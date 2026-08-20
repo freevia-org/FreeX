@@ -51,6 +51,73 @@ public sealed class DocumentViewContentControlAccessibilityTests
             },
             CancellationToken.None);
 
+    /// <summary>
+    /// r153 remediation. The toggle state used to be inferred by comparing the run's rendered text to
+    /// the app's own fixed tick character. A .docx may author its own symbols through w14 checked/
+    /// unchecked state metadata -- a tick and a cross, say -- and such a box was announced as UNTICKED
+    /// to a screen reader even though the model and the committed run text were both correct. Only the
+    /// announcement was wrong, which is exactly the kind of defect a sighted test never notices.
+    /// </summary>
+    [Fact]
+    public async Task A_check_box_field_with_the_documents_own_glyphs_still_reports_the_right_toggle_state() =>
+        await Session.Dispatch(
+            () =>
+            {
+                // U+2714 heavy check mark / U+2716 heavy multiplication x -- neither is the app default.
+                var metadata = new ContentControlCheckBoxMetadata(
+                    CheckedState: new ContentControlCheckBoxStateMetadata(GlyphCodePoint: "2714"),
+                    UncheckedState: new ContentControlCheckBoxStateMetadata(GlyphCodePoint: "2716"));
+
+                var ticked = new Run("✔")
+                {
+                    Control = new ContentControl(
+                        ContentControlKind.CheckBox,
+                        Tag: null,
+                        Alias: "Reviewed",
+                        Checked: true,
+                        CheckBoxMetadata: metadata),
+                };
+
+                var view = LoadFieldDocument(ticked);
+
+                FindContentControlPeer(view)!.GetProvider<IToggleProvider>()!.ToggleState
+                    .Should().Be(
+                        ToggleState.On,
+                        "a ticked box must announce itself as ticked whichever symbol the document uses");
+            },
+            CancellationToken.None);
+
+    /// <summary>
+    /// Sibling no-regression: a box using the app's own glyphs must keep reporting correctly, and an
+    /// unticked custom-glyph box must not now report as ticked.
+    /// </summary>
+    [Fact]
+    public async Task An_unticked_check_box_reports_off_for_both_default_and_document_glyphs() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var metadata = new ContentControlCheckBoxMetadata(
+                    CheckedState: new ContentControlCheckBoxStateMetadata(GlyphCodePoint: "2714"),
+                    UncheckedState: new ContentControlCheckBoxStateMetadata(GlyphCodePoint: "2716"));
+
+                var customUnticked = new Run("✖")
+                {
+                    Control = new ContentControl(
+                        ContentControlKind.CheckBox,
+                        Tag: null,
+                        Alias: "Reviewed",
+                        Checked: false,
+                        CheckBoxMetadata: metadata),
+                };
+
+                FindContentControlPeer(LoadFieldDocument(customUnticked))!
+                    .GetProvider<IToggleProvider>()!.ToggleState.Should().Be(ToggleState.Off);
+
+                FindContentControlPeer(LoadFieldDocument(Run.CheckBoxControl(@checked: false, alias: "Reviewed")))!
+                    .GetProvider<IToggleProvider>()!.ToggleState.Should().Be(ToggleState.Off);
+            },
+            CancellationToken.None);
+
     [Fact]
     public async Task Toggling_a_check_box_field_through_automation_actually_ticks_it() =>
         await Session.Dispatch(

@@ -8662,9 +8662,23 @@ public sealed partial class DocumentView : RichTextBox
                 // checked state in sync with the glyph so an in-place toggle round-trips.
                 var control = markers.Control?.Control;
                 if (control is { Kind: ContentControlKind.CheckBox })
-                    control = control with { Checked = markedRun.Text == ModelContentControl.CheckedGlyph };
+                    control = control with { Checked = ContentControlInteractionPlanner.IsCheckBoxTextChecked(control, markedRun.Text) };
 
-                modelParagraph.Runs.Add(new ModelRun(StripSoftHyphens(markedRun.Text), markedFmt)
+                var committedText = StripSoftHyphens(markedRun.Text);
+                // A placeholder-showing field (w:showingPlcHdr) stops showing placeholder text the moment
+                // its own text diverges from what was rendered -- matching Word, which drops the flag on
+                // any edit even if the result is empty. A checkbox/list/date-picker interaction already
+                // clears it via ContentControlInteractionPlanner.CloneWith before it ever reaches here;
+                // this covers native RichTextBox typing (plain-text/rich-text/combo-box), which mutates
+                // the WpfRun's text directly with nothing else observing the edit -- so the only signal
+                // available here is comparing against the text captured when the control was rendered.
+                if (control?.WordMetadata is { ShowingPlaceholder: true } placeholderMetadata
+                    && !string.Equals(committedText, markers.Control?.OriginalText, StringComparison.Ordinal))
+                {
+                    control = control with { WordMetadata = placeholderMetadata with { ShowingPlaceholder = false } };
+                }
+
+                modelParagraph.Runs.Add(new ModelRun(committedText, markedFmt)
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
@@ -10929,7 +10943,7 @@ public sealed partial class DocumentView : RichTextBox
             var location = sourceBlockIndex is { } blockIndex && sourceRunIndex is { } runIndex
                 ? new ContentControlLocation(blockIndex, runIndex)
                 : (ContentControlLocation?)null;
-            ApplyContentControlMarker(wpf, document, control, location);
+            ApplyContentControlMarker(wpf, document, control, location, run.Text);
         }
 
         if (IsTextHiddenInCurrentView(fmt))
@@ -11474,7 +11488,16 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     private readonly record struct ContentControlLocation(int BlockIndex, int RunIndex);
 
-    private sealed record ContentControlMarker(ModelContentControl Control, ContentControlLocation? Location = null);
+    /// <summary>
+    /// <paramref name="OriginalText"/> is the field's own text as rendered (before any kind-specific
+    /// override, e.g. a checkbox's glyph swap below) -- CommitToModel compares the live WpfRun text
+    /// against it to tell an untouched placeholder-showing field from one the user actually typed into,
+    /// since native RichTextBox editing mutates the run's text directly with nothing else observing it.
+    /// </summary>
+    private sealed record ContentControlMarker(
+        ModelContentControl Control,
+        ContentControlLocation? Location = null,
+        string? OriginalText = null);
 
     /// <summary>
     /// Marks a WPF run as the content of a content control (w:sdt): a subtle shaded background so the
@@ -11485,9 +11508,10 @@ public sealed partial class DocumentView : RichTextBox
         WpfRun wpf,
         TextDocument document,
         ModelContentControl control,
-        ContentControlLocation? location = null)
+        ContentControlLocation? location = null,
+        string? originalText = null)
     {
-        AddMarker(wpf, m => m with { Control = new ContentControlMarker(control, location) });
+        AddMarker(wpf, m => m with { Control = new ContentControlMarker(control, location, originalText) });
         wpf.Background = new SolidColorBrush(ContentControlShade);
         wpf.ToolTip = ContentControlInteractionPlanner.Tooltip(control);
         // The shade and tooltip only reach a sighted user. Name the run the same way the shared
@@ -11506,9 +11530,13 @@ public sealed partial class DocumentView : RichTextBox
                 // Synthesise the checkbox glyph from the control's checked state and render it in a symbol
                 // font. Word stores the box glyph in the SDT content run using a symbol font (often a
                 // Wingdings/MS Gothic codepoint), so the raw run text rendered in the body font showed
-                // nothing. Driving the glyph from the state (☒/☐ in Segoe UI Symbol, which has U+2610/U+2612)
-                // guarantees a visible, correct checkbox and matches how FreeW renders its own checkboxes.
-                wpf.Text = control.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
+                // nothing. ResolveCheckBoxGlyph drives the glyph from the state, honouring the document's
+                // own CheckBoxMetadata (☒/☐ in Segoe UI Symbol, U+2610/U+2612, when there is none) --
+                // matching how a click (OnCheckBoxControlClicked) and a commit-time read-back
+                // (ContentControlInteractionPlanner.IsCheckBoxTextChecked) resolve the same glyph, so a
+                // load-then-commit round trip on an already-checked custom-glyph control doesn't disagree
+                // with what it just rendered.
+                wpf.Text = ContentControlInteractionPlanner.ResolveCheckBoxGlyph(control);
                 wpf.FontFamily = new System.Windows.Media.FontFamily("Segoe UI Symbol");
                 wpf.Cursor = System.Windows.Input.Cursors.Hand;
                 wpf.MouseLeftButtonUp += OnCheckBoxControlClicked;
@@ -11548,16 +11576,27 @@ public sealed partial class DocumentView : RichTextBox
         if (owner is null || !owner.AllowsContentControlInteraction(marker.Control))
             return;
 
-        if (owner.RestrictEditingPolicy.IsFormFieldEditingOnly
-            && marker.Location is { } location
+        // Route through the shared planner whenever we know where the control lives in the model:
+        // ToggleContentControl -> ContentControlInteractionPlanner.ToggleCheckBox resolves the glyph from
+        // the document's own CheckBoxMetadata instead of the app's fixed CheckedGlyph/UncheckedGlyph. This
+        // used to run only under Word's "Filling in Forms" restriction, so an ordinary click on an
+        // unprotected document -- the common case -- fell through to the hand-written glyph below and
+        // silently overwrote a custom checkbox symbol.
+        if (marker.Location is { } location
             && owner.ToggleContentControl(location.BlockIndex, location.RunIndex))
         {
             return;
         }
 
-        var toggled = marker.Control with { Checked = !marker.Control.Checked };
+        // No model location to route through the planner (e.g. a control rendered without body
+        // block/run indices). Toggle by hand, but still resolve the glyph the same way the planner does
+        // so a custom checkbox symbol is honoured here too.
+        var resolved = ContentControlInteractionPlanner.ToggleCheckBox(
+            new ModelRun(string.Empty) { Control = marker.Control });
+        if (resolved?.Control is not { } toggled)
+            return;
         AddMarker(wpf, m => m with { Control = new ContentControlMarker(toggled, marker.Location) });
-        wpf.Text = toggled.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph;
+        wpf.Text = resolved.Text;
 
         // Persist the new state into the model so a subsequent save reflects the toggle.
         owner.CommitToModel();

@@ -405,7 +405,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
 
             var rewritten = RewriteFormulaForTableRenames(cell.FormulaText, renames);
             if (rewritten is not null)
-                cell.FormulaText = rewritten;
+                RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity(cell, rewritten);
         }
 
         foreach (var table in copy.StructuredTables)

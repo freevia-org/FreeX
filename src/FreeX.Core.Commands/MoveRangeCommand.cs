@@ -555,7 +555,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
                 checked((uint)(source.Col + colDelta)));
             var cell = sheet.GetCell(source)?.Clone();
             if (cell?.FormulaText is { } formulaText)
-                cell.FormulaText = formulaText;
+                RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity(cell, formulaText);
 
             payloads.Add(new MovePayload(
                 target,
@@ -1240,7 +1240,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
                     continue;
 
                 snapshot[addr] = cell.FormulaText;
-                cell.FormulaText = rewritten;
+                RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity(cell, rewritten);
             }
         }
     }

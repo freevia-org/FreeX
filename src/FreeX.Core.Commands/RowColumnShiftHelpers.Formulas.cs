@@ -43,8 +43,10 @@ internal static partial class RowColumnShiftHelpers
     // rename) -- the cell itself is not being re-authored and its legacy CSE array identity (and the
     // "can't split the array" protection that depends on LegacyArrayRows/Cols being non-zero) must
     // survive unchanged. Mirrors the identical save/assign/restore done for the same reason in
-    // Sheet.Clone.cs's CopyCellContentTo and in CellStateSnapshot.ToCell.
-    private static void SetFormulaTextPreservingArrayIdentity(Cell cell, string? formulaText)
+    // Sheet.Clone.cs's CopyCellContentTo and in CellStateSnapshot.ToCell. Internal (not private) so
+    // MoveRangeCommand and DuplicateSheetCommand's own hand-written reference-rewrite loops can reuse
+    // this exact preservation instead of restating it (R153/K1 remediation).
+    internal static void SetFormulaTextPreservingArrayIdentity(Cell cell, string? formulaText)
     {
         var arrayMode = cell.ArrayMode;
         var legacyArrayRows = cell.LegacyArrayRows;

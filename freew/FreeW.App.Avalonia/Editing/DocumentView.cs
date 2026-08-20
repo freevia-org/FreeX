@@ -18629,6 +18629,30 @@ public sealed partial class DocumentView : Control
 
         var cells = ParaCells(source);
         var caretOffset = edit(cells);
+
+        // AV-CCPLACEHOLDER: this is a genuine edit to the field's own text (insert/backspace/delete-
+        // forward are the only callers of this method), so the field stops "showing placeholder text"
+        // even if the edit leaves it empty -- matching Word, which drops w:showingPlcHdr the instant a
+        // placeholder field is typed into. Every cell in the span still carries the ORIGINAL (pre-edit)
+        // control instance -- untouched characters via the source-runs clone above, newly typed ones via
+        // caret.Control inside the edit callback -- so retargeting every cell that still references it to
+        // one shared cleared instance clears the flag everywhere at once without splitting the field's
+        // run (SetRuns groups cells into runs by Control REFERENCE equality, see SameContentControl).
+        if (caret.Control.WordMetadata is { ShowingPlaceholder: true } placeholderMetadata)
+        {
+            var cleared = caret.Control with
+            {
+                WordMetadata = placeholderMetadata with { ShowingPlaceholder = false }
+            };
+            for (var i = 0; i < cells.Count; i++)
+            {
+                if (ReferenceEquals(cells[i].Control, caret.Control))
+                    cells[i] = cells[i] with { Control = cleared };
+            }
+
+            caret = caret with { Control = cleared };
+        }
+
         var rebuilt = new Paragraph();
         SetRuns(rebuilt, cells);
         if (rebuilt.Runs.Count == 0)

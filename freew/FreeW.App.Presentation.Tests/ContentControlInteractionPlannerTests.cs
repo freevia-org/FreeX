@@ -214,6 +214,77 @@ public sealed class ContentControlInteractionPlannerTests
         ContentControlInteractionPlanner.WithText(new Run("plain"), "x").Should().BeNull();
     }
 
+    /// <summary>
+    /// K3: a placeholder-showing control (w:showingPlcHdr) stops showing placeholder text the moment any
+    /// of the four operations that call the shared CloneWith gives it real content -- typed text, a
+    /// checkbox toggle, a picked list item, or a picked relative date -- matching Word, which drops the
+    /// flag on any edit even if the result is empty. Before the fix, CloneWith carried the flag through
+    /// unchanged, so a filled-in control still reported itself as showing placeholder text.
+    /// </summary>
+    [Fact]
+    public void CloneWith_ClearsShowingPlaceholder_OnEveryContentSettingOperation()
+    {
+        static ContentControl Placeholder(ContentControlKind kind, bool @checked = false) => new(
+            kind,
+            Checked: @checked,
+            WordMetadata: new ContentControlWordMetadata(ShowingPlaceholder: true));
+
+        var typed = new Run("Click to enter text") { Control = Placeholder(ContentControlKind.PlainText) };
+        var afterTyping = ContentControlInteractionPlanner.WithText(typed, "Bobby");
+        afterTyping!.Control!.WordMetadata!.ShowingPlaceholder.Should().BeFalse(
+            "typing real text into a placeholder-showing field must clear w:showingPlcHdr");
+
+        var checkbox = new Run(ContentControl.UncheckedGlyph)
+        {
+            Control = Placeholder(ContentControlKind.CheckBox)
+        };
+        var afterToggle = ContentControlInteractionPlanner.ToggleCheckBox(checkbox);
+        afterToggle!.Control!.WordMetadata!.ShowingPlaceholder.Should().BeFalse(
+            "toggling a placeholder-showing checkbox must clear w:showingPlcHdr");
+
+        var list = new Run("Choose an item")
+        {
+            Control = Placeholder(ContentControlKind.DropDownList) with
+            {
+                ListItems = [new ContentControlListItem("Choose an item"), new ContentControlListItem("Item 1")]
+            }
+        };
+        var afterSelect = ContentControlInteractionPlanner.SelectItem(list, 1);
+        afterSelect!.Control!.WordMetadata!.ShowingPlaceholder.Should().BeFalse(
+            "picking a list item on a placeholder-showing drop-down must clear w:showingPlcHdr");
+
+        var date = new Run("Click to enter a date") { Control = Placeholder(ContentControlKind.DatePicker) };
+        var afterDate = ContentControlInteractionPlanner.SelectRelativeDate(date, choiceIndex: 0);
+        afterDate!.Control!.WordMetadata!.ShowingPlaceholder.Should().BeFalse(
+            "picking a relative date on a placeholder-showing date picker must clear w:showingPlcHdr");
+    }
+
+    /// <summary>
+    /// Sibling no-regression coverage: CloneWith must not disturb a control that was never showing a
+    /// placeholder (stays false, not flipped true) and must not manufacture WordMetadata out of thin air
+    /// for a control that never had any (stays null, so DocxWriter does not start emitting an empty
+    /// w:sdtPr addition it never used to).
+    /// </summary>
+    [Fact]
+    public void CloneWith_LeavesNonPlaceholderControlsUntouched()
+    {
+        var noMetadata = new Run("Bob") { Control = new ContentControl(ContentControlKind.PlainText) };
+        var updatedNoMetadata = ContentControlInteractionPlanner.WithText(noMetadata, "Bobby");
+        updatedNoMetadata!.Control!.WordMetadata.Should().BeNull(
+            "a control with no Word metadata must not gain any just from being edited");
+
+        var alreadyReal = new Run("Bob")
+        {
+            Control = new ContentControl(
+                ContentControlKind.PlainText,
+                WordMetadata: new ContentControlWordMetadata(ShowingPlaceholder: false, Temporary: true))
+        };
+        var updatedAlreadyReal = ContentControlInteractionPlanner.WithText(alreadyReal, "Bobby");
+        updatedAlreadyReal!.Control!.WordMetadata!.ShowingPlaceholder.Should().BeFalse();
+        updatedAlreadyReal.Control!.WordMetadata!.Temporary.Should().BeTrue(
+            "unrelated Word metadata fields must survive untouched");
+    }
+
     [Theory]
     [InlineData(ContentControlKind.PlainText, true)]
     [InlineData(ContentControlKind.RichText, true)]

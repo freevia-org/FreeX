@@ -228,6 +228,17 @@ public static class ContentControlInteractionPlanner
         return CloneWith(run, ResolveCheckBoxGlyph(updated), updated);
     }
 
+    /// <summary>
+    /// The read-side mirror of <see cref="ToggleCheckBox"/>: whether <paramref name="text"/> is the
+    /// CHECKED glyph for <paramref name="control"/>, resolved the same way -- the document's own authored
+    /// symbol from <see cref="ContentControl.CheckBoxMetadata"/> when present, falling back to the app's
+    /// fixed <see cref="ContentControl.CheckedGlyph"/> otherwise. A caller that infers checked state by
+    /// comparing rendered run text must go through this rather than compare against
+    /// <see cref="ContentControl.CheckedGlyph"/> directly, or a custom-glyph checkbox reads back wrong.
+    /// </summary>
+    public static bool IsCheckBoxTextChecked(ContentControl control, string text) =>
+        text == ResolveCheckBoxGlyph(control with { Checked = true });
+
     public static Run? SelectItem(Run run, int itemIndex)
     {
         if (run.Control is not { } control
@@ -283,10 +294,12 @@ public static class ContentControlInteractionPlanner
     /// <see cref="ContentControl.CheckBoxMetadata"/> (w14:checkedState/uncheckedState) when present and
     /// a valid Unicode code point, falling back to the app's fixed <see cref="ContentControl.CheckedGlyph"/>
     /// / <see cref="ContentControl.UncheckedGlyph"/> otherwise -- mirroring
-    /// <c>CustomXmlDataBindingResolver.ResolveCheckBoxGlyph</c>'s glyph resolution so a toggle never
-    /// overwrites a custom checkbox symbol with the generic ballot-box character.
+    /// <c>CustomXmlDataBindingResolver.ResolveCheckBoxGlyph</c>'s glyph resolution. Public because every
+    /// place that renders or infers a checkbox's glyph -- the initial render off the model, a toggle, and
+    /// reading the glyph back on commit -- must resolve it the same way, or a custom checkbox symbol gets
+    /// overwritten by the generic ballot-box character on one of those paths while the others still honour it.
     /// </summary>
-    private static string ResolveCheckBoxGlyph(ContentControl control)
+    public static string ResolveCheckBoxGlyph(ContentControl control)
     {
         var state = control.Checked
             ? control.CheckBoxMetadata?.CheckedState
@@ -300,6 +313,19 @@ public static class ContentControlInteractionPlanner
 
         return CheckBoxGlyph(control.Checked);
     }
+
+    /// <summary>
+    /// Clears a placeholder-showing control's <see cref="ContentControlWordMetadata.ShowingPlaceholder"/>
+    /// flag: once real content is set through <see cref="CloneWith"/> (a toggle, a picked item, a picked
+    /// date, or typed text), the field is no longer showing its w:showingPlcHdr placeholder -- matching
+    /// Word, which drops that flag the moment a placeholder field is edited, even if the edit leaves it
+    /// empty. A control with no Word metadata, or one already not showing a placeholder, is returned
+    /// unchanged (no allocation).
+    /// </summary>
+    private static ContentControl ClearShowingPlaceholder(ContentControl control) =>
+        control.WordMetadata is { ShowingPlaceholder: true } metadata
+            ? control with { WordMetadata = metadata with { ShowingPlaceholder = false } }
+            : control;
 
     private static Run CloneWith(Run source, string text, ContentControl control) => new(text, source.Formatting)
     {
@@ -327,7 +353,7 @@ public static class ContentControlInteractionPlanner
         IsPageBreak = source.IsPageBreak,
         IsColumnBreak = source.IsColumnBreak,
         Revision = source.Revision,
-        Control = control,
+        Control = ClearShowingPlaceholder(control),
         RevisionAuthor = source.RevisionAuthor,
         RevisionDateXml = source.RevisionDateXml,
         FormatRevision = source.FormatRevision

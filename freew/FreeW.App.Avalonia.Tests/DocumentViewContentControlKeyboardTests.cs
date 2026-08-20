@@ -318,6 +318,72 @@ public sealed class DocumentViewContentControlKeyboardTests
         view.PlainText.Should().Be("A: one\nB: two", "Tab must not type a literal tab into a field");
     }
 
+    /// <summary>
+    /// K3: a placeholder-showing field (w:showingPlcHdr) stops showing placeholder text the moment the
+    /// user actually edits its own text -- typing over it or deleting from it -- matching Word, which
+    /// drops the flag on any edit even if the result is empty. Before the fix, ApplyContentControlTextEdit
+    /// carried caret.Control (and the source runs cloned from the field) through unchanged, so a
+    /// freshly-typed-into field still reported itself as showing placeholder text.
+    /// </summary>
+    [Fact]
+    public void Typing_into_a_placeholder_showing_field_clears_the_placeholder_flag()
+    {
+        var control = PlaceholderControl("Click to enter text");
+        var (view, paragraph) = BuildView(control);
+
+        view.MoveCaretToBlockForTest(0, ControlStart + control.Text.Length);
+        view.InsertText("!");
+
+        paragraph.Runs.Should().HaveCount(3,
+            "the edit must not split the field's own run into two (SetRuns groups by Control reference)");
+        paragraph.Runs[1].Text.Should().Be("Click to enter text!");
+        paragraph.Runs[1].Control!.WordMetadata!.ShowingPlaceholder.Should().BeFalse(
+            "typing real text into a placeholder-showing field must clear w:showingPlcHdr");
+    }
+
+    [Fact]
+    public void Backspacing_a_placeholder_showing_field_also_clears_the_placeholder_flag()
+    {
+        var control = PlaceholderControl("Click to enter text");
+        var (view, paragraph) = BuildView(control);
+
+        view.MoveCaretToBlockForTest(0, ControlStart + control.Text.Length);
+        view.BackspaceForTest();
+
+        paragraph.Runs[1].Control!.WordMetadata!.ShowingPlaceholder.Should().BeFalse(
+            "deleting inside a placeholder-showing field also counts as editing it, per Word");
+    }
+
+    /// <summary>
+    /// Sibling no-regression coverage: typing in the BODY TEXT around an untouched placeholder-showing
+    /// field must leave its flag alone. SetRuns rebuilds every run of the whole paragraph (including the
+    /// field's) on every body edit, so a fix that cleared the flag unconditionally there -- rather than in
+    /// ApplyContentControlTextEdit, which only runs for an edit to the field's OWN text -- would wipe the
+    /// flag out from edits that never touched the field at all.
+    /// </summary>
+    [Fact]
+    public void Typing_in_body_text_elsewhere_leaves_an_untouched_placeholder_field_alone()
+    {
+        var control = PlaceholderControl("Click to enter text");
+        var (view, paragraph) = BuildView(control);
+
+        view.MoveCaretToBlockForTest(0, 0);
+        view.InsertText("Z");
+
+        paragraph.Runs.Should().HaveCount(3, "typing elsewhere must not split or merge the field's own run");
+        paragraph.Runs[0].Text.Should().Be("Z" + Prefix);
+        paragraph.Runs[1].Text.Should().Be("Click to enter text");
+        paragraph.Runs[1].Control!.WordMetadata!.ShowingPlaceholder.Should().BeTrue(
+            "editing text elsewhere in the paragraph must not clear an untouched field's placeholder flag");
+    }
+
+    private static Run PlaceholderControl(string text) => new(text)
+    {
+        Control = new ContentControl(
+            ContentControlKind.PlainText,
+            WordMetadata: new ContentControlWordMetadata(ShowingPlaceholder: true))
+    };
+
     private static void AssertIgnoresTyping(Run control)
     {
         var original = control.Text;

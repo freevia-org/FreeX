@@ -486,11 +486,13 @@ internal sealed class DocumentContentControlAutomationPeer : DocumentValueAutoma
 
     public override bool IsReadOnly => Node.IsReadOnly;
 
+    // r153-remediation: this used to compare Node.Value against the app's fixed CheckedGlyph, so a
+    // document carrying its own w14 checked/unchecked symbols was announced as unticked to a screen
+    // reader immediately after the user ticked it -- the model and the committed run text were both
+    // correct, only the announcement was wrong. The planner now resolves this against the control's
+    // own metadata; the peer must not re-derive it.
     public ToggleState ToggleState =>
-        IsCheckBox
-        && string.Equals(Node.Value, FreeW.Core.Model.ContentControl.CheckedGlyph, StringComparison.Ordinal)
-            ? ToggleState.On
-            : ToggleState.Off;
+        IsCheckBox && Node.IsCheckBoxChecked ? ToggleState.On : ToggleState.Off;
 
     /// <summary>
     /// Ticking the box is the whole interaction of a check-box field, so automation performs it for real

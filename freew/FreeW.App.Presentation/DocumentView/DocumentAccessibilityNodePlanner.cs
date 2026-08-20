@@ -75,7 +75,14 @@ public sealed record DocumentAccessibilityNode(
     IReadOnlyList<int>? ObjectPath = null,
     int SectionIndex = -1,
     DocumentAccessibilityStoryKind StoryKind = DocumentAccessibilityStoryKind.Body,
-    IReadOnlyList<DocumentAccessibilityNode>? Children = null)
+    IReadOnlyList<DocumentAccessibilityNode>? Children = null,
+    /// <summary>
+    /// For a check-box content control, whether it is ticked -- resolved HERE against the control's
+    /// own <c>w14:checkedState</c>/<c>uncheckedState</c> metadata, not left for a peer to infer by
+    /// comparing <see cref="Value"/> to the app's fixed glyph. A document that uses its own symbols
+    /// (a tick and a cross, say) otherwise reports every ticked box as unticked to a screen reader.
+    /// </summary>
+    bool IsCheckBoxChecked = false)
 {
     public IReadOnlyList<DocumentAccessibilityNode> SemanticChildren => Children ?? [];
 }
@@ -588,7 +595,9 @@ public static class DocumentAccessibilityNodePlanner
                     value.Length,
                     ContentControlKind: control.Kind,
                     IsReadOnly: IsContentControlReadOnly(document, control),
-                    Children: controlChildren));
+                    Children: controlChildren,
+                    IsCheckBoxChecked: control.Kind == ContentControlKind.CheckBox
+                        && ContentControlInteractionPlanner.IsCheckBoxTextChecked(control, value)));
                 continue;
             }
 
