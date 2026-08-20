@@ -28,6 +28,11 @@ public sealed partial class MainWindowRibbonKeyTipTests
         // is deliberately NOT closed: WPF shuts the Application down with the last window under the
         // default OnLastWindowClose, which took every subsequent test with it (64 of 68 failed).
 
+        // The window retired by the previous harness. It is closed only once the replacement
+        // exists, so the Application never sees its last window close (which would shut it down).
+        [ThreadStatic]
+        private static MainWindow? PreviousWindow;
+
         private readonly MainWindow _window;
         private readonly Workbook _workbook;
         private readonly RecordingUserMessageService _messageService;
@@ -721,6 +726,13 @@ public sealed partial class MainWindowRibbonKeyTipTests
         {
             var session = CreateSharedSession();
             var window = session.Window;
+
+            // Retire the prior window now that its replacement is up, so windows do not pile up and
+            // compete for activation -- menu popups need the active window to be the current one.
+            if (PreviousWindow is { } retired)
+                MainWindowTestCleanup.CloseWithoutSavePrompt(retired);
+            PreviousWindow = window;
+            PumpDispatcher();
             if (!window.IsVisible)
                 window.Show();
             window.Activate();
