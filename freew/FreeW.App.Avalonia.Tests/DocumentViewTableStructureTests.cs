@@ -87,6 +87,33 @@ public sealed class DocumentViewTableStructureTests
     }
 
     [Fact]
+    public async Task PositiveSpacingSinglePageTable_reserves_cell_gutters_in_row_schedule()
+    {
+        IReadOnlyList<(Rect Rect, int Row)>? hits = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            hits = GetTableCellHits(view);
+        });
+
+        ran.Should().BeTrue("the Avalonia dispatcher and renderer must be available for table-spacing evidence");
+        hits.Should().NotBeNull();
+        var rowTops = hits!
+            .GroupBy(hit => hit.Row)
+            .ToDictionary(group => group.Key, group => group.Min(hit => hit.Rect.Top));
+        const double spacingDip = 2.4 * 96.0 / 72.0;
+        var headerHeight = 30.0 * 96.0 / 72.0;
+        // The first-row surface consumes the outer top gutter while row 1 consumes its shared
+        // internal gutter, so its painted-top delta is one spacing unit smaller than the full
+        // scheduled row reservation.
+        (rowTops[1] - rowTops[0]).Should().BeApproximately(headerHeight + 3 * spacingDip, 0.1,
+            "a positive-spacing flow table must reserve Word's top, bottom, and adjacent cell gutters in its row schedule");
+    }
+
+    [Fact]
     public async Task RepeatHeaderRow_renders_header_cells_on_second_planned_page()
     {
         int repeatedHeaderCellCount = -1;

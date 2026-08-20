@@ -9528,6 +9528,13 @@ public sealed partial class DocumentView : Control
             firstPageLeadingContentHeightDip: DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(
                 _doc,
                 blockIndex));
+        // Word retains a complete spacing gutter above and below each cell surface in a
+        // single-page flow table.  SurfaceRectFor paints that gutter, but row scheduling must
+        // reserve it as well or every subsequent row collapses upward.  Planned tables keep the
+        // shared fixed-grid schedule and use their dedicated registration route.
+        var flowCellSpacingRowReservation = cellSpacingInset > 0 && tableLayoutPlan.Pagination.Pages.Count == 1
+            ? 4 * cellSpacingInset
+            : 0;
         var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
             cell => (cell.RowIndex, cell.CellIndex),
             cell => cell.EffectiveFill);
@@ -9625,7 +9632,7 @@ public sealed partial class DocumentView : Control
                 if (prCellHeight > prRowHeight)
                     prRowHeight = prCellHeight;
             }
-            rowHeights[pr] = ApplyAuthoredTableRowHeight(prRow, prRowHeight);
+            rowHeights[pr] = ApplyAuthoredTableRowHeight(prRow, prRowHeight) + flowCellSpacingRowReservation;
         }
 
         var floatingAnchorContentY = _layoutContentY;
@@ -9720,7 +9727,7 @@ public sealed partial class DocumentView : Control
                 measured.Add((cell, cellIndex, col, span, cellParas, paragraphSpacings, markerInsets, fmt));
             }
 
-            rowHeight = ApplyAuthoredTableRowHeight(row, rowHeight);
+            rowHeight = ApplyAuthoredTableRowHeight(row, rowHeight) + flowCellSpacingRowReservation;
 
             // Treat the row as a unit: reserve space on the current page (or push to next).
             var rowContentY = reservedContentY ?? ReserveContentY(rowHeight);
