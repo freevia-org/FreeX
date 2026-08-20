@@ -89,7 +89,13 @@ public sealed partial class SpellCheckWorkflowPlannerTests
         source.Should().Contain("() => MutateRuntimeOptions(options =>");
         source.Should().Contain("options.SpellCheckCustomDictionaryWords =");
         source.Should().Contain("new SpellCheckSessionController(new SpellCheckSessionAdapter(");
-        source.Should().Contain("_options.SpellCheckCustomDictionaryWords.ToList()");
+        // r153: the mutation used to overwrite the freshly-reloaded list with this window's
+        // in-memory one, dropping a word another FreeX process had persisted in the meantime. It
+        // now unions the two, so this pin follows the expression rather than the old wholesale
+        // copy. The BEHAVIOUR is asserted properly by
+        // R153_SpellCheckAddToDictionaryConcurrentPersistTests -- this line only keeps the wiring
+        // contract that the window's own words still reach the mutation at all.
+        source.Should().Contain(".Concat(_options.SpellCheckCustomDictionaryWords)");
         controllerSource.Should().Contain("case SpellCheckSessionAction.AddToDictionary:");
         controllerSource.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord(");
         controllerSource.Should().Contain("_adapter.PersistCustomDictionary();");
