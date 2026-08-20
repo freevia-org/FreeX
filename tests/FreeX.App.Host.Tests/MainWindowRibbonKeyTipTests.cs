@@ -23,9 +23,10 @@ public sealed partial class MainWindowRibbonKeyTipTests
 {
     private sealed class MainWindowHarness : IDisposable
     {
-        // Clipboard-isolated tests run on a dedicated STA, so each dispatcher needs its own WPF window.
-        [ThreadStatic]
-        private static SharedMainWindowSession? SharedSession;
+        // One window per harness. Sharing it carried every leaked popup, focus change and selection
+        // into the next test, so the class returned a different failure set on each run. The window
+        // is deliberately NOT closed: WPF shuts the Application down with the last window under the
+        // default OnLastWindowClose, which took every subsequent test with it (64 of 68 failed).
 
         private readonly MainWindow _window;
         private readonly Workbook _workbook;
@@ -718,7 +719,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public static MainWindowHarness Create(Action<Workbook>? configureWorkbook = null)
         {
-            var session = SharedSession ??= CreateSharedSession();
+            var session = CreateSharedSession();
             var window = session.Window;
             if (!window.IsVisible)
                 window.Show();
