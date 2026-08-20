@@ -6756,6 +6756,13 @@ public sealed partial class DocumentView : Control
             }
             else if (block is Table table)
             {
+                // R158: a table's cells are rendered through their OWN freshly-recomputed marker plan
+                // (BuildTableNumberingMarkers, via LayoutTablePaged), not through this loop's live
+                // listMarkerSequence. Replay the table's list paragraphs through THIS sequence too
+                // (without rendering them again) so a body list that resumes after the table continues
+                // numbering from where the table left off, instead of the body-level counter being frozen
+                // at its pre-table value. Mirrors the WPF host's Render() loop.
+                TableCellListMarkerPlanner.AdvanceThroughTable(table, listMarkerSequence);
                 LayoutTablePaged(blockIndex, table, textWidth);
             }
             else
@@ -9484,6 +9491,32 @@ public sealed partial class DocumentView : Control
 
     // ---- Table rendering (grid + modal cell text editing) ----------------------------------------
 
+    // R158: table cells never got a marker for a native Number/Bullet/MultiLevel paragraph on this shell
+    // either -- LayoutTablePaged only ever consulted PreservedNumberingMarkerPlanner.BuildByParagraph,
+    // which explicitly skips any paragraph whose ListKind is already set, and RunBodyLayoutBlocks's own
+    // live listMarkerSequence never descended into a table's cells. Folding TableCellListMarkerPlanner's
+    // native-list markers into the SAME dictionary this method already consults (mirroring the WPF host's
+    // BuildTableNumberingMarkers) reuses the existing marker-prepend rendering path with no new drawing
+    // code. See RunBodyLayoutBlocks's TableCellListMarkerPlanner.AdvanceThroughTable call for the other
+    // half of the fix: keeping the body loop's own live sequence positioned correctly across the table.
+    private static IReadOnlyDictionary<Paragraph, PreservedNumberingMarkerPlan> BuildTableNumberingMarkers(
+        TextDocument document)
+    {
+        var preserved = PreservedNumberingMarkerPlanner.BuildByParagraph(document);
+        var nativeListMarkers = TableCellListMarkerPlanner.Build(document);
+        if (nativeListMarkers.Count == 0)
+            return preserved;
+
+        var merged = new Dictionary<Paragraph, PreservedNumberingMarkerPlan>(preserved);
+        foreach (var (paragraph, plan) in nativeListMarkers)
+        {
+            if (!string.IsNullOrEmpty(plan.MarkerText))
+                merged[paragraph] = new PreservedNumberingMarkerPlan(plan.MarkerText, plan.Level);
+        }
+
+        return merged;
+    }
+
     private void LayoutTablePaged(int blockIndex, Table table, double textWidth)
     {
         var cols = Math.Max(1, table.ColumnCount);
@@ -9536,7 +9569,7 @@ public sealed partial class DocumentView : Control
         var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
             cell => (cell.RowIndex, cell.CellIndex),
             cell => cell.EffectiveFill);
-        var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.BuildByParagraph(_doc);
+        var preservedNumberingMarkers = BuildTableNumberingMarkers(_doc);
 
         DocumentTableCellEffectiveFillPlan EffectiveFillFor(int rowIndex, int cellIndex) =>
             cellEffectiveFills.TryGetValue((rowIndex, cellIndex), out var fillPlan)
@@ -17441,7 +17474,18 @@ public sealed partial class DocumentView : Control
                 fmt = fmt with { VerticalAlign = VerticalAlign.Superscript };
             }
 
-            replacement.Add(new Cell(result.Insert[index], fmt));
+            // r158-remediation: an AutoCorrect/AutoFormat replacement is an edit the user did not
+            // type, so with Track Changes on it must be recorded as an insertion like any other.
+            // Without this the correction is untracked and survives Review > Reject All Changes --
+            // the same defect the WPF shell was fixed for in this round, disclosed by that fixer
+            // as still present here. Mirrors the tracked-insert shape used for ordinary typing
+            // (see the CellsForInsertedText helper below).
+            replacement.Add(new Cell(
+                result.Insert[index],
+                fmt,
+                Revision: TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None,
+                RevisionAuthor: TrackChangesEnabled ? RevisionAuthor : null,
+                RevisionDateXml: TrackChangesEnabled ? _editingSession.RevisionDateXmlForEdit() : null));
         }
 
         var block = _caret.Block;

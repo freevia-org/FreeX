@@ -3727,6 +3727,24 @@ public static class PptxPackageWriter
             blip.Add(new XElement(A + "alphaModFix",
                 new XAttribute("amt", FormatPercentFraction(fmt.AlphaModPct.Value))));
 
+        // a:extLst must come last in the a:blip child sequence. Re-emits the a14:artisticEffect
+        // extension (Picture Format > Artistic Effects) verbatim from what the reader captured --
+        // see PictureFormat.ArtisticEffectXml -- so an Artistic Effect applied in real PowerPoint
+        // survives a FreeP open/save round trip instead of being silently dropped.
+        if (fmt.ArtisticEffectXml is { Length: > 0 } artisticEffectXml)
+        {
+            try
+            {
+                var ext = XElement.Parse(artisticEffectXml);
+                blip.Add(new XElement(A + "extLst", ext));
+            }
+            catch (System.Xml.XmlException)
+            {
+                // Malformed captured XML (should not happen -- written by this same reader/writer
+                // pair) -- drop the effect rather than emit an invalid part.
+            }
+        }
+
         return blip;
     }
 

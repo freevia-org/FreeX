@@ -44,6 +44,66 @@ public sealed class ConditionalFormatRenderEvaluatorTests
     }
 
     [Fact]
+    public void Evaluate_HigherPriorityExplicitUnBoldWinsOverLowerPriorityExplicitBold()
+    {
+        // freex-conditional-format-priority F1: a higher-priority (lower Priority number) rule whose
+        // dxf explicitly resets Font style to Regular (DxfBold=false, mirroring a real Excel dxf's
+        // explicit <b val="0"/>) must beat a lower-priority rule that turns Bold on for the same
+        // cell -- exactly like ViewportConditionalFormatEvaluator.StackDifferentialStyle's "first rule
+        // to explicitly decide wins" semantics for the on-screen grid. Before the fix, StackStyle
+        // OR-combined Bold across rules, so the lower-priority rule's "on" silently beat the
+        // higher-priority rule's explicit "off".
+        var sheet = CreateSheet(out var workbook);
+        var target = At(sheet, 1, 1);
+        sheet.SetCell(target, new NumberValue(10));
+
+        sheet.ConditionalFormats.Add(CellValueRule(target, priority: 1, new CellStyle
+        {
+            Bold = false,
+            DxfBold = false,
+        }));
+        sheet.ConditionalFormats.Add(CellValueRule(target, priority: 2, new CellStyle
+        {
+            Bold = true,
+        }));
+
+        var result = new ConditionalFormatRenderEvaluator(sheet, workbook).Evaluate(target, sheet.GetValue(target));
+
+        result.Style.Should().NotBeNull();
+        result.Style!.Value.Bold.Should().BeFalse(
+            "the higher-priority rule's explicit un-bold must win over the lower-priority rule's bold, " +
+            "matching the on-screen grid (ViewportConditionalFormatEvaluator)");
+    }
+
+    [Fact]
+    public void Evaluate_LowerPriorityRuleStillTurnsOnAttributeHigherPriorityRuleNeverMentioned()
+    {
+        // Sibling/no-regression case for the fix above: when the higher-priority rule never mentions
+        // Bold at all (DxfBold null, Bold false -- i.e. "not specified", not "explicitly off"), a
+        // lower-priority rule turning Bold on must still take effect. This is the case the OR-based
+        // code got right by accident and the tri-state fix must keep getting right on purpose.
+        var sheet = CreateSheet(out var workbook);
+        var target = At(sheet, 1, 1);
+        sheet.SetCell(target, new NumberValue(10));
+
+        sheet.ConditionalFormats.Add(CellValueRule(target, priority: 1, new CellStyle
+        {
+            FillColor = new CellColor(255, 0, 0),
+            // Bold/DxfBold both left at their defaults (false/null): this rule never mentions Bold.
+        }));
+        sheet.ConditionalFormats.Add(CellValueRule(target, priority: 2, new CellStyle
+        {
+            Bold = true,
+        }));
+
+        var result = new ConditionalFormatRenderEvaluator(sheet, workbook).Evaluate(target, sheet.GetValue(target));
+
+        result.Style.Should().NotBeNull();
+        result.Style!.Value.Bold.Should().BeTrue(
+            "a lower-priority rule may still turn an attribute on when no higher-priority rule decided it");
+    }
+
+    [Fact]
     public void Evaluate_MatchingStopIfTrueSuppressesLowerPriorityRules()
     {
         var sheet = CreateSheet(out var workbook);

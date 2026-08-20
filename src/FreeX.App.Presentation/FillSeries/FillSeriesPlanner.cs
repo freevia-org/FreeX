@@ -973,7 +973,7 @@ public static class FillSeriesPlanner
 
     private static double AddWeekdays(double value, int weekdays)
     {
-        var date = DateTime.FromOADate(value);
+        var date = new DateTimeValue(value).ToDateTime();
         var direction = Math.Sign(weekdays);
         for (var remaining = Math.Abs(weekdays); remaining > 0;)
         {
@@ -984,7 +984,7 @@ public static class FillSeriesPlanner
             remaining--;
         }
 
-        return date.ToOADate();
+        return DateTimeValue.FromDateTime(date).Value;
     }
 
     private static bool IsLastDayOfMonth(DateTime date) =>

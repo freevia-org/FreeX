@@ -739,6 +739,23 @@ public sealed partial class DocumentView
     }
 
     /// <summary>
+    /// Returns the text of every rendered list/preserved-numbering marker, in document render order
+    /// (body paragraphs interleaved with table-cell paragraphs in row/cell order) -- unlike
+    /// <see cref="GetListMarkerForBlockPublic"/>, which only walks top-level body blocks and cannot see
+    /// a marker rendered inside a table cell. Exposed for R158 table-cell list-marker tests, which need
+    /// to assert numbering continuity across a body -> table -> body run.
+    /// </summary>
+    internal IReadOnlyList<string> AllRenderedMarkerTextsForTest
+    {
+        get
+        {
+            if (_laidOutWidth < 0)
+                Relayout(FallbackWidth);
+            return _markers.Select(m => m.Text).ToList();
+        }
+    }
+
+    /// <summary>
     /// Simulates pressing Down (+1) or Up (-1) arrow from the current caret position.
     /// Exposed internally so regression tests can assert that vertical navigation reaches
     /// a tall inline object (ZZ1).

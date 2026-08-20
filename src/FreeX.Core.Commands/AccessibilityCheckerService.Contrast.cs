@@ -421,8 +421,20 @@ public static partial class AccessibilityCheckerService
     private static bool TryGetSharedAppliesToRange(IReadOnlyList<ConditionalFormat> rules, out GridRange range)
     {
         range = rules[0].AppliesTo;
+
+        // A rule with AdditionalRanges covers cells outside its single AppliesTo range (a
+        // multi-region sqref, e.g. a non-contiguous selection). The shared-range fast path below
+        // only ever tests SharedAppliesToRange.Contains(address) and returns the base style
+        // untouched for every other cell, so a rule with AdditionalRanges must never feed it --
+        // that would silently stop checking every cell in its additional regions. Bail out to the
+        // general per-rule loop (which consults AllRanges) instead.
+        if (rules[0].AdditionalRanges is { Count: > 0 })
+            return false;
+
         for (var i = 1; i < rules.Count; i++)
         {
+            if (rules[i].AdditionalRanges is { Count: > 0 })
+                return false;
             if (rules[i].AppliesTo != range)
                 return false;
         }
@@ -438,7 +450,7 @@ public static partial class AccessibilityCheckerService
             if (!IsRuleAlwaysTrueForScannedText(rule))
                 return null;
 
-            style = rule.FormatIfTrue!;
+            style = StackConditionalFormatContrastStyle(style, rule.FormatIfTrue!);
             if (rule.StopIfTrue)
                 break;
         }
@@ -489,13 +501,13 @@ public static partial class AccessibilityCheckerService
         CellStyle? style = null;
         foreach (var rule in conditionalContrastRules.Rules)
         {
-            if (!rule.AppliesTo.Contains(address))
+            if (!rule.AllRanges.Any(r => r.Contains(address)))
                 continue;
 
             if (!IsConditionalFormatTrue(rule, address, cell.Value, conditionalContrastRules.EvaluationCache))
                 continue;
 
-            style = rule.FormatIfTrue!;
+            style = StackConditionalFormatContrastStyle(style, rule.FormatIfTrue!);
             if (rule.StopIfTrue)
                 break;
         }
@@ -558,6 +570,51 @@ public static partial class AccessibilityCheckerService
         return merged;
     }
 
+    /// <summary>
+    /// Differentially stacks a matched rule's FormatIfTrue onto the styles already accumulated from
+    /// higher-priority matching rules, mirroring ViewportConditionalFormatEvaluator.StackDifferentialStyle's
+    /// "first (highest-priority) rule to set a given property wins" semantics -- exactly how Excel
+    /// actually renders multiple non-Stop-If-True conditional formats stacked on the same cell.
+    /// Without this, resolving the "effective" style for contrast grading by unconditionally overwriting
+    /// with each successive matching rule's FormatIfTrue would let a lower-priority rule that only sets
+    /// an unrelated property (e.g. Bold) silently discard a higher-priority rule's fill/font color.
+    /// </summary>
+    private static CellStyle StackConditionalFormatContrastStyle(CellStyle? accumulated, CellStyle cfStyle)
+    {
+        var result = (accumulated ?? CellStyle.Default).Clone();
+
+        if (!result.FillColor.HasValue && cfStyle.FillColor.HasValue)
+            result.FillColor = cfStyle.FillColor;
+        if (result.FillPatternStyle == CellFillPatternStyle.None &&
+            cfStyle.FillPatternStyle != CellFillPatternStyle.None)
+            result.FillPatternStyle = cfStyle.FillPatternStyle;
+        if (!result.FillPatternColor.HasValue && cfStyle.FillPatternColor.HasValue)
+            result.FillPatternColor = cfStyle.FillPatternColor;
+
+        if (!result.DxfBold.HasValue)
+        {
+            var boldOverride = cfStyle.DxfBold ?? (cfStyle.Bold ? true : (bool?)null);
+            if (boldOverride is { } explicitBold)
+            {
+                result.Bold = explicitBold;
+                result.DxfBold = explicitBold;
+            }
+        }
+
+        if (!result.DxfFontColor.HasValue)
+        {
+            var fontColorOverride = cfStyle.DxfFontColor ??
+                (cfStyle.FontColor != CellColor.Black ? cfStyle.FontColor : (CellColor?)null);
+            if (fontColorOverride is { } explicitFontColor)
+            {
+                result.FontColor = explicitFontColor;
+                result.DxfFontColor = explicitFontColor;
+            }
+        }
+
+        return result;
+    }
+
     private static CellStyle? GetEffectiveContrastStyleForApplicableRules(
         IReadOnlyList<ConditionalFormat> rules,
         CellAddress address,
@@ -570,7 +627,7 @@ public static partial class AccessibilityCheckerService
             if (!IsConditionalFormatTrue(rule, address, cell.Value, evaluationCache))
                 continue;
 
-            style = rule.FormatIfTrue!;
+            style = StackConditionalFormatContrastStyle(style, rule.FormatIfTrue!);
             if (rule.StopIfTrue)
                 break;
         }
@@ -27299,7 +27356,7 @@ public static partial class AccessibilityCheckerService
                     continue;
 
                 var address = new CellAddress(sheet.Id, entry.Row, entry.Col);
-                if (!rule.AppliesTo.Contains(address))
+                if (!rule.AllRanges.Any(r => r.Contains(address)))
                     continue;
 
                 counts[key] = counts.TryGetValue(key, out var current) ? current + 1 : 1;
@@ -27322,7 +27379,7 @@ public static partial class AccessibilityCheckerService
                     continue;
 
                 var address = new CellAddress(sheet.Id, entry.Row, entry.Col);
-                if (!rule.AppliesTo.Contains(address))
+                if (!rule.AllRanges.Any(r => r.Contains(address)))
                     continue;
 
                 sum += number;
@@ -27348,7 +27405,7 @@ public static partial class AccessibilityCheckerService
                     continue;
 
                 var address = new CellAddress(sheet.Id, entry.Row, entry.Col);
-                if (!rule.AppliesTo.Contains(address))
+                if (!rule.AllRanges.Any(r => r.Contains(address)))
                     continue;
 
                 rankedValues.Add((address, number, rankedValues.Count));

@@ -392,6 +392,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // in flight (see UpdateSaveButton) -- the Linux/macOS analogue of the WPF host's
     // StatusSaveProgressCancelButton/CancelFileOperation_Click.
     private readonly Button _fileOperationCancelButton = new();
+    // shared-progress-reporting F2: status-bar progress bar shown only while an open/save is in
+    // flight (see UpdateSaveButton), same gating as _fileOperationCancelButton above -- the
+    // Linux/macOS analogue of the WPF host's StatusSaveProgressBar. Percent is applied via
+    // ApplyFileOperationProgress, which reuses the shared, platform-neutral
+    // BackstageProgressOverlayPlanner the WPF host's own BackstageProgressOverlayBinder already
+    // drives, so both shells clamp/indeterminate the same way for the same Percent value.
+    private readonly ProgressBar _fileOperationProgressBar = new();
     private readonly StackPanel _selectionStatsPanel = new();
     private readonly TextBlock _statusAverageText = new();
     private readonly TextBlock _statusCountText = new();
@@ -3676,6 +3683,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetHelpText(_fileOperationCancelButton, UiText.Get("Toolbar_FileOperationCancelHelpText"));
 
+        // shared-progress-reporting F2: status-bar progress bar for the in-flight open/save, hidden
+        // by default (UpdateSaveButton reveals it only while _isOpening/_isSaving is true, same
+        // gating as _fileOperationCancelButton above) -- the Linux/macOS analogue of the WPF host's
+        // StatusSaveProgressBar. Before this fix the shared open/save pipeline's Percent was computed
+        // identically on both shells but only ever applied to a visual on Windows; the status text
+        // here cycled through phase labels with no numeric indication of how much was left.
+        _fileOperationProgressBar.Width = 96;
+        _fileOperationProgressBar.Height = 8;
+        _fileOperationProgressBar.Minimum = 0;
+        _fileOperationProgressBar.Maximum = 100;
+        _fileOperationProgressBar.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _fileOperationProgressBar.IsVisible = false;
+        // Automation name/help-text intentionally omitted here (unlike the Cancel button above) to
+        // avoid adding new localized resx strings for this fix; the AutomationId alone is enough for
+        // test hookup, and this control carries no user-visible text of its own to translate.
+        AutomationProperties.SetAutomationId(_fileOperationProgressBar, "FileOperationProgressBar");
+
         var leftPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -3683,6 +3707,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
         leftPanel.Children.Add(_statusText);
+        leftPanel.Children.Add(_fileOperationProgressBar);
         leftPanel.Children.Add(_fileOperationCancelButton);
 
         _selectionStatsPanel.Orientation = Orientation.Horizontal;
@@ -4198,6 +4223,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // higher-level entry points owning _isOpening/_isSaving.
         _fileOperationCancelButton.IsVisible = _fileOperationCancellationSession.IsActive;
         _fileOperationCancelButton.IsEnabled = _fileOperationCancellationSession.CanCancel;
+        // shared-progress-reporting F2: same lifetime as the Cancel button above.
+        _fileOperationProgressBar.IsVisible = _fileOperationCancellationSession.IsActive;
         _openButton.IsEnabled = isIdle && StorageProvider.CanOpen;
         _saveButton.IsEnabled = isIdle && _session.CanSaveCurrentSource(out _);
         _saveButton.Content = _session.IsDirty ? "Save*" : "Save";
@@ -4262,6 +4289,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ApplyNativeFileMenuAvailability(isIdle);
         RefreshNativeOpenRecentMenu(isIdle);
         ApplyNativeMenuAvailability(isIdle);
+    }
+
+    /// <summary>
+    /// shared-progress-reporting F2: applies an open/save Percent update to the status-bar progress
+    /// bar. Reuses the shared, platform-neutral <see cref="BackstageProgressOverlayPlanner"/> the WPF
+    /// host's own <c>BackstageProgressOverlayBinder</c> drives (src/FreeX.App.Host/
+    /// BackstageProgressOverlayBinder.cs), so a null percent (unknown-duration phase, e.g. the
+    /// initial "preparing" state) shows indeterminate exactly like the Windows host, and a known
+    /// percent is clamped into the bar's [Minimum, Maximum] the same way on both shells.
+    /// </summary>
+    private void ApplyFileOperationProgress(double? percent)
+    {
+        var state = BackstageProgressOverlayPlanner.Plan(
+            string.Empty,
+            string.Empty,
+            percent,
+            _fileOperationProgressBar.Minimum,
+            _fileOperationProgressBar.Maximum);
+        _fileOperationProgressBar.IsIndeterminate = state.IsIndeterminate;
+        if (!state.IsIndeterminate)
+            _fileOperationProgressBar.Value = state.Value;
     }
 
     /// <summary>
@@ -6909,13 +6957,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
+    /// Column header display text -- freex-freeze-headers F1: numeric under R1C1 reference style,
+    /// mirroring the WPF host's <c>FormatColumnHeader</c> (GridView.Rendering.Headers.cs), which
+    /// returns the plain column index when <c>UseR1C1ReferenceStyle</c> is set and only falls back to
+    /// A/B/C... letters otherwise. Before this fix the Avalonia column header row never consulted
+    /// the option at all, so it stayed in A1 letter style even after the formula bar/Name Box (which
+    /// already read this same property, see e.g. CommitCellText below) switched to R1C1 semantics.
+    /// The per-header automation id (set right below, in <see cref="CreateColumnHeaderCell"/>) is
+    /// deliberately left letter-based regardless of this setting -- it is test-hookup only, not a
+    /// user-visible label, and existing pointer-click regression tests hit-test it by that literal
+    /// letter string.
+    /// </summary>
+    private string FormatColumnHeaderLabel(uint col) =>
+        UseR1C1ReferenceStyle ? col.ToString(CultureInfo.InvariantCulture) : CellAddress.NumberToColumnName(col);
+
+    /// <summary>
     /// Builds a clickable column header. Left-click selects the whole column (Shift extends from the
     /// active cell); right-click selects then opens the shared column-header context menu, so Hide/
     /// Unhide Columns and the other column commands act on the column the user clicked.
     /// </summary>
     private Control CreateColumnHeaderCell(uint col, ColMetric metric, bool selected, double zoomFactor)
     {
-        var header = CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, IsActiveHeaderColumn(col), zoomFactor);
+        var header = CreateHeaderCell(FormatColumnHeaderLabel(col), selected, IsActiveHeaderColumn(col), zoomFactor);
         header.Padding = new Thickness(0, GetColumnOutlineGutterHeight(_session.Viewport, zoomFactor), 0, 0);
         header.Cursor = new Cursor(StandardCursorType.Hand);
         // sweep86 F1 remediation: gives real-PointerPressed regression tests a stable hook to
@@ -26905,11 +26968,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 .FormatOpen("preparing", TimeSpan.Zero, percent: null, UiText.Get)
                 .Detail;
             _statusText.Foreground = Brush(67, 113, 83);
+            ApplyFileOperationProgress(null);
             var progress = new Progress<WorkbookOpenProgressUpdate>(
                 update =>
                 {
                     _statusText.Text = WorkbookProgressTextFormatter.FormatOpen(update, UiText.Get).Detail;
                     _statusText.Foreground = Brush(67, 113, 83);
+                    ApplyFileOperationProgress(update.Percent);
                 });
 
             var workflowResult = await _fileWorkflow.OpenAsync(new WorkbookOpenWorkflowRequest(
@@ -27715,6 +27780,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 {
                     _statusText.Text = WorkbookProgressTextFormatter.FormatSave(update, UiText.Get).Detail;
                     _statusText.Foreground = Brush(67, 113, 83);
+                    ApplyFileOperationProgress(update.Percent);
                 });
 
             // R120-corewriter-persist-saving-window-view-1: reconcile THIS view's own per-window
@@ -27769,6 +27835,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         .FormatSave("preparing", TimeSpan.Zero, percent: null, UiText.Get)
                         .Detail;
                     _statusText.Foreground = Brush(67, 113, 83);
+                    ApplyFileOperationProgress(null);
                     UpdateSaveButton();
                 },
                 ExecutionCompleted: () =>

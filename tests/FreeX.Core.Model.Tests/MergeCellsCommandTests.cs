@@ -212,4 +212,91 @@ public class MergeCellsCommandTests
         sheet.MergedRegions.Should().BeEmpty();
     }
 
+    // freex-cell-comments F1: a legacy note/comment on a non-anchor cell being merged away must not
+    // be left behind at its now-covered address -- every comment-aware UI path (GridView.Rendering's
+    // indicator, GridView.CommentPreview's hit-testing, CommentNavigationPlanner's Next Note/Comment)
+    // assumes a merged range's comments only ever live at the anchor cell. Before the fix, Apply only
+    // touched Sheet cell values and left B1's comment orphaned at B1 (now covered, unreachable), never
+    // relocating it to the anchor A1.
+    [Fact]
+    public void F1_Merge_RelocatesNonAnchorLegacyCommentToAnchor()
+    {
+        var (_, sheet, ctx) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.Comments[b1] = "note on b1";
+        sheet.CommentAuthors[b1] = "Alice";
+        sheet.ShownComments.Add(b1);
+
+        var range = new GridRange(a1, b1);
+        new MergeCellsCommand(sheet.Id, range).Apply(ctx);
+
+        sheet.Comments.Should().ContainKey(a1).WhoseValue.Should().Be("note on b1");
+        sheet.CommentAuthors.Should().ContainKey(a1).WhoseValue.Should().Be("Alice");
+        sheet.ShownComments.Should().Contain(a1);
+        sheet.Comments.Should().NotContainKey(b1);
+        sheet.CommentAuthors.Should().NotContainKey(b1);
+        sheet.ShownComments.Should().NotContain(b1);
+    }
+
+    // Same relocation must happen for threaded comments (the modern comment model), independently of
+    // legacy notes.
+    [Fact]
+    public void F1_Merge_RelocatesNonAnchorThreadedCommentToAnchor()
+    {
+        var (_, sheet, ctx) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.ThreadedComments[b1] = new ThreadedComment("threaded on b1", "Bob");
+
+        var range = new GridRange(a1, b1);
+        new MergeCellsCommand(sheet.Id, range).Apply(ctx);
+
+        sheet.ThreadedComments.Should().ContainKey(a1).WhoseValue.Text.Should().Be("threaded on b1");
+        sheet.ThreadedComments.Should().NotContainKey(b1);
+    }
+
+    // Sibling/no-regression: when the anchor cell already carries its own comment, that comment must
+    // not be clobbered by a covered cell's comment -- the covered cell's comment is discarded (matching
+    // the "upper-left survives" content-loss rule Excel already applies to cell values), not silently
+    // overwriting the anchor's own note.
+    [Fact]
+    public void F1_Merge_KeepsAnchorsOwnComment_WhenNonAnchorAlsoHasOne()
+    {
+        var (_, sheet, ctx) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.Comments[a1] = "anchor's own note";
+        sheet.Comments[b1] = "covered note";
+
+        var range = new GridRange(a1, b1);
+        new MergeCellsCommand(sheet.Id, range).Apply(ctx);
+
+        sheet.Comments[a1].Should().Be("anchor's own note");
+        sheet.Comments.Should().NotContainKey(b1);
+    }
+
+    // Sibling/no-regression: Revert must put a relocated comment back on its original covered cell and
+    // remove it from the anchor, exactly undoing the migration performed by Apply.
+    [Fact]
+    public void F1_MergeRevert_RestoresRelocatedCommentToOriginalCell()
+    {
+        var (_, sheet, ctx) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.Comments[b1] = "note on b1";
+        sheet.CommentAuthors[b1] = "Alice";
+        sheet.ShownComments.Add(b1);
+
+        var range = new GridRange(a1, b1);
+        var cmd = new MergeCellsCommand(sheet.Id, range);
+        cmd.Apply(ctx);
+        cmd.Revert(ctx);
+
+        sheet.Comments.Should().NotContainKey(a1);
+        sheet.Comments.Should().ContainKey(b1).WhoseValue.Should().Be("note on b1");
+        sheet.CommentAuthors.Should().ContainKey(b1).WhoseValue.Should().Be("Alice");
+        sheet.ShownComments.Should().Contain(b1);
+    }
+
 }

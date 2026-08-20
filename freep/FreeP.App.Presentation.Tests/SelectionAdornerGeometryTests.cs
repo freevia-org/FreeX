@@ -100,6 +100,54 @@ public sealed class SelectionAdornerGeometryTests
     }
 
     [Fact]
+    public void BuildProjection_RotatesPictureCropHandlesWithTheShape()
+    {
+        // Regression for freep-picture-effects F1: crop handles must be rotated about the
+        // shape's bounds center, matching where the compositor actually paints the picture
+        // (SlideCanvasGeometryPlanner.OrientedBoundsToScreen does the same for the selection
+        // outline of the same shape).
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.Picture,
+            OffsetXEmu = ToEmu(10),
+            OffsetYEmu = ToEmu(20),
+            ExtentCxEmu = ToEmu(100),
+            ExtentCyEmu = ToEmu(80),
+            RotationDeg = 90,
+            Picture = new ImagePart { Bytes = [1] },
+        });
+
+        var projection = SelectionAdornerGeometry.BuildProjection(
+            slide,
+            presentation,
+            [7],
+            SlideTransformCore.Identity,
+            editPointsEnabled: true);
+
+        // Un-rotated local handle centers would be (10,60)/(60,20)/(110,60)/(60,100) -- on the
+        // un-rotated frame's edges. Rotating 90 degrees about the bounds center (60,60) swings
+        // each handle a quarter turn onto the edge that is actually visible once the picture
+        // itself is painted rotated.
+        projection.GeometryHandles.Should().Equal(
+            new SelectionAdornerGeometryHandlePlan(
+                PictureCropAuthoringPlanner.LeftHandleName,
+                new CanvasGesturePoint(60, 10)),
+            new SelectionAdornerGeometryHandlePlan(
+                PictureCropAuthoringPlanner.TopHandleName,
+                new CanvasGesturePoint(100, 60)),
+            new SelectionAdornerGeometryHandlePlan(
+                PictureCropAuthoringPlanner.RightHandleName,
+                new CanvasGesturePoint(60, 110)),
+            new SelectionAdornerGeometryHandlePlan(
+                PictureCropAuthoringPlanner.BottomHandleName,
+                new CanvasGesturePoint(20, 60)));
+    }
+
+    [Fact]
     public void BuildProjection_DispatchesNonPicturesToPresetGeometryHandles()
     {
         var presentation = Presentation.CreateEmpty();

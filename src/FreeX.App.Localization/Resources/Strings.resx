@@ -2615,6 +2615,9 @@
   <data name="GetData_ImportedStatus" xml:space="preserve">
     <value>Imported {0} ({1} rows × {2} columns)</value>
   </data>
+  <data name="GetData_ImportingStatus" xml:space="preserve">
+    <value>Importing {0}</value>
+  </data>
   <data name="GetData_RefreshNoSource" xml:space="preserve">
     <value>No imported data source to refresh. Use Get Data first.</value>
   </data>

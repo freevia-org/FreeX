@@ -429,13 +429,24 @@ public sealed class PictureFormat
     /// </summary>
     public double? AlphaModPct { get; set; }
 
+    /// <summary>
+    /// Verbatim outer XML of the <c>a:ext</c> element (uri="{BEBA8EAE-BF5A-486C-A8C5-ECC9F3942E4B}")
+    /// carrying the a14 "imgEffect" <c>a14:artisticEffect</c> extension from <c>a:blip/a:extLst</c>
+    /// (PowerPoint's Picture Format &gt; Artistic Effects, e.g. Pencil Sketch, Glow Diffused,
+    /// Mosaic Bubbles). Not modeled attribute-by-attribute — round-tripped byte-for-byte so a
+    /// picture opened and re-saved keeps whichever artistic effect PowerPoint applied to it.
+    /// Null when the picture has no artistic effect.
+    /// </summary>
+    public string? ArtisticEffectXml { get; set; }
+
     /// <summary>True when any colour effect is active.</summary>
     public bool HasColorEffect =>
         Grayscale ||
         BiLevelThreshold.HasValue ||
         Brightness.HasValue ||
         Contrast.HasValue ||
-        AlphaModPct.HasValue;
+        AlphaModPct.HasValue ||
+        ArtisticEffectXml is not null;
 }
 
 /// <summary>

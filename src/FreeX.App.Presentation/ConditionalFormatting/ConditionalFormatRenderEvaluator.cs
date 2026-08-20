@@ -72,16 +72,32 @@ public sealed class ConditionalFormatRenderEvaluator
         DataBarLayout? dataBar = null;
         IconSetResult? iconSet = null;
 
+        // Bold/Italic/Underline use "first (highest-priority) rule that explicitly decided this
+        // attribute wins" -- the same tri-state semantics ViewportConditionalFormatEvaluator.
+        // StackDifferentialStyle applies via its DxfBold/DxfItalic/DxfUnderline-aware EffectiveToggle
+        // -- instead of naive OR-across-all-matching-rules, which would let a lower-priority rule's
+        // explicit "on" silently override a higher-priority rule's explicit "off". Tracked separately
+        // from `style` because ConditionalFormatStylePlan's Bold/Italic/Underline fields are plain
+        // bool and can't themselves distinguish "explicitly off" from "not decided by this rule".
+        bool? decidedBold = null;
+        bool? decidedItalic = null;
+        bool? decidedUnderline = null;
+
         for (var i = 0; i < _rulesByPriority.Count; i++)
         {
             var rule = _rulesByPriority[i];
             if (!rule.AllRanges.Any(range => range.Contains(address)))
                 continue;
 
-            var conditionMet = EvaluateRule(rule, address, value, out var ruleStyle, out var ruleDataBar, out var ruleIconSet);
+            var conditionMet = EvaluateRule(
+                rule, address, value, out var ruleStyle, out var ruleDataBar, out var ruleIconSet,
+                out var ruleDecidedBold, out var ruleDecidedItalic, out var ruleDecidedUnderline);
 
             if (ruleStyle is { } matchedStyle)
                 style = style is { } accumulated ? StackStyle(accumulated, matchedStyle) : matchedStyle;
+            decidedBold ??= ruleDecidedBold;
+            decidedItalic ??= ruleDecidedItalic;
+            decidedUnderline ??= ruleDecidedUnderline;
             if (dataBar is null && ruleDataBar is { } matchedDataBar)
                 dataBar = matchedDataBar;
             if (iconSet is null && ruleIconSet is { } matchedIconSet)
@@ -89,6 +105,19 @@ public sealed class ConditionalFormatRenderEvaluator
 
             if (conditionMet && rule.StopIfTrue)
                 break;
+        }
+
+        // Materialize the tri-state Bold/Italic/Underline decision onto the style plan once, here --
+        // an attribute no rule ever explicitly decided defaults to false, matching prior behavior for
+        // cells with no matching dxf font override.
+        if (style is { } finalStyle)
+        {
+            style = finalStyle with
+            {
+                Bold = decidedBold ?? false,
+                Italic = decidedItalic ?? false,
+                Underline = decidedUnderline ?? false,
+            };
         }
 
         return new ConditionalFormatCellPlan(style, dataBar, iconSet);
@@ -100,11 +129,17 @@ public sealed class ConditionalFormatRenderEvaluator
         ScalarValue value,
         out ConditionalFormatStylePlan? style,
         out DataBarLayout? dataBar,
-        out IconSetResult? iconSet)
+        out IconSetResult? iconSet,
+        out bool? decidedBold,
+        out bool? decidedItalic,
+        out bool? decidedUnderline)
     {
         style = null;
         dataBar = null;
         iconSet = null;
+        decidedBold = null;
+        decidedItalic = null;
+        decidedUnderline = null;
 
         switch (rule.RuleType)
         {
@@ -139,7 +174,7 @@ public sealed class ConditionalFormatRenderEvaluator
                 }
 
                 if (rule.FormatIfTrue is { } formatIfTrue)
-                    style = ExtractStyle(formatIfTrue);
+                    style = ExtractStyle(formatIfTrue, out decidedBold, out decidedItalic, out decidedUnderline);
                 return true;
             }
             case CfRuleType.AboveAverage:
@@ -151,7 +186,7 @@ public sealed class ConditionalFormatRenderEvaluator
                 }
 
                 if (rule.FormatIfTrue is { } formatIfTrue)
-                    style = ExtractStyle(formatIfTrue);
+                    style = ExtractStyle(formatIfTrue, out decidedBold, out decidedItalic, out decidedUnderline);
                 return true;
             }
             case CfRuleType.DataBar:
@@ -200,7 +235,7 @@ public sealed class ConditionalFormatRenderEvaluator
                     return false;
 
                 if (rule.FormatIfTrue is { } formatIfTrue)
-                    style = ExtractStyle(formatIfTrue);
+                    style = ExtractStyle(formatIfTrue, out decidedBold, out decidedItalic, out decidedUnderline);
                 return true;
             }
             default:
@@ -271,13 +306,27 @@ public sealed class ConditionalFormatRenderEvaluator
         return ordered;
     }
 
-    private static ConditionalFormatStylePlan ExtractStyle(CellStyle style) =>
-        new(
+    private static ConditionalFormatStylePlan ExtractStyle(
+        CellStyle style,
+        out bool? decidedBold,
+        out bool? decidedItalic,
+        out bool? decidedUnderline)
+    {
+        // Resolve the dxf's tri-state Bold/Italic/Underline decision exactly like
+        // ViewportConditionalFormatEvaluator.EffectiveToggle: style.DxfBold/DxfItalic/DxfUnderline
+        // (populated by XlsxDifferentialStyleReader) win when the dxf explicitly set the attribute --
+        // including an explicit "off" -- otherwise fall back to treating a plain `true` as an implicit
+        // "on" and `false` as "not specified" (the convention every non-dxf CF style producer uses).
+        decidedBold = EffectiveToggle(style.DxfBold, style.Bold);
+        decidedItalic = EffectiveToggle(style.DxfItalic, style.Italic);
+        decidedUnderline = EffectiveToggle(style.DxfUnderline, style.Underline);
+
+        return new(
             style.FillColor,
             style.FontColor != CellColor.Black ? style.FontColor : null,
-            style.Bold,
-            style.Italic,
-            style.Underline,
+            decidedBold ?? false,
+            decidedItalic ?? false,
+            decidedUnderline ?? false,
             // Mirrors ViewportConditionalFormatEvaluator.MergeStyles: a dxf number format only counts
             // as an override when it's explicitly set to something other than "General".
             !string.IsNullOrEmpty(style.NumberFormat) &&
@@ -288,6 +337,15 @@ public sealed class ConditionalFormatRenderEvaluator
             style.BorderRight,
             style.BorderBottom,
             style.BorderLeft);
+    }
+
+    /// <summary>
+    /// Resolves a CF dxf's tri-state decision for one of the Bold/Italic/Underline toggles. Mirrors
+    /// ViewportConditionalFormatEvaluator.EffectiveToggle so print/PDF and the on-screen grid can never
+    /// drift apart on what counts as "explicitly decided" versus "not specified".
+    /// </summary>
+    private static bool? EffectiveToggle(bool? dxfValue, bool plainValue) =>
+        dxfValue ?? (plainValue ? true : null);
 
     private static ConditionalFormatStylePlan StackStyle(
         ConditionalFormatStylePlan accumulated,
@@ -295,9 +353,14 @@ public sealed class ConditionalFormatRenderEvaluator
         new(
             accumulated.FillColor ?? next.FillColor,
             accumulated.FontColor ?? next.FontColor,
-            accumulated.Bold || next.Bold,
-            accumulated.Italic || next.Italic,
-            accumulated.Underline || next.Underline,
+            // Bold/Italic/Underline here are provisional placeholders: Evaluate() overwrites them
+            // unconditionally after the rule loop using its own decidedBold/decidedItalic/
+            // decidedUnderline tri-state accumulation (first rule to explicitly decide wins), because
+            // this struct's plain bool fields can't carry "explicitly off" through the stack on their
+            // own. Do not rely on the values produced here.
+            false,
+            false,
+            false,
             // First matching (highest-priority) rule that specifies a number format wins, matching
             // ViewportConditionalFormatEvaluator.StackDifferentialStyle's "first matching rule wins"
             // semantics for the on-screen grid.

@@ -227,6 +227,23 @@ public partial class GridView
         set => SetValue(HyperlinkCellsProperty, value);
     }
 
+    /// <summary>
+    /// F1: host-supplied hover ScreenTip text for each <see cref="HyperlinkCells"/> address --
+    /// the cell's custom ScreenTip (set via the Insert Hyperlink dialog's ScreenTip... button) if
+    /// one was set, otherwise the raw link target, matching Excel's own hover behavior and
+    /// mirroring FreeX.App.Avalonia's FormatHyperlinkTooltip. Consulted by GridView.Input.cs to
+    /// show a WPF ToolTip on plain hover (no Ctrl needed), independent of the Ctrl+hover hand
+    /// cursor.
+    /// </summary>
+    public static readonly DependencyProperty HyperlinkTooltipsProperty =
+        DependencyProperty.Register(nameof(HyperlinkTooltips), typeof(IReadOnlyDictionary<CellAddress, string>), typeof(GridView),
+            new FrameworkPropertyMetadata(null));
+    public IReadOnlyDictionary<CellAddress, string>? HyperlinkTooltips
+    {
+        get => (IReadOnlyDictionary<CellAddress, string>?)GetValue(HyperlinkTooltipsProperty);
+        set => SetValue(HyperlinkTooltipsProperty, value);
+    }
+
     public static readonly DependencyProperty ChartsProperty =
         DependencyProperty.Register(nameof(Charts), typeof(IReadOnlyList<ChartModel>), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnChartRenderCacheInputChanged));

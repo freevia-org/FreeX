@@ -106,6 +106,14 @@ public partial class MainWindow
             // guard) so File > Open cannot be reached from the ribbon/menus while the import is in
             // flight -- matching Excel's modal Get Data behavior.
             RootGrid.IsEnabled = false;
+            // Surface the same footer progress affordance ExportAsPdf/ExportAsXps show for their
+            // own background work, so the window does not go inert with zero feedback: adapter.Load
+            // runs off-thread inside WorkbookImportWorkflow.ImportPathAsync below with no phase/percent
+            // reporting of its own, so this is indeterminate (percent: null) rather than a real bar.
+            ShowSaveProgress(
+                UiText.Get("MainWindowMessage_GetDataTitle"),
+                UiText.Format("GetData_ImportingStatus", System.IO.Path.GetFileName(importPath)),
+                null);
 
             // Capture the target session/workbook/sheet/destination BEFORE the await: a concurrent File >
             // Open reachable via a keyboard shortcut (not gated by RootGrid.IsEnabled above) can
@@ -229,6 +237,7 @@ public partial class MainWindow
         {
             _isImportingData = false;
             RootGrid.IsEnabled = true;
+            HideSaveProgress();
         }
     }
 

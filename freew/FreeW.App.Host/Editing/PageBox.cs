@@ -354,6 +354,17 @@ internal sealed class PageBox : Border
                 sourceModel, footnoteIds ?? Array.Empty<int>(),
                 endnoteIds ?? Array.Empty<int>(),
                 marginLeft, marginRight, contentWidth, isEndnoteBox);
+
+            // Carve the note region out of the fixed page content area instead of appending it below
+            // a full-height body -- the same thing Print/Print Preview/PDF do by growing
+            // PagePadding.Bottom (see PrintPreviewWindow.ApplyFootnoteBodyReserve and
+            // PaginationEngine.ComputeMaxPerPageFootnoteReserveDip) so the page stays a fixed size.
+            // Measuring the actual region here (rather than re-deriving the pagination-time reserve
+            // estimate) guarantees the subtraction matches exactly what row 2 renders, so
+            // header+body+notes+footer sums back to the true, footnote-free page height.
+            noteRegion.Measure(new Size(pageWidth, double.PositiveInfinity));
+            Body.MinHeight = Math.Max(0, Body.MinHeight - noteRegion.DesiredSize.Height);
+
             Grid.SetRow(noteRegion, 2);
             stack.Children.Add(noteRegion);
         }

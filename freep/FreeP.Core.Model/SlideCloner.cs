@@ -827,6 +827,7 @@ public static class SlideCloner
         Brightness        = f.Brightness,
         Contrast          = f.Contrast,
         AlphaModPct       = f.AlphaModPct,
+        ArtisticEffectXml = f.ArtisticEffectXml,
     };
 
     private static ConnectorAttachment CloneConnectorAttachment(ConnectorAttachment src) => new()

@@ -31,6 +31,10 @@ public static class PptxPackageReader
     private const string AutoNumTemplateExtUri = "{2E2E4D2B-4E4E-4A9E-9B3A-7C2BAA5D1B7C}";
     private const string RecordingMediaArtifactsPath = "ppt/media/recordingArtifacts.xml";
 
+    /// <summary>Shared empty fallback for callers that don't track masters by path (e.g. tests).</summary>
+    private static readonly IReadOnlyDictionary<string, SlideMaster> EmptyMastersByPath =
+        new Dictionary<string, SlideMaster>(StringComparer.OrdinalIgnoreCase);
+
     // ── Relationship type constants ───────────────────────────────────────────────
     private const string OfficeDocRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
     private const string SlideRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
@@ -221,6 +225,10 @@ public static class PptxPackageReader
         // Slide masters → layouts
         var masterRelEntries = presRels.Where(r => r.Type == SlideMasterRelType).ToList();
         bool firstMaster = true;
+        // Tracks each master by the normalized zip path it was read from, so an orphaned slide
+        // layout (see ResolveOrphanLayout) can be tied back to its real owning master via the
+        // layout's own p:sldLayout rels instead of guessing.
+        var mastersByPath = new Dictionary<string, SlideMaster>(StringComparer.OrdinalIgnoreCase);
         foreach (var (masterId, _, masterTarget) in masterRelEntries)
         {
             var masterPath = ResolveRelativeZipPath(presDir, masterTarget);
@@ -236,6 +244,7 @@ public static class PptxPackageReader
             }
             firstMaster = false;
             presentation.Masters.Add(master);
+            mastersByPath[masterPath] = master;
 
             var masterDir = GetDirectoryName(masterPath);
             var masterRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(masterPath));
@@ -394,7 +403,7 @@ public static class PptxPackageReader
             Slide slide;
             try
             {
-                slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId, presentation.Theme);
+                slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId, presentation.Theme, mastersByPath);
                 slide.NumericId = allSlides[si].NumericId;
             }
             catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
@@ -1262,7 +1271,8 @@ public static class PptxPackageReader
         Dictionary<string, TableStyleData>? tableStyles = null,
         List<Slide>? allSlides = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null,
-        PresentationTheme? theme = null)
+        PresentationTheme? theme = null,
+        IReadOnlyDictionary<string, SlideMaster>? mastersByPath = null)
     {
         var slide = new Slide { Id = slideId };
 
@@ -1279,7 +1289,8 @@ public static class PptxPackageReader
         {
             var layoutPath = ResolveRelativeZipPath(GetDirectoryName(slidePath), layoutTarget);
             // Match with our loaded layouts by exact normalized path (PartPath).
-            slide.LayoutId = MatchLayoutIdByPath(layoutPath, layouts);
+            slide.LayoutId = MatchLayoutIdByPath(
+                archive, layoutPath, layouts, mastersByPath ?? EmptyMastersByPath, scheme, theme);
         }
 
         var bg = xml.Root.Element(P + "cSld")?.Element(P + "bg");
@@ -1388,12 +1399,18 @@ public static class PptxPackageReader
     }
 
     /// <summary>
-    /// Matches a slide to its layout by exact normalized OPC part path.
-    /// Falls back to the first layout if no exact match (should not happen in well-formed packages).
+    /// Matches a slide to its layout by exact normalized OPC part path, then by bare file name.
+    /// When neither matches a layout reached by walking the presentation's slide masters (a real
+    /// file can still declare a layout relationship the master walk never reaches), reads the
+    /// layout directly from the part the slide's own relationship names -- see
+    /// <see cref="ResolveOrphanLayout"/> -- instead of silently reassigning the slide to an
+    /// unrelated layout.
     /// </summary>
-    private static string? MatchLayoutIdByPath(string layoutPath, List<SlideLayout> layouts)
+    private static string? MatchLayoutIdByPath(
+        ZipArchive archive, string layoutPath, List<SlideLayout> layouts,
+        IReadOnlyDictionary<string, SlideMaster> mastersByPath,
+        PresentationColorScheme scheme, PresentationTheme? theme)
     {
-        if (layouts.Count == 0) return null;
         // Primary: exact path match against the stored PartPath.
         var match = layouts.Find(l => string.Equals(l.PartPath, layoutPath, StringComparison.OrdinalIgnoreCase));
         if (match is not null) return match.Id;
@@ -1401,7 +1418,56 @@ public static class PptxPackageReader
         var seg = layoutPath.Split('/').Last();
         match = layouts.Find(l => string.Equals(l.PartPath.Split('/').Last(), seg, StringComparison.OrdinalIgnoreCase));
         if (match is not null) return match.Id;
-        return layouts[0].Id;
+        return ResolveOrphanLayout(archive, layoutPath, layouts, mastersByPath, scheme, theme);
+    }
+
+    /// <summary>
+    /// Reads a slide layout directly from <paramref name="layoutPath"/> when the slide's declared
+    /// layout relationship could not be matched against the layouts reached by walking the
+    /// presentation's slide masters. This covers real-world/hand-edited packages where a slide's
+    /// layout part exists in the zip but isn't reachable through the master-side relationship walk
+    /// (e.g. divergent relative-path resolution). Ties the new layout back to its real owning
+    /// master by following the layout part's own <c>slideMaster</c> relationship; falls back to
+    /// the first known master/theme (matching this reader's existing single-master-deck fallback
+    /// convention) only when that relationship is missing or unresolvable. Returns null -- leaving
+    /// the slide's LayoutId unresolved, which <c>PlaceholderResolver</c> already tolerates by
+    /// falling back to master-wide placeholder matching -- only when the part truly isn't present
+    /// in the package.
+    /// </summary>
+    private static string? ResolveOrphanLayout(
+        ZipArchive archive, string layoutPath, List<SlideLayout> layouts,
+        IReadOnlyDictionary<string, SlideMaster> mastersByPath,
+        PresentationColorScheme scheme, PresentationTheme? theme)
+    {
+        // A truly missing part (as opposed to one merely unreached by the master walk) keeps the
+        // existing "unresolved layout" degrade path rather than fabricating an empty layout entry.
+        var layoutXml = OpcXml.TryLoadXml(archive, layoutPath);
+        if (layoutXml?.Root is null) return null;
+
+        string? masterId = layouts.Count > 0 ? layouts[0].MasterId : null;
+        var resolvedTheme = theme;
+
+        var layoutRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(layoutPath));
+        var masterTarget = OpcRelationships.FirstTargetByType(layoutRels, SlideMasterRelType);
+        if (masterTarget is not null)
+        {
+            var resolvedMasterPath = ResolveRelativeZipPath(GetDirectoryName(layoutPath), masterTarget);
+            if (mastersByPath.TryGetValue(resolvedMasterPath, out var owningMaster))
+            {
+                masterId = owningMaster.Id;
+                resolvedTheme = owningMaster.Theme ?? theme;
+            }
+        }
+
+        var newLayout = ReadSlideLayout(
+            archive, layoutPath, layoutPath, masterId ?? string.Empty,
+            resolvedTheme?.ColorScheme ?? scheme, resolvedTheme);
+
+        // Guard against re-adding the same orphan path if more than one slide references it --
+        // after the first slide resolves it, later slides hit the exact-path match above instead.
+        if (!layouts.Exists(l => string.Equals(l.PartPath, layoutPath, StringComparison.OrdinalIgnoreCase)))
+            layouts.Add(newLayout);
+        return newLayout.Id;
     }
 
     // ── Shape tree ───────────────────────────────────────────────────────────────
@@ -1636,9 +1702,12 @@ public static class PptxPackageReader
     private const string DrawingOleUri =
         "http://schemas.openxmlformats.org/presentationml/2006/ole";
 
-    // a14: namespace — hosts a14:m math element
+    // a14: namespace — hosts a14:m math element and a14:artisticEffect
     private static readonly XNamespace A14 =
         "http://schemas.microsoft.com/office/drawing/2010/main";
+
+    // a14 "imgEffect" extension URI — carries a14:artisticEffect under a:blip/a:extLst.
+    private const string ArtisticEffectExtUri = "{BEBA8EAE-BF5A-486C-A8C5-ECC9F3942E4B}";
 
     // m: namespace — OOXML OMML (Office Math Markup Language)
     private static readonly XNamespace M =
@@ -8148,6 +8217,18 @@ public static class PptxPackageReader
             var alphaFix = blip.Element(A + "alphaModFix");
             if (alphaFix is not null)
                 fmt.AlphaModPct = ParsePercentFraction(alphaFix.Attribute("amt")?.Value);
+
+            // a:extLst/a:ext[@uri=a14 imgEffect] — Artistic Effects (Picture Format > Artistic
+            // Effects: Pencil Sketch, Photocopy, Glow Diffused, Glass, Mosaic Bubbles, etc). Not
+            // decomposed into a model per-effect; captured verbatim so it survives a save even
+            // though FreeP doesn't render or edit it yet (matches the a14:artisticEffect ISO/IEC
+            // 29500 transitional extension used exclusively for this feature).
+            var artisticExt = blip.Element(A + "extLst")?.Elements(A + "ext")
+                .FirstOrDefault(e => string.Equals(
+                    e.Attribute("uri")?.Value, ArtisticEffectExtUri, StringComparison.OrdinalIgnoreCase)
+                    && e.Element(A14 + "artisticEffect") is not null);
+            if (artisticExt is not null)
+                fmt.ArtisticEffectXml = artisticExt.ToString(SaveOptions.DisableFormatting);
         }
 
         // Return null when nothing was set so the caller can use null as "no format".

@@ -616,6 +616,20 @@ public partial class MainWindow
             : sheet.Hyperlinks.Keys
                 .Select(address => new CellAddress(default, address.Row, address.Col))
                 .ToHashSet();
+        // F1: the WPF host never surfaced a hyperlinked cell's ScreenTip/target on hover (only a
+        // Ctrl+hover hand cursor) -- mirror FreeX.App.Avalonia's FormatHyperlinkTooltip so
+        // GridView.Input.cs's UpdateHyperlinkScreenTip has text to show: the custom ScreenTip if
+        // one was set via the Insert Hyperlink dialog, otherwise the raw target.
+        SheetGrid.HyperlinkTooltips = sheet is null
+            ? null
+            : sheet.Hyperlinks
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.Value))
+                .ToDictionary(
+                    entry => new CellAddress(default, entry.Key.Row, entry.Key.Col),
+                    entry => sheet.HyperlinkMetadata.TryGetValue(entry.Key, out var metadata) &&
+                             !string.IsNullOrWhiteSpace(metadata.ScreenTip)
+                        ? metadata.ScreenTip.Trim()
+                        : entry.Value.Trim());
         SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch
         {
             AppOptionsObjectDisplay.Placeholders => FreeX.App.UI.GridObjectDisplayMode.Placeholders,
