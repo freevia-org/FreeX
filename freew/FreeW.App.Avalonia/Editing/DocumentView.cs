@@ -345,6 +345,12 @@ public sealed partial class DocumentView : Control
     private (DocPosition Start, DocPosition End)? _bodyDragSourceSelection;
     private DocPosition _bodyDragOriginalAnchor;
     private DocPosition _bodyDragOriginalCaret;
+    // The pointer held for the duration of the gesture, like every other drag this view implements.
+    // Without capture, a release outside this control is routed elsewhere: OnPointerReleased never runs
+    // here, so the drag neither commits nor restores its selection, and _bodyDragPending/_bodyDragActive
+    // stay set — claiming every later move — until some future press happens to clear them. Mirrors the
+    // WPF host's PaginatedEditorPanel Begin/EndActiveDrag capture (round 153, shared-drag-drop F3).
+    private IPointer? _bodyDragPointer;
     private DocumentViewAutomationPeer? _automationPeer;
     private string? _lastAutomationValue;
     private string? _lastAutomationSelectionStatus;
@@ -16888,7 +16894,7 @@ public sealed partial class DocumentView : Control
             // AV-DRAGMOVE: a plain press landing inside the current selection arms a pending drag
             // instead of collapsing it — see OnPointerMoved/OnPointerReleased for the rest of the
             // gesture.
-            if (!shift && !ctrlOrMeta && TryArmBodyTextDrag(point, pos))
+            if (!shift && !ctrlOrMeta && TryArmBodyTextDrag(point, pos, e.Pointer))
             {
                 e.Handled = true;
                 return;
@@ -16896,6 +16902,7 @@ public sealed partial class DocumentView : Control
             _bodyDragPending = false;
             _bodyDragActive = false;
             _bodyDragSourceSelection = null;
+            _bodyDragPointer = null;
 
             // AV-TBL: When entering a cell, _cellCaret was set by TryHitTest.
             // When leaving a cell (hitting body text), _cellCaret is cleared.
@@ -17060,6 +17067,7 @@ public sealed partial class DocumentView : Control
             _bodyDragPending = false;
             _bodyDragActive = false;
             _bodyDragSourceSelection = null;
+            _bodyDragPointer = null;
             Cursor = Cursor.Default;
             InvalidateVisual();
         }
@@ -24561,7 +24569,7 @@ public sealed partial class DocumentView : Control
     /// drag state untouched — for every other press, so the caller's ordinary click/selection-start
     /// behaviour runs unchanged.
     /// </summary>
-    private bool TryArmBodyTextDrag(Point point, DocPosition pos)
+    private bool TryArmBodyTextDrag(Point point, DocPosition pos, IPointer? pointer = null)
     {
         // A cell drag-move is a separate, unimplemented gesture — leaving _cellCaret null here (i.e.
         // declining to arm) keeps the existing cross-cell selection path untouched.
@@ -24579,6 +24587,10 @@ public sealed partial class DocumentView : Control
         _bodyDragSourceSelection = existingSelection;
         _bodyDragOriginalAnchor = _selectionAnchor!.Value;
         _bodyDragOriginalCaret = _caret;
+        // Hold the pointer for the whole gesture so the release always comes back to this control even
+        // when it happens outside its bounds — otherwise the armed state above can never be cleared.
+        _bodyDragPointer = pointer;
+        pointer?.Capture(this);
         return true;
     }
 
@@ -24624,10 +24636,15 @@ public sealed partial class DocumentView : Control
         var pressPos = _bodyDragPressPos;
         var originalAnchor = _bodyDragOriginalAnchor;
         var originalCaret = _bodyDragOriginalCaret;
+        var pointer = _bodyDragPointer;
         _bodyDragPending = false;
         _bodyDragActive = false;
         _bodyDragSourceSelection = null;
+        _bodyDragPointer = null;
         Cursor = Cursor.Default;
+        // Clear the state above before releasing capture: Avalonia can raise capture-lost synchronously
+        // from here, and that handler must not mistake this completed drag for an abandoned one.
+        pointer?.Capture(null);
 
         // Sub-threshold release: this was always just a click, never a drag — collapse to the press
         // point exactly like an ordinary (non-drag-aware) body click would.
