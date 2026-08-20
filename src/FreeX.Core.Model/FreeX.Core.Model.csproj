@@ -16,4 +16,11 @@
     <Using Include="Free.Shared.Drawing" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Sheet.ActiveCellWriteObserver, the #164 (R138) diagnostic seam, is internal so it is not
+         part of the model's public surface. Only the test assembly that owns that investigation
+         needs to see it. -->
+    <InternalsVisibleTo Include="FreeX.App.Host.Logic.Tests" />
+  </ItemGroup>
+
 </Project>

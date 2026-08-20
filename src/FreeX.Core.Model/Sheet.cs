@@ -283,11 +283,44 @@ public sealed partial class Sheet
     /// <summary>Saved left visible column from the worksheet view, when present.</summary>
     public uint? ViewLeftCol { get; set; }
 
+    private uint? _activeRow;
+    private uint? _activeCol;
+
+    /// <summary>
+    /// Diagnostic seam for #164 (R138). Set on a single <see cref="Sheet"/> instance by a test to
+    /// observe every write to <see cref="ActiveRow"/>/<see cref="ActiveCol"/>; null and inert
+    /// otherwise, and deliberately an INSTANCE field rather than a static, because static mutable
+    /// state on model types has caused cross-test interference in this codebase before.
+    ///
+    /// It exists because that failure -- a sibling window's active cell reaching the writer instead
+    /// of the saving window's own -- has survived several rounds of narrowing: the reconcile is now
+    /// known to run and to write the correct value, so the overwrite happens between it and
+    /// serialization, and every candidate identified by reading has been ruled out. Naming the
+    /// writer needs the write itself observed, not another argument about which one it could be.
+    /// </summary>
+    internal Action<string, uint?>? ActiveCellWriteObserver { get; set; }
+
     /// <summary>Saved active cell row from the worksheet view, when present.</summary>
-    public uint? ActiveRow { get; set; }
+    public uint? ActiveRow
+    {
+        get => _activeRow;
+        set
+        {
+            ActiveCellWriteObserver?.Invoke(nameof(ActiveRow), value);
+            _activeRow = value;
+        }
+    }
 
     /// <summary>Saved active cell column from the worksheet view, when present.</summary>
-    public uint? ActiveCol { get; set; }
+    public uint? ActiveCol
+    {
+        get => _activeCol;
+        set
+        {
+            ActiveCellWriteObserver?.Invoke(nameof(ActiveCol), value);
+            _activeCol = value;
+        }
+    }
 
     /// <summary>
     /// True when this sheet is authored right-to-left (OOXML <c>sheetView/@rightToLeft</c>), as Excel
