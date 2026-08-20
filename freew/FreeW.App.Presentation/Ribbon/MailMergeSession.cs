@@ -18,6 +18,14 @@ public sealed class MailMergeSession
 
     public FieldMapping? Mapping { get; set; }
 
+    // Parallel to Data.Rows: the 1-based row number each currently-active record held in the ORIGINAL,
+    // unfiltered/unsorted recipient list as loaded by MailMergeSessionWorkflow.LoadRecipients. Word's
+    // MERGEREC field must report this original position, not the record's position after Edit Recipient
+    // List has filtered/reordered Data. This lives on the session (not on MailMergeSessionWorkflow)
+    // because every ribbon command constructs a fresh MailMergeSessionWorkflow(session) per click --
+    // only MailMergeSession itself survives across clicks.
+    internal IReadOnlyList<int> OriginalRecordNumbers { get; set; } = [];
+
     public bool IsPreviewing => Template is not null;
 
     public TextDocument? EndPreview()

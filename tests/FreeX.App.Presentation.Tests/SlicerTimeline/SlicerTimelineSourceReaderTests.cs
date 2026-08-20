@@ -148,6 +148,39 @@ public sealed class SlicerTimelineSourceReaderTests
         SlicerTimelineSourceReader.ReadFieldItems(sheet, pivot, "Missing").Should().BeEmpty();
     }
 
+    // Excel serial 60 is the phantom 1900-02-29 (a date that never existed in the real
+    // Gregorian calendar). YEAR/MONTH/DAY, TEXT(), and grid display all resolve it to
+    // "1900-02-29" (see ExcelDateSystem.IsPhantomLeapDaySerial / NumberFormatter's
+    // OverridePhantomLeapDayOfMonthTokens). A pivot source date column must agree: this
+    // pins that a Timeline/Slicer item list shows the same date as the cell it came from,
+    // instead of the one-day-earlier "1900-02-28" that plain DateTime.FromOADate(60) yields.
+    [Fact]
+    public void ReadFieldItems_PhantomLeapDaySerial_MatchesGridAndTextFormatting()
+    {
+        var (_, sheet) = BuildSheet();
+        Set(sheet, 1, 1, "Date");
+        SetDate(sheet, 2, 1, 60);
+        var pivot = new PivotTableModel { Name = "Pivot1", SourceRange = Range(sheet, 1, 1, 2, 1) };
+
+        SlicerTimelineSourceReader.ReadFieldItems(sheet, pivot, "Date")
+            .Should().Equal("1900-02-29");
+    }
+
+    // Sibling no-regression check: an ordinary, comfortably-past-1900 date must still render
+    // as a plain "yyyy-MM-dd" string once the phantom-leap-day path is routed through the
+    // shared conversion -- the fix must not disturb the common case.
+    [Fact]
+    public void ReadFieldItems_OrdinaryDateSerial_FormatsUnaffected()
+    {
+        var (_, sheet) = BuildSheet();
+        Set(sheet, 1, 1, "Date");
+        SetDate(sheet, 2, 1, DateTimeValue.FromDateTime(new DateTime(2024, 3, 15)).Value);
+        var pivot = new PivotTableModel { Name = "Pivot1", SourceRange = Range(sheet, 1, 1, 2, 1) };
+
+        SlicerTimelineSourceReader.ReadFieldItems(sheet, pivot, "Date")
+            .Should().Equal("2024-03-15");
+    }
+
     [Theory]
     [InlineData("2024-01-01", "2024-02-15", TimelineGranularity.Day)]
     [InlineData("2024-01-01", "2024-09-30", TimelineGranularity.Month)]
@@ -175,6 +208,9 @@ public sealed class SlicerTimelineSourceReaderTests
 
     private static void Set(Sheet sheet, uint row, uint col, string value) =>
         sheet.SetCell(new CellAddress(sheet.Id, row, col), new TextValue(value));
+
+    private static void SetDate(Sheet sheet, uint row, uint col, double excelSerial) =>
+        sheet.SetCell(new CellAddress(sheet.Id, row, col), new DateTimeValue(excelSerial));
 
     private static GridRange Range(Sheet sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>
         new(new CellAddress(sheet.Id, startRow, startCol), new CellAddress(sheet.Id, endRow, endCol));

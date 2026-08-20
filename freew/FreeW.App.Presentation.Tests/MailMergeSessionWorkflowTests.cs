@@ -134,6 +134,55 @@ public sealed class MailMergeSessionWorkflowTests
     }
 
     [Fact]
+    public void ApplyRecipientFilter_FinishMergeReportsOriginalRowAcrossFreshWorkflowsPerRibbonClick()
+    {
+        // FreeWRibbonCommands.cs never keeps one MailMergeSessionWorkflow around: every ribbon command's
+        // Execute constructs `new MailMergeSessionWorkflow(session)` fresh (13 sites), sharing only the
+        // persistent MailMergeSession across clicks. Reproduce that exact pattern here -- a fresh workflow
+        // per step, wrapping one shared session -- instead of driving a single long-lived workflow the way
+        // the other tests in this file do, so this test cannot pass on lineage state that only survives
+        // because it happens to live on the workflow instance a single test method reuses.
+        var template = DocumentWith(
+            $"{MailMerge.FieldOpen}Name{MailMerge.FieldClose}=" +
+            $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose};");
+        var session = new MailMergeSession();
+
+        new MailMergeSessionWorkflow(session).LoadRecipients(MergeData.FromCsv("Name\nAda\nGrace\nAlan"));
+        new MailMergeSessionWorkflow(session).SetMode(MailMergeOutputMode.Directory);
+        var filtered = MergeData.FromCsv("Name\nAda\nAlan");
+        new MailMergeSessionWorkflow(session).ApplyRecipientFilter(filtered);
+        var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(filtered.Count);
+        var result = new MailMergeSessionWorkflow(session).ExecuteFinish(template, plan);
+
+        result.Success.Should().BeTrue();
+        result.Document!.PlainText.Should().Contain("Ada=1");
+        result.Document.PlainText.Should().Contain("Alan=3");
+        result.Document.PlainText.Should().NotContain("Alan=2");
+    }
+
+    [Fact]
+    public void ExecuteFinish_UnfilteredRecipientsReportPositionAcrossFreshWorkflowsPerRibbonClick()
+    {
+        // Sibling/no-regression case for the fresh-workflow-per-click pattern above: with no Edit
+        // Recipient List filter or sort ever applied, MERGEREC must still report each record's plain
+        // 1-based position even when every step goes through its own freshly constructed workflow.
+        var template = DocumentWith(
+            $"{MailMerge.FieldOpen}Name{MailMerge.FieldClose}=" +
+            $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose};");
+        var session = new MailMergeSession();
+
+        new MailMergeSessionWorkflow(session).LoadRecipients(MergeData.FromCsv("Name\nAda\nGrace\nAlan"));
+        new MailMergeSessionWorkflow(session).SetMode(MailMergeOutputMode.Directory);
+        var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(3);
+        var result = new MailMergeSessionWorkflow(session).ExecuteFinish(template, plan);
+
+        result.Success.Should().BeTrue();
+        result.Document!.PlainText.Should().Contain("Ada=1");
+        result.Document.PlainText.Should().Contain("Grace=2");
+        result.Document.PlainText.Should().Contain("Alan=3");
+    }
+
+    [Fact]
     public void ApplyRecipientFilter_PreviewReportsOriginalRecipientListRowNotFilteredPosition()
     {
         // Preview Results must match what Finish & Merge will print for the same record -- so it must

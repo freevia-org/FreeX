@@ -42,7 +42,19 @@ public sealed partial class SpreadsheetXmlFileAdapter : IFileAdapter
     public Workbook Load(Stream stream) =>
         Load(stream, SecureXmlReaderSettings.DefaultMaxCharactersInDocument);
 
-    internal Workbook Load(Stream stream, long maxCharactersInDocument)
+    internal Workbook Load(Stream stream, long maxCharactersInDocument) =>
+        LoadWithWarnings(stream, maxCharactersInDocument).Workbook;
+
+    public XlsxLoadResult LoadWithWarnings(Stream stream) =>
+        LoadWithWarnings(stream, SecureXmlReaderSettings.DefaultMaxCharactersInDocument);
+
+    /// <summary>
+    /// Loads a SpreadsheetML (Excel XML Spreadsheet 2003) stream, also reporting when
+    /// <see cref="ReadWorksheet"/> had to break out of its row or column loop because an explicit
+    /// <c>ss:Index</c> jumped past this sheet's grid limit -- see that method's doc comment for why
+    /// the used range alone cannot be trusted to reveal that afterwards.
+    /// </summary>
+    internal XlsxLoadResult LoadWithWarnings(Stream stream, long maxCharactersInDocument)
     {
         var document = LoadDocument(stream, maxCharactersInDocument);
         if (document.Root?.Name != SpreadsheetNs + "Workbook")
@@ -51,6 +63,7 @@ public sealed partial class SpreadsheetXmlFileAdapter : IFileAdapter
         var workbook = new Workbook("XML Spreadsheet");
         var styles = ReadStyles(workbook, document.Root);
         var sheetIndex = 1;
+        List<string>? gridLimitWarnings = null;
         foreach (var worksheetElement in document.Root.Elements(SpreadsheetNs + "Worksheet"))
         {
             var sheetName = UniqueSheetName(
@@ -60,7 +73,16 @@ public sealed partial class SpreadsheetXmlFileAdapter : IFileAdapter
             var sheet = workbook.AddSheet(sheetName);
             ReadWorksheetVisibility(sheet, worksheetElement);
             ReadWorksheetOptions(sheet, worksheetElement);
-            ReadWorksheet(sheet, worksheetElement, styles);
+            var (rowLimitExceeded, colLimitExceeded) = ReadWorksheet(sheet, worksheetElement, styles);
+            if (rowLimitExceeded || colLimitExceeded)
+            {
+                gridLimitWarnings ??= [];
+                gridLimitWarnings.Add(rowLimitExceeded && colLimitExceeded
+                    ? $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more rows and columns than this sheet's {CellAddress.MaxRow:N0}-row, {CellAddress.MaxCol:N0}-column limit; anything beyond that limit was not loaded."
+                    : rowLimitExceeded
+                        ? $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more than {CellAddress.MaxRow:N0} rows; rows beyond that limit were not loaded."
+                        : $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more than {CellAddress.MaxCol:N0} columns; columns beyond that limit were not loaded.");
+            }
         }
 
         if (workbook.Sheets.Count == 0)
@@ -68,7 +90,7 @@ public sealed partial class SpreadsheetXmlFileAdapter : IFileAdapter
 
         ReadNamedRanges(workbook, document.Root);
 
-        return workbook;
+        return new XlsxLoadResult(workbook, gridLimitWarnings ?? (IReadOnlyList<string>)[]);
     }
 
     public void Save(Workbook workbook, Stream stream)

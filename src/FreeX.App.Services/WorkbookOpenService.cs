@@ -113,19 +113,50 @@ public sealed class WorkbookOpenService
                     return legacyResult.Workbook;
                 }
 
+                // R156-remediation-p4: unlike the row/col readers in the fallback branch below, these
+                // three readers can drop a data-carrying record whose address is explicitly out of
+                // range WITHOUT the loaded sheet's used range ever reaching the boundary -- SlkFileAdapter
+                // and SpreadsheetXmlFileAdapter skip a record addressed past the limit rather than
+                // clamping to it (SpreadsheetML's own ss:Index can jump straight past the limit on a
+                // sparse sheet), and NativeJsonAdapter's TryGetCellAddress rejects an out-of-range
+                // address before it ever becomes a CellAddress. The DetectGridLimitTruncationWarnings
+                // heuristic below is therefore blind to a sparse source file in any of these three
+                // formats, so each reports its own truncation directly via LoadWithWarnings instead.
+                if (adapter is SlkFileAdapter slkAdapter)
+                {
+                    var slkResult = slkAdapter.LoadWithWarnings(fileStream);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    loadWarnings = slkResult.Warnings;
+                    return slkResult.Workbook;
+                }
+                if (adapter is SpreadsheetXmlFileAdapter spreadsheetXmlAdapter)
+                {
+                    var spreadsheetXmlResult = spreadsheetXmlAdapter.LoadWithWarnings(fileStream);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    loadWarnings = spreadsheetXmlResult.Warnings;
+                    return spreadsheetXmlResult.Workbook;
+                }
+                if (adapter is NativeJsonAdapter nativeJsonAdapter)
+                {
+                    var nativeJsonResult = nativeJsonAdapter.LoadWithWarnings(fileStream);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    loadWarnings = nativeJsonResult.Warnings;
+                    return nativeJsonResult.Workbook;
+                }
+
                 var loadedWorkbook = adapter.Load(fileStream);
                 cancellationToken.ThrowIfCancellationRequested();
                 // R156-appservices-open-fallback-grid-limit: every other importable format (CSV/TSV,
-                // fixed-width PRN, Symbolic Link SLK, Data Interchange DIF, dBase DBF, ODS, the legacy
-                // SpreadsheetML .xml, native .fxl JSON, HTML/PDF table paste, ...) lands here with no
-                // LoadWithWarnings counterpart the way XlsxFileAdapter/LegacyXlsFileAdapter have above --
-                // their readers just stop writing cells once a row/column index passes
+                // fixed-width PRN, Data Interchange DIF, dBase DBF, ODS, HTML/PDF table paste, ...)
+                // lands here with no LoadWithWarnings counterpart the way XlsxFileAdapter/
+                // LegacyXlsFileAdapter/SlkFileAdapter/SpreadsheetXmlFileAdapter/NativeJsonAdapter have
+                // above -- their readers just stop writing cells once a row/column index passes
                 // CellAddress.MaxRow/MaxCol (e.g. DelimitedTextWorkbookReader.Load's
                 // "if (row > CellAddress.MaxRow) break;", mirrored in PrnFileAdapter/DbfFileAdapter/
-                // SlkFileAdapter/DifFileAdapter/OdsFileAdapter.Read). A source file bigger than the grid
-                // therefore previously opened "successfully" with zero signal that anything was dropped,
-                // and a later Save over the original file would then unrecoverably lose that data. Every
-                // one of those readers breaks exactly AT the boundary, so a sheet whose used range still
+                // DifFileAdapter/OdsFileAdapter.Read). A source file bigger than the grid therefore
+                // previously opened "successfully" with zero signal that anything was dropped, and a
+                // later Save over the original file would then unrecoverably lose that data. Every one
+                // of those readers breaks exactly AT the boundary, so a sheet whose used range still
                 // reaches FreeX's very last supported row/column is the same signal real Excel itself
                 // uses to show its own "not all data was loaded" warning on this same gesture -- detect
                 // it here (format-agnostically, since none of those readers expose a warning channel of

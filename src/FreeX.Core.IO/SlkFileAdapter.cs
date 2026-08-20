@@ -31,7 +31,18 @@ public sealed class SlkFileAdapter : IFileAdapter
         new FileFormatDescriptor(".slk", "SYLK (Symbolic Link)", CanOpen: true, CanSave: true)
     ];
 
-    public Workbook Load(Stream stream)
+    public Workbook Load(Stream stream) => LoadWithWarnings(stream).Workbook;
+
+    /// <summary>
+    /// Loads a SYLK stream, also reporting when a cell record's explicit Y/X address falls outside
+    /// this sheet's row/column limits. <see cref="HandleCellRecord"/> skips such a record rather than
+    /// clamping it — a sparse .slk (Excel's own writer emits one record per occupied cell, so a
+    /// large source workbook need not touch every row/column in between) can therefore drop data
+    /// without the loaded sheet's used range ever reaching the boundary, which is why this is
+    /// detected here at the point of the skip rather than inferred afterwards from the used range
+    /// (see R156-appservices-open-fallback-grid-limit in WorkbookOpenService.cs).
+    /// </summary>
+    public XlsxLoadResult LoadWithWarnings(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
         var workbook = new Workbook("Untitled");
@@ -44,6 +55,8 @@ public sealed class SlkFileAdapter : IFileAdapter
         // fiddly; we map only the small built-in P-format subset we emit on write, keyed by index.
         var formatCodesByIndex = new List<string>();
         uint curRow = 1, curCol = 1;
+        var rowLimitExceeded = false;
+        var colLimitExceeded = false;
 
         string? line;
         while ((line = ReadLogicalLine(reader)) is not null)
@@ -58,7 +71,7 @@ public sealed class SlkFileAdapter : IFileAdapter
             switch (fields[0])
             {
                 case "E":
-                    return workbook;
+                    return new XlsxLoadResult(workbook, BuildGridLimitWarnings(sheet, rowLimitExceeded, colLimitExceeded));
                 case "P":
                     // A format-definition record: "P;P<format-code>" appends a code to the indexed table
                     // (referenced later by F;P<index>). Other P sub-codes (fonts etc.) are ignored.
@@ -75,13 +88,33 @@ public sealed class SlkFileAdapter : IFileAdapter
                     HandleFormatRecord(workbook, sheet, fields, formatCodesByIndex);
                     break;
                 case "C":
-                    HandleCellRecord(sheet, fields, ref curRow, ref curCol);
+                    HandleCellRecord(sheet, fields, ref curRow, ref curCol, ref rowLimitExceeded, ref colLimitExceeded);
                     break;
                 // ID / B / O / P / NU / NE and other records carry no cell data we model — skip.
             }
         }
 
-        return workbook;
+        return new XlsxLoadResult(workbook, BuildGridLimitWarnings(sheet, rowLimitExceeded, colLimitExceeded));
+    }
+
+    /// <summary>
+    /// Mirrors the wording WorkbookOpenService.DetectGridLimitTruncationWarnings uses for the
+    /// heuristic (used-range-boundary) case, so the message reads the same regardless of which
+    /// detection path found it.
+    /// </summary>
+    private static IReadOnlyList<string> BuildGridLimitWarnings(Sheet sheet, bool rowLimitExceeded, bool colLimitExceeded)
+    {
+        if (!rowLimitExceeded && !colLimitExceeded)
+            return [];
+
+        return
+        [
+            rowLimitExceeded && colLimitExceeded
+                ? $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more rows and columns than this sheet's {CellAddress.MaxRow:N0}-row, {CellAddress.MaxCol:N0}-column limit; anything beyond that limit was not loaded."
+                : rowLimitExceeded
+                    ? $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more than {CellAddress.MaxRow:N0} rows; rows beyond that limit were not loaded."
+                    : $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more than {CellAddress.MaxCol:N0} columns; columns beyond that limit were not loaded."
+        ];
     }
 
     public void Save(Workbook workbook, Stream stream)
@@ -209,7 +242,9 @@ public sealed class SlkFileAdapter : IFileAdapter
         Sheet sheet,
         List<string> fields,
         ref uint curRow,
-        ref uint curCol)
+        ref uint curCol,
+        ref bool rowLimitExceeded,
+        ref bool colLimitExceeded)
     {
         string? expression = null;
         string? constant = null;
@@ -239,7 +274,13 @@ public sealed class SlkFileAdapter : IFileAdapter
         if (!hasConstant && expression is null)
             return;
         if (!IsValidPosition(curRow, curCol))
+        {
+            // Data-carrying record explicitly addressed beyond the sheet's limits — the record is
+            // dropped right here rather than clamped, so this is the only place that knows it happened.
+            if (curRow > CellAddress.MaxRow) rowLimitExceeded = true;
+            if (curCol > CellAddress.MaxCol) colLimitExceeded = true;
             return;
+        }
 
         var addr = new CellAddress(sheet.Id, curRow, curCol);
         Cell cell;

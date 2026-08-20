@@ -73,6 +73,40 @@ public static partial class FormulaAuditingService
                 CollectReferences(workbook, hostSheetId, unary.Operand, result);
                 break;
 
+            // R156-freex-recalc-order-F1 taught RecalcEngine.CollectReferences to resolve a
+            // literal-string INDIRECT("A1")/INDIRECT("Sheet!A1") target the same way a bare cell
+            // reference resolves, so a circular reference formed through one INDIRECT hop is
+            // visible to the dependency graph. This walk backs GetDirectPrecedents/
+            // GetDirectPrecedentRegions/GetPrecedentTraceArrows/GetDirectDependents -- the Trace
+            // Precedents/Dependents ribbon buttons and the Error Checking "Trace Error" action --
+            // and had the identical gap: without this case, INDIRECT only fell through to the
+            // generic FunctionCallNode case below, which recurses into arguments looking for
+            // FormulaNode references and finds nothing inside a StringNode, so the INDIRECT target
+            // silently dropped out of the precedent list. Share the resolver (rather than
+            // restating the rule a third time) so both walks agree on what counts as a static
+            // INDIRECT target.
+            //
+            // Deliberately simpler than RecalcEngine's version: that one also skips adding an edge
+            // when the resolved target equals the formula's OWN cell, because doing so would route
+            // a direct self-reference through structural cycle detection instead of the already-
+            // verified runtime iterative-calculation self-reference pairing (see
+            // BuiltInFunctions.Lookup.Indirect.cs's IsIndirectSelfReference remarks) that only
+            // exists for live recalculation. This walk has no such runtime pairing to protect --
+            // it's a static audit/trace query with no notion of "the currently evaluating formula"
+            // (CollectReferences here isn't even given the formula's own CellAddress) -- and the
+            // ordinary CellRefNode case just above already includes a literal self-reference like
+            // `=A1` on cell A1 in the precedent list unconditionally, so excluding INDIRECT's
+            // self-reference here would make it disagree with that existing, unfiltered CellRefNode
+            // behavior for no reason.
+            case FunctionCallNode indirectCall when
+                string.Equals(indirectCall.FunctionName, "INDIRECT", StringComparison.OrdinalIgnoreCase) &&
+                indirectCall.Arguments.Count == 1 &&
+                indirectCall.Arguments[0] is StringNode { Value: var indirectRefText } &&
+                BuiltInFunctions.TryResolveIndirectStaticCellTarget(indirectRefText, out var indirectSheetName, out var indirectRow, out var indirectCol):
+                if (ResolveSheet(workbook, hostSheetId, indirectSheetName) is { } indirectSheet)
+                    result.Add(new CellAddress(indirectSheet.Id, indirectRow, indirectCol));
+                break;
+
             case FunctionCallNode function:
                 foreach (var arg in function.Arguments)
                     CollectReferences(workbook, hostSheetId, arg, result);
@@ -151,6 +185,22 @@ public static partial class FormulaAuditingService
 
             case UnaryOpNode unary:
                 CollectReferenceRegions(workbook, hostSheetId, unary.Operand, result);
+                break;
+
+            // Mirrors CollectReferences's INDIRECT case above (R156-freex-recalc-order-F1 /
+            // TryResolveIndirectStaticCellTarget) so a literal-string INDIRECT target shows up as
+            // a precedent region/trace arrow too, not just in the flattened GetDirectPrecedents
+            // list.
+            case FunctionCallNode indirectCall when
+                string.Equals(indirectCall.FunctionName, "INDIRECT", StringComparison.OrdinalIgnoreCase) &&
+                indirectCall.Arguments.Count == 1 &&
+                indirectCall.Arguments[0] is StringNode { Value: var indirectRefText } &&
+                BuiltInFunctions.TryResolveIndirectStaticCellTarget(indirectRefText, out var indirectSheetName, out var indirectRow, out var indirectCol):
+                if (ResolveSheet(workbook, hostSheetId, indirectSheetName) is { } indirectSheet)
+                {
+                    var indirectAddr = new CellAddress(indirectSheet.Id, indirectRow, indirectCol);
+                    result.Add(new GridRange(indirectAddr, indirectAddr));
+                }
                 break;
 
             case FunctionCallNode function:

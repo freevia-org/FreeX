@@ -31,7 +31,17 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
     public string Extension => ".fxl";
     public string FormatName => "FreeX Workbook";
 
-    public Workbook Load(Stream stream)
+    public Workbook Load(Stream stream) => LoadWithWarnings(stream).Workbook;
+
+    /// <summary>
+    /// Loads a .fxl stream, also reporting when a cell's address is well-formed but outside this
+    /// sheet's row/column limits. TryGetCellAddress drops such a cell silently (both the CellDto.Read
+    /// fast-path parse and CellAddress.TryParse's fallback bounds-check row/col before ever
+    /// constructing an address), so a sparse file whose out-of-range cells never happen to land on
+    /// the exact MaxRow/MaxCol boundary would otherwise leave nothing for a used-range scan to catch
+    /// after the fact.
+    /// </summary>
+    public XlsxLoadResult LoadWithWarnings(Stream stream)
     {
         var dto = JsonSerializer.Deserialize<WorkbookDto>(stream, LoadOptions)
             ?? throw new InvalidDataException("Invalid FreeX file");
@@ -87,9 +97,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         var cellStyleTable = LoadCellStyleTable(workbook, dto.CellStyles);
         Dictionary<CellStyleDto, StyleId>? styleIdCache = null;
         var sheetIndex = 1;
+        List<string>? gridLimitWarnings = null;
         foreach (var sDto in dto.Sheets ?? [])
         {
             if (sDto is null) continue;
+            var rowLimitExceeded = false;
+            var colLimitExceeded = false;
             var sheet = workbook.AddSheet(UniqueSheetName(workbook, sDto.Name, sheetIndex++));
             pendingPivotTables.Add((sheet, sDto));
             if (!string.IsNullOrWhiteSpace(sDto.Name))
@@ -428,7 +441,21 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 try
                 {
                     if (!TryGetCellAddress(cDto, sheet.Id, out var addr))
+                    {
+                        // A well-formed COL+ROW address that is numerically out of range is dropped
+                        // right here by TryGetCellAddress (both the fast Utf8 parse in CellDto.Read
+                        // and CellAddress.TryParse's fallback bounds-check row/col before ever
+                        // constructing an address) -- there is no boundary cell anywhere in the sheet
+                        // for a later used-range scan to notice, so the warning has to be raised at
+                        // this exact skip.
+                        if (!string.IsNullOrEmpty(cDto.Address) &&
+                            AddressExceedsGridLimits(cDto.Address, out var rowExceeded, out var colExceeded))
+                        {
+                            rowLimitExceeded |= rowExceeded;
+                            colLimitExceeded |= colExceeded;
+                        }
                         continue;
+                    }
                     var value = cDto.HasParsedNumericValue && cDto.ParsedValueType == 'n'
                         ? new NumberValue(cDto.ParsedNumericValue)
                         : cDto.HasParsedNumericValue && cDto.ParsedValueType == 'd'
@@ -467,6 +494,16 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                         sheet.SetStyleOnly(address.Row, address.Col, styleId);
                 }
                 catch (FormatException) { /* skip style-only entries with unparseable addresses */ }
+            }
+
+            if (rowLimitExceeded || colLimitExceeded)
+            {
+                gridLimitWarnings ??= [];
+                gridLimitWarnings.Add(rowLimitExceeded && colLimitExceeded
+                    ? $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more rows and columns than this sheet's {CellAddress.MaxRow:N0}-row, {CellAddress.MaxCol:N0}-column limit; anything beyond that limit was not loaded."
+                    : rowLimitExceeded
+                        ? $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more than {CellAddress.MaxRow:N0} rows; rows beyond that limit were not loaded."
+                        : $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more than {CellAddress.MaxCol:N0} columns; columns beyond that limit were not loaded.");
             }
         }
 
@@ -635,7 +672,52 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     string.IsNullOrWhiteSpace(scenarioDto.User) ? null : scenarioDto.User));
         }
 
-        return workbook;
+        return new XlsxLoadResult(workbook, gridLimitWarnings ?? (IReadOnlyList<string>)[]);
+    }
+
+    /// <summary>
+    /// True when <paramref name="a1"/> has the clean COL(letters)+ROW(digits) shape of a real cell
+    /// address but its row or column number is beyond <see cref="CellAddress.MaxRow"/>/
+    /// <see cref="CellAddress.MaxCol"/> -- as opposed to text that failed to parse as an address at
+    /// all (garbage/corruption, a different bug class this does not attempt to flag).
+    /// </summary>
+    private static bool AddressExceedsGridLimits(string a1, out bool rowExceeded, out bool colExceeded)
+    {
+        rowExceeded = false;
+        colExceeded = false;
+
+        var value = a1.AsSpan().Trim();
+        var index = 0;
+        var columnStart = index;
+        ulong col = 0;
+        while (index < value.Length)
+        {
+            var c = value[index];
+            var normalized = c is >= 'a' and <= 'z' ? (char)(c - ('a' - 'A')) : c;
+            if (normalized is < 'A' or > 'Z')
+                break;
+            col = col * 26 + (uint)(normalized - 'A' + 1);
+            index++;
+        }
+        if (index == columnStart)
+            return false;
+
+        var rowStart = index;
+        ulong row = 0;
+        while (index < value.Length)
+        {
+            var c = value[index];
+            if (c is < '0' or > '9')
+                return false;
+            row = row * 10 + (uint)(c - '0');
+            index++;
+        }
+        if (index == rowStart || row == 0)
+            return false;
+
+        rowExceeded = row > CellAddress.MaxRow;
+        colExceeded = col > CellAddress.MaxCol;
+        return rowExceeded || colExceeded;
     }
 
     private static bool TryGetCellAddress(CellDto dto, SheetId sheetId, out CellAddress address)

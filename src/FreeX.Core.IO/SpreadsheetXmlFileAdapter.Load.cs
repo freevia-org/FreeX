@@ -37,20 +37,37 @@ public sealed partial class SpreadsheetXmlFileAdapter
         sheet.FrozenCols = ReadPaneSplit(optionsElement, ExcelNs + "SplitVertical", CellAddress.MaxCol);
     }
 
-    private static void ReadWorksheet(Sheet sheet, XElement worksheetElement, IReadOnlyDictionary<string, StyleId> styles)
+    /// <summary>
+    /// Reads a worksheet's rows/cells, returning whether the row loop or the column loop hit this
+    /// sheet's grid limit. Excel's own SpreadsheetML writer represents sparse rows with an explicit
+    /// <c>ss:Index</c> jump (e.g. row 5 followed directly by row 2,000,000) rather than emitting every
+    /// row in between, so a break here can skip straight past the limit without ever writing a cell
+    /// at the boundary -- the caller can no longer infer truncation from the loaded sheet's used
+    /// range afterwards the way WorkbookOpenService.DetectGridLimitTruncationWarnings does for
+    /// readers that stop exactly at the boundary. Reporting it here, at the break, is what those
+    /// jumps need.
+    /// </summary>
+    private static (bool RowLimitExceeded, bool ColLimitExceeded) ReadWorksheet(
+        Sheet sheet, XElement worksheetElement, IReadOnlyDictionary<string, StyleId> styles)
     {
         var tableElement = worksheetElement.Element(SpreadsheetNs + "Table");
         if (tableElement is null)
-            return;
+            return (false, false);
 
         var columnStyles = ReadColumns(sheet, tableElement, styles);
+
+        var rowLimitExceeded = false;
+        var colLimitExceeded = false;
 
         var rowIndex = 1u;
         foreach (var rowElement in tableElement.Elements(SpreadsheetNs + "Row"))
         {
             rowIndex = ReadIndex(rowElement, rowIndex);
             if (rowIndex > CellAddress.MaxRow)
+            {
+                rowLimitExceeded = true;
                 break;
+            }
 
             var rowSpan = ReadSpan(rowElement);
             var lastRowIndex = rowSpan > CellAddress.MaxRow - rowIndex
@@ -66,7 +83,10 @@ public sealed partial class SpreadsheetXmlFileAdapter
             {
                 columnIndex = ReadIndex(cellElement, columnIndex);
                 if (columnIndex > CellAddress.MaxCol)
+                {
+                    colLimitExceeded = true;
                     break;
+                }
 
                 var address = new CellAddress(sheet.Id, rowIndex, columnIndex);
                 columnStyles.TryGetValue(columnIndex, out var columnStyleId);
@@ -102,6 +122,8 @@ public sealed partial class SpreadsheetXmlFileAdapter
 
             rowIndex = lastRowIndex + 1;
         }
+
+        return (rowLimitExceeded, colLimitExceeded);
     }
 
     private static Dictionary<uint, StyleId> ReadColumns(

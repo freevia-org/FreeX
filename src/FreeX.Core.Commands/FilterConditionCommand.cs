@@ -420,8 +420,15 @@ internal static class FilterCriterionAutoFilterModelBuilder
 
     private static string FormatNumber(double value) => value.ToString(CultureInfo.InvariantCulture);
 
+    // r156-remediation: Excel serial, not OADate. The two spaces differ by one for any date before
+    // 1900-03-01, because Excel keeps a day that never existed (29 February 1900) and .NET does
+    // not. This value is written into the worksheet's <customFilters> XML, so an OADate here means
+    // the saved filter threshold disagrees with real Excel -- and with the NumberValue branch of
+    // PersistedCustomFilterCriterion.Matches sitting a few lines below, which compares a genuine
+    // Excel serial against it. DateTimeValue.FromDateTime is the model's one conversion.
     private static string FormatDate(DateOnly date) =>
-        date.ToDateTime(TimeOnly.MinValue).ToOADate().ToString(CultureInfo.InvariantCulture);
+        DateTimeValue.FromDateTime(date.ToDateTime(TimeOnly.MinValue)).Value
+            .ToString(CultureInfo.InvariantCulture);
 }
 
 /// <summary>
@@ -498,10 +505,12 @@ internal sealed record PersistedCustomFilterCriterion(string? Operator, string V
                 // comparison operator, but non-blank text still resolves through notEqual"
                 // behaviour.
                 case DateTimeValue date when date.TryToDateTime(out var dateValue):
-                    var cellSerial = DateOnly
-                        .FromDateTime(dateValue)
-                        .ToDateTime(TimeOnly.MinValue)
-                        .ToOADate();
+                    // r156-remediation: Excel serial, matching what FormatDate now writes and what
+                    // the NumberValue case above compares. Round to whole days first so a cell
+                    // carrying a time-of-day still compares against a date-only threshold.
+                    var cellSerial = DateTimeValue
+                        .FromDateTime(DateOnly.FromDateTime(dateValue).ToDateTime(TimeOnly.MinValue))
+                        .Value;
                     return CompareNumeric(cellSerial, threshold, Operator);
             }
         }

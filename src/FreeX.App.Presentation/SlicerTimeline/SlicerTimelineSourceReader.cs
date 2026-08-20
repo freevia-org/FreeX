@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using FreeX.App.Presentation.PivotUI;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.SlicerTimeline;
@@ -64,7 +65,13 @@ public static class SlicerTimelineSourceReader
         null or BlankValue => string.Empty,
         TextValue text => text.Value,
         NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
-        DateTimeValue date => DateTime.FromOADate(date.Value).ToString("yyyy-MM-dd", CultureInfo.CurrentCulture),
+        // NumberFormatter, not DateTime.FromOADate: DateTimeValue.Value is an Excel serial (the
+        // formula engine, the grid, and TEXT() all read it that way), and .NET's OADate space has
+        // no slot for Excel's phantom 1900-02-29 (serial 60) -- converting straight through
+        // FromOADate silently prints "1900-02-28" for that serial, one day off from what YEAR/
+        // MONTH/DAY, TEXT(), and the grid itself show for the very same cell. Routing through the
+        // shared formatter keeps this list agreeing with the cell it was read from.
+        DateTimeValue date => NumberFormatter.Format(date, "yyyy-MM-dd"),
         BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
         _ => value.ToString() ?? string.Empty,
     };

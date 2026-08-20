@@ -90,12 +90,6 @@ public sealed class MailMergeSessionWorkflow
 
     public MailMergeSession Session { get; }
 
-    // Parallel to Session.Data.Rows: the 1-based row number each currently-active record held in the
-    // ORIGINAL, unfiltered/unsorted recipient list as loaded by LoadRecipients. Word's MERGEREC field
-    // must report this original position, not the record's position after Edit Recipient List has
-    // filtered/reordered Session.Data -- see BuildFinish and RenderCurrentPreview below.
-    private IReadOnlyList<int> _originalRecordNumbers = [];
-
     public IReadOnlyList<string> AvailableFieldNames => Session.Data?.Header ?? [];
 
     public MailMergeValidationPlan Validate(MailMergeOperation operation) =>
@@ -147,7 +141,7 @@ public sealed class MailMergeSessionWorkflow
 
         var editableTemplate = Session.EndPreview();
         Session.Load(data);
-        _originalRecordNumbers = Enumerable.Range(1, data.Count).ToList();
+        Session.OriginalRecordNumbers = Enumerable.Range(1, data.Count).ToList();
         return new(
             editableTemplate,
             $"Loaded {data.Count} record(s) with {data.Header.Count} field(s).");
@@ -165,7 +159,7 @@ public sealed class MailMergeSessionWorkflow
     {
         var editableTemplate = Session.EndPreview();
         Session.Clear();
-        _originalRecordNumbers = [];
+        Session.OriginalRecordNumbers = [];
         return new(editableTemplate, "Mail merge reset to a normal document.");
     }
 
@@ -184,10 +178,11 @@ public sealed class MailMergeSessionWorkflow
         var editableTemplate = Session.EndPreview();
         // Filter/sort rebuilds MergeData from scratch (no row identity survives), so recover each
         // surviving row's true original recipient-list number by matching its values back against the
-        // still-current Session.Data/_originalRecordNumbers pair before it is overwritten below. This
-        // composes correctly across repeated filter/sort passes because _originalRecordNumbers already
-        // carries the lineage from any prior pass.
-        _originalRecordNumbers = ResolveOriginalRecordNumbers(Session.Data, _originalRecordNumbers, data);
+        // still-current Session.Data/Session.OriginalRecordNumbers pair before it is overwritten below.
+        // This composes correctly across repeated filter/sort passes because Session.OriginalRecordNumbers
+        // already carries the lineage from any prior pass.
+        Session.OriginalRecordNumbers =
+            ResolveOriginalRecordNumbers(Session.Data, Session.OriginalRecordNumbers, data);
         Session.Data = data;
         Session.CurrentIndex = 0;
         return new(editableTemplate, $"Recipient list now contains {data.Count} record(s).");
@@ -439,10 +434,10 @@ public sealed class MailMergeSessionWorkflow
     // as opposed to `index + 1`, its 1-based position within the current, possibly filtered/sorted
     // Session.Data (which is what MERGESEQ reports). Falls back to the row's own position if lineage
     // was never recorded for it (defensive only -- LoadRecipients and ApplyRecipientFilter always keep
-    // _originalRecordNumbers sized to match Session.Data).
+    // Session.OriginalRecordNumbers sized to match Session.Data).
     private int OriginalRecordNumber(int index) =>
-        index >= 0 && index < _originalRecordNumbers.Count
-            ? _originalRecordNumbers[index]
+        index >= 0 && index < Session.OriginalRecordNumbers.Count
+            ? Session.OriginalRecordNumbers[index]
             : index + 1;
 
     // Recover, for each row of the newly filtered/sorted `newData`, the original recipient-list row
