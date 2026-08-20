@@ -73,6 +73,16 @@ public sealed class CommonDialogChromeParityTests
     }
 
     [Fact]
+    public void HyperlinkDialog_UsesWpfMatchedWindowGeometry()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var avalonia = Read(root, "freep", "FreeP.App.Avalonia", "HyperlinkDialog.cs");
+
+        avalonia.Should().Contain("Width = 406;")
+            .And.Contain("Height = 212;");
+    }
+
+    [Fact]
     public void RemainingPairedDialogsUseTheSharedRendererBases()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");

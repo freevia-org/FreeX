@@ -39,8 +39,11 @@ internal sealed partial class HyperlinkDialog : FreePDialogWindow
         _surface = _session.Surface;
 
         Title = _surface.Title;
-        Width = 405.3333333333333;
-        Height = 216;
+        // WPF's content-sized hyperlink dialog raster is 406 x 212 at the
+        // shared 96-DPI capture target. Keep the fixed Avalonia dialog on the
+        // same geometry so all target states retain matching control baselines.
+        Width = 406;
+        Height = 212;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         AutomationProperties.SetName(this, _surface.Schema.AccessibleName);
