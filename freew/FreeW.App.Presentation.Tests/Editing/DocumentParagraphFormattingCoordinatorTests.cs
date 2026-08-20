@@ -95,6 +95,68 @@ public sealed class DocumentParagraphFormattingCoordinatorTests
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    // freew-numbering-restart F3: turning Numbering on for a paragraph that is NOT adjacent to an
+    // existing Number list (an unrelated body paragraph sits between them) must start a fresh
+    // sequence at 1 -- this is the only ribbon/command path that ever creates a Number list, so it
+    // is also the only place able to tell "new list" apart from "resume that list".
+    [Fact]
+    public void ListToggleOnUnrelatedParagraphRestartsNumberListAtOne()
+    {
+        var document = Document("One", "Two", "Interrupting body text.", "Alpha");
+        var first = (Paragraph)document.Blocks[0];
+        var second = (Paragraph)document.Blocks[1];
+        first.Formatting = first.Formatting with { ListKind = ListKind.Number };
+        second.Formatting = second.Formatting with { ListKind = ListKind.Number };
+        var newListParagraph = (Paragraph)document.Blocks[3];
+        var session = Session(document);
+
+        session.Paragraphs.ToggleListKind([3], ListKind.Number).Should().BeTrue();
+
+        newListParagraph.Formatting.ListKind.Should().Be(ListKind.Number);
+        newListParagraph.Formatting.ListStartOverride.Should().Be(1,
+            "clicking Numbering on a paragraph separated from the earlier list by unrelated body " +
+            "text starts an independent list, which must be able to begin again at 1");
+
+        // Assert the two paths (the coordinator that sets the override, and the renderer's marker
+        // planner that consumes it) actually agree on the rendered numbers, not just that a field
+        // was set.
+        var planner = new DocumentListMarkerSequencePlanner();
+        planner.Advance((Paragraph)document.Blocks[0]).NumberValue.Should().Be(1);
+        planner.Advance((Paragraph)document.Blocks[1]).NumberValue.Should().Be(2);
+        planner.Advance((Paragraph)document.Blocks[2]); // unrelated body paragraph, not a list item
+        planner.Advance(newListParagraph).NumberValue.Should().Be(1,
+            "the renderer must show the restarted list starting at 1, matching the override the toggle set");
+    }
+
+    // Sibling no-regression case: toggling Numbering on for a paragraph immediately following an
+    // existing Number list (no unrelated paragraph in between) is resuming that same list and must
+    // keep continuing its count, exactly like ListNumberingRestartWpfTests'
+    // NumberList_InterruptedByBodyParagraph_ContinuesNumberingAcrossInterruption already pins for
+    // the render layer.
+    [Fact]
+    public void ListToggleOnAdjacentParagraphContinuesExistingNumberList()
+    {
+        var document = Document("One", "Two", "Three");
+        var first = (Paragraph)document.Blocks[0];
+        var second = (Paragraph)document.Blocks[1];
+        first.Formatting = first.Formatting with { ListKind = ListKind.Number };
+        second.Formatting = second.Formatting with { ListKind = ListKind.Number };
+        var continuedParagraph = (Paragraph)document.Blocks[2];
+        var session = Session(document);
+
+        session.Paragraphs.ToggleListKind([2], ListKind.Number).Should().BeTrue();
+
+        continuedParagraph.Formatting.ListKind.Should().Be(ListKind.Number);
+        continuedParagraph.Formatting.ListStartOverride.Should().BeNull(
+            "resuming a list right where it left off must not force a restart");
+
+        var planner = new DocumentListMarkerSequencePlanner();
+        planner.Advance(first).NumberValue.Should().Be(1);
+        planner.Advance(second).NumberValue.Should().Be(2);
+        planner.Advance(continuedParagraph).NumberValue.Should().Be(3,
+            "the renderer must keep counting 1, 2, 3 -- this toggle continues the same list, it did not start a new one");
+    }
+
     [Fact]
     public void BordersAndShadingUseSharedTargetFilteringAndCaseInsensitiveTogglePolicy()
     {

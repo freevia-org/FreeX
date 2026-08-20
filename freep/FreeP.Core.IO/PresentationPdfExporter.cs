@@ -199,7 +199,7 @@ public static class PresentationPdfExporter
                     box);
 
                 if (hasText || (!IsConnectorLike(shape) && !IsPictureLike(shape)))
-                    AppendShapeText(shapeOps, box, content);
+                    AppendShapeText(shapeOps, box, shape, content, hasText);
 
                 AppendShapeOps(ops, shapeOps, box, shape.RotationDeg);
 
@@ -1132,10 +1132,14 @@ public static class PresentationPdfExporter
     private static (double X, double Y) ToPdfPoint((long X, long Y) point, double slideHeightPoints) =>
         PresentationPdfScenePlanner.ToPdfPoint(point, slideHeightPoints);
 
-    private static void AppendShapeText(List<PdfDrawOp> ops, ShapeBox box, string content)
+    private static void AppendShapeText(List<PdfDrawOp> ops, ShapeBox box, SlideShape shape, string content, bool hasText)
     {
-        var y = box.Y + box.Height - ShapeTextInsetPt - BodySize;
-        foreach (var line in Lines(content))
+        var lines = BuildShapeTextLines(shape, content, hasText);
+        if (lines.Count == 0)
+            return;
+
+        var y = box.Y + box.Height - ShapeTextInsetPt - lines[0].FontSizePt;
+        foreach (var line in lines)
         {
             if (y < box.Y + ShapeTextInsetPt)
                 return;
@@ -1143,12 +1147,52 @@ public static class PresentationPdfExporter
             ops.Add(new PdfText(
                 box.X + ShapeTextInsetPt,
                 y,
-                BodySize,
+                line.FontSizePt,
                 PdfFontFace.Regular,
                 PdfColor.Black,
-                OneLine(line)));
-            y -= BodyLeadingPt;
+                OneLine(line.Text)));
+            y -= line.LeadingPt;
         }
+    }
+
+    /// <summary>One laid-out line of shape text plus the font size/leading it should draw at.</summary>
+    private readonly record struct ShapeTextLine(string Text, double FontSizePt, double LeadingPt);
+
+    /// <summary>
+    /// Splits a shape's text into the lines <see cref="AppendShapeText"/> draws, sized per the
+    /// shape's own authored paragraph/run font sizes and <c>a:normAutofit</c> scaling rather than
+    /// the fixed <see cref="BodySize"/>/<see cref="BodyLeadingPt"/> the fallback bracket-placeholder
+    /// path still uses (R157: previously every shape used the hard-coded 18pt/26pt regardless of
+    /// what was authored, silently truncating text that needed more/smaller lines than that budget
+    /// allowed and rendering PowerPoint-mismatched sizes for everything else).
+    /// </summary>
+    private static List<ShapeTextLine> BuildShapeTextLines(SlideShape shape, string content, bool hasText)
+    {
+        var textBody = shape.TextBody;
+        if (!hasText || textBody is null || textBody.Paragraphs.Count == 0)
+            return Lines(content).Select(line => new ShapeTextLine(line, BodySize, BodyLeadingPt)).ToList();
+
+        var normAutofit = textBody.AutoFitKind == TextAutoFitKind.Normal;
+        var fontScale = normAutofit && textBody.FontScalePPT is { } scalePpt && scalePpt > 0
+            ? scalePpt / 100000.0
+            : 1.0;
+        var leadingScale = normAutofit && textBody.LnSpcReductionPPT is { } reductionPpt && reductionPpt > 0
+            ? Math.Max(0.0, 1.0 - reductionPpt / 100000.0)
+            : 1.0;
+
+        var result = new List<ShapeTextLine>();
+        foreach (var paragraph in textBody.Paragraphs)
+        {
+            var paragraphText = string.Concat(paragraph.Runs.Select(r => r.Text));
+            var authoredSize = paragraph.Runs.Select(r => r.FontSizePt).FirstOrDefault(size => size.HasValue) ?? BodySize;
+            var fontSize = Math.Max(1.0, authoredSize * fontScale);
+            var leading = Math.Max(fontSize, fontSize * (BodyLeadingPt / BodySize) * leadingScale);
+
+            foreach (var line in Lines(paragraphText))
+                result.Add(new ShapeTextLine(line, fontSize, leading));
+        }
+
+        return result;
     }
 
     private static void AddWithOpacity(List<PdfDrawOp> ops, PdfDrawOp op, double opacity)

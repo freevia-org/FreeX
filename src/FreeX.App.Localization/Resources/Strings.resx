@@ -287,6 +287,12 @@
   <data name="ClipboardFeedback_ReadFailed" xml:space="preserve">
     <value>The clipboard is busy. Try pasting again.</value>
   </data>
+  <data name="ClipboardFeedback_PasteMultipleSelectionUnsupported" xml:space="preserve">
+    <value>Paste does not support multiple selected ranges yet.</value>
+  </data>
+  <data name="ClipboardFeedback_PasteSpecialMultipleSelectionUnsupported" xml:space="preserve">
+    <value>Paste Special does not support multiple selected ranges yet.</value>
+  </data>
   <!-- PivotTable Analyze / PivotChart contextual-tab commands -->
   <data name="PivotAnalyze_SelectPivotPrompt" xml:space="preserve">
     <value>Select a cell inside a PivotTable first.</value>

@@ -779,6 +779,71 @@ public partial class MainWindow
                 IWorkbookCommand CreatePasteCommand()
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
+                    var pasteLabel = mode == PasteMode.All && options == default && !keepColumnWidths
+                        ? "Paste"
+                        : "Paste Special";
+
+                    // freex-selection-model-F1: a Ctrl+click multi-area DESTINATION selection must
+                    // receive the pasted block in EVERY selected area -- not just the active one
+                    // (SheetGrid.SelectedRange) -- mirroring the Avalonia shell's WorkbookSession
+                    // .PasteSpecialClipboardAtActiveCell / PasteInternalClipboardToSelectedRanges
+                    // (SelectedRanges.Count > 1 branch), the only tested reference for this exact
+                    // gesture (WorkbookSessionTests
+                    // .PasteSpecialClipboardAtActiveCell_ValuesModePastesToMatchingMultipleSelectedRangesPreservesSelectionAndUndo
+                    // and its mismatched-size / cut-source rejection siblings). A Cut source, or any
+                    // area whose size doesn't exactly match the copied block, is rejected outright
+                    // with an error instead of silently only filling the active area.
+                    var currentAreas = GetCurrentSelectionRanges(currentRange);
+                    if (currentAreas.Count > 1)
+                    {
+                        var pasteRowCount = options.Transpose ? clip.SourceRange.ColCount : clip.SourceRange.RowCount;
+                        var pasteColCount = options.Transpose ? clip.SourceRange.RowCount : clip.SourceRange.ColCount;
+                        if (clip.IsCut ||
+                            currentAreas.Any(area => area.RowCount != pasteRowCount || area.ColCount != pasteColCount))
+                        {
+                            return new RejectedPasteCommand(
+                                pasteLabel,
+                                ClipboardFeedbackPlanner.PasteMultiRangeSelectionUnsupported(pasteLabel == "Paste Special")
+                                    .Resolve(UiText.Get));
+                        }
+
+                        var multiAreaTargetSheetIds = CurrentGroupedEditSheetIds();
+                        var multiAreaPasteCommands = new List<IWorkbookCommand>();
+                        foreach (var sheetId in multiAreaTargetSheetIds)
+                        {
+                            foreach (var area in currentAreas)
+                            {
+                                var sheetDestinationRange = GroupedSheetRangePlanner.RemapRangeToSheet(area, sheetId);
+                                var sheetPasteCommand = PasteCommandFactory.CreateInternalPasteCommand(
+                                    _workbook,
+                                    sheetId,
+                                    clip.SourceRange,
+                                    clip.Cells,
+                                    sheetDestinationRange,
+                                    ClipboardPastePlanner.ToCorePasteMode(mode),
+                                    options,
+                                    clip.SourceAreas,
+                                    sourceSheetOverride: clip.SourceSheet,
+                                    sourceWorkbookOverride: clip.SourceWorkbook);
+                                if (keepColumnWidths)
+                                {
+                                    sheetPasteCommand = new CompositeWorkbookCommand(
+                                        "Paste Special",
+                                        [
+                                            sheetPasteCommand,
+                                            new PasteColumnWidthsCommand(sheetId, clip.SourceRange, sheetDestinationRange.Start.Col, sheetDestinationRange.ColCount)
+                                        ]);
+                                }
+
+                                multiAreaPasteCommands.Add(sheetPasteCommand);
+                            }
+                        }
+
+                        return multiAreaPasteCommands.Count == 1
+                            ? multiAreaPasteCommands[0]
+                            : new CompositeWorkbookCommand(pasteLabel, multiAreaPasteCommands);
+                    }
+
                     var destinationRange = expandPasteToSelectedRange
                         ? currentRange
                         : new GridRange(currentRange.Start, currentRange.Start);
@@ -842,9 +907,6 @@ public partial class MainWindow
                         pasteCommands.Add(sheetPasteCommand);
                     }
 
-                    var pasteLabel = mode == PasteMode.All && options == default && !keepColumnWidths
-                        ? "Paste"
-                        : "Paste Special";
                     var command = pasteCommands.Count == 1
                         ? pasteCommands[0]
                         : new CompositeWorkbookCommand(pasteLabel, pasteCommands);
@@ -883,24 +945,38 @@ public partial class MainWindow
                     return;
 
                 var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
-                _repeatPostAction = _ =>
+
+                // freex-selection-model-F1: after a successful multi-area-destination paste, leave
+                // the Ctrl+click selection exactly as the user made it -- matching WorkbookSession
+                // .PasteInternalClipboardToSelectedRanges, which asserts SelectedRanges is unchanged
+                // post-paste -- instead of CompletePasteSelection's normal SheetGrid.SelectedRanges =
+                // null single-rectangle collapse, which only applies (and is unchanged) below for the
+                // ordinary single-area case.
+                void CompletePasteSelectionPreservingMultiArea()
                 {
+                    if (GetCurrentSelectionRanges(SheetGrid.SelectedRange ?? range).Count > 1)
+                    {
+                        ApplyClipboardVisualStateAfterInternalPaste(clip.SourceRange, preserveClipboardVisual);
+                        return;
+                    }
+
                     CompletePasteSelection(
                         clip.SourceRange,
                         options,
                         preserveClipboardVisual,
                         expandToSelectedRange: expandPasteToSelectedRange);
+                }
+
+                _repeatPostAction = _ =>
+                {
+                    CompletePasteSelectionPreservingMultiArea();
                     if (clip.IsCut)
                     {
                         _workbookClipboardSession.CompletePaste(clip);
                         InvalidateOsClipboardAfterCutMove();
                     }
                 };
-                CompletePasteSelection(
-                    clip.SourceRange,
-                    options,
-                    preserveClipboardVisual,
-                    expandToSelectedRange: expandPasteToSelectedRange);
+                CompletePasteSelectionPreservingMultiArea();
                 if (clip.IsCut)
                 {
                     _workbookClipboardSession.CompletePaste(clip);
@@ -1856,6 +1932,23 @@ public partial class MainWindow
         {
             // Best-effort extra clipboard flavor -- never let a rendering hiccup fail the copy itself.
             return null;
+        }
+    }
+
+    // R157-selection-model-F1: a minimal "reject with message" IWorkbookCommand so ExecutePaste's
+    // multi-area-destination-size-mismatch guard (see CreatePasteCommand below) can report the
+    // failure through the normal TryExecuteRepeatableCommand -> ShowCommandError pipeline, matching
+    // the private per-file rejecting-command idiom already used elsewhere in the app (e.g.
+    // DrawingObjectFormatCommandPolicy.MissingPictureFormatTargetCommand) -- Core.Commands'
+    // RejectedWorkbookCommand is `internal` to that assembly and not visible here.
+    private sealed class RejectedPasteCommand(string label, string message) : IWorkbookCommand
+    {
+        public string Label => label;
+
+        public CommandOutcome Apply(ICommandContext ctx) => new(false, message);
+
+        public void Revert(ICommandContext ctx)
+        {
         }
     }
 }

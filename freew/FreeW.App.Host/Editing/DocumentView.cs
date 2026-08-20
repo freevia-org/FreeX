@@ -5509,6 +5509,15 @@ public sealed partial class DocumentView : RichTextBox
             }
             else
             {
+                // R157: a table's cells are rendered through their OWN freshly-recomputed marker plan
+                // (BuildTableNumberingMarkers, via BuildTable), not through this loop's live
+                // listMarkerSequence. Replay the table's list paragraphs through THIS sequence too (without
+                // rendering them again) so a body list that resumes after the table continues numbering
+                // from where the table left off, instead of the body-level counter being frozen at its
+                // pre-table value.
+                if (blocks[i] is ModelTable tableBlock)
+                    TableCellListMarkerPlanner.AdvanceThroughTable(tableBlock, listMarkerSequence);
+
                 var renderedBlocks = BuildBlocks(
                     blocks[i],
                     _model,
@@ -9667,6 +9676,33 @@ public sealed partial class DocumentView : RichTextBox
         return TryParseColor(colorToken, out color);
     }
 
+    // R157: table cells never got a marker for a native Number/Bullet/MultiLevel paragraph — only the
+    // top-level body loop (Render(), below) produced one, via WpfList or PrependMultiLevelMarker.
+    // BuildParagraph already knows how to prepend arbitrary marker text (preservedNumberingMarker, used
+    // today for un-mapped numId chrome via PreservedNumberingMarkerPlanner), so folding native-list
+    // markers into that SAME dictionary reuses the existing render path with no new rendering code.
+    // TableCellListMarkerPlanner.Build replays the whole document (body + every table's cells) through
+    // one running sequence so numbering continuity across a body -> table -> body run, and across two
+    // independent list instances in different cells, matches exactly what the body loop already does for
+    // body-only lists (see the ListStartOverride-driven restart signal resolved once in DocxReader).
+    private static IReadOnlyDictionary<ModelParagraph, PreservedNumberingMarkerPlan> BuildTableNumberingMarkers(
+        TextDocument document)
+    {
+        var preserved = PreservedNumberingMarkerPlanner.BuildByParagraph(document);
+        var nativeListMarkers = TableCellListMarkerPlanner.Build(document);
+        if (nativeListMarkers.Count == 0)
+            return preserved;
+
+        var merged = new Dictionary<ModelParagraph, PreservedNumberingMarkerPlan>(preserved);
+        foreach (var (paragraph, plan) in nativeListMarkers)
+        {
+            if (!string.IsNullOrEmpty(plan.MarkerText))
+                merged[paragraph] = new PreservedNumberingMarkerPlan(plan.MarkerText, plan.Level);
+        }
+
+        return merged;
+    }
+
     private static WpfTable BuildTable(
         ModelTable table,
         TextDocument document,
@@ -9723,7 +9759,7 @@ public sealed partial class DocumentView : RichTextBox
         var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
             cell => (cell.RowIndex, cell.CellIndex),
             cell => cell.EffectiveFill);
-        var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.BuildByParagraph(document);
+        var preservedNumberingMarkers = BuildTableNumberingMarkers(document);
 
         DocumentTableCellEffectiveFillPlan EffectiveFillFor(int rowIndex, int cellIndex) =>
             cellEffectiveFills.TryGetValue((rowIndex, cellIndex), out var fillPlan)

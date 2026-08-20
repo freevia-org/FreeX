@@ -1017,6 +1017,13 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public FormatRevision? FormatRevision { get; set; }
 
     /// <summary>
+    /// The outer wrapper's kind/author/date when this run's <see cref="Revision"/> mark was nested inside a
+    /// different-kind wrapper on open (Word's "B deleted A's still-pending insertion" pattern). Null for the
+    /// overwhelmingly common single-wrapper case. See <see cref="NestedRevisionInfo"/>.
+    /// </summary>
+    public NestedRevisionInfo? NestedRevision { get; set; }
+
+    /// <summary>
     /// Optional character-style reference (w:rPr/w:rStyle), the run-level analog of
     /// <see cref="Paragraph.StyleId"/> (w:pPr/w:pStyle). When set, the run's look comes (at least in
     /// part) from the referenced character style in <see cref="TextDocument.Styles"/> rather than being
@@ -2251,6 +2258,19 @@ public enum RevisionKind
     Inserted,
     Deleted
 }
+
+/// <summary>
+/// The outer tracked-change wrapper's kind/author/date when a run's <see cref="Run.Revision"/> mark was
+/// read from a DIFFERENT-kind wrapper nested inside this one -- Word's "Reviewer B deleted text Reviewer A
+/// had inserted, both still pending" pattern (<c>&lt;w:ins w:author="A"&gt;&lt;w:del w:author="B"&gt;...
+/// &lt;/w:del&gt;&lt;/w:ins&gt;</c>). <see cref="Run.Revision"/>/<see cref="Run.RevisionAuthor"/>/
+/// <see cref="Run.RevisionDateXml"/> record only the innermost wrapper (the visually authoritative one);
+/// this carries the superseded outer wrapper's data instead of silently discarding it. Read-only for now --
+/// DocxWriter does not re-emit the nested wrapper on save, so a round-trip still loses it; this exists so
+/// the outer author/date at least survive for the lifetime of the open document instead of vanishing the
+/// instant the file is read.
+/// </summary>
+public sealed record NestedRevisionInfo(RevisionKind Kind, string? Author, string? DateXml);
 
 /// <summary>
 /// A tracked formatting change on a run (Word's <c>w:rPrChange</c>). <see cref="PreviousFormatting"/> is

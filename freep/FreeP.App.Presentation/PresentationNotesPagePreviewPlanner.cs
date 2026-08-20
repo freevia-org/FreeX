@@ -536,7 +536,7 @@ public static class PresentationNotesPagePreviewPlanner
             string prefix = marker.Kind is BulletKind.Char or BulletKind.Auto
                 ? $"{marker.Text} "
                 : string.Empty;
-            var textSegments = ExtractTextSegments(paragraph.Runs);
+            var textSegments = ExtractTextSegments(paragraph.Runs, inheritedStyle);
             var levelIndent = new string(' ', Math.Clamp(paragraph.Level, 0, 8) * 2);
             result.Add(new NoteParagraph(
                 textSegments,
@@ -547,7 +547,8 @@ public static class PresentationNotesPagePreviewPlanner
         return result;
     }
 
-    private static IReadOnlyList<NoteTextSegment> ExtractTextSegments(IEnumerable<Run> runs)
+    private static IReadOnlyList<NoteTextSegment> ExtractTextSegments(
+        IEnumerable<Run> runs, TextStyleLevel? inheritedStyle)
     {
         var result = new List<NoteTextSegment>();
         foreach (var run in runs)
@@ -558,11 +559,21 @@ public static class PresentationNotesPagePreviewPlanner
             if (text.Length == 0)
                 continue;
 
-            result.Add(new NoteTextSegment(
-                text,
-                run.Field?.Bold ?? run.Bold,
-                run.Field?.Italic ?? run.Italic,
-                run.Field?.Color ?? run.Color?.Resolved));
+            // Mirrors SlideCompositor's BoldSet/ItalicSet-aware inheritance (SlideCompositor.cs
+            // ~2564-2576): an explicit a:rPr @b/@i wins outright; otherwise fall back through the
+            // field, the run's own non-explicit value, and finally the notes list-style chain
+            // (the slide's own notes-body lstStyle merged with the notes master's, resolved by
+            // the caller) -- so speaker notes inherit bold/italic/color the same way ordinary
+            // slide body text does, instead of only the bullet marker inheriting.
+            bool bold = run.BoldSet
+                ? run.Bold
+                : (run.Bold || (run.Field?.Bold ?? false) || (inheritedStyle?.Bold ?? false));
+            bool italic = run.ItalicSet
+                ? run.Italic
+                : (run.Italic || (run.Field?.Italic ?? false) || (inheritedStyle?.Italic ?? false));
+            SrgbColor? color = run.Field?.Color ?? run.Color?.Resolved ?? inheritedStyle?.Color?.Resolved;
+
+            result.Add(new NoteTextSegment(text, bold, italic, color));
         }
 
         return result;

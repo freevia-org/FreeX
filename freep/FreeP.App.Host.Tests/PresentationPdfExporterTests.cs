@@ -1070,4 +1070,80 @@ public class PresentationPdfExporterTests
 
     private static (double X, double Y) BaseCenter(PdfFilledTriangle triangle) =>
         ((triangle.X2 + triangle.X3) / 2.0, (triangle.Y2 + triangle.Y3) / 2.0);
+
+    // R157 finding freep-shape-text-autofit F1: AppendShapeText used to lay out every shape's text
+    // at a hard-coded 18pt/26pt regardless of what was authored, so a normAutofit-shrunk text box
+    // whose real (on-screen) font size lets it hold more lines than the fixed budget allowed had
+    // its remaining lines silently dropped rather than shrunk. This mirrors the finding's own
+    // probe (a normAutofit AutoShape with 20 paragraphs authored at 10pt): the box below is sized
+    // tall enough that 20 lines of genuinely-10pt text fit (300pt of vertical budget needed at
+    // this exporter's own leading ratio; 320pt given here), which the OLD hard-coded-18pt/26pt
+    // layout could never do regardless of box size mattering less than the wrong font/leading.
+    [Fact]
+    public void BuildDocument_AutofitShrunkTextBox_KeepsAllLinesAtAuthoredSize()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(4 * 72),  // 4in wide
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(320),    // tall enough for 20 lines at 10pt
+            TextBody = new TextBody { AutoFitKind = TextAutoFitKind.Normal },
+        };
+        for (var i = 1; i <= 20; i++)
+        {
+            var para = new Paragraph();
+            para.Runs.Add(new Run { Text = $"Line {i:D2} of 20", FontSizePt = 10 });
+            shape.TextBody.Paragraphs.Add(para);
+        }
+
+        var slide = new Slide();
+        slide.Shapes.Add(shape);
+        deck.Slides.Add(slide);
+
+        var textOps = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops.OfType<PdfText>().ToList();
+
+        for (var i = 1; i <= 20; i++)
+        {
+            var expected = $"Line {i:D2} of 20";
+            textOps.Should().Contain(t => t.Text == expected && t.FontSize == 10,
+                $"'{expected}' should survive at the authored 10pt size, not be dropped or forced to 18pt");
+        }
+    }
+
+    // Sibling/no-regression: a shape with no explicit run font size and no autofit (the common
+    // case exercised by every other test in this file, via the SlideShape.Text setter) must keep
+    // rendering at the original fixed BodySize/BodyLeadingPt (18pt / 26pt leading) so plain shape
+    // text and its Y-position geometry are unchanged by the autofit-aware code path.
+    [Fact]
+    public void BuildDocument_PlainShapeText_StillUsesDefaultBodySize()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Text = "Positioned text",
+        };
+        var slide = new Slide();
+        slide.Shapes.Add(shape);
+        deck.Slides.Add(slide);
+
+        var ops = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops;
+
+        ops.OfType<PdfText>().Should().ContainSingle(text =>
+            text.Text == "Positioned text" &&
+            text.FontSize == 18 &&
+            text.X == 80 &&
+            text.Y == 424);
+    }
 }

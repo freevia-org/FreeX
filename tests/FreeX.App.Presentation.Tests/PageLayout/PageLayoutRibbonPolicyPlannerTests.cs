@@ -85,6 +85,65 @@ public sealed class PageLayoutRibbonPolicyPlannerTests
     }
 
     [Fact]
+    public void PlanScaleWidthCommit_AutomaticEchoWhileAlreadyInPercentModeIsNoOp()
+    {
+        // Mirrors PlanScalePercentCommit_AutomaticLeavesFitToPagesAlone, but for the symmetric
+        // case: committing an explicit percent (e.g. "150%") switches the sheet OUT of
+        // fit-to-pages, which redisplays the Scale Width combo as "Automatic". WPF's ComboBox
+        // echoes that reassignment back through SelectionChanged on a later dispatcher pass, after
+        // _suppressToolbarSync has already been reset, so this exact text reaches
+        // PlanScaleWidthCommit as if the user had typed it. Resolving it must reproduce the
+        // current (already-percent) state exactly, so the commit is a no-op rather than a second,
+        // value-identical "Scale To Fit" command landing on the undo stack.
+        var current = new WorksheetScaleToFit(150, null, null);
+
+        var plan = PageLayoutRibbonPolicyPlanner.PlanScaleWidthCommit(current, "Automatic");
+
+        plan.ShouldApply.Should().BeFalse();
+        plan.ScaleToFit.Should().Be(current);
+    }
+
+    [Fact]
+    public void PlanScaleHeightCommit_AutomaticEchoWhileAlreadyInPercentModeIsNoOp()
+    {
+        // Same combo-echo mechanism as the Width case above, mirrored for the Height box.
+        var current = new WorksheetScaleToFit(150, null, null);
+
+        var plan = PageLayoutRibbonPolicyPlanner.PlanScaleHeightCommit(current, "Automatic");
+
+        plan.ShouldApply.Should().BeFalse();
+        plan.ScaleToFit.Should().Be(current);
+    }
+
+    [Fact]
+    public void PlanScaleWidthCommit_AutomaticStillClearsAWidthOnlyFitToPages()
+    {
+        // Adjacent case that must NOT be swallowed by the no-op guard above: the user genuinely
+        // typing "Automatic" into Scale Width while a width-only fit-to-pages is active (height
+        // unset) is a real request to turn that off, and resolves to a state that differs from
+        // current -- it must still apply.
+        var current = new WorksheetScaleToFit(null, 5, null);
+
+        var plan = PageLayoutRibbonPolicyPlanner.PlanScaleWidthCommit(current, "Automatic");
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.ScaleToFit.Should().Be(new WorksheetScaleToFit(100, null, null));
+    }
+
+    [Fact]
+    public void PlanScaleWidthCommit_ExplicitValueStillAppliesWhileInPercentMode()
+    {
+        // Adjacent case: a genuine explicit edit committed while in percent mode (not an
+        // "Automatic" echo) must still apply normally.
+        var current = new WorksheetScaleToFit(150, null, null);
+
+        var plan = PageLayoutRibbonPolicyPlanner.PlanScaleWidthCommit(current, "2 pages");
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.ScaleToFit.Should().Be(new WorksheetScaleToFit(null, 2, null));
+    }
+
+    [Fact]
     public void PlanScalePercentCommit_AutomaticLeavesFitToPagesAlone()
     {
         // "Automatic" is what the Percent combo displays while fit-to-pages drives the scaling,

@@ -132,6 +132,53 @@ public sealed class DrawingObjectVisualPlannerTests
     }
 
     [Fact]
+    public void ShapeTextPlan_PreservesListKindAndLevelForNumberedTextBoxParagraphs()
+    {
+        // freew-numbering-restart F2: DocxReader populates Formatting.ListKind/ListLevel on shape
+        // (text-box) paragraphs identically to body paragraphs, but the render-plan projection used
+        // to drop it because DrawingObjectTextParagraphPlan had no field to carry it.
+        var shape = new Shape(ShapeKind.TextBox, 120, 80);
+        var firstItem = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number, ListLevel = 0 }
+        };
+        firstItem.Runs.Add(new Run("First", RunFormatting.Default));
+        var secondItem = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet, ListLevel = 1 }
+        };
+        secondItem.Runs.Add(new Run("Second", RunFormatting.Default));
+        shape.TextParagraphs.Add(firstItem);
+        shape.TextParagraphs.Add(secondItem);
+
+        var textPlan = DrawingObjectTextLayoutPlanner.BuildTextPlan(shape);
+
+        textPlan.Paragraphs.Should().HaveCount(2);
+        textPlan.Paragraphs[0].ListKind.Should().Be(ListKind.Number);
+        textPlan.Paragraphs[0].ListLevel.Should().Be(0);
+        textPlan.Paragraphs[1].ListKind.Should().Be(ListKind.Bullet);
+        textPlan.Paragraphs[1].ListLevel.Should().Be(1);
+    }
+
+    [Fact]
+    public void ShapeTextPlan_NonListParagraphStillDefaultsToNoListKind()
+    {
+        // Sibling no-regression case: an ordinary (non-list) text-box paragraph must keep
+        // reporting ListKind.None/level 0, exactly as before this fix.
+        var shape = new Shape(ShapeKind.TextBox, 120, 80);
+        var plain = new Paragraph { Formatting = ParagraphFormatting.Default with { Alignment = TextAlignment.Center } };
+        plain.Runs.Add(new Run("Plain", RunFormatting.Default));
+        shape.TextParagraphs.Add(plain);
+
+        var textPlan = DrawingObjectTextLayoutPlanner.BuildTextPlan(shape);
+
+        textPlan.Paragraphs.Should().HaveCount(1);
+        textPlan.Paragraphs[0].ListKind.Should().Be(ListKind.None);
+        textPlan.Paragraphs[0].ListLevel.Should().Be(0);
+        textPlan.Paragraphs[0].Alignment.Should().Be(TextAlignment.Center);
+    }
+
+    [Fact]
     public void TextLayout_UsesMonotonicLineIndexesAcrossHardBreaks()
     {
         var layout = DrawingObjectTextLayoutPlanner.LayoutPlan(

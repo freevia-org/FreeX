@@ -2559,6 +2559,7 @@ public static class DocxReader
                 citationRun.RevisionAuthor = revision.Author;
                 citationRun.RevisionDateXml = revision.DateXml;
                 citationRun.MoveRevisionId = revision.MoveId;
+                citationRun.NestedRevision = revision.Nested;
             }
 
             paragraph.Runs.Add(citationRun);
@@ -2584,6 +2585,7 @@ public static class DocxReader
             run.RevisionAuthor = revision.Author;
             run.RevisionDateXml = revision.DateXml;
             run.MoveRevisionId = revision.MoveId;
+            run.NestedRevision = revision.Nested;
         }
 
         paragraph.Runs.Add(run);
@@ -2619,6 +2621,7 @@ public static class DocxReader
                     referenceRun.RevisionAuthor = revision.Author;
                     referenceRun.RevisionDateXml = revision.DateXml;
                     referenceRun.MoveRevisionId = revision.MoveId;
+                    referenceRun.NestedRevision = revision.Nested;
                 }
                 paragraph.Runs.Add(referenceRun);
             }
@@ -2643,6 +2646,7 @@ public static class DocxReader
                     subDocumentRun.RevisionAuthor = revision.Author;
                     subDocumentRun.RevisionDateXml = revision.DateXml;
                     subDocumentRun.MoveRevisionId = revision.MoveId;
+                    subDocumentRun.NestedRevision = revision.Nested;
                 }
                 paragraph.Runs.Add(subDocumentRun);
             }
@@ -2670,11 +2674,22 @@ public static class DocxReader
                 ? RevisionKind.Deleted
                 : RevisionKind.Inserted;
             var isMove = child.Name == W + "moveFrom" || child.Name == W + "moveTo";
+            // A different-kind wrapper is already in effect (e.g. this w:del sits inside an outer w:ins):
+            // Word produces this when one reviewer deletes text another reviewer had inserted, both still
+            // pending. Only one (Kind, Author, DateXml) triple fits on the run, so the innermost wrapper --
+            // computed below -- stays authoritative for rendering/accept-reject, but the outer wrapper's own
+            // data would otherwise be silently overwritten and lost. Carry it forward as Nested instead
+            // (preferring an already-carried Nested from a still-further-out wrapper, so triple nesting keeps
+            // the outermost rather than a middle layer).
+            var childNested = revision.Nested ?? (revision.Kind != RevisionKind.None && revision.Kind != kind
+                ? new NestedRevisionInfo(revision.Kind, revision.Author, revision.DateXml)
+                : null);
             var childRevision = new RevisionInfo(
                 kind,
                 child.Attribute(W + "author")?.Value,
                 child.Attribute(W + "date")?.Value,
-                isMove && int.TryParse(child.Attribute(W + "id")?.Value, out var moveId) ? moveId : null);
+                isMove && int.TryParse(child.Attribute(W + "id")?.Value, out var moveId) ? moveId : null,
+                childNested);
             AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets, subDocumentRelationships);
         }
         else if (child.Name == W + "sdt")
@@ -2723,6 +2738,7 @@ public static class DocxReader
                     fieldRun.RevisionAuthor = revision.Author;
                     fieldRun.RevisionDateXml = revision.DateXml;
                     fieldRun.MoveRevisionId = revision.MoveId;
+                    fieldRun.NestedRevision = revision.Nested;
                 }
             }
         }
@@ -2740,6 +2756,7 @@ public static class DocxReader
                 run.RevisionAuthor = revision.Author;
                 run.RevisionDateXml = revision.DateXml;
                 run.MoveRevisionId = revision.MoveId;
+                run.NestedRevision = revision.Nested;
             }
             paragraph.Runs.Add(run);
         }
@@ -2765,6 +2782,7 @@ public static class DocxReader
                     displayRun.RevisionAuthor = revision.Author;
                     displayRun.RevisionDateXml = revision.DateXml;
                     displayRun.MoveRevisionId = revision.MoveId;
+                    displayRun.NestedRevision = revision.Nested;
                 }
                 paragraph.Runs.Add(displayRun);
             }
@@ -2845,6 +2863,7 @@ public static class DocxReader
             run.RevisionAuthor = revision.Author;
             run.RevisionDateXml = revision.DateXml;
             run.MoveRevisionId = revision.MoveId;
+            run.NestedRevision = revision.Nested;
         }
 
         paragraph.Runs.Add(run);
@@ -3808,8 +3827,12 @@ public static class DocxReader
         return items;
     }
 
-    /// <summary>Carries a tracked-change kind plus its author/date and optional move id while reading revisions.</summary>
-    private readonly record struct RevisionInfo(RevisionKind Kind, string? Author, string? DateXml, int? MoveId = null);
+    /// <summary>
+    /// Carries a tracked-change kind plus its author/date and optional move id while reading revisions.
+    /// <see cref="Nested"/> is the superseded outer wrapper's data when this revision was read from inside a
+    /// different-kind w:ins/w:del/moveTo/moveFrom nesting (see <see cref="NestedRevisionInfo"/>).
+    /// </summary>
+    private readonly record struct RevisionInfo(RevisionKind Kind, string? Author, string? DateXml, int? MoveId = null, NestedRevisionInfo? Nested = null);
 
     private static void AddRun(
         Paragraph paragraph,
@@ -3837,6 +3860,7 @@ public static class DocxReader
             run.RevisionAuthor = revision.Author;
             run.RevisionDateXml = revision.DateXml;
             run.MoveRevisionId = revision.MoveId;
+            run.NestedRevision = revision.Nested;
         }
 
         // A w:drawing whose anchor references a wpg:wgp group element is a floating drawing group.

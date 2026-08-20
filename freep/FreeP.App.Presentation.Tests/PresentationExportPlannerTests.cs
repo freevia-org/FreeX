@@ -2155,6 +2155,87 @@ public sealed class PresentationExportPlannerTests : IDisposable
         preview.NoteLines.Should().Equal("• Follow up with legal");
     }
 
+    /// <summary>
+    /// freep-notes-handouts F1: a speaker-notes run with no explicit a:rPr @b/@i/color (Bold =
+    /// Italic = false, BoldSet = ItalicSet = false, Color = null -- exactly how the reader leaves
+    /// an unattributed a:r) must inherit Bold/Italic/Color from the notes master's body
+    /// placeholder lstStyle, the same way the bullet marker on the same paragraph already does.
+    /// Before the fix, ExtractNoteParagraphs computed the merged inheritedStyle but only fed it
+    /// to the bullet-marker resolver, never to ExtractTextSegments, so the run stayed unstyled.
+    /// </summary>
+    [Fact]
+    public void NotesPagePdfRenderPlan_RunFormattingInheritedFromNotesMaster_AppearsInPreview()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.NotesMasterPlaceholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            TextBody = new TextBody
+            {
+                LstStyle = new TextStyleLevels
+                {
+                    [0] = new TextStyleLevel
+                    {
+                        Bold = true,
+                        Italic = true,
+                        Color = new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33)),
+                    },
+                },
+            },
+        });
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Master run style" });
+        // No LstStyle on the slide's own notes body -- the run formatting can only come from the
+        // notes master, and the run itself carries no explicit b/i/color attribute.
+        presentation.Slides[0].Notes = MakeTextBody("Follow up with legal");
+
+        var preview = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        preview.StyledNoteLines.Should().ContainSingle();
+        preview.StyledNoteLines[0].Runs.Should().Equal(
+            new PresentationNotesPageNoteTextRun(
+                "Follow up with legal",
+                Bold: true,
+                Italic: true,
+                Color: new SrgbColor(0x11, 0x22, 0x33)));
+    }
+
+    /// <summary>
+    /// Sibling no-regression case for freep-notes-handouts F1: a run that explicitly turns
+    /// formatting OFF (a:rPr b="0"/i="0", i.e. BoldSet/ItalicSet = true with Bold/Italic = false)
+    /// must keep winning over an inherited Bold/Italic = true from the notes master lstStyle --
+    /// explicit run authoring must not be clobbered by the newly-wired inheritance fallback.
+    /// </summary>
+    [Fact]
+    public void NotesPagePdfRenderPlan_ExplicitRunFormattingOverridesNotesMasterInheritance()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.NotesMasterPlaceholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            TextBody = new TextBody
+            {
+                LstStyle = new TextStyleLevels
+                {
+                    [0] = new TextStyleLevel { Bold = true, Italic = true },
+                },
+            },
+        });
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Explicit override" });
+        var notes = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = "Plain aside", Bold = false, BoldSet = true, Italic = false, ItalicSet = true });
+        notes.Paragraphs.Add(paragraph);
+        presentation.Slides[0].Notes = notes;
+
+        var preview = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        preview.StyledNoteLines.Should().ContainSingle();
+        preview.StyledNoteLines[0].Runs.Should().Equal(
+            new PresentationNotesPageNoteTextRun("Plain aside", Bold: false, Italic: false, Color: null));
+    }
+
     [Fact]
     public void NotesPagePdfRenderPlan_RichSpeakerNoteRuns_PreserveStyledFacesAndColor()
     {

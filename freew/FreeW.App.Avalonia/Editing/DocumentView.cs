@@ -10659,8 +10659,54 @@ public sealed partial class DocumentView : Control
         return null;
     }
 
-    private static double[] ComputeColumnWidths(Table table, int cols, double textWidth)
-        => TableColumnLayoutPlanner.AllocateColumnWidths(table, cols, textWidth);
+    private double[] ComputeColumnWidths(Table table, int cols, double textWidth)
+    {
+        // freew-table-layout F1: an AutoFit-to-Contents table (Word's default "AutoFit to Contents",
+        // or FreeW's Table Layout > AutoFit > AutoFit to Contents, round-tripped via DocxReader /
+        // TableLayoutOperations.SetAutoFit) must shrink-wrap its columns to measured cell content,
+        // exactly like the WPF host's ResolveContentAutoFitColumnWidths does. Without this, every
+        // AutoFit-to-Contents table falls through to AllocateColumnWidths below, which always
+        // distributes/stretches to the full available width -- correct for Fixed/Window tables, wrong
+        // for Contents ones.
+        var contentAutoFitWidths = ResolveContentAutoFitColumnWidths(table, textWidth);
+        if (contentAutoFitWidths is not null)
+            return contentAutoFitWidths.ToArray();
+
+        return TableColumnLayoutPlanner.AllocateColumnWidths(table, cols, textWidth);
+    }
+
+    /// <summary>
+    /// Avalonia counterpart of the WPF host's ResolveContentAutoFitColumnWidths (FreeW.App.Host/Editing/
+    /// DocumentView.cs): measures each cell's plain-text content width using the same font/style
+    /// resolution the paged table renderer uses (ResolveRunFmt + BuildForLayout), then routes through the
+    /// shared TableColumnLayoutPlanner.BuildContentAutoFitWidths. Returns null for any table that is not
+    /// AutoFit-to-Contents (BuildContentAutoFitWidths's own gate), in which case the caller falls back to
+    /// AllocateColumnWidths.
+    /// </summary>
+    private IReadOnlyList<double>? ResolveContentAutoFitColumnWidths(Table table, double availableWidthDip)
+    {
+        if (table.AutoFit != AutoFitMode.Contents)
+            return null;
+
+        var measurements = new List<TableCellContentMeasurement>();
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
+            {
+                var cell = row.Cells[cellIndex];
+                var contentWidth = cell.Paragraphs.Count == 0
+                    ? 0
+                    : cell.Paragraphs.Max(paragraph => paragraph.Runs.Sum(run =>
+                        string.IsNullOrEmpty(run.Text)
+                            ? 0
+                            : BuildForLayout(run.Text, ResolveRunFmt(run, paragraph)).WidthIncludingTrailingWhitespace));
+                measurements.Add(new TableCellContentMeasurement(rowIndex, cellIndex, contentWidth));
+            }
+        }
+
+        return TableColumnLayoutPlanner.BuildContentAutoFitWidths(table, availableWidthDip, measurements);
+    }
 
     private List<CellWrappedLine> WrapCellLines(
         int blockIndex,

@@ -87,7 +87,9 @@ public sealed record DrawingObjectTextRunPlan(
 
 public sealed record DrawingObjectTextParagraphPlan(
     TextAlignment Alignment,
-    IReadOnlyList<DrawingObjectTextRunPlan> Runs);
+    IReadOnlyList<DrawingObjectTextRunPlan> Runs,
+    ListKind ListKind = ListKind.None,
+    int ListLevel = 0);
 
 public sealed record DrawingObjectTextPlan(
     string Text,
@@ -147,7 +149,9 @@ public static class DrawingObjectTextLayoutPlanner
                         run.Formatting,
                         paragraphIndex,
                         runIndex))
-                    .ToArray()))
+                    .ToArray(),
+                paragraph.Formatting.ListKind,
+                paragraph.Formatting.ListLevel))
             .ToArray();
         var isCompactPlainText = paragraphs is [{ Runs: [{ } run] }]
             && run.Formatting == RunFormatting.Default

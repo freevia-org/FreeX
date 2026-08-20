@@ -99,20 +99,51 @@ public sealed class DocumentParagraphFormattingCoordinator
 
         var enable = targets.Any(index =>
             ((Paragraph)_session.Document.Blocks[index]).Formatting.ListKind != kind);
-        return Format(targets, formatting => enable
-            ? formatting with
-            {
-                ListKind = kind,
-                ListStartOverride = formatting.ListKind == kind
-                    ? formatting.ListStartOverride
-                    : null,
-            }
-            : formatting with
-            {
-                ListKind = ListKind.None,
-                ListLevel = 0,
-                ListStartOverride = null,
-            });
+
+        // Turning a plain Number list on is the only gesture that ever creates one, so it is also
+        // the only place that can tell a brand-new list apart from one being resumed. When the
+        // paragraph immediately before this selection is not already a Number list, this is a new,
+        // unrelated list and must restart its counter at 1 -- otherwise it silently keeps counting
+        // from whatever earlier list last left off, with no UI anywhere to correct it (see
+        // ListRestartCounter / DocumentListMarkerSequencePlanner, which already honor an explicit
+        // ListStartOverride for Number lists once one is set). Only the first paragraph of the
+        // newly-enabled run carries the restart marker: the planner reads ListStartOverride per
+        // paragraph, so marking every paragraph would split the run into one-item lists.
+        var restartTarget = enable && kind == ListKind.Number && !ContinuesAdjacentNumberList(targets)
+            ? targets.Min()
+            : (int?)null;
+
+        var pending = new Queue<int>(targets);
+        return Format(targets, formatting =>
+        {
+            var index = pending.Dequeue();
+            return enable
+                ? formatting with
+                {
+                    ListKind = kind,
+                    ListStartOverride = formatting.ListKind == kind
+                        ? formatting.ListStartOverride
+                        : index == restartTarget ? 1 : null,
+                }
+                : formatting with
+                {
+                    ListKind = ListKind.None,
+                    ListLevel = 0,
+                    ListStartOverride = null,
+                };
+        });
+    }
+
+    /// <summary>
+    /// True when the paragraph immediately preceding this selection is already a Number list --
+    /// i.e. this toggle extends that existing list rather than starting an unrelated new one.
+    /// </summary>
+    private bool ContinuesAdjacentNumberList(IReadOnlyList<int> targets)
+    {
+        var precedingIndex = targets.Min() - 1;
+        return precedingIndex >= 0
+            && _session.Document.Blocks[precedingIndex] is Paragraph preceding
+            && preceding.Formatting.ListKind == ListKind.Number;
     }
 
     public bool SetLineSpacing(IReadOnlyList<int> blockIndices, double multiplier) =>

@@ -97,13 +97,22 @@ public static class PageLayoutRibbonPolicyPlanner
         WorksheetScaleToFit current,
         string text)
     {
-        return PageLayoutInputParser.TryParseScalePages(text, out var pagesWide)
-            ? PageLayoutScaleCommitPlan.Apply(
-                PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(
-                    current,
-                    pagesWide,
-                    current.FitToPagesTall))
-            : PageLayoutScaleCommitPlan.Revert(current);
+        if (!PageLayoutInputParser.TryParseScalePages(text, out var pagesWide))
+            return PageLayoutScaleCommitPlan.Revert(current);
+
+        var resolved = PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(
+            current,
+            pagesWide,
+            current.FitToPagesTall);
+
+        // A combo echo of this box's own just-redisplayed value (e.g. "Automatic" after a Percent
+        // commit switched the sheet out of fit-to-pages) resolves to a WorksheetScaleToFit that is
+        // byte-for-byte identical to the current one. Applying it would push a second, indistinguishable
+        // undo entry for what the user experienced as one edit -- committing a value-identical state is
+        // a no-op, mirroring the same guard PlanScalePercentCommit already applies below.
+        return resolved == current
+            ? PageLayoutScaleCommitPlan.Revert(current)
+            : PageLayoutScaleCommitPlan.Apply(resolved);
     }
 
     public static PageLayoutScaleCommitPlan PlanScaleCommit(
@@ -122,13 +131,18 @@ public static class PageLayoutRibbonPolicyPlanner
         WorksheetScaleToFit current,
         string text)
     {
-        return PageLayoutInputParser.TryParseScalePages(text, out var pagesTall)
-            ? PageLayoutScaleCommitPlan.Apply(
-                PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(
-                    current,
-                    current.FitToPagesWide,
-                    pagesTall))
-            : PageLayoutScaleCommitPlan.Revert(current);
+        if (!PageLayoutInputParser.TryParseScalePages(text, out var pagesTall))
+            return PageLayoutScaleCommitPlan.Revert(current);
+
+        var resolved = PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(
+            current,
+            current.FitToPagesWide,
+            pagesTall);
+
+        // Same combo-echo guard as PlanScaleWidthCommit above, mirrored for the Height box.
+        return resolved == current
+            ? PageLayoutScaleCommitPlan.Revert(current)
+            : PageLayoutScaleCommitPlan.Apply(resolved);
     }
 
     public static PageLayoutScaleCommitPlan PlanScalePercentCommit(

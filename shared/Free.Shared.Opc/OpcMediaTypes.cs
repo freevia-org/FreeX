@@ -165,6 +165,7 @@ public static class OpcMediaTypes
                 "gif" => "image/gif",
                 "bmp" => "image/bmp",
                 "svg" => "image/svg+xml",
+                "webp" => "image/webp",
                 _ => "image/png",
             },
             OpcMediaContentTypeProfile.PresentationAudioInsertion => extension switch

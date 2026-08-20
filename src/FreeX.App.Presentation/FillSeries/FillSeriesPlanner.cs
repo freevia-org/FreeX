@@ -919,10 +919,19 @@ public static class FillSeriesPlanner
         };
     }
 
-    /// <summary>Adds whole months, returning NaN when the result would leave the calendar range.</summary>
+    /// <summary>
+    /// Adds whole months, returning NaN when the result would leave the calendar range.
+    /// <paramref name="value"/> and the return value are genuine Excel serials (the same convention
+    /// as <see cref="DateTimeValue.Value"/>), which differ from .NET OADates by one day for any date
+    /// before 1 March 1900 (Excel keeps the phantom 29 February 1900; OADate does not) -- so the
+    /// conversion in both directions must go through <see cref="DateTimeValue.ToDateTime"/> /
+    /// <see cref="DateTimeValue.FromDateTime"/> rather than a bare <c>DateTime.FromOADate</c>/
+    /// <c>.ToOADate()</c>, matching the seed conversion three lines above this method's only caller
+    /// (<c>lineSeed.ToDateTime()</c> in <see cref="BuildDateSeriesEdits"/>).
+    /// </summary>
     private static double AddMonths(double value, long months, bool preserveEndOfMonth)
     {
-        var date = DateTime.FromOADate(value);
+        var date = new DateTimeValue(value).ToDateTime();
         var totalMonths = ((long)date.Year * 12) + (date.Month - 1) + months;
         var year = totalMonths / 12;
         var month = totalMonths % 12;
@@ -937,20 +946,24 @@ public static class FillSeriesPlanner
 
         var day = Math.Min(date.Day, DateTime.DaysInMonth((int)year, (int)month + 1));
         var shifted = new DateTime((int)year, (int)month + 1, day, date.Hour, date.Minute, date.Second, date.Millisecond, date.Kind);
-        return PreserveEndOfMonth(shifted, preserveEndOfMonth).ToOADate();
+        return DateTimeValue.FromDateTime(PreserveEndOfMonth(shifted, preserveEndOfMonth)).Value;
     }
 
-    /// <summary>Adds whole years, returning NaN when the result would leave the calendar range.</summary>
+    /// <summary>
+    /// Adds whole years, returning NaN when the result would leave the calendar range. See
+    /// <see cref="AddMonths"/> for why both conversions route through <see cref="DateTimeValue"/>
+    /// instead of a bare OADate round trip.
+    /// </summary>
     private static double AddYears(double value, long years, bool preserveEndOfMonth)
     {
-        var date = DateTime.FromOADate(value);
+        var date = new DateTimeValue(value).ToDateTime();
         var year = date.Year + years;
         if (year < DateTime.MinValue.Year || year > DateTime.MaxValue.Year)
             return double.NaN;
 
         var day = Math.Min(date.Day, DateTime.DaysInMonth((int)year, date.Month));
         var shifted = new DateTime((int)year, date.Month, day, date.Hour, date.Minute, date.Second, date.Millisecond, date.Kind);
-        return PreserveEndOfMonth(shifted, preserveEndOfMonth).ToOADate();
+        return DateTimeValue.FromDateTime(PreserveEndOfMonth(shifted, preserveEndOfMonth)).Value;
     }
 
     private static DateTime PreserveEndOfMonth(DateTime date, bool preserveEndOfMonth) =>

@@ -13,6 +13,8 @@ public static class DrawingInputParser
             ".jpg" or ".jpeg" => "image/jpeg",
             ".bmp" => "image/bmp",
             ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".tif" or ".tiff" => "image/tiff",
             _ => "image/png"
         };
 

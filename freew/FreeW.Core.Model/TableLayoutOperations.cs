@@ -39,9 +39,14 @@ public static class TableLayoutOperations
         if (table.ColumnWidthsPt.Count == table.ColumnCount)
             table.ColumnWidthsPt[columnIndex] = widthPt ?? table.ColumnWidthsPt[columnIndex];
 
+        // columnIndex is a grid-column index, not a per-row cell index: a row containing a
+        // horizontally merged cell (GridSpan > 1) before this column has fewer Cells entries than
+        // grid columns, so Cells[columnIndex] would land on the wrong cell. Route through the same
+        // grid projection TableGridProjection already uses elsewhere to find whichever cell actually
+        // occupies this grid column in each row.
         foreach (var row in table.Rows)
-            if (columnIndex < row.Cells.Count)
-                row.Cells[columnIndex].WidthPt = widthPt;
+            if (TableGridProjection.At(row, columnIndex) is { } projected)
+                projected.Cell.WidthPt = widthPt;
 
         return true;
     }
