@@ -416,7 +416,17 @@ internal static class TextBodyFlowDocumentConverter
             };
             border.MouseLeftButtonDown += (_, args) =>
             {
-                if (args.ClickCount >= 2 && OleActivationService.TryActivate(ole))
+                // Double-clicking the placeholder is the external-activation route for an inline
+                // object. It reports the application's save through the same callback the in-place
+                // route uses, so the owning editor moves the bytes onto the live model and the
+                // shell marks the document dirty -- without it the edit landed in this document's
+                // copy of the body and was lost with it.
+                if (args.ClickCount >= 2
+                    && OleActivationService.TryActivate(
+                        ole,
+                        onPayloadUpdated: onInlineOlePayloadUpdated is null
+                            ? null
+                            : bytes => onInlineOlePayloadUpdated(ole, bytes)))
                     args.Handled = true;
             };
             WpfOleInPlaceHost.AttachInline(

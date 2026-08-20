@@ -1,3 +1,8 @@
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Input;
 using System.IO;
 using System.Windows.Threading;
 using FreeP.App.Compositor;
@@ -79,6 +84,17 @@ public sealed class InlineOleExternalActivationEndToEndTests
                 "an external application's save must be reported to the shell, or the edit is " +
                 "silently lost when the user closes an apparently clean document");
             LiveInlineOleBytes(shape).Should().Equal(rewritten);
+
+            // The commit runs on the activation session's continuation, not the UI thread. The
+            // shell's change notification updates window chrome, so unless it is marshalled the
+            // update throws inside the session (where the exception is swallowed) and the user
+            // sees a clean-looking title over a dirty document.
+            WaitFor(() => window.Title.Contains(
+                FreePApplicationFrameDescriptor.Title.DirtyMarker,
+                StringComparison.Ordinal))
+                .Should().BeTrue(
+                    "the dirty marker must reach the window title even though the commit arrives " +
+                    "on a background thread");
         }
         finally
         {
@@ -111,6 +127,103 @@ public sealed class InlineOleExternalActivationEndToEndTests
             window.IsDirty.Should().BeFalse(
                 "closing the external application without saving must leave the document clean");
             LiveInlineOleBytes(shape).Should().Equal([1, 2, 3]);
+        }
+        finally
+        {
+            OleActivationService.ExternalActivationOverrideForTests = null;
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// Double-clicking the inline placeholder is the second external route into the same object,
+    /// and it went through the activation service with no notification at all -- so the edit
+    /// landed in the editor document's copy of the body and was lost with it.
+    /// </summary>
+    [StaFact]
+    public void InlinePlaceholderDoubleClick_ReachesLiveModelAndMarksDirty()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        byte[] rewritten = [3, 3, 3, 3];
+        var shape = AddInlineOleShape(window, [1, 2, 3]);
+        var store = new RecordingTempFileStore();
+        var launcher = new ControllableLauncher();
+
+        OleActivationService.ExternalActivationOverrideForTests = () => (store, launcher);
+        try
+        {
+            window.SlideCanvas.TextEditor!.Activate(shape.Id);
+            var placeholder = window.SlideCanvas.TextEditor!.ActiveRichTextVisual
+                .Should().BeOfType<RichTextBox>().Subject
+                .Document.Blocks
+                .OfType<System.Windows.Documents.Paragraph>()
+                .SelectMany(paragraph => paragraph.Inlines)
+                .OfType<InlineUIContainer>()
+                .Select(container => container.Child)
+                .OfType<Border>()
+                .Single();
+
+            placeholder.RaiseEvent(DoubleClick());
+
+            File.WriteAllBytes(store.LastPath!, rewritten);
+            launcher.LastProcess!.Exit();
+
+            WaitFor(() => window.IsDirty).Should().BeTrue();
+            LiveInlineOleBytes(shape).Should().Equal(
+                rewritten,
+                "the placeholder's own activation route must report its save like every other one");
+        }
+        finally
+        {
+            OleActivationService.ExternalActivationOverrideForTests = null;
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// A left button-down carrying a click count of two. WPF only sets that count from real input,
+    /// so the test writes it through the property's non-public setter; everything else about the
+    /// event is what the placeholder's production handler receives.
+    /// </summary>
+    private static MouseButtonEventArgs DoubleClick()
+    {
+        var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+        {
+            RoutedEvent = UIElement.MouseLeftButtonDownEvent,
+        };
+        typeof(MouseButtonEventArgs)
+            .GetProperty("ClickCount", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
+            .SetValue(args, 2);
+        return args;
+    }
+
+    /// <summary>
+    /// The slide-level counterpart: an embedded object opened in its own application because
+    /// in-place activation was unavailable. The activation coordinator's default route reports
+    /// nothing, so the shell has to supply its own external activator.
+    /// </summary>
+    [StaFact]
+    public void SlideLevelExternalActivation_MarksDocumentDirty_WhenTheApplicationSavesThePayload()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        byte[] rewritten = [2, 2, 2, 2];
+        var ole = new OleObjectInfo { EmbeddedBytes = [1, 2, 3], FileName = "Book.xlsx" };
+        var store = new RecordingTempFileStore();
+        var launcher = new ControllableLauncher();
+
+        OleActivationService.ExternalActivationOverrideForTests = () => (store, launcher);
+        try
+        {
+            window.IsDirty.Should().BeFalse();
+
+            window.TryActivateOleExternallyForTests(ole).Should().BeTrue();
+
+            File.WriteAllBytes(store.LastPath!, rewritten);
+            launcher.LastProcess!.Exit();
+
+            WaitFor(() => window.IsDirty).Should().BeTrue(
+                "the shell's external activator must report the application's save");
+            ole.EmbeddedBytes.Should().Equal(rewritten);
         }
         finally
         {

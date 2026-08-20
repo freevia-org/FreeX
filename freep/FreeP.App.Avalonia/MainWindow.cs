@@ -2107,7 +2107,7 @@ public sealed partial class MainWindow : Window,
             // Inline embedded objects live inside a shape's rich text, so neither the slide-level
             // TryOpenOleInPlace route nor a text-edit command reports their commits; without this
             // a native or external inline edit left the document clean.
-            onInlineOlePayloadUpdated: _ => _fileWorkflow.MarkDirty());
+            onInlineOlePayloadUpdated: _ => MarkDirtyFromAnyThread());
         WireTableContextMenu();
     }
 
@@ -2159,7 +2159,7 @@ public sealed partial class MainWindow : Window,
 #else
                 null,
 #endif
-                onInlineOlePayloadUpdated: _ => _fileWorkflow.MarkDirty());
+                onInlineOlePayloadUpdated: _ => MarkDirtyFromAnyThread());
             WireTableContextMenu();
         }
     }
@@ -2187,13 +2187,28 @@ public sealed partial class MainWindow : Window,
             onActivationFailed: () =>
             {
                 CloseActiveOleHost();
-                OleActivationService.TryActivate(plan.OleObject, onPayloadUpdated: _ => _fileWorkflow.MarkDirty());
+                OleActivationService.TryActivate(plan.OleObject, onPayloadUpdated: _ => MarkDirtyFromAnyThread());
             },
             out _activeOleHost,
-            onPayloadUpdated: _ => _fileWorkflow.MarkDirty());
+            onPayloadUpdated: _ => MarkDirtyFromAnyThread());
 #else
         return false;
 #endif
+    }
+
+    /// <summary>
+    /// Marks the document dirty from whichever thread an OLE payload commit arrives on. In-place
+    /// commits arrive on the UI thread, but an external application's save is reported from the
+    /// activation session's continuation -- and the shell's change notification updates the title
+    /// and status bar, so an unmarshalled call throws where the session swallows it, leaving a
+    /// clean-looking window over a dirty document.
+    /// </summary>
+    private void MarkDirtyFromAnyThread()
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+            _fileWorkflow.MarkDirty();
+        else
+            Dispatcher.UIThread.Post(() => _fileWorkflow.MarkDirty());
     }
 
     private void CloseActiveOleHost()
@@ -2359,7 +2374,7 @@ public sealed partial class MainWindow : Window,
                 TryOpenInlineEmbeddedObject = () => _textEditor?.TryActivateInlineOleObject() == true,
                 TryOpenSelectedEmbeddedObject = ole =>
                 {
-                    OleActivationService.TryActivate(ole, onPayloadUpdated: _ => _fileWorkflow.MarkDirty());
+                    OleActivationService.TryActivate(ole, onPayloadUpdated: _ => MarkDirtyFromAnyThread());
                     return true;
                 },
             },

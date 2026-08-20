@@ -29,4 +29,13 @@ public sealed partial class MainWindow
     /// exercising the composition helper in isolation.
     /// </summary>
     internal bool TryOpenOleInPlaceForTests(SlideShape shape) => TryOpenOleInPlace(shape);
+
+    /// <summary>
+    /// Forwards to the private external-activation entry point wired to
+    /// <see cref="SlideCanvas.AttachEditing"/>, so end-to-end tests can drive the exact call site
+    /// that composes <c>onPayloadUpdated</c> for a slide-level embedded object opened in its own
+    /// application -- the route taken whenever in-place activation is unavailable.
+    /// </summary>
+    internal bool TryActivateOleExternallyForTests(OleObjectInfo? oleObject) =>
+        TryActivateOleExternally(oleObject);
 }

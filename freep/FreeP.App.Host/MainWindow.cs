@@ -553,8 +553,37 @@ public sealed partial class MainWindow : Window,
             // Inline embedded objects live inside a shape's rich text and are hosted by the
             // converter, not by TryOpenOleInPlace above; without this the native commit of an
             // inline object left the document clean.
-            onInlineOlePayloadUpdated: _ => _fileSession.MarkDirty());
+            onInlineOlePayloadUpdated: _ => MarkDirtyFromAnyThread(),
+            // Slide-level external activation: without this a double-clicked embedded object
+            // edited in its own application saved into the model and left the document clean,
+            // because the coordinator's default route reports nothing.
+            tryActivateOleExternally: TryActivateOleExternally);
         SlideCanvas.ApplyViewShowState(_viewShowState);
+    }
+
+    /// <summary>
+    /// Opens a slide-level embedded object in its associated application, the route a double-click
+    /// takes when in-place activation is unavailable. Reporting the application's save is what
+    /// separates this from the activation coordinator's default route, which silently drops it.
+    /// </summary>
+    private bool TryActivateOleExternally(OleObjectInfo? oleObject) =>
+        OleActivationService.TryActivate(
+            oleObject,
+            onPayloadUpdated: _ => MarkDirtyFromAnyThread());
+
+    /// <summary>
+    /// Marks the document dirty from whichever thread an OLE payload commit arrives on. In-place
+    /// commits arrive on the dispatcher, but an external application's save is reported from the
+    /// activation session's continuation -- and the shell's change notification updates window
+    /// chrome, so an unmarshalled call throws where the session swallows it, leaving a clean title
+    /// over a dirty document.
+    /// </summary>
+    private void MarkDirtyFromAnyThread()
+    {
+        if (Dispatcher.CheckAccess())
+            _fileSession.MarkDirty();
+        else
+            Dispatcher.InvokeAsync(() => _fileSession.MarkDirty());
     }
 
     private bool TryOpenOleInPlace(SlideShape shape)
@@ -589,7 +618,7 @@ public sealed partial class MainWindow : Window,
             plan.OleObject,
             bounds,
             out _activeOleHost,
-            onPayloadUpdated: _ => _fileSession.MarkDirty());
+            onPayloadUpdated: _ => MarkDirtyFromAnyThread());
     }
 
     private void CloseActiveOleHost()

@@ -162,13 +162,19 @@ public sealed partial class SlideCanvas : FrameworkElement
     /// dirty -- the inline counterpart of the <paramref name="tryOpenOleInPlace"/> route's
     /// own <c>onPayloadUpdated</c> wiring.
     /// </param>
+    /// <param name="tryActivateOleExternally">
+    /// Opens a slide-level embedded object in its associated application when in-place activation
+    /// is unavailable. Supply this rather than relying on the coordinator's default route: the
+    /// default reports nothing back, so the shell never learns that the application saved.
+    /// </param>
     public void AttachEditing(
         EditingSession editor,
         Canvas textOverlay,
         Func<SlideShape, bool>? tryOpenOleInPlace = null,
         Action<ChartPointHit>? onChartPointDoubleClick = null,
         Action<string, string>? onClipboardWriteFailed = null,
-        Action<byte[]>? onInlineOlePayloadUpdated = null)
+        Action<byte[]>? onInlineOlePayloadUpdated = null,
+        Func<OleObjectInfo?, bool>? tryActivateOleExternally = null)
     {
         var editPointsEnabled = _gestureHandler?.EditPointsEnabled ?? true;
         // Rebuilds replace the EditingSession. Dispose the previous handler first so its
@@ -192,7 +198,8 @@ public sealed partial class SlideCanvas : FrameworkElement
             this,
             editor,
             tryOpenOleInPlace,
-            onChartPointDoubleClick);
+            onChartPointDoubleClick,
+            tryActivateOleExternally);
         _gestureHandler.EditPointsEnabled = editPointsEnabled;
         ApplyViewShowState(_viewShowState);
         _textOverlay     = textOverlay;

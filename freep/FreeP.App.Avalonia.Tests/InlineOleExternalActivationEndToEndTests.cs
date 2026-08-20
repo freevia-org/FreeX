@@ -107,6 +107,13 @@ public sealed class InlineOleExternalActivationEndToEndTests
                 "an external application's save must be reported to the shell, or the edit is " +
                 "silently lost when the user closes an apparently clean document");
             LiveInlineOleBytes(shape).Should().Equal(rewritten);
+
+            // The commit arrives on the activation session's continuation, so the shell marshals
+            // its change notification (which updates title and status bar) onto the UI thread --
+            // see MainWindow.MarkDirtyFromAnyThread. That marshalling is asserted end to end in the
+            // WPF sibling of this test: this harness cannot observe it, because Avalonia's headless
+            // session never drains dispatcher-posted work and reports UI-thread access from any
+            // thread, so a posted update neither runs nor can be distinguished from an inline one.
         }
         finally
         {

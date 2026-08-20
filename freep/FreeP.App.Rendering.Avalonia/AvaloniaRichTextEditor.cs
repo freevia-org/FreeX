@@ -361,7 +361,14 @@ internal sealed class AvaloniaRichTextEditor : Grid
         return _session.GetSelectedRunHyperlink(Selection);
     }
 
-    internal bool TryActivateInlineOleObject(Func<int, bool> tryActivateAt)
+    /// <summary>
+    /// Resolves the caret position of the editor that actually owns the caret -- which is a nested
+    /// inline-table cell editor while a cell is being edited -- and offers it for activation. The
+    /// editor is passed alongside the position because the position is relative to <em>that</em>
+    /// editor's body: a cell-local position means nothing in the shape's body, so the caller has to
+    /// know whose coordinate space it is in before resolving a payload from it.
+    /// </summary>
+    internal bool TryActivateInlineOleObject(Func<AvaloniaRichTextEditor, int, bool> tryActivateAt)
     {
         ArgumentNullException.ThrowIfNull(tryActivateAt);
         if (!ReferenceEquals(EditingTarget, this))
@@ -369,8 +376,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
         SynchronizeText();
         int position = Math.Min(SelectionStart, SelectionEnd);
-        return tryActivateAt(position)
-            || (position > 0 && tryActivateAt(position - 1));
+        return tryActivateAt(this, position)
+            || (position > 0 && tryActivateAt(this, position - 1));
     }
 
     internal bool TryGetInlineOleHit(

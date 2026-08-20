@@ -521,7 +521,18 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         RefreshTableCellHighlight();
     }
 
-    private bool TryActivateInlineOleAt(int logicalPosition)
+    private bool TryActivateInlineOleAt(AvaloniaRichTextEditor caretOwner, int logicalPosition)
+    {
+        // A nested inline-table cell editor reports positions in its own cell body. Both routes
+        // below resolve the payload from the shape's body, where that position addresses something
+        // else entirely -- so refuse rather than open (and commit bytes into) the wrong object.
+        if (!ReferenceEquals(caretOwner, _textBox))
+            return false;
+
+        return TryActivateShapeInlineOleAt(logicalPosition);
+    }
+
+    private bool TryActivateShapeInlineOleAt(int logicalPosition)
     {
         if (_textBox is not null
             && _inlineOleHostFactory is not null
