@@ -12,7 +12,7 @@ public sealed class ChartDataDialogPlannerTests
     {
         ChartDataDialogVisualMetrics.WpfWindowWidth.Should().Be(640);
         ChartDataDialogVisualMetrics.WpfWindowHeight.Should().Be(440);
-        ChartDataDialogVisualMetrics.AvaloniaWindowWidth.Should().Be(625.3333333333334);
+        ChartDataDialogVisualMetrics.AvaloniaWindowWidth.Should().Be(626.3333333333334);
         ChartDataDialogVisualMetrics.AvaloniaWindowHeight.Should().Be(402.6666666666667);
         ChartDataDialogVisualMetrics.ToolbarButtonRightMargin.Should().Be(4);
         ChartDataDialogVisualMetrics.ToolbarGroupGap.Should().Be(12);

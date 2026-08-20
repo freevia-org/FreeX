@@ -45,7 +45,7 @@ internal sealed partial class FindReplaceDialog : FreePDialogWindow
         var initial = _session.InitialState;
         var surface = _session.Surface;
 
-        Width = 425.3333333333333;
+        Width = 426.3333333333333;
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;

@@ -191,6 +191,7 @@ public sealed class DialogLifecycleParityTests
         {
             var dialog = new FindReplaceDialog(MakeSession(), showReplace: false);
 
+            dialog.Width.Should().Be(426.3333333333333);
             dialog.Height.Should().Be(130);
             dialog.GetLogicalDescendants().OfType<CheckBox>()
                 .Should().HaveCount(2)

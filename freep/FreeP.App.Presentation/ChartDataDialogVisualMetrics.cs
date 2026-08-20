@@ -9,7 +9,7 @@ public static class ChartDataDialogVisualMetrics
 {
     public const double WpfWindowWidth = ChartDataDialogPlanner.DefaultDialogWidth;
     public const double WpfWindowHeight = ChartDataDialogPlanner.DefaultDialogHeight;
-    public const double AvaloniaWindowWidth = 625.3333333333334;
+    public const double AvaloniaWindowWidth = 626.3333333333334;
     public const double AvaloniaWindowHeight = 402.6666666666667;
 
     public const double ToolbarButtonRightMargin = 4;
