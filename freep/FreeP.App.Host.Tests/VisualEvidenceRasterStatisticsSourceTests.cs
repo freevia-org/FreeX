@@ -35,7 +35,8 @@ public sealed class VisualEvidenceRasterStatisticsSourceTests
             "freep", "TestSupport", "VisualEvidence.Wpf", "WpfDialogPaneVisualEvidenceCapture.cs");
 
         source.Should().Contain("private static IEnumerable<DependencyObject> Descendants(DependencyObject root)")
-            .And.Contain("yield return root;");
+            .And.Contain("yield return root;")
+            .And.NotContain("yield return child;");
     }
 
     private static string ReadWorkspaceSource(params string[] relativeParts)
