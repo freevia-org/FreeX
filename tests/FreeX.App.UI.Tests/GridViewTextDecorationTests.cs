@@ -121,6 +121,32 @@ public sealed class GridViewTextDecorationTests
     }
 
     [Fact]
+    public void CalculateCellTextRenderLayout_CompensatesFormattedTextLeadingForBottomAlignedCells()
+    {
+        var bottom = GridView.CalculateCellTextRenderLayout(
+            new Rect(0, 0, 100, 20),
+            textWidth: 30,
+            textHeight: 10,
+            FreeX.Core.Model.HorizontalAlignment.Left,
+            FreeX.Core.Model.VerticalAlignment.Bottom,
+            isNumeric: false,
+            indentPx: 0,
+            textRotation: 0);
+        var top = GridView.CalculateCellTextRenderLayout(
+            new Rect(0, 0, 100, 20),
+            textWidth: 30,
+            textHeight: 10,
+            FreeX.Core.Model.HorizontalAlignment.Left,
+            FreeX.Core.Model.VerticalAlignment.Top,
+            isNumeric: false,
+            indentPx: 0,
+            textRotation: 0);
+
+        bottom.TextPoint.Y.Should().Be(7);
+        top.TextPoint.Y.Should().Be(1, "top-aligned cell text does not have bottom-leading drift");
+    }
+
+    [Fact]
     public void CanOverflowCellText_PreservesNormalTextOverflowButExcludesShrinkToFitAndRotation()
     {
         GridView.CanOverflowCellText(

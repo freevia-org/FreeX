@@ -1504,7 +1504,28 @@ public partial class GridView
             indentPx,
             textRotation,
             isEffectivelyRightToLeft);
-        return ToWpfLayout(layout);
+        var wpfLayout = ToWpfLayout(layout);
+
+        // FormattedText includes roughly two DIPs of bottom leading that Excel's grid does not
+        // reserve when it bottom-aligns an unrotated cell. Without compensating for that leading,
+        // every ordinary Office cell sits visibly low in WPF (most obvious in Aptos Narrow's
+        // compact default row). Keep the portable layout math unchanged and correct only the WPF
+        // drawing origin, where the FormattedText metric is introduced.
+        if (textRotation == 0 &&
+            (vAlign ?? CellVAlign.Bottom) == CellVAlign.Bottom)
+        {
+            const double ExcelBottomAlignedWpfLeadingCorrection = 2.0;
+            return new CellTextRenderLayout(
+                new Point(wpfLayout.TextPoint.X, wpfLayout.TextPoint.Y - ExcelBottomAlignedWpfLeadingCorrection),
+                new Rect(
+                    wpfLayout.Bounds.Left,
+                    wpfLayout.Bounds.Top - ExcelBottomAlignedWpfLeadingCorrection,
+                    wpfLayout.Bounds.Width,
+                    wpfLayout.Bounds.Height),
+                wpfLayout.TransformAngle);
+        }
+
+        return wpfLayout;
     }
 
     private static void DrawCellText(
