@@ -455,11 +455,10 @@ public sealed class ComboAndTrendlineLayoutTests
 
         var catScale = layout.CategoryAxis!.Scale;
         var bar = layout.Series[0].Bars[0].Rect;
-        // Full default half-width (0.35, matching the WPF renderer's ColumnBarHalfWidth default --
-        // see G18 regression fix), same as a lone clustered series — not narrowed to a 2-series
+        // Full native half-width (gapWidth=219), same as a lone clustered series — not narrowed to a 2-series
         // sub-slot.
-        bar.Left.Should().BeApproximately(catScale.Transform(-0.35), 1e-6);
-        bar.Right.Should().BeApproximately(catScale.Transform(0.35), 1e-6);
+        bar.Left.Should().BeApproximately(catScale.Transform(-0.15673981191222572), 1e-6);
+        bar.Right.Should().BeApproximately(catScale.Transform(0.15673981191222572), 1e-6);
     }
 
     [Fact]

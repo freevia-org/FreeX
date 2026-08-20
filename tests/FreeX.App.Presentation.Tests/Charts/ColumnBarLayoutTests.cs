@@ -50,10 +50,10 @@ public sealed class ColumnBarLayoutTests
 
         var catScale = layout.CategoryAxis!.Scale;
         var firstBar = layout.Series[0].Bars[0];
-        // Bar spans index -0.35 .. 0.35 (default column half-width, matching the WPF renderer's
-        // ColumnBarHalfWidth default -- see G18 regression fix) around category 0.
-        firstBar.Rect.Left.Should().BeApproximately(catScale.Transform(-0.35), 1e-6);
-        firstBar.Rect.Right.Should().BeApproximately(catScale.Transform(0.35), 1e-6);
+        // Excel writes an implicit clustered-column gapWidth=219, which the reader stores as
+        // null; its native half-width is therefore 50 / (100 + 219), not the generic 0.35.
+        firstBar.Rect.Left.Should().BeApproximately(catScale.Transform(-0.15673981191222572), 1e-6);
+        firstBar.Rect.Right.Should().BeApproximately(catScale.Transform(0.15673981191222572), 1e-6);
     }
 
     [Fact]
@@ -217,21 +217,20 @@ public sealed class ColumnBarLayoutTests
     }
 
     [Fact]
-    public void ThreeDColumn_lays_out_identically_to_2D_Column_for_same_data()
+    public void ThreeDColumn_retains_legacy_default_width_when_2D_column_uses_native_gap_width()
     {
-        // Geometry should match the plain Column layout exactly (same axis, same bar widths).
+        // 3-D column is intentionally outside the native 2-D default-gap correction.
         var categories = new[] { "A", "B", "C" };
         var plot = new PlotRect(0, 0, 300, 200);
 
         var col3d = ChartLayoutEngine.Layout(Request(Chart(ChartType.ThreeDColumn), categories, [Series(0, "S", 10, 20, 30)], plot));
         var col2d = ChartLayoutEngine.Layout(Request(Chart(ChartType.Column), categories, [Series(0, "S", 10, 20, 30)], plot));
 
-        // Same number of bars, same bar rects.
+        // The vertical geometry remains the same, but 3-D keeps its established wider default.
         col3d.Series[0].Bars.Count.Should().Be(col2d.Series[0].Bars.Count);
         for (var i = 0; i < col3d.Series[0].Bars.Count; i++)
         {
-            col3d.Series[0].Bars[i].Rect.Left.Should().BeApproximately(col2d.Series[0].Bars[i].Rect.Left, 1e-6);
-            col3d.Series[0].Bars[i].Rect.Right.Should().BeApproximately(col2d.Series[0].Bars[i].Rect.Right, 1e-6);
+            col3d.Series[0].Bars[i].Rect.Width.Should().BeGreaterThan(col2d.Series[0].Bars[i].Rect.Width);
             col3d.Series[0].Bars[i].Rect.Top.Should().BeApproximately(col2d.Series[0].Bars[i].Rect.Top, 1e-6);
             col3d.Series[0].Bars[i].Rect.Bottom.Should().BeApproximately(col2d.Series[0].Bars[i].Rect.Bottom, 1e-6);
         }
@@ -362,11 +361,10 @@ public sealed class ColumnBarLayoutTests
 
         var catScale = layout.CategoryAxis!.Scale;
         var firstBar = layout.Series[0].Bars[0];
-        // Default halfWidth=0.35 → slot is [-0.35, 0.35] relative to category 0 (matching the WPF
-        // renderer's ColumnBarHalfWidth default -- see G18 regression fix).
-        firstBar.Rect.Left.Should().BeApproximately(catScale.Transform(-0.35), 1e-6,
+        // The un-authored clustered column uses Excel's gapWidth=219 slot.
+        firstBar.Rect.Left.Should().BeApproximately(catScale.Transform(-0.15673981191222572), 1e-6,
             "single-series bar must span the full default slot");
-        firstBar.Rect.Right.Should().BeApproximately(catScale.Transform(0.35), 1e-6);
+        firstBar.Rect.Right.Should().BeApproximately(catScale.Transform(0.15673981191222572), 1e-6);
     }
 
     [Fact]

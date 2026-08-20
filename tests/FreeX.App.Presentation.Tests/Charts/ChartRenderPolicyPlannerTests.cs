@@ -13,18 +13,26 @@ public sealed class ChartRenderPolicyPlannerTests
     {
         var chart = new ChartModel { Type = ChartType.Column };
 
-        ChartRenderPolicyPlanner.ResolveBarHalfWidth(chart).Should().Be(0.35);
+        ChartRenderPolicyPlanner.ResolveBarHalfWidth(chart).Should().BeApproximately(0.15673981191222572, 1e-12);
         ChartRenderPolicyPlanner.ResolveEffectiveBarOverlap(chart).Should().Be(-27);
 
-        var first = ChartRenderPolicyPlanner.ResolveClusteredBarOffsets(0.35, 0, 2, -27);
-        var second = ChartRenderPolicyPlanner.ResolveClusteredBarOffsets(0.35, 1, 2, -27);
-        first.Left.Should().BeApproximately(-0.35, 1e-12);
-        first.Right.Should().BeApproximately(-0.0416299559471366, 1e-12);
-        second.Left.Should().BeApproximately(0.0416299559471366, 1e-12);
-        second.Right.Should().BeApproximately(0.35, 1e-12);
+        var first = ChartRenderPolicyPlanner.ResolveClusteredBarOffsets(0.15673981191222572, 0, 2, -27);
+        var second = ChartRenderPolicyPlanner.ResolveClusteredBarOffsets(0.15673981191222572, 1, 2, -27);
+        first.Left.Should().BeApproximately(-0.15673981191222572, 1e-12);
+        first.Right.Should().BeApproximately(-0.018643061328766947, 1e-12);
+        second.Left.Should().BeApproximately(0.01864306132876692, 1e-12);
+        second.Right.Should().BeApproximately(0.1567398119122257, 1e-12);
 
         chart.BarGapWidth = 0;
         ChartRenderPolicyPlanner.ResolveBarHalfWidth(chart).Should().Be(0.5);
+
+        var bar = new ChartModel { Type = ChartType.Bar };
+        ChartRenderPolicyPlanner.ResolveBarHalfWidth(bar).Should().Be(0.35);
+        ChartRenderPolicyPlanner.ResolveEffectiveBarOverlap(bar).Should().Be(-27);
+        bar.BarGapWidth = 182;
+        bar.BarOverlap = -25;
+        ChartRenderPolicyPlanner.ResolveBarHalfWidth(bar).Should().BeApproximately(0.1773049645390071, 1e-12);
+        ChartRenderPolicyPlanner.ResolveEffectiveBarOverlap(bar).Should().Be(-25);
     }
 
     [Fact]

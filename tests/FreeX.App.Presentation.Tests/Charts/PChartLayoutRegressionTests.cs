@@ -12,11 +12,11 @@ namespace FreeX.App.Presentation.Tests.Charts;
 /// </summary>
 public sealed class PChartLayoutRegressionTests
 {
-    // ---- G18: clustered column/bar default half-width must be 0.35, matching WPF's
-    // ColumnBarHalfWidth (which has no 0.4 case anywhere for standard clustered Column/Bar). ----
+    // ---- G18: current Excel's implicit clustered-column gap is 219, while Bar keeps its
+    // established 0.35 width unless a source gap is authored. ----
 
     [Fact]
-    public void G18_Clustered_column_default_half_width_matches_WPF_0_35_not_0_4()
+    public void G18_Clustered_column_default_half_width_matches_Excel_gap_width_219()
     {
         var plot = new PlotRect(0, 0, 300, 200);
         var request = Request(Chart(ChartType.Column), ["A", "B", "C"], [Series(0, "S1", 1, 2, 3)], plot);
@@ -24,9 +24,9 @@ public sealed class PChartLayoutRegressionTests
 
         var catScale = layout.CategoryAxis!.Scale;
         var firstBar = layout.Series[0].Bars[0];
-        firstBar.Rect.Left.Should().BeApproximately(catScale.Transform(-0.35), 1e-6,
-            "the portable engine's clustered column half-width must match WPF's ColumnBarHalfWidth default of 0.35");
-        firstBar.Rect.Right.Should().BeApproximately(catScale.Transform(0.35), 1e-6);
+        firstBar.Rect.Left.Should().BeApproximately(catScale.Transform(-0.15673981191222572), 1e-6,
+            "the portable engine's clustered column half-width must restore Excel's implicit gapWidth=219");
+        firstBar.Rect.Right.Should().BeApproximately(catScale.Transform(0.15673981191222572), 1e-6);
     }
 
     [Fact]
@@ -49,10 +49,10 @@ public sealed class PChartLayoutRegressionTests
     }
 
     [Fact]
-    public void G18_Clustered_and_stacked_column_share_the_same_default_half_width()
+    public void G18_Clustered_column_native_default_is_narrower_than_the_stacked_default()
     {
-        // WPF's ColumnBarHalfWidth is a single shared function used by both the clustered and
-        // stacked paths, so the portable engine's clustered/stacked defaults must agree too.
+        // Excel's clustered-column XML writes gapWidth=219 while the stacked path retains the
+        // established generic default when it has no authored gap width.
         var plot = new PlotRect(0, 0, 300, 200);
         var clusteredLayout = ChartLayoutEngine.Layout(
             Request(Chart(ChartType.Column), ["A", "B"], [Series(0, "S1", 1, 2)], plot));
@@ -61,7 +61,7 @@ public sealed class PChartLayoutRegressionTests
 
         var clusteredBar = clusteredLayout.Series[0].Bars[0].Rect;
         var stackedBar = stackedLayout.Series[0].Bars[0].Rect;
-        (clusteredBar.Right - clusteredBar.Left).Should().BeApproximately(stackedBar.Right - stackedBar.Left, 1e-6);
+        (clusteredBar.Right - clusteredBar.Left).Should().BeLessThan(stackedBar.Right - stackedBar.Left);
     }
 
     // ---- G33: Bar-chart trendline equation/R² annotation anchor must land at the same corner as

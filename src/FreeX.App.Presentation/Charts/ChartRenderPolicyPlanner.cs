@@ -14,6 +14,7 @@ namespace FreeX.App.Presentation.Charts;
 public static class ChartRenderPolicyPlanner
 {
     private const double DefaultBarHalfWidth = 0.35;
+    private const int ExcelNativeClusteredColumnGapWidth = 219;
     private const double MaximumBubbleRadius = 20.0;
     private const double MinimumBubbleRadius = 1.0;
 
@@ -189,7 +190,14 @@ public static class ChartRenderPolicyPlanner
     public static double ResolveBarHalfWidth(ChartModel chart) =>
         chart.BarGapWidth is int gapWidth
             ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.5)
-            : DefaultBarHalfWidth;
+            // Current Excel serializes the implicit clustered-column default as gapWidth=219;
+            // the OOXML reader deliberately normalizes that value back to null. Restore that
+            // native geometry only for the affected 2-D clustered column family. Other chart
+            // families retain their established implicit width until their own native default is
+            // evidenced, and every authored gap width takes the branch above unchanged.
+            : chart.Type == ChartType.Column
+                ? 0.5 * 100.0 / (100.0 + ExcelNativeClusteredColumnGapWidth)
+                : DefaultBarHalfWidth;
 
     /// <summary>Resolves the native default overlap when the workbook omits an explicit value.</summary>
     public static int ResolveEffectiveBarOverlap(ChartModel chart) =>

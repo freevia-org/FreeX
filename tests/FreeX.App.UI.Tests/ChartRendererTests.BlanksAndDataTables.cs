@@ -116,7 +116,8 @@ public sealed partial class ChartRendererTests
 
         var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
         series.Items.Should().HaveCount(3);
-        series.Items.Should().Contain(item => item.X0 == 0.65 && item.X1 == 1.35 && item.Y0 == 0 && item.Y1 == 0);
+        series.Items.Should().Contain(item => item.X0 == 0.8432601880877743 && item.X1 == 1.1567398119122257 && item.Y0 == 0 && item.Y1 == 0,
+            "an implicit clustered column uses Excel's native gapWidth=219 geometry");
     }
 
     [Fact]
