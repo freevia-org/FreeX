@@ -2,6 +2,7 @@ using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace FreeX.App.Services;
 
@@ -436,6 +437,10 @@ public static class FormatCellsNumberFormatPlanner
         return false;
     }
 
+    // Mirrors NumberFormatter.DateTime.cs's QuotedNumberFormatTextRegex: quoted literal text (e.g.
+    // the "yd" in 0" yd") must not be mistaken for date/time tokens.
+    private static readonly Regex QuotedNumberFormatTextRegex = new("\"[^\"]*\"");
+
     private static bool LooksLikeDateTimeFormat(string format)
     {
         // LCID-only long-date/long-time codes: [$-F800] = system long date, [$-F400] = system long time.
@@ -443,7 +448,8 @@ public static class FormatCellsNumberFormatPlanner
             format.Equals("[$-F400]", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        var lower = format.ToLowerInvariant();
+        var stripped = QuotedNumberFormatTextRegex.Replace(format, "");
+        var lower = stripped.ToLowerInvariant();
         return lower.Contains('y')
             || lower.Contains("am/pm", StringComparison.Ordinal)
             || lower.Contains("[h]", StringComparison.Ordinal)

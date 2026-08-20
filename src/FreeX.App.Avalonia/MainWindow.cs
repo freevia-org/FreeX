@@ -26905,7 +26905,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var workflowResult = await _fileWorkflow.OpenAsync(new WorkbookOpenWorkflowRequest(
                 target,
                 ApplyOpenedWorkbookAsync,
-                CompletionDisplayName: Path.GetFileName(target.Path),
+                // R154-shared-templates-F2: no CompletionDisplayName override here, matching the
+                // WPF host's identical Open call (MainWindow.Backstage.cs) -- leave it to the
+                // shared planner's own default (WorkbookOpenResult.DisplayName =
+                // Path.GetFileNameWithoutExtension(path), see WorkbookOpenService.cs). A normal
+                // open still shows its extension because WorkbookSession.DisplayName falls back
+                // to Path.GetFileName(CurrentFilePath) once a real backing file is set; only a
+                // template open (CurrentFilePath forced null) falls back to this completion name,
+                // and Excel never shows a real file extension on an unsaved, template-derived
+                // document. Passing the extension-including file name here (as before) leaked the
+                // template's own extension into that fallback, showing e.g. "Invoice.xltx" for a
+                // brand-new, nowhere-saved workbook.
                 Progress: progress,
                 PrepareAsync: async (openTarget, _) => new WorkbookFileWorkflowPreparation(
                     await _workbookFileAccessService.BeginAccessAsync(

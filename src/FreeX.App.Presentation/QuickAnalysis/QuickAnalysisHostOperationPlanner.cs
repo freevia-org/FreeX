@@ -193,7 +193,8 @@ public static class QuickAnalysisHostOperationPlanner
             sheet.Id,
             range,
             description.HasHeaderRow,
-            sparklineKind);
+            sparklineKind,
+            sheet.Sparklines);
         return commands.Count > 0;
     }
 }

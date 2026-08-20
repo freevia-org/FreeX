@@ -67,6 +67,45 @@ public sealed class PresentationFilePersistenceWorkflowTests : IDisposable
         result.SuppressRecentFiles.Should().BeFalse();
     }
 
+    // ── r154-freep-template-open-saved-path ─────────────────────────────────────────────────
+    //
+    // FAIL-BEFORE: before the fix, Open() unconditionally returned SavedPath: path for every
+    // extension, including .potx/.potm, so opening a template left the session believing it was
+    // already saved to the template's own path -- Ctrl+S then silently overwrote the reusable
+    // master template with one-off edited content instead of prompting for a new file, exactly
+    // as FreeW's DocumentPersistenceWorkflow and FreeX's XltxFileAdapter avoid for their own
+    // template formats.
+
+    [Theory]
+    [InlineData("Template.potx")]
+    [InlineData("MacroTemplate.potm")]
+    public void Open_OfPowerPointTemplate_ReturnsNullSavedPathSoItOpensAsUnsavedDraft(string fileName)
+    {
+        var path = WritePptx(fileName, "Quarterly Review Template");
+
+        var result = PresentationFilePersistenceWorkflow.Open(path);
+
+        result.Presentation.Properties.Title.Should().Be("Quarterly Review Template");
+        result.SavedPath.Should().BeNull(
+            "a template opened for editing must not be treated as already saved to the master file");
+        result.SourceLastWriteTimeUtc.Should().BeNull(
+            "there is no saved path on disk to externally-modified-check against for a fresh template draft");
+        result.SuppressRecentFiles.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Open_OfPowerPointTemplate_ReadsTemplatePackageKindConfirmingItIsRoutedAsTemplate()
+    {
+        // Sanity check that the fixture file really is recognized as a template package (matching
+        // PptxPackageReader's own content-type detection), not merely named .potx.
+        var path = WritePptx("Template.potx", "Kind Check");
+
+        var result = PresentationFilePersistenceWorkflow.Open(path);
+
+        result.Presentation.PackageKind.Should().Be(PresentationPackageKind.Template);
+        result.SavedPath.Should().BeNull();
+    }
+
     [Fact]
     public void Save_WritesPptxAtomicallyAndReturnsSavedPathMetadata()
     {

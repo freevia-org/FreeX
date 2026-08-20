@@ -240,6 +240,48 @@ public class CharacterBorderShadingLanguageRoundTripTests
     }
 
     [Fact]
+    public void HighlightColor_AndCharacterShading_BothWriteIndependently()
+    {
+        // w:highlight and w:shd are two independent CT_RPr elements. CharacterShadingHex owns the single
+        // w:shd slot (as asserted above), but that must not cause the writer to drop HighlightColorHex's
+        // own w:highlight element — a run can carry both a text highlight and a character shading at once.
+        var rPr = WriteRunProperties(new RunFormatting
+        {
+            HighlightColorHex = "#FFFF00",
+            CharacterShadingHex = "#FFC000",
+            CharacterShadingPattern = ShadingPattern.Pct10,
+        });
+
+        var highlight = rPr.Element(W + "highlight");
+        highlight.Should().NotBeNull(
+            "HighlightColorHex must still be emitted as w:highlight even when CharacterShadingHex is also set");
+        highlight!.Attribute(W + "val")?.Value.Should().Be("yellow");
+
+        var shd = rPr.Element(W + "shd");
+        shd.Should().NotBeNull();
+        shd!.Attribute(W + "val")?.Value.Should().Be("pct10", "CharacterShadingHex still owns the w:shd slot");
+        shd.Attribute(W + "fill")?.Value.Should().Be("FFC000");
+    }
+
+    [Fact]
+    public void HighlightColor_AndCharacterShading_BothRoundTrip()
+    {
+        // Full writer→reader round trip: both fields must survive a save/reopen when set together, not
+        // just the one that happens to win the w:shd slot.
+        var result = RoundTrip(new RunFormatting
+        {
+            HighlightColorHex = "#FFFF00",
+            CharacterShadingHex = "#FFC000",
+            CharacterShadingPattern = ShadingPattern.Pct10,
+        });
+
+        result.HighlightColorHex.Should().Be("#FFFF00",
+            "the highlight must not be silently discarded on save just because character shading is also set");
+        result.CharacterShadingHex.Should().Be("#FFC000");
+        result.CharacterShadingPattern.Should().Be(ShadingPattern.Pct10);
+    }
+
+    [Fact]
     public void HighlightColor_Clear_StillWritesClearPattern()
     {
         // Legacy HighlightColorHex must continue to write w:shd val="clear" when no CharacterShadingHex.

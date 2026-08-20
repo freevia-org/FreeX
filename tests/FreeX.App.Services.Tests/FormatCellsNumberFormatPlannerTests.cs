@@ -1,5 +1,7 @@
 using FluentAssertions;
 using FreeX.App.Services;
+using FreeX.Core.Formula;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
 
@@ -185,5 +187,57 @@ public sealed class FormatCellsNumberFormatPlannerTests
         // Regression for F17: whitespace-only must return null, same as sibling methods.
         var result = FormatCellsNumberFormatPlanner.ResolveNumberFormat("   ", 0);
         result.Should().BeNull();
+    }
+
+    // ── freex-custom-formats F1: preview must agree with the real applied format for a
+    // ── quoted-literal custom code that contains a date-like letter (e.g. the 'y' in " yd"). ──
+
+    [Theory]
+    [InlineData("0\" yd\"")]
+    [InlineData("0\" yrs\"")]
+    public void PreviewForFormat_QuotedLiteralContainingDateLetter_AgreesWithRealAppliedFormat(string format)
+    {
+        // The dialog's live preview and the real cell-rendering path (NumberFormatter.Format
+        // against the actual NumberValue, exactly as FormatWithColor dispatches on OK) must
+        // produce the SAME text for the SAME format code and SAME sample value -- that is the
+        // defect: previously the preview mis-classified this as a date format because the
+        // quoted "yd"/"yrs" literal tripped a raw substring search for 'y'.
+        var expectedFromRealFormatter = NumberFormatter.Format(new NumberValue(1234.56), format);
+
+        var preview = FormatCellsNumberFormatPlanner.PreviewForFormat(format);
+
+        preview.Should().Be(expectedFromRealFormatter);
+        preview.Should().Be(format == "0\" yd\"" ? "1235 yd" : "1235 yrs");
+    }
+
+    [Theory]
+    [InlineData("yyyy-mm-dd")]
+    [InlineData("m/d/yyyy")]
+    [InlineData("mmmm d, yyyy")]
+    public void PreviewForFormat_RealDateFormat_StillAgreesWithRealAppliedFormat(string format)
+    {
+        // Sibling/no-regression check: an unquoted date token (real 'y'/'m'/'d' outside any
+        // quoted literal) must still be classified as date/time, and the preview must render
+        // through the sample DateTime the same way the dialog always has.
+        var sampleDate = new DateTime(2026, 5, 21, 13, 30, 0).ToOADate();
+        var expectedFromRealFormatter = NumberFormatter.Format(new DateTimeValue(sampleDate), format);
+
+        FormatCellsNumberFormatPlanner.PreviewForFormat(format)
+            .Should()
+            .Be(expectedFromRealFormatter);
+    }
+
+    [Theory]
+    [InlineData("0.00\" m\"")]
+    [InlineData("#,##0\" mi\"")]
+    public void PreviewForFormat_QuotedLiteralWithoutDateLetter_StillPreviewsNumerically(string format)
+    {
+        // Sibling/no-regression check: control formats without a misleading quoted letter must
+        // continue to preview as numbers, unaffected by the quote-stripping change.
+        var expectedFromRealFormatter = NumberFormatter.Format(new NumberValue(1234.56), format);
+
+        FormatCellsNumberFormatPlanner.PreviewForFormat(format)
+            .Should()
+            .Be(expectedFromRealFormatter);
     }
 }

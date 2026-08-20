@@ -91,6 +91,34 @@ public static class Captions
     }
 
     /// <summary>
+    /// Returns the next 1-based ordinal for a caption of <paramref name="label"/> that will be inserted
+    /// as a new top-level block at <paramref name="insertionBlockIndex"/>. Unlike the position-agnostic
+    /// overload, this counts only the existing captions of that label which appear <em>before</em> the
+    /// insertion point (i.e. whose top-level block index is less than <paramref name="insertionBlockIndex"/>),
+    /// so inserting a caption between two existing captions numbers it for its own position instead of
+    /// appending it after every caption already in the document.
+    /// </summary>
+    public static int NextCaptionNumber(TextDocument document, CaptionLabel label, int insertionBlockIndex)
+    {
+        return NextCaptionNumber(document, LabelText(label), insertionBlockIndex);
+    }
+
+    /// <summary>
+    /// Returns the next 1-based ordinal for a caption with the given label text that will be inserted as
+    /// a new top-level block at <paramref name="insertionBlockIndex"/>. See the <see cref="CaptionLabel"/>
+    /// overload for the position-aware counting rule.
+    /// </summary>
+    public static int NextCaptionNumber(TextDocument document, string labelText, int insertionBlockIndex)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var label = NormalizeLabelText(labelText);
+
+        var count = DocumentBodyParagraphs.Enumerate(document)
+            .Count(location => location.BlockIndex < insertionBlockIndex && IsCaptionOf(location.Paragraph, label));
+        return count + 1;
+    }
+
+    /// <summary>
     /// Builds a <c>Caption</c>-styled paragraph reading "<c>{Label} {number}</c>" optionally followed
     /// by "<c>: {text}</c>" when <paramref name="text"/> is non-empty. The number is the cached result
     /// of a native <c>SEQ</c> field and is formatted invariantly. Never mutates input.

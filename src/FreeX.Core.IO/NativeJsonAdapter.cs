@@ -64,7 +64,11 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         workbook.SmartTags = ToWorkbookSmartTags(dto.SmartTags);
         workbook.AdditionalViews = ToWorkbookAdditionalViews(dto.AdditionalViews);
         workbook.IsStructureProtected = dto.IsStructureProtected;
-        workbook.StructureProtectionPassword = dto.IsStructureProtected ? dto.StructureProtectionPassword : null;
+        // Not gated on IsStructureProtected -- see the matching note on the Save side
+        // (NativeJsonAdapter.Save.cs): a stored password can be genuine Windows-only protection
+        // (IsStructureProtected == false) and must survive the load unchanged, exactly like
+        // XlsxWorkbookMetadataReader treats workbookPassword independent of lockStructure.
+        workbook.StructureProtectionPassword = dto.StructureProtectionPassword;
         workbook.ProtectionMetadata = ToWorkbookProtectionMetadata(dto.ProtectionMetadata);
         if (dto.WindowArrangement is { } arrangement && Enum.IsDefined(arrangement))
             workbook.WindowArrangement = arrangement;

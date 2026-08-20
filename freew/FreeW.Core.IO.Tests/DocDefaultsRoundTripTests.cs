@@ -155,6 +155,39 @@ public class DocDefaultsRoundTripTests
     }
 
     /// <summary>
+    /// Sibling of the run-level fix in CharacterBorderShadingLanguageRoundTripTests: the identical
+    /// w:highlight-vs-w:shd guard is duplicated verbatim in BuildDocDefaultRunProperties (docDefaults
+    /// path), so a document-default run that carries both a highlight and a character shading must also
+    /// keep its w:highlight element instead of losing it to the w:shd slot.
+    /// </summary>
+    [Fact]
+    public void NewDocument_DefaultRun_HighlightAndCharacterShading_BothEmitted()
+    {
+        var doc = new TextDocument();
+        doc.DefaultRun = doc.DefaultRun with
+        {
+            HighlightColorHex = "#FFFF00",
+            CharacterShadingHex = "#FFC000",
+            CharacterShadingPattern = ShadingPattern.Pct10,
+        };
+        doc.Blocks.Add(new Paragraph("hello"));
+
+        var stylesXml = WriteStylesXml(doc);
+        var rPr = stylesXml.Root?.Element(W + "docDefaults")?.Element(W + "rPrDefault")?.Element(W + "rPr");
+        rPr.Should().NotBeNull();
+
+        var highlight = rPr!.Element(W + "highlight");
+        highlight.Should().NotBeNull(
+            "docDefaults must not drop HighlightColorHex just because CharacterShadingHex also owns the w:shd slot");
+        highlight!.Attribute(W + "val")?.Value.Should().Be("yellow");
+
+        var shd = rPr.Element(W + "shd");
+        shd.Should().NotBeNull();
+        shd!.Attribute(W + "val")?.Value.Should().Be("pct10", "CharacterShadingHex still owns the w:shd slot");
+        shd.Attribute(W + "fill")?.Value.Should().Be("FFC000");
+    }
+
+    /// <summary>
     /// Full read→write→read cycle: the document re-read after saving must still have the same DefaultRun.
     /// </summary>
     [Fact]

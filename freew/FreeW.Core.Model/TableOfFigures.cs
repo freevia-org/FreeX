@@ -132,7 +132,11 @@ public static class TableOfFigures
                     .ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
 
-            paragraphs.Add(CreateEntryParagraph(paragraph.PlainText, pageText, entryRightTabStopPt, label));
+            paragraphs.Add(CreateEntryParagraph(
+                LiveCaptionText(document, blockIndex, paragraph),
+                pageText,
+                entryRightTabStopPt,
+                label));
         }
 
         if (paragraphs.Count > 1)
@@ -145,6 +149,41 @@ public static class TableOfFigures
         }
 
         return paragraphs;
+    }
+
+    /// <summary>
+    /// The caption paragraph's text with any <c>SEQ</c> field run's ordinal recomputed live against the
+    /// document's current caption order, rather than trusting the paragraph's cached
+    /// <see cref="Paragraph.PlainText"/>. Word's caption number is a native <c>SEQ</c> field (see
+    /// <see cref="Captions.SequenceInstructionFor"/>) whose cached result only refreshes on an explicit
+    /// field update (F9); without this, deleting an earlier caption leaves a permanent numbering gap in a
+    /// freshly built table (see r154 freew-captions-references F2). <see cref="ComplexFieldEngine.Recompute"/>
+    /// is called and then unwound on the run so building the table stays side-effect free, matching this
+    /// type's documented contract.
+    /// </summary>
+    private static string LiveCaptionText(TextDocument document, int blockIndex, Paragraph paragraph)
+    {
+        if (!paragraph.Runs.Any(run => run.ComplexField is { Keyword: "SEQ" }))
+            return paragraph.PlainText;
+
+        var builder = new System.Text.StringBuilder();
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.ComplexField is { Keyword: "SEQ" })
+            {
+                var savedField = run.ComplexField;
+                var savedText = run.Text;
+                builder.Append(ComplexFieldEngine.Recompute(document, blockIndex, run));
+                run.ComplexField = savedField;
+                run.Text = savedText;
+            }
+            else
+            {
+                builder.Append(run.Text);
+            }
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>The native Word Table-of-Figures field instruction for a caption label.</summary>

@@ -47,9 +47,18 @@ public sealed class RecentColorsStore
     /// Moves <paramref name="color"/> to the front of the recent list (dedupe + cap) and
     /// persists the result. Returns the new most-recent-first list.
     /// </summary>
+    /// <remarks>
+    /// Re-reads <c>recent-colors.json</c> from disk immediately before computing the new list, so a
+    /// sibling <see cref="RecentColorsStore"/> instance's already-saved <see cref="Remember"/> (e.g. a
+    /// second FreeX window over the same workbook process, each owning its own store loaded at
+    /// construction time) is merged in rather than clobbered by this instance's stale in-memory
+    /// <see cref="_colors"/>. Mirrors the reload-before-write pattern in
+    /// <c>RecentFilesStore.ReloadEntriesLocked</c>.
+    /// </remarks>
     public IReadOnlyList<CellColor> Remember(CellColor color)
     {
-        _colors = CellColorPalettePlanner.PromoteRecentColor(_colors, color, _capacity).ToList();
+        var current = ParseStoredColors(_store.Load(), _capacity);
+        _colors = CellColorPalettePlanner.PromoteRecentColor(current, color, _capacity).ToList();
         _store.Save(_colors.Select(CellColorPalettePlanner.FormatHexColor).ToList());
         return _colors;
     }

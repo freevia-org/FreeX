@@ -116,7 +116,8 @@ public sealed class FormulaEvaluationSession
         if (string.IsNullOrEmpty(expression))
             return new FormulaEvaluationHighlight("", formula, "");
 
-        var index = FindExpressionTokenIndex(formula, expression);
+        var occurrence = CountPriorOccurrences(expression) + 1;
+        var index = FindExpressionTokenIndex(formula, expression, occurrence);
         if (index < 0)
             return new FormulaEvaluationHighlight("", formula, "");
 
@@ -127,14 +128,35 @@ public sealed class FormulaEvaluationSession
     }
 
     /// <summary>
-    /// Finds <paramref name="expression"/> inside <paramref name="formula"/>, skipping matches that
-    /// are merely a substring of a longer reference/identifier token (e.g. "A1" inside "A11") so a
-    /// repeated identical sub-expression or a prefix collision highlights the correct span rather
-    /// than the first (possibly embedded) occurrence.
+    /// Counts how many steps before <see cref="CurrentStepIndex"/> share the current step's
+    /// serialized expression text. CollectSteps walks the AST left-to-right in the same order the
+    /// corresponding sub-expressions appear in the source formula, so the Nth step carrying a given
+    /// expression text lines up with the Nth textual occurrence of that text in the formula. This
+    /// lets a repeated identical sub-expression (e.g. "=A1+A1") highlight the occurrence the current
+    /// step actually evaluates instead of always the first one.
     /// </summary>
-    private static int FindExpressionTokenIndex(string formula, string expression)
+    private int CountPriorOccurrences(string expression)
+    {
+        var count = 0;
+        for (var i = 0; i < CurrentStepIndex; i++)
+        {
+            if (string.Equals(Summary.Steps[i].Expression, expression, StringComparison.Ordinal))
+                count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Finds the <paramref name="occurrence"/>-th (1-based) match of <paramref name="expression"/>
+    /// inside <paramref name="formula"/>, skipping matches that are merely a substring of a longer
+    /// reference/identifier token (e.g. "A1" inside "A11") so a repeated identical sub-expression or
+    /// a prefix collision highlights the correct span rather than an embedded occurrence.
+    /// </summary>
+    private static int FindExpressionTokenIndex(string formula, string expression, int occurrence)
     {
         var searchStart = 0;
+        var remaining = occurrence;
         while (searchStart <= formula.Length - expression.Length)
         {
             var index = formula.IndexOf(expression, searchStart, StringComparison.OrdinalIgnoreCase);
@@ -151,7 +173,11 @@ public sealed class FormulaEvaluationSession
                 !IsFormulaHighlightTokenChar(formula[endIndex]);
 
             if (boundaryBefore && boundaryAfter)
-                return index;
+            {
+                remaining--;
+                if (remaining == 0)
+                    return index;
+            }
 
             searchStart = index + 1;
         }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
@@ -18,6 +19,92 @@ public sealed class MasterSourceStore
     public static MasterSourceStore Load() => Store().Load();
 
     public static bool Save(MasterSourceStore store) => Store().Save(store);
+
+    /// <summary>
+    /// Reload-before-save merge overload: saves <paramref name="edited"/> (the dialog's final
+    /// desired source list, built starting from <paramref name="baseline"/> -- the store this
+    /// session <see cref="Load"/>ed before showing the New Source / Manage Sources dialog) onto
+    /// whatever is on disk right now, instead of overwriting the file wholesale from a stale
+    /// snapshot. FreeW enforces no single-instance policy, so a second window/process can
+    /// Load()+Save() master-sources.json while this session's dialog is still open (Manage
+    /// Sources is a non-modal-duration-wise long-lived dialog the user can leave open editing for
+    /// as long as they like); without this reload+merge, this session's Save() would silently
+    /// discard whatever source(s) that other window already persisted. Mirrors the
+    /// reload-before-write fix already applied to AppOptions (BasicApplicationOptionsMerge) and
+    /// RecentFilesStore in this codebase.
+    /// </summary>
+    public static bool Save(MasterSourceStore baseline, MasterSourceStore edited)
+    {
+        ArgumentNullException.ThrowIfNull(baseline);
+        ArgumentNullException.ThrowIfNull(edited);
+
+        var fresh = Store().Load();
+        MergeOntoFreshLoad(fresh, baseline, edited);
+        return Store().Save(fresh);
+    }
+
+    /// <summary>
+    /// Applies this session's delta (<paramref name="edited"/> vs. <paramref name="baseline"/>)
+    /// onto <paramref name="fresh"/> (a just-reloaded copy of the on-disk file) in place, keyed by
+    /// <see cref="SourceRecord.Tag"/> via <see cref="SourceTagIdentity"/>:
+    /// <list type="bullet">
+    /// <item>a tag this session added, or whose record this session changed relative to
+    /// <paramref name="baseline"/>, overwrites whatever <paramref name="fresh"/> holds for that
+    /// tag -- the user explicitly typed/edited it in this session's dialog;</item>
+    /// <item>a tag present in <paramref name="baseline"/> but dropped from
+    /// <paramref name="edited"/> (deleted via Manage Sources) is removed from
+    /// <paramref name="fresh"/>;</item>
+    /// <item>any tag <paramref name="fresh"/> holds that this session never touched -- added or
+    /// edited by another window/process after <paramref name="baseline"/> was loaded -- is left
+    /// exactly as-is.</item>
+    /// </list>
+    /// Untagged records (no stable identity to diff by) are always carried over from
+    /// <paramref name="edited"/>, matching <see cref="AddOrUpdate"/>'s existing always-append
+    /// behavior for untagged sources.
+    /// </summary>
+    public static void MergeOntoFreshLoad(MasterSourceStore fresh, MasterSourceStore baseline, MasterSourceStore edited)
+    {
+        var baselineByTag = ByTag(baseline.Sources);
+
+        foreach (var record in edited.Sources)
+        {
+            var tag = SourceTagIdentity.Canonicalize(record.Tag);
+            if (tag.Length == 0)
+            {
+                fresh.Sources.Add(record);
+                continue;
+            }
+
+            if (!baselineByTag.TryGetValue(tag, out var baseRecord) || !RecordEquals(baseRecord, record))
+            {
+                fresh.Sources.RemoveAll(r => SourceTagIdentity.Equals(r.Tag, tag));
+                fresh.Sources.Add(record);
+            }
+        }
+
+        var editedByTag = ByTag(edited.Sources);
+        foreach (var tag in baselineByTag.Keys)
+        {
+            if (!editedByTag.ContainsKey(tag))
+                fresh.Sources.RemoveAll(r => SourceTagIdentity.Equals(r.Tag, tag));
+        }
+    }
+
+    private static Dictionary<string, SourceRecord> ByTag(List<SourceRecord> records)
+    {
+        var map = new Dictionary<string, SourceRecord>(SourceTagIdentity.Comparer);
+        foreach (var record in records)
+        {
+            var tag = SourceTagIdentity.Canonicalize(record.Tag);
+            if (tag.Length > 0)
+                map[tag] = record;
+        }
+
+        return map;
+    }
+
+    private static bool RecordEquals(SourceRecord a, SourceRecord b) =>
+        JsonSerializer.Serialize(a) == JsonSerializer.Serialize(b);
 
     public IReadOnlyList<Source> ToSources() =>
         Sources.Select(record => record.ToSource()).ToArray();

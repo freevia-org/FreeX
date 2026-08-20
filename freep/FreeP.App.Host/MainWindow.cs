@@ -1876,7 +1876,7 @@ public sealed partial class MainWindow : Window,
             Content = PresentationPaneTextResources.NewCommentCommand,
             MinWidth = 96
         };
-        button.Click += (_, _) => AddComment(input.Text);
+        button.Click += (_, _) => AddComment(input.Text, author: ResolveCommentAuthor());
 
         var row = new StackPanel
         {
@@ -1999,7 +1999,7 @@ public sealed partial class MainWindow : Window,
             Content = PresentationPaneTextResources.ReplyCommand,
             MinWidth = 58,
         };
-        button.Click += (_, _) => ReplyToSelectedComment(input.Text);
+        button.Click += (_, _) => ReplyToSelectedComment(input.Text, author: ResolveCommentAuthor());
         row.Children.Add(input);
         row.Children.Add(mentionButton);
         row.Children.Add(button);
@@ -2246,8 +2246,23 @@ public sealed partial class MainWindow : Window,
     internal PresentationCommentMutationPlan ReopenSelectedComment() => _reviewWorkflowSession.ReopenSelectedComment();
     internal PresentationCommentMutationPlan ReplyToSelectedComment(string? text, DateTime? timestamp = null, string? author = null, string? initials = null) => _reviewWorkflowSession.ReplyToSelectedComment(text, timestamp, author, initials);
 
+    /// <summary>
+    /// Resolves the real author identity to stamp on a new comment or reply, mirroring FreeW's
+    /// ReviewAuthorIdentityPlanner.ResolveAuthor chain (document author, then OS account name) minus
+    /// the revision-author override FreeW has and FreeP does not. Initials are derived downstream
+    /// from the author by PresentationReviewWorkflowPlanner.NormalizeInitials, so only the author
+    /// needs to be resolved here. Falls through to null (and from there to the planner's own
+    /// "FreeP User" default) only when neither source yields a usable name.
+    /// </summary>
+    internal string? ResolveCommentAuthor()
+    {
+        var documentAuthor = Editor.Presentation.Properties.Author;
+        if (!string.IsNullOrWhiteSpace(documentAuthor))
+            return documentAuthor.Trim();
 
-
+        var osAuthor = Environment.UserName;
+        return string.IsNullOrWhiteSpace(osAuthor) ? null : osAuthor.Trim();
+    }
 
     private string? GetSelectedCommentText() => _reviewWorkflowSession.GetSelectedCommentText();
 

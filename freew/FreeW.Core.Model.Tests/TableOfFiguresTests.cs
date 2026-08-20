@@ -226,6 +226,52 @@ public class TableOfFiguresTests
         doc.Blocks.Should().HaveCount(before);
     }
 
+    // r154 freew-captions-references F2: deleting a caption paragraph (ordinary editing, no Update
+    // Fields) leaves the SURVIVING captions' SEQ runs holding their old cached numbers. Build must
+    // recompute each entry's live ordinal by re-walking the document's SEQ counters, not just copy the
+    // caption paragraph's stale rendered text -- otherwise the generated table shows a permanent gap
+    // (1, 3, 4) instead of the renumbered sequence Word would compute (1, 2, 3).
+    [Fact]
+    public void Build_AfterEarlierCaptionDeleted_RecomputesLiveSeqInsteadOfStaleCachedNumber()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 1, "A"));
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 2, "B"));
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 3, "C"));
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 4, "D"));
+
+        // Delete the "B" caption the way ordinary editing would -- no field update follows.
+        doc.Blocks.RemoveAt(1);
+
+        var tof = TableOfFigures.Build(doc);
+
+        tof.Select(p => p.PlainText).Should().Equal(
+            "Table of Figures",
+            "Figure 1: A\t1",
+            "Figure 2: C\t1",
+            "Figure 3: D\t1");
+    }
+
+    // Sibling/no-regression: Build recomputing the SEQ number live must not become a hidden field
+    // update on the source document -- the caption paragraphs a user still sees in the body stay exactly
+    // as stale as Word leaves them until an explicit Update Fields (Ctrl+A, F9). Only the generated table
+    // itself gets the live numbers.
+    [Fact]
+    public void Build_AfterEarlierCaptionDeleted_DoesNotMutateSurvivingCaptionsCachedText()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 1, "A"));
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 2, "B"));
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 3, "C"));
+        doc.Blocks.RemoveAt(1);
+
+        TableOfFigures.Build(doc);
+
+        doc.Blocks.OfType<Paragraph>().Select(p => p.PlainText).Should().Equal(
+            "Figure 1: A",
+            "Figure 3: C");
+    }
+
     [Fact]
     public void IsTableOfFiguresStyleId_RecognisesGeneratedStyles()
     {
