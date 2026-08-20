@@ -10687,12 +10687,30 @@ public sealed partial class DocumentView : Control
             var text = run.ComplexField is null
                 ? run.Text
                 : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text;
-            foreach (var ch in text)
+            for (var textIndex = 0; textIndex < text.Length; textIndex++)
             {
+                var ch = text[textIndex];
+                // A DOCX w:br is retained as a newline in the portable run text. It is a hard
+                // line boundary, not a printable glyph: treating it as ordinary text collapsed
+                // table-cell values such as "Q1\n$1.20M" onto one line and consequently made
+                // the entire row too short versus Word. Collapse CRLF to one boundary so imported
+                // Windows line endings do not produce a spurious blank table line.
+                if (ch == '\r' && textIndex + 1 < text.Length && text[textIndex + 1] == '\n')
+                    continue;
+
+                var isHardBreak = ch is '\r' or '\n';
                 // AV-CCEDIT: a check box owns its glyph here too — see DisplayGlyph.
                 var glyph = DisplayGlyph(new Cell(ch, fmt, Control: run.Control));
-                var width = hidden ? 0 : Build(glyph.ToString(), fmt).WidthIncludingTrailingWhitespace;
-                items.Add(new CellWrappedItem(glyph, width, lineHeight, hidden, null, runIndex, run.Control));
+                var width = hidden || isHardBreak ? 0 : Build(glyph.ToString(), fmt).WidthIncludingTrailingWhitespace;
+                items.Add(new CellWrappedItem(
+                    glyph,
+                    width,
+                    lineHeight,
+                    hidden,
+                    null,
+                    runIndex,
+                    run.Control,
+                    IsHardBreak: isHardBreak));
             }
         }
 
@@ -10757,6 +10775,16 @@ public sealed partial class DocumentView : Control
 
         for (var index = 0; index < items.Count; index++)
         {
+            if (items[index].IsHardBreak)
+            {
+                AddLine(lineStart, index);
+                lineStart = index + 1;
+                currentWidth = 0;
+                lastSpace = -1;
+                consecutiveAutomaticHyphenLines = 0;
+                continue;
+            }
+
             if (!items[index].Hidden && items[index].Ch == ' ')
                 lastSpace = index;
 
@@ -25965,7 +25993,8 @@ public sealed partial class DocumentView : Control
         int RunIndex,
         // AV-CCEDIT: the content control this cell glyph belongs to, so a field inside a table renders with
         // the same chrome (shade, tooltip, check-box glyph) as one in the body.
-        ModelContentControl? Control = null);
+        ModelContentControl? Control = null,
+        bool IsHardBreak = false);
 
     private readonly record struct CellWrappedLine(
         double Height,
