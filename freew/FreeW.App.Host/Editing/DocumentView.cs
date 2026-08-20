@@ -11763,8 +11763,8 @@ public sealed partial class DocumentView : RichTextBox
                 break;
 
             case ContentControlKind.DatePicker:
-                // A date picker offers a small set of relative dates (today/yesterday/tomorrow) on click,
-                // each formatted with the control's date format, swapping the run text in place.
+                // A date picker opens a calendar on click, committing the picked date formatted with the
+                // control's date format; the relative-date choices stay on the right-click menu.
                 wpf.Cursor = System.Windows.Input.Cursors.Hand;
                 wpf.MouseLeftButtonUp += OnDatePickerClicked;
                 break;
@@ -11830,9 +11830,9 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Opens a small relative-date menu for a date-picker content control when its run is clicked: Today,
-    /// Yesterday and Tomorrow, each formatted with the control's <see cref="ModelContentControl.DateFormat"/>.
-    /// Selecting one swaps the displayed date text in place and re-commits so it round-trips on save.
+    /// Opens a real calendar on a date-picker content control, the way Word's own date field behaves.
+    /// The relative-date menu this replaces reached only today, yesterday and tomorrow, so every other
+    /// date had to be typed; it stays available on the field's right-click menu.
     /// </summary>
     private static void OnDatePickerClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
@@ -11840,9 +11840,116 @@ public sealed partial class DocumentView : RichTextBox
             || marker.Control.Kind != ContentControlKind.DatePicker)
             return;
 
-        OpenContentControlMenu(wpf, marker, e);
+        e.Handled = true;
+        var owner = FindOwnerView(wpf);
+        if (owner is null)
+            return;
+
+        // A locked field still shows its calendar, disabled: a click that does nothing at all reads as
+        // broken rather than as protection. Every commit path below re-checks the lock anyway.
+        var isEnabled = owner.AllowsContentControlInteraction(marker.Control);
+        var current = ContentControlInteractionPlanner.CurrentDate(marker.Control, wpf.Text) ?? DateTime.Today;
+        var calendar = new System.Windows.Controls.Calendar
+        {
+            SelectedDate = current,
+            DisplayDate = current,
+            IsEnabled = isEnabled,
+        };
+        var today = new System.Windows.Controls.Button
+        {
+            Content = ContentControlInteractionPlanner.TodayLabel,
+            Margin = new Thickness(0, 4, 0, 0),
+            IsEnabled = isEnabled,
+        };
+        var popup = new System.Windows.Controls.Primitives.Popup
+        {
+            PlacementTarget = wpf.Parent as UIElement,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Mouse,
+            StaysOpen = false,
+            Child = new Border
+            {
+                Background = System.Windows.SystemColors.WindowBrush,
+                BorderBrush = System.Windows.SystemColors.ActiveBorderBrush,
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(4),
+                Child = new StackPanel { Children = { calendar, today } },
+            },
+        };
+
+        var committed = false;
+        void Pick(DateTime date)
+        {
+            // A day click raises BOTH the selection change and the pointer-up fallback below; without this
+            // the field would take the same date twice.
+            if (committed)
+                return;
+            committed = true;
+            popup.IsOpen = false;
+            ApplyPickedDate(owner, wpf, marker, date);
+        }
+
+        // Subscribed AFTER the initial SelectedDate, so opening on the field's own date is not itself a
+        // pick that dirties the document.
+        calendar.SelectedDatesChanged += (_, _) =>
+        {
+            if (calendar.SelectedDate is { } picked)
+                Pick(picked);
+        };
+        // Clicking the day the field ALREADY shows leaves SelectedDate unchanged, so the event above never
+        // fires -- re-picking the shown date was a dead click. A mouse-up on a day button commits what is
+        // selected; month arrows and headers are not day buttons, so navigating still keeps the popup open.
+        calendar.AddHandler(
+            System.Windows.UIElement.PreviewMouseLeftButtonUpEvent,
+            new System.Windows.Input.MouseButtonEventHandler((_, args) =>
+            {
+                if (args.OriginalSource is DependencyObject source
+                    && FindAncestor<System.Windows.Controls.Primitives.CalendarDayButton>(source) is not null
+                    && calendar.SelectedDate is { } selected)
+                {
+                    Pick(selected);
+                }
+            }),
+            handledEventsToo: true);
+        today.Click += (_, _) => Pick(DateTime.Today);
+        popup.IsOpen = true;
     }
 
+    /// <summary>Walks up the visual tree for the first ancestor of <typeparamref name="T"/>, self included.</summary>
+    private static T? FindAncestor<T>(DependencyObject? source) where T : DependencyObject
+    {
+        while (source is not null)
+        {
+            if (source is T match)
+                return match;
+            source = System.Windows.Media.VisualTreeHelper.GetParent(source);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Commits a picked date, through the model when the run's location is known (so it is one undoable
+    /// command like every other field edit) and by hand otherwise, mirroring the checkbox click.
+    /// </summary>
+    private static void ApplyPickedDate(
+        DocumentView owner,
+        WpfRun wpf,
+        ContentControlMarker marker,
+        DateTime date)
+    {
+        if (marker.Location is { } location
+            && owner.SelectContentControlDate(location.BlockIndex, location.RunIndex, date))
+        {
+            return;
+        }
+
+        var updated = ContentControlInteractionPlanner.SelectDate(
+            new ModelRun(wpf.Text) { Control = marker.Control },
+            date);
+        if (updated is null)
+            return;
+        wpf.Text = updated.Text;
+        owner.CommitToModel();
+    }
     private static void OpenContentControlMenu(
         WpfRun wpf,
         ContentControlMarker marker,
@@ -15326,6 +15433,10 @@ public sealed partial class DocumentView : RichTextBox
     public bool SelectContentControlRelativeDate(int blockIndex, int runIndex, int choiceIndex) =>
         ApplyContentControlInteraction(blockIndex, runIndex, run =>
             ContentControlInteractionPlanner.SelectRelativeDate(run, choiceIndex));
+
+    public bool SelectContentControlDate(int blockIndex, int runIndex, DateTime date) =>
+        ApplyContentControlInteraction(blockIndex, runIndex, run =>
+            ContentControlInteractionPlanner.SelectDate(run, date));
 
     private bool ApplyContentControlMenuCommand(
         int blockIndex,

@@ -171,6 +171,9 @@ public static class ContentControlInteractionPlanner
             .ToArray();
     }
 
+    /// <summary>The "jump to today" label, shared by the relative-date menu and the calendar picker.</summary>
+    public const string TodayLabel = "Today";
+
     public static IReadOnlyList<ContentControlDateChoice> RelativeDateChoices(
         ContentControl control,
         DateTime? today = null,
@@ -182,7 +185,7 @@ public static class ContentControlInteractionPlanner
         var anchor = today ?? DateTime.Today;
         return
         [
-            DateChoice("Today", "today", anchor, control, culture),
+            DateChoice(TodayLabel, "today", anchor, control, culture),
             DateChoice("Yesterday", "yesterday", anchor.AddDays(-1), control, culture),
             DateChoice("Tomorrow", "tomorrow", anchor.AddDays(1), control, culture)
         ];
@@ -268,6 +271,49 @@ public static class ContentControlInteractionPlanner
         return CloneWith(run, choices[choiceIndex].DisplayText, control);
     }
 
+
+    /// <summary>
+    /// Sets a date-picker control's text to an ARBITRARY date, formatted with the control's own
+    /// <c>w:dateFormat</c>. <see cref="SelectRelativeDate"/> only ever reaches today, yesterday or
+    /// tomorrow; a real calendar picker (Word's own gesture on a date field) needs any date at all.
+    /// Returns null when the run is not a date picker.
+    /// </summary>
+    public static Run? SelectDate(Run run, DateTime date, CultureInfo? culture = null)
+    {
+        if (run.Control is not { Kind: ContentControlKind.DatePicker } control)
+            return null;
+
+        return CloneWith(run, FormatDate(control, date, culture), control);
+    }
+
+    /// <summary>
+    /// The date a date-picker field currently shows, so a calendar opens ON that date rather than on
+    /// today. Parses with the control's own format first — the same one <see cref="FormatDate"/> wrote —
+    /// then falls back to a general parse for a field whose text an import or a user typed in some other
+    /// shape. Null when the text is not a date at all (a placeholder, say), which a caller reads as
+    /// "open on today".
+    /// </summary>
+    public static DateTime? CurrentDate(
+        ContentControl? control,
+        string? text,
+        CultureInfo? culture = null)
+    {
+        if (control is not { Kind: ContentControlKind.DatePicker } || string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var effectiveCulture = culture ?? CultureInfo.CurrentCulture;
+        if (DateTime.TryParseExact(
+                text,
+                DateFormatOrDefault(control.DateFormat),
+                effectiveCulture,
+                DateTimeStyles.None,
+                out var exact))
+        {
+            return exact;
+        }
+
+        return DateTime.TryParse(text, effectiveCulture, DateTimeStyles.None, out var parsed) ? parsed : null;
+    }
     private static bool IsInteractive(ContentControl control) =>
         control.Kind is ContentControlKind.CheckBox
             or ContentControlKind.DatePicker

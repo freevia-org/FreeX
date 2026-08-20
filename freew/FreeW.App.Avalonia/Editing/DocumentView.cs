@@ -16226,7 +16226,9 @@ public sealed partial class DocumentView : Control
         _selectionAnchor = position;
         if (run.Control!.Kind == ContentControlKind.CheckBox)
             return ApplyContentControlInteraction(target, ContentControlInteractionPlanner.ToggleCheckBox);
-        if (run.Control.Kind is ContentControlKind.DropDownList or ContentControlKind.ComboBox or ContentControlKind.DatePicker)
+        if (run.Control.Kind == ContentControlKind.DatePicker)
+            return OpenContentControlCalendar(target, run);
+        if (run.Control.Kind is ContentControlKind.DropDownList or ContentControlKind.ComboBox)
             return OpenContentControlMenu(target, run);
         return false;
     }
@@ -16330,9 +16332,96 @@ public sealed partial class DocumentView : Control
         return null;
     }
 
+
+    /// <summary>
+    /// Opens a real calendar on a date-picker field, the way Word's own date field behaves. The menu
+    /// this replaces (for the click and keyboard gestures) offered only today, yesterday and tomorrow,
+    /// so any other date had to be typed. The right-click menu keeps those quick choices.
+    /// </summary>
+    private bool OpenContentControlCalendar(ContentControlTarget target, Run run)
+    {
+        if (run.Control is not { Kind: ContentControlKind.DatePicker } control)
+            return false;
+
+        // A locked field still shows its calendar, disabled -- the affordance the relative-date menu this
+        // replaced already gave (it opened with every choice greyed). Showing nothing at all would read as
+        // a broken click rather than a protected field.
+        var isEnabled = ContentControlInteractionPlanner.CanEditExistingContentControl(run, RestrictEditingPolicy);
+        var current = ContentControlInteractionPlanner.CurrentDate(control, run.Text) ?? DateTime.Today;
+        var calendar = new global::Avalonia.Controls.Calendar
+        {
+            SelectedDate = current,
+            DisplayDate = current,
+            IsEnabled = isEnabled,
+        };
+        var today = new Button
+        {
+            Content = ContentControlInteractionPlanner.TodayLabel,
+            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 4, 0, 0),
+            IsEnabled = isEnabled,
+        };
+        var flyout = new Flyout
+        {
+            Placement = PlacementMode.Pointer,
+            Content = new StackPanel { Children = { calendar, today } },
+        };
+        _contentControlCalendarFlyout = flyout;
+
+        var committed = false;
+        void Pick(DateTime date)
+        {
+            // Clicking a day raises BOTH the selection change and the pointer-released fallback below;
+            // without this the field would take the same date twice, as two undo steps.
+            if (committed)
+                return;
+            committed = true;
+            flyout.Hide();
+            ApplyContentControlInteraction(target, item => ContentControlInteractionPlanner.SelectDate(item, date));
+        }
+
+        // Subscribed AFTER the initial SelectedDate, so opening the calendar on the field's own date is
+        // not itself a pick that dirties the document.
+        calendar.SelectedDatesChanged += (_, _) =>
+        {
+            if (calendar.SelectedDate is { } picked)
+                Pick(picked);
+        };
+        // Clicking the day the field ALREADY shows leaves SelectedDate unchanged, so the event above never
+        // fires and the calendar just sat there: re-picking today's date was a dead click. A release on a
+        // day button commits whatever is selected -- month arrows and headers are not day buttons, so
+        // navigating still does not close the picker.
+        calendar.AddHandler(
+            InputElement.PointerReleasedEvent,
+            (_, args) =>
+            {
+                if (args.Source is Visual source
+                    && global::Avalonia.VisualTree.VisualExtensions.FindAncestorOfType<global::Avalonia.Controls.Primitives.CalendarDayButton>(source, includeSelf: true) is not null
+                    && calendar.SelectedDate is { } selected)
+                {
+                    Pick(selected);
+                }
+            },
+            global::Avalonia.Interactivity.RoutingStrategies.Bubble);
+        today.Click += (_, _) => Pick(DateTime.Today);
+        flyout.ShowAt(this, showAtPointer: true);
+        return true;
+    }
+
+    /// <summary>
+    /// Sets a date-picker field to an arbitrary date — what the calendar commits, and the seam a test
+    /// drives, since a flyout cannot be clicked in a headless run.
+    /// </summary>
+    public bool SelectContentControlDate(int blockIndex, int runIndex, DateTime date) =>
+        ApplyContentControlInteraction(new ContentControlTarget(blockIndex, runIndex), run =>
+            ContentControlInteractionPlanner.SelectDate(run, date));
+    // The keyboard gesture opens whatever the click opens -- a calendar on a date field, the item menu
+    // on a list -- so neither input route is the poor relation.
     private bool TryOpenContentControlMenuAtCaret() =>
         TryGetContentControlAt(_caret, out var target, out var run)
-        && OpenContentControlMenu(target, run);
+        && (run.Control?.Kind == ContentControlKind.DatePicker
+            ? OpenContentControlCalendar(target, run)
+            : OpenContentControlMenu(target, run));
 
     private bool TryGetContentControlAt(
         DocPosition position,
@@ -16482,6 +16571,9 @@ public sealed partial class DocumentView : Control
     }
 
     private ContextMenu? _activeContextMenu;
+
+    /// <summary>The date-picker calendar currently on screen, if any — the seam its tests inspect.</summary>
+    private Flyout? _contentControlCalendarFlyout;
 
     private ParagraphFormatting RulerParagraphFormatting() =>
         CurrentParagraph()?.Formatting ?? ParagraphFormatting.Default;

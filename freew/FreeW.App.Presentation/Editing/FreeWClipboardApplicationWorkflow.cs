@@ -158,7 +158,12 @@ public static class FreeWClipboardApplicationWorkflow
         if (rtf is null)
             return content;
 
-        var customData = content.CustomData.ToList();
+        // The native editor's own RTF is richer than a re-render of the parsed model, so it wins over
+        // the one CreateWriteContent just derived — hence replace rather than add, or the clipboard
+        // would carry the same flavour twice.
+        var customData = content.CustomData
+            .Where(data => data.Format.Name != RichTextFormat)
+            .ToList();
         customData.Add(PlatformClipboardData.FromText(RichTextFormat, rtf));
         return new PlatformClipboardContent(content.Text, content.FilePaths, content.Image, customData);
     }
@@ -190,6 +195,16 @@ public static class FreeWClipboardApplicationWorkflow
                 PlatformClipboardData.FromText(HtmlFormat, html),
                 PlatformClipboardData.FromText(HtmlWindowsFormat, html),
             ];
+        }
+
+        // clip-RTF: HTML alone left the Avalonia shell's copy unreadable to applications that only take
+        // RTF (the WPF shell got RTF free from its native editor). Written from the same selection
+        // document, so the two lingua-franca flavours agree; CreateWriteContentFromRtf replaces this
+        // with the native editor's own RTF where there is one.
+        if (richDocument is not null && TryRenderRtf(richDocument) is { } rtf)
+        {
+            customData ??= [];
+            customData.Add(PlatformClipboardData.FromText(RichTextFormat, rtf));
         }
 
         if (nativeDocument is not null && TryRenderNativeDocument(nativeDocument) is { } package)
@@ -407,6 +422,24 @@ public static class FreeWClipboardApplicationWorkflow
         {
             // A clipboard write must never crash the editor over an HTML-serialization edge case --
             // the plain-text payload written alongside this one is always a safe fallback.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Renders the selection document as RTF for applications that read no HTML. Degrades to the other
+    /// flavours on failure, exactly as <see cref="TryRenderHtml"/> does.
+    /// </summary>
+    private static string? TryRenderRtf(TextDocument richDocument)
+    {
+        try
+        {
+            using var stream = new MemoryStream();
+            RtfWriter.Write(richDocument, stream);
+            return Encoding.UTF8.GetString(stream.ToArray());
+        }
+        catch
+        {
             return null;
         }
     }

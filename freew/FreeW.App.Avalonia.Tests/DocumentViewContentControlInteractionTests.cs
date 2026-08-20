@@ -75,6 +75,39 @@ public sealed class DocumentViewContentControlInteractionTests
         view.SelectContentControlRelativeDate(0, 2, -1).Should().BeFalse();
     }
 
+
+    /// <summary>
+    /// A date field used to reach only today, yesterday and tomorrow; the click and keyboard gestures now
+    /// open a calendar, which commits through this seam (a flyout cannot be clicked in a headless run).
+    /// The edit is one undoable command and honours the same locks as every other field edit.
+    /// </summary>
+    [Fact]
+    public void SelectContentControlDate_CommitsAnyDateAsOneUndoableFieldEdit()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.DatePickerControl("2026-07-04", dateFormat: "yyyy-MM-dd"));
+        paragraph.Runs.Add(Run.DatePickerControl("2026-07-04", dateFormat: "yyyy-MM-dd"));
+        paragraph.Runs[1].Control = paragraph.Runs[1].Control! with
+        {
+            LockMode = ContentControlLockMode.ContentLocked,
+        };
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.SelectContentControlDate(0, 0, new DateTime(1999, 12, 31)).Should().BeTrue();
+        paragraph.Runs[0].Text.Should().Be("1999-12-31", "a calendar reaches dates no relative choice does");
+        paragraph.Runs[0].Control!.Kind.Should().Be(ContentControlKind.DatePicker);
+
+        view.Undo();
+        view.Document.Paragraphs.Single().Runs[0].Text.Should().Be("2026-07-04");
+
+        view.SelectContentControlDate(0, 1, new DateTime(1999, 12, 31))
+            .Should().BeFalse("a content-locked field takes no picked date either");
+    }
     [Fact]
     public void PublicInteractionMethods_AllowExistingControlsUnderFillingFormsButBlockStricterProtection()
     {

@@ -145,6 +145,45 @@ public sealed class ContentControlInteractionPlannerTests
         updated.Control!.DateFormat.Should().Be("yyyy-MM-dd");
     }
 
+
+    /// <summary>
+    /// The relative choices only ever reach today, yesterday and tomorrow — a calendar has to be able to
+    /// commit any date at all, in the control's own format.
+    /// </summary>
+    [Fact]
+    public void SelectDate_WritesAnyDateInTheControlsFormat()
+    {
+        var run = Run.DatePickerControl("old", dateFormat: "yyyy-MM-dd");
+
+        var updated = ContentControlInteractionPlanner.SelectDate(
+            run,
+            new DateTime(1999, 12, 31),
+            CultureInfo.InvariantCulture);
+
+        updated.Should().NotBeNull();
+        updated!.Text.Should().Be("1999-12-31");
+        updated.Control!.Kind.Should().Be(ContentControlKind.DatePicker);
+        ContentControlInteractionPlanner.SelectDate(new Run("plain"), new DateTime(1999, 12, 31))
+            .Should().BeNull("only a date picker takes a date");
+    }
+
+    /// <summary>A calendar opens on the date the field already shows, not on today.</summary>
+    [Fact]
+    public void CurrentDate_ReadsTheFieldsOwnDateBackAndDeclinesAnythingElse()
+    {
+        var culture = CultureInfo.InvariantCulture;
+        var run = Run.DatePickerControl("2026-07-04", dateFormat: "yyyy-MM-dd");
+
+        ContentControlInteractionPlanner.CurrentDate(run.Control, run.Text, culture)
+            .Should().Be(new DateTime(2026, 7, 4));
+        // A field whose text an import wrote in some other shape still parses.
+        ContentControlInteractionPlanner.CurrentDate(run.Control, "2026-08-20T00:00:00", culture)
+            .Should().Be(new DateTime(2026, 8, 20));
+        ContentControlInteractionPlanner.CurrentDate(run.Control, "Click to enter a date", culture)
+            .Should().BeNull("a placeholder is not a date — the caller opens on today");
+        ContentControlInteractionPlanner.CurrentDate(Run.PlainTextControl("x").Control, "2026-07-04", culture)
+            .Should().BeNull();
+    }
     [Fact]
     public void CanEditExistingContentControl_FollowsSharedRestrictEditingPolicy()
     {

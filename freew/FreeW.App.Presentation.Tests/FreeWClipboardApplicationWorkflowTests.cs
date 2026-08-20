@@ -287,6 +287,45 @@ public sealed class FreeWClipboardApplicationWorkflowTests
         FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges: []).Should().BeNull();
     }
 
+
+    /// <summary>
+    /// clip-RTF: the shell without a native editor (Avalonia) wrote only HTML, so a copy into an
+    /// application that reads RTF and not HTML arrived as unformatted text.
+    /// </summary>
+    [Fact]
+    public void CreateWriteContent_AlsoWritesRtfForApplicationsThatReadNoHtml()
+    {
+        var document = SelectionSource();
+        var ranges = AllRanges(document);
+
+        var content = FreeWClipboardApplicationWorkflow.CreateWriteContent(
+            document.PlainText,
+            FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(document, ranges),
+            FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges))!;
+
+        var rtf = content.GetText(FreeWClipboardApplicationWorkflow.RichTextFormat);
+        rtf.Should().StartWith(@"{\rtf1", "a receiving application expects a whole RTF document");
+        rtf.Should().Contain("Bob");
+    }
+
+    /// <summary>
+    /// The WPF shell hands over the RTF its native editor produced, which is richer than a re-render of
+    /// the parsed model — it must replace the derived one, not sit beside it as a duplicate flavour.
+    /// </summary>
+    [Fact]
+    public void CreateWriteContentFromRtf_KeepsTheNativeEditorsRtfAsTheOnlyRtfFlavour()
+    {
+        const string nativeRtf = @"{\rtf1\ansi\b Bold\b0  plain}";
+
+        var content = FreeWClipboardApplicationWorkflow.CreateWriteContentFromRtf(
+            "Bold plain",
+            nativeRtf,
+            nativeDocument: SelectionSource())!;
+
+        content.CustomData
+            .Where(data => data.Format.Name == FreeWClipboardApplicationWorkflow.RichTextFormat)
+            .Should().ContainSingle().Which.Text.Should().Be(nativeRtf);
+    }
     private static TextDocument SelectionSource()
     {
         var document = TextDocument.CreateEmpty();

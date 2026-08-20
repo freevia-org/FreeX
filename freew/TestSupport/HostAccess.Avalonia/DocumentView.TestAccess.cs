@@ -21,6 +21,22 @@ namespace FreeW.App.Avalonia.Editing;
 
 public sealed partial class DocumentView
 {
+
+    /// <summary>
+    /// Opens the date-picker calendar for a body field and hands back the flyout, so a test can inspect
+    /// what the click gesture actually puts on screen (a headless run cannot click inside a popup).
+    /// </summary>
+    internal global::Avalonia.Controls.Flyout? OpenContentControlCalendarForTest(int blockIndex, int runIndex)
+    {
+        if (_doc.Blocks.ElementAtOrDefault(blockIndex) is not Paragraph paragraph
+            || paragraph.Runs.ElementAtOrDefault(runIndex) is not { } run
+            || !OpenContentControlCalendar(new ContentControlTarget(blockIndex, runIndex), run))
+        {
+            return null;
+        }
+
+        return _contentControlCalendarFlyout;
+    }
     internal ((int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) Start,
         (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) End)? ShapeTextSelectionInfo =>
         CurrentShapeTextSelection;

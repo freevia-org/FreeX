@@ -169,6 +169,32 @@ public sealed class ContentControlEditorTests
         view.Model.Paragraphs.Single().Runs.Single().Control!.Checked.Should().Be(expected);
     }
 
+
+    /// <summary>
+    /// The date field's click gesture opens a calendar rather than a three-item relative-date menu; this
+    /// is the seam it commits through, which a headless run can drive without a popup.
+    /// </summary>
+    [StaFact]
+    public void SelectContentControlDate_CommitsAnyDateAndHonorsTheContentLock()
+    {
+        var run = Run.DatePickerControl("2026-07-04", dateFormat: "yyyy-MM-dd");
+        var locked = Run.DatePickerControl("2026-07-04", dateFormat: "yyyy-MM-dd");
+        locked.Control = locked.Control! with { LockMode = ContentControlLockMode.ContentLocked };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(run);
+        paragraph.Runs.Add(locked);
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        view.SelectContentControlDate(0, 0, new DateTime(1999, 12, 31)).Should().BeTrue();
+        view.Model.Paragraphs.Single().Runs[0].Text.Should().Be("1999-12-31");
+
+        view.SelectContentControlDate(0, 1, new DateTime(1999, 12, 31)).Should().BeFalse();
+        view.Model.Paragraphs.Single().Runs[1].Text.Should().Be("2026-07-04");
+    }
     private static System.Windows.Documents.TextPointer PositionAfterText(
         System.Windows.Documents.Paragraph paragraph,
         string text)
