@@ -7012,6 +7012,9 @@ public sealed partial class DocumentView : Control
     {
         // Default fallback header/footer distance: Word default 0.5 in = 36 pt.
         const double DefaultHfDistancePt = 36.0;
+        // Word's footer edge distance is measured from the bottom of the emitted footer story,
+        // not its first line. Keep the small leading that the native footer surface contributes.
+        const double FooterStoryLeadingDip = 8.0;
 
         var diffOddEven = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(_doc);
 
@@ -7083,17 +7086,24 @@ public sealed partial class DocumentView : Control
             // Emit footer.
             if (footerActive)
             {
-                // Footer distance is from the BOTTOM of the page upward; the footer text
-                // starts at: pageBottom - footerDistDip (+ a line-height offset per line).
+                // Footer distance is from the BOTTOM of the page upward. Start with that edge,
+                // emit the real story to measure its height, then move just those new footer
+                // items upward by that story height plus the native leading. This deliberately
+                // leaves the body, header, and page-paginator geometry untouched.
                 var pageBottom = pageTop + _pageHeightPx;
-                var hfY = pageBottom - footerDistDip;
-                EmitHfParagraphs(footer!, hfY, hfWidth, pageNumberText, _pageCount,
+                var footerStartIndex = _headerFooterItems.Count;
+                var footerBottomEdge = pageBottom - footerDistDip;
+                var footerEndY = EmitHfParagraphs(footer!, footerBottomEdge, hfWidth, pageNumberText, _pageCount,
                     pi => MakeHfTarget(sectionHf, footerSlot, pi),
                     slots.FooterSlot,
                     pi + 1,
                     pageSection.SectionIndex + 1,
                     pageSection.SectionRelativePageNumber,
                     pageSection.SectionPageCount);
+                var footerStoryHeight = Math.Max(0, footerEndY - footerBottomEdge);
+                var footerShift = -(footerStoryHeight + FooterStoryLeadingDip);
+                for (var itemIndex = footerStartIndex; itemIndex < _headerFooterItems.Count; itemIndex++)
+                    _headerFooterItems[itemIndex].Y += footerShift;
             }
         }
     }

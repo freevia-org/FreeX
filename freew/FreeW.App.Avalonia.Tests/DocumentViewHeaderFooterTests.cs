@@ -104,10 +104,11 @@ public sealed class DocumentViewHeaderFooterTests
     [Fact]
     public async Task Footer_items_appear_in_bottom_margin_band()
     {
-        // Footer starts at: pageBottom - footerDistDip
+        // Footer's bottom edge starts at pageBottom - footerDistDip, then the measured story
+        // height plus its native leading moves the rendered first line upward into Word's band.
         // pageBottom = pageTop + pageHeightPx = 24 + 792*(96/72) = 24 + 1056 = 1080
         // footerDistDip = 36*(96/72) = 48
-        // footerY ≈ 1080 - 48 = 1032
+        // a one-line default story is about 19 DIP plus 8 DIP leading, so footerY ≈ 1005
         // marginBottomTop = pageBottom - marginBottomDip = 1080 - 96 = 984
         // so footerY should be >= 984 (inside bottom margin band)
         IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
@@ -133,8 +134,8 @@ public sealed class DocumentViewHeaderFooterTests
         var bottomMarginTop = pageBottom - marginBottomDip; // ≈ 984
         item.Y.Should().BeGreaterThanOrEqualTo(bottomMarginTop,
             "footer must be positioned in the bottom margin band (below the body text area)");
-        item.Y.Should().BeLessThan(pageBottom,
-            "footer Y must be above the bottom edge of the page");
+        item.Y.Should().BeLessThan(pageBottom - 48 - 20,
+            "the footer story must be lifted above its bottom-edge distance by its measured height");
     }
 
     // ── Test 3: first-page header variant is used on page 1 when DifferentFirstPage ─────────────────
