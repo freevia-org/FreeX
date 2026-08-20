@@ -140,7 +140,7 @@ jobs:
             "FreeX" {
               powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1
               if ($LASTEXITCODE -ne 0) { throw "Repository preflight failed with exit code $LASTEXITCODE." }
-              Invoke-Dotnet build FreeX.slnx --configuration Release
+              Invoke-Dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1
               Invoke-Dotnet test tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj `
                 --configuration Release `
                 --no-build `
@@ -163,7 +163,7 @@ jobs:
                 --logger "trx;LogFileName=freex-avalonia-release-focused-tests.trx"
             }
             "FreeW" {
-              Invoke-Dotnet build FreeW.slnx --configuration Release
+              Invoke-Dotnet build FreeW.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1
               foreach ($project in @(
                 "freew/FreeW.Core.Model.Tests/FreeW.Core.Model.Tests.csproj",
                 "freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj",
@@ -182,7 +182,7 @@ jobs:
                 --logger "trx;LogFileName=freew-avalonia-smoke-tests.trx"
             }
             "FreeP" {
-              Invoke-Dotnet build FreeP.slnx --configuration Release
+              Invoke-Dotnet build FreeP.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1
               Invoke-Dotnet test FreeP.slnx `
                 --configuration Release `
                 --no-build `
