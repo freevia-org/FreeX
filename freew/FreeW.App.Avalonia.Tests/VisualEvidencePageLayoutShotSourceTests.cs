@@ -377,6 +377,17 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_TreatsTableCellRunNewlinesAsHardLineBreaks()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("var isHardBreak = ch is '\\r' or '\\n';");
+        source.Should().Contain("IsHardBreak: isHardBreak");
+        source.Should().Contain("if (items[index].IsHardBreak)");
+        source.Should().Contain("AddLine(lineStart, index);");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_UsesWordArtFillAsFieldAndContrastingText()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
