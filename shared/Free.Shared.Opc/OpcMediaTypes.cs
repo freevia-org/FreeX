@@ -647,6 +647,13 @@ public static class OpcMediaTypes
             _ => "png",
         };
 
+    // r157-remediation: webp belongs here for the same reason it belongs in the zoom-cover mapper
+    // above. Teaching the infer side about webp without teaching this one produced something worse
+    // than the original bug: PptxPackageWriter writes a SmartArt picture's [Content_Types].xml
+    // Override from the stored ContentType while naming the part from this extension, so a webp
+    // image inserted into a SmartArt node became a part called "picture1.png" declared as
+    // image/webp -- an internally inconsistent, spec-violating package, where before it was merely
+    // mislabelled as png and self-consistent.
     private static string GetPresentationSmartArtExtension(string? contentType) =>
         contentType?.ToLowerInvariant() switch
         {
@@ -654,6 +661,7 @@ public static class OpcMediaTypes
             "image/gif" => "gif",
             "image/bmp" => "bmp",
             "image/svg+xml" => "svg",
+            "image/webp" => "webp",
             _ => "png",
         };
 
