@@ -94,10 +94,28 @@ public sealed class R138_SavePersistsSavingWindowsOwnActiveCellTests
 
                 captured.Should().NotBeNull("the writer must have been invoked");
 
-                // This assertion has failed intermittently under full-gate load and passes every
-                // time in isolation, so the message carries the two pieces of window state that
-                // decide it. ReconcileViewStateForSave writes the live anchor only when
-                // _currentSheetId resolves to a sheet AND _selectionAnchor is set; if either is
+                // WHAT THE INSTRUMENTATION HAS ESTABLISHED SO FAR (#164), so the next failure
+                // starts from here rather than re-deriving it:
+                //   r147  -- both guards inside ReconcileViewStateForSave are satisfied at failure
+                //            time: _currentSheetId matches and _selectionAnchor is (5,2).
+                //   r152  -- the reconcile is called synchronously immediately before the writer
+                //            (WorkbookSaveExecutionCoordinator.cs, ProjectViewStateForSave then
+                //            SaveAsync), so "it never ran" was never a satisfying explanation.
+                //   r153  -- calling it directly here leaves the shared Sheet at (5,2), and the
+                //            writer STILL receives 26. So the reconcile is exonerated: something
+                //            overwrites Sheet.ActiveRow/ActiveCol between the reconcile and
+                //            serialization.
+                // Not yet identified: which writer. ApplySaveInProgress, the one thing the save
+                // broadcasts to siblings, only adjusts the input gate and writes no selection.
+                // The remaining candidates are the other writers of Sheet.ActiveRow reachable from
+                // a sibling window (MainWindow.Selection.cs 1090/1146/1166/1252,
+                // MainWindow.CellsCommands.cs 823/867) reached from queued dispatcher work.
+                //
+                // This assertion has failed intermittently under full-gate load, and ONCE in
+                // isolation on the first run after a build, so it is not load-only. The message
+                // carries the window state that decides it. ReconcileViewStateForSave writes the
+                // live anchor only when _currentSheetId resolves to a sheet AND _selectionAnchor
+                // is set; if either is
                 // off, the shared Sheet keeps whatever window2 wrote last and the row comes back
                 // as 26. Printing both here means the next gate failure says which one it was
                 // instead of only that the number was wrong.
