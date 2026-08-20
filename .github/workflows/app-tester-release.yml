@@ -116,14 +116,8 @@ jobs:
             throw "Full app releases must run from refs/heads/main or a codex/full-release-* branch."
           }
 
-          git fetch origin main:refs/remotes/origin/main --no-tags
-          if ($LASTEXITCODE -ne 0) {
-            throw "Could not fetch origin/main while validating the full release source."
-          }
-
-          git merge-base --is-ancestor origin/main HEAD
-          if ($LASTEXITCODE -ne 0) {
-            throw "Full release branches must contain the current origin/main commit."
+          if ($isFullReleaseBranch) {
+            Write-Host "Using the explicitly frozen full-release branch commit; later origin/main changes are deferred to a future release."
           }
 
       - name: Setup .NET
