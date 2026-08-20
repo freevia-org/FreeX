@@ -25,18 +25,9 @@ public sealed class DocumentViewFloatingSelectionTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too,
+    // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
     // ── helpers ───────────────────────────────────────────────────────────────────────────────────────
 
@@ -679,8 +670,16 @@ public sealed class DocumentViewFloatingSelectionTests
 
         var ran = await OnUiThread(() =>
         {
+            // A chart and a SmartArt keep their DEFAULT sizes (360x216pt and 468x216pt) unless told
+            // otherwise -- far larger than the group holding them, so their rects overlapped and a click
+            // at the chart's centre landed on the SmartArt drawn over it. Size them to fit their slots,
+            // which is what this test's geometry always assumed.
             var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1, 2]);
+            chart.WidthPt = 100;
+            chart.HeightPt = 60;
             var smartArt = SmartArt.Create(SmartArtKind.Process, ["Step"]);
+            smartArt.WidthPt = 90;
+            smartArt.HeightPt = 50;
             var inner = new DrawingGroup { WidthPt = 110, HeightPt = 64 };
             inner.Children.Add(smartArt);
             inner.ChildOffsets.Add((8, 6));
@@ -820,8 +819,10 @@ public sealed class DocumentViewFloatingSelectionTests
                 group.RotationAngle,
                 group.FlipH,
                 group.FlipV);
-            view.SelectFloatingGroupChildForTest(
-                new Point(visibleChildCenter.XDip, visibleChildCenter.YDip)).Should().BeTrue();
+            // The group is rotated and flipped, so the child is drawn at the TRANSFORMED centre -- which is
+            // where a user clicks and drags it. The untransformed rect centre is not on the child at all.
+            var visibleCenterPoint = new Point(visibleChildCenter.XDip, visibleChildCenter.YDip);
+            view.SelectFloatingGroupChildForTest(visibleCenterPoint).Should().BeTrue();
             var selected = view.SelectedFloatingGroupChildInfo;
             selected.Should().NotBeNull();
             selectedChildIndex = selected!.Value.ChildIndex;
@@ -830,10 +831,10 @@ public sealed class DocumentViewFloatingSelectionTests
             childWidthBefore = childShape.WidthPt;
             groupWidthBefore = group.WidthPt;
 
-            view.BeginFloatDrag(childRect.Center).Should().Be(FloatHandle.Body);
+            view.BeginFloatDrag(visibleCenterPoint).Should().Be(FloatHandle.Body);
             var screenDelta = new Vector(48, 24);
-            view.SimulateDragTo(childRect.Center + screenDelta);
-            view.EndFloatDrag(childRect.Center + screenDelta);
+            view.SimulateDragTo(visibleCenterPoint + screenDelta);
+            view.EndFloatDrag(visibleCenterPoint + screenDelta);
 
             var localDelta = DocumentViewLayoutPlanner.UnTransformVector(
                 new DocumentFloatPoint(screenDelta.X, screenDelta.Y),
@@ -940,6 +941,16 @@ public sealed class DocumentViewFloatingSelectionTests
 
             var movedLeafRect = view.FloatingGroupChildRectForPathForTest(0, 0, path)!.Value;
             var movedLeafPlannerRect = PlannerRect(movedLeafRect);
+            // The parent chain has to be re-read AFTER the move: the inner group's rect is where the
+            // chain is anchored, and the stale pre-move copy put the expected handle ~32dip away from
+            // where the handle actually is.
+            var movedParents = new DocumentFloatTransform[]
+            {
+                new(PlannerRect(view.FloatingGroupChildRectForPathForTest(0, 0, [0])!.Value),
+                    inner.RotationAngle, inner.FlipH, inner.FlipV),
+                new(PlannerRect(view.SelectedFloatingInfo!.Value.Rect),
+                    outer.RotationAngle, outer.FlipH, outer.FlipV)
+            };
             var handles = view.HandleRectsForSelection();
             handleCount = handles.Count;
             var bottomRight = handles[FloatHandle.BottomRight].Center;
@@ -949,7 +960,7 @@ public sealed class DocumentViewFloatingSelectionTests
                 leaf.RotationAngle,
                 leaf.FlipH,
                 leaf.FlipV,
-                parents);
+                movedParents);
             bottomRight.X.Should().BeApproximately(expectedBottomRight.XDip, 0.001);
             bottomRight.Y.Should().BeApproximately(expectedBottomRight.YDip, 0.001);
             var resizeTarget = bottomRight

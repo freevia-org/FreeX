@@ -86,16 +86,7 @@ public sealed class DocumentViewLineNumberRenderTests
         renderedItems.Select(item => item.PageIndex).Should().OnlyContain(pageIndex => pageIndex == 0);
     }
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too,
+    // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 }

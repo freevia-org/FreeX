@@ -14420,6 +14420,80 @@ public sealed partial class DocumentView : Control
         return true;
     }
 
+
+    /// <summary>
+    /// AV-CCEDIT: the shape-text counterpart of <see cref="TryActivateContentControl"/>. A <c>w:sdt</c>
+    /// can wrap a run inside a text box just as it can a body run — and its lock is already honoured for
+    /// typing there — but no click gesture reached it, so a check box in a text box would not toggle, a
+    /// list offered no choices and a date field no calendar.
+    /// </summary>
+    private bool TryActivateShapeTextContentControl()
+    {
+        if (_shapeCaret is not { } caret
+            || !TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex, caret.TextRunIndex, out var run)
+            || run.Control is not { } control
+            // Strictly inside the run, matching the body rule: a caret resting past the field's last
+            // character is beside it, not on it.
+            || caret.Offset >= run.Text.Length)
+        {
+            return false;
+        }
+
+        return control.Kind switch
+        {
+            ContentControlKind.CheckBox =>
+                ApplyShapeTextContentControlInteraction(caret, run, ContentControlInteractionPlanner.ToggleCheckBox),
+            ContentControlKind.DatePicker => ShowContentControlCalendar(
+                run,
+                date => ApplyShapeTextContentControlInteraction(
+                    caret,
+                    run,
+                    item => ContentControlInteractionPlanner.SelectDate(item, date))),
+            ContentControlKind.DropDownList or ContentControlKind.ComboBox =>
+                OpenShapeTextContentControlMenu(caret, run),
+            _ => false,
+        };
+    }
+
+    private bool OpenShapeTextContentControlMenu(
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) caret,
+        Run run)
+    {
+        var isEnabled = ContentControlInteractionPlanner.CanEditExistingContentControl(run, RestrictEditingPolicy);
+        var today = DateTime.Today;
+        var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
+            FreeWContextMenuPlanner.BuildContentControl(run, today, isEnabled),
+            commandId => ApplyShapeTextContentControlInteraction(
+                caret,
+                run,
+                item => FreeWContextMenuPlanner.ApplyContentControlCommand(item, commandId, today)));
+        OpenContextMenu(menu);
+        return true;
+    }
+
+    private bool ApplyShapeTextContentControlInteraction(
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) caret,
+        Run run,
+        Func<Run, Run?> planner)
+    {
+        if (!ContentControlInteractionPlanner.CanEditExistingContentControl(run, RestrictEditingPolicy))
+            return false;
+        if (planner(run) is not { Control: { } updatedControl } updated)
+            return false;
+
+        _bus.Execute(new SetShapeTextRunContentControlCommand(
+            caret.BlockIndex,
+            caret.RunIndex,
+            caret.TextParagraphIndex,
+            caret.TextRunIndex,
+            updated.Text,
+            updatedControl,
+            _activeShapeTextChildPath));
+        SetShapeTextCaretOffset(updated.Text.Length);
+        _shapeSelectionAnchor = _shapeCaret;
+        InvalidateLayoutAndVisual();
+        return true;
+    }
     private bool BeginShapeTextSelectionDrag(
         Point point,
         bool extend,
@@ -17078,10 +17152,17 @@ public sealed partial class DocumentView : Control
         // AV-SHAPETEXT3: once a text box is in edit mode, a left-button press inside its body starts a
         // text-range drag. The active end uses the same pointer caret-stop map as a click, while the
         // floating-object move/resize route remains available before text-edit mode is entered.
+        // AV-CCEDIT: a press lands the caret first; if it landed ON a field, the click OPERATES it.
         if (updateKind == PointerUpdateKind.LeftButtonPressed
             && _shapeCaret is not null
             && BeginShapeTextSelectionDrag(point, shift, e.Pointer, out _))
         {
+            if (!shift && TryActivateShapeTextContentControl())
+            {
+                e.Pointer.Capture(null);
+                _shapeTextSelectionDragState = null;
+            }
+
             e.Handled = true;
             return;
         }

@@ -1517,6 +1517,28 @@ public sealed partial class MainWindow : Window
                 : plan.StatusText;
     }
 
+
+    /// <summary>
+    /// Detaches <paramref name="control"/> from whatever currently owns it. Avalonia throws
+    /// "The Control already has a parent" on a re-parent, and the live workspace is handed back and
+    /// forth between the workspace border, a split-preview grid and the page-preview surfaces — so any
+    /// path that left it attached to a surface being torn down crashed the window on the way back.
+    /// </summary>
+    private static void DetachFromParent(Control control)
+    {
+        switch (control.Parent)
+        {
+            case Panel panel:
+                panel.Children.Remove(control);
+                break;
+            case Decorator decorator when ReferenceEquals(decorator.Child, control):
+                decorator.Child = null;
+                break;
+            case global::Avalonia.Controls.ContentControl content when ReferenceEquals(content.Content, control):
+                content.Content = null;
+                break;
+        }
+    }
     private void RestoreLiveWorkspace()
     {
         if (_splitPreviewGrid is not null && _liveWorkspaceContent is not null)
@@ -1530,7 +1552,10 @@ public sealed partial class MainWindow : Window
         ResetSideToSideNavigation();
 
         if (_liveWorkspaceContent is not null && !ReferenceEquals(_workspace.Child, _liveWorkspaceContent))
+        {
+            DetachFromParent(_liveWorkspaceContent);
             _workspace.Child = _liveWorkspaceContent;
+        }
         if (_scroller is not null)
             _scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
     }
@@ -1552,6 +1577,7 @@ public sealed partial class MainWindow : Window
         };
 
         _workspace.Child = null;
+        DetachFromParent(_liveWorkspaceContent);
         Grid.SetRow(_liveWorkspaceContent, 0);
         splitGrid.Children.Add(_liveWorkspaceContent);
 
@@ -2736,7 +2762,10 @@ public sealed partial class MainWindow : Window
         _outlineMode = plan.IsOutlineMode;
         _pagedEditMode = plan.IsPagedEditMode;
         if (_liveWorkspaceContent is not null)
+        {
+            DetachFromParent(_liveWorkspaceContent);
             _workspace.Child = _liveWorkspaceContent;
+        }
         UpdateViewModeButtons();
         UpdateStatus();
         RefreshRibbonCommandStates();

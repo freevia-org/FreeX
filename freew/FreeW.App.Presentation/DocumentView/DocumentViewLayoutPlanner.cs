@@ -1453,8 +1453,14 @@ public static class DocumentViewLayoutPlanner
                     defaultHeightPt: 216,
                     smartArtPlacement);
             }
+            // FB4: a drawing group whose Placement is null -- the model documents it as always non-null,
+            // but defensive callers still have to survive one -- threw a NullReferenceException out of
+            // layout, taking the whole measure pass with it. It stays a selectable floating object (its
+            // handles must still appear); the size/anchor COMMIT is what declines, since there is no
+            // placement to carry the anchor delta onto.
             else if (run.DrawingGroup is { } group)
             {
+                var groupPlacement = group.Placement ?? new FloatingPlacement();
                 AddSnapshot(
                     snapshots,
                     DocumentFloatingObjectKind.Group,
@@ -1467,7 +1473,7 @@ public static class DocumentViewLayoutPlanner
                     group.HeightPt,
                     defaultWidthPt: 144,
                     defaultHeightPt: 72,
-                    group.Placement,
+                    groupPlacement,
                     group.RotationAngle,
                     group.FlipH,
                     group.FlipV);
@@ -2303,7 +2309,19 @@ public static class DocumentViewLayoutPlanner
                 return handle.Handle;
         }
 
-        return DocumentFloatingHandle.None;
+        // FB4: no handle under the pointer, but a point INSIDE the child is a body grab -- the same
+        // fallback HitTestFloatingHandle makes for a top-level object. Without it a selected group child
+        // could only ever be dragged by one of its eight corner/edge handles: pressing anywhere in its
+        // middle resolved to None, so the ordinary "grab it and move it" gesture did nothing at all.
+        return ContainsFloatingGroupChildPointThroughGroupChain(
+            childRect,
+            point,
+            childRotationAngle,
+            childFlipH,
+            childFlipV,
+            parentTransforms)
+            ? DocumentFloatingHandle.Body
+            : DocumentFloatingHandle.None;
     }
 
     public static bool ContainsFloatingGroupChildPointThroughGroupChain(

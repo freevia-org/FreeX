@@ -45,18 +45,9 @@ public sealed class DocumentViewHeadlessTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false; // no headless drawing backend in this environment
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too,
+    // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
     private static async Task<bool> OnUiThreadAsync(Func<Task> action)
     {
@@ -570,7 +561,7 @@ public sealed class DocumentViewHeadlessTests
 
             var view = new DocumentView();
             view.LoadDocument(doc);
-            run = InvokePrivate<RunFormatting>(view, "ResolveRunFmt", RunFormatting.Default, paragraph);
+            run = InvokePrivate<RunFormatting>(view, "ResolveRunFmt", RunFormatting.Default, paragraph, null);
             paragraphFmt = InvokePrivate<ParagraphFormatting>(view, "ResolveParagraphFmt", paragraph);
         });
 
@@ -1506,19 +1497,36 @@ public sealed class DocumentViewHeadlessTests
         if (!ran) return;
     }
 
-    private static T InvokePrivate<T>(object instance, string name, params object[] args)
+    /// <summary>
+    /// Resolves a private method by name AND argument shape. Name alone throws
+    /// <see cref="System.Reflection.AmbiguousMatchException"/> the moment the production type gains an
+    /// overload — which is exactly what happened to ResolveRunFmt, and which the swallowing
+    /// <c>OnUiThread</c> then turned into a silently passing test rather than a failure.
+    /// </summary>
+    private static MethodInfo ResolvePrivateMethod(object instance, string name, object?[] args)
     {
-        var method = instance.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(instance.GetType().FullName, name);
-        return (T)method.Invoke(instance, args)!;
+        var candidates = instance.GetType()
+            .GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
+            .Where(method => method.Name == name && method.GetParameters().Length == args.Length)
+            .ToArray();
+
+        if (candidates.Length == 1)
+            return candidates[0];
+
+        var matched = candidates.FirstOrDefault(method => method.GetParameters()
+            .Select((parameter, index) => args[index] is null
+                ? !parameter.ParameterType.IsValueType
+                : parameter.ParameterType.IsInstanceOfType(args[index]))
+            .All(match => match));
+
+        return matched ?? throw new MissingMethodException(instance.GetType().FullName, name);
     }
 
-    private static void InvokePrivate(object instance, string name, params object[] args)
-    {
-        var method = instance.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(instance.GetType().FullName, name);
-        method.Invoke(instance, args);
-    }
+    private static T InvokePrivate<T>(object instance, string name, params object?[] args) =>
+        (T)ResolvePrivateMethod(instance, name, args).Invoke(instance, args)!;
+
+    private static void InvokePrivate(object instance, string name, params object?[] args) =>
+        ResolvePrivateMethod(instance, name, args).Invoke(instance, args);
 
     private static T GetPrivateField<T>(object instance, string name)
     {

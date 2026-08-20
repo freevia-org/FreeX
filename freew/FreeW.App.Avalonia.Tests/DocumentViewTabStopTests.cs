@@ -25,18 +25,9 @@ public sealed class DocumentViewTabStopTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false; // headless backend not available
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too,
+    // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
     private const double PxPerPoint   = 96.0 / 72.0;
     private const double ContentLeft  = 120.0;   // DeskPadding(24) + 72pt margin in px

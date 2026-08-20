@@ -25,18 +25,9 @@ public sealed class DocumentViewCellShadingBordersTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too,
+    // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
     // ── helpers ──────────────────────────────────────────────────────────────────────────────────
 

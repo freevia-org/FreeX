@@ -199,3 +199,91 @@ internal static class ContentControlRunSpan
         return removed;
     }
 }
+
+/// <summary>
+/// Replaces the text AND the content control of one run inside a shape's text (a <c>w:sdt</c> in a
+/// <c>txbxContent</c>), so operating a field in a text box — toggling its check box, picking a list item
+/// or a date — is one undoable step that keeps the control's own state.
+/// <para>
+/// <see cref="SetShapeTextRunCommand"/> cannot serve: it restores only the text, so a toggled check box
+/// would keep its flipped <see cref="ContentControl.Checked"/> flag after an undo while the glyph went
+/// back — the field and its rendering would disagree. The
+/// <see cref="DocumentCommandMutationKind.FormField"/> classification keeps this permitted under Word's
+/// "Filling in Forms" restriction, like every other field edit.
+/// </para>
+/// </summary>
+public sealed class SetShapeTextRunContentControlCommand(
+    int paragraphIndex,
+    int runIndex,
+    int textParagraphIndex,
+    int textRunIndex,
+    string text,
+    ContentControl control,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
+{
+    private string? _previousText;
+    private ContentControl? _previousControl;
+    private bool _applied;
+
+    public string Label => "Edit Shape Text Field";
+
+    public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.FormField;
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetRun(context, out var run, out var shape))
+            return;
+        _previousText = run.Text;
+        _previousControl = run.Control;
+        run.Text = text;
+        run.Control = control;
+        SyncOwningRunText(context, shape);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetRun(context, out var run, out var shape) || _previousText is null)
+            return;
+        run.Text = _previousText;
+        run.Control = _previousControl;
+        SyncOwningRunText(context, shape);
+        _applied = false;
+    }
+
+    private bool TryGetRun(IDocumentCommandContext context, out Run textRun, out Shape shape)
+    {
+        textRun = null!;
+        shape = null!;
+        if (!ShapeTextTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out shape)
+            || textParagraphIndex < 0
+            || textParagraphIndex >= shape.TextParagraphs.Count)
+        {
+            return false;
+        }
+
+        var textParagraph = shape.TextParagraphs[textParagraphIndex];
+        if (textRunIndex < 0 || textRunIndex >= textParagraph.Runs.Count)
+            return false;
+
+        textRun = textParagraph.Runs[textRunIndex];
+        return true;
+    }
+
+    /// <summary>
+    /// The drawing run that owns the shape keeps a plain-text mirror of it, which the sibling
+    /// <see cref="SetShapeTextRunCommand"/> refreshes on every edit. Without this the shape's text and
+    /// the mirror disagree after a field is operated -- and the mirror is what a plain-text read sees.
+    /// </summary>
+    private void SyncOwningRunText(IDocumentCommandContext context, Shape shape)
+    {
+        if (childPath is null
+            && paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph paragraph
+            && runIndex >= 0 && runIndex < paragraph.Runs.Count
+            && ReferenceEquals(paragraph.Runs[runIndex].Shape, shape))
+        {
+            paragraph.Runs[runIndex].Text = shape.PlainText;
+        }
+    }
+}

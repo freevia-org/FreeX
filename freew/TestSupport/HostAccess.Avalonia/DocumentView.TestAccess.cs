@@ -412,6 +412,9 @@ public sealed partial class DocumentView
     /// </summary>
     internal bool ActivateHfContentControlForTest() => TryActivateHfContentControl();
 
+    /// <summary>Operates the content control the shape-text caret sits on — the click gesture's own path.</summary>
+    internal bool ActivateShapeTextContentControlForTest() => TryActivateShapeTextContentControl();
+
     /// <summary>The date-picker calendar currently on screen, if any (see <see cref="OpenContentControlCalendarForTest"/>).</summary>
     internal global::Avalonia.Controls.Flyout? ActiveContentControlCalendarForTest => _contentControlCalendarFlyout;
     internal ContextMenu? ActiveContextMenuForTests => _activeContextMenu;

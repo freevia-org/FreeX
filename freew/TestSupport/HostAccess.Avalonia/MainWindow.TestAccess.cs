@@ -21,6 +21,27 @@ public sealed partial class MainWindow
     internal bool IsSideToSidePreviewActive => _viewSession.CurrentDepth.IsSideToSideActive;
     internal string? ViewDepthLimitation => _viewSession.CurrentDepth.Limitation;
     internal bool IsWorkspaceShowingLiveEditor => ReferenceEquals(_workspace.Child, _liveWorkspaceContent);
+
+    /// <summary>
+    /// Whether the live editor is on screen at all — directly under the workspace, or nested inside a
+    /// preview surface it shares with a snapshot. Split preview puts the live content in row 0 of its own
+    /// grid, so <see cref="IsWorkspaceShowingLiveEditor"/> (deliberately a DIRECT-child test, pinned by
+    /// MainWindow_split_preview_uses_live_editor_and_read_only_snapshot) answers false there even though
+    /// the editor is fully live — as the sibling cross-page-selection test proves by typing into it.
+    /// </summary>
+    internal bool IsLiveEditorAttachedForTests
+    {
+        get
+        {
+            for (var node = (StyledElement?)_liveWorkspaceContent; node is not null; node = node.Parent)
+            {
+                if (ReferenceEquals(node, _workspace))
+                    return true;
+            }
+
+            return false;
+        }
+    }
     internal bool IsWorkspaceShowingOutline => ReferenceEquals(_workspace.Child, _outlineView);
 
     internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests =>
@@ -33,9 +54,9 @@ public sealed partial class MainWindow
     internal Vector SideToSidePreviewOffsetForTests => new(_sideToSidePlannedHorizontalOffsetDip, 0);
     internal Control? WorkspaceContentForTests => _workspace.Child as Control;
     internal bool IsSideToSideEditorEditableForTests =>
-        _viewSession.CurrentDepth.IsSideToSideActive && IsWorkspaceShowingLiveEditor;
+        _viewSession.CurrentDepth.IsSideToSideActive && IsLiveEditorAttachedForTests;
     internal bool IsMultiplePagesEditorEditableForTests =>
-        _viewSession.CurrentDepth.IsMultiplePagesActive && IsWorkspaceShowingLiveEditor;
+        _viewSession.CurrentDepth.IsMultiplePagesActive && IsLiveEditorAttachedForTests;
     internal bool IsOutlineModeActiveForTests => _outlineMode;
     internal bool IsPagedEditModeActiveForTests => _pagedEditMode;
     internal void TogglePagedEditViewForTests() => TogglePagedEditView();

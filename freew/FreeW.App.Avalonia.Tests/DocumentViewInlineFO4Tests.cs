@@ -28,18 +28,9 @@ public sealed class DocumentViewInlineFO4Tests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too,
+    // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────────
 
@@ -281,7 +272,8 @@ public sealed class DocumentViewInlineFO4Tests
         var ran = await OnUiThread(() =>
         {
             var doc = DocWithInlineChart(ChartKind.Column, title: "Revenue");
-            ((Paragraph)doc.Blocks[0]).Runs[0].Chart!.QuickLayoutId = 1;
+            // Runs[0] is the leading "Before " text -- the chart is Runs[1].
+            ((Paragraph)doc.Blocks[0]).Runs[1].Chart!.QuickLayoutId = 1;
             var view = new DocumentView();
             view.LoadDocument(doc);
             view.Measure(new Size(816, 2000));
