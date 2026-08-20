@@ -520,12 +520,17 @@ public sealed partial class MainWindowRibbonKeyTipTests
         public bool? ActiveMenuItemIsChecked(string header) =>
             FindActiveMenuItem(header)?.IsChecked;
 
-        // Same dismissal caveat as ActiveMenuIsOpen, one level down: a submenu opened by a keytip
-        // is torn down with its parent popup when the window is not foreground, so accept a
-        // submenu that opened during this sequence even if it is no longer up.
+        // What this actually asserts is that the keytip route RESOLVED to this item, not that a
+        // popup is on screen. Those came apart in practice: on a failing run the resolver was
+        // logged reaching "Icon Sets" enabled, populated and correctly key-tipped, yet neither
+        // IsSubmenuOpen nor SubmenuOpened survived to the assertion -- a popup opened while the
+        // window is not foreground can be torn down first. Preferring the window's own resolved
+        // items control removes that environment dependency; the popup reads stay as fallbacks.
         public bool ActiveMenuItemSubmenuIsOpen(string header) =>
             FindActiveMenuItem(header) is { } item
-            && (item.IsSubmenuOpen || SubmenusOpenedBySequence.Contains(item));
+            && (ReferenceEquals(_window.ActiveRibbonKeyTipItemsControlForTest, item)
+                || item.IsSubmenuOpen
+                || SubmenusOpenedBySequence.Contains(item));
 
         public WorkbookWindowArrangement WorkbookArrangement =>
             _workbook.WindowArrangement;

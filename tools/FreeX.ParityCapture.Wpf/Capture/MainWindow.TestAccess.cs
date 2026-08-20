@@ -224,6 +224,14 @@ public partial class MainWindow
 
     internal FreeXRibbonKeyTipInputSession RibbonKeyTipSessionForTest => _ribbonKeyTipSession;
 
+    /// <summary>
+    /// The items control the keytip route last resolved to -- a <see cref="ContextMenu"/> for a
+    /// top-level menu, or the <see cref="MenuItem"/> whose submenu was opened for a nested one.
+    /// Tests assert on this rather than on popup liveness: a popup opened while the window is not
+    /// foreground can be torn down before the assertion runs, but the route still resolved.
+    /// </summary>
+    internal ItemsControl? ActiveRibbonKeyTipItemsControlForTest => _activeRibbonKeyTipItemsControl;
+
     internal ContextMenu? ActiveRibbonKeyTipMenuForTest
     {
         get => _activeRibbonKeyTipMenu;
