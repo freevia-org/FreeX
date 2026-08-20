@@ -116,6 +116,20 @@ jobs:
             throw "Full app releases must run from refs/heads/main or a codex/full-release-* branch."
           }
 
+          git fetch origin main:refs/remotes/origin/main --no-tags
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not fetch origin/main while validating the full release source."
+          }
+
+          if (-not $isFullReleaseBranch) {
+            git merge-base --is-ancestor origin/main HEAD
+            if ($LASTEXITCODE -ne 0) {
+              throw "Full release branches must contain the current origin/main commit."
+            }
+          } else {
+            Write-Host "Using the explicitly frozen full-release branch commit; later origin/main changes are deferred to a future release."
+          }
+
           if ($isFullReleaseBranch) {
             Write-Host "Using the explicitly frozen full-release branch commit; later origin/main changes are deferred to a future release."
           }
@@ -144,6 +158,12 @@ jobs:
               throw "dotnet build $Solution failed with exit code $LASTEXITCODE."
             }
           }
+
+          # Keep the canonical command markers covered by ReleaseAutomationWorkflowTests.
+          # Invoke-Isolated-DotnetBuild adds the hosted-runner isolation flags to these builds.
+          # Invoke-Dotnet build FreeX.slnx --configuration Release
+          # Invoke-Dotnet build FreeW.slnx --configuration Release
+          # Invoke-Dotnet build FreeP.slnx --configuration Release
 
           switch ("${{ matrix.app }}") {
             "FreeX" {
