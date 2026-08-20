@@ -67,6 +67,7 @@ internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator : IWholeWindo
         var visibleContextualTabs = visibleTabs.Where(contextualIds.Contains).ToArray();
         var focus = DescribeFocus(_access.Window.FocusManager?.GetFocusedElement());
         var root = _access.ClientRoot;
+        var backstageOpen = _access.IsBackstageOpen;
         return new(
             "avalonia",
             _access.CurrentSlideIndex,
@@ -76,8 +77,8 @@ internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator : IWholeWindo
             activeTabId,
             visibleTabs,
             visibleContextualTabs,
-            _access.IsBackstageOpen,
-            _access.BackstagePaneLabel,
+            backstageOpen,
+            backstageOpen ? _access.BackstagePaneLabel : null,
             focus.Role,
             focus.Label,
             _access.StatusText,
@@ -150,6 +151,8 @@ internal sealed class AvaloniaVisualEvidenceAppHost(MainWindow.AvaloniaVisualCap
     public void RefreshWholeWindow() => access.RefreshWholeWindow();
     public void NormalizeShell() => access.NormalizeShell();
     public void HideCommentsPane() => access.HideCommentsPane();
+    public void ResetAuxiliaryPanes() => access.ResetAuxiliaryPanes();
+    public void HideBackstage() => access.HideBackstage();
     public bool SelectRibbonTab(string tabId) => access.SelectRibbonTab(tabId);
     public void FocusNotes() => access.FocusNotes();
     public void ShowBackstagePane(string paneId) => access.ShowBackstagePane(paneId);

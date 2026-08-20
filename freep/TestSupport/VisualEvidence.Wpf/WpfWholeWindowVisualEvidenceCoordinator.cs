@@ -192,6 +192,8 @@ internal sealed class WpfVisualEvidenceAppHost(MainWindow.WpfVisualCaptureAdapte
     public void RefreshWholeWindow() => access.RefreshWholeWindow();
     public void NormalizeShell() => access.NormalizeShell();
     public void HideCommentsPane() => access.HideCommentsPane();
+    public void ResetAuxiliaryPanes() => access.ResetAuxiliaryPanes();
+    public void HideBackstage() => access.HideBackstage();
     public bool SelectRibbonTab(string tabId) => access.SelectRibbonTab(tabId);
     public void FocusNotes() => access.FocusNotes();
     public void ShowBackstagePane(string paneId) => access.ShowBackstagePane(paneId);

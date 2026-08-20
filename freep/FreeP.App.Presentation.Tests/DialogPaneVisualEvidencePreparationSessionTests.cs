@@ -129,6 +129,8 @@ public sealed class DialogPaneVisualEvidencePreparationSessionTests
         public void RefreshWholeWindow() { }
         public void NormalizeShell() { }
         public void HideCommentsPane() => CommentsShown = false;
+        public void ResetAuxiliaryPanes() { }
+        public void HideBackstage() { }
         public bool SelectRibbonTab(string tabId) => true;
         public void FocusNotes() { }
         public void ShowBackstagePane(string paneId) { }

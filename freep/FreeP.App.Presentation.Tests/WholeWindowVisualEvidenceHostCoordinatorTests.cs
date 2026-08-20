@@ -20,6 +20,10 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
             "SelectSlide:0",
             $"SelectShape:{fixture.TextShapeId}",
             "HideCommentsPane",
+            "ResetAuxiliaryPanes",
+            "HideBackstage",
+            "SetViewShowState:True:True",
+            "SetZoom:FitToWindow:100",
             "SelectRibbonTab:home",
             "CaptureBaselineState",
             "ShowCommentsPane",
@@ -43,11 +47,54 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
             "SelectSlide:0",
             $"SelectShape:{fixture.ChartShapeId}",
             "HideCommentsPane",
+            "ResetAuxiliaryPanes",
+            "HideBackstage",
+            "SetViewShowState:True:True",
+            "SetZoom:FitToWindow:100",
             "SelectRibbonTab:view",
             "CaptureBaselineState",
             "RefreshWholeWindow",
             "SetZoom:FitToWindow:100",
             "NormalizeShell");
+    }
+
+    [Fact]
+    public void Prepare_keeps_backstage_open_only_for_a_backstage_scenario()
+    {
+        var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
+        var probe = new FakeProbe();
+        var coordinator = new WholeWindowVisualEvidenceHostCoordinator(probe, probe);
+
+        coordinator.Prepare(WholeWindowVisualEvidenceCatalog.Get("backstage.account"), fixture);
+
+        probe.Calls.Should().Contain("ShowBackstagePane:Account");
+        probe.Calls.Should().NotContain("HideBackstage");
+    }
+
+    [Fact]
+    public void Prepare_restores_baseline_view_state_before_every_scenario()
+    {
+        var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
+        var probe = new FakeProbe();
+        var coordinator = new WholeWindowVisualEvidenceHostCoordinator(probe, probe);
+
+        coordinator.Prepare(WholeWindowVisualEvidenceCatalog.Get("workspace.canvas"), fixture);
+
+        probe.Calls.Should().ContainInOrder(
+            "HideBackstage",
+            "SetViewShowState:True:True",
+            "SetZoom:FitToWindow:100",
+            "SelectRibbonTab:design");
+
+        probe.Calls.Clear();
+        coordinator.Prepare(WholeWindowVisualEvidenceCatalog.Get("view.zoom-200"), fixture);
+
+        probe.Calls.Should().ContainInOrder(
+            "HideBackstage",
+            "SetViewShowState:True:True",
+            "SetZoom:FitToWindow:100",
+            "SelectRibbonTab:view",
+            "SetZoom:Percent:200");
     }
 
     [Fact]
@@ -143,6 +190,8 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
         }
 
         public void HideCommentsPane() => Calls.Add("HideCommentsPane");
+        public void ResetAuxiliaryPanes() => Calls.Add("ResetAuxiliaryPanes");
+        public void HideBackstage() => Calls.Add("HideBackstage");
         public bool SelectRibbonTab(string tabId)
         {
             Calls.Add($"SelectRibbonTab:{tabId}");

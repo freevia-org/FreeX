@@ -31,6 +31,8 @@ public interface IVisualEvidenceAppHost
     void RefreshWholeWindow();
     void NormalizeShell();
     void HideCommentsPane();
+    void ResetAuxiliaryPanes();
+    void HideBackstage();
     bool SelectRibbonTab(string tabId);
     void FocusNotes();
     void ShowBackstagePane(string paneId);

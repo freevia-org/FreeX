@@ -74,6 +74,22 @@ public sealed partial class MainWindow
     internal void ClearSelection() => owner.Editor.ClearSelection();
     internal void RefreshCanvas() => owner.RefreshCanvas();
     internal void HideCommentsPane() => owner.HideReviewCommentsPane();
+    internal void ResetAuxiliaryPanes()
+    {
+        owner._workareaSession.Panes.Hide(PresentationWorkareaPane.AccessibilityChecker);
+        owner._accessibilityCheckerPaneHost.Visibility = Visibility.Collapsed;
+        owner.HideAltTextPane();
+        owner._workareaSession.Panes.Hide(PresentationWorkareaPane.ReadingOrder);
+        owner._readingOrderPaneHost.Visibility = Visibility.Collapsed;
+        owner._workareaSession.Panes.Hide(PresentationWorkareaPane.Proofing);
+        owner._proofingPaneHost.Visibility = Visibility.Collapsed;
+        owner.MediaPaneHost.Hide();
+        owner.HideSmartArtTextPane();
+        if (owner._animPaneHost.Visibility == Visibility.Visible)
+            owner.ToggleAnimationPane();
+        owner.RefreshPaneAccessibilityMetadata();
+    }
+    internal void HideBackstage() => owner._backstage.Hide();
     internal void ShowCommentsPane() => owner.ShowReviewCommentsPane();
     internal void SelectFirstComment() => owner._reviewWorkflowSession.SetSelectedReviewCommentIndex(0);
     internal void ShowAccessibilityPane() => owner.ShowAccessibilityCheckerPane();

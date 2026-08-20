@@ -70,6 +70,10 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(
             host.SelectShape(plan.SelectionShapeId);
 
         host.HideCommentsPane();
+        host.ResetAuxiliaryPanes();
+        if (plan.Activation.Kind != WholeWindowVisualEvidenceActivationKind.BackstagePane)
+            host.HideBackstage();
+        RestoreBaselineViewState();
         host.SelectRibbonTab(plan.ActiveRibbonTabId);
         var assertions = plan.CreateBaselineAssertions(inspector.CaptureBaselineState()).ToList();
         _viewStateActivated = !plan.Activation.IsViewState;
@@ -216,6 +220,12 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(
             SetZoom(new PresentationViewZoomState(PresentationViewZoomMode.Percent, 200)),
         _ => false,
     };
+
+    private void RestoreBaselineViewState()
+    {
+        host.SetViewShowState(showGridlines: true, showGuides: true);
+        host.SetZoom(PresentationViewZoomState.FitToWindow);
+    }
 
     private bool SetZoom(PresentationViewZoomState state)
     {
