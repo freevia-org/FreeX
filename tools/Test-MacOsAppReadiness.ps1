@@ -1938,7 +1938,7 @@ function Test-SourceWiring {
                 "if (IsPivotFieldPaneFocused())",
                 "ShellFocusTarget.TaskPane => FocusVisibleTaskPane()",
                 "ShellFocusTarget.StatusBar => FocusControl(_zoomText)",
-                "_ => FocusControl(_sheetGridHost)",
+                "_ => FocusActiveCellOrGridHost()",
                 "private bool FocusFirstEnabledToolbarControl()",
                 "private IReadOnlyList<Control> GetToolbarFocusTargets()",
                 "_openButton,",
