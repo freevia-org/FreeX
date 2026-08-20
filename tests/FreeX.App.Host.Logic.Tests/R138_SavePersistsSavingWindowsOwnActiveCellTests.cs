@@ -111,6 +111,11 @@ public sealed class R138_SavePersistsSavingWindowsOwnActiveCellTests
                 // a sibling window (MainWindow.Selection.cs 1090/1146/1166/1252,
                 // MainWindow.CellsCommands.cs 823/867) reached from queued dispatcher work.
                 //
+                // TIMING SIGNAL (r153, small sample -- suggestive, not conclusive): 1 of 3 first runs
+                // immediately after a rebuild failed, against 0 of 14 subsequent runs in the same
+                // session. A cold process is slower, which widens the window between the reconcile
+                // and serialization -- consistent with queued sibling work landing inside it.
+                //
                 // This assertion has failed intermittently under full-gate load, and ONCE in
                 // isolation on the first run after a build, so it is not load-only. The message
                 // carries the window state that decides it. ReconcileViewStateForSave writes the
