@@ -82,6 +82,28 @@ public sealed class DocumentViewRichPasteTests
     }
 
     [Fact]
+    public void Pasting_with_track_changes_on_records_the_pasted_runs_as_an_insertion()
+    {
+        var view = LoadDocument(Paragraph("Head tail"));
+        view.ToggleTrackChanges().Should().BeTrue();
+
+        view.MoveCaretToBlockForTest(0, 5);
+        view.PasteKeepSourceFormatting(ClipboardDocument()).Should().BeTrue(
+            "a rich paste used to be refused outright while tracking, degrading to plain text");
+
+        var paragraph = view.Document.Paragraphs.Single();
+        paragraph.Runs.Where(run => run.Revision == RevisionKind.Inserted)
+            .Select(run => run.Text)
+            .Should().Equal("Name: ", "Bob", " added");
+        // The paste is this author's insertion — except the run the SOURCE had already marked, whose
+        // recorded history belongs to whoever made it.
+        paragraph.Runs.Where(run => run.Revision == RevisionKind.Inserted)
+            .Select(run => run.RevisionAuthor)
+            .Should().Equal(view.RevisionAuthor, view.RevisionAuthor, "Ada");
+        paragraph.Runs.Single(run => run.Control != null).Text.Should().Be("Bob");
+    }
+
+    [Fact]
     public void Pasting_inside_a_content_control_is_declined_rather_than_tearing_the_field()
     {
         var paragraph = new Paragraph();

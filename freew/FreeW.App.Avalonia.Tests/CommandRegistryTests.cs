@@ -855,12 +855,11 @@ public sealed class CommandRegistryTests
     }
 
     /// <summary>
-    /// A rich paste replaces a selection (Word's behaviour; it used to be refused, degrading the paste to
-    /// unformatted text) but still declines while Track Changes is on, where the inserted runs would have
-    /// to be recorded as a revision the native insert cannot mark.
+    /// A rich paste replaces a selection, and with Track Changes on it is recorded as an insertion —
+    /// both cases used to be refused outright, degrading the paste to unformatted text.
     /// </summary>
     [Fact]
-    public void Paste_keep_source_formatting_replaces_a_selection_but_defers_to_tracked_changes()
+    public void Paste_keep_source_formatting_replaces_a_selection_and_records_it_when_tracking()
     {
         var source = TextDocument.CreateEmpty();
         source.Blocks.Clear();
@@ -872,10 +871,14 @@ public sealed class CommandRegistryTests
         view.PasteKeepSourceFormatting(source).Should().BeTrue();
         view.Document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Rich source");
 
+        // With Track Changes on the paste is recorded rather than refused: the pasted runs arrive as
+        // this author's insertion, exactly as typed text does.
         view.LoadDocument(TextDocument.CreateEmpty());
         view.ToggleTrackChanges();
-        view.PasteKeepSourceFormatting(source).Should().BeFalse();
-        view.Document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().BeEmpty();
+        view.PasteKeepSourceFormatting(source).Should().BeTrue();
+        var pasted = view.Document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which;
+        pasted.PlainText.Should().Be("Rich source");
+        pasted.Runs.Should().OnlyContain(run => run.Revision == RevisionKind.Inserted);
     }
 
     [Fact]

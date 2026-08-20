@@ -239,7 +239,8 @@ public sealed class DocumentEditingSession
     public bool TryInsertDocumentAtBodyCaret(
         DocumentTextPosition caret,
         TextDocument? source,
-        out DocumentParagraphEditResult result)
+        out DocumentParagraphEditResult result,
+        bool trackChanges = false)
     {
         result = default;
         if (source is null
@@ -258,6 +259,23 @@ public sealed class DocumentEditingSession
             return false;
         foreach (var (id, style) in source.Styles)
             Document.Styles.TryAdd(id, style);
+
+        // With Track Changes on, pasted content arrives as this author's insertion, exactly as typing
+        // does. A run the SOURCE already marked keeps its own mark: that copied history is the source's
+        // record, not something this paste performed.
+        if (trackChanges)
+        {
+            var author = ResolveRevisionAuthor();
+            var dateXml = _revisionDateXml();
+            foreach (var run in clones.SelectMany(PastedRuns))
+            {
+                if (run.Revision != RevisionKind.None)
+                    continue;
+                run.Revision = RevisionKind.Inserted;
+                run.RevisionAuthor = author;
+                run.RevisionDateXml = dateXml;
+            }
+        }
 
         var offset = Math.Clamp(caret.Offset, 0, destination.PlainText.Length);
         var head = CreateParagraph(destination, keepStyle: true);
@@ -326,6 +344,17 @@ public sealed class DocumentEditingSession
         && paragraph.ParagraphFormatRevision is null
         && !ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl)
         && paragraph.Runs.All(run => run.Control is not null || IsPortableBodyTextRun(run));
+
+    /// <summary>Every run a pasted block carries, including the ones inside a pasted table's cells.</summary>
+    private static IEnumerable<Run> PastedRuns(Block block) => block switch
+    {
+        Paragraph paragraph => paragraph.Runs,
+        Table table => table.Rows
+            .SelectMany(row => row.Cells)
+            .SelectMany(cell => cell.Paragraphs)
+            .SelectMany(paragraph => paragraph.Runs),
+        _ => [],
+    };
 
     private static bool IsOffsetInsideContentControl(Paragraph paragraph, int offset)
     {

@@ -70,7 +70,12 @@ public sealed class FreeWDocumentWindowPlannerTests
             maxRecentEntries: () => 10,
             onChanged: () => changed++,
             promptSaveChanges: _ => SaveChangesPrompt.Cancel,
-            save: () => false);
+            save: () => false,
+            // Isolated store: without one the workflow loads the MACHINE's real recent-files list, so
+            // the "no recent entry was added" assertion below failed the moment anything on this machine
+            // had opened a document. Mirrors the isolation the autosave tests already use.
+            loadRecentFilesStore: () => RecentFilesStore.Load(
+                Path.Combine(Path.GetTempPath(), "freew-tests", Guid.NewGuid().ToString("N") + ".json")));
 
         workflow.ApplyDocumentState(path, isDirty);
 
