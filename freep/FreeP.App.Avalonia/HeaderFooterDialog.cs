@@ -41,8 +41,11 @@ internal sealed partial class HeaderFooterDialog : FreePDialogWindow
         Title = surface.Title;
         AutomationProperties.SetName(this, surface.AccessibleName);
         AutomationProperties.SetAutomationId(this, surface.AutomationId);
-        Width = 345.3333333333333;
-        Height = 260.6666666666667;
+        // The WPF dialog's content-sized raster is 346 x 254 at the shared
+        // 96-DPI target. Keep this fixed Avalonia dialog on the same outer
+        // geometry so its control baselines do not drift beneath the action row.
+        Width = 346;
+        Height = 254;
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -163,30 +166,16 @@ internal sealed partial class HeaderFooterDialog : FreePDialogWindow
 
     private void ApplyChrome()
     {
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_dateTimeCheck, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_dateTimeCheck, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_dateFormatCombo, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_fixedDateCheck, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_fixedDateCheck, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_fixedDateBox, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_footerCheck, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_footerCheck, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_footerBox, DialogChromeStyle);
         _fixedDateBox.Background = Brushes.White;
         _footerBox.Background = Brushes.White;
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_slideNumberCheck, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_dontShowOnTitleSlideCheck, DialogChromeStyle);
-        foreach (var checkBox in new[]
-                 {
-                     _dateTimeCheck,
-                     _fixedDateCheck,
-                     _footerCheck,
-                     _slideNumberCheck,
-                     _dontShowOnTitleSlideCheck,
-                 })
-        {
-            checkBox.Height = 20;
-            checkBox.MinHeight = 20;
-            checkBox.MaxHeight = 20;
-            checkBox.Padding = new Thickness(0);
-        }
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_slideNumberCheck, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_dontShowOnTitleSlideCheck, DialogChromeStyle);
     }
 
     private void ApplyDisabledChrome()

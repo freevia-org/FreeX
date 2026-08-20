@@ -57,6 +57,22 @@ public sealed class CommonDialogChromeParityTests
     }
 
     [Fact]
+    public void HeaderFooterDialog_UsesCompactTogglesAndMatchedWindowGeometry()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var avalonia = Read(root, "freep", "FreeP.App.Avalonia", "HeaderFooterDialog.cs");
+
+        avalonia.Should().Contain("Width = 346;")
+            .And.Contain("Height = 254;")
+            .And.Contain("ApplyCompactCheckBox(_dateTimeCheck, DialogChromeStyle)")
+            .And.Contain("ApplyCompactCheckBox(_fixedDateCheck, DialogChromeStyle)")
+            .And.Contain("ApplyCompactCheckBox(_footerCheck, DialogChromeStyle)")
+            .And.Contain("ApplyCompactCheckBox(_slideNumberCheck, DialogChromeStyle)")
+            .And.Contain("ApplyCompactCheckBox(_dontShowOnTitleSlideCheck, DialogChromeStyle)")
+            .And.NotContain("ApplyCheckBox(_dateTimeCheck, DialogChromeStyle)");
+    }
+
+    [Fact]
     public void RemainingPairedDialogsUseTheSharedRendererBases()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
