@@ -27,6 +27,49 @@ internal static class StaTestRunner
         0xA5 // Right Alt
     ];
 
+    /// <summary>
+    /// Runs out any work a previous test queued but never dispatched.
+    ///
+    /// <para>
+    /// Every test in this assembly shares one STA dispatcher (see <see cref="StaDispatcher"/>) and
+    /// parallelisation is disabled, so a test that returns while items are still queued leaves them
+    /// to run inside whichever test starts next. That is not theoretical: it showed up as a stray
+    /// keystroke landing in the next test's formula bar, an extra entry on its undo stack, and its
+    /// selection moving on its own -- symptoms that vanish when the test is run alone, which is what
+    /// made them look like ordering bugs.
+    /// </para>
+    ///
+    /// <para>
+    /// This deliberately does NOT close windows a test left open. Doing that trips WPF's default
+    /// OnLastWindowClose shutdown and takes the whole assembly down with it; see
+    /// docs/known-issues/FREEX-HOST-KEYTIP-TEST-INSTABILITY-2026-08-20.md. Draining the queue is
+    /// enough, and is bounded so a test that queues work perpetually cannot hang the run.
+    /// </para>
+    /// </summary>
+    private static void DrainPendingDispatcherWork()
+    {
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        var deadline = Environment.TickCount64 + 2000;
+
+        while (Environment.TickCount64 < deadline)
+        {
+            var frame = new DispatcherFrame();
+            var pending = true;
+            dispatcher.BeginInvoke(
+                DispatcherPriority.SystemIdle,
+                new Action(() =>
+                {
+                    pending = false;
+                    frame.Continue = false;
+                }));
+            Dispatcher.PushFrame(frame);
+
+            // Reaching SystemIdle means nothing of higher priority is left waiting.
+            if (!pending)
+                return;
+        }
+    }
+
     public static void Run(Action action)
     {
         var dispatcher = StaDispatcher.Value;
@@ -35,11 +78,13 @@ internal static class StaTestRunner
             try
             {
                 ReleaseModifierKeys();
+                DrainPendingDispatcherWork();
                 action();
             }
             finally
             {
                 ReleaseModifierKeys();
+                DrainPendingDispatcherWork();
             }
 
             return;
@@ -53,6 +98,7 @@ internal static class StaTestRunner
                 try
                 {
                     ReleaseModifierKeys();
+                    DrainPendingDispatcherWork();
                     action();
                 }
                 catch (Exception ex)
@@ -62,6 +108,7 @@ internal static class StaTestRunner
                 finally
                 {
                     ReleaseModifierKeys();
+                    DrainPendingDispatcherWork();
                 }
             });
 
@@ -115,6 +162,7 @@ internal static class StaTestRunner
             try
             {
                 ReleaseModifierKeys();
+                DrainPendingDispatcherWork();
                 action();
             }
             catch (Exception ex)
