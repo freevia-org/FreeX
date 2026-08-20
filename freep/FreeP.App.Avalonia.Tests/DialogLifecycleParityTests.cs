@@ -185,6 +185,24 @@ public sealed class DialogLifecycleParityTests
     }
 
     [Fact]
+    public async Task FindReplace_compact_surface_keeps_shared_field_and_option_row_metrics()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new FindReplaceDialog(MakeSession(), showReplace: false);
+
+            dialog.Height.Should().Be(130);
+            dialog.GetLogicalDescendants().OfType<CheckBox>()
+                .Should().HaveCount(2)
+                .And.OnlyContain(checkBox => checkBox.Height == 18 && checkBox.MinHeight == 18);
+
+            dialog.ShowReplaceMode(true);
+
+            dialog.Height.Should().Be(192);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public void FindReplace_renderer_is_a_native_adapter_over_portable_catalog_and_dispatch()
     {
         var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");

@@ -28,6 +28,7 @@ internal sealed partial class FindReplaceDialog : FreePDialogWindow
     private readonly TextBlock _statusText;
     private readonly Grid _replaceInputRow;
     private readonly StackPanel _replaceButtonRow;
+    private readonly StackPanel _findActionRow;
     internal FindReplaceWorkflowPlan LastWorkflowPlan => _session.LastWorkflowPlan;
     internal bool ShowReplace => _session.ShowReplace;
 
@@ -106,8 +107,11 @@ internal sealed partial class FindReplaceDialog : FreePDialogWindow
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_replaceBox, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_matchCaseCheck, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_wholeWordCheck, DialogChromeStyle);
+        // The default Avalonia toggle template reserves a full control-height row.
+        // Find/Replace uses the compact WPF checkbox metric instead, keeping the
+        // option row and both subsequent action rows on their shared baselines.
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_matchCaseCheck, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_wholeWordCheck, DialogChromeStyle);
 
         _findBox.TextChanged += (_, _) => ApplyWorkflowPlan(_session.SetQuery(_findBox.Text));
         _replaceBox.TextChanged += (_, _) => ApplyWorkflowPlan(_session.SetReplacement(_replaceBox.Text));
@@ -127,8 +131,12 @@ internal sealed partial class FindReplaceDialog : FreePDialogWindow
         _replaceInputRow = BuildInputRow(_replaceLabel, _replaceBox);
         _replaceButtonRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [_replaceButton, _replaceAllButton],
-            new Thickness(0, 4, 0, 0));
+            new Thickness(0, 1, 0, 0));
         _replaceButtonRow.Spacing = 4;
+
+        _findActionRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [_findNextButton, _findPreviousButton, closeButton],
+            new Thickness(0, 1, 0, 0));
 
         Content = new StackPanel
         {
@@ -144,9 +152,7 @@ internal sealed partial class FindReplaceDialog : FreePDialogWindow
                     Children = { _matchCaseCheck, _wholeWordCheck },
                 },
                 _replaceButtonRow,
-                AvaloniaCompactDialogChrome.CreateActionRow(
-                    [_findNextButton, _findPreviousButton, closeButton],
-                    new Thickness(0, 4, 0, 0)),
+                _findActionRow,
                 _statusText,
             },
         };
@@ -174,9 +180,17 @@ internal sealed partial class FindReplaceDialog : FreePDialogWindow
 
     private FindReplaceWorkflowPlan ApplyWorkflowPlan(FindReplaceWorkflowPlan plan)
     {
-        Height = plan.ShowReplace ? 198.66666666666666 : 134;
+        // Keep the client surface aligned with the WPF dialog after its content has
+        // been normalized to the shared 24px field and button metrics.  These are
+        // deliberately mode-specific because the replacement field/action row is
+        // genuinely absent in Find mode, not merely hidden visually.
+        Height = plan.ShowReplace ? 192 : 130;
         _replaceInputRow.IsVisible = plan.ShowReplace;
         _replaceButtonRow.IsVisible = plan.ShowReplace;
+        // In Replace mode the preceding action row supplies the three pixels of
+        // separation that WPF gets from its Grid row.  In Find mode that row is
+        // absent, so the active action row itself uses the compact one-pixel gap.
+        _findActionRow.Margin = new Thickness(0, plan.ShowReplace ? 4 : 1, 0, 0);
         Title = plan.Title;
         _statusText.Text = plan.StatusText;
         _statusText.Foreground = plan.StatusKind switch
@@ -198,10 +212,13 @@ internal sealed partial class FindReplaceDialog : FreePDialogWindow
     {
         var row = new Grid
         {
-            Margin = new Thickness(0, 0, 0, 6),
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = new GridLength(90) },
+                // WPF's 90px label plus its 6px trailing label margin positions
+                // the text field at 102px from the dialog content edge.  Reserve
+                // the same space in the Avalonia grid so the two native renderers
+                // start their fields on the same vertical guide.
+                new ColumnDefinition { Width = new GridLength(96) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
         };
