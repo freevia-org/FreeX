@@ -33,6 +33,7 @@ using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using SkiaSharp;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -4565,8 +4566,16 @@ public sealed partial class MainWindow
             // composite AvaloniaGrid doesn't always paint the Canvas sibling in headless mode.  We
             // use a two-pass approach: render the cell grid first, then render the Canvas overlay into
             // a second bitmap and blit it on top via CreateDrawingContext (additive draw).
-            RenderAttachedGridCaptureToPng(gridControl, pixelWidth, pixelHeight, pngPath);
-            if (ParityCaptureOutputGuard.ValidateGridPngOutput(pngPath) is { } captureValidationError)
+            var chartPixelBounds = GetVisibleChartPixelBounds(sheet, range, pixelWidth, pixelHeight);
+            var chartOverlapsRange = chartPixelBounds.Count > 0;
+            RenderAttachedGridCaptureToPng(
+                gridControl,
+                pixelWidth,
+                pixelHeight,
+                pngPath,
+                includeDrawingOverlays: chartOverlapsRange,
+                chartPixelBounds);
+            if (ParityCaptureOutputGuard.ValidateGridPngOutput(pngPath, chartPixelBounds) is { } captureValidationError)
                 return GridCaptureFailure(workbookPath, rangeText, outputDirectory, captureValidationError);
 
             // ── 7. Write the JSON log file alongside the PNG ──────────────────────────────────────
@@ -4615,16 +4624,92 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
+    /// Determines whether a visible chart's sheet-absolute drawing rectangle intersects a captured
+    /// cell range. Chart anchors use the same width × 8 / row-height geometry as the XLSX drawing
+    /// anchor applier, so the check is independent of the temporary capture viewport.
+    /// </summary>
+    private static bool HasVisibleChartOverlappingRange(Sheet sheet, GridRange range)
+        => GetVisibleChartPixelBounds(sheet, range, int.MaxValue, int.MaxValue).Count > 0;
+
+    private static IReadOnlyList<ChartPixelBounds> GetVisibleChartPixelBounds(
+        Sheet sheet,
+        GridRange range,
+        int captureWidth,
+        int captureHeight)
+    {
+        var left = SumSheetColumnPixels(sheet, 1, range.Start.Col - 1);
+        var top = SumSheetRowPixels(sheet, 1, range.Start.Row - 1);
+        var right = left + SumSheetColumnPixels(sheet, range.Start.Col, range.End.Col - range.Start.Col + 1);
+        var bottom = top + SumSheetRowPixels(sheet, range.Start.Row, range.End.Row - range.Start.Row + 1);
+
+        return sheet.Charts
+            .Where(chart => chart.IsVisible &&
+                            chart.Left < right && chart.Left + chart.Width > left &&
+                            chart.Top < bottom && chart.Top + chart.Height > top)
+            .Select(chart => ChartPixelBounds.FromAbsoluteBounds(
+                chart.Left - left,
+                chart.Top - top,
+                chart.Width,
+                chart.Height,
+                captureWidth,
+                captureHeight))
+            .Where(bounds => !bounds.IsEmpty)
+            .ToArray();
+    }
+
+    private static double SumSheetColumnPixels(Sheet sheet, uint firstColumn, uint count)
+    {
+        double width = 0;
+        for (var offset = 0u; offset < count; offset++)
+        {
+            var column = firstColumn + offset;
+            if (!sheet.IsColEffectivelyHidden(column))
+                width += sheet.ColumnWidths.GetValueOrDefault(column, sheet.DefaultColumnWidth) * 8;
+        }
+
+        return width;
+    }
+
+    private static double SumSheetRowPixels(Sheet sheet, uint firstRow, uint count)
+    {
+        double height = 0;
+        for (var offset = 0u; offset < count; offset++)
+        {
+            var row = firstRow + offset;
+            if (!sheet.IsRowEffectivelyHidden(row))
+                height += sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
+        }
+
+        return height;
+    }
+
+    /// <summary>
     /// Temporarily roots a capture-only grid under the displayed worksheet host before painting it.
     /// Avalonia's desktop Skia renderer requires that visual-root relationship for a range grid to
     /// paint its cell children into a <see cref="RenderTargetBitmap"/>.
     /// </summary>
-    private void RenderAttachedGridCaptureToPng(Control gridControl, int width, int height, string path)
+    private void RenderAttachedGridCaptureToPng(
+        Control gridControl,
+        int width,
+        int height,
+        string path,
+        bool includeDrawingOverlays,
+        IReadOnlyList<ChartPixelBounds> chartPixelBounds)
     {
         var originalContent = _sheetGridHost.Content;
         var originalWidth = _sheetGridHost.Width;
         var originalHeight = _sheetGridHost.Height;
         var captureSize = new Size(Math.Max(1, width), Math.Max(1, height));
+        var composite = gridControl as AvaloniaGrid;
+        GridCaptureOverlayLayer[] overlays = !includeDrawingOverlays || composite is null
+            ? []
+            : composite.Children
+                .Skip(1)
+                .Select((child, index) => new GridCaptureOverlayLayer(index + 1, child))
+                .ToArray();
+        var basePath = path + "." + Guid.NewGuid().ToString("N") + ".base.png";
+        var overlayPath = path + "." + Guid.NewGuid().ToString("N") + ".overlay.png";
+        var overlaysDetached = false;
 
         try
         {
@@ -4636,12 +4721,82 @@ public sealed partial class MainWindow
             _sheetGridHost.UpdateLayout();
             Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
 
-            // Render the rooted host rather than the grid child: the desktop compositor only gives
-            // RenderTargetBitmap a populated drawing context when its target is attached to a visual root.
-            RenderVisualToPngWithOverlay(_sheetGridHost, width, height, path);
+            if (overlays.Length == 0)
+            {
+                // Preserve the established single-layer host path exactly for ordinary cell-only
+                // captures. The two-layer composition below is only needed when a drawing overlay
+                // exists, and the headless backend is sensitive to that extra bitmap path.
+                RenderVisualToPngWithOverlay(_sheetGridHost, width, height, path);
+                return;
+            }
+
+            // Render the established, host-rooted frame before touching the composite.  In the
+            // headless backend this is the only proven path that paints the range grid reliably.
+            // The overlay Canvas is composited separately below because it can be omitted from
+            // that otherwise valid host render.
+            RenderVisualToPngWithOverlay(_sheetGridHost, width, height, basePath);
+
+            // The base image is now stable. Detach the overlays so each can be rooted under the
+            // host and rendered independently without disturbing the cell-grid capture.
+            for (var index = composite!.Children.Count - 1; index >= 1; index--)
+                composite.Children.RemoveAt(index);
+            overlaysDetached = true;
+
+            using var baseBitmap = new Bitmap(basePath);
+            var overlayComposite = new AvaloniaGrid
+            {
+                Width = captureSize.Width,
+                Height = captureSize.Height,
+                ClipToBounds = true,
+            };
+            // The bare Image deliberately serves as the first pass: in the headless backend it
+            // leaves a black scratch frame but allows the final Canvas child to paint. The scratch
+            // is then alpha-key composed over the separately captured, valid cell-grid base PNG.
+            overlayComposite.Children.Add(new global::Avalonia.Controls.Image
+            {
+                Width = captureSize.Width,
+                Height = captureSize.Height,
+                Source = baseBitmap,
+                Stretch = Stretch.Fill,
+            });
+            foreach (var overlay in overlays)
+                overlayComposite.Children.Add(overlay.Control);
+
+            // Render the chart Canvas into a scratch PNG, then combine it with the independently
+            // valid base. The headless renderer encodes transparent Canvas background as opaque
+            // black, so black pixels are retained only within known chart rectangles.
+            _sheetGridHost.Content = overlayComposite;
+            _sheetGridHost.Measure(captureSize);
+            _sheetGridHost.Arrange(new Rect(0, 0, captureSize.Width, captureSize.Height));
+            _sheetGridHost.UpdateLayout();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+            RenderVisualToPngWithOverlay(overlayComposite, width, height, overlayPath);
+            overlayComposite.Children.Clear();
+            CompositeChartOverlayPng(basePath, overlayPath, path, chartPixelBounds);
         }
         finally
         {
+            try
+            {
+                if (File.Exists(basePath))
+                    File.Delete(basePath);
+                if (File.Exists(overlayPath))
+                    File.Delete(overlayPath);
+            }
+            catch (IOException)
+            {
+                // Capture cleanup must not replace a valid artifact with a teardown failure.
+            }
+
+            if (composite is not null && overlaysDetached)
+            {
+                // Detach the final overlay from the host before restoring it to the composite.
+                // Avalonia rejects inserting a control that still belongs to the host's ContentPresenter.
+                _sheetGridHost.Content = gridControl;
+                foreach (var overlay in overlays)
+                    composite.Children.Insert(overlay.Index, overlay.Control);
+            }
+
             _sheetGridHost.Content = originalContent;
             _sheetGridHost.Width = originalWidth;
             _sheetGridHost.Height = originalHeight;
@@ -4649,6 +4804,52 @@ public sealed partial class MainWindow
             Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
         }
     }
+
+    private static void CompositeChartOverlayPng(
+        string basePath,
+        string overlayPath,
+        string outputPath,
+        IReadOnlyList<ChartPixelBounds> chartPixelBounds)
+    {
+        using var baseBitmap = SKBitmap.Decode(basePath)
+            ?? throw new InvalidDataException("The captured grid base PNG could not be decoded.");
+        using var overlayBitmap = SKBitmap.Decode(overlayPath)
+            ?? throw new InvalidDataException("The captured chart overlay PNG could not be decoded.");
+        if (baseBitmap.Width != overlayBitmap.Width || baseBitmap.Height != overlayBitmap.Height)
+            throw new InvalidDataException("The captured grid base and chart overlay dimensions differ.");
+
+        using var composed = new SKBitmap(baseBitmap.Width, baseBitmap.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using (var canvas = new SKCanvas(composed))
+            canvas.DrawBitmap(baseBitmap, 0, 0);
+
+        for (var y = 0; y < composed.Height; y++)
+        {
+            for (var x = 0; x < composed.Width; x++)
+            {
+                var overlayPixel = overlayBitmap.GetPixel(x, y);
+                var inChartBounds = chartPixelBounds.Any(bounds => bounds.Contains(x, y));
+                if (overlayPixel.Alpha == 0 ||
+                    (!inChartBounds && overlayPixel.Red == 0 && overlayPixel.Green == 0 && overlayPixel.Blue == 0))
+                {
+                    continue;
+                }
+
+                composed.SetPixel(x, y, overlayPixel);
+            }
+        }
+
+        using var image = SKImage.FromBitmap(composed);
+        using var encoded = image.Encode(SKEncodedImageFormat.Png, quality: 100);
+        if (encoded is null)
+            throw new InvalidDataException("The composited chart PNG could not be encoded.");
+
+        var directory = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+        File.WriteAllBytes(outputPath, encoded.ToArray());
+    }
+
+    private sealed record GridCaptureOverlayLayer(int Index, Control Control);
 
     private static GridCaptureResult GridCaptureFailure(
         string workbookPath,

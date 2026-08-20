@@ -122,6 +122,29 @@ internal sealed record ParitySurfaceResult(
     };
 }
 
+internal readonly record struct ChartPixelBounds(int Left, int Top, int Width, int Height)
+{
+    public bool IsEmpty => Width <= 0 || Height <= 0;
+
+    public bool Contains(int x, int y) =>
+        x >= Left && x < Left + Width && y >= Top && y < Top + Height;
+
+    public static ChartPixelBounds FromAbsoluteBounds(
+        double left,
+        double top,
+        double width,
+        double height,
+        int captureWidth,
+        int captureHeight)
+    {
+        var clampedLeft = Math.Clamp((int)Math.Floor(left), 0, captureWidth);
+        var clampedTop = Math.Clamp((int)Math.Floor(top), 0, captureHeight);
+        var clampedRight = Math.Clamp((int)Math.Ceiling(left + width), 0, captureWidth);
+        var clampedBottom = Math.Clamp((int)Math.Ceiling(top + height), 0, captureHeight);
+        return new ChartPixelBounds(clampedLeft, clampedTop, clampedRight - clampedLeft, clampedBottom - clampedTop);
+    }
+}
+
 internal static class ParityCaptureOutputGuard
 {
     private static readonly byte[] PngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -168,7 +191,7 @@ internal static class ParityCaptureOutputGuard
     /// Validates a range-capture PNG beyond its file signature. A detached Avalonia visual can produce a
     /// syntactically valid, fully transparent-black frame, which is not usable parity evidence.
     /// </summary>
-    internal static string? ValidateGridPngOutput(string pngPath)
+    internal static string? ValidateGridPngOutput(string pngPath, int minimumChromaticPixels = 0)
     {
         var basicValidation = ValidatePngOutput(pngPath);
         if (basicValidation is not null)
@@ -177,7 +200,7 @@ internal static class ParityCaptureOutputGuard
         try
         {
             var (rgba, width, height) = DecodeRgbaPng(File.ReadAllBytes(pngPath));
-            return ValidateGridPixels(rgba, width, height);
+            return ValidateGridPixels(rgba, width, height, minimumChromaticPixels);
         }
         catch (Exception ex) when (ex is InvalidDataException or NotSupportedException)
         {
@@ -185,7 +208,32 @@ internal static class ParityCaptureOutputGuard
         }
     }
 
-    internal static string? ValidateGridPixels(ReadOnlySpan<byte> rgba, int width, int height)
+    internal static string? ValidateGridPngOutput(
+        string pngPath,
+        IReadOnlyList<ChartPixelBounds> chartPixelBounds)
+    {
+        ArgumentNullException.ThrowIfNull(chartPixelBounds);
+
+        var basicValidation = ValidatePngOutput(pngPath);
+        if (basicValidation is not null)
+            return basicValidation;
+
+        try
+        {
+            var (rgba, width, height) = DecodeRgbaPng(File.ReadAllBytes(pngPath));
+            return ValidateGridPixels(rgba, width, height, chartPixelBounds, minimumChromaticPixels: 64);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or NotSupportedException)
+        {
+            return $"Grid PNG output could not be decoded for pixel validation: {pngPath} ({ex.Message})";
+        }
+    }
+
+    internal static string? ValidateGridPixels(
+        ReadOnlySpan<byte> rgba,
+        int width,
+        int height,
+        int minimumChromaticPixels = 0)
     {
         if (width <= 0 || height <= 0 || rgba.Length != checked(width * height * 4))
             return "Grid PNG pixel buffer has invalid dimensions.";
@@ -196,6 +244,7 @@ internal static class ParityCaptureOutputGuard
         var firstA = rgba[3];
         var hasVisiblePixel = false;
         var hasVariance = false;
+        var chromaticPixelCount = 0;
 
         for (var index = 0; index < rgba.Length; index += 4)
         {
@@ -204,14 +253,61 @@ internal static class ParityCaptureOutputGuard
                            rgba[index + 1] != firstG ||
                            rgba[index + 2] != firstB ||
                            rgba[index + 3] != firstA;
+            if (rgba[index + 3] != 0)
+            {
+                var maximum = Math.Max(rgba[index], Math.Max(rgba[index + 1], rgba[index + 2]));
+                var minimum = Math.Min(rgba[index], Math.Min(rgba[index + 1], rgba[index + 2]));
+                if (maximum - minimum >= 32)
+                    chromaticPixelCount++;
+            }
         }
 
         if (!hasVisiblePixel)
             return "Grid PNG output is fully transparent-black.";
         if (!hasVariance)
             return "Grid PNG output has no pixel variance.";
+        if (chromaticPixelCount < minimumChromaticPixels)
+            return $"Grid PNG output is missing expected chart pixels (found {chromaticPixelCount}, require {minimumChromaticPixels}).";
 
         return null;
+    }
+
+    internal static string? ValidateGridPixels(
+        ReadOnlySpan<byte> rgba,
+        int width,
+        int height,
+        IReadOnlyList<ChartPixelBounds> chartPixelBounds,
+        int minimumChromaticPixels)
+    {
+        ArgumentNullException.ThrowIfNull(chartPixelBounds);
+
+        var baselineValidation = ValidateGridPixels(rgba, width, height);
+        if (baselineValidation is not null)
+            return baselineValidation;
+        if (chartPixelBounds.Count == 0)
+            return null;
+
+        var chromaticPixelCount = 0;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                if (!chartPixelBounds.Any(bounds => bounds.Contains(x, y)))
+                    continue;
+
+                var index = ((y * width) + x) * 4;
+                if (rgba[index + 3] == 0)
+                    continue;
+                var maximum = Math.Max(rgba[index], Math.Max(rgba[index + 1], rgba[index + 2]));
+                var minimum = Math.Min(rgba[index], Math.Min(rgba[index + 1], rgba[index + 2]));
+                if (maximum - minimum >= 32)
+                    chromaticPixelCount++;
+            }
+        }
+
+        return chromaticPixelCount < minimumChromaticPixels
+            ? $"Grid PNG output is missing expected chart pixels in the chart bounds (found {chromaticPixelCount}, require {minimumChromaticPixels})."
+            : null;
     }
 
     private static (byte[] Rgba, int Width, int Height) DecodeRgbaPng(byte[] png)

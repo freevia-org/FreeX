@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Windows.Data.Pdf;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Sparklines;
@@ -1260,8 +1261,233 @@ internal static class Program
             }
         }
 
+        // Excel intermittently rejects Range.CopyPicture (0x800A03EC) even while it can render the
+        // exact same worksheet normally.  Keep CopyPicture as the primary path, but fall back to a
+        // temporary worksheet copy printed to PDF when it exhausts its retry variants.  PDF output
+        // retains both cell content and floating ChartObjects, unlike a direct Chart.Export diagnostic.
+        try
+        {
+            ExportExcelRangeToPngThroughPdf(workbook, sheetName, range, outPath);
+            if (!IsLikelyBlankReferencePng(outPath))
+                return;
+
+            lastFailure = new InvalidOperationException(
+                "Excel PDF range fallback produced a blank-looking image.");
+        }
+        catch (Exception ex)
+        {
+            lastFailure = ex;
+        }
+
         throw new InvalidOperationException(
             $"Excel range PNG export failed for {sheetName}!{range}.", lastFailure);
+    }
+
+    /// <summary>
+    /// Exports a sheet-range reference without changing the source workbook.  The worksheet is copied
+    /// into Excel's temporary active workbook, where a zero-margin, gridline-visible print area is
+    /// written to a single-page PDF.  The existing Windows.Data.Pdf platform rasterization approach
+    /// is deliberately the same one used by FreeW.PdfRasterize; no external renderer is introduced.
+    /// </summary>
+    private static void ExportExcelRangeToPngThroughPdf(
+        object workbook,
+        string sheetName,
+        GridRange range,
+        string outPath)
+    {
+        object? sourceWorksheet = null;
+        object? application = null;
+        object? temporaryWorkbook = null;
+        object? temporaryWorksheet = null;
+        object? pageSetup = null;
+        var temporaryDirectory = Path.Combine(Path.GetTempPath(), "freex-grid-pdf-" + Guid.NewGuid().ToString("N"));
+        var pdfPath = Path.Combine(temporaryDirectory, "range.pdf");
+        var rasterPath = Path.Combine(temporaryDirectory, "range-raster.png");
+
+        try
+        {
+            Directory.CreateDirectory(temporaryDirectory);
+            sourceWorksheet = ((dynamic)workbook).Worksheets[sheetName];
+            application = ((dynamic)workbook).Application;
+
+            // Copy() without Before/After creates an independent one-sheet workbook.  It preserves
+            // anchored charts and allows PageSetup mutation without saving or mutating the fixture.
+            ((dynamic)sourceWorksheet).Copy(Type.Missing, Type.Missing);
+            temporaryWorkbook = ((dynamic)application).ActiveWorkbook;
+            temporaryWorksheet = ((dynamic)temporaryWorkbook).Worksheets[1];
+            pageSetup = ((dynamic)temporaryWorksheet).PageSetup;
+
+            ((dynamic)pageSetup).PrintArea = range.ToString();
+            ((dynamic)pageSetup).PrintGridlines = true;
+            ((dynamic)pageSetup).LeftMargin = 0d;
+            ((dynamic)pageSetup).RightMargin = 0d;
+            ((dynamic)pageSetup).TopMargin = 0d;
+            ((dynamic)pageSetup).BottomMargin = 0d;
+            ((dynamic)pageSetup).HeaderMargin = 0d;
+            ((dynamic)pageSetup).FooterMargin = 0d;
+            // xlLandscape = 2; retain the worksheet's native 100% sheet geometry rather than
+            // permitting Excel's portrait page to scale the logical cell surface down.
+            ((dynamic)pageSetup).Orientation = 2;
+            ((dynamic)pageSetup).Zoom = 100;
+
+            var missing = Type.Missing;
+            // xlTypePDF = 0; xlQualityStandard = 0.  Passing Missing for the optional From/To and
+            // FixedFormatExtClassPtr arguments is required by the COM binder (null yields E_INVALIDARG).
+            ((dynamic)temporaryWorksheet).ExportAsFixedFormat(
+                0,
+                pdfPath,
+                0,
+                true,
+                false,
+                missing,
+                missing,
+                false,
+                missing);
+
+            RasterizeFirstPdfPageToPng(pdfPath, rasterPath);
+            CropPdfRangePngToLogicalSurface(rasterPath, outPath);
+        }
+        finally
+        {
+            try
+            {
+                if (temporaryWorkbook is not null)
+                    ((dynamic)temporaryWorkbook).Close(false);
+            }
+            catch
+            {
+                // The source workbook is never saved; temporary-copy cleanup is best effort.
+            }
+
+            ExcelComAutomation.ReleaseComObject(pageSetup);
+            ExcelComAutomation.ReleaseComObject(temporaryWorksheet);
+            ExcelComAutomation.ReleaseComObject(temporaryWorkbook);
+            ExcelComAutomation.ReleaseComObject(application);
+            ExcelComAutomation.ReleaseComObject(sourceWorksheet);
+
+            try
+            {
+                if (Directory.Exists(temporaryDirectory))
+                    Directory.Delete(temporaryDirectory, recursive: true);
+            }
+            catch
+            {
+                // A virus scanner can briefly hold a generated PDF/PNG. It is outside the fixture
+                // and has a unique temp directory, so leave cleanup to the OS in that exceptional case.
+            }
+        }
+    }
+
+    private static void RasterizeFirstPdfPageToPng(string pdfPath, string pngPath)
+    {
+        Task.Run(async () =>
+        {
+            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(pdfPath);
+            var pdf = await PdfDocument.LoadFromFileAsync(file);
+            if (pdf.PageCount != 1)
+                throw new InvalidOperationException($"Excel PDF range fallback expected one page but produced {pdf.PageCount}.");
+
+            using var page = pdf.GetPage(0);
+            var width = Math.Max(1u, (uint)Math.Ceiling(page.Size.Width));
+            var height = Math.Max(1u, (uint)Math.Ceiling(page.Size.Height));
+            var options = new PdfPageRenderOptions
+            {
+                DestinationWidth = width,
+                DestinationHeight = height,
+            };
+            using var stream = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+            await page.RenderToStreamAsync(stream, options);
+            stream.Seek(0);
+
+            var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
+            var transform = new Windows.Graphics.Imaging.BitmapTransform
+            {
+                ScaledWidth = width,
+                ScaledHeight = height,
+            };
+            var pixels = await decoder.GetPixelDataAsync(
+                Windows.Graphics.Imaging.BitmapPixelFormat.Rgba8,
+                Windows.Graphics.Imaging.BitmapAlphaMode.Straight,
+                transform,
+                Windows.Graphics.Imaging.ExifOrientationMode.IgnoreExifOrientation,
+                Windows.Graphics.Imaging.ColorManagementMode.DoNotColorManage);
+
+            using var encoded = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+            var encoder = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
+                Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId,
+                encoded);
+            encoder.SetPixelData(
+                Windows.Graphics.Imaging.BitmapPixelFormat.Rgba8,
+                Windows.Graphics.Imaging.BitmapAlphaMode.Straight,
+                width,
+                height,
+                decoder.DpiX,
+                decoder.DpiY,
+                pixels.DetachPixelData());
+            await encoder.FlushAsync();
+            encoded.Seek(0);
+
+            var bytes = new byte[encoded.Size];
+            using var reader = new Windows.Storage.Streams.DataReader(encoded);
+            await reader.LoadAsync((uint)encoded.Size);
+            reader.ReadBytes(bytes);
+            await File.WriteAllBytesAsync(pngPath, bytes);
+        }).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Crops a PDF page to the deterministic ink bounds of the temporary print area. Because the
+    /// fallback forces PrintGridlines=true and zero margins, the outer gridline is the logical range
+    /// boundary even when the range contains otherwise blank cells. This removes page whitespace while
+    /// preserving all overlapping charts painted inside that boundary.
+    /// </summary>
+    private static void CropPdfRangePngToLogicalSurface(string sourcePath, string outPath)
+    {
+        var decoder = BitmapDecoder.Create(
+            new Uri(sourcePath, UriKind.Absolute),
+            BitmapCreateOptions.PreservePixelFormat,
+            BitmapCacheOption.OnLoad);
+        var source = new FormatConvertedBitmap(decoder.Frames[0], PixelFormats.Bgra32, null, 0d);
+        var width = source.PixelWidth;
+        var height = source.PixelHeight;
+        var stride = checked(width * 4);
+        var pixels = new byte[checked(stride * height)];
+        source.CopyPixels(pixels, stride, 0);
+
+        var left = width;
+        var top = height;
+        var right = -1;
+        var bottom = -1;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var offset = (y * stride) + (x * 4);
+                // BGRA32; Excel's page paper is opaque white. A 250 cutoff keeps antialiased
+                // gridlines and chart borders while excluding the unused white page area.
+                var isInk = pixels[offset] < 250 || pixels[offset + 1] < 250 ||
+                            pixels[offset + 2] < 250 || pixels[offset + 3] < 250;
+                if (!isInk)
+                    continue;
+
+                left = Math.Min(left, x);
+                top = Math.Min(top, y);
+                right = Math.Max(right, x);
+                bottom = Math.Max(bottom, y);
+            }
+        }
+
+        if (right < left || bottom < top)
+            throw new InvalidOperationException("Excel PDF range fallback found no printed grid or chart pixels.");
+
+        var crop = new CroppedBitmap(source, new Int32Rect(left, top, right - left + 1, bottom - top + 1));
+        var directory = Path.GetDirectoryName(outPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(crop));
+        using var output = File.Create(outPath);
+        encoder.Save(output);
     }
 
     private static void ExportExcelRangeToPngAttempt(

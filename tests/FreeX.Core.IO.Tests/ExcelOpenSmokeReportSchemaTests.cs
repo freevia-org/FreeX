@@ -109,6 +109,14 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         source.Should().Contain("selected bitmap");
         source.Should().Contain("Excel range PNG export produced a blank-looking image");
         source.Should().Contain("CopyPicture");
+        source.Should().Contain("ExportExcelRangeToPngThroughPdf");
+        source.Should().Contain("Windows.Data.Pdf");
+        source.Should().Contain("PrintGridlines = true");
+        source.Should().Contain("Copy(Type.Missing, Type.Missing)");
+        source.Should().Contain("CropPdfRangePngToLogicalSurface");
+        source.IndexOf("CopyPicture", StringComparison.Ordinal)
+            .Should().BeLessThan(source.IndexOf("ExportExcelRangeToPngThroughPdf", StringComparison.Ordinal),
+                "the PDF route is only a fallback after every CopyPicture attempt");
         source.Should().Contain("GetPngDimensions");
         source.Should().Contain("--fail-on-dimension-mismatch");
         source.Should().Contain("Dimension gate: native Excel and FreeX PNG dimensions must match exactly.");

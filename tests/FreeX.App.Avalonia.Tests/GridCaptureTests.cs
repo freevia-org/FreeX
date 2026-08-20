@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless;
@@ -197,6 +198,61 @@ public sealed class GridCaptureTests
             .Should().Be("Grid PNG output has no pixel variance.");
         ParityCaptureOutputGuard.ValidateGridPixels(variedPixels, width: 2, height: 1)
             .Should().BeNull();
+    }
+
+    [Fact]
+    public void GridCaptureOutputGuard_RequiresChartPixels_WhenRangeOverlapsChart()
+    {
+        // A populated cell grid has visible variance and may have colored cells outside the chart.
+        // Require chromatic pixels inside the known chart rectangle, not anywhere in the range.
+        var cellsOnlyPixels = new byte[]
+        {
+            255, 255, 255, 255,
+            31, 31, 31, 255,
+        };
+        var chartPixels = new byte[]
+        {
+            255, 255, 255, 255,
+            31, 31, 31, 255,
+            24, 132, 196, 255,
+        };
+
+        var chartBounds = new[] { new ChartPixelBounds(Left: 2, Top: 0, Width: 1, Height: 1) };
+
+        ParityCaptureOutputGuard.ValidateGridPixels(cellsOnlyPixels, width: 2, height: 1, chartBounds, minimumChromaticPixels: 1)
+            .Should().Contain("chart bounds");
+        ParityCaptureOutputGuard.ValidateGridPixels(chartPixels, width: 3, height: 1, chartBounds, minimumChromaticPixels: 1)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void ParityGridCapture_RequiresChartPixels_OnlyForOverlappingVisibleCharts()
+    {
+        var session = new WorkbookSessionFactory().CreateNew(viewportHeight: 500, viewportWidth: 800);
+        var sheet = session.ActiveSheet;
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 25, 14));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Pie,
+            IsVisible = true,
+            Left = 10,
+            Top = 110,
+            Width = 320,
+            Height = 220,
+        };
+        sheet.Charts.Add(chart);
+
+        var method = typeof(MainWindow).GetMethod(
+            "HasVisibleChartOverlappingRange",
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+
+        method.Invoke(null, [sheet, range]).Should().Be(true);
+
+        chart.Left = 10_000;
+        method.Invoke(null, [sheet, range]).Should().Be(false,
+            "a visible chart outside the requested capture range must not require chart-pixel evidence");
     }
 
     // ── Headless integration smoke ────────────────────────────────────────────────────────────────
