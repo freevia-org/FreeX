@@ -28,10 +28,10 @@ public sealed partial class MainWindowRibbonKeyTipTests
         // is deliberately NOT closed: WPF shuts the Application down with the last window under the
         // default OnLastWindowClose, which took every subsequent test with it (64 of 68 failed).
 
-        // The window retired by the previous harness. It is closed only once the replacement
-        // exists, so the Application never sees its last window close (which would shut it down).
+        // One window per STA dispatcher, reused by every test in the class. Per-test windows were
+        // measured and are not better -- see the note in docs/known-issues.
         [ThreadStatic]
-        private static MainWindow? PreviousWindow;
+        private static SharedMainWindowSession? SharedSessionForTest;
 
         private readonly MainWindow _window;
         private readonly Workbook _workbook;
@@ -724,15 +724,9 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public static MainWindowHarness Create(Action<Workbook>? configureWorkbook = null)
         {
-            var session = CreateSharedSession();
+            var session = SharedSessionForTest ??= CreateSharedSession();
             var window = session.Window;
 
-            // Retire the prior window now that its replacement is up, so windows do not pile up and
-            // compete for activation -- menu popups need the active window to be the current one.
-            if (PreviousWindow is { } retired)
-                MainWindowTestCleanup.CloseWithoutSavePrompt(retired);
-            PreviousWindow = window;
-            PumpDispatcher();
             if (!window.IsVisible)
                 window.Show();
             window.Activate();
@@ -892,6 +886,14 @@ public sealed partial class MainWindowRibbonKeyTipTests
             // than assuming EnterKeyTipScope alone fully resets the previously active popup.
             if (ActiveMenu is { } staleMenu)
                 staleMenu.IsOpen = false;
+
+            // Make sure this window is the active one before routing the sequence. Each test now
+            // builds its own window and retires the previous one, so activation is briefly in flux;
+            // a keytip sequence routed during that window resolves against nothing and the menu
+            // never opens ("sequence H,A,N should open a menu, but found False").
+            _window.Activate();
+            _window.Focus();
+            PumpDispatcher();
 
             EnterKeyTipScope("TopLevel");
             HandleKeyTip(tabKeyTip);
