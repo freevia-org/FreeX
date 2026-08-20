@@ -967,6 +967,24 @@ public sealed partial class MainWindowRibbonKeyTipTests
             ConfigureQuickAccessToolbar(QuickAccessToolbarCatalog.DefaultCommandIds, belowRibbon: false);
             if (ActiveMenu is { } activeMenu)
                 activeMenu.IsOpen = false;
+
+            // ActiveMenu only tracks the one menu the keytip route last opened, and this MainWindow
+            // is shared by every test in the class (SharedMainWindowSession is ThreadStatic). Any
+            // other popup a test left open therefore leaked into the next one, which is why the
+            // class produced a different set of failures on each run. Close them all.
+            foreach (var element in WpfTestTree.FindVisualSelfAndDescendants<FrameworkElement>(_window))
+            {
+                if (element.ContextMenu is { IsOpen: true } openMenu)
+                    openMenu.IsOpen = false;
+                if (element is ComboBox { IsDropDownOpen: true } openCombo)
+                    openCombo.IsDropDownOpen = false;
+                if (element is System.Windows.Controls.Primitives.ToggleButton { IsChecked: true } toggle
+                    && toggle.Name is "RibbonTabsOverflowButton")
+                {
+                    toggle.IsChecked = false;
+                }
+            }
+
             if (_window.FindName("NumberFormatBox") is ComboBox numberFormatBox)
                 numberFormatBox.IsDropDownOpen = false;
             _window.UpdateLayout();
