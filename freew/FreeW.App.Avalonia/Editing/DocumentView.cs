@@ -8851,15 +8851,13 @@ public sealed partial class DocumentView : Control
         // Keep the full paragraph together for the ordinary text path. This mirrors the WPF host's
         // default-on widow policy without changing tabs, equations, drop caps, or wrapped float layout.
         //
-        // R132 NOTE — do not "fix" this to `pf.KeepLinesTogether || pf.WidowControl` without also
-        // fixing the paginator. Word's widowControl only guards a stranded first/last LINE and never
-        // forces a whole paragraph to move as a unit, so dropping the `!pf.WidowControlIsSet` term is
-        // the semantically correct end state. But in THIS layout engine it currently produces a page
-        // containing only the watermark and the page border and no body text at all
-        // (DocumentViewPdfExportTests.BuildPdfContent_IncludesTextWatermarkBehindPageBorderOnEveryPage
-        // fails; reverting this single line makes it pass). The empty-page emission is a separate
-        // defect that has to be closed first -- tracked separately. The WPF host's fix for the same
-        // finding is implemented differently and is unaffected by this line.
+        // R132: the policy itself lives in the shared planner, which treats an OMITTED w:widowControl as
+        // splittable (Word's widowControl guards only a stranded first/last line and never moves a whole
+        // paragraph as one unit) while an explicit widowControl=on still keeps the paragraph together.
+        // The blank-page emission that once blocked that distinction -- a page carrying only the
+        // watermark and the page border -- no longer occurs;
+        // DocumentViewColumnLayoutTests.Omitted_widow_control_allows_an_ordinary_wrapped_paragraph_to_split_like_explicit_off
+        // and the watermark-on-every-page export test both pass.
         var keepParagraphTogether = DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(pf);
         // R137 fix: WPF maps Paragraph.KeepWithNext straight onto FlowDocument's Paragraph.KeepWithNext,
         // so the framework's own pagination engine never lets a page break fall between this paragraph

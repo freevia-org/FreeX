@@ -327,17 +327,13 @@ public sealed class DocumentViewColumnLayoutTests
         pageCount.Should().BeGreaterThanOrEqualTo(2);
     }
 
-    // R132: this asserts the CORRECT end state -- Word's widowControl guards only a stranded
-    // first/last line and never forces a whole paragraph to move as one unit, so an omitted
-    // w:widowControl must let an ordinary paragraph split across pages. Making it pass requires
-    // dropping the `!pf.WidowControlIsSet` term in DocumentView.MeasureParagraph's
-    // keepParagraphTogether, and doing ONLY that regresses
-    // DocumentViewPdfExportTests.BuildPdfContent_IncludesTextWatermarkBehindPageBorderOnEveryPage:
-    // the re-paginated document then emits a page carrying only the watermark and the page border
-    // with no body text at all. That empty-page emission is a separate paginator defect which has to
-    // be fixed first; shipping the widowControl change alone trades a pagination bug for a blank-page
-    // bug. Skipped rather than deleted so the intent and the exact blocker survive.
-    [Fact(Skip = "R132: blocked on the Avalonia paginator emitting a body-text-free page; see the note above and the tracked follow-up.")]
+    // R132: an omitted w:widowControl must split like an explicit off token -- Word's widowControl
+    // guards only a stranded first/last line and never moves a whole paragraph as one unit. This was
+    // skipped while the keep-together decision lived inline here and produced a page carrying only the
+    // watermark and the page border; DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether
+    // now makes the omitted case splittable without that blank-page emission, and the sibling
+    // watermark-on-every-page export test passes alongside it.
+    [Fact]
     public async Task Omitted_widow_control_allows_an_ordinary_wrapped_paragraph_to_split_like_explicit_off()
     {
         // Word's widowControl only guards a single stranded first/last LINE; it never forces a whole
