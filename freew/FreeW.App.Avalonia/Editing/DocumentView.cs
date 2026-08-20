@@ -23855,7 +23855,6 @@ public sealed partial class DocumentView : Control
         if (source is null
             || source.Blocks.Count == 0
             || IsEditingLocked
-            || TrackChangesEnabled
             || _hfCaret is not null
             || _cellCaret is not null
             || CurrentParagraph() is not { } paragraph
@@ -23887,7 +23886,8 @@ public sealed partial class DocumentView : Control
         if (!_editingSession.TryInsertDocumentAtBodyCaret(
                 new DocumentTextPosition(_caret.Block, _caret.Offset),
                 source,
-                out var insertion))
+                out var insertion,
+                TrackChangesEnabled))
         {
             if (ownsUndoGroup)
                 _bus.AbortUndoGroup();

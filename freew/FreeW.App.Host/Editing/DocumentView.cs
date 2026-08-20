@@ -1827,8 +1827,14 @@ public sealed partial class DocumentView : RichTextBox
         if (!TryGetCurrentBodyTextRange(out var range) || !range.IsCollapsed)
             return false;
 
-        if (!_editingSession.TryInsertDocumentAtBodyCaret(range.Normalize().Start, source, out var insertion))
+        if (!_editingSession.TryInsertDocumentAtBodyCaret(
+                range.Normalize().Start,
+                source,
+                out var insertion,
+                TrackChangesEnabled))
+        {
             return false;
+        }
 
         Render();
         PlaceCaretAtModelTextOffset(insertion.Caret.BlockIndex, insertion.Caret.Offset);
