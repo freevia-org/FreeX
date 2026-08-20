@@ -109,7 +109,7 @@ public sealed partial class SourceTodoDocumentationTests
     [
         new(
             "src/FreeX.Core.Formula/FormulaRewriter.cs",
-            "// TODO(H28 3-D sheet-span refs):",
+            "// TODO(H28 3-D sheet-span refs, partially addressed — F1 defined-names-span-rowcol-shift):",
             "docs/planning/formula-deferred-work.md",
             "## H28 3-D Sheet-Span Structural Rewrites")
     ];
