@@ -1590,6 +1590,10 @@ public sealed partial class XlsxFileAdapter
 
         private static bool PatchBlockReasonInvalidatesCalcChain(string reason) =>
             reason is "change_formula_text" or "change_formula_to_literal" or "change_formula_array_mode"
+                // A changed legacy CSE array extent reshapes which cells the array covers, so the
+                // source calcChain's entries for the vacated/added member cells go stale exactly as
+                // they do for the array-mode change above.
+                or "change_formula_array_extent"
                 or "change_sheet_count" or "change_dimension_metadata" or "change_cell_count_mismatch"
                 // A plain sheet reorder (no add/delete) trips one of these two reasons -- whichever
                 // per-ordinal identity check (chart-source-range baseline, then pivot-source-range
@@ -6422,7 +6426,9 @@ public sealed partial class XlsxFileAdapter
                                 sourceStyleIndex,
                                 cell.IgnoreFormulaError,
                                 sheet.RichTextRuns.GetValueOrDefault(new CellAddress(sheet.Id, row, col)),
-                                GetLiveSpillMemberCount(sheet, sheet.Id, row, col)));
+                                GetLiveSpillMemberCount(sheet, sheet.Id, row, col),
+                                cell.LegacyArrayRows,
+                                cell.LegacyArrayCols));
                     }
 
                     Array.Sort(cells, XlsxPatchCellEntry.Compare);
@@ -6499,7 +6505,9 @@ public sealed partial class XlsxFileAdapter
                             sourceStyleIndex,
                             cell.IgnoreFormulaError,
                             sheet.RichTextRuns.GetValueOrDefault(new CellAddress(sheet.Id, row, col)),
-                            GetLiveSpillMemberCount(sheet, sheet.Id, row, col)));
+                            GetLiveSpillMemberCount(sheet, sheet.Id, row, col),
+                            cell.LegacyArrayRows,
+                            cell.LegacyArrayCols));
                 }
 
                 Array.Sort(cells, XlsxPatchCellEntry.Compare);
@@ -6812,6 +6820,22 @@ public sealed partial class XlsxFileAdapter
                         return Fail("change_formula_array_mode", out blockReason);
                     }
 
+                    // R155-io-legacy-cse-array-identity-1: sibling of the array-mode check above for
+                    // a legacy CSE array anchor's fixed extent (Cell.LegacyArrayRows/Cols). Patching
+                    // reuses the source XML's own <f t="array" ref="..."/> verbatim (see
+                    // XlsxWorksheetFormulaCachedValueWriter.CollectLegacyArrayMemberKeys, which
+                    // re-derives the extent from that attribute because the model only knows it via
+                    // the anchor), so a changed extent -- e.g. the user re-authored over the whole
+                    // array range, clearing the extent to 0 while ArrayMode stays Dynamic -- cannot
+                    // be expressed by a patch: the saved package would keep declaring an array over
+                    // cells that are no longer part of one. Bail to the full save, which rewrites
+                    // the <f> element from the model.
+                    if (cell.LegacyArrayRows != original.LegacyArrayRows ||
+                        cell.LegacyArrayCols != original.LegacyArrayCols)
+                    {
+                        return Fail("change_formula_array_extent", out blockReason);
+                    }
+
                     // R140-io-dynamic-array-spill-growth-1: a dynamic-array anchor's spill extent
                     // can grow or shrink (its formula's result now covers more/fewer cells) while
                     // the anchor's own formula text, cached top-left value, style, and rich runs
@@ -6936,7 +6960,9 @@ public sealed partial class XlsxFileAdapter
                         // phonetic guide's <rPh> base-text offsets would no longer apply.
                         PhoneticGuide: patchKind == XlsxCellValuePatchKind.CellStyle && patchRichRunsChanged
                             ? sheet.CellPhoneticGuides.GetValueOrDefault(new CellAddress(baseline.SheetId, row, col))
-                            : null));
+                            : null,
+                        OriginalLegacyArrayRows: original.LegacyArrayRows,
+                        OriginalLegacyArrayCols: original.LegacyArrayCols));
                     if (changes.Count > changeLimit)
                         return Fail("change_limit_cells", out blockReason);
                 }
@@ -6986,7 +7012,9 @@ public sealed partial class XlsxFileAdapter
                         NewStyleId: StyleId.Default,
                         original.SourceStyleIndex,
                         NewSourceStyleIndex: null,
-                        original.IgnoreFormulaError));
+                        original.IgnoreFormulaError,
+                        OriginalLegacyArrayRows: original.LegacyArrayRows,
+                        OriginalLegacyArrayCols: original.LegacyArrayCols));
                     if (changes.Count > changeLimit)
                         return Fail("change_limit_cells", out blockReason);
 
@@ -8164,6 +8192,8 @@ public sealed partial class XlsxFileAdapter
                 ScalarValue CurrentValue,
                 string? CurrentFormulaText,
                 FormulaArrayMode CurrentArrayMode,
+                uint CurrentLegacyArrayRows,
+                uint CurrentLegacyArrayCols,
                 StyleId CurrentStyleId,
                 bool CurrentIgnoreFormulaError)>(changes.Count);
             var insertedCells = new List<(Sheet Sheet, uint Row, uint Col, Cell CurrentCell)>();
@@ -8253,7 +8283,10 @@ public sealed partial class XlsxFileAdapter
                         {
                             Value = change.OriginalValue,
                             FormulaText = change.OriginalFormulaText,
+                            // Must follow FormulaText: its setter resets all three of these.
                             ArrayMode = change.OriginalArrayMode,
+                            LegacyArrayRows = change.OriginalLegacyArrayRows,
+                            LegacyArrayCols = change.OriginalLegacyArrayCols,
                             StyleId = change.OriginalStyleId,
                             IgnoreFormulaError = change.OriginalIgnoreFormulaError
                         };
@@ -8271,11 +8304,16 @@ public sealed partial class XlsxFileAdapter
                         changedCell.Value,
                         changedCell.FormulaText,
                         changedCell.ArrayMode,
+                        changedCell.LegacyArrayRows,
+                        changedCell.LegacyArrayCols,
                         changedCell.StyleId,
                         changedCell.IgnoreFormulaError));
                     changedCell.Value = change.OriginalValue;
                     changedCell.FormulaText = change.OriginalFormulaText;
+                    // Must follow FormulaText: its setter resets all three of these.
                     changedCell.ArrayMode = change.OriginalArrayMode;
+                    changedCell.LegacyArrayRows = change.OriginalLegacyArrayRows;
+                    changedCell.LegacyArrayCols = change.OriginalLegacyArrayCols;
                     changedCell.StyleId = change.OriginalStyleId;
                     changedCell.IgnoreFormulaError = change.OriginalIgnoreFormulaError;
                 }
@@ -8287,11 +8325,16 @@ public sealed partial class XlsxFileAdapter
             }
             finally
             {
-                foreach (var (cell, currentValue, currentFormulaText, currentArrayMode, currentStyleId, currentIgnoreFormulaError) in restoredCells)
+                foreach (var (cell, currentValue, currentFormulaText, currentArrayMode,
+                              currentLegacyArrayRows, currentLegacyArrayCols,
+                              currentStyleId, currentIgnoreFormulaError) in restoredCells)
                 {
                     cell.Value = currentValue;
                     cell.FormulaText = currentFormulaText;
+                    // Must follow FormulaText: its setter resets all three of these.
                     cell.ArrayMode = currentArrayMode;
+                    cell.LegacyArrayRows = currentLegacyArrayRows;
+                    cell.LegacyArrayCols = currentLegacyArrayCols;
                     cell.StyleId = currentStyleId;
                     cell.IgnoreFormulaError = currentIgnoreFormulaError;
                 }
@@ -11327,7 +11370,16 @@ public sealed partial class XlsxFileAdapter
         // TryGetPatchableValueChanges -- without this, a spill that grows or shrinks while its
         // anchor's own formula text/cached top-left value/style/runs stay identical would be
         // skipped as "no change" and the new/removed member cells would never be written.
-        uint SpillMemberCount = 1);
+        uint SpillMemberCount = 1,
+        // R155-io-legacy-cse-array-identity-1: the cell's legacy CSE array extent (Cell.LegacyArray
+        // Rows/Cols) at baseline-capture time; 0/0 for everything that is not a fixed-extent legacy
+        // array anchor. Captured because the speculative patch-validation revert below reassigns
+        // Cell.FormulaText -- whose setter unconditionally resets ArrayMode AND this extent to
+        // "freshly authored modern formula" defaults -- so without a baseline copy to put back, a
+        // legacy CSE anchor silently loses its fixed extent (and the "you cannot change part of an
+        // array" protection that depends on it) every time the workbook is patch-saved.
+        uint LegacyArrayRows = 0,
+        uint LegacyArrayCols = 0);
 
     private sealed record XlsxCellValuePatch(
         XlsxCellValuePatchKind Kind,
@@ -11359,7 +11411,16 @@ public sealed partial class XlsxFileAdapter
         // set only when RichRuns is also being rewritten (RichRunsChanged for a CellStyle-kind
         // patch) so a run-formatting-only edit (e.g. Bold the whole cell) re-emits the original
         // <rPh>/<phoneticPr> alongside the rebuilt <r> runs instead of silently dropping them.
-        CellPhoneticGuide? PhoneticGuide = null)
+        CellPhoneticGuide? PhoneticGuide = null,
+        // R155-io-legacy-cse-array-identity-1: the baseline's legacy CSE array extent for this cell
+        // (see XlsxPatchCell.LegacyArrayRows), carried alongside OriginalArrayMode so the
+        // speculative patch-validation revert can put back a legacy array anchor's fixed extent
+        // after reassigning FormulaText (which zeroes it). There is no New* counterpart: a changed
+        // extent is not patch-representable at all -- the saved <f t="array" ref="..."/> is reused
+        // verbatim from the source XML -- so TryGetPatchableValueChanges bails to the full-save
+        // fallback ("change_formula_array_extent") whenever the live extent differs from this.
+        uint OriginalLegacyArrayRows = 0,
+        uint OriginalLegacyArrayCols = 0)
     {
         public bool HasStyleChange => OriginalStyleId != NewStyleId;
     }

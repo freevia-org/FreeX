@@ -61,7 +61,15 @@ internal static class ConvertToRangeStructuredReferenceLowering
                     continue;
 
                 snapshot[address] = cell.FormulaText;
-                cell.FormulaText = lowered;
+                // Lowering a structured reference is not a fresh authoring/edit of this cell: the
+                // Cell.FormulaText setter resets ArrayMode/LegacyArrayRows/LegacyArrayCols to the
+                // "freshly authored modern formula" defaults on every assignment, which would
+                // silently strip a legacy CSE array cell's fixed-extent identity (and the "you
+                // cannot change part of an array" protection that depends on LegacyArrayRows/Cols
+                // being non-zero) merely because the table it referenced was converted to a range.
+                // Same reason RowColumnShiftHelpers.RewriteAllFormulas routes through this helper --
+                // and the RestoreFormulas that undoes this snapshot already does too.
+                RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity(cell, lowered);
             }
         }
     }
