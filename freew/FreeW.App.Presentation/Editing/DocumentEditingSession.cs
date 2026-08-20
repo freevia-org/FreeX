@@ -247,7 +247,7 @@ public sealed class DocumentEditingSession
             || caret.BlockIndex < 0
             || caret.BlockIndex >= Document.Blocks.Count
             || Document.Blocks[caret.BlockIndex] is not Paragraph destination
-            || !CanRestructure(destination)
+            || !CanReceivePaste(destination)
             || IsOffsetInsideContentControl(destination, caret.Offset))
         {
             return false;
@@ -310,6 +310,22 @@ public sealed class DocumentEditingSession
             ReplacedBlockCount: 1);
         return true;
     }
+
+    /// <summary>
+    /// Whether a paragraph can receive a pasted document. This is <see cref="CanRestructure"/>'s test with
+    /// one allowance: a paragraph holding a content control CAN receive one, because the paste clones runs
+    /// rather than rebuilding them from characters, and the caret-inside-a-field case is refused
+    /// separately. Without the allowance a paste anywhere in a form's paragraph fell back to plain text.
+    /// </summary>
+    private static bool CanReceivePaste(Paragraph paragraph) =>
+        paragraph.BookmarkBoundaries.Count == 0
+        && paragraph.BookmarkNames.Count == 0
+        && paragraph.DropCap is null
+        && paragraph.SectionBreak is null
+        && paragraph.PreservedNumbering is null
+        && paragraph.ParagraphFormatRevision is null
+        && !ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl)
+        && paragraph.Runs.All(run => run.Control is not null || IsPortableBodyTextRun(run));
 
     private static bool IsOffsetInsideContentControl(Paragraph paragraph, int offset)
     {

@@ -23858,23 +23858,44 @@ public sealed partial class DocumentView : Control
             || TrackChangesEnabled
             || _hfCaret is not null
             || _cellCaret is not null
-            || NormalizedSelection() is not null
             || CurrentParagraph() is not { } paragraph
             || !IsEditable(paragraph))
         {
             return false;
         }
 
-        // AV-CLIP: the paste lands AT the caret, splicing the clipboard's first and last paragraphs into
-        // this one — it used to require an empty destination paragraph, which meant a rich paste
-        // anywhere in real text silently degraded to plain text.
+        // AV-CLIP: pasting over a selection replaces it, as in Word — the delete and the insert are one
+        // undo unit. DeleteSelection enforces the content-control locks, so a selection it refuses to
+        // remove leaves the paste refused too.
+        var ownsUndoGroup = NormalizedSelection() is not null && !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        if (NormalizedSelection() is not null)
+        {
+            DeleteSelection();
+            if (NormalizedSelection() is not null)
+            {
+                if (ownsUndoGroup)
+                    _bus.AbortUndoGroup();
+                return false;
+            }
+        }
+
+        // The paste lands AT the caret, splicing the clipboard's first and last paragraphs into this
+        // one — it used to require an empty destination paragraph, which meant a rich paste anywhere in
+        // real text silently degraded to plain text.
         if (!_editingSession.TryInsertDocumentAtBodyCaret(
                 new DocumentTextPosition(_caret.Block, _caret.Offset),
                 source,
                 out var insertion))
         {
+            if (ownsUndoGroup)
+                _bus.AbortUndoGroup();
             return false;
         }
+
+        if (ownsUndoGroup)
+            _bus.CommitUndoGroup("Paste");
 
         _caret = new DocPosition(insertion.Caret.BlockIndex, insertion.Caret.Offset);
         _selectionAnchor = _caret;

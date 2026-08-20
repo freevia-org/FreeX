@@ -392,16 +392,22 @@ public sealed class HomeDialogDepthTests
         view.Model.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// A rich paste over a selection REPLACES it, as in Word. This used to be refused outright — the
+    /// insert could only address an empty destination paragraph — so pasting over selected text silently
+    /// degraded to unformatted text.
+    /// </summary>
     [StaFact]
-    public void PasteKeepSourceFormatting_DoesNotReplaceASelectedPartialParagraph()
+    public void PasteKeepSourceFormatting_ReplacesASelectedParagraph()
     {
         var destination = DocOfParagraphs("Destination");
         var source = DocOfParagraphs("Rich source");
         var view = ViewWith(destination);
         SelectAllParagraphs(view);
 
-        view.PasteKeepSourceFormatting(source).Should().BeFalse();
-        view.Model.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Destination");
+        view.PasteKeepSourceFormatting(source).Should().BeTrue();
+        view.Model.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>()
+            .Which.PlainText.Should().Be("Rich source");
     }
 
     // ── 9. Multilevel list presets are defined ────────────────────────────────

@@ -854,8 +854,13 @@ public sealed class CommandRegistryTests
         view.Document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// A rich paste replaces a selection (Word's behaviour; it used to be refused, degrading the paste to
+    /// unformatted text) but still declines while Track Changes is on, where the inserted runs would have
+    /// to be recorded as a revision the native insert cannot mark.
+    /// </summary>
     [Fact]
-    public void Paste_keep_source_formatting_rejects_partial_selection_and_tracked_changes()
+    public void Paste_keep_source_formatting_replaces_a_selection_but_defers_to_tracked_changes()
     {
         var source = TextDocument.CreateEmpty();
         source.Blocks.Clear();
@@ -864,8 +869,8 @@ public sealed class CommandRegistryTests
         var view = new DocumentView();
         view.LoadDocument(MakeDoc("Destination"));
         view.SetSelectionRangePublic(0, 0, 0, "Destination".Length);
-        view.PasteKeepSourceFormatting(source).Should().BeFalse();
-        view.Document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Destination");
+        view.PasteKeepSourceFormatting(source).Should().BeTrue();
+        view.Document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Rich source");
 
         view.LoadDocument(TextDocument.CreateEmpty());
         view.ToggleTrackChanges();

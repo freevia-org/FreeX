@@ -1808,10 +1808,19 @@ public sealed partial class DocumentView : RichTextBox
     {
         if (source is null
             || source.Blocks.Count == 0
-            || !Selection.IsEmpty
             || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
         {
             return false;
+        }
+
+        // Pasting over a selection replaces it, as in Word. The same predicate the Cut/Paste gate uses
+        // decides whether that removal is allowed, so a locked content control in the range refuses the
+        // paste rather than being deleted by it.
+        if (!Selection.IsEmpty)
+        {
+            if (IsCaretOnLockedContentControl())
+                return false;
+            Selection.Text = string.Empty;
         }
 
         CommitToModel();

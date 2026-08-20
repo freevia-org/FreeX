@@ -49,6 +49,39 @@ public sealed class DocumentViewRichPasteTests
     }
 
     [Fact]
+    public void Pasting_over_a_selection_replaces_it_as_one_undo_step()
+    {
+        var view = LoadDocument(Paragraph("Head REPLACE tail"));
+
+        view.SetBodySelectionForTest(0, 5, 0, 12);
+        view.PasteKeepSourceFormatting(ClipboardDocument()).Should().BeTrue();
+        view.Document.Paragraphs.Single().PlainText.Should().Be("Head Name: Bob added tail");
+        view.Undo();
+        view.Document.Paragraphs.Single().PlainText.Should().Be(
+            "Head REPLACE tail",
+            "the delete and the insert undo together");
+    }
+
+    [Fact]
+    public void Pasting_beside_a_field_works_rather_than_falling_back_to_plain_text()
+    {
+        var destination = new Paragraph();
+        destination.Runs.Add(new Run("Name: "));
+        destination.Runs.Add(Run.PlainTextControl("Bob", tag: "Applicant"));
+        destination.Runs.Add(new Run(" tail"));
+        var view = LoadDocument(destination);
+
+        // Caret between the field and the trailing text — the destination holds a field, which used to
+        // make the whole paragraph ineligible for a rich paste.
+        view.MoveCaretToBlockForTest(0, 9);
+        view.PasteKeepSourceFormatting(ClipboardDocument()).Should().BeTrue();
+
+        var paragraph = view.Document.Paragraphs.Single();
+        paragraph.PlainText.Should().Be("Name: BobName: Bob added tail");
+        paragraph.Runs.Where(run => run.Control != null).Should().HaveCount(2, "both fields survive");
+    }
+
+    [Fact]
     public void Pasting_inside_a_content_control_is_declined_rather_than_tearing_the_field()
     {
         var paragraph = new Paragraph();
