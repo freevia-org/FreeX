@@ -326,6 +326,38 @@ public sealed class FreeWClipboardApplicationWorkflowTests
             .Where(data => data.Format.Name == FreeWClipboardApplicationWorkflow.RichTextFormat)
             .Should().ContainSingle().Which.Text.Should().Be(nativeRtf);
     }
+
+    /// <summary>
+    /// "Rich Text Format" is the Windows clipboard name; on Linux and macOS the format string is a MIME
+    /// type, so writing only the Windows name left the RTF flavour invisible on exactly the shell that
+    /// needed it. Both names carry the same payload, and a paste reads either.
+    /// </summary>
+    [Fact]
+    public async Task Rtf_is_written_and_read_under_both_the_windows_name_and_the_mime_type()
+    {
+        var document = SelectionSource();
+        var content = FreeWClipboardApplicationWorkflow.CreateWriteContent(
+            document.PlainText,
+            FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(document, AllRanges(document)))!;
+
+        var windowsName = content.GetText(FreeWClipboardApplicationWorkflow.RichTextFormat);
+        var mimeName = content.CustomData
+            .Single(data => data.Format.Name == "text/rtf").Text;
+        mimeName.Should().Be(windowsName).And.StartWith(@"{\rtf1");
+
+        // A clipboard that offers ONLY the MIME name — a Linux source — still pastes as rich text.
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                new PlatformClipboardContent(
+                    Text: document.PlainText,
+                    CustomData: [PlatformClipboardData.FromText("text/rtf", mimeName)])),
+        };
+
+        var payload = (await FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(clipboard)).Payload!;
+        payload.RichDocument.Should().NotBeNull();
+        payload.RichDocument!.PlainText.Should().Contain("Bob");
+    }
     private static TextDocument SelectionSource()
     {
         var document = TextDocument.CreateEmpty();

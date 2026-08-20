@@ -12,7 +12,7 @@ namespace FreeW.App.Host.Tests;
 
 /// <summary>
 /// R156 freew-document-protection F1: picking an item from a drop-down-list/combo-box content control's
-/// popup menu, or a relative date from a date-picker content control's popup menu, must route through
+/// popup menu, or a date from a date-picker content control's calendar, must route through
 /// <see cref="DocumentView"/>'s protection-revalidating, undo-tracked model command
 /// (ApplyContentControlMenuCommand -&gt; ApplyContentControlInteraction -&gt; ReplaceContentControlRunCommand
 /// via the command bus) on every reachable protection state, not only Word's "Filling in Forms"
@@ -23,9 +23,9 @@ namespace FreeW.App.Host.Tests;
 /// just clears and rebuilds <c>_model.Blocks</c> from the rendered document). The distinguishing,
 /// observable symptom is therefore <see cref="DocumentView.CanUndo"/>: the command-bus path leaves an
 /// undo entry, the bypassed fallback does not. Mirrors the real click plumbing (<c>MouseLeftButtonUp</c>
-/// -&gt; OnListControlClicked/OnDatePickerClicked -&gt; OpenContentControlMenu -&gt; a real WPF ContextMenu ->
-/// a real MenuItem.Click), exactly as <see cref="CheckBoxContentControlTests"/> does for the sibling
-/// checkbox gesture the same class of bug was already fixed for (round 153). Runs on an STA thread
+/// -&gt; OnListControlClicked/OnDatePickerClicked -&gt; a real WPF ContextMenu and MenuItem.Click for a
+/// list, a real WPF Popup holding a Calendar for a date), exactly as
+/// <see cref="CheckBoxContentControlTests"/> does for the sibling checkbox gesture the same class of bug was already fixed for (round 153). Runs on an STA thread
 /// (<c>[StaFact]</c>, via Xunit.StaFact) because the RichTextBox/FlowDocument/ContextMenu need STA.
 /// </summary>
 public sealed class DropDownContentControlMenuTests
@@ -88,9 +88,18 @@ public sealed class DropDownContentControlMenuTests
     // [StaFact] on its own STA thread, and PresentationSource.CurrentSources is a process-wide static list
     // that keeps entries from earlier tests' now-dead threads around -- CheckAccess() filters those out so
     // walking their stale visual trees does not throw "different thread owns it".
-    private static System.Collections.Generic.List<MenuItem> OpenMenuItems()
+    private static System.Collections.Generic.List<MenuItem> OpenMenuItems() => OpenVisuals<MenuItem>();
+
+    // Finds the real WPF MenuItem the click opened. See <see cref="OpenMenuItems"/>.
+    private static MenuItem FindOpenMenuItem(string header) =>
+        OpenMenuItems().Single(item => item.Header?.ToString() == header);
+
+
+    // Every open control of type T reachable from this thread's PresentationSources -- the date picker's
+    // calendar lives in a Popup, which like the ContextMenu above is only reachable this way.
+    private static System.Collections.Generic.List<T> OpenVisuals<T>() where T : DependencyObject
     {
-        var found = new System.Collections.Generic.List<MenuItem>();
+        var found = new System.Collections.Generic.List<T>();
         foreach (var source in PresentationSource.CurrentSources.OfType<PresentationSource>())
         {
             if (source.RootVisual is Visual root && root.CheckAccess())
@@ -99,19 +108,15 @@ public sealed class DropDownContentControlMenuTests
         return found;
     }
 
-    // Finds the real WPF MenuItem the click opened. See <see cref="OpenMenuItems"/>.
-    private static MenuItem FindOpenMenuItem(string header) =>
-        OpenMenuItems().Single(item => item.Header?.ToString() == header);
-
-    private static void Walk(DependencyObject node, System.Collections.Generic.List<MenuItem> found)
+    private static void Walk<T>(DependencyObject node, System.Collections.Generic.List<T> found)
+        where T : DependencyObject
     {
-        if (node is MenuItem mi)
-            found.Add(mi);
+        if (node is T match)
+            found.Add(match);
         var count = VisualTreeHelper.GetChildrenCount(node);
         for (var i = 0; i < count; i++)
             Walk(VisualTreeHelper.GetChild(node, i), found);
     }
-
     private static string RunTextAt(DocumentView view, int blockIndex, int runIndex) =>
         ((Paragraph)view.Model.Blocks[blockIndex]).Runs[runIndex].Text;
 
@@ -134,21 +139,33 @@ public sealed class DropDownContentControlMenuTests
         RunTextAt(view, 0, 0).Should().Be("Red", "undo must cleanly revert the command-bus-tracked selection");
     }
 
+    /// <summary>
+    /// The date field's click gesture now opens a CALENDAR rather than a three-item relative-date menu
+    /// (any other date used to have to be typed by hand), so this pins the same protection/undo contract
+    /// through the new plumbing: the picked date must still land via the undo-tracked command bus.
+    /// </summary>
     [StaFact]
-    public void DatePickerMenuSelection_OnUnprotectedDocument_RoutesThroughUndoTrackedCommandBus()
+    public void DatePickerClick_OpensACalendarThatCommitsThroughTheUndoTrackedCommandBus()
     {
         var view = LoadDatePicker(out var wpf);
         view.ProtectionMode.Should().Be(ProtectionMode.None);
         view.CanUndo.Should().BeFalse();
 
         Click(wpf);
-        var today = System.DateTime.Today.ToString("yyyy-MM-dd");
-        FindOpenMenuItem($"Today ({today})").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        var calendar = OpenVisuals<System.Windows.Controls.Calendar>().Should().ContainSingle().Subject;
+        calendar.SelectedDate.Should().Be(
+            new System.DateTime(2020, 1, 1),
+            "the calendar opens on the date the field already shows");
 
-        RunTextAt(view, 0, 0).Should().Be(today);
+        calendar.SelectedDate = new System.DateTime(1999, 12, 31);
+
+        RunTextAt(view, 0, 0).Should().Be("1999-12-31", "a calendar reaches dates no relative choice does");
         view.CanUndo.Should().BeTrue(
-            "an ordinary click on an unprotected document's date picker must also route through the " +
+            "an ordinary click on an unprotected document's date picker must route through the " +
             "undo-tracked command bus, matching the drop-down/combo-box case");
+
+        view.Undo();
+        RunTextAt(view, 0, 0).Should().Be("2020-01-01");
     }
 
     [StaFact]

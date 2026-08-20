@@ -73,6 +73,16 @@ public static class FreeWClipboardApplicationWorkflow
         RichTextFormat,
         PlatformClipboardDataKind.Text);
 
+    // clip-RTF: "Rich Text Format" is the WINDOWS clipboard name. On Linux and macOS the format string is
+    // a MIME type, so a copy written only under the Windows name is invisible to every other application
+    // there -- which is exactly the case the RTF flavour exists to serve. Written and read under both, the
+    // way the HTML pair above already handles the same split.
+    private const string RtfMimeFormat = "text/rtf";
+
+    private static readonly PlatformClipboardFormat RtfMimeClipboardFormat = new(
+        RtfMimeFormat,
+        PlatformClipboardDataKind.Text);
+
     private const string HtmlFormat = "text/html";
     private const string HtmlWindowsFormat = "HTML Format";
 
@@ -107,6 +117,7 @@ public static class FreeWClipboardApplicationWorkflow
         [
             NativeDocumentClipboardFormat,
             RichTextClipboardFormat,
+            RtfMimeClipboardFormat,
             HtmlClipboardFormat,
             HtmlWindowsClipboardFormat
         ]);
@@ -162,9 +173,10 @@ public static class FreeWClipboardApplicationWorkflow
         // the one CreateWriteContent just derived — hence replace rather than add, or the clipboard
         // would carry the same flavour twice.
         var customData = content.CustomData
-            .Where(data => data.Format.Name != RichTextFormat)
+            .Where(data => data.Format.Name is not (RichTextFormat or RtfMimeFormat))
             .ToList();
         customData.Add(PlatformClipboardData.FromText(RichTextFormat, rtf));
+        customData.Add(PlatformClipboardData.FromText(RtfMimeFormat, rtf));
         return new PlatformClipboardContent(content.Text, content.FilePaths, content.Image, customData);
     }
 
@@ -205,6 +217,7 @@ public static class FreeWClipboardApplicationWorkflow
         {
             customData ??= [];
             customData.Add(PlatformClipboardData.FromText(RichTextFormat, rtf));
+            customData.Add(PlatformClipboardData.FromText(RtfMimeFormat, rtf));
         }
 
         if (nativeDocument is not null && TryRenderNativeDocument(nativeDocument) is { } package)
@@ -523,7 +536,9 @@ public static class FreeWClipboardApplicationWorkflow
             richDocument = TryReadNativeDocument(
                 result.Value.GetBytes(NativeDocumentFormat, PlatformClipboardFormatScope.Application));
 
-            var rtf = richDocument is null ? result.Value.GetText(RichTextFormat) : null;
+            var rtf = richDocument is null
+                ? result.Value.GetText(RichTextFormat) ?? result.Value.GetText(RtfMimeFormat)
+                : null;
             if (rtf is not null && RtfClipboardDocumentParser.TryParse(rtf, out var parsed))
                 richDocument = parsed;
 
