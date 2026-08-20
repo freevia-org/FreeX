@@ -3994,7 +3994,7 @@ public sealed partial class MainWindow : Window,
                 Content   = action.Label,
                 IsEnabled = action.IsEnabled,
                 Tag       = action.CommandId,
-                MinWidth  = 88,
+                Width     = PresentationCommentPaneVisualMetrics.ToolbarActionWidth(action.CommandId),
                 Margin    = new Thickness(0, 0, 6, 6),
             };
             AutomationProperties.SetAutomationId(button, action.CommandId);
@@ -4097,7 +4097,7 @@ public sealed partial class MainWindow : Window,
         var button = new Button
         {
             Content  = PresentationPaneTextResources.NewCommentCommand,
-            MinWidth = PresentationCommentPaneVisualMetrics.AddCommentButtonMinimumWidth,
+            Width = PresentationCommentPaneVisualMetrics.AddCommentButtonWidth,
             MinHeight = 0,
             Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
             FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,

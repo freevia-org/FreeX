@@ -26,11 +26,17 @@ public sealed class ReviewCommentPaneVisualParitySourceTests
 
         sharedMetrics.Should().Contain("public const double CompactControlHeight = 22;");
         sharedMetrics.Should().Contain("public const double CardBottomMargin = 6;");
+        sharedMetrics.Should().Contain("ToolbarActionWidth(string commandId)");
         avalonia.Should().Contain("PresentationCommentPaneVisualMetrics.CompactControlHeight");
         avalonia.Should().Contain("PresentationCommentPaneVisualMetrics.CardBottomMargin");
+        avalonia.Should().Contain("PresentationCommentPaneVisualMetrics.ToolbarActionWidth(action.CommandId)");
         avalonia.Should().NotContain("PlaceholderText = \"Comment\"");
-        wpf.Should().Contain("MinWidth = 64");
-        wpf.Should().Contain("MinWidth = 220");
+        wpf.Should().Contain("PresentationCommentPaneVisualMetrics.CompactControlHeight");
+        wpf.Should().Contain("PresentationCommentPaneVisualMetrics.CardBottomMargin");
+        wpf.Should().Contain("PresentationCommentPaneVisualMetrics.AddCommentInputMinimumWidth");
+        wpf.Should().Contain("PresentationCommentPaneVisualMetrics.ToolbarActionWidth(action.CommandId)");
+        wpf.Should().Contain(
+            "if (action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)");
     }
 
     [Fact]

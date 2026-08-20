@@ -770,7 +770,9 @@ public sealed partial class MainWindow : Window,
             MaxHeight       = 100,
             Child           = new ScrollViewer
             {
-                VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
+                // Avalonia uses overlay scrolling for this compact strip. Keep
+                // WPF scrollable without reserving a different right-side gutter.
+                VerticalScrollBarVisibility   = ScrollBarVisibility.Hidden,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 Content                       = _commentListPanel,
             },
@@ -1751,14 +1753,14 @@ public sealed partial class MainWindow : Window,
                     Child           = new TextBlock
                     {
                         Text       = cm.InitialsBadgeText,
-                        FontSize   = 10,
+                        FontSize   = PresentationCommentPaneVisualMetrics.StatusFontSize,
                         Foreground = FreePBrushes.White,
                     }
                 };
                 var authorText = new TextBlock
                 {
                     Text       = cm.AuthorDisplayName,
-                    FontSize   = 11,
+                    FontSize   = PresentationCommentPaneVisualMetrics.AuthorFontSize,
                     FontWeight = FontWeights.SemiBold,
                     Foreground = FreePBrushes.PaneHeadingText,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -1768,7 +1770,7 @@ public sealed partial class MainWindow : Window,
                 headerPanel.Children.Add(new TextBlock
                 {
                     Text       = cm.ThreadStatusLabel,
-                    FontSize   = 10,
+                    FontSize   = PresentationCommentPaneVisualMetrics.StatusFontSize,
                     Foreground = FreePBrushes.PaneMutedText,
                     Margin     = new Thickness(6, 0, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center,
@@ -1778,7 +1780,7 @@ public sealed partial class MainWindow : Window,
                 var bodyText = new TextBlock
                 {
                     Text         = cm.TextPreview,
-                    FontSize     = 11,
+                    FontSize     = PresentationCommentPaneVisualMetrics.BodyFontSize,
                     TextWrapping = TextWrapping.Wrap,
                     Foreground   = FreePBrushes.PaneText,
                     Margin       = new Thickness(16, 2, 6, 6),
@@ -1799,7 +1801,7 @@ public sealed partial class MainWindow : Window,
                     BorderBrush     = cm.IsSelected ? FreePBrushes.Accent : FreePBrushes.CardBorder,
                     BorderThickness = new Thickness(cm.IsSelected ? 2 : 1),
                     CornerRadius    = new CornerRadius(4),
-                    Margin          = new Thickness(0, 0, 0, 6),
+                    Margin          = new Thickness(0, 0, 0, PresentationCommentPaneVisualMetrics.CardBottomMargin),
                     Cursor          = Cursors.Hand,
                     Child           = card,
                 };
@@ -1839,7 +1841,12 @@ public sealed partial class MainWindow : Window,
         {
             Content = plan.CloseAction.Label,
             IsEnabled = plan.CloseAction.IsEnabled,
-            MinWidth = 64,
+            MinWidth = PresentationCommentPaneVisualMetrics.CloseMinimumWidth,
+            MinHeight = 0,
+            Height = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+            Padding = new Thickness(8, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(6, 0, 0, 6),
             Tag = PresentationSemanticIdentityCatalog.CommentsPaneCloseTag,
         };
@@ -1849,16 +1856,17 @@ public sealed partial class MainWindow : Window,
         summaryRow.Children.Add(new TextBlock
         {
             Text = plan.HeaderSummaryText,
-            FontSize = 11,
+            FontSize = PresentationCommentPaneVisualMetrics.SummaryFontSize,
             FontWeight = FontWeights.SemiBold,
             Foreground = FreePBrushes.PaneText,
+            VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 0, 6),
         });
         host.Children.Add(summaryRow);
         host.Children.Add(new TextBlock
         {
             Text = plan.FilterOptionsSummaryText,
-            FontSize = 10,
+            FontSize = PresentationCommentPaneVisualMetrics.FilterFontSize,
             Foreground = FreePBrushes.PaneMutedText,
             Margin = new Thickness(0, 0, 0, 6),
         });
@@ -1868,13 +1876,23 @@ public sealed partial class MainWindow : Window,
     {
         var input = new TextBox
         {
-            MinWidth = 220,
+            MinWidth = PresentationCommentPaneVisualMetrics.AddCommentInputMinimumWidth,
+            MinHeight = 0,
+            Height = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+            Padding = new Thickness(4, 0, 4, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0)
         };
         var button = new Button
         {
             Content = PresentationPaneTextResources.NewCommentCommand,
-            MinWidth = 96
+            Width = PresentationCommentPaneVisualMetrics.AddCommentButtonWidth,
+            MinHeight = 0,
+            Height = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+            Padding = new Thickness(8, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
         };
         button.Click += (_, _) => AddComment(input.Text, author: ResolveCommentAuthor());
 
@@ -1899,12 +1917,20 @@ public sealed partial class MainWindow : Window,
 
         foreach (var action in actions)
         {
+            if (action.CommandId == PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+                continue;
+
             var button = new Button
             {
                 Content = action.Label,
                 IsEnabled = action.IsEnabled,
                 Tag = action.CommandId,
-                MinWidth = 88,
+                Width = PresentationCommentPaneVisualMetrics.ToolbarActionWidth(action.CommandId),
+                MinHeight = 0,
+                Height = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+                FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+                Padding = new Thickness(8, 0, 8, 0),
+                VerticalContentAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 6, 6),
             };
             AutomationProperties.SetAutomationId(button, action.CommandId);
@@ -1929,7 +1955,12 @@ public sealed partial class MainWindow : Window,
         {
             Text = editText,
             CaretIndex = editText.Length,
-            MinWidth = 220,
+            MinWidth = PresentationCommentPaneVisualMetrics.AddCommentInputMinimumWidth,
+            MinHeight = 0,
+            Height = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+            Padding = new Thickness(4, 0, 4, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(16, 0, 6, 6)
         };
         var mentionButton = BuildCommentMentionButton(
@@ -1942,6 +1973,11 @@ public sealed partial class MainWindow : Window,
             Content = editAction.Label,
             IsEnabled = editAction.IsEnabled,
             MinWidth = 72,
+            MinHeight = 0,
+            Height = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+            Padding = new Thickness(8, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 6)
         };
         button.Click += (_, _) => EditSelectedComment(input.Text);
@@ -1963,7 +1999,7 @@ public sealed partial class MainWindow : Window,
             var row = new TextBlock
             {
                 Text = reply.DisplayText,
-                FontSize = 10,
+                FontSize = PresentationCommentPaneVisualMetrics.ReplyFontSize,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = FreePBrushes.PaneSecondaryText,
                 Margin = new Thickness(26, 0, 6, 4),
@@ -1986,7 +2022,12 @@ public sealed partial class MainWindow : Window,
         };
         var input = new System.Windows.Controls.TextBox
         {
-            MinWidth = 180,
+            MinWidth = PresentationCommentPaneVisualMetrics.AddCommentInputMinimumWidth,
+            MinHeight = 0,
+            Height = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+            Padding = new Thickness(4, 0, 4, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0),
         };
         var mentionButton = BuildCommentMentionButton(
@@ -1998,6 +2039,11 @@ public sealed partial class MainWindow : Window,
         {
             Content = PresentationPaneTextResources.ReplyCommand,
             MinWidth = 58,
+            MinHeight = 0,
+            Height = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+            Padding = new Thickness(8, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
         };
         button.Click += (_, _) => ReplyToSelectedComment(input.Text, author: ResolveCommentAuthor());
         row.Children.Add(input);
@@ -2011,7 +2057,7 @@ public sealed partial class MainWindow : Window,
         card.Children.Add(new TextBlock
         {
             Text = mentionDetailSummary,
-            FontSize = 10,
+            FontSize = PresentationCommentPaneVisualMetrics.MentionFontSize,
             TextWrapping = TextWrapping.Wrap,
             Foreground = FreePBrushes.PaneMutedText,
             Margin = margin,
