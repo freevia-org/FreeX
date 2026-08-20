@@ -3,13 +3,16 @@ namespace FreeP.App.Compositor;
 /// <summary>
 /// Shared WPF-authority layout contract for the WPF and Avalonia Custom Shows dialogs.
 /// Window dimensions account for each toolkit's native non-client chrome so both expose the
-/// same 625 1/3 by 402 2/3 logical comparison surface; content geometry is otherwise identical.
+/// same 626 by 402 2/3 logical comparison surface; content geometry is otherwise identical.
 /// </summary>
 public static class SlideShowCustomShowDialogVisualMetrics
 {
     public const double WpfWindowWidth = 640;
     public const double WpfWindowHeight = 440;
-    public const double AvaloniaWindowWidth = 625.3333333333334;
+    // Avalonia rounds the outer window value directly to a device pixel while WPF's
+    // client-area calculation produces a 626px raster. Keep the rendered comparison
+    // surface integral and identical rather than encoding the toolkit frame delta here.
+    public const double AvaloniaWindowWidth = 626;
     public const double AvaloniaWindowHeight = 402.6666666666667;
     public const double MinimumWindowWidth = 560;
     public const double MinimumWindowHeight = 360;

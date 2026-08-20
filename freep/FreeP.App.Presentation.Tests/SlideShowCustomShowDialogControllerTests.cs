@@ -9,7 +9,7 @@ public sealed class SlideShowCustomShowDialogControllerTests
     {
         SlideShowCustomShowDialogVisualMetrics.WpfWindowWidth.Should().Be(640);
         SlideShowCustomShowDialogVisualMetrics.WpfWindowHeight.Should().Be(440);
-        SlideShowCustomShowDialogVisualMetrics.AvaloniaWindowWidth.Should().Be(625.3333333333334);
+        SlideShowCustomShowDialogVisualMetrics.AvaloniaWindowWidth.Should().Be(626);
         SlideShowCustomShowDialogVisualMetrics.AvaloniaWindowHeight.Should().Be(402.6666666666667);
         SlideShowCustomShowDialogVisualMetrics.MinimumWindowWidth.Should().Be(560);
         SlideShowCustomShowDialogVisualMetrics.MinimumWindowHeight.Should().Be(360);
