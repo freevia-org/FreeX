@@ -83,6 +83,16 @@ public sealed class CommonDialogChromeParityTests
     }
 
     [Fact]
+    public void SlideSizeDialog_UsesWpfMatchedWindowGeometry()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var avalonia = Read(root, "freep", "FreeP.App.Avalonia", "SlideSizeDialog.cs");
+
+        avalonia.Should().Contain("Width = 366;")
+            .And.Contain("Height = 222.66666666666666;");
+    }
+
+    [Fact]
     public void RemainingPairedDialogsUseTheSharedRendererBases()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
