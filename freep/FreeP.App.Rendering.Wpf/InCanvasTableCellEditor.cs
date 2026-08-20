@@ -30,6 +30,7 @@ public sealed class InCanvasTableCellEditor
     private readonly EditingSession _editor;
     private readonly Canvas         _overlay;
     private readonly Action<string, string>? _onClipboardWriteFailed;
+    private readonly Action<byte[]>? _onInlineOlePayloadUpdated;
 
     // ── Cell-edit state ───────────────────────────────────────────────────────
 
@@ -51,16 +52,23 @@ public sealed class InCanvasTableCellEditor
     /// the OS clipboard, so callers can surface it (e.g. to the status bar) instead of the
     /// failure vanishing silently while the user believes the copy succeeded.
     /// </param>
+    /// <param name="onInlineOlePayloadUpdated">
+    /// Invoked with the edited bytes when a native in-place OLE server commits an inline embedded
+    /// object inside the edited cell text, so the shell can mark the document dirty at the moment
+    /// of that commit. Same wiring as <see cref="InCanvasTextEditor"/>.
+    /// </param>
     public InCanvasTableCellEditor(
         SlideCanvas canvas,
         EditingSession editor,
         Canvas overlay,
-        Action<string, string>? onClipboardWriteFailed = null)
+        Action<string, string>? onClipboardWriteFailed = null,
+        Action<byte[]>? onInlineOlePayloadUpdated = null)
     {
         _canvas  = canvas  ?? throw new ArgumentNullException(nameof(canvas));
         _editor  = editor  ?? throw new ArgumentNullException(nameof(editor));
         _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
         _onClipboardWriteFailed = onClipboardWriteFailed;
+        _onInlineOlePayloadUpdated = onInlineOlePayloadUpdated;
 
         _canvas.MouseLeftButtonDown += OnCanvasMouseDown;
 
@@ -116,7 +124,10 @@ public sealed class InCanvasTableCellEditor
             cell.TextBody,
             InCanvasRichTextEditorDefaults.TableCellFallbackFontSizePt);
 
-        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(cell.TextBody, fallbackPt);
+        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(
+            cell.TextBody,
+            fallbackPt,
+            onInlineOlePayloadUpdated: _onInlineOlePayloadUpdated);
 
         _cellTextBox = new RichTextBox(doc)
         {
@@ -452,7 +463,10 @@ public sealed class InCanvasTableCellEditor
         double fallbackPt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
             updated,
             InCanvasRichTextEditorDefaults.TableCellFallbackFontSizePt);
-        _cellTextBox.Document = TextBodyFlowDocumentConverter.ToFlowDocument(updated, fallbackPt);
+        _cellTextBox.Document = TextBodyFlowDocumentConverter.ToFlowDocument(
+            updated,
+            fallbackPt,
+            onInlineOlePayloadUpdated: _onInlineOlePayloadUpdated);
 
         var startPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_cellTextBox.Document, start);
         var endPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_cellTextBox.Document, end);
@@ -537,7 +551,8 @@ public sealed class InCanvasTableCellEditor
                 var result = await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(
                     e,
                     _cellTextBox,
-                    currentBody);
+                    currentBody,
+                    onInlineOlePayloadUpdated: _onInlineOlePayloadUpdated);
                 if (e.Key is Key.C or Key.X &&
                     !result.Handled &&
                     result.FailureMessage is { } failureMessage)

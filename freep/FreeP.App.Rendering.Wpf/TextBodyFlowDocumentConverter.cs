@@ -48,12 +48,19 @@ internal static class TextBodyFlowDocumentConverter
     ///
     /// If <paramref name="body"/> is null or empty an empty single-paragraph document is returned.
     /// </summary>
+    /// <param name="onInlineOlePayloadUpdated">
+    /// Invoked with the edited bytes when a native in-place OLE server commits an inline embedded
+    /// object hosted by this document, so the shell can mark the document dirty. Mirrors the
+    /// slide-level <c>WpfOleInPlaceHost.TryShow</c> route; null in pure-conversion callers (tests,
+    /// clipboard payload building) that own no document.
+    /// </param>
     public static FlowDocument ToFlowDocument(
         TextBody? body,
         double fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt,
         TextBody? layoutBody = null,
         MasterTextStyles? masterTextStyles = null,
-        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other)
+        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other,
+        Action<byte[]>? onInlineOlePayloadUpdated = null)
     {
         // 100000 DIPs (~1041 feet) is large enough that the FlowDocument never paginates
         // inside a RichTextBox, while staying within WPF's accepted finite range.
@@ -116,7 +123,10 @@ internal static class TextBodyFlowDocumentConverter
                 if (CreateDisplayOnlyBullet(paragraphPlan, fallbackFontSizePt) is { } marker)
                     wp.Inlines.Add(marker);
                 foreach (var mr in mp.Runs)
-                    wp.Inlines.Add(ModelRunToWpfRun(mr, paragraphPlan.InheritedRunStyle.IsPresent));
+                    wp.Inlines.Add(ModelRunToWpfRun(
+                        mr,
+                        paragraphPlan.InheritedRunStyle.IsPresent,
+                        onInlineOlePayloadUpdated));
             }
 
             doc.Blocks.Add(wp);
@@ -365,7 +375,10 @@ internal static class TextBodyFlowDocumentConverter
         }
     }
 
-    private static Inline ModelRunToWpfRun(ModelRun mr, bool hasInheritedStyle = false)
+    private static Inline ModelRunToWpfRun(
+        ModelRun mr,
+        bool hasInheritedStyle = false,
+        Action<byte[]>? onInlineOlePayloadUpdated = null)
     {
         if (mr.InlineTable is { } inlineTable)
         {
@@ -403,7 +416,12 @@ internal static class TextBodyFlowDocumentConverter
                 if (args.ClickCount >= 2 && OleActivationService.TryActivate(ole))
                     args.Handled = true;
             };
-            WpfOleInPlaceHost.AttachInline(border, ole, width: 42, height: 20);
+            WpfOleInPlaceHost.AttachInline(
+                border,
+                ole,
+                width: 42,
+                height: 20,
+                onPayloadUpdated: onInlineOlePayloadUpdated);
             return new InlineUIContainer(border)
             {
                 BaselineAlignment = BaselineAlignment.Center,

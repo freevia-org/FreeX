@@ -19,6 +19,7 @@ public sealed class InCanvasTextEditor : IDisposable
     private readonly EditingSession _editor;
     private readonly Canvas _overlay;
     private readonly Action<string, string>? _onClipboardWriteFailed;
+    private readonly Action<byte[]>? _onInlineOlePayloadUpdated;
 
     private RichTextBox? _richBox;
     private InCanvasRichTextEditSession? _editSession;
@@ -39,16 +40,24 @@ public sealed class InCanvasTextEditor : IDisposable
     /// clipboard, so callers can surface it (e.g. to the status bar) instead of the failure
     /// vanishing silently while the user believes the copy succeeded.
     /// </param>
+    /// <param name="onInlineOlePayloadUpdated">
+    /// Invoked with the edited bytes when a native in-place OLE server commits an inline embedded
+    /// object inside the edited text, so the shell can mark the document dirty at the moment of
+    /// that commit -- the inline counterpart of the slide-level
+    /// <c>WpfOleInPlaceHost.TryShow(onPayloadUpdated:)</c> wiring.
+    /// </param>
     public InCanvasTextEditor(
         SlideCanvas canvas,
         EditingSession editor,
         Canvas overlay,
-        Action<string, string>? onClipboardWriteFailed = null)
+        Action<string, string>? onClipboardWriteFailed = null,
+        Action<byte[]>? onInlineOlePayloadUpdated = null)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
         _onClipboardWriteFailed = onClipboardWriteFailed;
+        _onInlineOlePayloadUpdated = onInlineOlePayloadUpdated;
 
         _canvas.MouseLeftButtonDown += OnCanvasMouseDown;
         _editor.CurrentSlideChanged += OnEditorCurrentSlideChanged;
@@ -193,7 +202,8 @@ public sealed class InCanvasTextEditor : IDisposable
             fallbackPt,
             _inheritedLayoutBody,
             _inheritedMasterTextStyles,
-            _inheritedStyleCategory);
+            _inheritedStyleCategory,
+            _onInlineOlePayloadUpdated);
 
         _richBox = new RichTextBox(doc)
         {
@@ -468,7 +478,8 @@ public sealed class InCanvasTextEditor : IDisposable
             fallbackPt,
             _inheritedLayoutBody,
             _inheritedMasterTextStyles,
-            _inheritedStyleCategory);
+            _inheritedStyleCategory,
+            _onInlineOlePayloadUpdated);
 
         var startPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, start);
         var endPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, end);
@@ -601,7 +612,8 @@ public sealed class InCanvasTextEditor : IDisposable
                 cancellationToken: default,
                 layoutBody: _inheritedLayoutBody,
                 masterTextStyles: _inheritedMasterTextStyles,
-                category: _inheritedStyleCategory);
+                category: _inheritedStyleCategory,
+                onInlineOlePayloadUpdated: _onInlineOlePayloadUpdated);
             if (e.Key == Key.V && result.Handled)
                 _shapeParagraphBody = result.UpdatedBody;
             else if (e.Key is Key.C or Key.X &&

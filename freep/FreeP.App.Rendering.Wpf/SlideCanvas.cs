@@ -156,12 +156,19 @@ public sealed partial class SlideCanvas : FrameworkElement
     /// Call once after constructing the canvas and once on every file new/open to wire up
     /// the new Editor instance.  The overlay canvas must already be in the visual tree.
     /// </summary>
+    /// <param name="onInlineOlePayloadUpdated">
+    /// Invoked with the edited bytes when a native in-place OLE server commits an inline embedded
+    /// object hosted inside an open text/table-cell editor, so the shell can mark the document
+    /// dirty -- the inline counterpart of the <paramref name="tryOpenOleInPlace"/> route's
+    /// own <c>onPayloadUpdated</c> wiring.
+    /// </param>
     public void AttachEditing(
         EditingSession editor,
         Canvas textOverlay,
         Func<SlideShape, bool>? tryOpenOleInPlace = null,
         Action<ChartPointHit>? onChartPointDoubleClick = null,
-        Action<string, string>? onClipboardWriteFailed = null)
+        Action<string, string>? onClipboardWriteFailed = null,
+        Action<byte[]>? onInlineOlePayloadUpdated = null)
     {
         var editPointsEnabled = _gestureHandler?.EditPointsEnabled ?? true;
         // Rebuilds replace the EditingSession. Dispose the previous handler first so its
@@ -189,8 +196,10 @@ public sealed partial class SlideCanvas : FrameworkElement
         _gestureHandler.EditPointsEnabled = editPointsEnabled;
         ApplyViewShowState(_viewShowState);
         _textOverlay     = textOverlay;
-        _textEditor      = new InCanvasTextEditor(this, editor, textOverlay, onClipboardWriteFailed);
-        _tableCellEditor = new InCanvasTableCellEditor(this, editor, textOverlay, onClipboardWriteFailed); // Wave 9A
+        _textEditor      = new InCanvasTextEditor(
+            this, editor, textOverlay, onClipboardWriteFailed, onInlineOlePayloadUpdated);
+        _tableCellEditor = new InCanvasTableCellEditor(
+            this, editor, textOverlay, onClipboardWriteFailed, onInlineOlePayloadUpdated); // Wave 9A
     }
 
     /// <summary>

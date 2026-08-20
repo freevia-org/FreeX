@@ -117,5 +117,30 @@ public sealed partial class MainWindow
     /// slides) does, driving <see cref="FreeP.App.Ole.Windows.WindowsOleInPlaceEngine.CloseAndCommit"/>.
     /// </summary>
     internal void CloseActiveOleHostForTests() => CloseActiveOleHost();
+
+    /// <summary>
+    /// Opens the in-canvas rich-text editor on a shape, the way a double-click gesture does, so
+    /// end-to-end tests can reach the inline (in-text) embedded-object route that
+    /// <see cref="TryOpenOleInPlaceForTests"/>'s slide-level route never touches.
+    /// </summary>
+    internal bool ActivateShapeTextEditForTests(uint shapeId)
+    {
+        _textEditor?.Activate(shapeId);
+        return _textEditor?.IsRichTextEditActive == true;
+    }
+
+    /// <summary>
+    /// Forwards to the same inline embedded-object entry point the command surface calls
+    /// (<c>TryOpenInlineEmbeddedObject</c>), so tests drive the real inline-OLE host factory
+    /// composed in <c>WireInteraction</c> rather than a hand-rolled copy of that wiring.
+    /// </summary>
+    internal bool TryActivateInlineOleObjectForTests() =>
+        _textEditor?.TryActivateInlineOleObject() == true;
+
+    /// <summary>
+    /// Ends the text edit without committing it -- the Escape route -- which still closes the
+    /// inline in-place host and so drives <c>CloseAndCommit</c> for the inline payload.
+    /// </summary>
+    internal void CancelShapeTextEditForTests() => _textEditor?.Cancel();
 #endif
 }

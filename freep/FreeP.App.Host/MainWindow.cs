@@ -549,7 +549,11 @@ public sealed partial class MainWindow : Window,
             _textOverlay,
             TryOpenOleInPlace,
             OnChartPointDoubleClick,
-            ReportClipboardWriteFailure);
+            ReportClipboardWriteFailure,
+            // Inline embedded objects live inside a shape's rich text and are hosted by the
+            // converter, not by TryOpenOleInPlace above; without this the native commit of an
+            // inline object left the document clean.
+            onInlineOlePayloadUpdated: _ => _fileSession.MarkDirty());
         SlideCanvas.ApplyViewShowState(_viewShowState);
     }
 
