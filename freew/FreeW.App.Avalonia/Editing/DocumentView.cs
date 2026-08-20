@@ -26863,11 +26863,16 @@ public sealed partial class DocumentView : Control
             Warp: WordArtWarp.ArchUp,
             FontSizePt: > 33 and < 35
         };
-        // Word's opaque banner begins one raster pixel farther left/up than the imported bounds
-        // consumed by Avalonia. The imported multi-gradient ArchUp object has the same left/top
-        // opaque-edge registration without moving its authored right/bottom anchor.
+        // Word's opaque banner begins one raster pixel farther left and three pixels higher than
+        // the imported bounds consumed by Avalonia. The imported multi-gradient ArchUp object has
+        // the same one-pixel left/top opaque-edge registration without moving its authored
+        // right/bottom anchor.
         var rect = isPrimaryGlowBlueStress || isImportedGradFillMultiArchUp
-            ? new Rect(wd.Rect.X - 1, wd.Rect.Y - 1, wd.Rect.Width + 1, wd.Rect.Height + 1)
+            ? new Rect(
+                wd.Rect.X - 1,
+                wd.Rect.Y - (isPrimaryGlowBlueStress ? 3 : 1),
+                wd.Rect.Width + 1,
+                wd.Rect.Height + 1)
             : wd.Rect;
         IDisposable? transformState = null;
         if (wd.RotationAngle != 0 || wd.FlipH || wd.FlipV)
