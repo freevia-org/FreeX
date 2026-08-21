@@ -41,8 +41,8 @@ public sealed class MultilevelListDialogVisualParityTests
             textBoxes.Should().OnlyContain(textBox => textBox.Margin == new Thickness(0, 0, 0, 8));
             combos.Should().OnlyContain(combo => combo.HorizontalAlignment == HorizontalAlignment.Stretch);
             textBoxes.Should().OnlyContain(textBox => textBox.HorizontalAlignment == HorizontalAlignment.Stretch);
-            combos.Should().OnlyContain(combo => combo.Height == 22);
-            textBoxes.Should().OnlyContain(textBox => textBox.Height == 18);
+            combos.Should().OnlyContain(combo => combo.Height == CompactDialogVisualTokens.ControlHeight);
+            textBoxes.Should().OnlyContain(textBox => textBox.Height == CompactDialogVisualTokens.ControlHeight);
             buttons.Select(UserFacingButtonText).Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
             UserFacingButtonText(buttons.Single(button => button.IsDefault)).Should().Be(ShellStrings.Current.Ok);
             UserFacingButtonText(buttons.Single(button => button.IsCancel)).Should().Be(ShellStrings.Current.Cancel);
@@ -51,10 +51,18 @@ public sealed class MultilevelListDialogVisualParityTests
                     ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Ok),
                     ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Cancel));
             actionRow.Spacing.Should().Be(8);
-            actionRow.Margin.Should().Be(new Thickness(0, 11, 0, 0));
-            combos.Select(combo => combo.Bounds.Height).Should().Equal(22, 22, 22, 22);
-            textBoxes.Select(textBox => textBox.Bounds.Height).Should().Equal(18, 18);
-            buttons.Select(button => button.Bounds.Height).Should().Equal(20, 20);
+            actionRow.Margin.Should().Be(new Thickness(0, 9, 0, 0));
+            combos.Select(combo => combo.Bounds.Height).Should().Equal(
+                CompactDialogVisualTokens.ControlHeight,
+                CompactDialogVisualTokens.ControlHeight,
+                CompactDialogVisualTokens.ControlHeight,
+                CompactDialogVisualTokens.ControlHeight);
+            textBoxes.Select(textBox => textBox.Bounds.Height).Should().Equal(
+                CompactDialogVisualTokens.ControlHeight,
+                CompactDialogVisualTokens.ControlHeight);
+            buttons.Select(button => button.Bounds.Height).Should().Equal(
+                CompactDialogVisualTokens.ButtonHeight,
+                CompactDialogVisualTokens.ButtonHeight);
             dialog.Close();
         }, CancellationToken.None);
     }
@@ -95,6 +103,11 @@ public sealed class MultilevelListDialogVisualParityTests
             "tools",
             "FreeW.DialogVisualHarness.Avalonia",
             "Program.cs"));
+        var dialogSource = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "MultilevelListDialog.cs"));
         var catalog = File.ReadAllText(Path.Combine(
             root,
             "freew",
@@ -105,8 +118,14 @@ public sealed class MultilevelListDialogVisualParityTests
         source.Should().Contain("plan.UseWpfAuthoritySize");
         source.Should().Contain("plan.ClientWidthAdjustment");
         source.Should().Contain("clientWidth += plan.ClientWidthAdjustment");
+        dialogSource.Should().Contain("AvaloniaCompactDialogChrome.WindowsStyle with");
+        dialogSource.Should().NotContain("ControlHeight = 20");
+        dialogSource.Should().NotContain("TextBoxHeight = 18");
+        dialogSource.Should().NotContain("ComboBoxHeight = 22");
+        dialogSource.Should().NotContain("ButtonHeight = 20");
         catalog.Should().Contain("Pair(\"multilevel-list\", \"MultilevelListDialog\"");
-        catalog.Should().Contain("avaloniaClientWidthAdjustment: 1");
+        catalog.Should().Contain("useWpfAuthoritySize: true),");
+        catalog.Should().NotContain("avaloniaClientWidthAdjustment: 1");
     }
 
     // AvaloniaDialogButtonContent wraps mnemonic-bearing text ("_OK") in an AccessText so Avalonia's

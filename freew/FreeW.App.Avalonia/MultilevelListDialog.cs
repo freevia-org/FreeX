@@ -12,12 +12,8 @@ namespace FreeW.App.Avalonia;
 
 internal sealed partial class MultilevelListDialog : FreeWDialogWindow
 {
-    private static AvaloniaCompactDialogChromeStyle Chrome => new(AvaloniaCompactDialogChrome.WindowsUiFontFamily)
+    private static AvaloniaCompactDialogChromeStyle Chrome => AvaloniaCompactDialogChrome.WindowsStyle with
     {
-        ControlHeight = 20,
-        TextBoxHeight = 18,
-        ComboBoxHeight = 22,
-        ButtonHeight = 20,
         ComboBoxBackgroundBrush = new LinearGradientBrush
         {
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
@@ -87,7 +83,10 @@ internal sealed partial class MultilevelListDialog : FreeWDialogWindow
             Accept,
             () => Close(null),
             buttonWidth: MultilevelListDialogPlanner.ButtonWidth,
-            margin: new Thickness(0, 11, 0, 0),
+            // The shared 24/26-DIP controls render two DIPs taller than the WPF
+            // prompt's rounded 96-DPI content stack. Keep the authority's terminal
+            // button edge aligned without changing the shared control contract.
+            margin: new Thickness(0, 9, 0, 0),
             style: Chrome);
         panel.Children.Add(actionRow);
         Content = panel;
