@@ -43,7 +43,9 @@ public sealed class GridViewTextDecorationTests
     {
         // Regression for F18: DoubleUnderline must NOT produce a TextDecoration here, because
         // GridView.DrawCellText already draws two manual strokes. Adding one here would give 3 lines.
-        var decorations = GridView.BuildTextDecorations(new CellStyle { DoubleUnderline = true });
+        // OOXML double underline imports as both Underline=true and DoubleUnderline=true; this
+        // must still leave the ordinary WPF underline out because DrawCellText owns both strokes.
+        var decorations = GridView.BuildTextDecorations(new CellStyle { Underline = true, DoubleUnderline = true });
 
         // Either null (no other decorations) or no underline decoration entry.
         if (decorations is not null)
