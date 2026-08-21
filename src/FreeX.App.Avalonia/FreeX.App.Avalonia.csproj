@@ -39,10 +39,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Packaging\macos\FreeX.icns" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <!-- Keep the runtime resource path through a project link to the neutral shared canonical ICO. -->
+    <!-- Every host and package format consumes the shared canonical brand family. -->
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.icns"
+             Link="FreeX.icns"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
              Link="Resources\FreeX.ico"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.svg"
+             Link="Resources\FreeX.svg"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

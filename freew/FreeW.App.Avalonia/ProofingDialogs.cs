@@ -4,6 +4,8 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia;
@@ -167,7 +169,7 @@ internal sealed class ThesaurusDialog : FreeWDialogWindow
         {
             Text = sense.DisplayLabel,
             FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
+            Foreground = new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.AccentDark)),
         });
 
         foreach (var action in sense.Actions)

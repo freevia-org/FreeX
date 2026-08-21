@@ -1,7 +1,7 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Soft Edges 2.5pt">
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Soft Edges 2.5pt">
   <defs><filter id="se"><feGaussianBlur stdDeviation="2"/></filter></defs>
   <rect width="32" height="32" fill="none"/>
-  <rect x="6" y="7" width="20" height="14" rx="3" fill="#dcecff" stroke="#0F6D8C" stroke-width="1.5" filter="url(#se)"/>
+  <rect x="6" y="7" width="20" height="14" rx="3" fill="#dcecff" stroke="#A26714" stroke-width="1.5" filter="url(#se)"/>
   <rect x="6" y="7" width="20" height="14" rx="3" fill="#dcecff" stroke="none" opacity=".5"/>
-  <text x="16" y="27" font-size="5" text-anchor="middle" fill="#0F6D8C" font-family="sans-serif">2.5pt</text>
+  <text x="16" y="27" font-size="5" text-anchor="middle" fill="#A26714" font-family="sans-serif">2.5pt</text>
 </svg>

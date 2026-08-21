@@ -98,7 +98,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}");
         workflow.Should().Contain("MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}");
         workflow.Should().Contain("plutil -lint");
-        workflow.Should().Contain("cp src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns \"$app/Contents/Resources/FreeX.icns\"");
+        workflow.Should().Contain("cp shared/Free.Shared.Shell/Resources/FreeX.icns \"$app/Contents/Resources/FreeX.icns\"");
         workflow.Should().Contain("test -f \"$app/Contents/Resources/FreeX.icns\"");
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleExecutable'");
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleIconFile'");

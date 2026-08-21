@@ -938,29 +938,9 @@ public sealed partial class MainWindowSourceHygieneTests
         File.Exists(iconPath).Should().BeTrue();
         xaml.Should().Contain("Icon=\"Resources/FreeX.ico\"");
         xaml.Should().Contain("x:Name=\"TitleBarAppIcon\"");
-        xaml.Should().Contain("x:Name=\"TitleBarAppFreeBand\"");
-        xaml.Should().Contain("x:Name=\"TitleBarAppXOutlineTop\"");
-        xaml.Should().Contain("x:Name=\"TitleBarAppXOutlineBottom\"");
-        xaml.Should().Contain("x:Name=\"TitleBarAppXOutlineLeft\"");
-        xaml.Should().Contain("x:Name=\"TitleBarAppXOutlineRight\"");
-        xaml.Should().Contain("x:Name=\"TitleBarAppX\"");
-        xaml.Should().Contain("<TextBlock Text=\"FREE\"");
-        xaml.Should().Contain("<TextBlock Text=\"X\"");
-        xaml.Should().Contain("<RowDefinition Height=\"8\"/>");
-        xaml.Should().Contain("<RowDefinition Height=\"1\"/>");
-        xaml.Should().Contain("<RowDefinition Height=\"*\"/>");
-        xaml.Should().Contain("Margin=\"0\"");
-        xaml.Should().Contain("Grid.RowSpan=\"3\"");
-        xaml.Should().Contain("FontSize=\"6.6\"");
-        xaml.Should().Contain("FontSize=\"14.5\"");
-        xaml.Should().Contain("Foreground=\"#10253A\"");
-        xaml.Should().Contain("Margin=\"0,-3,0,0\"");
-        xaml.Should().Contain("Margin=\"0,-1,0,0\"");
-        xaml.Should().Contain("Margin=\"-1,-2,0,0\"");
-        xaml.Should().Contain("Margin=\"1,-2,0,0\"");
-        xaml.Should().Contain("Margin=\"0,-2,0,0\"");
-        xaml.Should().NotContain("<Image Source=\"Resources/FreeX.ico\"");
-        xaml.Should().NotContain("<TextBlock Text=\"F\" Foreground=\"{StaticResource FreeXAccentBrush}\"");
+        xaml.Should().Contain("Source=\"Resources/FreeX.ico\"");
+        xaml.Should().NotContain("x:Name=\"TitleBarAppFreeBand\"");
+        xaml.Should().NotContain("x:Name=\"TitleBarAppXOutlineTop\"");
         theme.Should().Contain("x:Key=\"FreeXTitleBarBrush\"");
         // WS-G round 2 made the title bar token-driven and runtime-swappable, so the brand
         // background now binds via DynamicResource rather than StaticResource.

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="In Margin Drop Cap">
   <rect width="32" height="32" fill="none"/>
   <!-- Large cap in the left margin area -->
-  <text x="3" y="20" font-size="18" fill="#0F6D8C" font-family="Georgia,Times New Roman,serif" font-weight="700" dominant-baseline="auto">D</text>
+  <text x="3" y="20" font-size="18" fill="#A26714" font-family="Georgia,Times New Roman,serif" font-weight="700" dominant-baseline="auto">D</text>
   <!-- text lines to the right -->
   <path d="M14 9h13M14 14h13M14 19h13M14 25h13" fill="none" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round"/>
 </svg>

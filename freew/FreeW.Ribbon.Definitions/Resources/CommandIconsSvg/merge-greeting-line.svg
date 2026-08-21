@@ -3,6 +3,6 @@
   <!-- Speech bubble outline -->
   <path d="M6 8h20a1.5 1.5 0 0 1 1.5 1.5v10A1.5 1.5 0 0 1 26 21H12l-5 4v-4H6A1.5 1.5 0 0 1 4.5 19.5v-10A1.5 1.5 0 0 1 6 8z" fill="#ffffff" stroke="#242424" stroke-width="1.4" stroke-linejoin="round"/>
   <!-- "Dear" text lines inside bubble -->
-  <line x1="9" y1="13" x2="23" y2="13" stroke="#0F6D8C" stroke-width="1.4" stroke-linecap="round"/>
+  <line x1="9" y1="13" x2="23" y2="13" stroke="#A26714" stroke-width="1.4" stroke-linecap="round"/>
   <line x1="9" y1="16.5" x2="19" y2="16.5" stroke="#242424" stroke-width="1.2" stroke-linecap="round"/>
 </svg>

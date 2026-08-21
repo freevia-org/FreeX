@@ -6,5 +6,5 @@
   <line x1="10" y1="13" x2="18" y2="13" stroke="#242424" stroke-width="1.1" stroke-linecap="round"/>
   <line x1="10" y1="16" x2="15" y2="16" stroke="#242424" stroke-width="1.1" stroke-linecap="round"/>
   <!-- Forward arrow (next) -->
-  <path d="M20 19l6 4-6 4" fill="none" stroke="#0F6D8C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 19l6 4-6 4" fill="none" stroke="#A26714" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -12,17 +12,17 @@ public sealed class SisterBackstageEntryBuilderTests
     [Fact]
     public void SisterBackstageTheme_ExposesFreeWAndFreePPresets()
     {
-        SisterBackstagePalette.FreeW.Sidebar.Should().Be(new BackstageRgb(0x17, 0x32, 0x4D));
-        SisterBackstagePalette.FreeW.Selected.Should().Be(new BackstageRgb(0x0F, 0x24, 0x38));
-        SisterBackstageTheme.FreeW.Accent.Sidebar.Should().Be(Color.FromRgb(0x17, 0x32, 0x4D));
-        SisterBackstageTheme.FreeW.Accent.Selected.Should().Be(Color.FromRgb(0x0F, 0x24, 0x38));
-        SisterBackstageTheme.FreeW.LinkColor.Should().Be(Color.FromRgb(0x0F, 0x6D, 0x8C));
+        SisterBackstagePalette.FreeW.Sidebar.Should().Be(new BackstageRgb(0x4B, 0x2F, 0x12));
+        SisterBackstagePalette.FreeW.Selected.Should().Be(new BackstageRgb(0x36, 0x20, 0x0C));
+        SisterBackstageTheme.FreeW.Accent.Sidebar.Should().Be(Color.FromRgb(0x4B, 0x2F, 0x12));
+        SisterBackstageTheme.FreeW.Accent.Selected.Should().Be(Color.FromRgb(0x36, 0x20, 0x0C));
+        SisterBackstageTheme.FreeW.LinkColor.Should().Be(Color.FromRgb(0xA2, 0x67, 0x14));
         SisterBackstageTheme.FreeW.TileWidth.Should().Be(150);
         SisterBackstageTheme.FreeW.TileHeight.Should().Be(190);
 
-        SisterBackstageTheme.FreeP.Accent.Sidebar.Should().Be(Color.FromRgb(0xB7, 0x47, 0x2A));
-        SisterBackstageTheme.FreeP.Accent.Hover.Should().Be(Color.FromRgb(0xC9, 0x5A, 0x3D));
-        SisterBackstageTheme.FreeP.LinkColor.Should().Be(Color.FromRgb(0xB7, 0x47, 0x2A));
+        SisterBackstageTheme.FreeP.Accent.Sidebar.Should().Be(Color.FromRgb(0x4E, 0x21, 0x3B));
+        SisterBackstageTheme.FreeP.Accent.Hover.Should().Be(Color.FromRgb(0xA2, 0x3B, 0x72));
+        SisterBackstageTheme.FreeP.LinkColor.Should().Be(Color.FromRgb(0xA2, 0x3B, 0x72));
         SisterBackstageTheme.FreeP.TileWidth.Should().Be(190);
         SisterBackstageTheme.FreeP.TileHeight.Should().Be(150);
     }

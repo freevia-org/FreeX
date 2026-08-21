@@ -226,7 +226,7 @@ jobs:
           packaging_dir="src/FreeX.App.Avalonia/Packaging/linux"
           desktop_file="$packaging_dir/io.github.tony-xmelon.freex.desktop"
           mime_file="$packaging_dir/io.github.tony-xmelon.freex.xml"
-          icon_file="$packaging_dir/io.github.tony-xmelon.freex.svg"
+          icon_file="shared/Free.Shared.Shell/Resources/FreeX.svg"
           metainfo_file="$packaging_dir/io.github.tony-xmelon.freex.metainfo.xml"
           desktop-file-validate "$desktop_file"
           test -f "$mime_file"

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Picture Border">
   <rect width="32" height="32" fill="none"/>
-  <rect x="5.5" y="7.5" width="21" height="17" rx="1.5" fill="#ffffff" stroke="#0F6D8C" stroke-width="2.5"/>
-  <circle cx="11" cy="13" r="2" fill="#dcecff" stroke="#0F6D8C" stroke-width="1"/>
+  <rect x="5.5" y="7.5" width="21" height="17" rx="1.5" fill="#ffffff" stroke="#A26714" stroke-width="2.5"/>
+  <circle cx="11" cy="13" r="2" fill="#dcecff" stroke="#A26714" stroke-width="1"/>
   <path d="M7.5 21.5l5-5 3 3 3-3 4 5" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

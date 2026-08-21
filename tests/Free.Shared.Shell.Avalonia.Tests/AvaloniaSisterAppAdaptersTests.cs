@@ -11,19 +11,19 @@ public sealed class AvaloniaSisterAppAdaptersTests
         var freeW = AvaloniaSisterBackstageTheme.FreeW;
         var freeP = AvaloniaSisterBackstageTheme.FreeP;
 
-        freeW.Accent.Sidebar.Should().Be(Color.FromRgb(0x17, 0x32, 0x4D));
-        freeW.Accent.Hover.Should().Be(Color.FromRgb(0x26, 0x4B, 0x6B));
-        freeW.Accent.Selected.Should().Be(Color.FromRgb(0x0F, 0x24, 0x38));
-        freeW.Accent.Separator.Should().Be(Color.FromRgb(0x36, 0x55, 0x73));
-        freeW.LinkColor.Should().Be(Color.FromRgb(0x0F, 0x6D, 0x8C));
+        freeW.Accent.Sidebar.Should().Be(Color.FromRgb(0x4B, 0x2F, 0x12));
+        freeW.Accent.Hover.Should().Be(Color.FromRgb(0xA2, 0x67, 0x14));
+        freeW.Accent.Selected.Should().Be(Color.FromRgb(0x36, 0x20, 0x0C));
+        freeW.Accent.Separator.Should().Be(Color.FromRgb(0x4B, 0x2F, 0x12));
+        freeW.LinkColor.Should().Be(Color.FromRgb(0xA2, 0x67, 0x14));
         freeW.TileWidth.Should().Be(150);
         freeW.TileHeight.Should().Be(190);
 
-        freeP.Accent.Sidebar.Should().Be(Color.FromRgb(0xB7, 0x47, 0x2A));
-        freeP.Accent.Hover.Should().Be(Color.FromRgb(0xC9, 0x5A, 0x3D));
-        freeP.Accent.Selected.Should().Be(Color.FromRgb(0x8F, 0x37, 0x21));
-        freeP.Accent.Separator.Should().Be(Color.FromRgb(0xCE, 0x6A, 0x4F));
-        freeP.LinkColor.Should().Be(Color.FromRgb(0xB7, 0x47, 0x2A));
+        freeP.Accent.Sidebar.Should().Be(Color.FromRgb(0x4E, 0x21, 0x3B));
+        freeP.Accent.Hover.Should().Be(Color.FromRgb(0xA2, 0x3B, 0x72));
+        freeP.Accent.Selected.Should().Be(Color.FromRgb(0x35, 0x14, 0x26));
+        freeP.Accent.Separator.Should().Be(Color.FromRgb(0x4E, 0x21, 0x3B));
+        freeP.LinkColor.Should().Be(Color.FromRgb(0xA2, 0x3B, 0x72));
         freeP.TileWidth.Should().Be(190);
         freeP.TileHeight.Should().Be(150);
     }

@@ -2,6 +2,6 @@
   <rect width="32" height="32" fill="none"/>
   <path d="M7 4.5h14l4 4V27.5H7z" fill="#ffffff" stroke="#242424" stroke-width="1.4" stroke-linejoin="round"/>
   <path d="M21 4.5V9h4" fill="none" stroke="#242424" stroke-width="1" stroke-linejoin="round"/>
-  <text x="16" y="15" font-size="6.5" fill="#0F6D8C" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">KW</text>
+  <text x="16" y="15" font-size="6.5" fill="#A26714" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">KW</text>
   <path d="M10 19h12M10 23h9" fill="none" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round"/>
 </svg>

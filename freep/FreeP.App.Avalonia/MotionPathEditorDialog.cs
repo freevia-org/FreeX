@@ -19,7 +19,7 @@ internal sealed class MotionPathEditorDialog : FreePDialogWindow
     private readonly StackPanel _rowsPanel = new();
     private readonly TextBlock _validationText = new()
     {
-        Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+        Foreground = FreePBrushes.Accent,
         TextWrapping = TextWrapping.Wrap,
         Margin = new Thickness(0, 6, 0, 0),
     };

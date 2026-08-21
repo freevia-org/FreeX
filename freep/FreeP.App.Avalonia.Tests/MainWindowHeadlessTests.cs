@@ -653,15 +653,18 @@ public sealed class MainWindowHeadlessTests : IDisposable
     {
         var ico = FindRepoFile("shared", "Free.Shared.Shell", "Resources", "FreeP.ico");
         var svg = FindRepoFile("shared", "Free.Shared.Shell", "Resources", "FreeP.svg");
+        var icns = FindRepoFile("shared", "Free.Shared.Shell", "Resources", "FreeP.icns");
         new FileInfo(ico).Length.Should().BeGreaterThan(1_024);
-        File.ReadAllText(svg).Should().Contain("#b7472a").And.Contain(">P</text>");
+        new FileInfo(icns).Length.Should().BeGreaterThan(1_024);
+        File.ReadAllText(svg).Should().Contain("#A23B72").And.Contain("FREE").And.Contain(">P</text>");
 
         var avaloniaProject = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"));
         var wpfProject = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "FreeP.App.Host.csproj"));
         var wpfWindow = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "MainWindow.cs"));
 
         avaloniaProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeP.ico")
-            .And.Contain(@"shared\Free.Shared.Shell\Resources\FreeP.svg");
+            .And.Contain(@"shared\Free.Shared.Shell\Resources\FreeP.svg")
+            .And.Contain(@"shared\Free.Shared.Shell\Resources\FreeP.icns");
         wpfProject.Should().Contain(@"<ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeP.ico</ApplicationIcon>");
         wpfWindow.Should().Contain("IconUri = \"pack://application:,,,/FreeP.App.Host;component/Resources/FreeP.ico\"");
     }

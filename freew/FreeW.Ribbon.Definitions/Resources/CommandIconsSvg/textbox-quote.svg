@@ -2,7 +2,7 @@
   <rect width="32" height="32" fill="none"/>
   <rect x="4" y="8" width="24" height="16" rx="1" fill="#F2F2F2" stroke="#8a8a8a" stroke-width="1.2"/>
   <!-- quotation marks -->
-  <text x="9" y="17" font-size="11" fill="#0F6D8C" font-family="Georgia,serif" font-style="italic" dominant-baseline="central">"</text>
-  <text x="20" y="19" font-size="11" fill="#0F6D8C" font-family="Georgia,serif" font-style="italic" dominant-baseline="central">"</text>
+  <text x="9" y="17" font-size="11" fill="#A26714" font-family="Georgia,serif" font-style="italic" dominant-baseline="central">"</text>
+  <text x="20" y="19" font-size="11" fill="#A26714" font-family="Georgia,serif" font-style="italic" dominant-baseline="central">"</text>
   <path d="M11 17h10" fill="none" stroke="#4a4a4a" stroke-width="1" stroke-linecap="round"/>
 </svg>

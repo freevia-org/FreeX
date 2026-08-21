@@ -3,7 +3,7 @@
   <!-- group bounding box dashed -->
   <rect x="3" y="3" width="26" height="26" rx="2" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="3 2"/>
   <!-- child A: blue rect -->
-  <rect x="7" y="7" width="9" height="9" rx="1.5" fill="#0F6D8C" opacity="0.85"/>
+  <rect x="7" y="7" width="9" height="9" rx="1.5" fill="#A26714" opacity="0.85"/>
   <!-- child B: orange rect -->
   <rect x="16" y="16" width="9" height="9" rx="1.5" fill="#E07020" opacity="0.85"/>
   <!-- corner handles -->

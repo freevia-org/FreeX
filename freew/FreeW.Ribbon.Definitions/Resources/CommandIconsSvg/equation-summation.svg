@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Summation">
   <rect width="32" height="32" fill="none"/>
-  <path d="M22 8H10L17 16L10 24H22" fill="none" stroke="#0F6D8C" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22 8H10L17 16L10 24H22" fill="none" stroke="#A26714" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
   <text x="22" y="11" font-family="Cambria, 'Times New Roman', serif" font-size="8" font-style="italic" fill="#242424">n</text>
 </svg>

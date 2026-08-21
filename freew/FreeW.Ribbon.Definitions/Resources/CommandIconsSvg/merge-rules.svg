@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Rules">
   <rect width="32" height="32" fill="none"/>
   <!-- Diamond / decision shape -->
-  <polygon points="16,5 27,16 16,27 5,16" fill="none" stroke="#0F6D8C" stroke-width="1.6" stroke-linejoin="round"/>
+  <polygon points="16,5 27,16 16,27 5,16" fill="none" stroke="#A26714" stroke-width="1.6" stroke-linejoin="round"/>
   <!-- Question mark inside -->
-  <text x="16" y="21" font-family="Segoe UI,Arial" font-size="12" font-weight="bold" fill="#0F6D8C" text-anchor="middle">?</text>
+  <text x="16" y="21" font-family="Segoe UI,Arial" font-size="12" font-weight="bold" fill="#A26714" text-anchor="middle">?</text>
 </svg>

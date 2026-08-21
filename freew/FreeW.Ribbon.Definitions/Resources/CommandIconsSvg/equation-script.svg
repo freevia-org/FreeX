@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Script">
   <rect width="32" height="32" fill="none"/>
   <text x="6" y="22" font-family="Cambria, 'Times New Roman', serif" font-size="16" font-style="italic" fill="#242424">x</text>
-  <text x="18" y="14" font-family="Cambria, 'Times New Roman', serif" font-size="10" font-style="italic" fill="#0F6D8C">2</text>
-  <text x="18" y="27" font-family="Cambria, 'Times New Roman', serif" font-size="10" font-style="italic" fill="#0F6D8C">n</text>
+  <text x="18" y="14" font-family="Cambria, 'Times New Roman', serif" font-size="10" font-style="italic" fill="#A26714">2</text>
+  <text x="18" y="27" font-family="Cambria, 'Times New Roman', serif" font-size="10" font-style="italic" fill="#A26714">n</text>
 </svg>

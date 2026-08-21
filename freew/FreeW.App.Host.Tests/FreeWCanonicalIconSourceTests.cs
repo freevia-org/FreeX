@@ -13,6 +13,8 @@ public sealed class FreeWCanonicalIconSourceTests
         File.Exists(Path.Combine(sharedResources, "FreeW.ico")).Should().BeTrue();
         File.Exists(Path.Combine(sharedResources, "FreeW.svg")).Should().BeTrue();
         File.Exists(Path.Combine(sharedResources, "FreeW.icns")).Should().BeTrue();
+        File.ReadAllText(Path.Combine(sharedResources, "FreeW.svg"))
+            .Should().Contain("#A26714").And.Contain("#4B2F12").And.Contain("FREE").And.Contain(">W</text>");
 
         var wpfProject = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"));
         wpfProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeW.ico");

@@ -1,4 +1,5 @@
 using Free.Shared.Drawing;
+using Free.Shared.Theme;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -139,7 +140,7 @@ public static class PresentationDesignCommandPlanner
         ThumbnailBackgroundBrushHex: "#FFFFFF",
         ThumbnailBorderBrushHex: "#D9D9D9",
         ThumbnailBorderThicknessDip: 1,
-        BadgeForegroundBrushHex: "#B7472A",
+        BadgeForegroundBrushHex: BrandThemes.FreeP.Colors.Accent.ToHex(),
         TitlePlaceholder: new PresentationLayoutPlaceholderVisualSpec(
             PresentationLayoutPlaceholderCategory.Title,
             FillBrushHex: "#F8DDD1",
@@ -441,8 +442,8 @@ public static class PresentationDesignCommandPlanner
                 PresentationLayoutChoiceChromeState.Current,
                 true,
                 false,
-                "#B7472A",
-                "#FFF4EF",
+                BrandThemes.FreeP.Colors.Accent.ToHex(),
+                BrandThemes.FreeP.Colors.AccentSoft.ToHex(),
                 2,
                 "Current");
         }

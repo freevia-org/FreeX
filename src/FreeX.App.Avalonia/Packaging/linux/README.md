@@ -10,7 +10,7 @@ document-type associations using freedesktop / XDG conventions.
 | --- | --- |
 | `io.github.tony-xmelon.freex.desktop` | Desktop entry: launcher name, icon, categories, and MIME associations for `.fxl` plus common spreadsheet formats. |
 | `io.github.tony-xmelon.freex.xml` | `shared-mime-info` definition for the native `application/vnd.freex.workbook+json` (`*.fxl`) type. |
-| `io.github.tony-xmelon.freex.svg` | Scalable hicolor application icon. |
+| `../../../../../shared/Free.Shared.Shell/Resources/FreeX.svg` | Canonical scalable application icon shared by every host and package. |
 | `package-linux-app.sh` | Build a relocatable `.tar.gz` with `install.sh`/`uninstall.sh` for a per-user (`~/.local`) or system prefix. |
 | `build-appimage.sh` | Build a single-file `.AppImage` (requires `appimagetool`, fetched by CI). |
 | `build-deb.sh` | Build a distro-native `.deb` (control + postinst/postrm cache refresh; requires `dpkg-deb`). |

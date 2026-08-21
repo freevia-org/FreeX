@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Free.Shared.AppServices;
+using Free.Shared.Theme.Wpf;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation;
 using FreeW.App.Presentation.Ribbon;
@@ -138,7 +139,7 @@ internal sealed class ThesaurusPane
             {
                 Text = sense.DisplayLabel,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
+                Foreground = new SolidColorBrush(WpfThemeApplier.ToColor(Program.ActiveTheme.Colors.AccentDark)),
                 Margin = new Thickness(10, 8, 10, 2)
             };
             _sensesPanel.Children.Add(senseLabel);
