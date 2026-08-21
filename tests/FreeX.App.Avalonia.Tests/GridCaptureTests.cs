@@ -273,7 +273,34 @@ public sealed class GridCaptureTests
                 overlayBounds,
                 minimumChromaticPixels: fills.Length - 1,
                 expectedFills)
-            .Should().Contain("expected shape fill pixels");
+            .Should().Contain("expected drawing color pixels");
+    }
+
+    [Fact]
+    public void GridCaptureOutputGuard_RequiresExpectedEmbeddedPictureColor_InItsOverlayRegion()
+    {
+        var overlayBounds = new[] { new GridCaptureOverlayBounds(Left: 1, Top: 0, Width: 1, Height: 1) };
+        var expectedPictureColor = new[]
+        {
+            new GridCaptureFillColorRegion(overlayBounds[0], new CellColor(255, 102, 0), MinimumPixelCount: 1)
+        };
+        var cellsOnlyPixels = new byte[]
+        {
+            255, 255, 255, 255,
+            31, 31, 31, 255,
+        };
+        var picturePixels = new byte[]
+        {
+            255, 255, 255, 255,
+            255, 102, 0, 255,
+        };
+
+        ParityCaptureOutputGuard.ValidateGridPixels(
+                cellsOnlyPixels, width: 2, height: 1, overlayBounds, minimumChromaticPixels: 0, expectedPictureColor)
+            .Should().Contain("expected drawing color pixels");
+        ParityCaptureOutputGuard.ValidateGridPixels(
+                picturePixels, width: 2, height: 1, overlayBounds, minimumChromaticPixels: 1, expectedPictureColor)
+            .Should().BeNull();
     }
 
     [Fact]

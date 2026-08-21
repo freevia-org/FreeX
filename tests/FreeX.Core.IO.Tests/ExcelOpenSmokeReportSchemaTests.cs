@@ -104,6 +104,8 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         source.Should().Contain("PivotGridAdornmentPlanner.BuildRowLabelAdornments");
         source.Should().Contain("IsLikelyBlankReferencePng");
         source.Should().Contain("opaqueRatio");
+        source.Should().Contain("chromaticPixels");
+        source.Should().Contain("minimumMeaningfulChroma");
         source.Should().Contain("TrySaveClipboardImageToPng");
         source.Should().Contain("CopyEnhMetaFile");
         source.Should().Contain("selected bitmap");

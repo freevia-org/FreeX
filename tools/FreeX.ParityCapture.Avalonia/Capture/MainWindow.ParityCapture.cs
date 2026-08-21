@@ -4550,6 +4550,20 @@ public sealed partial class MainWindow
             // exactly the same cell rendering the live app uses.
             var gridControl = BuildSheetGrid();
 
+            // A tiny range viewport can omit an otherwise valid embedded picture from its projected
+            // DrawingObjects collection even though the source sheet anchors it inside the requested
+            // range.  Add only those missing Image pictures to this capture-only overlay, reusing the
+            // production image visual so crop and future renderer changes remain observable here.
+            var missingPictureOverlayBounds = new List<GridCaptureOverlayBounds>();
+            gridControl = AddMissingEmbeddedPictureCaptureOverlay(
+                gridControl,
+                viewport,
+                sheet,
+                range,
+                pixelWidth,
+                pixelHeight,
+                missingPictureOverlayBounds);
+
             // ── 6. Render to PNG ───────────────────────────────────────────────────────────────────
             Directory.CreateDirectory(outputDirectory);
 
@@ -4572,9 +4586,17 @@ public sealed partial class MainWindow
                 range,
                 pixelWidth,
                 pixelHeight);
-            var overlayPixelBounds = chartPixelBounds.Concat(drawingObjectPixelBounds).ToArray();
+            var overlayPixelBounds = chartPixelBounds
+                .Concat(drawingObjectPixelBounds)
+                .Concat(missingPictureOverlayBounds)
+                .ToArray();
             var expectedShapeFillRegions = GetVisibleDrawingShapeFillRegions(
                 workbook.Theme,
+                sheet,
+                range,
+                pixelWidth,
+                pixelHeight);
+            var expectedPictureColorRegions = GetVisibleEmbeddedPictureColorRegions(
                 sheet,
                 range,
                 pixelWidth,
@@ -4586,7 +4608,10 @@ public sealed partial class MainWindow
                 pngPath,
                 includeDrawingOverlays: overlayPixelBounds.Length > 0,
                 overlayPixelBounds);
-            if (ParityCaptureOutputGuard.ValidateGridPngOutput(pngPath, overlayPixelBounds, expectedShapeFillRegions) is { } captureValidationError)
+            if (ParityCaptureOutputGuard.ValidateGridPngOutput(
+                    pngPath,
+                    overlayPixelBounds,
+                    expectedShapeFillRegions.Concat(expectedPictureColorRegions).ToArray()) is { } captureValidationError)
                 return GridCaptureFailure(workbookPath, rangeText, outputDirectory, captureValidationError);
 
             // ── 7. Write the JSON log file alongside the PNG ──────────────────────────────────────
@@ -4734,6 +4759,148 @@ public sealed partial class MainWindow
         }
 
         return regions;
+    }
+
+    private static IReadOnlyList<GridCaptureFillColorRegion> GetVisibleEmbeddedPictureColorRegions(
+        Sheet sheet,
+        GridRange range,
+        int captureWidth,
+        int captureHeight)
+    {
+        var regions = new List<GridCaptureFillColorRegion>();
+        foreach (var picture in sheet.Pictures)
+        {
+            if (!picture.IsVisible ||
+                picture.Kind != PictureKind.Image ||
+                picture.ImageBytes is not { Length: > 0 } imageBytes ||
+                !TryGetRepresentativeChromaticColor(imageBytes, out var color) ||
+                !TryGetAnchoredObjectPixelBounds(
+                    sheet,
+                    range,
+                    captureWidth,
+                    captureHeight,
+                    picture.Anchor,
+                    picture.AnchorOffsetX,
+                    picture.AnchorOffsetY,
+                    picture.Width,
+                    picture.Height,
+                    out var bounds))
+            {
+                continue;
+            }
+
+            regions.Add(new GridCaptureFillColorRegion(bounds, color));
+        }
+
+        return regions;
+    }
+
+    private static bool TryGetRepresentativeChromaticColor(byte[] imageBytes, out CellColor color)
+    {
+        color = default;
+        using var bitmap = SKBitmap.Decode(imageBytes);
+        if (bitmap is null)
+            return false;
+
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                var maximum = Math.Max(pixel.Red, Math.Max(pixel.Green, pixel.Blue));
+                var minimum = Math.Min(pixel.Red, Math.Min(pixel.Green, pixel.Blue));
+                if (pixel.Alpha > 0 && maximum - minimum >= 32)
+                {
+                    color = new CellColor(pixel.Red, pixel.Green, pixel.Blue);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static Control AddMissingEmbeddedPictureCaptureOverlay(
+        Control gridControl,
+        ViewportModel viewport,
+        Sheet sheet,
+        GridRange range,
+        int captureWidth,
+        int captureHeight,
+        ICollection<GridCaptureOverlayBounds> addedBounds)
+    {
+        var projectedPictureIds = viewport.DrawingObjects
+            .Where(item => item.Kind == SelectionPaneObjectKind.Picture)
+            .Select(item => item.Id)
+            .ToHashSet();
+        var overlay = new Canvas
+        {
+            Width = captureWidth,
+            Height = captureHeight,
+            ClipToBounds = true,
+            IsHitTestVisible = false,
+        };
+
+        foreach (var picture in sheet.Pictures)
+        {
+            if (!picture.IsVisible ||
+                picture.Kind != PictureKind.Image ||
+                picture.ImageBytes is not { Length: > 0 } imageBytes ||
+                projectedPictureIds.Contains(picture.Id) ||
+                !TryGetAnchoredObjectPixelBounds(
+                    sheet,
+                    range,
+                    captureWidth,
+                    captureHeight,
+                    picture.Anchor,
+                    picture.AnchorOffsetX,
+                    picture.AnchorOffsetY,
+                    picture.Width,
+                    picture.Height,
+                    out var bounds))
+            {
+                continue;
+            }
+
+            var renderPlan = DrawingObjectRenderPlanner.Plan(new DrawingObjectBounds(
+                SelectionPaneObjectKind.Picture,
+                picture.Id,
+                picture.Name ?? "Picture",
+                picture.Anchor.Row,
+                picture.Anchor.Col,
+                Left: bounds.Left,
+                Top: bounds.Top,
+                Width: bounds.Width,
+                Height: bounds.Height,
+                RotationDegrees: picture.RotationDegrees,
+                FlipHorizontal: picture.FlipHorizontal,
+                FlipVertical: picture.FlipVertical,
+                PictureKind: picture.Kind,
+                ImageBytes: imageBytes.ToArray(),
+                ImageContentType: picture.ContentType,
+                CropLeft: picture.CropLeft,
+                CropTop: picture.CropTop,
+                CropRight: picture.CropRight,
+                CropBottom: picture.CropBottom));
+            var visual = CreateDrawingImageVisual(renderPlan, bounds.Width, bounds.Height);
+            Canvas.SetLeft(visual, bounds.Left);
+            Canvas.SetTop(visual, bounds.Top);
+            overlay.Children.Add(visual);
+            addedBounds.Add(bounds);
+        }
+
+        if (overlay.Children.Count == 0)
+            return gridControl;
+
+        var composite = new AvaloniaGrid
+        {
+            Width = captureWidth,
+            Height = captureHeight,
+            ClipToBounds = true,
+        };
+        composite.Children.Add(gridControl);
+        composite.Children.Add(overlay);
+        return composite;
     }
 
     private static void AddVisibleAnchoredObjectPixelBounds(

@@ -151,8 +151,9 @@ internal readonly record struct GridCaptureOverlayBounds(int Left, int Top, int 
 }
 
 /// <summary>
-/// An authored solid shape fill expected within a drawing-overlay region.  The guard is deliberately
-/// strict enough to reject a cells-only capture while allowing normal edge antialiasing.
+/// An authored solid shape fill or representative embedded-picture color expected within a drawing-overlay
+/// region. The guard is deliberately strict enough to reject a cells-only capture while allowing normal edge
+/// antialiasing.
 /// </summary>
 internal readonly record struct GridCaptureFillColorRegion(
     GridCaptureOverlayBounds Bounds,
@@ -354,7 +355,7 @@ internal static class ParityCaptureOutputGuard
 
             if (matchingPixelCount < expectedFill.MinimumPixelCount)
             {
-                return $"Grid PNG output is missing expected shape fill pixels in overlay bounds " +
+                return $"Grid PNG output is missing expected drawing color pixels in overlay bounds " +
                        $"({bounds.Left},{bounds.Top},{bounds.Width},{bounds.Height}) " +
                        $"(found {matchingPixelCount}, require {expectedFill.MinimumPixelCount}).";
             }

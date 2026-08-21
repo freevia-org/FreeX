@@ -1644,10 +1644,17 @@ internal static class Program
         var pixels = GetBgra32Pixels(bitmap, width, height);
         var colors = new HashSet<int>();
         var opaquePixels = 0;
+        var chromaticPixels = 0;
         for (var offset = 0; offset < pixels.Length; offset += 4)
         {
             if (pixels[offset + 3] > 16)
+            {
                 opaquePixels++;
+                var maximum = Math.Max(pixels[offset], Math.Max(pixels[offset + 1], pixels[offset + 2]));
+                var minimum = Math.Min(pixels[offset], Math.Min(pixels[offset + 1], pixels[offset + 2]));
+                if (maximum - minimum >= 24)
+                    chromaticPixels++;
+            }
 
             var argb =
                 pixels[offset + 3] << 24 |
@@ -1658,7 +1665,12 @@ internal static class Program
         }
 
         var opaqueRatio = (double)opaquePixels / (width * height);
-        return colors.Count <= 24 || opaqueRatio < 0.15;
+        // A valid picture-only reference can intentionally contain very few colors (for example,
+        // the shapes corpus embeds a solid orange PNG).  Keep rejecting sparse monochrome clipboard
+        // failures, but do not mistake substantial authored chroma for a blank frame.
+        var minimumMeaningfulChroma = Math.Max(16, (width * height) / 1000);
+        return opaqueRatio < 0.15 ||
+               (colors.Count <= 24 && chromaticPixels < minimumMeaningfulChroma);
     }
 
     // -----------------------------------------------------------------------
