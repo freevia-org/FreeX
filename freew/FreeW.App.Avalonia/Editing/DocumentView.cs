@@ -1694,6 +1694,30 @@ public sealed partial class DocumentView : Control
             // atom before the caret, else the one after), so they extend that w:sdt instead of splitting
             // it into "field / plain text / field" on save.
             var control = HfActiveContentControl(atoms, idx);
+
+            // AV-CCPLACEHOLDER (header/footer): the header/footer twin of ApplyContentControlTextEdit's
+            // placeholder clearing -- this is a genuine edit to the field's own text, so it stops
+            // "showing placeholder text" even if Word never learns the field is now non-empty until this
+            // typed character lands, matching Word's drop of w:showingPlcHdr the instant a placeholder
+            // field is typed into. Every atom still referencing the original control instance (untouched
+            // characters via the atoms already in the list, the ones about to be typed via `control`
+            // above) is retargeted to one shared cleared instance so the flag clears everywhere at once
+            // without splitting the field's run (HfSetAtoms groups atoms by Control REFERENCE equality,
+            // see SameContentControl).
+            if (control?.WordMetadata is { ShowingPlaceholder: true } placeholderMetadata)
+            {
+                var cleared = control with
+                {
+                    WordMetadata = placeholderMetadata with { ShowingPlaceholder = false }
+                };
+                for (var i = 0; i < atoms.Count; i++)
+                {
+                    if (SameContentControl(atoms[i].Control, control))
+                        atoms[i] = atoms[i] with { Control = cleared };
+                }
+                control = cleared;
+            }
+
             var at = idx;
             foreach (var ch in text)
                 atoms.Insert(at++, new HfAtom(ch, fmt, null, control));
@@ -16415,7 +16439,61 @@ public sealed partial class DocumentView : Control
             return OpenContentControlCalendar(target, run);
         if (run.Control.Kind is ContentControlKind.DropDownList or ContentControlKind.ComboBox)
             return OpenContentControlMenu(target, run);
+
+        // AV-CCPLACEHOLDER-CLICK: entering a placeholder-showing plain-text/rich-text field by click
+        // selects its whole placeholder run, exactly like Tab already does (TabToContentControl), so the
+        // first keystroke replaces the placeholder instead of being spliced into the middle of its
+        // wording -- matching Word. An already-filled field is deliberately left alone: only a click that
+        // lands on a field still SHOWING its placeholder gets the select-all; a filled field keeps
+        // ordinary click-to-position-caret so a user editing real content is not forced into select-all.
+        if (run.Control.Kind is ContentControlKind.PlainText or ContentControlKind.RichText
+            && run.Control.WordMetadata is { ShowingPlaceholder: true }
+            && SelectContentControlSpanAt(target))
+        {
+            return true;
+        }
         return false;
+    }
+
+    /// <summary>
+    /// Selects the model-text span of the content control at <paramref name="target"/> -- caret at its
+    /// end, anchor at its start -- so entering it (by click, mirroring <see cref="TabToContentControl"/>'s
+    /// Tab-based entry) leaves the whole field selected rather than an ordinary caret resting inside it.
+    /// </summary>
+    private bool SelectContentControlSpanAt(ContentControlTarget target)
+    {
+        var paragraph = target.Row is { } row && target.Column is { } col && target.ParagraphIndex is { } paraIdx
+            ? GetCellParagraph(target.BlockIndex, row, col, paraIdx)
+            : _doc.Blocks[target.BlockIndex] as Paragraph;
+        if (paragraph is null)
+            return false;
+
+        (int Start, int Length)? spanRange = null;
+        foreach (var span in ContentControlSpans(paragraph))
+        {
+            if (target.RunIndex >= span.FirstRunIndex && target.RunIndex < span.FirstRunIndex + span.RunCount)
+            {
+                spanRange = (span.Start, span.Length);
+                break;
+            }
+        }
+        if (spanRange is not { } sr)
+            return false;
+
+        if (target.Row is { } r2 && target.Column is { } c2 && target.ParagraphIndex is { } p2)
+        {
+            PlaceCaretInCell(target.BlockIndex, r2, c2, p2, sr.Start + sr.Length);
+            _cellAnchor = (target.BlockIndex, r2, c2, p2, sr.Start);
+            _selectionAnchor = new DocPosition(target.BlockIndex, sr.Start);
+        }
+        else
+        {
+            _cellCaret = null;
+            _cellAnchor = null;
+            _caret = new DocPosition(target.BlockIndex, sr.Start + sr.Length);
+            _selectionAnchor = new DocPosition(target.BlockIndex, sr.Start);
+        }
+        return true;
     }
 
     private bool TryOpenContentControlMenu(Point point)

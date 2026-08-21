@@ -222,10 +222,10 @@ public sealed class NamedRangeDialogXamlTests
         var source = ReadNamedRangeDialogSource();
 
         source.Should().Contain("Func<string, bool>? isValidRange");
-        source.Should().Contain("Func<string, string?>? validateName");
+        source.Should().Contain("Func<string, DefinedNameScope, string?>? validateName");
         source.Should().Contain("isValidRange: rangeText => _definedNames.ValidateRefersTo(rangeText).IsValid");
         source.Should().Contain("validateName: ValidateNameForNativeDialog");
-        source.Should().Contain("ValidateNameInput(name, _validateName)");
+        source.Should().Contain("ValidateNameInput(name, scope, _validateName)");
         source.Should().Contain("FocusNameInput();");
         source.Should().Contain("FocusRefersToInput();");
         source.Should().Contain("private void FocusNameInput()");
@@ -243,7 +243,10 @@ public sealed class NamedRangeDialogXamlTests
     {
         var workbook = new Workbook("Book");
 
-        NameDefinitionDialog.ValidateNameInput(name, workbook.ValidateNamedRangeName)
+        NameDefinitionDialog.ValidateNameInput(
+                name,
+                DefinedNameScope.Workbook,
+                (candidate, _) => workbook.ValidateNamedRangeName(candidate))
             .Should()
             .BeNull();
     }
@@ -260,7 +263,10 @@ public sealed class NamedRangeDialogXamlTests
     {
         var workbook = new Workbook("Book");
 
-        var error = NameDefinitionDialog.ValidateNameInput(name, workbook.ValidateNamedRangeName);
+        var error = NameDefinitionDialog.ValidateNameInput(
+            name,
+            DefinedNameScope.Workbook,
+            (candidate, _) => workbook.ValidateNamedRangeName(candidate));
 
         error.Should().Contain(expectedMessage);
     }
@@ -514,6 +520,85 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().NotContain("ICommandBus");
         source.Should().NotContain("_commandBus");
 
+    }
+
+    // R162-name-manager-f1: ValidateNameForNativeDialog is the New/Edit Name dialog's ONLY live
+    // check before OK is allowed to close it (see NameDefinitionDialog.Accept). It used to route
+    // through DefinedNamesSession.ValidateNameStructure, which checks structural validity plus
+    // structured-table-name collisions only -- it never consulted the workbook's own
+    // NamedRanges/NamedFormulas/ScopedNamedRanges/ScopedNamedFormulas, so typing an
+    // already-existing defined name produced no warning and let the dialog close, discarding the
+    // typed Refers To/Comment (the later DefineOrUpdateName -> PlanSave call was the only place
+    // that actually caught the duplicate, by which point the dialog was already gone). Drives the
+    // real production call site directly.
+    [Fact]
+    public void ValidateNameForNativeDialog_FlagsDuplicateAgainstExistingNamedRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book");
+            workbook.AddSheet("Sheet1");
+            var dialog = new NamedRangeDialog(workbook, CreateCommandBus(workbook));
+            try
+            {
+                var defineOrUpdateName = SourceTextTestSupport.GetPrivateMethod(dialog, "DefineOrUpdateName");
+                defineOrUpdateName.Invoke(
+                    dialog,
+                    [new NameDefinitionDialogResult("Sales", "Workbook", "", "A1:A2"), null, null, null]);
+                workbook.NamedRanges.Should().ContainKey("Sales");
+
+                var validate = SourceTextTestSupport.GetPrivateMethod(dialog, "ValidateNameForNativeDialog");
+                var error = (string?)validate.Invoke(dialog, [ "Sales", DefinedNameScope.Workbook ]);
+
+                error.Should().NotBeNull(
+                    "typing the name of an already-existing defined name must be flagged live, before OK is allowed to discard the typed Refers To/Comment");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    // R162-name-manager-f1 sibling/no-regression: re-opening the SAME entry for Edit without
+    // renaming it must not flag the name as a duplicate of itself. ShowNameDefinitionDialog
+    // populates _activeDefinitionOriginal from the (originalName, originalScopeSheetId) it is
+    // given before the modal dialog opens; this test sets that field directly (bypassing the
+    // modal ShowDialog loop, which this reflection-driven test cannot pump) to exercise
+    // ValidateNameForNativeDialog exactly as a real Edit would.
+    [Fact]
+    public void ValidateNameForNativeDialog_SkipsDuplicateWarningWhenEditingSameEntry()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book");
+            workbook.AddSheet("Sheet1");
+            var dialog = new NamedRangeDialog(workbook, CreateCommandBus(workbook));
+            try
+            {
+                var defineOrUpdateName = SourceTextTestSupport.GetPrivateMethod(dialog, "DefineOrUpdateName");
+                defineOrUpdateName.Invoke(
+                    dialog,
+                    [new NameDefinitionDialogResult("Sales", "Workbook", "", "A1:A2"), null, null, null]);
+                workbook.NamedRanges.Should().ContainKey("Sales");
+
+                var originalField = typeof(NamedRangeDialog).GetField(
+                    "_activeDefinitionOriginal",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                originalField.Should().NotBeNull();
+                originalField!.SetValue(dialog, (DefinedNameIdentity?)new DefinedNameIdentity("Sales", DefinedNameScope.Workbook));
+
+                var validate = SourceTextTestSupport.GetPrivateMethod(dialog, "ValidateNameForNativeDialog");
+                var error = (string?)validate.Invoke(dialog, [ "Sales", DefinedNameScope.Workbook ]);
+
+                error.Should().BeNull(
+                    "re-opening an existing name for Edit without renaming it must not flag it as a duplicate of itself");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]

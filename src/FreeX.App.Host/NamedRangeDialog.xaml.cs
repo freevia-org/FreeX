@@ -20,6 +20,7 @@ public sealed partial class NamedRangeDialog : Window
     private readonly List<DefinedNameRow> _items = [];
     private readonly string _initialRefersTo;
     private NameDefinitionDialog? _activeDefinitionDialog;
+    private DefinedNameIdentity? _activeDefinitionOriginal;
 
     public NamedRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
@@ -164,6 +165,12 @@ public sealed partial class NamedRangeDialog : Window
         SheetId? originalScopeSheetId)
     {
         _activeDefinitionDialog = dialog;
+        // Mirrors the identity DefineOrUpdateName itself excludes from its post-close duplicate
+        // check (see below): null for a brand-new name, or the entry being edited so re-saving it
+        // unchanged (or under the same name/scope) never flags itself as a duplicate of itself.
+        _activeDefinitionOriginal = originalName is null
+            ? null
+            : new DefinedNameIdentity(originalName, _definedNames.GetScope(originalScopeSheetId));
         try
         {
             if (dialog.ShowDialog() == true)
@@ -172,6 +179,7 @@ public sealed partial class NamedRangeDialog : Window
         finally
         {
             _activeDefinitionDialog = null;
+            _activeDefinitionOriginal = null;
         }
     }
 
@@ -318,9 +326,20 @@ public sealed partial class NamedRangeDialog : Window
     private IReadOnlyList<DefinedNameScopeOption> GetScopeOptions() =>
         DefinedNameUiPolicy.BuildScopeOptions(_definedNames.ScopeChoices);
 
-    private string? ValidateNameForNativeDialog(string name)
+    /// <summary>
+    /// R162-name-manager-f1: this used to route through <see cref="DefinedNamesSession.ValidateNameStructure"/>,
+    /// which only checks structural validity plus collisions with structured-table names -- it never
+    /// consulted the workbook's own defined names/formulas at all, so the New/Edit Name dialog would
+    /// close successfully on a real duplicate (only the later <see cref="DefinedNamesSession.PlanSave"/>
+    /// call in <see cref="DefineOrUpdateName"/> caught it, by which point the dialog -- and everything
+    /// the user typed into it -- was already gone). <see cref="DefinedNamesSession.ValidateName"/> is the
+    /// full scope-aware duplicate check (the same one Avalonia's live validation and this dialog's own
+    /// post-close <see cref="DefineOrUpdateName"/> already use), with <see cref="_activeDefinitionOriginal"/>
+    /// excluded so editing a name in place without renaming it does not flag itself.
+    /// </summary>
+    private string? ValidateNameForNativeDialog(string name, DefinedNameScope scope)
     {
-        var result = _definedNames.ValidateNameStructure(name);
+        var result = _definedNames.ValidateName(name, scope, _activeDefinitionOriginal);
         return result.IsValid ? null : DescribeNameError(result.Error);
     }
 

@@ -88,7 +88,14 @@ public partial class MainWindow
             DefinedNameUiPolicy.BuildScopeOptions(definedNames.ScopeChoices),
             request => ApplyNameDefinitionSelection(dialog, request),
             isValidRange: rangeText => definedNames.ValidateRefersTo(rangeText).IsValid,
-            validateName: _workbook.ValidateNamedRangeName)
+            // R162-name-manager-f1: this "Define Name" ribbon entry point is a separate gesture from
+            // Name Manager's New/Edit dialog (see NamedRangeDialog.ValidateNameForNativeDialog) and is
+            // deliberately left as-is here -- structural + table-name validation only, matching this
+            // call site's pre-existing behavior. NameDefinitionDialog's validateName delegate now
+            // threads the live Scope selection through as a second parameter; this site does not use
+            // it (Workbook.ValidateNamedRangeName never checked duplicates against other defined names
+            // either, so there is no scope-aware behavior to preserve here).
+            validateName: (name, _) => _workbook.ValidateNamedRangeName(name))
         {
             Owner = this
         };

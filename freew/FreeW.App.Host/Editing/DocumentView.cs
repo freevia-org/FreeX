@@ -9243,6 +9243,7 @@ public sealed partial class DocumentView : RichTextBox
         var tableBorders = stashedTag?.Borders;
         var floatingPosition = stashedTag?.FloatingPosition;
         var floatingTableAllowsOverlap = stashedTag?.FloatingTableAllowsOverlap;
+        var blockContentControl = stashedTag?.BlockContentControl;
 
         // Preserve column widths (column-level in WPF) so the docx tblGrid round-trips through edit.
         foreach (var column in wpfTable.Columns)
@@ -9387,6 +9388,11 @@ public sealed partial class DocumentView : RichTextBox
         table.Borders = tableBorders;
         table.FloatingPosition = floatingPosition;
         table.FloatingTableAllowsOverlap = floatingTableAllowsOverlap;
+        // Recover the table's own body-level content-control mark (a Group/RepeatingSection/
+        // BuildingBlockGallery/DocumentPart/Bibliography w:sdt wrapping the whole w:tbl). Stashed by
+        // BuildTable since a WPF FlowDocument Table has no native slot for it; without this, committing
+        // the view back to the model (every save routes through CommitToModel) silently drops the wrapper.
+        table.BlockContentControl = blockContentControl;
         return table;
     }
 
@@ -9678,9 +9684,13 @@ public sealed partial class DocumentView : RichTextBox
     /// <summary>
     /// Carried on a rendered <see cref="WpfTable"/>'s Tag so <see cref="ReadTable"/> can recover values
     /// that the WPF FlowDocument table cannot express: the <see cref="TableFormatting"/> toggles, explicit
-    /// <see cref="TableBorders"/>, the <see cref="TableStyleId"/> (the named catalog style), and authored
-    /// floating-table placement. They are stashed on <see cref="BuildTable"/> and recovered on commit so
-    /// they survive the view→model round-trip unmodified.
+    /// <see cref="TableBorders"/>, the <see cref="TableStyleId"/> (the named catalog style), authored
+    /// floating-table placement, and the table's own body-level content-control mark (<see
+    /// cref="FreeW.Core.Model.Block.BlockContentControl"/> -- a Group/RepeatingSection/BuildingBlockGallery/
+    /// DocumentPart/Bibliography <c>w:sdt</c> wrapping the whole <c>w:tbl</c>, see <see
+    /// cref="FreeW.Core.IO.DocxReader"/>'s <c>table.BlockContentControl = inheritedBlockContentControl</c>).
+    /// They are stashed on <see cref="BuildTable"/> and recovered on commit so they survive the
+    /// view→model round-trip unmodified.
     /// </summary>
     private sealed record WpfTableTag(
         TableFormatting Formatting,
@@ -9692,7 +9702,8 @@ public sealed partial class DocumentView : RichTextBox
         int SegmentIndex = 0,
         int SegmentCount = 1,
         int PageNumber = 1,
-        bool IsPaginationSegment = false);
+        bool IsPaginationSegment = false,
+        FreeW.Core.Model.BlockContentControl? BlockContentControl = null);
 
     private sealed record WpfTableRowTag(
         int SourceRowIndex,
@@ -9924,7 +9935,8 @@ public sealed partial class DocumentView : RichTextBox
                 segmentIndex,
                 segmentCount,
                 paginationPage?.PageNumber ?? 1,
-                isPaginationSegment)
+                isPaginationSegment,
+                table.BlockContentControl)
         };
         if (isPaginationSegment)
         {
@@ -11996,7 +12008,36 @@ public sealed partial class DocumentView : RichTextBox
                 wpf.Cursor = System.Windows.Input.Cursors.Hand;
                 wpf.MouseLeftButtonUp += OnDatePickerClicked;
                 break;
+
+            case ContentControlKind.PlainText:
+            case ContentControlKind.RichText:
+                // Mirrors FreeW.App.Avalonia.Editing.DocumentView.TryActivateContentControl: entering a
+                // placeholder-showing plain-text/rich-text field by click selects the whole placeholder
+                // run, exactly like Tab already does (TabToContentControl), so the first keystroke
+                // replaces the placeholder instead of landing at the click position and splicing into the
+                // middle of its wording -- matching Word. An already-filled field is deliberately left
+                // unwired here: clicking it should keep ordinary native caret placement, not select
+                // everything.
+                if (control.WordMetadata is { ShowingPlaceholder: true })
+                    wpf.MouseLeftButtonUp += OnPlaceholderControlClicked;
+                break;
         }
+    }
+
+    /// <summary>
+    /// Selects the whole run when a placeholder-showing plain-text/rich-text content control is clicked --
+    /// the click-gesture counterpart of <see cref="TabToContentControl"/>'s Tab-based whole-field
+    /// selection. Runs after the RichTextBox's own MouseLeftButtonDown handling has already placed a
+    /// collapsed caret at the click point, so overriding the selection here (rather than during Down)
+    /// reliably wins.
+    /// </summary>
+    private static void OnPlaceholderControlClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not WpfRun wpf)
+            return;
+
+        e.Handled = true;
+        FindOwnerView(wpf)?.Selection.Select(wpf.ContentStart, wpf.ContentEnd);
     }
 
     /// <summary>
@@ -15848,6 +15889,18 @@ public sealed partial class DocumentView : RichTextBox
                 && BlockContentControlAt(paragraph) is { } blockControl
                 && !ContentControlInteractionPlanner.CanDeleteBlockContentControl(blockControl)
                 && CoveredWhole(paragraph.ContentStart, paragraph.ContentEnd))
+            {
+                return true;
+            }
+
+            // A table wrapped in its own body-level content control (Group / RepeatingSection /
+            // BuildingBlockGallery / DocumentPart / Bibliography w:sdt around a w:tbl -- see WpfTableTag)
+            // is the table-level counterpart of the paragraph check above: a delete-locked wrapper must
+            // refuse a selection that covers the whole table just as it would for a paragraph.
+            if (block is WpfTable wpfTable
+                && (wpfTable.Tag as WpfTableTag)?.BlockContentControl is { } tableBlockControl
+                && !ContentControlInteractionPlanner.CanDeleteBlockContentControl(tableBlockControl)
+                && CoveredWhole(wpfTable.ContentStart, wpfTable.ContentEnd))
             {
                 return true;
             }

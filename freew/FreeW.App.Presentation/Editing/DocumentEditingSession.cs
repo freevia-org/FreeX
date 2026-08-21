@@ -924,8 +924,38 @@ public sealed class DocumentEditingSession
         string? basedOnId,
         string? nextStyleId)
     {
-        if (string.IsNullOrWhiteSpace(styleId) || !Document.Styles.ContainsKey(styleId))
+        if (string.IsNullOrWhiteSpace(styleId) || !Document.Styles.TryGetValue(styleId, out var existing))
             return null;
+
+        // Dry-run the same StyleManager.ModifyStyle logic against a scratch catalog (a fresh dictionary
+        // holding the same DocumentStyle references -- ModifyStyle only ever replaces the target entry
+        // with a new instance, never mutates one in place, so sharing the other entries is safe) so a
+        // Modify Style OK click that changes nothing (dialog closed without edits, or edits that
+        // round-trip back to the original values) never reaches the command bus. Without this, every
+        // such click pushed a no-op "Modify Style" undo entry -- see finding shared-undo-across-panes F2.
+        var scratch = TextDocument.CreateEmpty();
+        scratch.Styles.Clear();
+        foreach (var (id, style) in Document.Styles)
+            scratch.Styles[id] = style;
+
+        var preview = StyleManager.ModifyStyle(
+            scratch,
+            styleId,
+            run: run,
+            para: paragraph,
+            basedOnId: basedOnId,
+            clearBasedOn: basedOnId is null,
+            nextStyleId: nextStyleId,
+            clearNext: nextStyleId is null);
+
+        if (preview is not null
+            && preview.Run == existing.Run
+            && preview.Paragraph == existing.Paragraph
+            && string.Equals(preview.BasedOnStyleId, existing.BasedOnStyleId, StringComparison.Ordinal)
+            && string.Equals(preview.NextStyleId, existing.NextStyleId, StringComparison.Ordinal))
+        {
+            return existing;
+        }
 
         DocumentStyle? updated = null;
         _commands.Execute(new StyleCatalogCommand("Modify Style", document =>

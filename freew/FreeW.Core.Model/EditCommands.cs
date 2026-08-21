@@ -407,6 +407,11 @@ public sealed class ReplaceTableCellParagraphRunsCommand(
 /// Restart or Continue AND the cell below is Continue), the new cell inherits
 /// <see cref="VerticalMergeState.Continue"/> so the merge is extended rather than severed (BF2).
 /// Reversible.
+/// <para>Track Changes: when <see cref="TextDocument.TrackRevisions"/> is on, the new row is stamped
+/// <see cref="TableRow.RowRevision"/> = <see cref="RevisionKind.Inserted"/> (the row-level sibling of
+/// <see cref="DeleteTableRowCommand"/>'s tracked-deletion path), so it shows up in the Reviewing Pane and
+/// disappears again on <see cref="TrackChanges.RejectAll"/> instead of becoming permanent content
+/// immediately.</para>
 /// </summary>
 public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocumentCommand
 {
@@ -446,6 +451,13 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
                 }
             }
             row.Cells.Add(new TableCell(string.Empty) { VerticalMerge = mergeState });
+        }
+
+        if (context.Document.TrackRevisions)
+        {
+            row.RowRevision = RevisionKind.Inserted;
+            row.RowRevisionAuthor = TrackedFormattingRevisionFactory.NormalizeAuthor(context.RevisionAuthor);
+            row.RowRevisionDateXml = TrackedFormattingRevisionFactory.CurrentDateXml();
         }
 
         table.Rows.Insert(at, row);

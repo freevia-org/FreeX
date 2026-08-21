@@ -188,6 +188,31 @@ public partial class OptionsDialog : Window
         // Language
         OptAppLanguage.ItemsSource = AppLanguageCatalog.GetAvailableLanguages();
         OptAppLanguage.SelectedValue = AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage);
+        if (OptAppLanguage.SelectedIndex < 0 &&
+            AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage) is string storedAppLanguage &&
+            !string.IsNullOrEmpty(storedAppLanguage))
+        {
+            // The persisted language is a culture this build's catalog doesn't list (e.g. a
+            // language pack from a fuller/older build, or a satellite missing from a trimmed
+            // deployment). Add it to the list and keep it selected instead of silently collapsing
+            // to "System Default" below -- that fallback would otherwise be written back as a
+            // genuine user edit the moment OK is clicked (see
+            // OptionsDialogPlanner.MergeOntoFreshLoad), discarding the user's real preference even
+            // though they never opened this page.
+            var unlistedDisplayName = storedAppLanguage;
+            try
+            {
+                unlistedDisplayName = System.Globalization.CultureInfo.GetCultureInfo(storedAppLanguage).NativeName;
+            }
+            catch (System.Globalization.CultureNotFoundException)
+            {
+            }
+
+            OptAppLanguage.ItemsSource = AppLanguageCatalog.GetAvailableLanguages()
+                .Append(new Free.Shared.Localization.AppLanguageOption(storedAppLanguage, unlistedDisplayName))
+                .ToList();
+            OptAppLanguage.SelectedValue = storedAppLanguage;
+        }
         if (OptAppLanguage.SelectedIndex < 0)
             OptAppLanguage.SelectedIndex = 0;
 

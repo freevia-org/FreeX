@@ -150,11 +150,22 @@ public sealed partial class ManageConditionalFormatsDialog
         if (textBox.Tag as string == textBox.Text)
             return;
 
+        // r162 remediation: the text genuinely changed, so the binding has already committed a new
+        // AppliesTo into the rule. Mark the dialog dirty even when the new text does not parse --
+        // the model was mutated either way, and OK must not silently drop it.
+        MarkPendingChange();
+
         if (TryParseAppliesToText(textBox.Text, _sheet.Id, out _))
             rule.AdditionalRanges = null;
     }
 
-    private static GridViewColumn CreateStopIfTrueColumn()
+    // r162 remediation. Both direct-bound editors in this ListView -- this checkbox and the
+    // Applies To text box -- write straight into the ConditionalFormat through their bindings,
+    // without passing through any of the dialog's own edit commands. Those commands are where
+    // MarkPendingChange lives, so a visit whose ONLY edit came through a binding left
+    // _hasPendingChanges false, and the r162 fix that made OK skip a no-op commit then discarded
+    // the edit entirely. A binding that mutates the model is an edit and must mark the dialog dirty.
+    private GridViewColumn CreateStopIfTrueColumn()
     {
         var stopIfTrueTemplate = new DataTemplate();
         var stopIfTrueFactory  = new FrameworkElementFactory(typeof(CheckBox));
@@ -167,6 +178,8 @@ public sealed partial class ManageConditionalFormatsDialog
                 Mode = BindingMode.TwoWay,
                 UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
             });
+        stopIfTrueFactory.AddHandler(ToggleButton.CheckedEvent, new RoutedEventHandler(StopIfTrueCheckBox_Toggled));
+        stopIfTrueFactory.AddHandler(ToggleButton.UncheckedEvent, new RoutedEventHandler(StopIfTrueCheckBox_Toggled));
         stopIfTrueTemplate.VisualTree = stopIfTrueFactory;
 
         return new GridViewColumn
@@ -175,5 +188,14 @@ public sealed partial class ManageConditionalFormatsDialog
             Width = 85,
             CellTemplate = stopIfTrueTemplate
         };
+    }
+
+    // The binding has already written the new value into rule.StopIfTrue by the time this runs
+    // (handlers attached after a binding fire after it commits), so there is nothing to apply here
+    // -- only the dirty flag to raise.
+    private void StopIfTrueCheckBox_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox { DataContext: ConditionalFormat })
+            MarkPendingChange();
     }
 }

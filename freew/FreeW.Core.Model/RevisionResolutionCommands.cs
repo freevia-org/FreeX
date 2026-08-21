@@ -51,14 +51,20 @@ internal abstract class RevisionResolutionCommand : IDocumentCommand
     /// </summary>
     public static bool CanResolve(TextDocument document, RevisionEntry? entry)
     {
-        if (entry is null || !ContainsParagraph(document, entry.Paragraph) || !entry.Paragraph.Runs.Contains(entry.Run))
+        // A null Run means entry describes a paragraph-mark revision (Paragraph.MarkRevision) rather than
+        // a run. Resolving one can merge this paragraph's runs into the next paragraph in its container
+        // (RevisionList.ResolveMarkRevision), which this command's TargetParagraph snapshot (one
+        // paragraph's own runs/formatting/marks) is too narrow to undo correctly -- so this legacy
+        // undoable-command path deliberately does not support it yet, exactly as it could not before
+        // RevisionEntry.Run became nullable (there was no way to construct such an entry at all).
+        if (entry is null || entry.Run is not { } run || !ContainsParagraph(document, entry.Paragraph) || !entry.Paragraph.Runs.Contains(run))
             return false;
 
         return entry.Kind switch
         {
-            RevisionEntryKind.Insertion => entry.Run.Revision == RevisionKind.Inserted,
-            RevisionEntryKind.Deletion => entry.Run.Revision == RevisionKind.Deleted,
-            RevisionEntryKind.Formatting => entry.Run.FormatRevision is not null,
+            RevisionEntryKind.Insertion => run.Revision == RevisionKind.Inserted,
+            RevisionEntryKind.Deletion => run.Revision == RevisionKind.Deleted,
+            RevisionEntryKind.Formatting => run.FormatRevision is not null,
             _ => false
         };
     }

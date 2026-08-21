@@ -27,7 +27,7 @@ internal sealed class NameDefinitionDialog : Window
     private readonly IReadOnlyList<DefinedNameScopeOption> _scopeOptions;
     private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
     private readonly Func<string, bool> _isValidRange;
-    private readonly Func<string, string?> _validateName;
+    private readonly Func<string, DefinedNameScope, string?> _validateName;
 
     public NameDefinitionDialogResult Result { get; private set; }
     public NamedRangeSelectionRequest? RangeSelectionRequest { get; private set; }
@@ -37,7 +37,7 @@ internal sealed class NameDefinitionDialog : Window
         IReadOnlyList<DefinedNameScopeOption> scopeOptions,
         Action<NamedRangeSelectionRequest>? requestRangeSelection = null,
         Func<string, bool>? isValidRange = null,
-        Func<string, string?>? validateName = null)
+        Func<string, DefinedNameScope, string?>? validateName = null)
     {
         Result = initial;
         _scopeOptions = scopeOptions.Count > 0
@@ -45,7 +45,7 @@ internal sealed class NameDefinitionDialog : Window
             : [new DefinedNameScopeOption(DefinedNameScope.Workbook)];
         _requestRangeSelection = requestRangeSelection;
         _isValidRange = isValidRange ?? (rangeText => !string.IsNullOrWhiteSpace(rangeText));
-        _validateName = validateName ?? (_ => null);
+        _validateName = validateName ?? ((_, _) => null);
         Title = string.IsNullOrWhiteSpace(initial.Name)
             ? UiText.Get("NameDefinition_NewNameTitle")
             : UiText.Get("NameDefinition_EditNameTitle");
@@ -157,7 +157,13 @@ internal sealed class NameDefinitionDialog : Window
     private void Accept()
     {
         var name = _nameBox.Text.Trim();
-        var nameError = ValidateNameInput(name, _validateName);
+        // Read the Scope combo's LIVE selection (not the initial/original scope) so this matches
+        // exactly what DefineOrUpdateName will check once the dialog closes: the user is free to
+        // change scope before clicking OK, and validating against a stale scope would either miss a
+        // real duplicate in the newly chosen scope or flag a false one that only existed in the
+        // scope the dialog started on.
+        var scope = DefinedNameUiPolicy.ResolveScopeOption(_scopeOptions, _scopeBox.SelectedIndex).Scope;
+        var nameError = ValidateNameInput(name, scope, _validateName);
         if (nameError is not null)
         {
             DialogMessageHelper.ShowWarning(this, nameError, Title);
@@ -193,12 +199,15 @@ internal sealed class NameDefinitionDialog : Window
     /// (it uses the Define Name dialog's own wording rather than the Name Manager's). Every other rule is
     /// delegated to <paramref name="validateName"/>, which the host wires to the defined-names session.
     /// </summary>
-    internal static string? ValidateNameInput(string name, Func<string, string?> validateName)
+    internal static string? ValidateNameInput(
+        string name,
+        DefinedNameScope scope,
+        Func<string, DefinedNameScope, string?> validateName)
     {
         if (DefinedNameValidator.Validate(name).Error == DefinedNameError.Blank)
             return UiText.Get("NameDefinition_PleaseEnterNameMessage");
 
-        return validateName(name.Trim());
+        return validateName(name.Trim(), scope);
     }
 
     private void FocusNameInput()

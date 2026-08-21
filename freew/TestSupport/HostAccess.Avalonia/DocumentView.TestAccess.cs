@@ -407,6 +407,15 @@ public sealed partial class DocumentView
 
 
     /// <summary>
+    /// Operates the content control at the given point via the body/table-cell click gesture's own path
+    /// (<see cref="TryActivateContentControl"/>) — checkbox toggle, calendar/menu open, or (F3) selecting
+    /// a placeholder-showing plain-text/rich-text field's whole run so a headless test can exercise the
+    /// exact code path a real mouse click runs, not just the caret placement <see cref="HandleBodyClickForTest"/>
+    /// alone provides.
+    /// </summary>
+    internal bool ActivateContentControlAtForTest(Point point) => TryActivateContentControl(point);
+
+    /// <summary>
     /// Operates the content control the header/footer caret sits on — the click gesture's own path, which
     /// a headless run reaches this way because a header field has no model index to address it by.
     /// </summary>

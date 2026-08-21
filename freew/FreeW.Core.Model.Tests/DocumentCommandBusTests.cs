@@ -560,6 +560,81 @@ public class DocumentCommandBusTests
     }
 
     [Fact]
+    public void InsertTableRow_UnderTrackRevisions_StampsRowInsertedAndRejectAllRemovesIt()
+    {
+        var (doc, bus) = New("Ada Reviewer");
+        doc.TrackRevisions = true;
+        var table = Table.Create(2, 3);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new InsertTableRowCommand(0, 1));
+
+        table.RowCount.Should().Be(3);
+        table.Rows[1].RowRevision.Should().Be(RevisionKind.Inserted);
+        table.Rows[1].RowRevisionAuthor.Should().Be("Ada Reviewer");
+        table.Rows[1].RowRevisionDateXml.Should().NotBeNullOrEmpty();
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+
+        TrackChanges.RejectAll(doc);
+        table.RowCount.Should().Be(2);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void InsertTableRow_UnderTrackRevisions_AcceptAllKeepsRowAndClearsMark()
+    {
+        var (doc, bus) = New("Ada Reviewer");
+        doc.TrackRevisions = true;
+        var table = Table.Create(2, 3);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new InsertTableRowCommand(0, 1));
+        table.RowCount.Should().Be(3);
+
+        TrackChanges.AcceptAll(doc);
+        table.RowCount.Should().Be(3);
+        table.Rows[1].RowRevision.Should().Be(RevisionKind.None);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void InsertTableRow_WithoutTrackRevisions_LeavesRowUnmarked()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 3);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new InsertTableRowCommand(0, 1));
+
+        table.RowCount.Should().Be(3);
+        table.Rows[1].RowRevision.Should().Be(RevisionKind.None);
+        table.Rows[1].RowRevisionAuthor.Should().BeNull();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void DeleteTableRow_OnOwnPendingTrackedInsertion_RemovesRowOutrightInsteadOfStackingDeletion()
+    {
+        // Sibling interaction: DeleteTableRowCommand.IsOwnPendingInsertion only fires when a row is
+        // already marked RowRevision.Inserted by this same author -- which InsertTableRowCommand now
+        // produces. Deleting your own still-pending tracked insertion should take it back outright
+        // (row disappears immediately) rather than layering a Deleted mark on top of an Inserted one.
+        var (doc, bus) = New("Ada Reviewer");
+        doc.TrackRevisions = true;
+        var table = Table.Create(2, 3);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new InsertTableRowCommand(0, 1));
+        table.RowCount.Should().Be(3);
+        table.Rows[1].RowRevision.Should().Be(RevisionKind.Inserted);
+
+        bus.Execute(new DeleteTableRowCommand(0, 1));
+
+        table.RowCount.Should().Be(2);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
     public void DeleteTableRow_ReducesRowCount_AndUndoRestoresSameRow()
     {
         var (doc, bus) = New();

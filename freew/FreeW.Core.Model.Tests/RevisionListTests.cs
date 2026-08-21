@@ -386,4 +386,328 @@ public class RevisionListTests
         remaining.Should().Contain(e => e.Kind == RevisionEntryKind.Deletion && e.Text == "old ");
         remaining.Should().Contain(e => e.Kind == RevisionEntryKind.Insertion && e.Text == "new");
     }
+
+    // --- Paragraph-mark revisions (freew-track-changes-accept F2) ---
+    //
+    // A tracked Backspace/Delete at a paragraph boundary (DocumentEditingSession
+    // .TryDeleteBodyParagraphBoundaryAsRevision) sets ONLY Paragraph.MarkRevision -- no run is touched.
+    // Before the fix, RevisionList.Enumerate never read MarkRevision at all, so this change was invisible
+    // to the Reviewing Pane, Previous/Next, and single Accept/Reject (only Accept All/Reject All, which
+    // walk TrackChanges.ResolveBlockList, could ever resolve it).
+
+    [Fact]
+    public void Enumerate_ListsParagraphMarkDeletionRevision()
+    {
+        var doc = new TextDocument();
+        var p0 = new Paragraph();
+        p0.Runs.Add(new Run("Hello "));
+        p0.MarkRevision = RevisionKind.Deleted;
+        p0.MarkRevisionAuthor = "Alice";
+        p0.MarkRevisionDateXml = "2026-08-20T09:00:00Z";
+        doc.Blocks.Add(p0);
+
+        var p1 = new Paragraph();
+        p1.Runs.Add(new Run("World"));
+        doc.Blocks.Add(p1);
+
+        var entries = RevisionList.Enumerate(doc);
+
+        entries.Should().ContainSingle();
+        entries[0].Kind.Should().Be(RevisionEntryKind.Deletion);
+        entries[0].Author.Should().Be("Alice");
+        entries[0].DateXml.Should().Be("2026-08-20T09:00:00Z");
+        entries[0].Text.Should().Be(FormattingMarks.Pilcrow.ToString());
+        entries[0].Paragraph.Should().BeSameAs(p0);
+        entries[0].Run.Should().BeNull();
+        entries[0].BlockIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void Accept_ParagraphMarkDeletion_MergesTheTwoParagraphs()
+    {
+        // Accepting a deleted paragraph mark applies the tracked merge: this paragraph's runs move onto
+        // the following paragraph and the boundary paragraph itself disappears -- exactly what Accept All
+        // does for the same mark (TrackChanges.ResolveBlockList), just for this one entry only.
+        var doc = new TextDocument();
+        var p0 = new Paragraph();
+        p0.Runs.Add(new Run("Hello "));
+        p0.MarkRevision = RevisionKind.Deleted;
+        p0.MarkRevisionAuthor = "Alice";
+        doc.Blocks.Add(p0);
+
+        var p1 = new Paragraph();
+        p1.Runs.Add(new Run("World"));
+        doc.Blocks.Add(p1);
+
+        var entry = RevisionList.Enumerate(doc)[0];
+        RevisionList.Accept(doc, entry).Should().BeTrue();
+
+        doc.Blocks.Should().ContainSingle();
+        var merged = (Paragraph)doc.Blocks[0];
+        merged.PlainText.Should().Be("Hello World");
+        merged.MarkRevision.Should().Be(RevisionKind.None);
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+        // Independent oracle: TrackChanges.AcceptAll on an equivalent document must agree.
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Reject_ParagraphMarkDeletion_ClearsMarkAndKeepsBothParagraphs()
+    {
+        // Rejecting a deleted paragraph mark restores the boundary: the mark is cleared but the two
+        // paragraphs stay separate (the opposite of Accept).
+        var doc = new TextDocument();
+        var p0 = new Paragraph();
+        p0.Runs.Add(new Run("Hello "));
+        p0.MarkRevision = RevisionKind.Deleted;
+        doc.Blocks.Add(p0);
+
+        var p1 = new Paragraph();
+        p1.Runs.Add(new Run("World"));
+        doc.Blocks.Add(p1);
+
+        var entry = RevisionList.Enumerate(doc)[0];
+        RevisionList.Reject(doc, entry).Should().BeTrue();
+
+        doc.Blocks.Should().HaveCount(2);
+        p0.MarkRevision.Should().Be(RevisionKind.None);
+        p0.PlainText.Should().Be("Hello ");
+        p1.PlainText.Should().Be("World");
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Reject_ParagraphMarkInsertion_UndoesTheSplitByMergingParagraphs()
+    {
+        // The inverse gesture: a tracked Enter split one paragraph in two, marking the earlier paragraph's
+        // OWN (new) end mark as Inserted. Rejecting the insertion undoes the split (merge); accepting it
+        // keeps the split (mark just cleared) -- the mirror image of the Deletion case above.
+        var doc = new TextDocument();
+        var p0 = new Paragraph();
+        p0.Runs.Add(new Run("Hello "));
+        p0.MarkRevision = RevisionKind.Inserted;
+        p0.MarkRevisionAuthor = "Bob";
+        doc.Blocks.Add(p0);
+
+        var p1 = new Paragraph();
+        p1.Runs.Add(new Run("World"));
+        doc.Blocks.Add(p1);
+
+        var entry = RevisionList.Enumerate(doc).Single();
+        entry.Kind.Should().Be(RevisionEntryKind.Insertion);
+
+        RevisionList.Reject(doc, entry).Should().BeTrue();
+
+        doc.Blocks.Should().ContainSingle();
+        var merged = (Paragraph)doc.Blocks[0];
+        merged.PlainText.Should().Be("Hello World");
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Accept_ParagraphMarkInsertion_KeepsTheSplitAndClearsTheMarkOnly()
+    {
+        var doc = new TextDocument();
+        var p0 = new Paragraph();
+        p0.Runs.Add(new Run("Hello "));
+        p0.MarkRevision = RevisionKind.Inserted;
+        doc.Blocks.Add(p0);
+
+        var p1 = new Paragraph();
+        p1.Runs.Add(new Run("World"));
+        doc.Blocks.Add(p1);
+
+        var entry = RevisionList.Enumerate(doc).Single();
+        RevisionList.Accept(doc, entry).Should().BeTrue();
+
+        doc.Blocks.Should().HaveCount(2);
+        p0.MarkRevision.Should().Be(RevisionKind.None);
+        p0.PlainText.Should().Be("Hello ");
+        p1.PlainText.Should().Be("World");
+    }
+
+    [Fact]
+    public void Accept_ParagraphMarkDeletion_OnLastEmptyUnanchoredParagraph_DropsItOutright()
+    {
+        // No following paragraph to merge into: an empty, unanchored trailing paragraph whose mark
+        // resolves to "removed" is dropped entirely -- mirrors TrackChanges' own fallback for this case.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body text"));
+        var trailing = new Paragraph();
+        trailing.MarkRevision = RevisionKind.Deleted;
+        doc.Blocks.Add(trailing);
+
+        var entry = RevisionList.Enumerate(doc).Single();
+        RevisionList.Accept(doc, entry).Should().BeTrue();
+
+        doc.Blocks.Should().ContainSingle();
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Accept_ParagraphMarkDeletion_InsideTableCell_MergesWithinTheCellOnly()
+    {
+        // Sibling/no-regression case: the same merge must work for a paragraph nested in a table cell,
+        // touching only that cell's own paragraph list (not the top-level body block list).
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);
+        var cell = table.Rows[0].Cells[0];
+        cell.Paragraphs.Clear();
+        var p0 = new Paragraph();
+        p0.Runs.Add(new Run("cell one "));
+        p0.MarkRevision = RevisionKind.Deleted;
+        cell.Paragraphs.Add(p0);
+        var p1 = new Paragraph();
+        p1.Runs.Add(new Run("cell two"));
+        cell.Paragraphs.Add(p1);
+        doc.Blocks.Add(table);
+
+        var entry = RevisionList.Enumerate(doc).Single();
+        RevisionList.Accept(doc, entry).Should().BeTrue();
+
+        cell.Paragraphs.Should().ContainSingle();
+        cell.Paragraphs[0].PlainText.Should().Be("cell one cell two");
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Accept_StaleMarkRevisionEntry_IsNoOp()
+    {
+        var doc = new TextDocument();
+        var p0 = new Paragraph();
+        p0.MarkRevision = RevisionKind.Deleted;
+        doc.Blocks.Add(p0);
+        doc.Blocks.Add(new Paragraph("next"));
+
+        var entry = RevisionList.Enumerate(doc).Single();
+        RevisionList.Accept(doc, entry).Should().BeTrue();
+        // p0 was merged away; resolving the same (now stale) entry again must do nothing.
+        RevisionList.Accept(doc, entry).Should().BeFalse();
+    }
+
+    // --- Headers/footers/footnotes/endnotes (freew-track-changes-accept F3) ---
+    //
+    // TrackChanges.HasRevisions/AcceptAll/RejectAll already reach every header/footer slot of every
+    // section plus every footnote/endnote (TrackChanges.cs). Before the fix, RevisionList only walked the
+    // document body, so a tracked change living in one of those places produced an empty Reviewing Pane
+    // even though TrackChanges agreed a revision was pending.
+
+    [Fact]
+    public void Enumerate_ListsRevisionInsideHeader()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body text"));
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(new Run("Header "));
+        headerParagraph.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Ada" });
+        doc.Header = new HeaderFooter();
+        doc.Header.Paragraphs.Add(headerParagraph);
+
+        var entries = RevisionList.Enumerate(doc);
+
+        entries.Should().ContainSingle();
+        entries[0].Kind.Should().Be(RevisionEntryKind.Insertion);
+        entries[0].Author.Should().Be("Ada");
+        entries[0].Text.Should().Be("added");
+        // Independent oracle: TrackChanges must agree a revision is pending.
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Accept_RevisionInsideHeader_ResolvesItAndAgreesWithTrackChanges()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body text"));
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(new Run("Header "));
+        headerParagraph.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Ada" });
+        doc.Header = new HeaderFooter();
+        doc.Header.Paragraphs.Add(headerParagraph);
+
+        var entry = RevisionList.Enumerate(doc).Single();
+        RevisionList.Accept(doc, entry).Should().BeTrue();
+
+        headerParagraph.PlainText.Should().Be("Header added");
+        headerParagraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Enumerate_AndResolve_RevisionInsideFootnote()
+    {
+        var doc = new TextDocument();
+        var footnote = new Footnote(1);
+        var footnoteParagraph = new Paragraph();
+        footnoteParagraph.Runs.Add(new Run("note "));
+        footnoteParagraph.Runs.Add(new Run("gone") { Revision = RevisionKind.Deleted, RevisionAuthor = "Eve" });
+        footnote.Content.Add(footnoteParagraph);
+        doc.Footnotes[1] = footnote;
+
+        var entries = RevisionList.Enumerate(doc);
+        entries.Should().ContainSingle();
+        entries[0].Kind.Should().Be(RevisionEntryKind.Deletion);
+        entries[0].Author.Should().Be("Eve");
+
+        RevisionList.Accept(doc, entries[0]).Should().BeTrue();
+        footnoteParagraph.PlainText.Should().Be("note ");
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Enumerate_AndResolve_RevisionInsideEndnote()
+    {
+        var doc = new TextDocument();
+        var endnote = new Endnote(1);
+        var endnoteParagraph = new Paragraph();
+        endnoteParagraph.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Carol" });
+        endnote.Content.Add(endnoteParagraph);
+        doc.Endnotes[1] = endnote;
+
+        var entries = RevisionList.Enumerate(doc);
+        entries.Should().ContainSingle();
+        entries[0].Kind.Should().Be(RevisionEntryKind.Insertion);
+        entries[0].Author.Should().Be("Carol");
+
+        RevisionList.Accept(doc, entries[0]).Should().BeTrue();
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Accept_ParagraphMarkDeletion_InsideFootnote_MergesWithinTheFootnoteOnly()
+    {
+        // Sibling case for the F2 merge logic: the same paragraph-mark merge must reach a footnote's own
+        // paragraph list, not just the document body.
+        var doc = new TextDocument();
+        var footnote = new Footnote(1);
+        var p0 = new Paragraph();
+        p0.Runs.Add(new Run("first "));
+        p0.MarkRevision = RevisionKind.Deleted;
+        footnote.Content.Add(p0);
+        var p1 = new Paragraph();
+        p1.Runs.Add(new Run("second"));
+        footnote.Content.Add(p1);
+        doc.Footnotes[1] = footnote;
+
+        var entry = RevisionList.Enumerate(doc).Single();
+        RevisionList.Accept(doc, entry).Should().BeTrue();
+
+        footnote.Content.Should().ContainSingle();
+        footnote.Content[0].PlainText.Should().Be("first second");
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Enumerate_OnDocumentWithHeaderButNoRevisions_IsEmpty()
+    {
+        // No-regression check: an ordinary header (no tracked changes) must not spuriously appear.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body text"));
+        doc.Header = new HeaderFooter("Plain header, nothing tracked");
+
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
 }

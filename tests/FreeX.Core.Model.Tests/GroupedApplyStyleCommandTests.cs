@@ -147,4 +147,85 @@ public sealed class GroupedApplyStyleCommandTests
         sheet2.GetCell(address2)!.StyleId.Should().Be(oldStyle2);
     }
 
+    // freex-cell-styles-gallery F2: GroupedApplyStyleCommand's Pass 1 must clear a stale per-run
+    // Bold=false override on every grouped sheet when the applied StyleDiff sets whole-cell
+    // Bold=true, exactly as ApplyStyleCommand.Apply's Pass 1 does for a single (ungrouped) sheet --
+    // otherwise the toolbar/gallery "make this bold" action silently leaves part of the cell text
+    // non-bold on every sheet but the first one touched.
+    [Fact]
+    public void Apply_ClearsStaleRunBoldOverrideOnEveryGroupedSheetWhenWholeCellBoldIsApplied()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        var addr1 = new CellAddress(sheet1.Id, 1, 1);
+        var addr2 = new CellAddress(sheet2.Id, 1, 1);
+
+        sheet1.SetCell(addr1, Cell.FromValue(new TextValue("Hello")));
+        sheet2.SetCell(addr2, Cell.FromValue(new TextValue("Hello")));
+        var staleRuns = new List<CellTextRun>
+        {
+            new("He", Bold: false, Italic: null, Underline: null, Strikethrough: null,
+                FontName: null, FontSize: null, FontColor: null),
+            new("llo", Bold: null, Italic: null, Underline: null, Strikethrough: null,
+                FontName: null, FontSize: null, FontColor: null),
+        };
+        sheet1.RichTextRuns[addr1] = staleRuns;
+        sheet2.RichTextRuns[addr2] = staleRuns;
+
+        var command = new GroupedApplyStyleCommand(
+            [sheet1.Id, sheet2.Id],
+            new GridRange(addr1, addr1),
+            new StyleDiff(Bold: true));
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet1.RichTextRuns[addr1][0].Bold.Should().BeNull(
+            "the whole-cell Bold=true just applied must win over the stale per-run Bold=false override");
+        sheet2.RichTextRuns[addr2][0].Bold.Should().BeNull(
+            "the fix must apply to every grouped sheet, not just the first");
+        wb.GetStyle(sheet1.GetCell(addr1)!.StyleId).Bold.Should().BeTrue();
+        wb.GetStyle(sheet2.GetCell(addr2)!.StyleId).Bold.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        sheet1.RichTextRuns[addr1][0].Bold.Should().BeFalse("undo must restore the original per-run override");
+        sheet2.RichTextRuns[addr2][0].Bold.Should().BeFalse("undo must restore the original per-run override");
+    }
+
+    // Sibling no-regression: a StyleDiff that does NOT touch any rich-run font property (e.g. a
+    // fill color change) must leave existing per-run overrides untouched on grouped sheets, just as
+    // ApplyStyleCommand leaves them untouched on a single sheet.
+    [Fact]
+    public void Apply_LeavesRunOverridesUntouchedWhenDiffDoesNotAffectRichRunFontProperties()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        var addr1 = new CellAddress(sheet1.Id, 1, 1);
+        var addr2 = new CellAddress(sheet2.Id, 1, 1);
+
+        sheet1.SetCell(addr1, Cell.FromValue(new TextValue("Hello")));
+        sheet2.SetCell(addr2, Cell.FromValue(new TextValue("Hello")));
+        var runs = new List<CellTextRun>
+        {
+            new("He", Bold: false, Italic: null, Underline: null, Strikethrough: null,
+                FontName: null, FontSize: null, FontColor: null),
+        };
+        sheet1.RichTextRuns[addr1] = runs;
+        sheet2.RichTextRuns[addr2] = runs;
+
+        var command = new GroupedApplyStyleCommand(
+            [sheet1.Id, sheet2.Id],
+            new GridRange(addr1, addr1),
+            new StyleDiff(FillColor: new CellColor(0, 255, 0)));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet1.RichTextRuns[addr1][0].Bold.Should().BeFalse("a fill-color-only change must not touch run font overrides");
+        sheet2.RichTextRuns[addr2][0].Bold.Should().BeFalse("a fill-color-only change must not touch run font overrides");
+    }
 }

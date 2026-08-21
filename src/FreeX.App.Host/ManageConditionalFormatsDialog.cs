@@ -19,7 +19,12 @@ namespace FreeX.App.Host;
 /// </summary>
 public sealed partial class ManageConditionalFormatsDialog : Window
 {
-    /// <summary>Set after OK or Apply is clicked. Priorities are re-assigned 1...N in list order.</summary>
+    /// <summary>
+    /// Set after OK or Apply is clicked and the user made at least one edit since the dialog opened or
+    /// since the edit was last committed via Apply. Priorities are re-assigned 1...N in list order.
+    /// <see langword="null"/> when OK or Apply is clicked with nothing pending -- the caller treats a
+    /// null result as "nothing to apply" and skips pushing another undo entry for an unchanged sheet.
+    /// </summary>
     public IReadOnlyList<ConditionalFormat>? ResultRules { get; private set; }
 
     private readonly Sheet _sheet;
@@ -30,6 +35,14 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     // Working copy bound to the ListView.
     private readonly ObservableCollection<ConditionalFormat> _rules = [];
+
+    /// <summary>
+    /// True once the user has made an edit (add/edit/delete/duplicate/move/re-range a rule) since the
+    /// dialog opened or since the edit was last committed via Apply. OK and Apply both no-op when this
+    /// is false so a visit with zero edits never pushes a spurious "nothing changed" undo entry, and a
+    /// commit made via Apply is never repeated a second time by a subsequent OK with no further edits.
+    /// </summary>
+    private bool _hasPendingChanges;
 
     private readonly ComboBox _scopeBox;
     private readonly ListView _listView;
@@ -111,7 +124,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
         var okBtn     = new Button { Content = UiText.Ok,     Width = 72, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
         var cancelBtn = new Button { Content = UiText.Cancel, Width = 72, Margin = new Thickness(0, 0, 6, 0), IsCancel = true };
-        _applyBtn = new Button { Content = UiText.Get("ManageConditionalFormats_Apply"),  Width = 72 };
+        _applyBtn = new Button { Content = UiText.Get("ManageConditionalFormats_Apply"),  Width = 72, IsEnabled = false };
         okBtn.Click    += OkBtn_Click;
         _applyBtn.Click += ApplyBtn_Click;
         bottomRow.Children.Add(okBtn);
@@ -224,6 +237,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         if (dlg.ShowDialog() == true && dlg.ResultRule is { } newRule)
         {
             _manageSession.Add(newRule);
+            MarkPendingChange();
             ReloadWorkingRules(newRule.Id);
         }
     }
@@ -240,7 +254,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         if (dlg.ShowDialog() == true && dlg.ResultRule is { } edited)
         {
             if (_manageSession.Replace(edited))
+            {
+                MarkPendingChange();
                 ReloadWorkingRules(edited.Id);
+            }
         }
     }
 
@@ -262,6 +279,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         if (!_manageSession.Delete(selected.Id))
             return;
 
+        MarkPendingChange();
         ReloadWorkingRules();
         if (_rules.Count > 0)
             _listView.SelectedIndex = Math.Min(selectedIndex, _rules.Count - 1);
@@ -277,7 +295,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
         var duplicateId = Guid.NewGuid();
         if (_manageSession.Duplicate(selected.Id, duplicateId))
+        {
+            MarkPendingChange();
             ReloadWorkingRules(duplicateId);
+        }
     }
 
     private void MoveUp_Click(object sender, RoutedEventArgs e)
@@ -286,7 +307,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             return;
 
         if (_manageSession.Move(selected.Id, ConditionalFormatRuleMoveDirection.Up))
+        {
+            MarkPendingChange();
             ReloadWorkingRules(selected.Id);
+        }
     }
 
     private void MoveDown_Click(object sender, RoutedEventArgs e)
@@ -295,7 +319,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             return;
 
         if (_manageSession.Move(selected.Id, ConditionalFormatRuleMoveDirection.Down))
+        {
+            MarkPendingChange();
             ReloadWorkingRules(selected.Id);
+        }
     }
 
     private void ListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -328,20 +355,42 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
     {
-        CommitResult();
+        // Only hand the caller a result (and thereby let it push an undo entry) when the user actually
+        // edited a rule since the dialog opened, or since the edit was last committed via Apply.
+        // Otherwise clear ResultRules -- even if an earlier Apply click had set it -- so the caller's
+        // "ResultRules is null => nothing to apply" check skips a second, redundant commit of the same
+        // already-applied state.
+        if (_hasPendingChanges)
+            CommitResult();
+        else
+            ResultRules = null;
         DialogResult = true;
     }
 
     private void ApplyBtn_Click(object sender, RoutedEventArgs e)
     {
+        if (!_hasPendingChanges)
+            return;
+
         CommitResult();
         if (ResultRules is not null)
             _applyRules?.Invoke(ResultRules);
+
+        // The edit is now committed to the live sheet by the caller. Clear the pending flag (but keep
+        // ResultRules populated -- callers/tests observe it as "set after OK or Apply") so a following
+        // OK with no further edits takes the branch above and does not repeat this same commit.
+        MarkPendingChange(false);
     }
 
     private void CommitResult()
     {
         ResultRules = _manageSession.BuildResultRules(_sheet.ConditionalFormats);
+    }
+
+    private void MarkPendingChange(bool hasPendingChange = true)
+    {
+        _hasPendingChanges = hasPendingChange;
+        _applyBtn.IsEnabled = hasPendingChange;
     }
 
     // Helpers
@@ -419,6 +468,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         if (!_manageSession.ApplyRange(ruleId, range))
             return;
 
+        MarkPendingChange();
         ReloadWorkingRules(ruleId);
         FocusRulesList();
     }

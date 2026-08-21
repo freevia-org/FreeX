@@ -13,6 +13,7 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
     private readonly GridRange _sourceRange;
     private readonly StyleDiff _diff;
     private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, StyleOnlySource? OldStyleOnlySource)>? _snapshot;
+    private List<(SheetId SheetId, CellAddress Address, IReadOnlyList<CellTextRun> OldRuns)>? _richTextSnapshot;
 
     private const int BytesPerCell = 200;
 
@@ -70,6 +71,17 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
                 _snapshot.Add((sheetId, address, cell.Clone(), null, null));
                 cell.StyleId = StyleDiffStyleCache.GetOrRegister(
                     ctx.Workbook, _diff, cell.StyleId, styleCache);
+
+                // Parity with ApplyStyleCommand.Apply's Pass 1: a whole-cell font-formatting change
+                // (Bold/Italic/Underline/Strikethrough/Font Name/Font Size/Font Color) must win over
+                // a stale per-run rich-text override for the same property, or the newly applied
+                // uniform value stays masked by old run formatting on grouped sheets.
+                if (sheet.RichTextRuns.TryGetValue(address, out var runs) && ApplyStyleCommand.AffectsRichRunFont(_diff))
+                {
+                    _richTextSnapshot ??= [];
+                    _richTextSnapshot.Add((sheetId, address, runs));
+                    sheet.RichTextRuns[address] = ApplyStyleCommand.ClearOverriddenRunProperties(runs, _diff);
+                }
             }
 
             // --- Pass 2: empty cells within the style-only create zone ---
@@ -195,6 +207,12 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
             {
                 sheet.SetCell(address, oldCell.Clone());
             }
+        }
+
+        if (_richTextSnapshot is not null)
+        {
+            foreach (var (sheetId, address, oldRuns) in _richTextSnapshot)
+                ctx.GetSheet(sheetId).RichTextRuns[address] = oldRuns;
         }
     }
 }

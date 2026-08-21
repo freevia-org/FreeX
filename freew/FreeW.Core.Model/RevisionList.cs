@@ -19,7 +19,10 @@ public enum RevisionEntryKind
 /// <see cref="Text"/>. <see cref="BlockIndex"/> is the index of the owning paragraph in the document's
 /// body-paragraph walk (top-level paragraphs and those nested in table cells, in order) — a stable handle
 /// for click-to-navigate. The owning <see cref="Paragraph"/> and <see cref="Run"/> are carried so a single
-/// entry can be accepted or rejected directly. Immutable snapshot: re-enumerate after any accept/reject.
+/// entry can be accepted or rejected directly. <see cref="Run"/> is null for a tracked change on the
+/// paragraph's own end-of-paragraph mark (<see cref="Paragraph.MarkRevision"/>, Word's pilcrow) rather than
+/// on one of its runs — <see cref="Text"/> is <see cref="FormattingMarks.Pilcrow"/> for that case.
+/// Immutable snapshot: re-enumerate after any accept/reject.
 /// </summary>
 public sealed record RevisionEntry(
     int BlockIndex,
@@ -28,7 +31,7 @@ public sealed record RevisionEntry(
     string? DateXml,
     string Text,
     Paragraph Paragraph,
-    Run Run);
+    Run? Run);
 
 /// <summary>
 /// Pure, unit-testable enumeration and single-revision resolution over the tracked changes carried on the
@@ -40,11 +43,15 @@ public sealed record RevisionEntry(
 public static class RevisionList
 {
     /// <summary>
-    /// Every tracked change in the document body, in reading order: for each body paragraph (top-level and
-    /// nested in table cells), each run carrying an insertion/deletion mark and each run carrying a tracked
-    /// formatting change, as a <see cref="RevisionEntry"/>. A single run can yield two entries when it is
-    /// both inserted/deleted and format-changed (mirroring how <see cref="TrackChanges"/> resolves the two
-    /// marks independently). Order matches the Reviewing Pane and drives Previous/Next navigation.
+    /// Every tracked change reachable anywhere <see cref="TrackChanges"/> resolves one — the document body
+    /// (top-level paragraphs and those nested in table cells, to any depth, plus any text-box shape), every
+    /// header/footer slot of every section, and every footnote/endnote — in reading order: for each such
+    /// paragraph, each run carrying an insertion/deletion mark, each run carrying a tracked formatting
+    /// change, and (if set) the paragraph's own end-of-paragraph-mark revision
+    /// (<see cref="Paragraph.MarkRevision"/>, a <see cref="RevisionEntry"/> with a null <see cref="RevisionEntry.Run"/>),
+    /// as a <see cref="RevisionEntry"/>. A single run can yield two entries when it is both inserted/deleted
+    /// and format-changed (mirroring how <see cref="TrackChanges"/> resolves the two marks independently).
+    /// Order matches the Reviewing Pane and drives Previous/Next navigation.
     /// </summary>
     public static IReadOnlyList<RevisionEntry> Enumerate(TextDocument document)
     {
@@ -62,6 +69,12 @@ public static class RevisionList
                 if (run.FormatRevision is { } format)
                     entries.Add(new RevisionEntry(blockIndex, RevisionEntryKind.Formatting, format.Author, format.DateXml, run.Text, paragraph, run));
             }
+
+            var markText = FormattingMarks.Pilcrow.ToString();
+            if (paragraph.MarkRevision == RevisionKind.Inserted)
+                entries.Add(new RevisionEntry(blockIndex, RevisionEntryKind.Insertion, paragraph.MarkRevisionAuthor, paragraph.MarkRevisionDateXml, markText, paragraph, null));
+            else if (paragraph.MarkRevision == RevisionKind.Deleted)
+                entries.Add(new RevisionEntry(blockIndex, RevisionEntryKind.Deletion, paragraph.MarkRevisionAuthor, paragraph.MarkRevisionDateXml, markText, paragraph, null));
 
             blockIndex++;
         }
@@ -102,6 +115,9 @@ public static class RevisionList
     {
         var paragraph = entry.Paragraph;
         var run = entry.Run;
+        if (run is null)
+            return ResolveMarkRevision(document, paragraph, accept);
+
         var index = paragraph.Runs.IndexOf(run);
         if (index < 0)
             return false;
@@ -173,10 +189,206 @@ public static class RevisionList
         return null;
     }
 
-    // Every paragraph reachable in the document body — top-level paragraphs and those nested in table cells
-    // (including tables nested inside table cells, to any depth), plus the text-box content of any
-    // Run.Shape a run carries (see BodyParagraphWalk) — the same walk TrackChanges/DocxWriter use, so the
-    // index is consistent across the reviewing surface.
-    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document) =>
-        BodyParagraphWalk.Enumerate(document);
+    // Every paragraph reachable anywhere TrackChanges.HasRevisions/AcceptAll/RejectAll look: the document
+    // body (top-level paragraphs and those nested in table cells, including tables nested inside table
+    // cells, to any depth, plus the text-box content of any Run.Shape a run carries -- see
+    // BodyParagraphWalk), every header/footer slot of every section, and every footnote/endnote. Before
+    // this, RevisionList only walked the body, so a tracked change living in a header/footer/footnote/
+    // endnote produced an empty Reviewing Pane and no per-item Accept/Reject even though
+    // TrackChanges.HasRevisions/AcceptAll/RejectAll (TrackChanges.cs's own Resolve) already reached it.
+    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
+    {
+        foreach (var paragraph in BodyParagraphWalk.Enumerate(document))
+            yield return paragraph;
+
+        foreach (var section in document.Sections)
+        {
+            var headersFooters = section.HeadersFooters;
+            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.Header)) yield return paragraph;
+            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.Footer)) yield return paragraph;
+            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.EvenHeader)) yield return paragraph;
+            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.EvenFooter)) yield return paragraph;
+            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.FirstHeader)) yield return paragraph;
+            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.FirstFooter)) yield return paragraph;
+        }
+
+        foreach (var footnote in document.Footnotes.Values)
+            foreach (var paragraph in BodyParagraphWalk.Enumerate(footnote.Content))
+                yield return paragraph;
+        foreach (var endnote in document.Endnotes.Values)
+            foreach (var paragraph in BodyParagraphWalk.Enumerate(endnote.Content))
+                yield return paragraph;
+    }
+
+    private static IEnumerable<Paragraph> HeaderFooterParagraphs(HeaderFooter? headerFooter) =>
+        headerFooter is null ? [] : BodyParagraphWalk.Enumerate(headerFooter.Paragraphs);
+
+    // Resolve a paragraph-mark revision (Paragraph.MarkRevision) in isolation, leaving every other
+    // revision untouched -- the mark-revision counterpart to ResolveInsertionOrDeletion above. Mirrors
+    // TrackChanges.ResolveBlockList/ResolveParagraphContainer's own paragraph-mark handling: an accepted
+    // deletion (or rejected insertion) of the mark merges this paragraph's runs into the following
+    // paragraph in the SAME container (or, if there is no following paragraph and this one is empty and
+    // unanchored, drops it outright); otherwise the mark is simply cleared. Unlike TrackChanges' bulk
+    // Resolve, only the ONE target paragraph is touched -- every other paragraph's mark (and every run
+    // revision anywhere) is left exactly as it was.
+    private static bool ResolveMarkRevision(TextDocument document, Paragraph target, bool accept)
+    {
+        if (target.MarkRevision == RevisionKind.None)
+            return false;
+
+        if (TryResolveMarkInBlockList(document.Blocks, target, accept))
+            return true;
+
+        foreach (var section in document.Sections)
+        {
+            var headersFooters = section.HeadersFooters;
+            if (TryResolveMarkInHeaderFooter(headersFooters.Header, target, accept)) return true;
+            if (TryResolveMarkInHeaderFooter(headersFooters.Footer, target, accept)) return true;
+            if (TryResolveMarkInHeaderFooter(headersFooters.EvenHeader, target, accept)) return true;
+            if (TryResolveMarkInHeaderFooter(headersFooters.EvenFooter, target, accept)) return true;
+            if (TryResolveMarkInHeaderFooter(headersFooters.FirstHeader, target, accept)) return true;
+            if (TryResolveMarkInHeaderFooter(headersFooters.FirstFooter, target, accept)) return true;
+        }
+
+        foreach (var footnote in document.Footnotes.Values)
+            if (TryResolveMarkInParagraphList(footnote.Content, target, accept))
+                return true;
+        foreach (var endnote in document.Endnotes.Values)
+            if (TryResolveMarkInParagraphList(endnote.Content, target, accept))
+                return true;
+
+        return false;
+    }
+
+    private static bool TryResolveMarkInHeaderFooter(HeaderFooter? headerFooter, Paragraph target, bool accept) =>
+        headerFooter is not null && TryResolveMarkInParagraphList(headerFooter.Paragraphs, target, accept);
+
+    // Top-level body block list: a paragraph may merge into a following paragraph in the SAME list, but
+    // only when that next block is itself a paragraph (a pilcrow cannot merge text into a table). Tables
+    // (including nested tables and any cell's text-box shapes) are searched recursively for the target.
+    private static bool TryResolveMarkInBlockList(IList<Block> blocks, Paragraph target, bool accept)
+    {
+        for (var index = 0; index < blocks.Count; index++)
+        {
+            switch (blocks[index])
+            {
+                case Paragraph paragraph when ReferenceEquals(paragraph, target):
+                    ResolveMarkAtBlockIndex(blocks, index, accept);
+                    return true;
+                case Paragraph paragraph when TryResolveMarkInShapes(paragraph, target, accept):
+                    return true;
+                case Table table when TryResolveMarkInTable(table, target, accept):
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void ResolveMarkAtBlockIndex(IList<Block> blocks, int index, bool accept)
+    {
+        var paragraph = (Paragraph)blocks[index];
+        var dropKind = accept ? RevisionKind.Deleted : RevisionKind.Inserted;
+        if (paragraph.MarkRevision == dropKind)
+        {
+            if (index + 1 < blocks.Count && blocks[index + 1] is Paragraph next)
+            {
+                next.Runs.InsertRange(0, paragraph.Runs);
+                blocks.RemoveAt(index);
+                return;
+            }
+
+            if (IsEmptyUnanchoredParagraph(paragraph) && blocks.Count > 1)
+            {
+                blocks.RemoveAt(index);
+                return;
+            }
+        }
+
+        ClearMarkRevision(paragraph);
+    }
+
+    private static bool TryResolveMarkInTable(Table table, Paragraph target, bool accept)
+    {
+        foreach (var row in table.Rows)
+        {
+            foreach (var cell in row.Cells)
+            {
+                if (TryResolveMarkInParagraphList(cell.Paragraphs, target, accept))
+                    return true;
+                foreach (var nested in cell.NestedTables)
+                    if (TryResolveMarkInTable(nested, target, accept))
+                        return true;
+            }
+        }
+
+        return false;
+    }
+
+    // A self-contained paragraph list (a table cell's paragraphs, a header/footer slot, or a
+    // footnote's/endnote's content) resolved the same way as the top-level body: the next paragraph in
+    // the SAME list is always a valid merge target (there is no sibling table to worry about).
+    private static bool TryResolveMarkInParagraphList(IList<Paragraph> paragraphs, Paragraph target, bool accept)
+    {
+        for (var index = 0; index < paragraphs.Count; index++)
+        {
+            var paragraph = paragraphs[index];
+            if (ReferenceEquals(paragraph, target))
+            {
+                ResolveMarkAtParagraphIndex(paragraphs, index, accept);
+                return true;
+            }
+
+            if (TryResolveMarkInShapes(paragraph, target, accept))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static void ResolveMarkAtParagraphIndex(IList<Paragraph> paragraphs, int index, bool accept)
+    {
+        var paragraph = paragraphs[index];
+        var dropKind = accept ? RevisionKind.Deleted : RevisionKind.Inserted;
+        if (paragraph.MarkRevision == dropKind)
+        {
+            if (index + 1 < paragraphs.Count)
+            {
+                paragraphs[index + 1].Runs.InsertRange(0, paragraph.Runs);
+                paragraphs.RemoveAt(index);
+                return;
+            }
+
+            if (IsEmptyUnanchoredParagraph(paragraph) && paragraphs.Count > 1)
+            {
+                paragraphs.RemoveAt(index);
+                return;
+            }
+        }
+
+        ClearMarkRevision(paragraph);
+    }
+
+    private static bool TryResolveMarkInShapes(Paragraph host, Paragraph target, bool accept)
+    {
+        foreach (var run in host.Runs)
+        {
+            if (run.Shape is { } shape && TryResolveMarkInParagraphList(shape.TextParagraphs, target, accept))
+                return true;
+        }
+
+        return false;
+    }
+
+    // A paragraph whose dropped mark can safely take the whole paragraph with it: no surviving run
+    // content and no bookmark anchored on it (mirrors TrackChanges.IsEmptyUnanchoredParagraph).
+    private static bool IsEmptyUnanchoredParagraph(Paragraph paragraph) =>
+        paragraph.Runs.Count == 0 && paragraph.BookmarkNames.Count == 0;
+
+    private static void ClearMarkRevision(Paragraph paragraph)
+    {
+        paragraph.MarkRevision = RevisionKind.None;
+        paragraph.MarkRevisionAuthor = null;
+        paragraph.MarkRevisionDateXml = null;
+    }
 }

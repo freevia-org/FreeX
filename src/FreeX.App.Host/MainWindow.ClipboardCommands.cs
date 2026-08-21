@@ -252,7 +252,13 @@ public partial class MainWindow
                     if (!seenAddresses.Add(addr))
                         continue;
                     var cell = sheet?.GetCell(r, c);
-                    clipCells.Add((addr, cell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
+                    // freex-array-spill-edit-F1: GetCell deliberately does NOT see the dynamic-array
+                    // spill overlay (see the remarks on Sheet.GetCell), so a non-anchor spill member
+                    // (e.g. B1 of a =SEQUENCE(5) anchored at A1) has no _cells entry and would
+                    // otherwise be recorded here as a literal blank, silently discarding its value on
+                    // paste. Fall back to GetValue, which does check the spill overlay, so the
+                    // clipboard snapshot carries the spilled literal instead of a blank.
+                    clipCells.Add((addr, cell?.Clone() ?? Cell.FromValue(sheet?.GetValue(r, c) ?? BlankValue.Instance)));
                 }
             }
         }

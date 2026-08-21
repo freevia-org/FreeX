@@ -242,7 +242,7 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
     /// per-run override on <see cref="CellTextRun"/> (Bold, Italic, Underline, Strikethrough,
     /// FontName, FontSize, or either font-color form).
     /// </summary>
-    private static bool AffectsRichRunFont(StyleDiff diff) =>
+    internal static bool AffectsRichRunFont(StyleDiff diff) =>
         diff.Bold is not null
         || diff.Italic is not null
         || diff.Underline is not null
@@ -258,7 +258,7 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
     /// explicitly sets, so the newly applied whole-cell value is not masked by a stale run-level
     /// override.
     /// </summary>
-    private static List<CellTextRun> ClearOverriddenRunProperties(IReadOnlyList<CellTextRun> runs, StyleDiff diff)
+    internal static List<CellTextRun> ClearOverriddenRunProperties(IReadOnlyList<CellTextRun> runs, StyleDiff diff)
     {
         var result = new List<CellTextRun>(runs.Count);
         foreach (var run in runs)

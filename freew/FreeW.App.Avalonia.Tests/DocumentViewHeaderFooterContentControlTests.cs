@@ -115,6 +115,69 @@ public sealed class DocumentViewHeaderFooterContentControlTests
             },
             CancellationToken.None);
 
+    /// <summary>
+    /// F2: the header/footer counterpart of DocumentViewContentControlKeyboardTests'
+    /// Typing_into_a_placeholder_showing_field_clears_the_placeholder_flag -- HfInsertText must clear
+    /// ContentControlWordMetadata.ShowingPlaceholder the moment real text is typed into a
+    /// placeholder-showing header/footer field, exactly like the body's ApplyContentControlTextEdit
+    /// already does, so a saved .docx does not keep w:showingPlcHdr on a field the user just filled in.
+    /// </summary>
+    [Fact]
+    public async Task Typing_into_a_placeholder_showing_header_field_clears_the_placeholder_flag() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var (document, view) = MakeViewWithHeaderControl(
+                    ContentControlLockMode.NotSpecified,
+                    PlaceholderHeaderControl());
+
+                // "Title: Click to enter text" -- the field starts at offset 7; type at its end.
+                view.PlaceCaretInHeaderFooter(footer: false, paraIdx: 0, offset: 7 + "Click to enter text".Length);
+                view.InsertText("!");
+
+                var field = HeaderFields(document).Should().ContainSingle().Subject;
+                field.Text.Should().Be("Click to enter text!");
+                field.Control!.WordMetadata!.ShowingPlaceholder.Should().BeFalse(
+                    "typing real text into a placeholder-showing header field must clear w:showingPlcHdr, matching the body fix");
+            },
+            CancellationToken.None);
+
+    /// <summary>
+    /// Sibling no-regression coverage for F2: typing in the header text AROUND an untouched
+    /// placeholder-showing field must leave its flag alone -- HfSetAtoms rebuilds every run of the whole
+    /// paragraph (including the field's) on every header edit, so a fix that cleared the flag
+    /// unconditionally there, rather than only when the edit targets the field's own text, would wipe the
+    /// flag out from edits that never touched the field at all.
+    /// </summary>
+    [Fact]
+    public async Task Typing_in_header_text_elsewhere_leaves_an_untouched_placeholder_field_alone() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var (document, view) = MakeViewWithHeaderControl(
+                    ContentControlLockMode.NotSpecified,
+                    PlaceholderHeaderControl());
+
+                view.PlaceCaretInHeaderFooter(footer: false, paraIdx: 0, offset: 0);
+                view.InsertText("X");
+
+                var field = HeaderFields(document).Should().ContainSingle().Subject;
+                field.Text.Should().Be("Click to enter text");
+                field.Control!.WordMetadata!.ShowingPlaceholder.Should().BeTrue(
+                    "editing text elsewhere in the header must not clear an untouched field's placeholder flag");
+            },
+            CancellationToken.None);
+
+    private static Run PlaceholderHeaderControl()
+    {
+        var control = Run.PlainTextControl("Click to enter text", tag: "DocTitle");
+        control.Control = control.Control! with
+        {
+            WordMetadata = new ContentControlWordMetadata(ShowingPlaceholder: true)
+        };
+        return control;
+    }
+
     [Fact]
     public async Task Hovering_a_header_field_shows_its_description() =>
         await Session.Dispatch(

@@ -1,4 +1,5 @@
 using System.Threading;
+using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Input;
 using FreeW.App.Avalonia.Editing;
@@ -375,6 +376,64 @@ public sealed class DocumentViewContentControlKeyboardTests
         paragraph.Runs[1].Text.Should().Be("Click to enter text");
         paragraph.Runs[1].Control!.WordMetadata!.ShowingPlaceholder.Should().BeTrue(
             "editing text elsewhere in the paragraph must not clear an untouched field's placeholder flag");
+    }
+
+    /// <summary>
+    /// F3: real Word selects the entire placeholder run the instant a plain-text/rich-text content
+    /// control showing w:showingPlcHdr is entered by CLICK, just as it already does for Tab (see
+    /// Tab_moves_between_fields_under_forms_protection_instead_of_typing_a_tab). Before the fix,
+    /// TryActivateContentControl only special-cased CheckBox/DatePicker/DropDownList/ComboBox and fell
+    /// through to ordinary click-to-position-caret for PlainText/RichText, so a click mid-placeholder left
+    /// an unselected caret there and the next keystroke spliced into the middle of the placeholder wording.
+    /// </summary>
+    // Measuring/hit-testing forces a text layout, which needs the headless font manager (see
+    // A_content_control_in_a_table_cell_is_typable_under_forms_protection above).
+    [Fact]
+    public async Task Clicking_into_a_placeholder_showing_field_selects_the_whole_placeholder() =>
+        await Session.Dispatch(ClickPlaceholderFieldSelectsItWhole, CancellationToken.None);
+
+    private static void ClickPlaceholderFieldSelectsItWhole()
+    {
+        var control = PlaceholderControl("Click to enter text");
+        var (view, paragraph) = BuildView(control);
+        view.Measure(new Size(816, 4000));
+
+        // Click strictly inside the placeholder wording, not at either edge.
+        view.MoveCaretToBlockForTest(0, ControlStart + 5);
+        var clickPoint = view.CaretRectForTest!.Value.Center;
+
+        view.ActivateContentControlAtForTest(clickPoint).Should().BeTrue();
+        view.SelectedText.Should().Be("Click to enter text",
+            "clicking a placeholder-showing field must select its whole run, like Tab already does, so " +
+            "the first keystroke replaces it instead of splicing into the middle of the placeholder wording");
+
+        // And the practical consequence: typing now REPLACES the placeholder instead of merging with it.
+        view.InsertText("Bobby");
+        paragraph.Runs[1].Text.Should().Be("Bobby");
+    }
+
+    /// <summary>
+    /// Sibling no-regression coverage for F3: a field that is NOT showing its placeholder (i.e. already
+    /// filled in) must keep ordinary click-to-position-caret -- select-all on every click into a filled
+    /// field would make it impossible to position the caret for a normal in-place edit, which is worse
+    /// than the bug being fixed. Real Word only select-alls a placeholder run, not filled content.
+    /// </summary>
+    [Fact]
+    public async Task Clicking_into_an_already_filled_field_does_not_select_it_all() =>
+        await Session.Dispatch(ClickFilledFieldDoesNotSelectItAll, CancellationToken.None);
+
+    private static void ClickFilledFieldDoesNotSelectItAll()
+    {
+        var control = Run.PlainTextControl("Click to enter text"); // no WordMetadata -> not a placeholder
+        var (view, _) = BuildView(control);
+        view.Measure(new Size(816, 4000));
+
+        view.MoveCaretToBlockForTest(0, ControlStart + 5);
+        var clickPoint = view.CaretRectForTest!.Value.Center;
+
+        view.ActivateContentControlAtForTest(clickPoint).Should().BeFalse(
+            "a filled plain-text field falls through to ordinary click-to-position-caret");
+        view.SelectedText.Should().BeEmpty("clicking a filled field must not select its whole run");
     }
 
     private static Run PlaceholderControl(string text) => new(text)

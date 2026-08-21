@@ -7349,7 +7349,7 @@ public partial class MainWindow
                     FormatFormulaAuthoringNamesRangeReference(context.Sheet, context.MarginRange)),
                 GetFormulaAuthoringNamesScopeOptions(),
                 isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _),
-                validateName: _workbook.ValidateNamedRangeName)
+                validateName: (name, _) => _workbook.ValidateNamedRangeName(name))
             {
                 Owner = this
             };
