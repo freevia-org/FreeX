@@ -33,19 +33,14 @@ public class DocxWriterInstructionSanitizationInvariantTests
     // riding on a stale exemption.
     private const string FieldKeywordSite = "(W + \"instr\", instruction)";
 
+    // Workspace traversal belongs in TestWorkspaceFileLocator, not in a private walker per test file --
+    // TestWorkspaceFileLocatorSourceGuardTests enforces that, and the first version of this file tripped it.
     private static string DocxWriterSource() =>
-        File.ReadAllText(Path.Combine(FindRepositoryRoot(), "freew", "FreeW.Core.IO", "DocxWriter.cs"));
-
-    private static string FindRepositoryRoot()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "FreeW.slnx")))
-                return dir.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the repository root (FreeW.slnx) from " + AppContext.BaseDirectory);
-    }
+        File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "freew",
+            "FreeW.Core.IO",
+            "DocxWriter.cs"));
 
     // Matches the start of every constructor call that names one of the XML-illegal-character-sensitive
     // element/attribute names as its first argument: new XElement(W + "t"/"delText"/"instrText", ...) or
