@@ -1381,7 +1381,33 @@ Write-Host "Capture height: $captureH physical px (300 logical)"
 function Find-ExcelRibbonTab($tabName) {
     $tabCond = New-Object System.Windows.Automation.PropertyCondition(
                    [System.Windows.Automation.AutomationElement]::NameProperty, $tabName)
-    return $appEl.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $tabCond)
+    $matches = $appEl.FindAll([System.Windows.Automation.TreeScope]::Descendants, $tabCond)
+    $windowRect = New-Object ScreenshotWin32+RECT
+    [ScreenshotWin32]::GetWindowRect($hwnd, [ref]$windowRect) | Out-Null
+    foreach ($match in $matches) {
+        $rect = $match.Current.BoundingRectangle
+        if ($match.Current.ControlType -eq [System.Windows.Automation.ControlType]::TabItem -and
+            $rect.Width -gt 0 -and $rect.Height -gt 0 -and
+            $rect.Top -ge $windowRect.Top -and $rect.Top -lt ($windowRect.Top + 180)) {
+            return $match
+        }
+    }
+
+    return $null
+}
+
+function Assert-ExcelRibbonTabSelected($tabEl, $tabName) {
+    try {
+        $selectionPattern = [System.Windows.Automation.SelectionItemPattern]$tabEl.GetCurrentPattern(
+            [System.Windows.Automation.SelectionItemPattern]::Pattern)
+        if ($null -eq $selectionPattern -or -not $selectionPattern.Current.IsSelected) {
+            throw "Excel ribbon tab '$tabName' did not become selected; refusing to retain a mislabeled capture."
+        }
+    }
+    catch {
+        Clear-ScreenshotEvidenceArtifacts
+        throw "Unable to verify that Excel ribbon tab '$tabName' is selected; refusing to retain a mislabeled capture. $($_.Exception.Message)"
+    }
 }
 
 function Resolve-ExcelAvailableRibbonTabs {
@@ -1418,21 +1444,20 @@ function Screenshot-Tab($tabName, $widthSpec) {
         throw "Ribbon screenshot tab '$tabName' was discovered during preflight but was not found during capture; aborting instead of writing an incomplete evidence matrix."
     }
 
-    # Click the tab via its bounding rectangle center (UIA patterns unsupported in Excel ribbon)
+    # Click the visible TabItem via its bounding rectangle center. Do not send Enter first: that
+    # would activate the previously focused tab and can retain a mislabeled screenshot.
     $rect = $tabEl.Current.BoundingRectangle
     $cx   = [int]($rect.Left + $rect.Width  / 2)
     $cy   = [int]($rect.Top  + $rect.Height / 2)
     [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new($cx, $cy)
     Start-Sleep -Milliseconds 100
-    Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab keyboard input" $script:ForegroundWindowOwnershipFailureAction
-    [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-    # Also try a real mouse click via mouse_event.
     Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab mouse down" $script:ForegroundWindowOwnershipFailureAction
     [ScreenshotWin32]::mouse_event(2,0,0,0,0)
     Start-Sleep -Milliseconds 50
     Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab mouse up" $script:ForegroundWindowOwnershipFailureAction
     [ScreenshotWin32]::mouse_event(4,0,0,0,0)
     Start-Sleep -Milliseconds 800
+    Assert-ExcelRibbonTabSelected $tabEl $tabName
 
     $wrect = New-Object ScreenshotWin32+RECT
     [ScreenshotWin32]::GetWindowRect($hwnd, [ref]$wrect) | Out-Null

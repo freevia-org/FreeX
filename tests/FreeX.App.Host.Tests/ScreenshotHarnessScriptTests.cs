@@ -138,6 +138,17 @@ public sealed class ScreenshotHarnessScriptTests
         missingTabBranch.Groups["body"].Value.Should().NotContain("return");
     }
 
+    [Fact]
+    public void ExcelScreenshotScript_UsesVisibleTabItemsAndVerifiesTheSelectedTab()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("$match.Current.ControlType -eq [System.Windows.Automation.ControlType]::TabItem");
+        script.Should().Contain("function Assert-ExcelRibbonTabSelected($tabEl, $tabName)");
+        script.Should().Contain("Assert-ExcelRibbonTabSelected $tabEl $tabName");
+        script.Should().NotContain("[System.Windows.Forms.SendKeys]::SendWait(\"{ENTER}\")");
+    }
+
     [Theory]
     [InlineData(
         "screenshot_excel.ps1",
