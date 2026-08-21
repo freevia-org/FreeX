@@ -12,6 +12,8 @@ Every tester release uses one predictable app/version tag and independently runn
 
 Every release asset has an adjacent `.sha256` file. Windows artifacts are self-contained single-file WPF executables. Linux and macOS artifacts are self-contained Avalonia archives. This is a packaging distinction, not a release-lane distinction: all three platforms belong to the same app/version release.
 
+For ChromeOS installation through the Linux development environment, see [the ChromeOS user guide](../user/chromeos-install.md). For the browser-release boundary, see [installation-and-browser-support.md](installation-and-browser-support.md).
+
 ## Tester Installation
 
 Use the matching app name (`FreeX`, `FreeW`, or `FreeP`) and release version in the commands below. Always download the artifact and its adjacent `.sha256` file first.
