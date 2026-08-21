@@ -101,12 +101,16 @@ public sealed class HomeCellsCommandSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
 
         source.Should().Contain("private void SheetCtxTabColor_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("ColorSheetTabs(tab.Id, selectedSheetIds);");
+        source.Should().Contain("ColorSheetTabs(tab.Id, CurrentTabColorTargetSheetIds(tab.Id));");
         source.Should().Contain("private void ColorCurrentSheetTab()");
-        source.Should().Contain("ColorSheetTabs(_currentSheetId, selectedSheetIds);");
+        source.Should().Contain("ColorSheetTabs(_currentSheetId, CurrentTabColorTargetSheetIds(_currentSheetId));");
         source.Should().Contain("private void ColorSheetTabs(SheetId sheetId, IReadOnlyCollection<SheetId> sheetIds)");
         source.Should().Contain("TryShowColorPicker(\"Tab Color\"");
         source.Should().Contain("_session.SetSelectedSheetTabColor(tabColor)");
+        source.Should().Contain("CreateSheetTabColorPaletteMenuItem");
+        source.Should().Contain("CellColorPalettePlanner.BuildThemePalette(_workbook.Theme)");
+        source.Should().Contain("CellColorPalettePlanner.BuildStandardSwatches()");
+        source.Should().Contain("ColorPicker_MoreColorsEllipsis");
         source.Should().NotContain("new SetSheetTabColorCommand(id, tabColor)");
     }
 

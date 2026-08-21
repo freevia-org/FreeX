@@ -13,6 +13,7 @@ using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using FreeX.App.Presentation.SheetUI;
+using FreeX.App.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FreeX.App.Host.Tests;
@@ -40,6 +41,28 @@ public sealed class MainWindowSheetTabKeyboardTests
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_ViewCode")).Should().Be("V");
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_ProtectSheet")).Should().Be("P");
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_TabColor")).Should().Be("T");
+        });
+    }
+
+    [Fact]
+    public void SheetTabTabColorMenu_ExposesImmediateThemeAndStandardSwatches()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.FocusCurrentSheetTab().Should().BeTrue();
+            harness.OpenFocusedSheetTabContextMenu();
+
+            var palette = harness.SheetTabColorPalette;
+            palette.HasNoColor.Should().BeTrue();
+            palette.ThemeSwatchCount.Should().Be(
+                CellColorPalettePlanner.BuildThemePalette().Sum(column => column.Shades.Count));
+            palette.StandardSwatchCount.Should().Be(CellColorPalettePlanner.BuildStandardSwatches().Count);
+            palette.HasMoreColors.Should().BeTrue();
+
+            harness.ApplyFirstStandardSheetTabColor();
+            harness.ActiveSheetTabColor.Should().Be(CellColorPalettePlanner.BuildStandardSwatches()[0].Color);
         });
     }
 
@@ -707,6 +730,39 @@ public sealed class MainWindowSheetTabKeyboardTests
                 .OfType<MenuItem>()
                 .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal))
                 ?.InputGestureText;
+
+        public (bool HasNoColor, int ThemeSwatchCount, int StandardSwatchCount, bool HasMoreColors) SheetTabColorPalette
+        {
+            get
+            {
+                var tabColor = RoutedOrActiveSheetTabTarget?.ContextMenu?.Items
+                    .OfType<MenuItem>()
+                    .Single(item => string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_TabColor"), StringComparison.Ordinal));
+                var menuItems = tabColor?.Items.OfType<MenuItem>().ToList() ?? [];
+                var gallery = menuItems.Single(item => item.Header is StackPanel);
+                var palettes = ((StackPanel)gallery.Header).Children.OfType<UniformGrid>().ToList();
+
+                return (
+                    menuItems.Any(item => string.Equals(item.Header?.ToString(), UiText.Get("RibbonWire_TabColorNone"), StringComparison.Ordinal)),
+                    palettes[0].Children.Count,
+                    palettes[1].Children.Count,
+                    menuItems.Any(item => string.Equals(item.Header?.ToString(), UiText.Get("ColorPicker_MoreColorsEllipsis"), StringComparison.Ordinal)));
+            }
+        }
+
+        public CellColor? ActiveSheetTabColor => _window.Session.ActiveSheet.TabColor;
+
+        public void ApplyFirstStandardSheetTabColor()
+        {
+            var tabColor = RoutedOrActiveSheetTabTarget?.ContextMenu?.Items
+                .OfType<MenuItem>()
+                .Single(item => string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_TabColor"), StringComparison.Ordinal));
+            var gallery = tabColor?.Items.OfType<MenuItem>().Single(item => item.Header is StackPanel);
+            var palettes = ((StackPanel)gallery!.Header).Children.OfType<UniformGrid>().ToList();
+            ((Button)palettes[1].Children[0]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
 
         public IReadOnlyList<UIElement> SheetTabChromeChildren =>
             ((Panel)_window.FindName("SheetTabsChromeLayer")).Children.Cast<UIElement>().ToList();

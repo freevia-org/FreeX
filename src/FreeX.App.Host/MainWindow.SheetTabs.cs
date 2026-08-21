@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.SheetUI;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -1519,6 +1520,12 @@ public partial class MainWindow
             return;
         }
 
+        if (command.Action == SheetTabContextMenuAction.TabColor)
+        {
+            target.Add(CreateSheetTabColorPaletteMenuItem(command));
+            return;
+        }
+
         var menuItem = new MenuItem
         {
             Header = UiText.Get(command.ResourceKey),
@@ -1535,6 +1542,122 @@ public partial class MainWindow
 
         target.Add(menuItem);
     }
+
+    // Excel opens a compact, immediately actionable swatch gallery from a sheet tab's Tab Color
+    // submenu. Keeping the full picker behind More Colors preserves its custom-color path without
+    // making the common theme/standard-color action modal.
+    private MenuItem CreateSheetTabColorPaletteMenuItem(SheetTabContextMenuCommand command)
+    {
+        var menuItem = new MenuItem
+        {
+            Header = UiText.Get(command.ResourceKey),
+            IsEnabled = command.IsEnabled
+        };
+
+        if (!string.IsNullOrEmpty(command.KeyTip))
+            RibbonTooltip.SetKeyTip(menuItem, command.KeyTip);
+        if (!string.IsNullOrEmpty(command.CommandName))
+            RibbonMetadata.SetCommandName(menuItem, command.CommandName);
+
+        var clearColorItem = new MenuItem { Header = UiText.Get("RibbonWire_TabColorNone") };
+        clearColorItem.Click += (_, _) => ApplySelectedSheetTabColor(null);
+        menuItem.Items.Add(clearColorItem);
+        menuItem.Items.Add(new Separator());
+        menuItem.Items.Add(CreateSheetTabColorPaletteGallery(menuItem));
+        menuItem.Items.Add(new Separator());
+
+        var moreColorsItem = new MenuItem { Header = UiText.Get("ColorPicker_MoreColorsEllipsis") };
+        moreColorsItem.Click += SheetCtxTabColor_Click;
+        menuItem.Items.Add(moreColorsItem);
+        return menuItem;
+    }
+
+    private MenuItem CreateSheetTabColorPaletteGallery(MenuItem parentMenuItem)
+    {
+        var content = new StackPanel { Margin = new Thickness(6, 4, 6, 4) };
+        AddSheetTabColorPaletteSection(
+            content,
+            UiText.Get("ColorPicker_ThemeColors"),
+            BuildThemeSwatchesInDisplayOrder(),
+            "Theme Colors",
+            parentMenuItem);
+        AddSheetTabColorPaletteSection(
+            content,
+            UiText.Get("ColorPicker_StandardColors"),
+            CellColorPalettePlanner.BuildStandardSwatches(),
+            UiText.Get("ColorPicker_StandardColorGroup"),
+            parentMenuItem);
+
+        return new MenuItem
+        {
+            Header = content,
+            Padding = new Thickness(0),
+            StaysOpenOnClick = true,
+            Focusable = false
+        };
+    }
+
+    private IReadOnlyList<CellColorSwatch> BuildThemeSwatchesInDisplayOrder()
+    {
+        var columns = CellColorPalettePlanner.BuildThemePalette(_workbook.Theme);
+        return Enumerable.Range(0, columns[0].Shades.Count)
+            .SelectMany(row => columns.Select(column => column.Shades[row]))
+            .ToList();
+    }
+
+    private void AddSheetTabColorPaletteSection(
+        Panel target,
+        string heading,
+        IReadOnlyList<CellColorSwatch> swatches,
+        string groupName,
+        MenuItem parentMenuItem)
+    {
+        target.Children.Add(new TextBlock
+        {
+            Text = heading,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 3)
+        });
+
+        var palette = new System.Windows.Controls.Primitives.UniformGrid { Columns = 10 };
+        foreach (var swatch in swatches)
+            palette.Children.Add(CreateSheetTabColorSwatchButton(swatch, groupName, parentMenuItem));
+        target.Children.Add(palette);
+    }
+
+    private Button CreateSheetTabColorSwatchButton(
+        CellColorSwatch swatch,
+        string groupName,
+        MenuItem parentMenuItem)
+    {
+        var button = new Button
+        {
+            Width = 18,
+            Height = 18,
+            Margin = new Thickness(1),
+            Padding = new Thickness(0),
+            Background = new SolidColorBrush(Color.FromRgb(swatch.Color.R, swatch.Color.G, swatch.Color.B)),
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            ToolTip = UiText.Format("ColorPicker_GroupSwatchToolTip", groupName, swatch.Hex)
+        };
+        System.Windows.Automation.AutomationProperties.SetName(
+            button,
+            UiText.Format("ColorPicker_GroupSwatchAutomationName", groupName, swatch.Hex));
+        System.Windows.Automation.AutomationProperties.SetHelpText(button, UiText.Get("ColorPicker_SwatchHelpText"));
+        button.Click += (_, args) =>
+        {
+            ApplySelectedSheetTabColor(swatch.Color);
+            parentMenuItem.IsSubmenuOpen = false;
+            args.Handled = true;
+        };
+        return button;
+    }
+
+    private IReadOnlyList<SheetId> CurrentTabColorTargetSheetIds(SheetId tabId) =>
+        _groupedSheetIds.Contains(tabId)
+            ? _workbook.Sheets.Select(sheet => sheet.Id).Where(_groupedSheetIds.Contains).ToList()
+            : [tabId];
 
     // Maps neutral planner actions to the existing sheet-tab Click handlers. "View Code" intentionally has
     // no handler (it was always disabled in the XAML); every other action routes to the same handler the
@@ -1948,10 +2071,7 @@ public partial class MainWindow
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
 
-        var selectedSheetIds = _groupedSheetIds.Contains(tab.Id)
-            ? _workbook.Sheets.Select(sheet => sheet.Id).Where(_groupedSheetIds.Contains).ToList()
-            : [tab.Id];
-        ColorSheetTabs(tab.Id, selectedSheetIds);
+        ColorSheetTabs(tab.Id, CurrentTabColorTargetSheetIds(tab.Id));
     }
 
     private void SheetCtxProtectSheet_Click(object sender, RoutedEventArgs e) =>
@@ -2098,10 +2218,7 @@ public partial class MainWindow
 
     private void ColorCurrentSheetTab()
     {
-        var selectedSheetIds = _groupedSheetIds.Contains(_currentSheetId)
-            ? _workbook.Sheets.Select(sheet => sheet.Id).Where(_groupedSheetIds.Contains).ToList()
-            : [_currentSheetId];
-        ColorSheetTabs(_currentSheetId, selectedSheetIds);
+        ColorSheetTabs(_currentSheetId, CurrentTabColorTargetSheetIds(_currentSheetId));
     }
 
     private void ColorSheetTabs(SheetId sheetId, IReadOnlyCollection<SheetId> sheetIds)
@@ -2110,6 +2227,11 @@ public partial class MainWindow
         if (!TryShowColorPicker("Tab Color", sheet?.TabColor ?? new CellColor(15, 109, 140), allowNoColor: true, out var tabColor, out _))
             return;
 
+        ApplySelectedSheetTabColor(tabColor);
+    }
+
+    private void ApplySelectedSheetTabColor(CellColor? tabColor)
+    {
         SynchronizeWorkbookSessionSelection();
         var result = _session.SetSelectedSheetTabColor(tabColor);
         if (!result.Success)
