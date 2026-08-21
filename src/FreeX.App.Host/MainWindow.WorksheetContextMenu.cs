@@ -34,8 +34,10 @@ public partial class MainWindow
             menu.Items,
             ribbonMenu.Items,
             action => ExecuteWorksheetContextMenuAction(action, actualAddr));
+        WorksheetContextMenuRenderer.AddSearchBox(menu);
 
-        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
+        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>()
+            .Where(item => !WorksheetContextMenuRenderer.IsSearchMenuItem(item)));
         menu.PlacementTarget = SheetGrid;
         menu.Opened += WorksheetContextMenu_Opened;
         menu.Closed += (_, _) =>
@@ -148,7 +150,9 @@ public partial class MainWindow
         MenuItem? firstEnabledItem = null;
         foreach (var item in menu.Items)
         {
-            if (item is not MenuItem menuItem || !menuItem.IsEnabled)
+            if (item is not MenuItem menuItem ||
+                !menuItem.IsEnabled ||
+                WorksheetContextMenuRenderer.IsSearchMenuItem(menuItem))
                 continue;
 
             firstEnabledItem = menuItem;

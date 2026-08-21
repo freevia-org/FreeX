@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -110,6 +111,36 @@ public sealed class WorksheetContextMenuRendererTests
             WorksheetContextMenuRenderer.AddItems(menu.Items, ribbonMenu.Items, _ => { });
 
             menu.Items.OfType<MenuItem>().First().IsCheckable.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void AddSearchBox_AddsExcelLikeSearchRowAndFiltersVisibleCommands()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var commands = WorksheetContextMenuPlanner.BuildCommands();
+            var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
+            var menu = new ContextMenu();
+            WorksheetContextMenuRenderer.AddItems(menu.Items, ribbonMenu.Items, _ => { });
+
+            var searchBox = WorksheetContextMenuRenderer.AddSearchBox(menu);
+
+            var searchItem = menu.Items[0].Should().BeOfType<MenuItem>().Subject;
+            searchItem.Tag.Should().Be(WorksheetContextMenuRenderer.SearchMenuItemTag);
+            searchItem.StaysOpenOnClick.Should().BeTrue();
+            AutomationProperties.GetName(searchBox).Should().Be("Search the menus");
+            ((Grid)searchItem.Header).Children.OfType<TextBlock>().Single()
+                .Text.Should().Be("Search the menus");
+
+            searchBox.Text = "hyperlink";
+
+            menu.Items.OfType<MenuItem>()
+                .Single(item => (item.Header as string) == "_Hyperlink...")
+                .Visibility.Should().Be(Visibility.Visible);
+            menu.Items.OfType<MenuItem>()
+                .Single(item => (item.Header as string) == "Cu_t")
+                .Visibility.Should().Be(Visibility.Collapsed);
         });
     }
 

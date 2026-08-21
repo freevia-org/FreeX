@@ -1,6 +1,8 @@
 using System;
 using System.Windows.Automation;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FreeX.App.Services.Ribbon;
 using Free.Shared.Ribbon;
 
@@ -16,6 +18,8 @@ namespace FreeX.App.Host;
 /// </summary>
 internal static class WorksheetContextMenuRenderer
 {
+    internal const string SearchMenuItemTag = "WorksheetContextMenuSearch";
+
     public static void AddItems(
         ItemCollection target,
         System.Collections.Generic.IReadOnlyList<RibbonMenuItem> items,
@@ -38,6 +42,58 @@ internal static class WorksheetContextMenuRenderer
     {
         foreach (var item in items)
             AddItem(target, item, dispatch);
+    }
+
+    /// <summary>
+    /// Adds Excel's familiar <c>Search the menus</c> affordance above a worksheet context menu.
+    /// Filtering only changes the live WPF presentation; the shared command tree and its action
+    /// routing remain intact.
+    /// </summary>
+    public static TextBox AddSearchBox(ContextMenu menu)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+
+        var searchBox = new TextBox
+        {
+            Padding = new Thickness(6, 3, 6, 3),
+            ToolTip = "Search commands in this menu"
+        };
+        AutomationProperties.SetName(searchBox, "Search the menus");
+        AutomationProperties.SetHelpText(searchBox, "Type to filter commands in this menu.");
+
+        var searchHeader = new Grid { Width = 180, Margin = new Thickness(2) };
+        searchHeader.Children.Add(searchBox);
+        var watermark = new TextBlock
+        {
+            Text = "Search the menus",
+            Margin = new Thickness(9, 0, 4, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Brushes.Gray,
+            IsHitTestVisible = false
+        };
+        searchHeader.Children.Add(watermark);
+
+        var searchItem = new MenuItem
+        {
+            Header = searchHeader,
+            Tag = SearchMenuItemTag,
+            StaysOpenOnClick = true,
+            Focusable = false,
+            Padding = new Thickness(3),
+            IsEnabled = true
+        };
+        AutomationProperties.SetName(searchItem, "Search the menus");
+        menu.Items.Insert(0, searchItem);
+        menu.Items.Insert(1, new Separator { Tag = SearchMenuItemTag });
+
+        searchBox.TextChanged += (_, _) =>
+        {
+            watermark.Visibility = string.IsNullOrEmpty(searchBox.Text)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            ApplySearchFilter(menu, searchBox.Text);
+        };
+        return searchBox;
     }
 
     private static void AddItem(
@@ -125,6 +181,52 @@ internal static class WorksheetContextMenuRenderer
         commandId is { } id
             ? Enum.Parse<WorksheetContextMenuAction>(id.Value)
             : WorksheetContextMenuAction.None;
+
+    internal static bool IsSearchMenuItem(object? item) =>
+        item is FrameworkElement { Tag: SearchMenuItemTag };
+
+    private static void ApplySearchFilter(ContextMenu menu, string? query)
+    {
+        var hasQuery = !string.IsNullOrWhiteSpace(query);
+        foreach (var item in menu.Items)
+        {
+            if (IsSearchMenuItem(item))
+                continue;
+
+            if (item is MenuItem menuItem)
+                menuItem.Visibility = !hasQuery || Matches(menuItem, query!)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+        }
+
+        UpdateSeparatorVisibility(menu.Items);
+    }
+
+    private static bool Matches(MenuItem item, string query)
+    {
+        var name = AutomationProperties.GetName(item);
+        if (name.Contains(query, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return item.Items.OfType<MenuItem>().Any(child => Matches(child, query));
+    }
+
+    private static void UpdateSeparatorVisibility(ItemCollection items)
+    {
+        for (var index = 0; index < items.Count; index++)
+        {
+            if (items[index] is not Separator separator || IsSearchMenuItem(separator))
+                continue;
+
+            var hasVisibleCommandBefore = items.Cast<object>().Take(index).OfType<MenuItem>()
+                .Any(item => !IsSearchMenuItem(item) && item.Visibility == Visibility.Visible);
+            var hasVisibleCommandAfter = items.Cast<object>().Skip(index + 1).OfType<MenuItem>()
+                .Any(item => item.Visibility == Visibility.Visible);
+            separator.Visibility = hasVisibleCommandBefore && hasVisibleCommandAfter
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
 
     // Recovers the clean label by removing the single access-key marker ('_') the planner inserts.
     private static string StripAccessMnemonic(string accessHeader)

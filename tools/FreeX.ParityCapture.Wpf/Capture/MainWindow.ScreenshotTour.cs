@@ -10153,7 +10153,7 @@ public partial class MainWindow
     {
         var menuHeaders = menu.Items
             .OfType<MenuItem>()
-            .Select(item => item.Header?.ToString() ?? string.Empty)
+            .Select(item => AutomationProperties.GetName(item))
             .Where(header => !string.IsNullOrWhiteSpace(header))
             .ToArray();
 
