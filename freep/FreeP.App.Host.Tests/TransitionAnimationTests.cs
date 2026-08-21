@@ -522,6 +522,101 @@ public class TransitionAnimationTests
         Assert.Equal(AnimationTrigger.AfterPrevious, anims[1].Trigger);
     }
 
+    // The three commands below capture the slide's animation list with a shallow
+    // `slide.Animations.ToList()` and undo by clearing the live list and re-adding the captured
+    // elements wholesale. ShapeAnimation is a reference type, so that only round-trips correctly
+    // as long as Apply never mutates a captured element in place - it may only add/remove entries.
+    // These tests pin that: a head promoted by the removal keeps its own stored Trigger through
+    // Apply, and Undo returns every entry with its exact pre-Apply Trigger.
+
+    [Fact]
+    public void DeleteShapeCommand_PromotedHeadKeepsTrigger_AndRevertRestoresIt()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(new SlideShape { Id = 10, Name = "A", Kind = SlideShapeKind.AutoShape });
+        slide.Shapes.Add(new SlideShape { Id = 11, Name = "B", Kind = SlideShapeKind.AutoShape });
+        var head    = new ShapeAnimation { ShapeId = 10, Trigger = AnimationTrigger.OnClick };
+        var promoted = new ShapeAnimation { ShapeId = 11, Trigger = AnimationTrigger.AfterPrevious };
+        slide.Animations.Add(head);
+        slide.Animations.Add(promoted);
+
+        // Deleting shape 10 drops its animation and promotes `promoted` to the main-sequence head.
+        var cmd = new DeleteShapeCommand(0, 10);
+        cmd.Apply(pres);
+
+        var anims = pres.Slides[0].Animations;
+        Assert.Single(anims);
+        Assert.Equal(11u, anims[0].ShapeId);
+        Assert.Equal(AnimationTrigger.AfterPrevious, anims[0].Trigger);
+
+        cmd.Revert(pres);
+        anims = pres.Slides[0].Animations;
+        Assert.Equal(2, anims.Count);
+        Assert.Equal(AnimationTrigger.OnClick,       anims[0].Trigger);
+        Assert.Equal(AnimationTrigger.AfterPrevious, anims[1].Trigger);
+    }
+
+    [Fact]
+    public void ConvertSmartArtToShapesCommand_PromotedHeadKeepsTrigger_AndRevertRestoresIt()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        var smartArt = new SlideShape { Id = 10, Name = "SmartArt", Kind = SlideShapeKind.SmartArt };
+        slide.Shapes.Add(smartArt);
+        slide.Shapes.Add(new SlideShape { Id = 11, Name = "B", Kind = SlideShapeKind.AutoShape });
+        slide.Animations.Add(new ShapeAnimation { ShapeId = 10, Trigger = AnimationTrigger.OnClick });
+        slide.Animations.Add(new ShapeAnimation { ShapeId = 11, Trigger = AnimationTrigger.AfterPrevious });
+
+        // Conversion destroys the SmartArt id, so its animation is dropped and the second entry
+        // becomes the new head.
+        var converted = new[]
+        {
+            new SlideShape { Id = 20, Name = "Converted", Kind = SlideShapeKind.AutoShape },
+        };
+        var cmd = new ConvertSmartArtToShapesCommand(0, 10, smartArt, converted);
+        cmd.Apply(pres);
+
+        var anims = pres.Slides[0].Animations;
+        Assert.Single(anims);
+        Assert.Equal(11u, anims[0].ShapeId);
+        Assert.Equal(AnimationTrigger.AfterPrevious, anims[0].Trigger);
+
+        cmd.Revert(pres);
+        anims = pres.Slides[0].Animations;
+        Assert.Equal(2, anims.Count);
+        Assert.Equal(AnimationTrigger.OnClick,       anims[0].Trigger);
+        Assert.Equal(AnimationTrigger.AfterPrevious, anims[1].Trigger);
+    }
+
+    [Fact]
+    public void UngroupShapeCommand_PromotedHeadKeepsTrigger_AndRevertRestoresIt()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        var group = new SlideShape { Id = 10, Name = "Group", Kind = SlideShapeKind.Group };
+        group.Children.Add(new SlideShape { Id = 12, Name = "Child", Kind = SlideShapeKind.AutoShape });
+        slide.Shapes.Add(group);
+        slide.Shapes.Add(new SlideShape { Id = 11, Name = "B", Kind = SlideShapeKind.AutoShape });
+        slide.Animations.Add(new ShapeAnimation { ShapeId = 10, Trigger = AnimationTrigger.OnClick });
+        slide.Animations.Add(new ShapeAnimation { ShapeId = 11, Trigger = AnimationTrigger.AfterPrevious });
+
+        // Ungrouping destroys the group's own id, dropping its animation and promoting the second.
+        var cmd = new UngroupShapeCommand(0, 10);
+        cmd.Apply(pres);
+
+        var anims = pres.Slides[0].Animations;
+        Assert.Single(anims);
+        Assert.Equal(11u, anims[0].ShapeId);
+        Assert.Equal(AnimationTrigger.AfterPrevious, anims[0].Trigger);
+
+        cmd.Revert(pres);
+        anims = pres.Slides[0].Animations;
+        Assert.Equal(2, anims.Count);
+        Assert.Equal(AnimationTrigger.OnClick,       anims[0].Trigger);
+        Assert.Equal(AnimationTrigger.AfterPrevious, anims[1].Trigger);
+    }
+
     [Fact]
     public void ReorderShapeAnimationCommand_ReorderingAwayFromHead_LeavesTriggersUntouched()
     {
