@@ -705,6 +705,12 @@ public static class SlideCompositor
     {
         if (shape.Picture is null) return;
 
+        // An explicit zero-sized slide placeholder is hidden in PowerPoint (same rule as
+        // ComposeAutoShape below) -- do not let normal placeholder inheritance turn its
+        // authored zero transform into visible layout geometry.
+        if (shape.HasExplicitZeroExtentTransform && shape.Placeholder is not null)
+            return;
+
         var anchor = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
         var boundsDip = AnchorToBounds(anchor);
 
@@ -756,6 +762,12 @@ public static class SlideCompositor
         List<DrawOp> ops,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
+        // An explicit zero-sized slide placeholder is hidden in PowerPoint (same rule as
+        // ComposeAutoShape above) -- do not let normal placeholder inheritance turn its
+        // authored zero transform into visible layout geometry.
+        if (shape.HasExplicitZeroExtentTransform && shape.Placeholder is not null)
+            return;
+
         var anchor    = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
         var boundsDip = AnchorToBounds(anchor);
 
@@ -1386,6 +1398,12 @@ public static class SlideCompositor
         List<DrawOp> ops,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
+        // An explicit zero-sized slide placeholder is hidden in PowerPoint (same rule as
+        // ComposeAutoShape above) -- do not let normal placeholder inheritance turn its
+        // authored zero transform into visible layout geometry.
+        if (shape.HasExplicitZeroExtentTransform && shape.Placeholder is not null)
+            return;
+
         var anchor    = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
         var boundsDip = AnchorToBounds(anchor);
 
@@ -1521,6 +1539,12 @@ public static class SlideCompositor
         List<DrawOp> ops,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
+        // An explicit zero-sized slide placeholder is hidden in PowerPoint (same rule as
+        // ComposeAutoShape above) -- do not let normal placeholder inheritance turn its
+        // authored zero transform into visible layout geometry.
+        if (shape.HasExplicitZeroExtentTransform && shape.Placeholder is not null)
+            return;
+
         var anchor    = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
         var boundsDip = AnchorToBounds(anchor);
 

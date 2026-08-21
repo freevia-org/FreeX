@@ -1017,6 +1017,86 @@ public sealed class SlideCompositorTests
         SlideCompositor.Compose(p, slide).OfType<DrawOp.Shape>().Should().BeEmpty();
     }
 
+    [Fact]
+    public void Compose_ExplicitZeroExtentPicturePlaceholder_IsHiddenInsteadOfInheritingLayoutGeometry()
+    {
+        // F1 (freep-master-layout-edit): the explicit-zero-extent hide rule enforced for
+        // AutoShape/text placeholders in ComposeAutoShape must also apply to Picture
+        // placeholders -- otherwise a slide picture placeholder that PowerPoint (or FreeP's own
+        // SetSlideLayoutCommand.ApplyInheritedMasterGeometry) marks as explicitly hidden with a
+        // zero <a:xfrm> would instead render at the inherited, non-zero layout position.
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Picture,
+            Placeholder = new Placeholder { Type = PlaceholderType.Picture, Idx = 1 },
+            OffsetXEmu = 457200,
+            OffsetYEmu = 274320,
+            ExtentCxEmu = 8229600,
+            ExtentCyEmu = 1143000
+        });
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Picture,
+            Placeholder = new Placeholder { Type = PlaceholderType.Picture, Idx = 1 },
+            HasExplicitZeroExtentTransform = true,
+            Picture = new ImagePart { Bytes = [0x89, 0x50, 0x4E, 0x47], ContentType = "image/png" },
+        });
+        p.Slides.Add(slide);
+
+        SlideCompositor.Compose(p, slide).OfType<DrawOp.Picture>().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Compose_NonZeroExtentPicturePlaceholder_StillInheritsLayoutGeometry()
+    {
+        // Sibling no-regression case for F1: a Picture placeholder that is NOT marked
+        // explicit-zero must still inherit the layout placeholder's position/size exactly as
+        // before -- the new guard must not suppress the normal inheritance path.
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Picture,
+            Placeholder = new Placeholder { Type = PlaceholderType.Picture, Idx = 1 },
+            OffsetXEmu = 457200,
+            OffsetYEmu = 274320,
+            ExtentCxEmu = 8229600,
+            ExtentCyEmu = 1143000
+        });
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Picture,
+            Placeholder = new Placeholder { Type = PlaceholderType.Picture, Idx = 1 },
+            Picture = new ImagePart { Bytes = [0x89, 0x50, 0x4E, 0x47], ContentType = "image/png" },
+        });
+        p.Slides.Add(slide);
+
+        var picOp = SlideCompositor.Compose(p, slide).OfType<DrawOp.Picture>().Single();
+
+        picOp.DestDip.X.Should().BeApproximately(457200 / 9525.0, 0.1);
+        picOp.DestDip.Width.Should().BeApproximately(8229600 / 9525.0, 0.1);
+    }
+
     // â”€â”€â”€ Theme color resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]

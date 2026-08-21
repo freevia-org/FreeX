@@ -257,7 +257,11 @@ public static partial class DataValidationService
         if (dv.Type != DvType.List || !dv.ShowDropdown || string.IsNullOrWhiteSpace(dv.Formula1))
             return Array.Empty<string>();
 
-        return ResolveListValues(dv.Formula1, sheet, dv.AppliesTo.Start, address, workbook);
+        // forDisplay: true -- these items are shown verbatim to the user (in-cell dropdown
+        // ItemsSource, rule preview text), not compared against an entered value, so a
+        // date-sourced item must render as a date ("2024-01-02") rather than the raw OADate
+        // serial ValidateList's own matching path uses (R163-DV-F1).
+        return ResolveListValues(dv.Formula1, sheet, dv.AppliesTo.Start, address, workbook, forDisplay: true);
     }
 
     public static string FormatListSourceRange(GridRange range, string? sheetName = null)

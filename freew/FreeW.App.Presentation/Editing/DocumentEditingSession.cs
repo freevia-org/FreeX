@@ -795,11 +795,18 @@ public sealed class DocumentEditingSession
 
         Func<RunFormatting, RunFormatting> transform = formatting =>
             NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, plan.EffectiveStyle.Run);
+        // Beyond baking the style's fields into Formatting (so the run looks right immediately, and still
+        // round-trips through plain text importers with no style catalog), link the run to the character
+        // style itself. DocumentRunFormattingResolver already re-walks a run's own StyleId live against
+        // document.Styles -- the same cascade a docx-authored w:rPr/w:rStyle run gets -- so a later
+        // Manage Styles > Modify of this style can repaint text styled through this path too, instead of
+        // only text whose style link happened to come from DocxReader.
         var commands = CreateRunFormattingCommands(
             ranges,
             transform,
             "Apply Character Style",
-            skipUnchangedRanges: true);
+            skipUnchangedRanges: true,
+            styleId: plan.EffectiveStyle.Id);
         if (commands.Count > 0)
             DocumentUndoGroupExecutor.Execute(_commands, commands, "Apply Character Style");
 
@@ -1954,27 +1961,30 @@ public sealed class DocumentEditingSession
         IReadOnlyList<DocumentTextRange> ranges,
         Func<RunFormatting, RunFormatting> transform,
         string commandLabel,
-        bool skipUnchangedRanges)
+        bool skipUnchangedRanges,
+        string? styleId = null)
     {
         ArgumentNullException.ThrowIfNull(ranges);
         ArgumentNullException.ThrowIfNull(transform);
         ArgumentException.ThrowIfNullOrWhiteSpace(commandLabel);
 
         return ResolveBodyTextRanges(ranges)
-            .Where(range => !skipUnchangedRanges || RunRangeWouldChange(range, transform))
+            .Where(range => !skipUnchangedRanges || RunRangeWouldChange(range, transform, styleId))
             .Select(range => (IDocumentCommand)new RunFormattingRangeCommand(
                 range.Start.BlockIndex,
                 range.Start.Offset,
                 range.End.Offset,
                 transform,
                 _revisionDateXml,
-                commandLabel))
+                commandLabel,
+                styleId))
             .ToArray();
     }
 
     private bool RunRangeWouldChange(
         DocumentTextRange range,
-        Func<RunFormatting, RunFormatting> transform)
+        Func<RunFormatting, RunFormatting> transform,
+        string? styleId = null)
     {
         var paragraph = (Paragraph)Document.Blocks[range.Start.BlockIndex];
         var position = 0;
@@ -1986,6 +1996,12 @@ public sealed class DocumentEditingSession
             if (runEnd <= range.Start.Offset || runStart >= range.End.Offset || run.Text.Length == 0)
                 continue;
             if (transform(run.Formatting) != run.Formatting)
+                return true;
+            // A style application whose baked fields happen to already match (e.g. the run was already
+            // manually bolded before "Strong" was applied) must still link the run to the style, so treat
+            // an unset/different StyleId as a change too -- otherwise skipUnchangedRanges would silently
+            // drop the one command that assigns it.
+            if (styleId is not null && !string.Equals(run.StyleId, styleId, StringComparison.Ordinal))
                 return true;
         }
         return false;
@@ -2038,7 +2054,8 @@ public sealed class DocumentEditingSession
         Func<RunFormatting, RunFormatting> transform,
         TextDocument document,
         string? revisionAuthor,
-        string? revisionDateXml)
+        string? revisionDateXml,
+        string? styleId = null)
     {
         var rebuilt = new List<Run>();
         var position = 0;
@@ -2070,6 +2087,8 @@ public sealed class DocumentEditingSession
             var covered = RevisionEditPlanner.CloneRunWithText(source, source.Text[localStart..localEnd]);
             var formatting = transform(source.Formatting);
             covered.Formatting = formatting;
+            if (styleId is not null)
+                covered.StyleId = styleId;
             if (document is { TrackRevisions: true, DoNotTrackFormatting: false }
                 && formatting != source.Formatting
                 && covered.FormatRevision is null)
@@ -2119,7 +2138,8 @@ public sealed class DocumentEditingSession
         int endOffset,
         Func<RunFormatting, RunFormatting> transform,
         Func<string?> revisionDateXml,
-        string commandLabel) : IDocumentCommand
+        string commandLabel,
+        string? styleId = null) : IDocumentCommand
     {
         private List<Run>? _previous;
         private List<Run>? _replacement;
@@ -2145,7 +2165,8 @@ public sealed class DocumentEditingSession
                 transform,
                 context.Document,
                 context.RevisionAuthor,
-                revisionDateXml());
+                revisionDateXml(),
+                styleId);
             _replacement = [.. paragraph.Runs];
         }
 

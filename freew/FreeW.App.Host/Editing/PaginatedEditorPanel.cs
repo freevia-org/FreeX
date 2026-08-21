@@ -612,6 +612,35 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         if (startPtr is null || endPtr is null)
             return false;
 
+        // freew-cc-3 / shared-drag-drop F1: Word declines the WHOLE deletion outright when it would
+        // remove a locked content control, rather than deleting part of it (see the sibling Avalonia
+        // TryCommitBodyTextDragMove/SelectionReachesLockedContentControl comment for the canonical
+        // semantics this mirrors). Scan every spanned box's own sub-range for a locked run/paragraph
+        // BEFORE any mutation runs -- every caller of this method (Ctrl+X, a drag-move's cut, and
+        // PasteAtCaret's stale-selection cleanup) must refuse to silently delete protected content the
+        // same way the caret-based Enter/Backspace/Delete/Paste/Cut guards already refuse to mutate it.
+        for (int i = startBoxIdx; i <= endBoxIdx && i < _pageBoxes.Count; i++)
+        {
+            var lockBox = _pageBoxes[i];
+            try
+            {
+                TextPointer lockFrom = (i == startBoxIdx)
+                    ? startPtr
+                    : lockBox.Body.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward) ?? lockBox.Body.Document.ContentStart;
+                TextPointer lockTo = (i == endBoxIdx)
+                    ? endPtr
+                    : lockBox.Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward) ?? lockBox.Body.Document.ContentEnd;
+
+                if (RangeTouchesLockedContentControl(lockBox, lockFrom, lockTo))
+                    return false;
+            }
+            catch
+            {
+                // Position resolution failed here -- fall through to the real deletion loop below,
+                // which has its own pre-existing fail-open handling for exactly this race.
+            }
+        }
+
         // Delete from each spanned box. Track whether every box's delete actually succeeded —
         // a per-box try/catch below is deliberately fail-open (a later box's position can become
         // invalid once an earlier box's content changes), but the caller must still learn when a
@@ -644,6 +673,46 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         _crossPageSelection.Clear(_pageBoxes);
         ScheduleRepaginate();
         return allDeleted;
+    }
+
+    /// <summary>
+    /// Whether any position between <paramref name="from"/> and <paramref name="to"/> (a single page
+    /// box's own sub-range of a cross-page selection) sits on a content-control run that
+    /// <paramref name="box"/>'s <see cref="PageBox.ContentControlLockProbe"/> would refuse to edit --
+    /// used by <see cref="DeleteCrossPageSelection"/> to decline a delete/drag-move outright rather than
+    /// silently removing part of a locked control (shared-drag-drop finding F1). Only public
+    /// <see cref="TextPointer"/> navigation is used here -- never the private Tag marker types the probe
+    /// itself pattern-matches on (see <c>DocumentView.TryEvaluateContentControlLock</c>'s doc comment on
+    /// why this file cannot do so directly) -- so this works uniformly across every page's own
+    /// FlowDocument. A position strictly inside a run's text is where <c>TextPointer.Parent</c> resolves
+    /// to the run itself, the same shape of position every other probe call site in this class already
+    /// uses (see <c>PagedEditContentControlLockTests.PositionAfterText</c>), so each Text-context segment
+    /// in the range is probed one character in from its start.
+    /// </summary>
+    private static bool RangeTouchesLockedContentControl(PageBox box, TextPointer from, TextPointer to)
+    {
+        if (box.ContentControlLockProbe is not { } probe)
+            return false;
+
+        if (probe(from) == false || probe(to) == false)
+            return true;
+
+        var pointer = from;
+        while (pointer is not null && pointer.CompareTo(to) < 0)
+        {
+            if (pointer.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.Text
+                && probe(pointer.GetPositionAtOffset(1, LogicalDirection.Forward) ?? pointer) == false)
+            {
+                return true;
+            }
+
+            var next = pointer.GetNextContextPosition(LogicalDirection.Forward);
+            if (next is null || next.CompareTo(pointer) <= 0)
+                break;
+            pointer = next;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1388,6 +1457,17 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // removes content from different boxes the pointer in the target box (a different box)
         // stays valid.  dropPtr is held as dropPtrRef through the cut.
         TextPointer dropPtrRef = dropPtr;
+
+        // freew-cc-3 / shared-drag-drop F1: refuse to drop onto a locked content control. The
+        // InsertTextInRun call below mutates the live FlowDocument directly with no lock awareness
+        // of its own -- exactly like PaginatedEditorPanel.PasteAtCaret's own caret insert, which
+        // already gates on this same probe before inserting (see its guard for the reasoning). Checked
+        // before either branch below runs so a locked drop target aborts the whole gesture without
+        // cutting the source selection first.
+        if (dropBox.ContentControlLockProbe?.Invoke(dropPtrRef) == false)
+        {
+            return true; // handled: the drag gesture is consumed, nothing is inserted or removed.
+        }
 
         if (!isCopy)
         {

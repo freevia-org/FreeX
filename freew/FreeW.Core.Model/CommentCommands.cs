@@ -124,6 +124,9 @@ public sealed class AddCommentCommand(
 
     private static Run CloneRunMarks(Run source, string text) => new(text, source.Formatting)
     {
+        // r163: a run carries its character-style link like any other property; a copier that
+        // omits it silently unlinks the run the next time anything reformats the paragraph.
+        StyleId = source.StyleId,
         HyperlinkUrl = source.HyperlinkUrl,
         HyperlinkAnchor = source.HyperlinkAnchor,
         HyperlinkTooltip = source.HyperlinkTooltip,
@@ -268,6 +271,9 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
 
     private static Run CloneRun(Run source) => new(source.Text, source.Formatting)
     {
+        // r163: a run carries its character-style link like any other property; a copier that
+        // omits it silently unlinks the run the next time anything reformats the paragraph.
+        StyleId = source.StyleId,
         HyperlinkUrl = source.HyperlinkUrl,
         HyperlinkAnchor = source.HyperlinkAnchor,
         HyperlinkTooltip = source.HyperlinkTooltip,

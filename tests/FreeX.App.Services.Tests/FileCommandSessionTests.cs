@@ -215,4 +215,68 @@ public sealed class FileCommandSessionTests : IDisposable
 
         session.RecentEntries.Select(entry => entry.Path).Should().BeEquivalentTo(new[] { pathA, pathB });
     }
+
+    [Fact]
+    public void RecentEntries_CachesPathExistsProbePerPath_AcrossRepeatedReads()
+    {
+        // Regression for shared-recent-files-jumplist F1: FreeW's Backstage Open-pane search box
+        // calls FileCommandWorkflow.RecentEntries -> FileCommandSession.RecentEntries fresh on
+        // every keystroke (see FreeWBackstageSession.BuildOpenPane / BackstageView.cs's
+        // searchBox.TextChanged wiring in both shells). Before the fix, every single read re-ran
+        // the pathExists probe -- a plain File.Exists in production, which blocks for the SMB/TCP
+        // connect timeout (commonly 20+ seconds) against an unreachable UNC/mapped-network recent
+        // entry -- for every recent entry with no caching at all, so N reads of M entries cost
+        // N*M probe calls. The probe must now run at most once per distinct path for the lifetime
+        // of the session, so repeated reads (repeated keystrokes) are free.
+        var probeCallsByPath = new Dictionary<string, int>();
+        var storePath = Path.Combine(_tempDir, "recent.json");
+        var session = new FileCommandSession(
+            loadRecentFilesStore: () => RecentFilesStore.Load(storePath),
+            pathExists: path =>
+            {
+                probeCallsByPath[path] = probeCallsByPath.GetValueOrDefault(path) + 1;
+                return true;
+            });
+
+        var pathA = Path.Combine(_tempDir, "a.fxp");
+        var pathB = Path.Combine(_tempDir, "b.fxp");
+        var pathC = Path.Combine(_tempDir, "c.fxp");
+        session.MarkSavedWithPath(pathA, suppressRecentFiles: false, maxRecentEntries: 5);
+        session.MarkSavedWithPath(pathB, suppressRecentFiles: false, maxRecentEntries: 5);
+        session.MarkSavedWithPath(pathC, suppressRecentFiles: false, maxRecentEntries: 5);
+
+        for (var i = 0; i < 5; i++)
+        {
+            _ = session.RecentEntries;
+        }
+
+        probeCallsByPath.Keys.Should().HaveCount(3);
+        probeCallsByPath.Values.Sum().Should().Be(3,
+            "each distinct recent path should be probed at most once across 5 reads, not once per read");
+        probeCallsByPath.Values.Should().OnlyContain(count => count == 1);
+    }
+
+    [Fact]
+    public void RecentEntries_CachingKeepsDistinctPathsResultsCorrect_AcrossRepeatedReads()
+    {
+        // Sibling no-regression: the new per-path cache must key strictly on path identity so
+        // caching one entry's existence result never leaks onto a different recent path, and the
+        // real (non-mocked) prune-vs-keep behavior from RecentEntries_PrunesEntriesWhoseFileNoLongerExists
+        // / RecentEntries_KeepsEntriesWhoseFileStillExists still holds across repeated reads, not
+        // just the first one.
+        var storePath = Path.Combine(_tempDir, "recent.json");
+        var missingPath = Path.Combine(_tempDir, "missing.fxp");
+        var keepPath = Path.Combine(_tempDir, "keep.fxp");
+        File.WriteAllText(keepPath, "");
+        // missingPath intentionally never created on disk.
+
+        var session = new FileCommandSession(loadRecentFilesStore: () => RecentFilesStore.Load(storePath));
+        session.MarkSavedWithPath(missingPath, suppressRecentFiles: false, maxRecentEntries: 5);
+        session.MarkSavedWithPath(keepPath, suppressRecentFiles: false, maxRecentEntries: 5);
+
+        for (var i = 0; i < 3; i++)
+        {
+            session.RecentEntries.Select(entry => entry.Path).Should().Equal(keepPath);
+        }
+    }
 }

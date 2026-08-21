@@ -1211,6 +1211,10 @@ internal static class FreeWRibbonCommands
         // navigation commands move through real recipient rows; "Finish & Merge" combines every merged
         // record according to the selected output mode.
         var mergeSession = new MailMergeSession();
+        // Publish the session onto the editor so persistence-side code (FileCommands.Save/SaveAs/SaveCopy,
+        // AutosaveCoordinator) can tell a mail-merge preview is on screen and save the real template
+        // instead of baking the previewed record's values into the .docx (see DocumentView.MailMergeSession).
+        editor.MailMergeSession = mergeSession;
         // Write & Insert Fields — Address Block, Greeting Line, Match Fields (Word parity).
         // Special merge fields use Word's native NEXT/MERGEREC/MERGESEQ instructions. Their cached
         // result remains the familiar guillemet label until a merge evaluates the field.

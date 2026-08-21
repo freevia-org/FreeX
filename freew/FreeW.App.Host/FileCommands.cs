@@ -76,9 +76,19 @@ internal sealed class FileCommands
             _workflow.Workflow,
             _persistence,
             new FreeWDocumentFilePorts(
-                GetDocument: () => _editor.Model,
+                // While Mailings > Preview Results is active, _editor.Model holds the merged, single-record
+                // document that the preview loaded for on-screen display (MailMergeSessionWorkflow.EnsurePreviewing/
+                // NavigatePreview/MovePreviewTo -> Realize -> editor.LoadModel), not the mail-merge template.
+                // Saving that straight to disk would permanently replace every MERGEFIELD/ADDRESSBLOCK/
+                // GREETINGLINE/IF/SKIPIF/NEXTIF in the user's template with the one previewed recipient's
+                // literal values -- across Save, Save As, and Save a Copy, which all funnel through this same
+                // GetDocument port (FreeWDocumentFileWorkflow.SaveTargetAsync). Fall back to the session's
+                // still-live Template whenever a preview is active, exactly as FreeWRibbonCommands'
+                // CurrentMailMergeDocument already does for every other mail-merge operation.
+                GetDocument: () => _editor.MailMergeSession?.Template ?? _editor.Model,
                 LoadDocumentAsync: (document, _) =>
                 {
+                    AbandonStaleMailMergePreview();
                     _editor.LoadModel(document);
                     return ValueTask.CompletedTask;
                 },
@@ -115,6 +125,7 @@ internal sealed class FileCommands
             new FreeWDocumentFileCommandPorts(
                 LoadNewDocumentAsync: () =>
                 {
+                    AbandonStaleMailMergePreview();
                     _editor.LoadModel(TextDocument.CreateEmpty());
                     _editor.CurrentFileName = null;
                     return Task.CompletedTask;
@@ -132,6 +143,20 @@ internal sealed class FileCommands
                 PresentFeedback: feedback => ApplyFeedback(feedback)),
             FreeWFileTextResources.Document);
     }
+
+    /// <summary>
+    /// r163 remediation. MailMergeSession is built once per WINDOW, but its Template is set per
+    /// DOCUMENT by the preview workflow, and nothing cleared it when a different document was loaded.
+    /// With the save port above preferring Template whenever one exists, a preview left active on
+    /// document A would then be written over document B the moment the user opened B and pressed
+    /// Ctrl+S -- destroying a file that has nothing to do with the mail merge. That is a wider blast
+    /// radius than the bug the save port was added to fix, so every path that swaps the document out
+    /// from under the window ends the preview first.
+    ///
+    /// EndPreview only drops Template; the loaded recipient data and mapping survive, so re-running a
+    /// merge in this window after opening another document does not have to start from scratch.
+    /// </summary>
+    private void AbandonStaleMailMergePreview() => _editor.MailMergeSession?.EndPreview();
 
     public bool IsDirty => _workflow.IsDirty;
 
@@ -175,6 +200,7 @@ internal sealed class FileCommands
     {
         ArgumentNullException.ThrowIfNull(plan);
 
+        AbandonStaleMailMergePreview();
         _editor.LoadModel(plan.Document);
         _workflow.ApplyDocumentState(
             plan.CurrentPath,

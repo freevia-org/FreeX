@@ -363,6 +363,19 @@ public sealed partial class DocumentView : RichTextBox
 
     public TextDocument Model => _model;
 
+    /// <summary>
+    /// The active Mailings mail-merge session for this window, if one has been started (set once by
+    /// <c>FreeWRibbonCommands.BuildCore</c> right after it constructs the session). While
+    /// <see cref="MailMergeSession.IsPreviewing"/> is true, <see cref="Model"/> holds the merged,
+    /// single-record document that Mailings &gt; Preview Results loaded for on-screen display (see
+    /// <c>MailMergeSessionWorkflow.RenderCurrentPreview</c>/<c>Realize</c>) -- callers that need the real,
+    /// unmerged template to persist (Save/Save As/Save Copy/autosave/crash-recovery) must read
+    /// <see cref="MailMergeSession.Template"/> instead of <see cref="Model"/> whenever this is set and
+    /// previewing, mirroring the same <c>session.Template ?? editor.Model</c> guard other mail-merge
+    /// operations already use (see FreeWRibbonCommands.CurrentMailMergeDocument).
+    /// </summary>
+    public MailMergeSession? MailMergeSession { get; set; }
+
     internal IPlatformClipboard PlatformClipboard => _platformClipboard;
 
     internal void ApplyViewDepthLayout(DocumentViewDepthLayoutPlan layout)

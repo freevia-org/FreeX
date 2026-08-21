@@ -49,7 +49,7 @@ public static partial class DataValidationService
                 return dv.ErrorMessage ?? GenericListErrorMessage;
             }
 
-            var allowed = ResolveListValues(source, sheet, anchor, address, workbook);
+            var allowed = ResolveListValues(source, sheet, anchor, address, workbook, forDisplay: false);
             if (allowed.Count > 0)
                 return ValidateListAgainstValues(dv, value, allowed);
 
@@ -67,17 +67,31 @@ public static partial class DataValidationService
         return ValidateList(dv, value);
     }
 
+    /// <summary>
+    /// Resolves a List-validation source formula to its item strings.
+    /// </summary>
+    /// <param name="forDisplay">
+    /// When <see langword="true"/>, items are rendered for a human to read (e.g. a date-sourced
+    /// item shows as "2024-01-02"), matching how <see cref="FreeX.App.Presentation.SpreadsheetDisplayFormatter"/>
+    /// would show the same cell. When <see langword="false"/> (the default), items are rendered
+    /// via <see cref="ToValidationText"/> for value-membership matching (e.g. a date-sourced item
+    /// is the raw OADate serial), so they compare equal to a value's own <see cref="ToValidationText"/>
+    /// regardless of locale. Callers that show items to the user (the in-cell dropdown's
+    /// <c>GetListItems</c>, the rule preview) want <paramref name="forDisplay"/>: true; callers that
+    /// use the resolved items to accept/reject an entered value want it false (R163-DV-F1).
+    /// </param>
     private static IReadOnlyList<string> ResolveListValues(
         string formulaText,
         Sheet sheet,
         CellAddress anchor,
         CellAddress address,
-        Workbook? workbook)
+        Workbook? workbook,
+        bool forDisplay = false)
     {
         var source = formulaText.Trim();
         if (source.StartsWith('='))
         {
-            if (TryReadRangeOrNamedSource(source, sheet, workbook, anchor, address, out var rangeValues))
+            if (TryReadRangeOrNamedSource(source, sheet, workbook, anchor, address, forDisplay, out var rangeValues))
                 return rangeValues;
 
             var ast = FormulaEvaluator.ParseFormula(source);
@@ -86,7 +100,11 @@ public static partial class DataValidationService
 
             var result = new FormulaEvaluator().Evaluate(ast, sheet, workbook, currentCell: address);
             if (result is RangeValue range)
-                return range.Flatten().Select(ToValidationText).ToArray();
+            {
+                return forDisplay
+                    ? range.Flatten().Select(ToDisplayText).ToArray()
+                    : range.Flatten().Select(ToValidationText).ToArray();
+            }
 
             if (result is ErrorValue)
             {
@@ -98,7 +116,7 @@ public static partial class DataValidationService
                 return Array.Empty<string>();
             }
 
-            return new[] { ToValidationText(result) };
+            return new[] { forDisplay ? ToDisplayText(result) : ToValidationText(result) };
         }
 
         return ParseInlineListItems(formulaText);
@@ -146,13 +164,14 @@ public static partial class DataValidationService
         Workbook? workbook,
         CellAddress anchor,
         CellAddress address,
+        bool forDisplay,
         out IReadOnlyList<string> values)
     {
         values = Array.Empty<string>();
 
         // The simple-range fast path strips $ markers and can't distinguish relative from
         // absolute references, so it can only be used when no anchor->address shift is needed.
-        if (anchor == address && TryReadSimpleSameSheetRangeSource(formulaText, sheet, out values))
+        if (anchor == address && TryReadSimpleSameSheetRangeSource(formulaText, sheet, forDisplay, out values))
             return true;
 
         try
@@ -179,7 +198,7 @@ public static partial class DataValidationService
                         return false;
                 }
 
-                values = ReadRangeValues(sourceSheet, range.Start.Row, range.Start.ColumnNumber, range.End.Row, range.End.ColumnNumber);
+                values = ReadRangeValues(sourceSheet, range.Start.Row, range.Start.ColumnNumber, range.End.Row, range.End.ColumnNumber, forDisplay);
                 return true;
             }
 
@@ -199,7 +218,8 @@ public static partial class DataValidationService
                     namedRange.Start.Row,
                     namedRange.Start.Col,
                     namedRange.End.Row,
-                    namedRange.End.Col);
+                    namedRange.End.Col,
+                    forDisplay);
                 return true;
             }
 
@@ -214,6 +234,7 @@ public static partial class DataValidationService
     private static bool TryReadSimpleSameSheetRangeSource(
         string formulaText,
         Sheet sheet,
+        bool forDisplay,
         out IReadOnlyList<string> values)
     {
         values = Array.Empty<string>();
@@ -232,7 +253,7 @@ public static partial class DataValidationService
             if (!TryParseA1Cell(source, sheet.Id, out var cell))
                 return false;
 
-            values = ReadRangeValues(sheet, cell.Row, cell.Col, cell.Row, cell.Col);
+            values = ReadRangeValues(sheet, cell.Row, cell.Col, cell.Row, cell.Col, forDisplay);
             return true;
         }
 
@@ -242,7 +263,7 @@ public static partial class DataValidationService
             return false;
         }
 
-        values = ReadRangeValues(sheet, start.Row, start.Col, end.Row, end.Col);
+        values = ReadRangeValues(sheet, start.Row, start.Col, end.Row, end.Col, forDisplay);
         return true;
     }
 
@@ -425,13 +446,14 @@ public static partial class DataValidationService
         uint firstRow,
         uint firstCol,
         uint lastRow,
-        uint lastCol)
+        uint lastCol,
+        bool forDisplay = false)
     {
         var startRow = Math.Min(firstRow, lastRow);
         var endRow = Math.Max(firstRow, lastRow);
         var startCol = Math.Min(firstCol, lastCol);
         var endCol = Math.Max(firstCol, lastCol);
-        return RangeListItems.Create(sheet, startRow, endRow, startCol, endCol);
+        return RangeListItems.Create(sheet, startRow, endRow, startCol, endCol, forDisplay);
     }
 
     private sealed class RangeListItems : IReadOnlyList<string>
@@ -441,17 +463,19 @@ public static partial class DataValidationService
         private readonly uint _startCol;
         private readonly uint _columnCount;
         private readonly int _count;
+        private readonly bool _forDisplay;
 
-        private RangeListItems(Sheet sheet, uint startRow, uint startCol, uint columnCount, int count)
+        private RangeListItems(Sheet sheet, uint startRow, uint startCol, uint columnCount, int count, bool forDisplay)
         {
             _sheet = sheet;
             _startRow = startRow;
             _startCol = startCol;
             _columnCount = columnCount;
             _count = count;
+            _forDisplay = forDisplay;
         }
 
-        public static RangeListItems Create(Sheet sheet, uint startRow, uint endRow, uint startCol, uint endCol)
+        public static RangeListItems Create(Sheet sheet, uint startRow, uint endRow, uint startCol, uint endCol, bool forDisplay = false)
         {
             var rowCount = (ulong)(endRow - startRow) + 1;
             var columnCount = (ulong)(endCol - startCol) + 1;
@@ -459,7 +483,7 @@ public static partial class DataValidationService
             if (cellCount > int.MaxValue)
                 throw new InvalidOperationException("Validation list range is too large to expose as an item list.");
 
-            return new RangeListItems(sheet, startRow, startCol, (uint)columnCount, (int)cellCount);
+            return new RangeListItems(sheet, startRow, startCol, (uint)columnCount, (int)cellCount, forDisplay);
         }
 
         public int Count => _count;
@@ -478,7 +502,7 @@ public static partial class DataValidationService
                 // in Sheet._cells -- see Sheet.SetSpillRange) still reads its real value instead
                 // of BlankValue (R140-DV-1).
                 var value = _sheet.GetValue(row, col);
-                return ToValidationText(value);
+                return _forDisplay ? ToDisplayText(value) : ToValidationText(value);
             }
         }
 
@@ -506,6 +530,33 @@ public static partial class DataValidationService
         // for a large range/named source, allocate a multi-megabyte string from) the very list
         // the loop above just scanned looking for a match.
         return dv.ErrorMessage ?? GenericListErrorMessage;
+    }
+
+    /// <summary>
+    /// Renders <paramref name="value"/> the way a human should see it in a List validation's
+    /// in-cell dropdown / rule preview -- as opposed to <see cref="ToValidationText"/>, which
+    /// renders it for raw value-membership matching. The two agree for every scalar kind except
+    /// dates: <see cref="ToValidationText"/> must keep rendering a <see cref="DateTimeValue"/> as
+    /// its raw OADate serial so it compares equal to another cell's own serial regardless of
+    /// locale, but showing that same raw serial to the user in a dropdown ("45293" instead of
+    /// "2024-01-02") is wrong -- Excel shows the formatted date. This mirrors the "yyyy-MM-dd"
+    /// invariant format <c>SpreadsheetDisplayFormatter.FormatDateTimeCellValue</c> uses for the
+    /// same cell in the grid/formula bar (that formatter lives in FreeX.App.Presentation, which
+    /// this project cannot reference, hence the small local duplicate), so the dropdown's items
+    /// and the active cell's own displayed text (computed via that formatter by
+    /// DataValidationDropdownPlanner) use the identical string and the current value's item can be
+    /// found/highlighted (R163-DV-F1).
+    /// </summary>
+    private static string ToDisplayText(ScalarValue value)
+    {
+        if (value is DateTimeValue dateTimeValue)
+        {
+            return dateTimeValue.TryToDateTime(out var dateTime)
+                ? dateTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+                : ToValidationText(dateTimeValue);
+        }
+
+        return ToValidationText(value);
     }
 
     private static string ToValidationText(ScalarValue value)

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Free.Shared.IO;
 
 namespace Free.Shared.AppServices;
@@ -14,6 +15,15 @@ public sealed class FileCommandSession
 
     private readonly Func<RecentFilesStore> _loadRecentFilesStore;
     private readonly Func<string, bool> _pathExists;
+
+    // Caches each recent path's existence probe result for the lifetime of this session, so a
+    // Backstage Open-pane rebuild triggered once per keystroke (FreeW) or once per pane switch
+    // (FreeP) re-probes each path at most once instead of re-running a synchronous File.Exists
+    // (potentially a 20+ second SMB/TCP timeout for an unreachable UNC/mapped-network path) on
+    // every single access. Keyed with platform path identity so a case-differing alias of an
+    // already-probed path reuses the cached result instead of re-probing.
+    private readonly ConcurrentDictionary<string, bool> _pathExistsCache = new(PlatformPathIdentityComparer.Current);
+
     private readonly WorkbookDocumentState _state = new();
     private readonly string _untitledDisplayName;
 
@@ -43,7 +53,10 @@ public sealed class FileCommandSession
     /// Recent files (most recent first) from the shared store, pruned to entries whose file still
     /// exists on disk; never throws. Mirrors the FreeX WPF host's <c>BackstageRecentFileListPlanner</c>
     /// filtering so a moved/deleted file silently drops out of the Recent list instead of producing a
-    /// dead "Open" click.
+    /// dead "Open" click. Each path's existence result is cached for the lifetime of this session, so
+    /// repeated reads -- e.g. once per keystroke while a host filters its Open-pane Recent list --
+    /// probe a given path at most once instead of re-running a synchronous, potentially multi-second
+    /// filesystem/network check on every access.
     /// </summary>
     public IReadOnlyList<RecentFileEntry> RecentEntries
     {
@@ -55,7 +68,7 @@ public sealed class FileCommandSession
                 var existing = new List<RecentFileEntry>(entries.Count);
                 foreach (var entry in entries)
                 {
-                    if (_pathExists(entry.Path))
+                    if (_pathExistsCache.GetOrAdd(entry.Path, _pathExists))
                         existing.Add(entry);
                 }
 

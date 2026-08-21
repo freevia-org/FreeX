@@ -350,6 +350,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private readonly IPlatformPrintService _printService;
     private readonly IPlatformClipboard _platformClipboard;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
+
+    /// <summary>
+    /// Reloads the recent-files store fresh from disk. Every window in the process constructs its
+    /// own <see cref="_recentFiles"/> instance at construction time, so with multiple windows open
+    /// (View &gt; New Window) each window's cached instance goes stale the moment a sibling window
+    /// writes to recent.json. Read paths (the native Open Recent menu, the Backstage Home pane) call
+    /// this immediately before <see cref="RecentFilesStore.Snapshot"/> instead of trusting the
+    /// long-lived <see cref="_recentFiles"/> field, so they never show a stale list. Mirrors the WPF
+    /// host's identical <c>MainWindow.Backstage.cs</c> <c>ReloadRecentFilesStore()</c>.
+    /// </summary>
+    private static RecentFilesStore ReloadRecentFilesStore() => RecentFilesStore.Load();
+
     // Backs the in-app Home pane's Recent list existence filter (BuildLiveBackstageHomePane) so a
     // moved/deleted recent entry gets dropped like WPF's backstage and this app's own native
     // Open-Recent menu already do, without a synchronous File.Exists blocking the UI thread if a
@@ -25715,8 +25727,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // (commonly 20+ seconds) -- this rebuild runs synchronously after every File>Open and every
         // Save/Save-As (WorkbookFileWorkflow's recentFilesChanged callback), matching the Home pane's
         // BuildLiveBackstageHomePane, which already routes through this same cache.
+        // Reload from disk rather than reading the constructor-time _recentFiles field: with
+        // multiple windows sharing this process (View > New Window), a sibling window may have
+        // registered/pinned/removed an entry since this window loaded, and this window's cached
+        // instance would never observe it otherwise (see ReloadRecentFilesStore).
         var plan = OpenRecentWorkbookMenuPlanner.Create(
-            _recentFiles.Snapshot(),
+            ReloadRecentFilesStore().Snapshot(),
             _recentFilePathExistenceCache.Exists,
             path => _fileWorkflow.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null);
         if (plan.ItemCount == 0)

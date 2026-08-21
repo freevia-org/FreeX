@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
@@ -362,6 +363,16 @@ public sealed partial class MainWindow : Window
         WindowState = WindowState.Maximized;
         Background = WpfThemeResourceResolver.Find<Brush>(ThemeResources.SheetSurfaceBrush)
             ?? new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+
+        // Window-level file-drop-to-open, mirroring FreeX's MainWindow.FileDrop.cs: dragging a document
+        // from Explorer onto this window opens it, the same gesture real Word supports. OpenPath does not
+        // dirty-gate (a drag-drop replaces the document the way a recent-files click does, see OpenPath's
+        // own doc comment) and already turns a missing file or unrecognized extension into the normal
+        // ShowError dialog instead of throwing, so an unsupported drop degrades to an error message rather
+        // than a crash.
+        AllowDrop = true;
+        DragOver += MainWindow_DragOver;
+        Drop += MainWindow_Drop;
 
         // Build the borderless WindowChrome shell — custom integrated title bar with embedded window
         // buttons, Win11 rounded corners, the maximized inset, and the shared chrome styles — from the
@@ -796,6 +807,34 @@ public sealed partial class MainWindow : Window
                 Loaded += (_, _) => OpenAdditionalStartupFiles(additionalStartupFilePaths);
             }
         }
+    }
+
+    private void MainWindow_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = GetDroppedDocumentPath(e) is null
+            ? DragDropEffects.None
+            : DragDropEffects.Copy;
+        e.Handled = true;
+    }
+
+    private void MainWindow_Drop(object sender, DragEventArgs e)
+    {
+        var path = GetDroppedDocumentPath(e);
+        e.Handled = true;
+        if (path is null)
+            return;
+
+        _file.OpenPath(path);
+    }
+
+    private static string? GetDroppedDocumentPath(DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop))
+            return null;
+
+        return e.Data.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } paths
+            ? paths.FirstOrDefault(File.Exists)
+            : null;
     }
 
     private void InstallSharedKeyboardShortcuts()

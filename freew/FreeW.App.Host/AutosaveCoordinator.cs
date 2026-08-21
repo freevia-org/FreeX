@@ -32,7 +32,13 @@ internal sealed partial class AutosaveCoordinator
             ExecuteWithDocument: writeDocument =>
             {
                 editor.CommitToModel();
-                writeDocument(editor.Model);
+                // Same guard as FileCommands' GetDocument port: while Mailings > Preview Results is active,
+                // editor.Model is the merged, single-record preview document, not the template. Autosave
+                // snapshots (and the crash-recovery snapshot that reuses this same port via
+                // AutosaveCoordinator.TryEmergencySnapshot) must persist the real template so an
+                // untimely autosave/crash doesn't leave the recovered document with its merge fields baked
+                // away.
+                writeDocument(editor.MailMergeSession?.Template ?? editor.Model);
             });
         _session = sessionFactory?.Invoke(ports) ?? new FreeWAutosaveSession(ports);
         _recoverInNewWindow = recoverInNewWindow;

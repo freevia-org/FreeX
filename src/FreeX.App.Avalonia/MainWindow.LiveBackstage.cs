@@ -260,9 +260,13 @@ public sealed partial class MainWindow
         // call), rather than silently listing entries that will fail to open. Routed through the
         // cache (not a raw File.Exists) so an unreachable UNC/network entry never blocks the UI
         // thread while the Home pane is built.
+        // Reload from disk rather than reading the constructor-time _recentFiles field: with
+        // multiple windows sharing this process (View > New Window), a sibling window may have
+        // registered/pinned/removed an entry since this window loaded, and this window's cached
+        // instance would never observe it otherwise (see MainWindow.cs's ReloadRecentFilesStore).
         var entries = BackstageRecentFileListPlanner.SelectPinnedFirst(
             BackstageRecentFileListPlanner.Build(
-                _recentFiles.Snapshot(),
+                ReloadRecentFilesStore().Snapshot(),
                 filter: null,
                 _recentFilePathExistenceCache.Exists),
             maximumCount: 12);

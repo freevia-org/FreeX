@@ -384,6 +384,9 @@ public static class ContentControlInteractionPlanner
         SmartArt = source.SmartArt,
         PreservedDrawing = source.PreservedDrawing,
         DrawingGroup = source.DrawingGroup,
+        // r163: a run carries its character-style link like any other property; a copier that
+        // omits it silently unlinks the run the next time anything reformats the paragraph.
+        StyleId = source.StyleId,
         HyperlinkUrl = source.HyperlinkUrl,
         HyperlinkAnchor = source.HyperlinkAnchor,
         HyperlinkTooltip = source.HyperlinkTooltip,

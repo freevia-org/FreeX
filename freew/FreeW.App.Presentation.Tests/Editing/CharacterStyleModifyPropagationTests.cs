@@ -5,23 +5,30 @@ using FreeW.Core.Model;
 namespace FreeW.App.Presentation.Tests.Editing;
 
 /// <summary>
-/// Evidence tests for freew-styles-pane F3 ("modifying a character style never updates text that
-/// already has it applied"). These tests do NOT accompany a production change: they demonstrate that
-/// the reported symptom is real, but that its root cause is NOT in <see cref="StyleManager.ModifyStyle"/>
-/// (which this wave owns) -- it is that <see cref="DocumentEditingSession.ApplyNamedStyle"/> never sets
-/// <see cref="Run.StyleId"/> when baking a character style into a run's <see cref="Run.Formatting"/>.
-/// FreeW already has the dynamic paragraph-style/character-style/direct-formatting cascade the finding
-/// says is missing (<see cref="DocumentRunFormattingResolver"/>), wired into real rendering
-/// (freew/FreeW.App.Host/Editing/DocumentView.cs:18155 and freew/FreeW.App.Avalonia/Editing/DocumentView.cs:25893).
-/// A run that legitimately carries <see cref="Run.StyleId"/> (e.g. read from a docx's w:rPr/w:rStyle via
-/// DocxReader.ReadRunStyleId) already re-resolves correctly the moment <see cref="StyleManager.ModifyStyle"/>
-/// replaces the catalog entry -- exactly mirroring how paragraph styles work. FreeW's own "Apply Named
-/// Style" ribbon action just never establishes that link for text it styles itself.
+/// Evidence tests for freew-styles-inheritance F3 ("modifying a character style never updates text that
+/// already has it applied"). The root cause was that <see cref="DocumentEditingSession.ApplyNamedStyle"/>
+/// baked a character style's fields into a run's <see cref="Run.Formatting"/> without ever recording
+/// <see cref="Run.StyleId"/>, so <see cref="StyleManager.ModifyStyle"/> had no run to re-cascade to
+/// (unlike a run read from a docx's w:rPr/w:rStyle, which DocxReader already links). ApplyNamedStyle
+/// now also sets <see cref="Run.StyleId"/> to the applied character style, alongside its existing bake,
+/// so <see cref="DocumentRunFormattingResolver"/> -- wired into real rendering at
+/// freew/FreeW.App.Host/Editing/DocumentView.cs:18155 and freew/FreeW.App.Avalonia/Editing/DocumentView.cs:25893
+/// -- has a link to re-walk live the moment the style catalog changes.
+///
+/// The existing bake is deliberately left in place (it is pinned by many other tests, e.g.
+/// FreeW.App.Avalonia.Tests/StylesGalleryTests.cs and this project's NamedStyleEditingSessionTests.cs,
+/// which assert the run's Formatting reflects the style immediately after Apply without going through the
+/// resolver). Because DocumentRunFormattingResolver's cascade OR-combines boolean fields with the run's
+/// direct Formatting, a field the style already baked true at apply time stays stuck true even after the
+/// style is later modified to turn it off -- only fields the style newly introduces (that were never
+/// baked) pick up a later Modify live. That residual gap is a separate, pre-existing limitation in the
+/// shared OR/??-based Overlay cascade (used by every other formatting caller too), not something this
+/// finding's fix reaches.
 /// </summary>
 public sealed class CharacterStyleModifyPropagationTests
 {
     [Fact]
-    public void ApplyNamedStyle_NeverLinksTheRunToTheStyle_SoAModifiedStyleLeavesBakedTextStale()
+    public void ApplyNamedStyle_NowLinksTheRunToTheStyle_SoAModifiedStyleCanRecascade()
     {
         var document = CharacterStyledDocument();
         var session = new DocumentEditingSession();
@@ -34,22 +41,61 @@ public sealed class CharacterStyleModifyPropagationTests
             Target(hasTextSelection: true, Range(0, 0, 5)));
 
         var styled = paragraph.Runs.Single(run => run.Text == "abcde");
-        styled.Formatting.Bold.Should().BeTrue("the style's Bold got baked directly into Formatting");
+        styled.Formatting.Bold.Should().BeTrue("the style's Bold is still baked directly into Formatting");
 
-        // Root-cause check: FreeW's own apply path never records which style produced this run's look.
-        styled.StyleId.Should().BeNull(
-            "ApplyNamedStyle bakes the style's Run fields into Formatting but never sets Run.StyleId, " +
-            "so the run carries no memory of which style produced it");
+        // The fix: FreeW's own apply path now records which style produced this run's look.
+        styled.StyleId.Should().Be(
+            "Strong",
+            "ApplyNamedStyle must link the run to the character style it applied, the same way a " +
+            "docx-authored w:rPr/w:rStyle run is linked, so a later style Modify has something to " +
+            "re-cascade to");
 
-        // Now modify the style through the same path Manage Styles > Modify uses: uncheck Bold, check Italic.
+        // Modify the style through the same path Manage Styles > Modify uses, introducing a field
+        // ("Underline") the style never had at apply time, so it was never baked into Formatting.
+        StyleManager.ModifyStyle(
+            document,
+            "Strong",
+            run: RunFormatting.Default with { Bold = true, Underline = true });
+
+        // Fixed: because the run now carries StyleId, DocumentRunFormattingResolver -- the same resolver
+        // every renderer uses -- re-walks the modified style live and the newly-added Underline appears
+        // on already-styled text without any further edit.
+        var effective = DocumentRunFormattingResolver.Resolve(document, paragraph, styled);
+        effective.Bold.Should().BeTrue("Strong is still bold");
+        effective.Underline.Should().BeTrue(
+            "fixed: the run's StyleId lets the resolver pick up the newly-added Underline live");
+    }
+
+    [Fact]
+    public void ApplyNamedStyle_TurningOffAnAlreadyBakedFieldStaysStale_KnownResolverCascadeLimitation()
+    {
+        // Documents the residual gap called out above: a boolean the style already baked true at apply
+        // time (Bold here) stays stuck true after a later Modify turns it off, because
+        // DocumentRunFormattingResolver's Overlay OR-combines direct Formatting with the live style
+        // cascade, and OverlayCharacterStyle baked Bold=true into direct Formatting up front. This is a
+        // pre-existing limitation of the shared cascade (also relied on by direct-formatting toggles
+        // elsewhere), not a regression introduced by linking Run.StyleId.
+        var document = CharacterStyledDocument();
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var paragraph = (Paragraph)document.Blocks[0];
+
+        session.ApplyNamedStyle(
+            "Strong",
+            Target(hasTextSelection: true, Range(0, 0, 5)));
+        var styled = paragraph.Runs.Single(run => run.Text == "abcde");
+        styled.StyleId.Should().Be("Strong");
+
         StyleManager.ModifyStyle(document, "Strong", run: RunFormatting.Default with { Italic = true });
 
-        // Reproduces the finding: resolving this run's effective formatting (the same resolver every
-        // renderer uses) still shows Bold and never picks up Italic, because the old style's Bold=true
-        // is now baked into Formatting itself and the run has no style link for the resolver to re-cascade.
         var effective = DocumentRunFormattingResolver.Resolve(document, paragraph, styled);
-        effective.Bold.Should().BeTrue("bug: the already-styled run stays bold");
-        effective.Italic.Should().BeFalse("bug: the already-styled run never picks up the new Italic");
+        effective.Bold.Should().BeTrue(
+            "known limitation: Bold was already baked true at apply time, so it stays stuck even though " +
+            "the style no longer sets it -- direct Formatting always wins over the live cascade for a " +
+            "field it already carries");
+        effective.Italic.Should().BeTrue(
+            "fixed: Italic was never baked (the style didn't set it at apply time), so the run's StyleId " +
+            "link lets it pick up the new Italic live");
     }
 
     [Fact]
