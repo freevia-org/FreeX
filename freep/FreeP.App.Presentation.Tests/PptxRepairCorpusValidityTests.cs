@@ -443,8 +443,16 @@ public sealed class PptxRepairCorpusValidityTests
             "the richer imported cache remains authoritative instead of claiming the smaller live grammar");
     }
 
+    /// <summary>
+    /// The repaired fixture is authored by PowerPoint, so its increasingCircleProcess slide carries the
+    /// RICHER background-ellipse/chord/rectangle cache rather than the seven-shape ellipse-and-line
+    /// grammar the shared planner models. The reader deliberately keeps such a cache authoritative
+    /// instead of claiming live layout for it — this pins that, and that the phase content still
+    /// composes. The admitted seven-shape grammar is covered by
+    /// SmartArtTests.Reader_ImportedIncreasingCircleProcess_AdmitsExactGrowingEllipseAndLineCache.
+    /// </summary>
     [Fact]
-    public void SmartArtLiveCorpus_AdmitsIncreasingCircleProcessFixtureToSharedLiveLayout()
+    public void SmartArtLiveCorpus_KeepsTheRicherIncreasingCircleProcessCacheAuthoritative()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "15-smartart-grouped-list.pptx");
         var presentation = PptxPackageReader.Read(deckPath);
@@ -453,16 +461,17 @@ public sealed class PptxRepairCorpusValidityTests
             .Single(shape => shape.Kind == SlideShapeKind.SmartArt)
             .SmartArt!;
 
-        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue();
-        smartArt.FallbackShapes.Should().HaveCount(7);
+        smartArt.Data!.LayoutUniqueId.Should().EndWith("/IncreasingCircleProcess");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "PowerPoint's cache carries background and chord roles the shared plan does not model");
+        smartArt.FallbackShapes.Should().HaveCount(12);
 
         var shapes = SlideCompositor.Compose(presentation, slide)
             .OfType<DrawOp.Shape>()
             .ToArray();
-        shapes.Where(shape => shape.Text is not null)
-            .Select(shape => shape.Text!.Paragraphs.First().Runs.First().Text)
-            .Should().ContainInOrder("Phase A", "Phase B", "Phase C", "Phase D");
-        shapes.Where(shape => shape.Text is null).Should().HaveCount(3);
+        shapes.Select(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Should().Contain(["Phase A", "Phase B", "Phase C", "Phase D"]);
     }
 
     [Fact]

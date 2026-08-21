@@ -69,7 +69,14 @@ public sealed class SmartArtTests : IDisposable
         bool relationship1NodeAndEllipseCache = false,
         long? relationship1HorizontalStepEmu = null,
         bool verticalArrowListNodeCache = false,
-        bool process1NodeAndConnectorCache = false)
+        bool process1NodeAndConnectorCache = false,
+        // The three caches below replace what 15-smartart-grouped-list.pptx used to supply. That fixture
+        // was hand-authored OOXML PowerPoint could not materialize, so it was replaced by a
+        // PowerPoint-generated deck that holds none of these layouts; authoring the audited grammar here
+        // keeps the reader's admission rules covered by the same geometry they were written against.
+        bool list1FourSlotCache = false,
+        bool gridMatrixSquareCache = false,
+        bool increasingCircleProcessCache = false)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
 
@@ -98,6 +105,37 @@ public sealed class SmartArtTests : IDisposable
         var fallbackEls = new List<XElement>();
         var process1BoxX = new long[] { 329_184, 1_933_956, 3_538_728, 5_143_500, 6_748_272 };
         var process1ConnectorX = new long[] { 1_584_198, 3_188_970, 4_793_742, 6_398_514 };
+
+        // list1: four full-width rounded slots at the signature the reader matches exactly.
+        const long list1BoxX = 329_184;
+        const long list1BoxWidth = 7_571_232;
+        const long list1BoxHeight = 1_213_589;
+        var list1BoxY = new long[] { 229_792, 1_587_001, 2_944_210, 4_301_419 };
+
+        // gridMatrix: a centred 2x2 of squares whose gap is the shared plan's 2.5% of the grid.
+        const long gridMatrixCell = 2_000_000;
+        const long gridMatrixStep = 2_102_564; // cell + (long)(gridSize * 0.025)
+        const long gridMatrixOriginX = 500_000;
+        const long gridMatrixOriginY = 500_000;
+
+        // increasingCircleProcess: bottom-aligned circles growing from 52% to full diameter, joined by
+        // equal-gap connector lines between consecutive centres.
+        const long circleProcessDiameter = 2_000_000;
+        const long circleProcessGap = 200_000;
+        const long circleProcessBottom = 3_000_000;
+        const long circleProcessFirstX = 500_000;
+        var circleProcessDiameters = Enumerable.Range(0, nodeTexts.Length)
+            .Select(index => nodeTexts.Length > 1
+                ? (long)(circleProcessDiameter * (0.52 + (1.0 - 0.52) * index / (nodeTexts.Length - 1)))
+                : circleProcessDiameter)
+            .ToArray();
+        var circleProcessX = new long[nodeTexts.Length];
+        for (var index = 0; index < nodeTexts.Length; index++)
+        {
+            circleProcessX[index] = index == 0
+                ? circleProcessFirstX
+                : circleProcessX[index - 1] + circleProcessDiameters[index - 1] + circleProcessGap;
+        }
         for (var nodeIndex = 0; nodeIndex < nodeTexts.Length; nodeIndex++)
         {
             var text = nodeTexts[nodeIndex];
@@ -130,30 +168,56 @@ public sealed class SmartArtTests : IDisposable
                     new XElement(aNs + "xfrm",
                         new XElement(aNs + "off", new XAttribute("x", process1NodeAndConnectorCache
                             ? process1BoxX[nodeIndex]
+                            : list1FourSlotCache
+                            ? list1BoxX
+                            : gridMatrixSquareCache
+                            ? gridMatrixOriginX + (nodeIndex % 2) * gridMatrixStep
+                            : increasingCircleProcessCache
+                            ? circleProcessX[nodeIndex]
                             : verticalArrowListNodeCache
                             ? 329_184L
                             : relationship1NodeAndEllipseCache
                                 ? 1_522_800L + nodeIndex * (relationship1HorizontalStepEmu ?? 1_392_000L)
                                 : (idx - 1) * 914400L), new XAttribute("y", process1NodeAndConnectorCache
                             ? 689_376L
+                            : list1FourSlotCache
+                            ? list1BoxY[nodeIndex]
+                            : gridMatrixSquareCache
+                            ? gridMatrixOriginY + (nodeIndex / 2) * gridMatrixStep
+                            : increasingCircleProcessCache
+                            ? circleProcessBottom - circleProcessDiameters[nodeIndex]
                             : verticalArrowListNodeCache
                             ? 229_792L + nodeIndex * 1_344_642L
                             : relationship1NodeAndEllipseCache ? 1_672_400L : 457200L)),
                         new XElement(aNs + "ext", new XAttribute("cx", process1NodeAndConnectorCache
                             ? 1_152_144L
+                            : list1FourSlotCache
+                            ? list1BoxWidth
+                            : gridMatrixSquareCache
+                            ? gridMatrixCell
+                            : increasingCircleProcessCache
+                            ? circleProcessDiameters[nodeIndex]
                             : verticalArrowListNodeCache
                             ? 7_571_232L
                             : relationship1NodeAndEllipseCache ? 2_400_000L : 914400L), new XAttribute("cy", process1NodeAndConnectorCache
                             ? 4_366_048L
+                            : list1FourSlotCache
+                            ? list1BoxHeight
+                            : gridMatrixSquareCache
+                            ? gridMatrixCell
+                            : increasingCircleProcessCache
+                            ? circleProcessDiameters[nodeIndex]
                             : verticalArrowListNodeCache
                             ? 1_251_289L
                             : relationship1NodeAndEllipseCache ? 2_400_000L : 457200L))),
                     new XElement(aNs + "prstGeom",
-                        new XAttribute("prst", process1NodeAndConnectorCache
+                        new XAttribute("prst", process1NodeAndConnectorCache || list1FourSlotCache
                             ? "roundRect"
                             : verticalArrowListNodeCache
                             ? "downArrow"
-                            : cycle2NodeAndArrowCache || relationship1NodeAndEllipseCache ? "ellipse" : "rect"),
+                            : cycle2NodeAndArrowCache || relationship1NodeAndEllipseCache || increasingCircleProcessCache
+                                ? "ellipse"
+                                : "rect"),
                         new XElement(aNs + "avLst")),
                     new XElement(aNs + "solidFill",
                         new XElement(aNs + "srgbClr", new XAttribute("val", "4472C4"))),
@@ -205,6 +269,35 @@ public sealed class SmartArtTests : IDisposable
                         new XElement(aNs + "xfrm",
                             new XElement(aNs + "off", new XAttribute("x", process1ConnectorX[nodeIndex]), new XAttribute("y", "2872400")),
                             new XElement(aNs + "ext", new XAttribute("cx", "246888"), new XAttribute("cy", "914"))),
+                        new XElement(aNs + "ln",
+                            new XElement(aNs + "solidFill",
+                                new XElement(aNs + "srgbClr", new XAttribute("val", "0E4B66"))),
+                            new XElement(aNs + "prstDash", new XAttribute("val", "solid"))))));
+            }
+        }
+
+        // increasingCircleProcess connectors come AFTER every node: the reader reads the first N shapes as
+        // nodes and the remainder as connectors, unlike process1's interleaved pair order.
+        if (increasingCircleProcessCache)
+        {
+            for (var nodeIndex = 0; nodeIndex < nodeTexts.Length - 1; nodeIndex++)
+            {
+                var currentCentreY = circleProcessBottom - circleProcessDiameters[nodeIndex] / 2;
+                var nextCentreY = circleProcessBottom - circleProcessDiameters[nodeIndex + 1] / 2;
+                fallbackEls.Add(new XElement(dspNs + "sp",
+                    new XElement(dspNs + "nvSpPr",
+                        new XElement(dspNs + "cNvPr",
+                            new XAttribute("id", shapeIdx),
+                            new XAttribute("name", $"Circle process connector {shapeIdx++}")),
+                        new XElement(dspNs + "cNvSpPr")),
+                    new XElement(dspNs + "spPr",
+                        new XElement(aNs + "xfrm",
+                            new XElement(aNs + "off",
+                                new XAttribute("x", circleProcessX[nodeIndex] + circleProcessDiameters[nodeIndex]),
+                                new XAttribute("y", Math.Min(currentCentreY, nextCentreY))),
+                            new XElement(aNs + "ext",
+                                new XAttribute("cx", circleProcessGap),
+                                new XAttribute("cy", Math.Abs(nextCentreY - currentCentreY)))),
                         new XElement(aNs + "ln",
                             new XElement(aNs + "solidFill",
                                 new XElement(aNs + "srgbClr", new XAttribute("val", "0E4B66"))),
@@ -651,9 +744,22 @@ public sealed class SmartArtTests : IDisposable
     [Fact]
     public void Reader_ImportedSmartArtGroupedList_AdmitsBoundedBandCacheToSharedLiveLayout()
     {
-        var corpusPath = FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx");
-        var presentation = PptxPackageReader.Read(corpusPath);
-        var slide = presentation.Slides[5];
+        // Built here rather than read from 15-smartart-grouped-list.pptx -- that hand-authored fixture was
+        // replaced by a PowerPoint-generated deck holding no groupedList diagram. MakeSmartArtPptxWithNodeTree
+        // authors the same two-band, two-header, four-child cache.
+        var presentation = PptxPackageReader.Read(MakeSmartArtPptxWithNodeTree(
+            "urn:microsoft.com/office/officeart/2005/8/layout/groupedList",
+            [
+                ("g1", "Discovery"),
+                ("g2", "Delivery"),
+                ("g1c1", "Interviews"),
+                ("g1c2", "Surveys"),
+                ("g2c1", "Build"),
+                ("g2c2", "Launch"),
+            ],
+            [("g1", "g1c1"), ("g1", "g1c2"), ("g2", "g2c1"), ("g2", "g2c2")],
+            groupedListBandCache: true));
+        var slide = presentation.Slides[0];
         var smartArtShape = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt);
         var smartArt = smartArtShape.SmartArt!;
 
@@ -911,9 +1017,14 @@ public sealed class SmartArtTests : IDisposable
     [Fact]
     public void Reader_ImportedGridMatrix_AdmitsExactFourCellCacheToSharedLiveLayout()
     {
-        var corpusPath = FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx");
-        var presentation = PptxPackageReader.Read(corpusPath);
-        var slide = presentation.Slides[7];
+        // Built here rather than read from 15-smartart-grouped-list.pptx -- that hand-authored fixture was
+        // replaced by a PowerPoint-generated deck holding none of the audited layouts. MakeSmartArtPptx
+        // authors the same four square cells with the shared plan's 2.5% gap.
+        var presentation = PptxPackageReader.Read(MakeSmartArtPptx(
+            ["Axis", "Speed", "Quality", "Cost"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix",
+            gridMatrixSquareCache: true));
+        var slide = presentation.Slides[0];
         var smartArtShape = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt);
         var smartArt = smartArtShape.SmartArt!;
 
@@ -972,14 +1083,22 @@ public sealed class SmartArtTests : IDisposable
     [Fact]
     public void Reader_ImportedIncreasingCircleProcess_AdmitsExactGrowingEllipseAndLineCache()
     {
-        var presentation = PptxPackageReader.Read(
-            FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx"));
-        var smartShape = presentation.Slides[8].Shapes
+        // Built here rather than read from 15-smartart-grouped-list.pptx -- that hand-authored fixture was
+        // replaced by a PowerPoint-generated deck whose increasingCircleProcess slides carry the RICHER
+        // background/chord/rectangle cache the sibling test below pins as deliberately non-live. This
+        // authors the seven-shape grammar the reader admits.
+        var presentation = PptxPackageReader.Read(MakeSmartArtPptx(
+            ["Phase A", "Phase B", "Phase C", "Phase D"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2008/layout/IncreasingCircleProcess",
+            increasingCircleProcessCache: true));
+        var smartShape = presentation.Slides[0].Shapes
             .Single(shape => shape.Kind == SlideShapeKind.SmartArt);
         var smartArt = smartShape.SmartArt!;
 
         smartArt.Data.Should().NotBeNull();
-        smartArt.Data!.LayoutUniqueId.Should().EndWith("/increasingCircleProcess");
+        // Office's own id is capitalised (the sibling rich-cache test below asserts the same spelling);
+        // the lowercase form came from the hand-authored fixture.
+        smartArt.Data!.LayoutUniqueId.Should().EndWith("/IncreasingCircleProcess");
         smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
             "the checked-in cache is exactly four ordered growing ellipse nodes plus three empty line roles");
         smartArt.FallbackShapes.Should().HaveCount(7);
@@ -1021,8 +1140,14 @@ public sealed class SmartArtTests : IDisposable
     [Fact]
     public void Reader_ImportedProcess1_AdmitsExactFiveStageNodeAndConnectorCache()
     {
-        var presentation = PptxPackageReader.Read(
-            FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx"));
+        // Built here rather than read from 15-smartart-grouped-list.pptx: that fixture was hand-authored
+        // OOXML PowerPoint could not materialize and was replaced by a PowerPoint-generated deck, which
+        // holds none of the audited layouts. MakeSmartArtPptx already authors this exact five-stage
+        // node-and-connector cache, so the grammar under audit is unchanged.
+        var presentation = PptxPackageReader.Read(MakeSmartArtPptx(
+            ["Plan", "Design", "Build", "Test", "Deploy"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            process1NodeAndConnectorCache: true));
         var slide = presentation.Slides[0];
         var smartShape = slide.Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt);
         var smartArt = smartShape.SmartArt!;
@@ -1174,11 +1299,14 @@ public sealed class SmartArtTests : IDisposable
     [Fact]
     public void Reader_ImportedList1_AdmitsExactFourSlotCacheAndSharedComposition()
     {
-        var presentation = PptxPackageReader.Read(
-            FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx"));
-        var slide = presentation.Slides.Single(candidate => candidate.Shapes.Any(shape =>
-            shape.Kind == SlideShapeKind.SmartArt
-            && shape.SmartArt?.Data?.LayoutUniqueId.EndsWith("/list1", StringComparison.OrdinalIgnoreCase) == true));
+        // Built here rather than read from 15-smartart-grouped-list.pptx -- see MakeSmartArtPptx: that
+        // hand-authored fixture was replaced by a PowerPoint-generated deck holding none of the audited
+        // layouts, so the four-slot grammar is authored directly.
+        var presentation = PptxPackageReader.Read(MakeSmartArtPptx(
+            ["Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/list1",
+            list1FourSlotCache: true));
+        var slide = presentation.Slides[0];
         var smartArt = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
 
         smartArt.Data.Should().NotBeNull();
@@ -1292,17 +1420,32 @@ public sealed class SmartArtTests : IDisposable
     [Fact]
     public void Reader_List1_MalformedHierarchyPreservesCachedDrawingFallback()
     {
-        var pptxPath = Path.Combine(_tempDir, "list1-malformed-hierarchy.pptx");
-        File.Copy(FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx"), pptxPath);
-        RewriteList1Data(pptxPath, document =>
+        // Built here rather than copied from 15-smartart-grouped-list.pptx -- that hand-authored fixture
+        // was replaced by a PowerPoint-generated deck holding no list1 diagram at all. Mirrors the
+        // process1 twin above, which already mutates a synthetic package's data part.
+        var pptxPath = MakeSmartArtPptx(
+            ["Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/list1",
+            list1FourSlotCache: true);
+        var dgmNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+
+        RewriteSmartArtData(pptxPath, document =>
         {
-            var dgmNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
             var nodeIds = document.Descendants(dgmNs + "pt")
                 .Where(point => (string?)point.Attribute("type") != "doc")
                 .Select(point => (string)point.Attribute("modelId")!)
                 .Take(2)
                 .ToArray();
-            document.Root!.Element(dgmNs + "cxnLst")!.Add(new XElement(dgmNs + "cxn",
+            var connections = document.Root!.Element(dgmNs + "cxnLst");
+            if (connections is null)
+            {
+                connections = new XElement(dgmNs + "cxnLst");
+                document.Root!.Add(connections);
+            }
+
+            // A parent-of edge between two top-level slots is exactly the malformed hierarchy list1's
+            // flat four-slot grammar must refuse.
+            connections.Add(new XElement(dgmNs + "cxn",
                 new XAttribute("modelId", "{00000000-0000-0000-0000-000000000138}"),
                 new XAttribute("type", "parOf"),
                 new XAttribute("srcId", nodeIds[0]),
@@ -1311,7 +1454,7 @@ public sealed class SmartArtTests : IDisposable
                 new XAttribute("destOrd", "0")));
         });
 
-        var smartArt = PptxPackageReader.Read(pptxPath).Slides[4].Shapes
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
             .First(shape => shape.Kind == SlideShapeKind.SmartArt)
             .SmartArt!;
 
@@ -1332,11 +1475,14 @@ public sealed class SmartArtTests : IDisposable
     [Fact]
     public void ReaderWriter_ImportedVerticalArrowList_AdmitsOnlyTheAuditedFourSlotCache()
     {
-        var corpusPath = FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx");
-        var presentation = PptxPackageReader.Read(corpusPath);
-        var slide = presentation.Slides.Single(candidate => candidate.Shapes.Any(shape =>
-            shape.Kind == SlideShapeKind.SmartArt
-            && shape.SmartArt?.Data?.LayoutUniqueId.EndsWith("/verticalArrowList", StringComparison.OrdinalIgnoreCase) == true));
+        // Built here rather than read from 15-smartart-grouped-list.pptx -- that hand-authored fixture was
+        // replaced by a PowerPoint-generated deck holding none of the audited layouts. The synthetic
+        // package reproduces the same four-slot down-arrow cache.
+        var presentation = PptxPackageReader.Read(MakeSmartArtPptx(
+            ["Collect", "Shape", "Review", "Share"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList",
+            verticalArrowListNodeCache: true));
+        var slide = presentation.Slides[0];
         var smartArt = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
 
         smartArt.Data.Should().NotBeNull();
@@ -3145,7 +3291,12 @@ public sealed class SmartArtTests : IDisposable
         XDocument? quickStyleXml = null,
         XDocument? colorsXml = null,
         string[]? assistantNodeIds = null,
-        bool includeCachedHierarchy3Connectors = false)
+        bool includeCachedHierarchy3Connectors = false,
+        // groupedList's audited cache: one empty band rectangle per group, geometrically containing that
+        // group's child boxes, with a rounded-rectangle header per group. Authored here because the
+        // hand-authored corpus fixture that used to carry it was replaced by a PowerPoint-generated deck
+        // holding no groupedList diagram (see MakeSmartArtPptx).
+        bool groupedListBandCache = false)
     {
         var path = Path.Combine(_tempDir, $"smartart_tree_{Guid.NewGuid():N}.pptx");
 
@@ -3206,6 +3357,69 @@ public sealed class SmartArtTests : IDisposable
         var colorsPartXml = colorsXml ?? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "colorsDef", new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
 
         var fallbackEls = new List<XElement>();
+        if (groupedListBandCache)
+        {
+            var childIdsByParent = parOfConnections
+                .GroupBy(connection => connection.srcId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Select(c => c.destId).ToArray(), StringComparer.Ordinal);
+            var childIds = new HashSet<string>(
+                parOfConnections.Select(connection => connection.destId),
+                StringComparer.Ordinal);
+            var groups = nodes.Where(node => !childIds.Contains(node.id)).ToArray();
+            var textById = nodes.ToDictionary(node => node.id, node => node.text, StringComparer.Ordinal);
+
+            const long bandWidth = 4_000_000;
+            const long bandHeight = 2_800_000;
+            const long bandStride = 3_000_000;
+            var shapeId = 1;
+
+            XElement Shape(int id, string name, string prst, long x, long y, long cx, long cy, string? text) =>
+                new(dspNs + "sp",
+                    new XElement(dspNs + "nvSpPr",
+                        new XElement(dspNs + "cNvPr", new XAttribute("id", id), new XAttribute("name", name)),
+                        new XElement(dspNs + "cNvSpPr")),
+                    new XElement(dspNs + "spPr",
+                        new XElement(aNs + "xfrm",
+                            new XElement(aNs + "off", new XAttribute("x", x), new XAttribute("y", y)),
+                            new XElement(aNs + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
+                        new XElement(aNs + "prstGeom", new XAttribute("prst", prst), new XElement(aNs + "avLst"))),
+                    new XElement(dspNs + "txBody",
+                        new XElement(aNs + "bodyPr"),
+                        new XElement(aNs + "lstStyle"),
+                        text is null
+                            ? new XElement(aNs + "p")
+                            : new XElement(aNs + "p",
+                                new XElement(aNs + "r",
+                                    new XElement(aNs + "rPr", new XAttribute("lang", "en-US")),
+                                    new XElement(aNs + "t", text)))));
+
+            for (var groupIndex = 0; groupIndex < groups.Length; groupIndex++)
+            {
+                var bandY = groupIndex * bandStride;
+                fallbackEls.Add(Shape(
+                    shapeId++, $"Band {groupIndex}", "rect", 0, bandY, bandWidth, bandHeight, null));
+                fallbackEls.Add(Shape(
+                    shapeId++, $"Header {groupIndex}", "roundRect",
+                    100_000, bandY + 100_000, 3_800_000, 600_000, groups[groupIndex].text));
+
+                var children = childIdsByParent.TryGetValue(groups[groupIndex].id, out var ids)
+                    ? ids
+                    : [];
+                for (var childIndex = 0; childIndex < children.Length; childIndex++)
+                {
+                    fallbackEls.Add(Shape(
+                        shapeId++,
+                        $"Child {groupIndex}.{childIndex}",
+                        "rect",
+                        100_000,
+                        bandY + 800_000 + childIndex * 900_000,
+                        3_800_000,
+                        800_000,
+                        textById[children[childIndex]]));
+                }
+            }
+        }
+
         if (includeCachedHierarchy3Connectors)
         {
             layoutUniqueId.Should().EndWith("/hierarchy3");
@@ -4929,9 +5143,14 @@ public sealed class SmartArtTests : IDisposable
     [Fact]
     public void Reader_ImportedRelationship1_AdmitsExactNodeEllipseCache()
     {
-        var presentation = PptxPackageReader.Read(
-            FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx"));
-        var relationship = presentation.Slides[6].Shapes
+        // Built here rather than read from 15-smartart-grouped-list.pptx -- that hand-authored fixture was
+        // replaced by a PowerPoint-generated deck holding none of the audited layouts. The synthetic
+        // package reproduces the same three-node overlapping-ellipse cache.
+        var presentation = PptxPackageReader.Read(MakeSmartArtPptx(
+            ["Audience", "Need", "Offer"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/relationship1",
+            relationship1NodeAndEllipseCache: true));
+        var relationship = presentation.Slides[0].Shapes
             .First(shape => shape.Kind == SlideShapeKind.SmartArt)
             .SmartArt!;
 
