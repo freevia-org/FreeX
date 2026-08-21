@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -116,7 +117,7 @@ public sealed partial class AutoFilterDialogTests
     }
 
     [Fact]
-    public void DialogControls_SearchBoxHasNoStandaloneVisibleLabel()
+    public void DialogControls_SearchBoxHasExcelStyleWatermarkWithoutStandaloneLabel()
     {
         StaTestRunner.Run(() =>
         {
@@ -137,6 +138,13 @@ public sealed partial class AutoFilterDialogTests
 
                 AutomationProperties.GetAccessKey(searchBox).Should().Be("S");
                 labels.Should().NotContain("_Search");
+
+                var watermark = WpfTestTree.FindVisualDescendants<TextBlock>(dialog)
+                    .Single(textBlock => textBlock.Text == "Search");
+                watermark.Visibility.Should().Be(Visibility.Visible);
+
+                searchBox.Text = "Apple";
+                watermark.Visibility.Should().Be(Visibility.Collapsed);
             }
             finally
             {

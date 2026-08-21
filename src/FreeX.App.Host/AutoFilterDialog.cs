@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Free.Shared.Ribbon;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
@@ -15,6 +16,15 @@ public sealed partial class AutoFilterDialog : Window
     private readonly List<AutoFilterDialogItem> _allItems;
     private readonly ObservableCollection<AutoFilterDialogItem> _items;
     private readonly TextBox _searchBox = new();
+    private readonly Grid _searchBoxHost = new();
+    private readonly TextBlock _searchWatermark = new()
+    {
+        Text = UiText.Get("AutoFilter_Search3"),
+        Margin = new Thickness(9, 0, 4, 0),
+        VerticalAlignment = System.Windows.VerticalAlignment.Center,
+        Foreground = Brushes.Gray,
+        IsHitTestVisible = false
+    };
     private readonly CheckBox _addCurrentSelectionToFilterBox = new()
     {
         Content = UiText.Get("AutoFilter_AddCurrentSelectionToFilter"),
@@ -256,14 +266,22 @@ public sealed partial class AutoFilterDialog : Window
         }
 
         AddFilterMenuSeparator(stack);
-        _searchBox.Margin = new Thickness(0, 8, 0, 6);
+        _searchBoxHost.Margin = new Thickness(0, 8, 0, 6);
         _searchBox.MinHeight = 24;
+        _searchBoxHost.Children.Add(_searchBox);
+        _searchBoxHost.Children.Add(_searchWatermark);
         _searchBox.ToolTip = UiText.Get("AutoFilter_Search3");
         AutomationProperties.SetName(_searchBox, UiText.Get("AutoFilter_Search3"));
         AutomationProperties.SetHelpText(_searchBox, UiText.Get("AutoFilter_Search3"));
         AutomationProperties.SetAccessKey(_searchBox, "S");
-        _searchBox.TextChanged += (_, _) => ApplySearchTextChange();
-        stack.Children.Add(_searchBox);
+        _searchBox.TextChanged += (_, _) =>
+        {
+            _searchWatermark.Visibility = string.IsNullOrEmpty(_searchBox.Text)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            ApplySearchTextChange();
+        };
+        stack.Children.Add(_searchBoxHost);
         stack.Children.Add(_addCurrentSelectionToFilterBox);
         _selectAllBox.Checked += (_, _) => SetSelectionForVisibleItems(isSelected: true);
         _selectAllBox.Unchecked += (_, _) => SetSelectionForVisibleItems(isSelected: false);
