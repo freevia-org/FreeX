@@ -1,4 +1,7 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using System.Runtime.ExceptionServices;
 using FluentAssertions;
 using Free.Shared.Ribbon;
@@ -34,6 +37,57 @@ public sealed class RibbonGalleryComboBoxTests
             gallery.CloseGallery();
             gallery.IsGalleryOpen.Should().BeFalse();
         });
+    }
+
+    [Fact]
+    public void CellStyleGallery_GroupsPreviewTilesAndExecutesTheSelectedStyle()
+    {
+        RunSta(() =>
+        {
+            RibbonCommandId? executed = null;
+            var gallery = new RibbonCellStyleGalleryButton();
+            gallery.SetMenu(
+                new RibbonMenu(
+                [
+                    new RibbonMenuItem("Good", new RibbonCommandId("cell-style.good")),
+                    new RibbonMenuItem("Heading 1", new RibbonCommandId("cell-style.heading1")),
+                    new RibbonMenuItem("20% - Accent 1", new RibbonCommandId("cell-style.accent1")),
+                ]),
+                (commandId, _) => executed = commandId);
+
+            gallery.OpenGallery();
+
+            gallery.IsGalleryOpen.Should().BeTrue();
+            gallery.ItemHeaders.Should().Equal("Good", "Heading 1", "20% - Accent 1");
+            gallery.GalleryPopupChild.Measure(new Size(510, double.PositiveInfinity));
+            gallery.GalleryPopupChild.Arrange(new Rect(0, 0, 510, gallery.GalleryPopupChild.DesiredSize.Height));
+            var good = FindDescendant<Button>(gallery.GalleryPopupChild, button => button.Tag is RibbonCommandId id && id.Value == "cell-style.good");
+            good.Should().NotBeNull();
+
+            good!.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+
+            executed.Should().Be(new RibbonCommandId("cell-style.good"));
+            gallery.IsGalleryOpen.Should().BeFalse();
+        });
+    }
+
+    private static T? FindDescendant<T>(DependencyObject root, Func<T, bool> predicate)
+        where T : DependencyObject
+    {
+        if (root is T candidate && predicate(candidate))
+            return candidate;
+
+        var count = root is Visual or System.Windows.Media.Media3D.Visual3D
+            ? VisualTreeHelper.GetChildrenCount(root)
+            : 0;
+        for (var index = 0; index < count; index++)
+        {
+            var match = FindDescendant(VisualTreeHelper.GetChild(root, index), predicate);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
     }
 
     private static void RunSta(Action action)

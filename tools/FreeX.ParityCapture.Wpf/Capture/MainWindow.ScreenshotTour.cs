@@ -1781,8 +1781,39 @@ public partial class MainWindow
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
 
-        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)
+        var button = FindRenderedRibbonControl(commandName) as ButtonBase
             ?? throw new InvalidOperationException($"Home Styles/Conditional Formatting tour could not find '{commandName}' ribbon button.");
+        if (button is RibbonCellStyleGalleryButton galleryButton)
+        {
+            galleryButton.OpenGallery();
+            await Task.Delay(350);
+            var gallery = galleryButton.GalleryPopupChild;
+            if (gallery.ActualWidth <= 0 || gallery.ActualHeight <= 0)
+            {
+                gallery.Measure(new Size(510, double.PositiveInfinity));
+                gallery.Arrange(new Rect(0, 0, 510, gallery.DesiredSize.Height));
+                gallery.UpdateLayout();
+            }
+
+            try
+            {
+                await CaptureElementAsync(gallery, outputDir, fileName);
+                return CreateHomeStylesConditionalFormattingCapture(
+                    state,
+                    surface,
+                    fileName,
+                    "RenderTargetBitmap-cell-style-gallery-popup",
+                    gallery.ActualWidth,
+                    gallery.ActualHeight,
+                    galleryButton.ItemHeaders,
+                    evidenceSummary);
+            }
+            finally
+            {
+                galleryButton.CloseGallery();
+            }
+        }
+
         var menu = button.ContextMenu
             ?? throw new InvalidOperationException($"Home Styles/Conditional Formatting tour could not find '{commandName}' context menu.");
 
@@ -1814,7 +1845,7 @@ public partial class MainWindow
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
 
-        var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, "Conditional Formatting")
+        var button = FindRenderedRibbonControl("Conditional Formatting") as ButtonBase
             ?? throw new InvalidOperationException("Home Styles/Conditional Formatting tour could not find the Conditional Formatting ribbon button.");
         var menu = button.ContextMenu
             ?? throw new InvalidOperationException("Home Styles/Conditional Formatting tour could not find the Conditional Formatting context menu.");
@@ -1969,7 +2000,12 @@ public partial class MainWindow
     {
         foreach (var commandName in new[] { "Conditional Formatting", "Format as Table", "Cell Styles" })
         {
-            var button = FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName);
+            var button = FindRenderedRibbonControl(commandName) as ButtonBase;
+            if (button is RibbonCellStyleGalleryButton galleryButton)
+            {
+                galleryButton.CloseGallery();
+                continue;
+            }
             if (button?.ContextMenu is { } menu)
                 menu.IsOpen = false;
         }

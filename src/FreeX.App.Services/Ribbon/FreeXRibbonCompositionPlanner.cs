@@ -26,6 +26,9 @@ public static class FreeXRibbonCompositionPlanner
 
     private static RibbonControl ApplyChoices(RibbonControl control)
     {
+        if (control is RibbonDropdown { CommandId.Value: "Cell Styles" } dropdown)
+            return dropdown with { PresentationKind = RibbonDropdownPresentationKind.CellStyleGallery };
+
         if (control is not RibbonComboBox combo)
             return control;
 

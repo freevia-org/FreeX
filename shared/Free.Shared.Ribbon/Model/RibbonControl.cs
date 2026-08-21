@@ -85,8 +85,18 @@ public sealed record RibbonComboBox(RibbonCommandId CommandId, string Label)
 public sealed record RibbonSplitButton(RibbonCommandId CommandId, string Label, RibbonMenu Menu)
     : RibbonControl(CommandId, Label);
 
+public enum RibbonDropdownPresentationKind
+{
+    Standard,
+    CellStyleGallery,
+}
+
 public sealed record RibbonDropdown(RibbonCommandId CommandId, string Label, RibbonMenu Menu)
-    : RibbonControl(CommandId, Label);
+    : RibbonControl(CommandId, Label)
+{
+    public RibbonDropdownPresentationKind PresentationKind { get; init; } =
+        RibbonDropdownPresentationKind.Standard;
+}
 
 public sealed record RibbonGallery(RibbonCommandId CommandId, string Label)
     : RibbonControl(CommandId, Label);

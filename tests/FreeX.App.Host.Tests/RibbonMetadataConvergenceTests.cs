@@ -95,6 +95,13 @@ public sealed class RibbonMetadataConvergenceTests
         combos["Font"].Items.Should().Contain("Calibri");
         combos["Font Size"].Choices.Should().BeEmpty();
         combos["Font Size"].Items.Should().Contain("11");
+
+        var cellStyles = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .Single(dropdown => dropdown.CommandId.Value == "Cell Styles");
+        cellStyles.PresentationKind.Should().Be(RibbonDropdownPresentationKind.CellStyleGallery);
     }
 
     [Fact]

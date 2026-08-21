@@ -812,6 +812,13 @@ public static class RibbonWpfRenderer
 
     private static Control NewButton(RibbonControl control, FrameworkElement resourceHost, string styleKey)
     {
+        if (control is RibbonDropdown { PresentationKind: RibbonDropdownPresentationKind.CellStyleGallery })
+        {
+            var galleryButton = new RibbonCellStyleGalleryButton();
+            ApplyStyle(galleryButton, resourceHost, styleKey);
+            return galleryButton;
+        }
+
         if (control is RibbonToggleButton or RibbonCheckBox)
         {
             var toggle = new ToggleButton();
@@ -871,6 +878,18 @@ public static class RibbonWpfRenderer
 
         if (hasMenuItems)
         {
+            if (control is RibbonDropdown { PresentationKind: RibbonDropdownPresentationKind.CellStyleGallery } &&
+                buttonBase is RibbonCellStyleGalleryButton galleryButton)
+            {
+                galleryButton.SetMenu(menu!, (commandId, sender) =>
+                {
+                    if (registry.TryGet(commandId, out var command) && command is not null)
+                        ExecuteGuarded(command, commandId, SenderContext(sender));
+                });
+                galleryButton.Click += (_, _) => galleryButton.OpenGallery();
+                return;
+            }
+
             var contextMenu = BuildContextMenu(menu!, registry, stateStore);
             RibbonWpfPopupAdapter.Configure(contextMenu, buttonBase, resourceHost ?? element);
             buttonBase.ContextMenu = contextMenu;
