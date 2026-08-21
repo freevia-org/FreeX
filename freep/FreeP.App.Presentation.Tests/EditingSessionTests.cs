@@ -1423,12 +1423,15 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
-    public void DeleteSelected_PromotedAnimationHeadTriggerIsCorrectedToOnClick()
+    public void DeleteSelected_PromotedAnimationHeadKeepsOwnTrigger()
     {
-        // freep-animation F1 sibling: the Delete key (EditingSession.DeleteSelected ->
-        // DeleteShapeCommand) removes ShapeAnimation entries the same way the Animation Pane's
-        // own Remove/Reorder buttons do, so it must apply the same main-sequence-head trigger
-        // correction they do.
+        // freep-animation F1 sibling; superseded round-160 T2: the Delete key
+        // (EditingSession.DeleteSelected -> DeleteShapeCommand) removes ShapeAnimation entries the
+        // same way the Animation Pane's own Remove/Reorder buttons do, and none of them force a
+        // newly promoted head to On Click any more -- PptxPackageWriter.BuildClickGroupEl writes a
+        // head's trigger verbatim and SlideShowController.BuildSteps starts a head unconditionally
+        // regardless of its stored trigger, matching real PowerPoint's behaviour when the
+        // animation ahead of a With/After-Previous entry is deleted.
         var sess   = Make();
         var shape1 = MakeShape(1);
         var shape2 = MakeShape(2);
@@ -1444,8 +1447,8 @@ public sealed class EditingSessionTests
         var anims = sess.CurrentSlide!.Animations;
         anims.Should().ContainSingle();
         anims[0].ShapeId.Should().Be(2u);
-        anims[0].Trigger.Should().Be(AnimationTrigger.OnClick);
-        promotee.Trigger.Should().Be(AnimationTrigger.OnClick);
+        anims[0].Trigger.Should().Be(AnimationTrigger.WithPrevious);
+        promotee.Trigger.Should().Be(AnimationTrigger.WithPrevious);
     }
 
     [Fact]
@@ -1710,11 +1713,16 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
-    public void UngroupSelected_PromotedAnimationHeadTriggerIsCorrectedToOnClick()
+    public void UngroupSelected_PromotedAnimationHeadKeepsOwnTrigger()
     {
-        // freep-animation F1 sibling: UngroupShapeCommand (reached from EditingSession.
-        // UngroupSelected) drops the group's own animation the same way DeleteShapeCommand
-        // drops a deleted shape's, so it must apply the same main-sequence-head correction.
+        // freep-animation F1 sibling; superseded round-160 T2: UngroupShapeCommand (reached from
+        // EditingSession.UngroupSelected) drops the group's own animation the same way
+        // DeleteShapeCommand drops a deleted shape's, promoting whatever animation is now first.
+        // That promoted head must keep its own stored trigger rather than being forced to On
+        // Click -- PptxPackageWriter.BuildClickGroupEl writes a head's trigger verbatim and
+        // SlideShowController.BuildSteps starts a head unconditionally regardless of its stored
+        // trigger, matching real PowerPoint's behaviour when the animation ahead of an
+        // After-Previous entry is removed.
         var sess  = Make();
         var group = new SlideShape { Id = 40, Kind = SlideShapeKind.Group };
         group.Children.Add(MakeShape(41));
@@ -1730,8 +1738,8 @@ public sealed class EditingSessionTests
         var anims = sess.CurrentSlide!.Animations;
         anims.Should().ContainSingle();
         anims[0].ShapeId.Should().Be(42u);
-        anims[0].Trigger.Should().Be(AnimationTrigger.OnClick);
-        promotee.Trigger.Should().Be(AnimationTrigger.OnClick);
+        anims[0].Trigger.Should().Be(AnimationTrigger.AfterPrevious);
+        promotee.Trigger.Should().Be(AnimationTrigger.AfterPrevious);
     }
 
     [Fact]

@@ -344,15 +344,15 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         slide.Animations.RemoveAll(animation =>
             animation.ShapeId == _groupId ||
             (animation.TriggerShapeId is { } triggerShapeId && triggerShapeId == _groupId));
-        // If the group's own animation was the main-sequence head, whatever animation is now
-        // first needs its stored trigger corrected to On Click (see ShapeAnimationAnchorFix) --
-        // otherwise the Animation Pane keeps showing a stale With/After Previous label. The group
-        // could independently have headed some unrelated trigger group too (a second animation on
-        // the group shape, keyed by a different TriggerShapeId), so that group's head needs the
-        // identical check. Revert below restores the whole captured list wholesale, so no undo
-        // bookkeeping is needed for either correction here.
-        ShapeAnimationAnchorFix.NormalizeMainSequenceHead(slide.Animations);
-        ShapeAnimationAnchorFix.NormalizeTriggerGroupHeads(slide.Animations);
+        // If the group's own animation was the main-sequence head (or the head of some unrelated
+        // trigger group keyed by a different TriggerShapeId), whatever animation is now first
+        // simply keeps its own stored Trigger: PptxPackageWriter.BuildClickGroupEl writes a head's
+        // trigger verbatim and SlideShowController.BuildSteps starts a head unconditionally
+        // regardless of its stored trigger, so "first in the group" already behaves correctly on
+        // its own -- forcing it to On Click here would silently discard an authored auto-play
+        // setting (round-160 finding; see the NOTE in PresentationCommands.cs above
+        // RemoveShapeAnimationCommand). Revert below restores the whole captured list wholesale,
+        // so no undo bookkeeping is needed.
         slide.AnimationBuildListXml = DeleteShapeCommand.RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             new HashSet<uint> { _groupId });

@@ -18285,6 +18285,14 @@ public sealed partial class DocumentView : Control
         {
             _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
             _selectionAnchor = _caret;
+
+            // r160-remediation: typing over a selection DELETES that selection, through the same
+            // shared fast path the three delete gestures use -- so it orphans a comment the same
+            // way when the selection covered the last run carrying its CommentId. The remediation
+            // that added pruning to Backspace, Delete and DeleteSelection missed this fourth door
+            // because it enumerated delete GESTURES rather than the deletion OPERATION; an auditor
+            // found it by searching for the operation and reproduced it against the fixed code.
+            PruneOrphanedCommentAndNoteAnchorsIfAny();
             return;
         }
 
@@ -19416,6 +19424,16 @@ public sealed partial class DocumentView : Control
         {
             _caret = new DocPosition(bodyResult.Caret.BlockIndex, bodyResult.Caret.Offset);
             _selectionAnchor = _caret;
+            // AV-COMMENT-PRUNE (r160 remediation, T1): the shared session's portability gate
+            // (IsPortableBodyTextParagraph/IsPortableBodyTextRun) only declines a paragraph that itself
+            // holds the comment's textless reference run -- it does not check Run.CommentId on an
+            // ordinary anchored-text run. A comment imported from Word whose range crosses a paragraph
+            // boundary anchors its text in one paragraph and its reference run in the next, so deleting
+            // just the anchor paragraph succeeds here, unopposed, and can drop the last surviving
+            // Run.CommentId in the document without ever reaching the local ParaCells fallback below
+            // (which is the only place this prune used to run). Must prune here too, or the entry lingers
+            // in TextDocument.Comments forever once nothing anywhere still carries its id.
+            PruneOrphanedCommentAndNoteAnchorsIfAny();
             return;
         }
 
@@ -19578,6 +19596,11 @@ public sealed partial class DocumentView : Control
         {
             _caret = new DocPosition(bodyResult.Caret.BlockIndex, bodyResult.Caret.Offset);
             _selectionAnchor = _caret;
+            // AV-COMMENT-PRUNE (r160 remediation, T1): see Backspace's identical call -- the shared
+            // session's fast path can drop the last surviving Run.CommentId in the document (a
+            // cross-paragraph comment's anchor paragraph, deleted alone) without ever reaching the local
+            // ParaCells fallback below, so it must prune here too.
+            PruneOrphanedCommentAndNoteAnchorsIfAny();
             return;
         }
 
@@ -20223,6 +20246,11 @@ public sealed partial class DocumentView : Control
         {
             _caret = new DocPosition(sharedResult.Caret.BlockIndex, sharedResult.Caret.Offset);
             _selectionAnchor = _caret;
+            // AV-COMMENT-PRUNE (r160 remediation, T1): see Backspace's identical call -- the shared
+            // session's fast path can drop the last surviving Run.CommentId in the document (a
+            // cross-paragraph comment's anchor paragraph, deleted alone) without ever reaching the local
+            // ParaCells fallback below, so it must prune here too.
+            PruneOrphanedCommentAndNoteAnchorsIfAny();
             return;
         }
 

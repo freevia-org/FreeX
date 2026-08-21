@@ -3348,15 +3348,16 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
         slide.Animations.RemoveAll(animation =>
             animation.ShapeId == _smartArtId ||
             (animation.TriggerShapeId is { } triggerShapeId && triggerShapeId == _smartArtId));
-        // If the SmartArt's animation was the main-sequence head, whatever animation is now
-        // first needs its stored trigger corrected to On Click (see ShapeAnimationAnchorFix) --
-        // otherwise the Animation Pane keeps showing a stale With/After Previous label. The
-        // SmartArt could independently have headed some unrelated trigger group too (a second
-        // animation on the same shape, keyed by a different TriggerShapeId), so that group's
-        // head needs the identical check. Revert below restores the whole captured list
-        // wholesale, so no undo bookkeeping is needed for either correction here.
-        ShapeAnimationAnchorFix.NormalizeMainSequenceHead(slide.Animations);
-        ShapeAnimationAnchorFix.NormalizeTriggerGroupHeads(slide.Animations);
+        // If the SmartArt's animation was the main-sequence head (or the head of some unrelated
+        // trigger group keyed by a different TriggerShapeId), whatever animation is now first
+        // simply keeps its own stored Trigger. A head with a WithPrevious/AfterPrevious trigger
+        // is not stale or broken: PptxPackageWriter.BuildClickGroupEl writes it verbatim and
+        // SlideShowController.BuildSteps starts a head unconditionally regardless of its stored
+        // trigger, so the file and live playback already treat "first in the group" as the thing
+        // that matters -- exactly as real PowerPoint does when the animation ahead of it is
+        // deleted. Rewriting it to On Click here would silently discard the user's authored
+        // auto-play setting (round-160 finding). Revert below restores the whole captured list
+        // wholesale, so no undo bookkeeping is needed.
         slide.AnimationBuildListXml = DeleteShapeCommand.RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             new HashSet<uint> { _smartArtId });
@@ -3509,15 +3510,15 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         slide.Animations.RemoveAll(animation =>
             deletedShapeIds.Contains(animation.ShapeId) ||
             (animation.TriggerShapeId is { } triggerShapeId && deletedShapeIds.Contains(triggerShapeId)));
-        // If the deleted shape's animation was the main-sequence head, whatever animation is now
-        // first needs its stored trigger corrected to On Click (see ShapeAnimationAnchorFix) --
-        // otherwise the Animation Pane keeps showing a stale With/After Previous label. A single
-        // Delete can carry away several shapes at once (deletedShapeIds), so it can simultaneously
-        // have removed the main-sequence head AND, independently, the head of an unrelated trigger
-        // group -- both promoted heads need the identical correction. Revert below restores the
-        // whole captured list wholesale, so no undo bookkeeping is needed for either here.
-        ShapeAnimationAnchorFix.NormalizeMainSequenceHead(slide.Animations);
-        ShapeAnimationAnchorFix.NormalizeTriggerGroupHeads(slide.Animations);
+        // If the deleted shape's animation was the main-sequence head (or the head of some
+        // unrelated trigger group), whatever animation is now first simply keeps its own stored
+        // Trigger. A single Delete can carry away several shapes at once (deletedShapeIds), so it
+        // can simultaneously promote a new head in more than one group -- neither one needs any
+        // correction: PptxPackageWriter.BuildClickGroupEl writes a head's trigger verbatim and
+        // SlideShowController.BuildSteps starts a head unconditionally regardless of its stored
+        // trigger, so "first in the group" already behaves correctly on its own (round-160
+        // finding). Revert below restores the whole captured list wholesale, so no undo
+        // bookkeeping is needed.
         slide.AnimationBuildListXml = RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             deletedShapeIds);
@@ -5299,89 +5300,24 @@ public sealed class AddShapeAnimationCommand : IPresentationCommand
     }
 }
 
-/// <summary>
-/// A <see cref="ShapeAnimation.Trigger"/> of WithPrevious/AfterPrevious is only meaningful relative
-/// to a preceding animation in the same click-group. The very first main-sequence animation (the one
-/// with <see cref="ShapeAnimation.TriggerShapeId"/> null) is always started by a click regardless of
-/// its stored trigger -- both live playback (SlideShowController.BuildSteps: "anim.Trigger == OnClick
-/// || current is null") and the package writer (PptxPackageWriter.BuildTimingEl/BuildClickGroupEl:
-/// "clickGroups.Count == 0" starts a new group unconditionally) treat it as On Click. When a command
-/// promotes a different animation into that leading slot, its stored Trigger must be corrected to On
-/// Click too, or the Animation Pane (which reads Trigger verbatim) keeps showing a stale With/After
-/// Previous label that silently flips to On Click the next time the file round-trips through
-/// save/reload.
-///
-/// The first animation of each distinct trigger group (entries sharing a common non-null
-/// <see cref="ShapeAnimation.TriggerShapeId"/>) needs the identical correction, and for a stronger
-/// reason: a trigger group has no slide-entrance moment to legitimately auto-play against the way the
-/// main sequence's head can -- it exists only because its designated trigger shape was clicked, so
-/// its head can never mean anything but On Click. PptxPackageWriter.BuildClickGroupEl forces
-/// <c>i == 0 ? OnClick : anim.Trigger</c> for the first click-group of a trigger sequence exactly as
-/// it does for the main sequence, so the same stale-label gap applies. See
-/// <see cref="NormalizeTriggerGroupHeads"/>.
-/// </summary>
-internal static class ShapeAnimationAnchorFix
-{
-    /// <summary>
-    /// If the first main-sequence animation in <paramref name="anims"/> has a stored trigger other
-    /// than On Click, corrects it to On Click and returns the animation plus its previous trigger so
-    /// the caller can restore it on undo. Returns null when no correction was needed.
-    /// </summary>
-    public static (ShapeAnimation Animation, AnimationTrigger OldTrigger)? NormalizeMainSequenceHead(
-        IList<ShapeAnimation> anims)
-    {
-        ShapeAnimation? head = null;
-        foreach (var a in anims)
-        {
-            if (a.TriggerShapeId is null)
-            {
-                head = a;
-                break;
-            }
-        }
-
-        if (head is null || head.Trigger == AnimationTrigger.OnClick) return null;
-
-        var oldTrigger = head.Trigger;
-        head.Trigger = AnimationTrigger.OnClick;
-        return (head, oldTrigger);
-    }
-
-    /// <summary>
-    /// For every distinct trigger group in <paramref name="anims"/> (entries sharing a common
-    /// non-null <see cref="ShapeAnimation.TriggerShapeId"/>, taken in list order to match
-    /// PptxPackageWriter's <c>GroupBy(a => a.TriggerShapeId!.Value)</c>), corrects the group's first
-    /// entry to On Click when its stored trigger is something else, and returns each correction
-    /// (animation plus previous trigger) so the caller can restore it on undo. This is the
-    /// trigger-group counterpart of <see cref="NormalizeMainSequenceHead"/> -- it never inspects or
-    /// changes the main-sequence head itself, only entries with a non-null TriggerShapeId. A single
-    /// remove/reorder of one animation can promote at most one trigger group's head (only the group
-    /// the removed/reordered entry itself belonged to), but this returns every correction made so
-    /// undo is exact even if that ever changes. Returns an empty list when no correction was needed.
-    /// </summary>
-    public static IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)> NormalizeTriggerGroupHeads(
-        IList<ShapeAnimation> anims)
-    {
-        List<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>? fixes = null;
-        var seenTriggerShapeIds = new HashSet<uint>();
-
-        foreach (var a in anims)
-        {
-            if (a.TriggerShapeId is not { } triggerShapeId || !seenTriggerShapeIds.Add(triggerShapeId))
-                continue;
-
-            if (a.Trigger == AnimationTrigger.OnClick)
-                continue;
-
-            var oldTrigger = a.Trigger;
-            a.Trigger = AnimationTrigger.OnClick;
-            (fixes ??= new()).Add((a, oldTrigger));
-        }
-
-        return (IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>?)fixes
-            ?? Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
-    }
-}
+// NOTE (round-160 remediation T2): this file used to define a ShapeAnimationAnchorFix helper that
+// force-corrected a newly promoted click-group head (main-sequence or trigger-group) to
+// AnimationTrigger.OnClick whenever Remove/Reorder/Delete/ConvertSmartArt/Ungroup promoted a
+// different animation into a group's first slot. That directly contradicted the round-160 writer
+// fix to PptxPackageWriter.BuildClickGroupEl, which stopped forcing a click-group head to OnClick
+// because real PowerPoint allows the very first animation of a sequence to be authored with
+// Start:"With Previous"/"After Previous" and have it auto-play when the slide (or trigger) begins --
+// BuildClickGroupEl now writes anim.Trigger verbatim, and SlideShowController.BuildSteps already
+// starts a head unconditionally ("anim.Trigger == OnClick || current is null") regardless of its
+// stored trigger. A promoted head is, at the file/model level, indistinguishable from an authored
+// one: PowerPoint itself does not rewrite a surviving animation's Start setting when an earlier one
+// in its group is deleted or reordered away -- it keeps whatever Start value it already had. So
+// forcing OnClick here was not fixing staleness; it was silently discarding the user's authored
+// (or now-inherited) auto-play setting the moment they edited the animation list, which is exactly
+// the class of bug the writer fix closed on the save path. The helper and all five call sites
+// (RemoveShapeAnimationCommand, ReorderShapeAnimationCommand, DeleteShapeCommand,
+// ConvertSmartArtToShapesCommand, and UngroupShapeCommand in PresentationCommands12A.cs) have been
+// removed; a promoted head's Trigger is now left exactly as-is by every one of them.
 
 /// <summary>
 /// Removes the animation at <paramref name="animationIndex"/> from the slide at <paramref name="slideIndex"/>.
@@ -5392,10 +5328,6 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
     private readonly int _slideIndex;
     private readonly int _animationIndex;
     private ShapeAnimation? _captured;
-    private ShapeAnimation? _promotedHead;
-    private AnimationTrigger _promotedHeadOldTrigger;
-    private IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)> _promotedTriggerHeads =
-        Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
 
     public RemoveShapeAnimationCommand(int slideIndex, int animationIndex)
     {
@@ -5412,14 +5344,8 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
         if (_animationIndex < 0 || _animationIndex >= anims.Count) return;
         _captured = anims[_animationIndex];
         anims.RemoveAt(_animationIndex);
-
-        var fix = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
-        _promotedHead           = fix?.Animation;
-        _promotedHeadOldTrigger = fix?.OldTrigger ?? default;
-        // The removed entry could equally have been the head of an unrelated trigger group (its
-        // own TriggerShapeId non-null) rather than the main sequence's; that group's newly
-        // promoted head needs the identical On-Click correction (see ShapeAnimationAnchorFix).
-        _promotedTriggerHeads = ShapeAnimationAnchorFix.NormalizeTriggerGroupHeads(anims);
+        // Whatever animation is now first in the main sequence (or in an unrelated trigger group)
+        // keeps its own stored Trigger untouched -- see the NOTE above this class.
     }
 
     public void Revert(Presentation p)
@@ -5429,16 +5355,6 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
         var anims = p.Slides[_slideIndex].Animations;
         var idx = Math.Clamp(_animationIndex, 0, anims.Count);
         anims.Insert(idx, _captured);
-
-        if (_promotedHead is not null)
-        {
-            _promotedHead.Trigger = _promotedHeadOldTrigger;
-            _promotedHead = null;
-        }
-
-        foreach (var (animation, oldTrigger) in _promotedTriggerHeads)
-            animation.Trigger = oldTrigger;
-        _promotedTriggerHeads = Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
     }
 }
 
@@ -5450,10 +5366,6 @@ public sealed class ReorderShapeAnimationCommand : IPresentationCommand
     private readonly int _slideIndex;
     private readonly int _from;
     private readonly int _to;
-    private ShapeAnimation? _promotedHead;
-    private AnimationTrigger _promotedHeadOldTrigger;
-    private IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)> _promotedTriggerHeads =
-        Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
 
     public ReorderShapeAnimationCommand(int slideIndex, int fromIndex, int toIndex)
     {
@@ -5466,29 +5378,14 @@ public sealed class ReorderShapeAnimationCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        if (!MoveInList(p, _from, _to)) return;
-        var anims = p.Slides[_slideIndex].Animations;
-        var fix = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
-        _promotedHead           = fix?.Animation;
-        _promotedHeadOldTrigger = fix?.OldTrigger ?? default;
-        // The moved entry could equally have vacated the head slot of an unrelated trigger group
-        // (its own TriggerShapeId non-null) rather than the main sequence's; that group's newly
-        // promoted head needs the identical On-Click correction (see ShapeAnimationAnchorFix).
-        _promotedTriggerHeads = ShapeAnimationAnchorFix.NormalizeTriggerGroupHeads(anims);
+        MoveInList(p, _from, _to);
+        // Whatever animation now occupies a group's first slot keeps its own stored Trigger
+        // untouched -- see the NOTE above this class.
     }
 
     public void Revert(Presentation p)
     {
         MoveInList(p, _to, _from);
-        if (_promotedHead is not null)
-        {
-            _promotedHead.Trigger = _promotedHeadOldTrigger;
-            _promotedHead = null;
-        }
-
-        foreach (var (animation, oldTrigger) in _promotedTriggerHeads)
-            animation.Trigger = oldTrigger;
-        _promotedTriggerHeads = Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
     }
 
     private bool MoveInList(Presentation p, int from, int to)

@@ -431,10 +431,21 @@ public class TransitionAnimationTests
         Assert.Equal(AnimationPreset.Fade,   pres.Slides[0].Animations[1].Preset);
     }
 
-    // ── Click-group anchor trigger correction (freep-animation F1) ─────────────────
+    // ── Click-group anchor trigger correction (freep-animation F1; superseded round-160 T2) ──
+    //
+    // These two tests originally asserted that promoting a different animation into a
+    // click-group's head slot (by removing or reordering) forced its stored Trigger to On Click.
+    // Round 160 fixed PptxPackageWriter.BuildClickGroupEl to stop forcing a click-group head's
+    // *authored* trigger to On Click, because real PowerPoint allows the very first animation of
+    // a sequence to be authored as With/After Previous and have it auto-play with no click. A
+    // promoted head is indistinguishable from an authored one at the file/model level -- and
+    // PowerPoint itself does not rewrite a surviving animation's Start setting when the one ahead
+    // of it in its group is deleted or reordered away. So forcing OnClick on promotion here would
+    // have re-introduced, on the model side, exactly the bug the writer fix closed on the save
+    // side. These tests now assert the opposite: a promoted head keeps its own stored trigger.
 
     [Fact]
-    public void RemoveShapeAnimationCommand_PromotedHeadTriggerIsCorrectedToOnClick_AndRevertRestoresIt()
+    public void RemoveShapeAnimationCommand_PromotedHeadKeepsOwnTrigger_AndRevertRestoresList()
     {
         var pres = Presentation.CreateEmpty();
         var a0 = new ShapeAnimation { ShapeId = 10, Trigger = AnimationTrigger.OnClick };
@@ -449,9 +460,9 @@ public class TransitionAnimationTests
         var anims = pres.Slides[0].Animations;
         Assert.Single(anims);
         Assert.Equal(11u, anims[0].ShapeId);
-        Assert.Equal(AnimationTrigger.OnClick, anims[0].Trigger);
-        // The promoted animation instance itself was mutated (pane/writer read this field directly).
-        Assert.Equal(AnimationTrigger.OnClick, a1.Trigger);
+        Assert.Equal(AnimationTrigger.WithPrevious, anims[0].Trigger);
+        // The promoted animation instance itself was never mutated.
+        Assert.Equal(AnimationTrigger.WithPrevious, a1.Trigger);
 
         cmd.Revert(pres);
         Assert.Equal(2, anims.Count);
@@ -486,7 +497,7 @@ public class TransitionAnimationTests
     }
 
     [Fact]
-    public void ReorderShapeAnimationCommand_PromotedHeadTriggerIsCorrectedToOnClick_AndRevertRestoresIt()
+    public void ReorderShapeAnimationCommand_PromotedHeadKeepsOwnTrigger_AndRevertRestoresIt()
     {
         var pres = Presentation.CreateEmpty();
         var a0 = new ShapeAnimation { ShapeId = 10, Trigger = AnimationTrigger.OnClick };
@@ -500,7 +511,7 @@ public class TransitionAnimationTests
 
         var anims = pres.Slides[0].Animations;
         Assert.Equal(11u, anims[0].ShapeId);
-        Assert.Equal(AnimationTrigger.OnClick, anims[0].Trigger);
+        Assert.Equal(AnimationTrigger.AfterPrevious, anims[0].Trigger);
         Assert.Equal(10u, anims[1].ShapeId);
         Assert.Equal(AnimationTrigger.OnClick, anims[1].Trigger);
 
