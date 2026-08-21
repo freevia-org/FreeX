@@ -686,6 +686,8 @@ static int RenderInputDocx(string outDir, InputDocxCaptureOptions input)
             pageCount: input.PageCount,
             alignViewportToRequestedPage: pageNumber > 1,
             forceWordComparablePageSurface: true,
+            useInputDocxSectionPageSurface: true,
+            normalizeToWordBaselineRasterSurface: true,
             bypassScenarioSelection: true,
             bypassFixtureSource: true,
             hostMetadata: input.HostMetadata);
@@ -919,6 +921,8 @@ static int RenderMode(
     bool hasEndnotes = false,
     bool isSyntheticPage = false,
     bool forceWordComparablePageSurface = false,
+    bool useInputDocxSectionPageSurface = false,
+    bool normalizeToWordBaselineRasterSurface = false,
     bool bypassScenarioSelection = false,
     bool bypassFixtureSource = false,
     IReadOnlyDictionary<string, string>? hostMetadata = null)
@@ -939,7 +943,9 @@ static int RenderMode(
             width);
         viewportOffsetY = surfacePlan.PageTopDip(pageNumber - 1);
     }
-    var sectionPageSurface = ResolveSectionPageSurfacePlan(scenarioId, sourceDocument, pageNumber, pageCount);
+    var sectionPageSurface = useInputDocxSectionPageSurface
+        ? ResolveInputDocxSectionPageSurfacePlan(sourceDocument, pageNumber, pageCount)
+        : ResolveSectionPageSurfacePlan(scenarioId, sourceDocument, pageNumber, pageCount);
     var sectionGeometryPage = sectionPageSurface?.PagePlan
         ?? ResolveSectionGeometryPage(scenarioId, sourceDocument, pageNumber, pageCount);
     var doc = sectionPageSurface?.Document ?? sourceDocument;
@@ -1005,7 +1011,7 @@ static int RenderMode(
             viewportOffsetY,
             WordComparableContentOffsetY(scenarioId, pageNumber));
     }
-    if (ShouldNormalizeSectionPageSurfaceToWordBaseline(scenarioId))
+    if (normalizeToWordBaselineRasterSurface || ShouldNormalizeSectionPageSurfaceToWordBaseline(scenarioId))
     {
         (bytes, captureWidth, captureHeight) = NormalizeToWordBaselineRasterSurface(
             bytes,
@@ -1074,7 +1080,7 @@ static int RenderMode(
                 viewportOffsetY,
                 WordComparableContentOffsetY(scenarioId, pageNumber));
         }
-        if (ShouldNormalizeSectionPageSurfaceToWordBaseline(scenarioId))
+        if (normalizeToWordBaselineRasterSurface || ShouldNormalizeSectionPageSurfaceToWordBaseline(scenarioId))
         {
             (pngBytes, fallbackWidth, fallbackHeight) = NormalizeToWordBaselineRasterSurface(
                 pngBytes,
@@ -1645,6 +1651,14 @@ static FreeWVisualSectionGeometrySurfacePlan? ResolveSectionPageSurfacePlan(
         .BuildSectionGeometrySurfacePlans(document, pageCount)
         .FirstOrDefault(page => page.PageNumber == pageNumber);
 }
+
+static FreeWVisualSectionGeometrySurfacePlan? ResolveInputDocxSectionPageSurfacePlan(
+    TextDocument document,
+    int pageNumber,
+    int pageCount) =>
+    FreeWVisualEvidencePlanner
+        .BuildSectionGeometrySurfacePlans(document, pageCount)
+        .FirstOrDefault(page => page.PageNumber == pageNumber);
 
 static FreeWVisualPixelStats ComputePngPixelStats(byte[] pngBytes, int fallbackWidth, int fallbackHeight)
 {

@@ -24,6 +24,19 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void PageLayoutShot_InputDocxUsesOwningSectionSurfaceForEachRequestedPhysicalPage()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));
+
+        source.Should().Contain("useInputDocxSectionPageSurface: true");
+        source.Should().Contain("normalizeToWordBaselineRasterSurface: true");
+        source.Should().Contain("var sectionPageSurface = useInputDocxSectionPageSurface");
+        source.Should().Contain("ResolveInputDocxSectionPageSurfacePlan(sourceDocument, pageNumber, pageCount)");
+        source.Should().Contain("BuildSectionGeometrySurfacePlans(document, pageCount)");
+        source.Should().Contain("normalizeToWordBaselineRasterSurface || ShouldNormalizeSectionPageSurfaceToWordBaseline(scenarioId)");
+    }
+
+    [Fact]
     public void PageLayoutShot_NormalizesSectionPageSurfacesToTheWordBaselineRasterBounds()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));
