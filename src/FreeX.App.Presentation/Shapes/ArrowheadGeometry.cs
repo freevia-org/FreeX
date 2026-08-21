@@ -72,13 +72,27 @@ public static class ArrowheadGeometry
 
     /// <summary>
     /// Returns (halfWidth, length) in DIP pixels for the arrowhead, scaled from the stroke width.
-    /// Excel scales arrowheads relative to the line weight; we approximate using the same
-    /// sm/med/lg multipliers Excel uses (roughly 2/4/6 × stroke for length, 1.5/3/4.5 for half-width).
+    /// Excel scales arrowheads relative to the line weight. Native medium triangular ends are
+    /// substantially tighter than the other supported medium presets, so that one authored
+    /// combination uses the calibrated factors below while all other shape/size combinations
+    /// retain their established geometry.
     /// </summary>
     public static (double HalfWidth, double Length) ScaleArrowhead(DrawingArrowhead arrowhead, double strokeWidth)
     {
         // Clamp stroke to a minimum so tiny lines still have visible arrowheads.
         var s = Math.Max(1.0, strokeWidth);
+
+        // Excel's DrawingML `triangle` with absent w/len attributes is medium/medium. Its native
+        // terminal geometry is about 3.5 × stroke long and 3 × stroke wide. The former generic
+        // medium factors (7 × length, 5 × width) made every Excel-authored medium triangle roughly
+        // twice as large in both WPF and Avalonia. Keep small/large triangles and the other
+        // arrowhead types on their existing factors: only this exercised native combination moves.
+        if (arrowhead.Type == DrawingArrowheadType.Triangle &&
+            arrowhead.Width == DrawingArrowheadSize.Medium &&
+            arrowhead.Length == DrawingArrowheadSize.Medium)
+        {
+            return (s * 3.0 / 2.0, s * 3.5);
+        }
 
         var lengthFactor = arrowhead.Length switch
         {

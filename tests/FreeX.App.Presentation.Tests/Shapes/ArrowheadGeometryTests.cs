@@ -14,9 +14,9 @@ public sealed class ArrowheadGeometryTests
 
     [Theory]
     [InlineData(DrawingArrowheadSize.Small,  DrawingArrowheadSize.Small,  3.0, 4.0)]
-    [InlineData(DrawingArrowheadSize.Medium, DrawingArrowheadSize.Medium, 5.0, 7.0)]
+    [InlineData(DrawingArrowheadSize.Medium, DrawingArrowheadSize.Medium, 3.0, 3.5)]
     [InlineData(DrawingArrowheadSize.Large,  DrawingArrowheadSize.Large,  7.0, 10.0)]
-    public void ScaleArrowhead_ReturnsCorrectFactors(
+    public void ScaleArrowhead_Triangle_ReturnsCorrectFactors(
         DrawingArrowheadSize w,
         DrawingArrowheadSize len,
         double expectedHalfWidthFactor,
@@ -32,9 +32,23 @@ public sealed class ArrowheadGeometryTests
     }
 
     [Fact]
+    public void ScaleArrowhead_MediumNonTriangle_RetainsEstablishedFactors()
+    {
+        var arrowhead = new DrawingArrowhead(
+            DrawingArrowheadType.Arrow,
+            DrawingArrowheadSize.Medium,
+            DrawingArrowheadSize.Medium);
+
+        var (halfWidth, length) = ArrowheadGeometry.ScaleArrowhead(arrowhead, strokeWidth: 2.0);
+
+        halfWidth.Should().BeApproximately(5.0, 1e-9);
+        length.Should().BeApproximately(14.0, 1e-9);
+    }
+
+    [Fact]
     public void ScaleArrowhead_ClampsZeroStrokeToOne()
     {
-        var arrowhead = new DrawingArrowhead(DrawingArrowheadType.Triangle, DrawingArrowheadSize.Medium, DrawingArrowheadSize.Medium);
+        var arrowhead = new DrawingArrowhead(DrawingArrowheadType.Arrow, DrawingArrowheadSize.Medium, DrawingArrowheadSize.Medium);
         // stroke=0 should clamp to 1
         var (halfWidth, length) = ArrowheadGeometry.ScaleArrowhead(arrowhead, strokeWidth: 0.0);
         halfWidth.Should().BeApproximately(5.0 / 2.0, 1e-9,  "uses clamp-to-1 stroke");
