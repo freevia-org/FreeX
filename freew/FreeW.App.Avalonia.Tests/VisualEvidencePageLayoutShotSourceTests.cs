@@ -43,6 +43,15 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void PageLayoutShot_CropsDrawingObjectsToTheWordComparablePageSurface()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));
+
+        source.Should().MatchRegex("ShouldCaptureWordComparablePageSurface\\([\\s\\S]*?string.Equals\\(scenarioId, \"drawing-objects-complex\", StringComparison.OrdinalIgnoreCase\\)");
+        source.Should().Contain("CropToDocumentPageSurface(");
+    }
+
+    [Fact]
     public void PageLayoutShot_CropsReviewCompareToTheWordComparablePageSurface()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));

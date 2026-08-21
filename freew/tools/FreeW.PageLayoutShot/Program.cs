@@ -1241,6 +1241,7 @@ static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "equation-structures", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "drawing-objects-complex", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "chart-smartart-complex", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "object-format-position-size-style", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "field-page-number-variants", StringComparison.OrdinalIgnoreCase) ||
