@@ -381,10 +381,14 @@ public partial class MainWindow
         button.ContextMenu = menu;
         menu.PlacementTarget = button;
         menu.Placement = PlacementMode.Bottom;
-        RibbonMenuKeyTipScopePlanner.ApplyScopedInputGestureText(menu);
+        var showKeyTips = enterKeyTipMenuScope || _ribbonKeyTipSession.IsActive;
+        if (showKeyTips)
+            RibbonMenuKeyTipScopePlanner.ApplyScopedInputGestureText(menu);
+        else
+            RibbonMenuKeyTipScopePlanner.ClearInputGestureText(menu);
         menu.IsOpen = true;
 
-        if (enterKeyTipMenuScope || _ribbonKeyTipSession.IsActive)
+        if (showKeyTips)
             EnterRibbonMenuKeyTipScope(menu);
     }
 

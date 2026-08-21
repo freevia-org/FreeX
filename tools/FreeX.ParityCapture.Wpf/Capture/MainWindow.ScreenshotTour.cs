@@ -1101,6 +1101,7 @@ public partial class MainWindow
 
         try
         {
+            RibbonMenuKeyTipScopePlanner.ClearInputGestureText(menu);
             menu.PlacementTarget = bordersButton;
             menu.Placement = PlacementMode.Bottom;
             menu.IsOpen = true;

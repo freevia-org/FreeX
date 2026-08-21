@@ -43,6 +43,25 @@ public sealed class RibbonMenuKeyTipScopePlannerTests
     }
 
     [Fact]
+    public void ClearInputGestureText_HidesRootAndNestedMenuGestures()
+    {
+        RunSta(() =>
+        {
+            var parent = CreateMenuItem("H");
+            var child = CreateMenuItem("HG");
+            parent.Items.Add(child);
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+
+            RibbonMenuKeyTipScopePlanner.ApplyScopedInputGestureText(menu);
+            RibbonMenuKeyTipScopePlanner.ClearInputGestureText(menu);
+
+            parent.InputGestureText.Should().BeEmpty();
+            child.InputGestureText.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
     public void GetScopedKeyTip_UsesNormalizedActiveParentPrefix()
     {
         RunSta(() =>
