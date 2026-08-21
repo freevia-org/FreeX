@@ -33,6 +33,7 @@ using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using Serilog;
 
 namespace FreeX.App.Host;
 
@@ -219,6 +220,7 @@ public partial class MainWindow
     // Activated by FREEX_SS_TOUR=1 env var.  Output lands in <repo-root>/screenshots/.
     private async void TryStartScreenshotTour()
     {
+        var screenshotTourRequested = false;
         try
         {
         var ribbonBurstTour = Environment.GetEnvironmentVariable("FREEX_SS_TOUR_BURST") == "1";
@@ -280,6 +282,8 @@ public partial class MainWindow
         if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeAlignmentNumberTour && !homeBordersDropdownTour && !homeFontColorsTour && !homeStylesConditionalFormattingTour && !homeClipboardCellsEditingTour && !homeSubmittedWorkflowsTour && !homeStylePersistenceTour && !ribbonOverflowKeytipTour && !worksheetContextMenuTour && !worksheetContextTargetsTour && !worksheetContextSubmittedTour && !keyTipOverlayTour && !printPreviewTour && !backstageRecentExportShareTour && !optionsAccountTour && !helpAboutLegalTour && !qatUndoRedoTour && !titlebarWindowChromeTour && !statusFooterTour && !statusFooterInteractionsTour && !formulaBarNameBoxTour && !gridSelectionEditingTour && !insertObjectsLinksTour && !insertObjectPersistenceTour && !dataToolsDialogsTour && !dataSortFilterOutlineTour && !dataSubmittedWorkflowsTour && !dataWhatIfWorkflowsTour && !fileIoImportSmokeTour && !fileBackstageWorkflowsTour && !insertTablesChartsTour && !tableWorkflowsTour && !chartDataLayoutTour && !chartPersistenceRenderTour && !chartObjectSelectionTour && !pivotFieldListContextTour && !pivotOptionsSlicerTour && !pivotAdvancedWorkflowsTour && !viewPanesZoomTour && !viewWorkflowsTour && !pageLayoutSetupTour && !pageLayoutOutputTour && !drawObjectFormattingTour && !drawObjectPersistenceTour && !formulaDiagnosticsTour && !formulaAuthoringNamesTour && !formulaSubmittedPersistenceTour && !reviewCommentsProtectionTour && !reviewProtectionMatrixTour && !reviewStatsShareTour)
             return;
 
+        screenshotTourRequested = true;
+
         var ribbonPlan = ribbonTour
             ? RibbonScreenshotTourPlanner.CreatePlan(
                 Environment.GetEnvironmentVariable("FREEX_SS_TOUR_TABS"),
@@ -303,6 +307,15 @@ public partial class MainWindow
                 ["reason"] = ex.GetType().Name,
                 ["message"] = ex.Message
             });
+            Log.Error(ex, "Screenshot tour failed");
+        }
+        finally
+        {
+            if (screenshotTourRequested && Application.Current is not null)
+            {
+                _suppressClosePrompt = true;
+                Application.Current.Shutdown();
+            }
         }
     }
 
@@ -693,7 +706,11 @@ public partial class MainWindow
         numberFormatBox.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
         numberFormatBox.Focus();
         numberFormatBox.ApplyTemplate();
-        numberFormatBox.IsDropDownOpen = true;
+        var gallery = numberFormatBox as RibbonGalleryComboBox;
+        if (gallery is not null)
+            gallery.OpenGallery();
+        else
+            numberFormatBox.IsDropDownOpen = true;
         numberFormatBox.UpdateLayout();
         UpdateLayout();
         await WaitForRibbonScreenshotRenderPassAsync();
@@ -702,12 +719,24 @@ public partial class MainWindow
 
         try
         {
-            var popupChild = FindOpenPopupChild(numberFormatBox)
-                ?? throw new InvalidOperationException("Home number format dropdown tour could not locate the open ComboBox popup.");
+            var popupChild = gallery?.GalleryPopupChild ?? FindOpenPopupChild(numberFormatBox)
+                ?? throw new InvalidOperationException("Home number format dropdown tour could not locate the open number format popup.");
+            if (gallery is not null && (popupChild.ActualWidth <= 0 || popupChild.ActualHeight <= 0))
+            {
+                popupChild.Measure(new Size(264, double.PositiveInfinity));
+                popupChild.Arrange(new Rect(0, 0, 264, popupChild.DesiredSize.Height));
+                popupChild.UpdateLayout();
+            }
+            if (popupChild.ActualWidth <= 0 || popupChild.ActualHeight <= 0)
+                throw new InvalidOperationException(
+                    $"Home number format dropdown tour opened a popup with no rendered size (galleryOpen={gallery?.IsGalleryOpen}, width={popupChild.ActualWidth}, height={popupChild.ActualHeight}).");
 
             await CaptureElementAsync(popupChild, outputDir, HomeNumberFormatDropdownTourCaptureFileName);
             ValidateHomeNumberFormatDropdownTourEvidence(outputDir);
-            await WriteHomeNumberFormatDropdownTourManifestAsync(outputDir, popupChild);
+            await WriteHomeNumberFormatDropdownTourManifestAsync(
+                outputDir,
+                popupChild,
+                gallery is null ? "RenderTargetBitmap-combobox-popup-child" : "RenderTargetBitmap-number-format-gallery-popup");
         }
         catch
         {
@@ -717,6 +746,7 @@ public partial class MainWindow
         finally
         {
             numberFormatBox.IsDropDownOpen = false;
+            gallery?.CloseGallery();
         }
     }
 
@@ -10063,7 +10093,10 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.AutoFilterFlyoutTourManifest);
     }
 
-    private static async Task WriteHomeNumberFormatDropdownTourManifestAsync(string outputDir, FrameworkElement popupChild)
+    private static async Task WriteHomeNumberFormatDropdownTourManifestAsync(
+        string outputDir,
+        FrameworkElement popupChild,
+        string captureMethod)
     {
         var capture = new HomeNumberFormatDropdownTourManifestCapture(
             CaptureKey: "interactive:home-number-format:opened",
@@ -10089,7 +10122,7 @@ public partial class MainWindow
             SelectedFormat: HomeNumberFormatDropdownPlanner.Options[HomeNumberFormatDropdownPlanner.DefaultSelectionIndex].Label,
             OptionLabels: HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label).ToArray(),
             CaptureStatus: "complete",
-            CaptureMethod: "RenderTargetBitmap-combobox-popup-child",
+            CaptureMethod: captureMethod,
             Pairing: new HomeNumberFormatDropdownTourManifestPairing(
                 "interactive:home-number-format:<State>",
                 "excel",
@@ -10098,7 +10131,7 @@ public partial class MainWindow
             Captures: [capture],
             Limitations:
             [
-                "This in-app tour opens the production Home Number Format ComboBox and captures the open WPF popup child without global mouse or keyboard input.",
+                "This in-app tour opens the production Home Number Format gallery and captures its explicit WPF popup without global mouse or keyboard input.",
                 "The paired Microsoft Excel transient capture is declared by tools/screenshot_excel.ps1 and remains a separate foreground-guarded capture.",
                 "The scenario captures the opened dropdown with the default General format selected."
             ]);

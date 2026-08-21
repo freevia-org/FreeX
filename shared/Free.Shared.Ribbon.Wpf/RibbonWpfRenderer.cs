@@ -694,19 +694,21 @@ public static class RibbonWpfRenderer
 
     private static FrameworkElement BuildComboControl(RibbonComboBox combo, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
     {
-        var box = new ComboBox
-        {
-            Width = combo.Width ?? 110,
-            Height = RibbonVisualMetrics.SmallRowHeight,
-            Margin = new Thickness(1, 0, 1, 0),
-            IsEditable = true,
-            Background = Brushes.White
-        };
+        ComboBox box = combo.PresentationKind == RibbonComboBoxPresentationKind.Gallery
+            ? new RibbonGalleryComboBox()
+            : new ComboBox();
+        box.Width = combo.Width ?? 110;
+        box.Height = RibbonVisualMetrics.SmallRowHeight;
+        box.Margin = new Thickness(1, 0, 1, 0);
+        box.IsEditable = true;
+        box.Background = Brushes.White;
         if (combo.Choices.Count > 0)
         {
             box.DisplayMemberPath = nameof(RibbonComboBoxChoice.Label);
             foreach (var choice in combo.Choices)
                 box.Items.Add(choice);
+            if (box is RibbonGalleryComboBox gallery)
+                gallery.SetGalleryChoices(combo.Choices);
         }
         else
         {

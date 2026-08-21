@@ -6,6 +6,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Shell;
 using FluentAssertions;
+using Free.Shared.Ribbon.Wpf;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Services;
@@ -131,6 +132,9 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public bool NumberFormatDropDownIsOpen =>
             (_window.FindName("NumberFormatBox") as ComboBox)?.IsDropDownOpen == true;
+
+        public bool NumberFormatGalleryIsOpen =>
+            (_window.FindName("NumberFormatBox") as RibbonGalleryComboBox)?.IsGalleryOpen == true;
 
         public bool NumberFormatBoxHasKeyboardFocus =>
             (_window.FindName("NumberFormatBox") as ComboBox)?.IsKeyboardFocusWithin == true ||

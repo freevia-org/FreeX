@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using Free.Shared.Ribbon.Wpf;
 using FreeX.App.Presentation.Ribbon;
 
 namespace FreeX.App.Host;
@@ -351,7 +352,10 @@ public partial class MainWindow
 
             comboBox.Focus();
             Keyboard.Focus(comboBox);
-            comboBox.IsDropDownOpen = true;
+            if (comboBox is RibbonGalleryComboBox gallery)
+                gallery.OpenGallery();
+            else
+                comboBox.IsDropDownOpen = true;
             return true;
         }
 

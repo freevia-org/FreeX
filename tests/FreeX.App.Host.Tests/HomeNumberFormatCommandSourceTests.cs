@@ -82,8 +82,22 @@ public sealed class HomeNumberFormatCommandSourceTests
             .Single(control => control.CommandId.Value == "Number Format");
 
         declarativeSource.Should().Contain("FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), UiText.Get)");
+        numberFormatCombo.PresentationKind.Should().Be(RibbonComboBoxPresentationKind.Gallery);
         numberFormatCombo.Choices.Select(choice => (choice.Value, choice.Label)).Should().Equal(
             HomeNumberFormatDropdownPlanner.Options.Select(option => (option.Value, option.Label)));
+        numberFormatCombo.Choices.Select(choice => choice.PreviewKind).Should().Equal(
+            RibbonComboBoxGalleryPreviewKind.General,
+            RibbonComboBoxGalleryPreviewKind.Number,
+            RibbonComboBoxGalleryPreviewKind.Currency,
+            RibbonComboBoxGalleryPreviewKind.Accounting,
+            RibbonComboBoxGalleryPreviewKind.ShortDate,
+            RibbonComboBoxGalleryPreviewKind.LongDate,
+            RibbonComboBoxGalleryPreviewKind.Time,
+            RibbonComboBoxGalleryPreviewKind.Percentage,
+            RibbonComboBoxGalleryPreviewKind.Fraction,
+            RibbonComboBoxGalleryPreviewKind.Scientific,
+            RibbonComboBoxGalleryPreviewKind.Text,
+            RibbonComboBoxGalleryPreviewKind.More);
         formattingSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options[selectedIndex]");
         formattingSource.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Number)");
     }

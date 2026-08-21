@@ -65,6 +65,7 @@ public static class HomeRibbonDefinition
                 {
                     Width = 124,
                     KeyTip = "N",
+                    PresentationKind = RibbonComboBoxPresentationKind.Gallery,
                     Items = new[] { "General", "Number", "Currency", "Accounting", "Date", "Percentage", "Text" }
                 })
                 .RowBreak()

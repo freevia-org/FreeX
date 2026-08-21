@@ -31,8 +31,7 @@ public static class FreeXRibbonCompositionPlanner
 
         IReadOnlyList<RibbonComboBoxChoice>? choices = combo.CommandId.Value switch
         {
-            "Number Format" => HomeNumberFormatDropdownPlanner.Options
-                .Select(option => new RibbonComboBoxChoice(option.Value, option.Label)).ToArray(),
+            "Number Format" => HomeNumberFormatGalleryPlanner.Choices,
             "Scale Width" or "Scale Height" => PageLayoutInputParser.ScalePageCountChoices
                 .Select(choice => new RibbonComboBoxChoice(choice.Value, choice.Label)).ToArray(),
             "Scale Percent" => PageLayoutInputParser.ScalePercentChoices

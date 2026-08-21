@@ -27,14 +27,45 @@ public sealed record RibbonCheckBox(RibbonCommandId CommandId, string Label)
 public sealed record RibbonLabel(RibbonCommandId CommandId, string Label)
     : RibbonControl(CommandId, Label);
 
+public enum RibbonComboBoxPresentationKind
+{
+    Standard,
+    Gallery,
+}
+
+public enum RibbonComboBoxGalleryPreviewKind
+{
+    None,
+    General,
+    Number,
+    Currency,
+    Accounting,
+    ShortDate,
+    LongDate,
+    Time,
+    Percentage,
+    Fraction,
+    Scientific,
+    Text,
+    More,
+}
+
 /// <summary>
-/// A closed combo-box choice whose stable value is command protocol and whose label is presentation.
+/// A combo-box choice whose stable value is command protocol and whose label is presentation.
+/// Gallery metadata is optional so standard combos keep their compact label-only presentation.
 /// </summary>
-public sealed record RibbonComboBoxChoice(string Value, string Label);
+public sealed record RibbonComboBoxChoice(
+    string Value,
+    string Label,
+    string? Description = null,
+    RibbonComboBoxGalleryPreviewKind PreviewKind = RibbonComboBoxGalleryPreviewKind.None);
 
 public sealed record RibbonComboBox(RibbonCommandId CommandId, string Label)
     : RibbonControl(CommandId, Label)
 {
+    /// <summary>Closed selector and opened-popup presentation contract for the renderer.</summary>
+    public RibbonComboBoxPresentationKind PresentationKind { get; init; } = RibbonComboBoxPresentationKind.Standard;
+
     /// <summary>
     /// Typed choices for semantic/enumerated controls. Renderers display <see cref="RibbonComboBoxChoice.Label"/>
     /// and dispatch or match state with <see cref="RibbonComboBoxChoice.Value"/>.

@@ -50,7 +50,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.HandleKeyTip(Key.N);
 
             harness.SelectedRibbonTabHeader.Should().Be("Home");
-            harness.NumberFormatDropDownIsOpen.Should().BeTrue();
+            harness.NumberFormatGalleryIsOpen.Should().BeTrue();
             harness.NumberFormatBoxHasKeyboardFocus.Should().BeTrue();
             harness.KeyTipScope.Should().Be("None");
         });

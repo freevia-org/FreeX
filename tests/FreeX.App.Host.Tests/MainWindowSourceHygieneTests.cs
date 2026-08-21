@@ -171,6 +171,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("numberFormatBox.IsDropDownOpen = true");
         source.Should().Contain("FindOpenPopupChild(numberFormatBox)");
         source.Should().Contain("FindRenderedRibbonControl(\"Number Format\") as ComboBox");
+        source.Should().Contain("RibbonGalleryComboBox");
         source.Should().Contain("HomeNumberFormatDropdownTourManifest");
         source.Should().Contain("interactive:home-number-format:opened");
         source.Should().Contain("RenderTargetBitmap-combobox-popup-child");
@@ -357,7 +358,7 @@ public sealed partial class MainWindowSourceHygieneTests
         startupSource.IndexOf("TryApplyDeclarativeRibbon();", StringComparison.Ordinal).Should().BeLessThan(
             startupSource.IndexOf("ApplyOptionsToView();", StringComparison.Ordinal));
         declarativeSource.Should().Contain("FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), UiText.Get)");
-        compositionSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options");
+        compositionSource.Should().Contain("HomeNumberFormatGalleryPlanner.Choices");
         startupSource.Should().Contain("CreateNewWorkbook();");
         startupSource.Should().NotContain("UpdateRibbonCompactMode");
     }

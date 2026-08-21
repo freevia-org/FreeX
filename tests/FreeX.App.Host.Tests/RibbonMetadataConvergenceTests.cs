@@ -85,6 +85,7 @@ public sealed class RibbonMetadataConvergenceTests
 
         combos["Number Format"].Choices.Select(choice => choice.Value)
             .Should().Equal(HomeNumberFormatDropdownPlanner.Options.Select(option => option.Value));
+        combos["Number Format"].PresentationKind.Should().Be(RibbonComboBoxPresentationKind.Gallery);
         combos["Scale Width"].Choices.Select(choice => choice.Value)
             .Should().Equal("auto", "1", "2", "3", "4", "5", "10");
         combos["Scale Height"].Choices.Should().Equal(combos["Scale Width"].Choices);
