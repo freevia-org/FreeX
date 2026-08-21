@@ -22,6 +22,7 @@ public partial class MainWindow
     private double _lastSheetTabViewportContentWidth;
     private bool _sheetTabViewportRefreshQueued;
     private SheetTabsChromeRenderKey? _lastSheetTabsChromeRenderKey;
+    private bool _isOpeningSheetTabContextMenuFromKeyboard;
 
     private void RefreshSheetTabs()
     {
@@ -1390,13 +1391,21 @@ public partial class MainWindow
                 return false;
         }
 
-        RebuildSheetTabContextMenu(contextMenu, target.DataContext as SheetTabViewModel);
-        MenuKeyTipAssigner.AssignUniqueKeyTips(contextMenu.Items.OfType<MenuItem>());
-        contextMenu.Opened -= SheetTabContextMenu_Opened;
-        contextMenu.Opened += SheetTabContextMenu_Opened;
-        contextMenu.PlacementTarget = target;
-        contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-        contextMenu.IsOpen = true;
+        _isOpeningSheetTabContextMenuFromKeyboard = true;
+        try
+        {
+            RebuildSheetTabContextMenu(contextMenu, target.DataContext as SheetTabViewModel);
+            MenuKeyTipAssigner.AssignUniqueKeyTips(contextMenu.Items.OfType<MenuItem>());
+            contextMenu.Opened -= SheetTabContextMenu_Opened;
+            contextMenu.Opened += SheetTabContextMenu_Opened;
+            contextMenu.PlacementTarget = target;
+            contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            contextMenu.IsOpen = true;
+        }
+        finally
+        {
+            _isOpeningSheetTabContextMenuFromKeyboard = false;
+        }
         return true;
     }
 
@@ -1467,6 +1476,17 @@ public partial class MainWindow
             }
             AddSheetTabContextMenuItem(menu.Items, command);
         }
+
+        if (!_isOpeningSheetTabContextMenuFromKeyboard)
+            HideSheetTabContextMenuInputGestures(menu);
+    }
+
+    // Mouse-opened context menus should use the same quiet, command-first chrome as Excel.
+    // Keyboard opening immediately reapplies the key tips in TryOpenFocusedSheetTabContextMenu.
+    private static void HideSheetTabContextMenuInputGestures(ContextMenu menu)
+    {
+        foreach (var item in menu.Items.OfType<MenuItem>())
+            item.InputGestureText = string.Empty;
     }
 
     // freex-subtotals-outline-F2: WPF host mirror of the Avalonia shell's "Outline Settings..." sheet-tab

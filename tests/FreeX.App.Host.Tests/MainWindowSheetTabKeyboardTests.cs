@@ -620,6 +620,8 @@ public sealed class MainWindowSheetTabKeyboardTests
         source.Should().Contain("private void SheetTabChrome_ContextMenuOpening(object sender, ContextMenuEventArgs e)");
         source.Should().Contain("private void RebuildSheetTabContextMenu(ContextMenu menu, SheetTabViewModel? tab)");
         source.Should().Contain("SheetTabContextMenuPlanner.BuildSheetTabCommands(state)");
+        source.Should().Contain("HideSheetTabContextMenuInputGestures(menu);");
+        source.Should().Contain("item.InputGestureText = string.Empty;");
         source.Should().Contain("private SheetTabContextMenuState BuildSheetTabContextMenuState(SheetTabViewModel? tab)");
         source.Should().Contain("CanUnhideSheet: hiddenSheetCount > 0");
         source.Should().Contain("CanUngroupSheets: _groupedSheetIds.Count > 1");

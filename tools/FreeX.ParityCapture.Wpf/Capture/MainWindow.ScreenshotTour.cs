@@ -13652,7 +13652,6 @@ public partial class MainWindow
 
         try
         {
-            MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
             menu.PlacementTarget = target;
             menu.Placement = PlacementMode.Bottom;
             menu.IsOpen = true;
