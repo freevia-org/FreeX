@@ -25,6 +25,15 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void PageLayoutShot_CropsCommentsToTheWordComparablePageSurface()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));
+
+        source.Should().MatchRegex("ShouldCaptureWordComparablePageSurface\\([\\s\\S]*?string.Equals\\(scenarioId, \"f2-comments\", StringComparison.OrdinalIgnoreCase\\)");
+        source.Should().Contain("CropToDocumentPageSurface(");
+    }
+
+    [Fact]
     public void PageLayoutShot_EmitsSharedVisualEvidenceManifestAndTrustChecks()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));

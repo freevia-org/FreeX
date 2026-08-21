@@ -1251,6 +1251,7 @@ static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "wordart-watermark-stress", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "wordart-picture-watermark-layout", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-tracked-changes", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "f2-comments", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-section-landscape", StringComparison.OrdinalIgnoreCase);
 
 static bool ShouldNormalizeSectionPageSurfaceToWordBaseline(string scenarioId) =>
