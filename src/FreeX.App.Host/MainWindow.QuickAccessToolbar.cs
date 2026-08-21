@@ -101,7 +101,7 @@ public partial class MainWindow
         return button;
     }
 
-    // FreeX-side QAT render options: the shared renderer draws the button (TitleBarQatButton on the navy
+    // FreeX-side QAT render options: the shared renderer draws the button (TitleBarQatButton on the
     // caption, or RibbonBtn when shown below the ribbon) with FreeX's own RibbonIcon glyph factory so the
     // icons match the rest of the app. FreeX keeps localized RibbonTooltip metadata, name
     // registration (tracked for rebuild) and click (sender/args), so those shared hooks are turned off.
@@ -110,10 +110,10 @@ public partial class MainWindow
         double width,
         Thickness margin)
     {
-        var iconBrushKey = showBelowRibbon ? "FreeXTextBrush" : "FreeXWhiteBrush";
+        var iconBrushKey = showBelowRibbon ? "FreeXTextBrush" : "FreeXTitleBarForegroundBrush";
         var iconBrushFallback = showBelowRibbon
             ? new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F))
-            : (Brush)Brushes.White;
+            : new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F));
         var iconBrush = TryFindResource(iconBrushKey) as Brush ?? iconBrushFallback;
         return new SharedQatOptions
         {

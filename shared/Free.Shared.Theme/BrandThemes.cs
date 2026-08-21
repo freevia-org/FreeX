@@ -45,6 +45,8 @@ public static class BrandThemes
     /// <summary>
     /// FreeX (spreadsheet) brand theme.
     /// Colors are BYTE-IDENTICAL to <c>src/FreeX.App.Host/Resources/ThemeResources.xaml</c>.
+    /// The default title bar follows the light Office surface while alternate dark themes retain
+    /// a white title-bar foreground through the dedicated semantic role.
     /// </summary>
     public static readonly Theme FreeX = new(
         Name: "FreeX",
@@ -53,11 +55,12 @@ public static class BrandThemes
             AccentDark:           ThemeColor.FromHex("#17324D"),
             AccentSoft:           ThemeColor.FromHex("#E6F6FA"),
             AccentPressed:        ThemeColor.FromHex("#CCEAF2"),
-            TitleBar:             ThemeColor.FromHex("#17324D"),
-            TitleBarHover:        ThemeColor.FromHex("#0F6D8C"),
-            TitleBarPressed:      ThemeColor.FromHex("#10253A"),
-            TitleBarDisabled:     ThemeColor.FromHex("#8BA6B8"),
-            TitleBarButtonBorder: ThemeColor.FromHex("#55FFFFFF"),  // alpha 0x55
+            TitleBar:             ThemeColor.FromHex("#F3F4F6"),
+            TitleBarForeground:   ThemeColor.FromHex("#1F1F1F"),
+            TitleBarHover:        ThemeColor.FromHex("#E2E6EA"),
+            TitleBarPressed:      ThemeColor.FromHex("#D0D4D9"),
+            TitleBarDisabled:     ThemeColor.FromHex("#767676"),
+            TitleBarButtonBorder: ThemeColor.FromHex("#C8CCD0"),
             RibbonButtonHover:    ThemeColor.FromHex("#BEE6FD"),
             RibbonInlineDivider:  ThemeColor.FromHex("#CCCCCC"),
             Text:                 ThemeColor.FromHex("#1F1F1F"),
@@ -103,6 +106,7 @@ public static class BrandThemes
             AccentPressed:        ThemeColor.FromHex("#CFEAF1"),   // FreeWRibbonResources.xaml FreeXAccentPressedBrush
             // ── Title bar: sourced from MainWindow.cs TitleBarColor (#17324D). ──
             TitleBar:             ThemeColor.FromHex("#17324D"),
+            TitleBarForeground:   s_white,
             TitleBarHover:        ThemeColor.FromHex("#0F6D8C"),
             TitleBarPressed:      ThemeColor.FromHex("#10253A"),
             TitleBarDisabled:     ThemeColor.FromHex("#8BA6B8"),
@@ -151,6 +155,7 @@ public static class BrandThemes
             AccentPressed:        ThemeColor.FromHex("#F2D2CB"),
             // ── TitleBar: sourced from MainWindow.cs ChromeOptions.TitleBarColor (#B7472A) ──
             TitleBar:             ThemeColor.FromHex("#B7472A"),
+            TitleBarForeground:   s_white,
             TitleBarHover:        ThemeColor.FromHex("#C95A3D"),   // BackstageAccent.Hover (#C95A3D)
             TitleBarPressed:      ThemeColor.FromHex("#8F3721"),   // BackstageAccent.Selected (#8F3721)
             TitleBarDisabled:     ThemeColor.FromHex("#8BA6B8"),
@@ -186,6 +191,7 @@ public static class BrandThemes
             AccentSoft:           ThemeColor.FromHex("#FDF0E6"),
             AccentPressed:        ThemeColor.FromHex("#F9D9BC"),
             TitleBar:             ThemeColor.FromHex("#202124"),   // near-black title bar
+            TitleBarForeground:   s_white,
             TitleBarHover:        ThemeColor.FromHex("#C8651B"),
             TitleBarPressed:      ThemeColor.FromHex("#161719"),
             TitleBarDisabled:     ThemeColor.FromHex("#6E7074"),

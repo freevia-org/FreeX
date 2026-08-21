@@ -1,7 +1,7 @@
 namespace Free.Shared.Theme;
 
 /// <summary>
-/// The 22 semantic color roles that drive all chrome surfaces in a FreeFamily app.
+/// The 23 semantic color roles that drive all chrome surfaces in a FreeFamily app.
 /// Seeded from FreeX's ThemeResources.xaml palette; other apps provide alternate values.
 /// </summary>
 public sealed record ThemeColors(
@@ -10,6 +10,7 @@ public sealed record ThemeColors(
     ThemeColor AccentSoft,
     ThemeColor AccentPressed,
     ThemeColor TitleBar,
+    ThemeColor TitleBarForeground,
     ThemeColor TitleBarHover,
     ThemeColor TitleBarPressed,
     ThemeColor TitleBarDisabled,

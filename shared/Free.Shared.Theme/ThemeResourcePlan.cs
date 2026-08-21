@@ -75,6 +75,7 @@ public sealed record ThemeResourcePlan(
                 Color("AccentSoft", colors.AccentSoft),
                 Color("AccentPressed", colors.AccentPressed),
                 Color("TitleBar", colors.TitleBar),
+                Color("TitleBarForeground", colors.TitleBarForeground),
                 Color("TitleBarHover", colors.TitleBarHover),
                 Color("TitleBarPressed", colors.TitleBarPressed),
                 Color("TitleBarDisabled", colors.TitleBarDisabled),
