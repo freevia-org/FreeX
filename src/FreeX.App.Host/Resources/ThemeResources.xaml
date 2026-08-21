@@ -17,7 +17,8 @@
     <SolidColorBrush x:Key="FreeXRibbonSurfaceBrush" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="FreeXChromeSurfaceBrush" Color="#F7F8F8"/>
     <SolidColorBrush x:Key="FreeXSheetSurfaceBrush" Color="#F3F3F3"/>
-    <SolidColorBrush x:Key="FreeXStatusSurfaceBrush" Color="#17324D"/>
+    <SolidColorBrush x:Key="FreeXStatusSurfaceBrush" Color="#F3F4F6"/>
+    <SolidColorBrush x:Key="FreeXStatusForegroundBrush" Color="#1F1F1F"/>
     <SolidColorBrush x:Key="FreeXBorderBrush" Color="#DADCE0"/>
     <SolidColorBrush x:Key="FreeXBorderStrongBrush" Color="#C8CCD0"/>
     <SolidColorBrush x:Key="FreeXDangerBrush" Color="#C42B1C"/>

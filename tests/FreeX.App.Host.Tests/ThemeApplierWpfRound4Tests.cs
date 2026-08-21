@@ -42,19 +42,19 @@ public sealed class ThemeApplierWpfRound4Tests
     }
 
     [Fact]
-    public void WpfApplier_Midnight_StatusSurfaceBrush_IsNearBlack_NotNavy()
+    public void WpfApplier_Midnight_StatusSurfaceBrush_IsNearBlack_NotOfficeLight()
     {
-        // Default FreeX status surface is #17324D (navy); Midnight uses #202124 (near-black).
+        // Default FreeX status surface is #F3F4F6 (Office-light); Midnight uses #202124 (near-black).
         var defaultDict  = WpfThemeApplier.BuildResources(BrandThemes.FreeX,         "FreeX");
         var midnightDict = WpfThemeApplier.BuildResources(BrandThemes.FreeXMidnight, "FreeX");
 
         var defaultColor  = ((SolidColorBrush)defaultDict["FreeXStatusSurfaceBrush"]).Color;
         var midnightColor = ((SolidColorBrush)midnightDict["FreeXStatusSurfaceBrush"]).Color;
 
-        // Midnight status surface: near-black #202124
+        defaultColor.Should().Be(Color.FromRgb(0xF3, 0xF4, 0xF6));
         midnightColor.Should().Be(Color.FromRgb(0x20, 0x21, 0x24));
         midnightColor.Should().NotBe(defaultColor,
-            because: "FreeXMidnight replaces the navy status bar; DynamicResource makes this visible at runtime");
+            because: "FreeXMidnight replaces the Office-light status bar; DynamicResource makes this visible at runtime");
     }
 
     // ── Apply(Application, …) path — proves the runtime injection the XAML DynamicResource binds to ──

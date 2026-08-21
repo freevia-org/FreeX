@@ -29,6 +29,7 @@ public sealed class ThemeResourcePlanTests
             "ChromeSurface",
             "SheetSurface",
             "StatusSurface",
+            "StatusForeground",
             "Border",
             "BorderStrong",
             "Danger",

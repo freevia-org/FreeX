@@ -69,7 +69,8 @@ public static class BrandThemes
             RibbonSurface:        ThemeColor.FromHex("#FFFFFF"),
             ChromeSurface:        ThemeColor.FromHex("#F7F8F8"),
             SheetSurface:         ThemeColor.FromHex("#F3F3F3"),
-            StatusSurface:        ThemeColor.FromHex("#17324D"),
+            StatusSurface:        ThemeColor.FromHex("#F3F4F6"),
+            StatusForeground:     ThemeColor.FromHex("#1F1F1F"),
             Border:               ThemeColor.FromHex("#DADCE0"),
             BorderStrong:         ThemeColor.FromHex("#C8CCD0"),
             Danger:               ThemeColor.FromHex("#C42B1C"),
@@ -123,6 +124,7 @@ public static class BrandThemes
             SheetSurface:         s_sheetSurf,
             // ── Status bar: MainWindow.cs BuildStatusBar surface (#17324D). ──
             StatusSurface:        ThemeColor.FromHex("#17324D"),
+            StatusForeground:     s_white,
             Border:               s_border,
             BorderStrong:         s_borderStrong,
             Danger:               s_danger,
@@ -170,6 +172,7 @@ public static class BrandThemes
             SheetSurface:         s_sheetSurf,
             // ── StatusSurface: sourced from MainWindow.cs BuildStatusBar SolidColorBrush (#B7472A) ──
             StatusSurface:        ThemeColor.FromHex("#B7472A"),
+            StatusForeground:     s_white,
             Border:               s_border,
             BorderStrong:         s_borderStrong,
             Danger:               s_danger,
@@ -205,6 +208,7 @@ public static class BrandThemes
             ChromeSurface:        ThemeColor.FromHex("#F5F5F5"),
             SheetSurface:         s_sheetSurf,
             StatusSurface:        ThemeColor.FromHex("#202124"),
+            StatusForeground:     s_white,
             Border:               s_border,
             BorderStrong:         s_borderStrong,
             Danger:               s_danger,

@@ -73,7 +73,8 @@ public sealed class BrandThemesTests
     [Fact] public void FreeX_RibbonSurface_Is_FFFFFF()        => BrandThemes.FreeX.Colors.RibbonSurface.ToHex().Should().Be("#FFFFFF");
     [Fact] public void FreeX_ChromeSurface_Is_F7F8F8()        => BrandThemes.FreeX.Colors.ChromeSurface.ToHex().Should().Be("#F7F8F8");
     [Fact] public void FreeX_SheetSurface_Is_F3F3F3()         => BrandThemes.FreeX.Colors.SheetSurface.ToHex().Should().Be("#F3F3F3");
-    [Fact] public void FreeX_StatusSurface_Is_17324D()        => BrandThemes.FreeX.Colors.StatusSurface.ToHex().Should().Be("#17324D");
+    [Fact] public void FreeX_StatusSurface_Is_F3F4F6()        => BrandThemes.FreeX.Colors.StatusSurface.ToHex().Should().Be("#F3F4F6");
+    [Fact] public void FreeX_StatusForeground_Is_1F1F1F()    => BrandThemes.FreeX.Colors.StatusForeground.ToHex().Should().Be("#1F1F1F");
     [Fact] public void FreeX_Border_Is_DADCE0()               => BrandThemes.FreeX.Colors.Border.ToHex().Should().Be("#DADCE0");
     [Fact] public void FreeX_BorderStrong_Is_C8CCD0()         => BrandThemes.FreeX.Colors.BorderStrong.ToHex().Should().Be("#C8CCD0");
     [Fact] public void FreeX_Danger_Is_C42B1C()               => BrandThemes.FreeX.Colors.Danger.ToHex().Should().Be("#C42B1C");
@@ -129,6 +130,7 @@ public sealed class BrandThemesTests
     [Fact] public void FreeW_ChromeSurface_Is_F7F8F8()        => BrandThemes.FreeW.Colors.ChromeSurface.ToHex().Should().Be("#F7F8F8");
     [Fact] public void FreeW_SheetSurface_Is_F3F3F3()         => BrandThemes.FreeW.Colors.SheetSurface.ToHex().Should().Be("#F3F3F3");
     [Fact] public void FreeW_StatusSurface_Is_17324D()        => BrandThemes.FreeW.Colors.StatusSurface.ToHex().Should().Be("#17324D");
+    [Fact] public void FreeW_StatusForeground_Is_FFFFFF()     => BrandThemes.FreeW.Colors.StatusForeground.ToHex().Should().Be("#FFFFFF");
     [Fact] public void FreeW_Border_Is_DADCE0()               => BrandThemes.FreeW.Colors.Border.ToHex().Should().Be("#DADCE0");
     [Fact] public void FreeW_BorderStrong_Is_C8CCD0()         => BrandThemes.FreeW.Colors.BorderStrong.ToHex().Should().Be("#C8CCD0");
     [Fact] public void FreeW_Danger_Is_C42B1C()               => BrandThemes.FreeW.Colors.Danger.ToHex().Should().Be("#C42B1C");
@@ -184,6 +186,7 @@ public sealed class BrandThemesTests
     [Fact] public void FreeP_ChromeSurface_Is_F7F8F8()        => BrandThemes.FreeP.Colors.ChromeSurface.ToHex().Should().Be("#F7F8F8");
     [Fact] public void FreeP_SheetSurface_Is_F3F3F3()         => BrandThemes.FreeP.Colors.SheetSurface.ToHex().Should().Be("#F3F3F3");
     [Fact] public void FreeP_StatusSurface_Is_B7472A()        => BrandThemes.FreeP.Colors.StatusSurface.ToHex().Should().Be("#B7472A");
+    [Fact] public void FreeP_StatusForeground_Is_FFFFFF()     => BrandThemes.FreeP.Colors.StatusForeground.ToHex().Should().Be("#FFFFFF");
     [Fact] public void FreeP_Border_Is_DADCE0()               => BrandThemes.FreeP.Colors.Border.ToHex().Should().Be("#DADCE0");
     [Fact] public void FreeP_BorderStrong_Is_C8CCD0()         => BrandThemes.FreeP.Colors.BorderStrong.ToHex().Should().Be("#C8CCD0");
     [Fact] public void FreeP_Danger_Is_C42B1C()               => BrandThemes.FreeP.Colors.Danger.ToHex().Should().Be("#C42B1C");

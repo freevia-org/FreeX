@@ -59,6 +59,8 @@ public sealed record ProductThemeResourceProfile(string KeyPrefix, string BadgeC
 
     public ThemeResourceDescriptor StatusSurfaceBrush => Brush("StatusSurface");
 
+    public ThemeResourceDescriptor StatusForegroundBrush => Brush("StatusForeground");
+
     public ThemeResourceDescriptor StatusBarHeight => Metric("StatusBarHeight");
 
     public ThemeResourceDescriptor StatusBarTextFontSize => FontSize("StatusBarText");

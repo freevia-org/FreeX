@@ -51,7 +51,7 @@ public sealed class ThemeApplierWpfTests
             "FreeXTitleBarButtonBorderBrush", "FreeXRibbonButtonHoverBrush",
             "FreeXTextBrush", "FreeXMutedTextBrush", "FreeXSubtleTextBrush",
             "FreeXRibbonSurfaceBrush", "FreeXChromeSurfaceBrush", "FreeXSheetSurfaceBrush",
-            "FreeXStatusSurfaceBrush", "FreeXBorderBrush", "FreeXBorderStrongBrush",
+            "FreeXStatusSurfaceBrush", "FreeXStatusForegroundBrush", "FreeXBorderBrush", "FreeXBorderStrongBrush",
             "FreeXDangerBrush", "FreeXWhiteBrush"
         };
         foreach (var key in expected)

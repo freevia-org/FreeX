@@ -7,6 +7,7 @@ public sealed class ThemeResourceLookupTests
     {
         ProductThemeResourceProfiles.FreeX.TitleBarBrush.PrimaryKey.Should().Be("FreeXTitleBarBrush");
         ProductThemeResourceProfiles.FreeW.StatusSurfaceBrush.PrimaryKey.Should().Be("FreeWStatusSurfaceBrush");
+        ProductThemeResourceProfiles.FreeW.StatusForegroundBrush.PrimaryKey.Should().Be("FreeWStatusForegroundBrush");
         ProductThemeResourceProfiles.FreeP.StatusBarHeight.PrimaryKey.Should().Be("FreePStatusBarHeight");
 
         ProductThemeResourceProfiles.FreeW.BadgeBrush.PrimaryKey.Should().Be("FreeWAccentBrush");
@@ -76,6 +77,8 @@ public sealed class ThemeResourceLookupTests
             .Should().Be(profile.TitleBarBrush.PrimaryKey);
         plan.Colors.Single(resource => resource.Role == "StatusSurface").BrushKey
             .Should().Be(profile.StatusSurfaceBrush.PrimaryKey);
+        plan.Colors.Single(resource => resource.Role == "StatusForeground").BrushKey
+            .Should().Be(profile.StatusForegroundBrush.PrimaryKey);
         plan.Metrics.Single(resource => resource.Role == "StatusBarHeight").Key
             .Should().Be(profile.StatusBarHeight.PrimaryKey);
         plan.Typography.Single(resource => resource.Role == "StatusBarText").FontSizeKey

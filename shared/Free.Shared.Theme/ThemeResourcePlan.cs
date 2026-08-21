@@ -89,6 +89,7 @@ public sealed record ThemeResourcePlan(
                 Color("ChromeSurface", colors.ChromeSurface),
                 Color("SheetSurface", colors.SheetSurface),
                 Color("StatusSurface", colors.StatusSurface),
+                Color("StatusForeground", colors.StatusForeground),
                 Color("Border", colors.Border),
                 Color("BorderStrong", colors.BorderStrong),
                 Color("Danger", colors.Danger),
