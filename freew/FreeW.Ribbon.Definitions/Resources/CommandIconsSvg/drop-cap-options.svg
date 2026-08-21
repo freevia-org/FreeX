@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Drop Cap Options">
   <rect width="32" height="32" fill="none"/>
-  <text x="12" y="16" font-size="15" fill="#0F6D8C" font-family="Georgia,Times New Roman,serif" font-weight="700" text-anchor="middle" dominant-baseline="central">A</text>
+  <text x="12" y="16" font-size="15" fill="#A26714" font-family="Georgia,Times New Roman,serif" font-weight="700" text-anchor="middle" dominant-baseline="central">A</text>
   <!-- gear / options indicator -->
   <circle cx="23" cy="23" r="5" fill="none" stroke="#242424" stroke-width="1.3"/>
   <circle cx="23" cy="23" r="2" fill="#242424"/>

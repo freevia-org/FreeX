@@ -6,7 +6,7 @@
   <line x1="8" y1="16" x2="24" y2="16" stroke="#242424" stroke-width="1.1"/>
   <line x1="8" y1="21" x2="24" y2="21" stroke="#242424" stroke-width="1.1"/>
   <!-- Filter funnel accent -->
-  <path d="M8 8h16l-6 5v5l-4-2V13z" fill="#0F6D8C" opacity="0.9"/>
+  <path d="M8 8h16l-6 5v5l-4-2V13z" fill="#A26714" opacity="0.9"/>
   <!-- Sort arrow -->
-  <path d="M21 17v6M21 23l-2-2.5M21 23l2-2.5" fill="none" stroke="#0F6D8C" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M21 17v6M21 23l-2-2.5M21 23l2-2.5" fill="none" stroke="#A26714" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

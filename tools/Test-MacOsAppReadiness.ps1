@@ -2,7 +2,7 @@ param(
     [string]$ProjectRoot = "",
     [string]$AvaloniaProjectPath = "src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj",
     [string]$InfoPlistPath = "src\FreeX.App.Avalonia\Packaging\macos\Info.plist",
-    [string]$IconPath = "src\FreeX.App.Avalonia\Packaging\macos\FreeX.icns",
+    [string]$IconPath = "shared\Free.Shared.Shell\Resources\FreeX.icns",
     [string]$WorkflowPath = ".github\workflows\macos-app.yml",
     [string[]]$PortableSourceRoots = @(
         "src\FreeX.App.Avalonia",
@@ -370,7 +370,7 @@ function Test-MacOsIcon {
     }
 
     Assert-True -Condition ($offset -eq $bytes.Length) -Message "macOS app icon entries must end at the file length."
-    foreach ($entryType in @("icp4", "icp5", "ic08")) {
+    foreach ($entryType in @("ic07", "ic08", "ic09")) {
         Assert-True -Condition ($entryTypes -contains $entryType) -Message "macOS app icon must include '$entryType'."
     }
 
@@ -429,7 +429,7 @@ function Test-AvaloniaProject {
     }
 
     $contentItems = @(Get-ProjectItems -Project $project -Name "Content" | ForEach-Object { [string]$_.Include })
-    Assert-True -Condition ($contentItems -contains "Packaging\macos\FreeX.icns") -Message "Avalonia app project must include the macOS app icon as content."
+    Assert-True -Condition ($contentItems -contains "..\..\shared\Free.Shared.Shell\Resources\FreeX.icns") -Message "Avalonia app project must include the shared macOS app icon as content."
 
     $macOsSourceRemoves = @(Get-ProjectItemNodes -Project $project -Name "Compile" | Where-Object { $_.GetAttribute("Remove") -eq "MacOs\**\*.cs" })
     Assert-True -Condition ($macOsSourceRemoves.Count -eq 1) -Message "Avalonia app project must exclude MacOs source from non-macOS target frameworks."
@@ -588,7 +588,7 @@ function Test-MacOsWorkflow {
         "-p:PublishSingleFile=false",
         '--output "$app/Contents/MacOS"',
         "cp src/FreeX.App.Avalonia/Packaging/macos/Info.plist",
-        'cp src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns "$app/Contents/Resources/FreeX.icns"',
+        'cp shared/Free.Shared.Shell/Resources/FreeX.icns "$app/Contents/Resources/FreeX.icns"',
         "plutil -lint",
         'test -f "$app/Contents/MacOS/FreeX"',
         'test -x "$app/Contents/MacOS/FreeX"',

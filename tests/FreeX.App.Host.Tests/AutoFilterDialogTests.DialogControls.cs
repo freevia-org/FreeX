@@ -114,6 +114,9 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("CreateMenuCommandButton(UiText.Get(\"AutoFilter_ClearFilterFrom2\"), RibbonCommandIconKind.Clear)");
         source.Should().Contain("SetMenuCommandButtonContent(_textFiltersButton, FormatCascadeMenuHeader(UiText.Get(\"AutoFilter_TextFilters\")), RibbonCommandIconKind.Filter)");
         source.Should().Contain("RibbonIconFactory.CreateIcon(new RibbonCommandIcon(iconKind), 14, Brushes.Black)");
+        source.Should().Contain("new AccessText");
+        source.Should().Contain("CreateMenuCommandButtonTemplate()");
+        source.Should().Contain("AutoFilterMenuCommandContent");
     }
 
     [Fact]
@@ -207,8 +210,7 @@ public sealed partial class AutoFilterDialogTests
             try
             {
                 var clearButton = WpfTestTree.FindVisualDescendants<Button>(dialog)
-                    .Single(button => WpfTestTree.FindVisualDescendants<TextBlock>(button)
-                        .Any(text => text.Text.Contains("Clear Filter From", StringComparison.Ordinal)));
+                    .Single(button => HasButtonCaption(button, "Clear Filter From"));
 
                 clearButton.IsEnabled.Should().BeFalse();
             }
@@ -237,10 +239,8 @@ public sealed partial class AutoFilterDialogTests
             try
             {
                 var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog).ToList();
-                var sortByColor = buttons.Single(button => WpfTestTree.FindVisualDescendants<TextBlock>(button)
-                    .Any(text => text.Text.StartsWith("Sort by Color", StringComparison.Ordinal)));
-                var filterByColor = buttons.Single(button => WpfTestTree.FindVisualDescendants<TextBlock>(button)
-                    .Any(text => text.Text.StartsWith("Filter by Color", StringComparison.Ordinal)));
+                var sortByColor = buttons.Single(button => HasButtonCaption(button, "Sort by Color"));
+                var filterByColor = buttons.Single(button => HasButtonCaption(button, "Filter by Color"));
 
                 sortByColor.IsEnabled.Should().BeFalse();
                 filterByColor.IsEnabled.Should().BeFalse();
@@ -251,6 +251,10 @@ public sealed partial class AutoFilterDialogTests
             }
         });
     }
+
+    private static bool HasButtonCaption(Button button, string caption) =>
+        WpfTestTree.FindVisualDescendants<AccessText>(button)
+            .Any(text => text.Text.Contains(caption, StringComparison.Ordinal));
 
     [Fact]
     public void DialogControls_ConsumeSharedMenuPlanRowsWithoutOwningPopupPolicy()

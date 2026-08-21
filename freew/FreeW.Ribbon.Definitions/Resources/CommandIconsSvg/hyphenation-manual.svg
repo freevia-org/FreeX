@@ -2,8 +2,8 @@
   <rect width="32" height="32" fill="none"/>
   <!-- "a-b" with a hand/pointer cue: manual hyphenation -->
   <text x="9.5" y="16" font-size="13" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">a</text>
-  <path d="M14 16h5" fill="none" stroke="#0F6D8C" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M14 16h5" fill="none" stroke="#A26714" stroke-width="2.2" stroke-linecap="round"/>
   <text x="23.5" y="16" font-size="13" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">b</text>
-  <path d="M11 24l5 2 5-2" fill="none" stroke="#0F6D8C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M16 21v5" fill="none" stroke="#0F6D8C" stroke-width="2" stroke-linecap="round"/>
+  <path d="M11 24l5 2 5-2" fill="none" stroke="#A26714" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M16 21v5" fill="none" stroke="#A26714" stroke-width="2" stroke-linecap="round"/>
 </svg>

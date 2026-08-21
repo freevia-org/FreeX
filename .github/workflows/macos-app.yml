@@ -236,7 +236,7 @@ jobs:
           test -x "$validation_host"
 
           cp src/FreeX.App.Avalonia/Packaging/macos/Info.plist "$app/Contents/Info.plist"
-          cp src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns "$app/Contents/Resources/FreeX.icns"
+          cp shared/Free.Shared.Shell/Resources/FreeX.icns "$app/Contents/Resources/FreeX.icns"
           plutil -lint "$app/Contents/Info.plist"
           chmod +x "$app/Contents/MacOS/FreeX"
           test -f "$app/Contents/MacOS/FreeX"

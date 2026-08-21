@@ -218,9 +218,32 @@ public static class RibbonWpfRenderer
 
         var labelBorder = new Border();
         ApplyStyle(labelBorder, resourceHost, "RibbonGroupLabelBorder");
+        var labelPanel = new Grid();
+        labelPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        if (group.Launcher is not null)
+            labelPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
         var label = new TextBlock { Text = group.Header };
         ApplyStyle(label, resourceHost, "GroupLbl");
-        labelBorder.Child = label;
+        labelPanel.Children.Add(label);
+
+        if (group.Launcher is { } launcher)
+        {
+            var launcherControl = new RibbonButton(launcher.CommandId, launcher.TooltipTitle)
+            {
+                KeyTip = launcher.KeyTip,
+                TooltipTitle = launcher.TooltipTitle,
+                TooltipDescription = launcher.TooltipDescription
+            };
+            var launcherButton = new Button();
+            ApplyStyle(launcherButton, resourceHost, "RibbonGroupDialogLauncher");
+            launcherButton.Content = new TextBlock { Text = "\u2197" };
+            WireMetadata(launcherButton, launcherControl, registry, stateStore, options, attachMenu: false, resourceHost: resourceHost);
+            Grid.SetColumn(launcherButton, 1);
+            labelPanel.Children.Add(launcherButton);
+        }
+
+        labelBorder.Child = labelPanel;
         Grid.SetRow(labelBorder, 1);
         grid.Children.Add(labelBorder);
 

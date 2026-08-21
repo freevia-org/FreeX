@@ -22,11 +22,10 @@ public sealed partial class AutoFilterDialog
         {
             Visibility = visibility,
             HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
-            Padding = new Thickness(6, 3, 6, 3),
-            Margin = new Thickness(0, 0, 0, 2),
-            MinHeight = 24,
-            BorderThickness = new Thickness(0),
-            Background = Brushes.Transparent
+            Padding = new Thickness(5, 2, 5, 2),
+            Margin = new Thickness(0),
+            MinHeight = 22,
+            Template = CreateMenuCommandButtonTemplate()
         };
         SetMenuCommandButtonContent(button, content, iconKind);
         return button;
@@ -43,7 +42,7 @@ public sealed partial class AutoFilterDialog
             Children =
             {
                 RibbonIconFactory.CreateIcon(new RibbonCommandIcon(iconKind), 14, Brushes.Black),
-                new TextBlock
+                new AccessText
                 {
                     Text = content,
                     Margin = new Thickness(7, 0, 0, 0),
@@ -57,7 +56,45 @@ public sealed partial class AutoFilterDialog
 
     private static void AddFilterMenuSeparator(Panel stack)
     {
-        stack.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
+        stack.Children.Add(new Separator { Margin = new Thickness(0, 4, 0, 4) });
+    }
+
+    private static ControlTemplate CreateMenuCommandButtonTemplate()
+    {
+        var template = new ControlTemplate(typeof(Button));
+        var chrome = new FrameworkElementFactory(typeof(Border));
+        chrome.Name = "AutoFilterMenuCommandChrome";
+        chrome.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        chrome.SetValue(Border.BorderBrushProperty, Brushes.Transparent);
+        chrome.SetValue(Border.BorderThicknessProperty, new Thickness(0));
+        chrome.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+        chrome.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
+
+        var content = new FrameworkElementFactory(typeof(ContentPresenter));
+        content.Name = "AutoFilterMenuCommandContent";
+        content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
+        content.SetValue(ContentPresenter.ContentTemplateProperty, new TemplateBindingExtension(ContentControl.ContentTemplateProperty));
+        content.SetValue(ContentPresenter.ContentTemplateSelectorProperty, new TemplateBindingExtension(ContentControl.ContentTemplateSelectorProperty));
+        content.SetValue(ContentPresenter.ContentStringFormatProperty, new TemplateBindingExtension(ContentControl.ContentStringFormatProperty));
+        content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, true);
+        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, new TemplateBindingExtension(Control.HorizontalContentAlignmentProperty));
+        content.SetValue(FrameworkElement.VerticalAlignmentProperty, new TemplateBindingExtension(Control.VerticalContentAlignmentProperty));
+        chrome.AppendChild(content);
+
+        var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        hoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(229, 241, 251)), "AutoFilterMenuCommandChrome"));
+        template.Triggers.Add(hoverTrigger);
+
+        var pressedTrigger = new Trigger { Property = System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, Value = true };
+        pressedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(204, 228, 247)), "AutoFilterMenuCommandChrome"));
+        template.Triggers.Add(pressedTrigger);
+
+        var disabledTrigger = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+        disabledTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 0.48, "AutoFilterMenuCommandContent"));
+        template.Triggers.Add(disabledTrigger);
+
+        template.VisualTree = chrome;
+        return template;
     }
 
     private void FocusInitialKeyboardTarget()

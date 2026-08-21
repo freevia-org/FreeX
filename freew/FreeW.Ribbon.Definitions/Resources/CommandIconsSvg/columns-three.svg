@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Three Columns">
   <rect width="32" height="32" fill="none"/>
   <rect x="5.5" y="5" width="21" height="22" rx="1.5" fill="#ffffff" stroke="#242424" stroke-width="1.3"/>
-  <path d="M12.5 7.5v17M19.5 7.5v17" stroke="#0F6D8C" stroke-width="1.3" stroke-linecap="round"/>
+  <path d="M12.5 7.5v17M19.5 7.5v17" stroke="#A26714" stroke-width="1.3" stroke-linecap="round"/>
   <path d="M8 10h2.5M8 13.5h2.5M15 10h2M15 13.5h2M22 10h2M22 13.5h2" stroke="#8a8a8a" stroke-width="1" stroke-linecap="round"/>
 </svg>

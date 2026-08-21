@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Reset Picture">
   <rect width="32" height="32" fill="none"/>
   <rect x="6" y="8" width="14" height="11" rx="1.5" fill="#dcecff" stroke="#242424" stroke-width="1.5"/>
-  <circle cx="9.5" cy="11.5" r="1.4" fill="#0F6D8C"/>
+  <circle cx="9.5" cy="11.5" r="1.4" fill="#A26714"/>
   <path d="M8 17l3.5-3.5 2.5 2.5 2-2 2.5 3" fill="none" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M22 15.5a5.5 5.5 0 1 1-3.5-5.1" fill="none" stroke="#0F6D8C" stroke-width="1.6" stroke-linecap="round"/>
-  <path d="M22 10.5v5h-5" fill="none" stroke="#0F6D8C" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22 15.5a5.5 5.5 0 1 1-3.5-5.1" fill="none" stroke="#A26714" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M22 10.5v5h-5" fill="none" stroke="#A26714" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

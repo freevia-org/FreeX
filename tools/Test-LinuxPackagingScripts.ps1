@@ -176,7 +176,7 @@ function Test-TarballProduct {
 $sharedRelative = "tools/packaging/linux/package-linux.sh"
 $sharedPath = Join-Path $repoRoot $sharedRelative
 $entrypoints = @(
-    @{ Relative = "src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh"; TarballEntrypoint = (Join-Path $repoRoot "src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh"); Product = "freex"; Operation = "tarball"; Config = "freex.conf"; AppId = "io.github.tony-xmelon.freex"; BinaryName = "FreeX"; LauncherName = "freex"; LibraryDir = "freex"; StagePrefix = "freex"; MimeAsset = "io.github.tony-xmelon.freex.xml"; IconSource = "src/FreeX.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freex.svg" },
+    @{ Relative = "src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh"; TarballEntrypoint = (Join-Path $repoRoot "src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh"); Product = "freex"; Operation = "tarball"; Config = "freex.conf"; AppId = "io.github.tony-xmelon.freex"; BinaryName = "FreeX"; LauncherName = "freex"; LibraryDir = "freex"; StagePrefix = "freex"; MimeAsset = "io.github.tony-xmelon.freex.xml"; IconSource = "shared/Free.Shared.Shell/Resources/FreeX.svg" },
     @{ Relative = "src/FreeX.App.Avalonia/Packaging/linux/build-appimage.sh"; Product = "freex"; Operation = "appimage"; Config = "freex.conf"; AppId = "io.github.tony-xmelon.freex"; StagePrefix = "freex"; MimeAsset = "io.github.tony-xmelon.freex.xml" },
     @{ Relative = "src/FreeX.App.Avalonia/Packaging/linux/build-deb.sh"; Product = "freex"; Operation = "deb"; Config = "freex.conf"; AppId = "io.github.tony-xmelon.freex"; StagePrefix = "freex"; MimeAsset = "io.github.tony-xmelon.freex.xml" },
     @{ Relative = "freew/FreeW.App.Avalonia/Packaging/linux/package-linux-app.sh"; TarballEntrypoint = (Join-Path $repoRoot "freew/FreeW.App.Avalonia/Packaging/linux/package-linux-app.sh"); Product = "freew"; Operation = "tarball"; Config = "freew.conf"; AppId = "io.github.tony-xmelon.freew"; BinaryName = "FreeW"; LauncherName = "freew"; LibraryDir = "freew"; StagePrefix = "freew"; MimeAsset = ""; IconSource = "shared/Free.Shared.Shell/Resources/FreeW.svg" },
@@ -216,7 +216,10 @@ foreach ($entrypoint in $entrypoints) {
     $expectedConfigArgument = '--config "$repo_root/tools/packaging/linux/' + $entrypoint.Config + '"'
     Assert-Packaging $text.Contains($expectedConfigArgument) "Entrypoint '$($entrypoint.Relative)' has no explicit product config."
     Assert-Packaging $text.Contains('--asset-dir "$script_dir"') "Entrypoint '$($entrypoint.Relative)' must preserve its product asset directory."
-    if ($entrypoint.Product -eq 'freew') {
+    if ($entrypoint.Product -eq 'freex') {
+        Assert-Packaging $text.Contains('--icon-file "$repo_root/shared/Free.Shared.Shell/Resources/FreeX.svg"') "FreeX entrypoint '$($entrypoint.Relative)' must use the canonical shared icon."
+    }
+    elseif ($entrypoint.Product -eq 'freew') {
         Assert-Packaging $text.Contains('--icon-file "$repo_root/shared/Free.Shared.Shell/Resources/FreeW.svg"') "FreeW entrypoint '$($entrypoint.Relative)' must use the canonical shared icon."
     }
     Assert-Packaging (-not [regex]::IsMatch($text, '(?im)^\s*(eval|bash\s+-c|sh\s+-c)')) "Entrypoint '$($entrypoint.Relative)' must not build shell command strings."
@@ -313,6 +316,7 @@ if ($bashUsable) {
         # A non-default filename proves the generated install/uninstall scripts use config, not app_id.xml.
         $customAssetDir = Join-Path $sandbox 'custom-assets'
         Copy-Item -LiteralPath (Join-Path $repoRoot 'src/FreeX.App.Avalonia/Packaging/linux') -Destination $customAssetDir -Recurse
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'shared/Free.Shared.Shell/Resources/FreeX.svg') -Destination (Join-Path $customAssetDir 'io.github.tony-xmelon.freex.svg')
         $customMime = Join-Path $customAssetDir 'custom-workbook-mime.xml'
         Move-Item -LiteralPath (Join-Path $customAssetDir 'io.github.tony-xmelon.freex.xml') -Destination $customMime
         $customConfig = Join-Path $sandbox 'custom-freex.conf'

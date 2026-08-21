@@ -14,13 +14,13 @@ public sealed class AppGraphicAssetsTests
                 "FreeX",
                 "io.github.tony-xmelon.freex",
                 "X",
-                "#127a41",
+                "#0F6D8C",
                 "shared/Free.Shared.Shell/Resources/FreeX.ico",
                 "src/FreeX.App.Host/FreeX.App.Host.csproj",
-                "src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns",
+                "shared/Free.Shared.Shell/Resources/FreeX.icns",
                 "src/FreeX.App.Avalonia/Packaging/macos/Info.plist",
                 "src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj",
-                "src/FreeX.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freex.svg",
+                "shared/Free.Shared.Shell/Resources/FreeX.svg",
                 "src/FreeX.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freex.desktop")
         ];
 
@@ -30,7 +30,7 @@ public sealed class AppGraphicAssetsTests
                 "FreeW",
                 "io.github.tony-xmelon.freew",
                 "W",
-                "#1b5fa6",
+                "#A26714",
                 "shared/Free.Shared.Shell/Resources/FreeW.ico",
                 "freew/FreeW.App.Host/FreeW.App.Host.csproj",
                 "shared/Free.Shared.Shell/Resources/FreeW.icns",
@@ -39,6 +39,38 @@ public sealed class AppGraphicAssetsTests
                 "shared/Free.Shared.Shell/Resources/FreeW.svg",
                 "freew/FreeW.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freew.desktop")
         ];
+    }
+
+    [Fact]
+    public void FreeP_hosts_use_the_shared_owned_icon_family()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var resources = Path.Combine(root, "shared", "Free.Shared.Shell", "Resources");
+
+        AssertIcoFile(Path.Combine(resources, "FreeP.ico"));
+        AssertIcnsFile(Path.Combine(resources, "FreeP.icns"));
+        var svg = File.ReadAllText(Path.Combine(resources, "FreeP.svg"));
+        svg.Should().Contain("FREE").And.Contain(">P</text>").And.Contain("#A23B72").And.Contain("#4E213B");
+
+        var wpfProject = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj"));
+        var avaloniaProject = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"));
+        wpfProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeP.ico");
+        avaloniaProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeP.ico")
+            .And.Contain(@"shared\Free.Shared.Shell\Resources\FreeP.svg")
+            .And.Contain(@"shared\Free.Shared.Shell\Resources\FreeP.icns");
+    }
+
+    [Fact]
+    public void Canonical_svg_icons_share_the_FreeX_two_band_format()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        foreach (var product in new[] { "FreeX", "FreeW", "FreeP" })
+        {
+            var svg = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell", "Resources", $"{product}.svg"));
+            svg.Should().Contain("clip-path=\"url(#brandTile)\"")
+                .And.Contain("<text x=\"128\" y=\"74\" font-size=\"48\">FREE</text>")
+                .And.Contain("<text x=\"128\" y=\"206\" font-size=\"128\">");
+        }
     }
 
     [Theory]
@@ -181,7 +213,9 @@ public sealed class AppGraphicAssetsTests
         }
 
         offset.Should().Be(bytes.Length);
-        foreach (var requiredEntry in new[] { "icp4", "icp5", "ic08" })
+        // Pillow emits the modern PNG-backed ICNS entries. Cover the standard
+        // 128, 256, and 512 pixel desktop sizes used by current macOS shells.
+        foreach (var requiredEntry in new[] { "ic07", "ic08", "ic09" })
             entryTypes.Should().Contain(requiredEntry);
     }
 

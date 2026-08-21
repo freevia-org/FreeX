@@ -5,6 +5,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 
 namespace FreeW.App.Avalonia;
 
@@ -29,7 +31,7 @@ public sealed partial class RevealFormattingPane : SidePaneBase
 
     // ── Per-pane style constants ──────────────────────────────────────────────
 
-    private static readonly Color SectionHeadingColor = Color.FromRgb(0x17, 0x32, 0x4D);
+    private static readonly Color SectionHeadingColor = AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.AccentDark);
     private static readonly Color LabelColor = Color.FromRgb(0x60, 0x60, 0x60);
 
     // ── Construction ──────────────────────────────────────────────────────────

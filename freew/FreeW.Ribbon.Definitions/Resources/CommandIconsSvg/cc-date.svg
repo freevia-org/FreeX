@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Date Picker Content Control">
   <rect width="32" height="32" fill="none"/>
   <rect x="5.5" y="6.5" width="21" height="20" rx="2" fill="#ffffff" stroke="#242424" stroke-width="1.6"/>
-  <path d="M5.5 12h21" fill="none" stroke="#0F6D8C" stroke-width="2"/>
+  <path d="M5.5 12h21" fill="none" stroke="#A26714" stroke-width="2"/>
   <path d="M11 4.5v5M21 4.5v5" fill="none" stroke="#242424" stroke-width="1.7" stroke-linecap="round"/>
   <text x="16" y="23" font-size="9.5" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">15</text>
-  <path d="M22.5 22l2.5 2.5 4-5" fill="none" stroke="#0F6D8C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22.5 22l2.5 2.5 4-5" fill="none" stroke="#A26714" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

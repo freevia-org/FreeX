@@ -134,7 +134,7 @@ public sealed partial class MainWindow : Window
     // Identity/palette for the shared window shell.  Colors are resolved from the active theme tokens
     // (FreeWTitleBarBrush / FreeWAccentBrush) registered by WpfThemeApplier at startup, with literal
     // fallbacks so tests that construct MainWindow without a running Application still work.
-    // Values are BYTE-IDENTICAL to the previous literals when the default FreeW theme is active.
+    // The fallbacks are the canonical FreeW palette for tests that construct a window without an app.
     private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeW;
 
     private static ShellChromeOptions BuildChromeOptions() => new()
@@ -143,11 +143,11 @@ public sealed partial class MainWindow : Window
         TitleBarColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
             ThemeResources.TitleBarBrush,
             brush => brush.Color,
-            Color.FromRgb(0x17, 0x32, 0x4D)),
+            WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBar)),
         BadgeColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
             ThemeResources.BadgeBrush,
             brush => brush.Color,
-            Color.FromRgb(0x0F, 0x6D, 0x8C)),
+            WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.Accent)),
         CaptionHeight = 34,
         IconUri = "pack://application:,,,/FreeW.App.Host;component/Resources/FreeW.ico"
     };
@@ -1187,9 +1187,9 @@ public sealed partial class MainWindow : Window
         _zoomItem.Margin = new Thickness(6, 0, 10, 0);
 
         _status = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
-            // Status bar surface routed through FreeWStatusSurfaceBrush token (#17324D default).
+            // Status bar surface routed through the shared FreeW theme.
             WpfThemeResourceResolver.Find<Brush>(ThemeResources.StatusSurfaceBrush)
-                ?? new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
+                ?? new SolidColorBrush(WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.StatusSurface)),
             left,
             [_viewSwitchItem, _zoomItem])).Root;
         return _status;
@@ -1562,7 +1562,7 @@ public sealed partial class MainWindow : Window
             {
                 Text = section.Heading,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
+                Foreground = new SolidColorBrush(WpfThemeApplier.ToColor(Program.ActiveTheme.Colors.AccentDark)),
                 Margin = new Thickness(0, 10, 0, 4)
             });
 
@@ -1765,7 +1765,7 @@ public sealed partial class MainWindow : Window
         {
             Text = presentation.CaptionText,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))
+            Foreground = new SolidColorBrush(WpfThemeApplier.ToColor(Program.ActiveTheme.Colors.AccentDark))
         });
         if (presentation.SnippetText.Length > 0)
             panel.Children.Add(new TextBlock
@@ -3387,8 +3387,8 @@ public sealed partial class MainWindow : Window
             registry,
             stateStore,
             FileTabHeader: "File",
-            FileTabAccent: Color.FromRgb(0x0F, 0x6D, 0x8C),
-            FileTabHover: Color.FromRgb(0x0B, 0x55, 0x6E),
+            FileTabAccent: WpfThemeApplier.ToColor(Program.ActiveTheme.Colors.Accent),
+            FileTabHover: WpfThemeApplier.ToColor(Program.ActiveTheme.Colors.AccentDark),
             ShowBackstage)
         {
             EnableContextualTabs = true,

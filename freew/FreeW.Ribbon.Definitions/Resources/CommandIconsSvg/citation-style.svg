@@ -2,5 +2,5 @@
   <rect width="32" height="32" fill="none"/>
   <text x="13" y="16" font-size="21" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">CS</text>
 
-  <path d="M7 25h18" stroke="#0F6D8C" stroke-width="2" stroke-linecap="round"/>
+  <path d="M7 25h18" stroke="#A26714" stroke-width="2" stroke-linecap="round"/>
 </svg>

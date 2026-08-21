@@ -16,7 +16,7 @@ public sealed class FreeWChromeBrushTokenTests
 {
     /// <summary>
     /// Applying the default <see cref="BrandThemes.FreeW"/> theme with prefix "FreeW" produces
-    /// <c>FreeWAccentBrush</c> = #0F6D8C, byte-identical to the previous hardcoded value.
+    /// <c>FreeWAccentBrush</c> uses the canonical amber accent #A26714.
     /// </summary>
     [Fact]
     public void BuildResources_FreeWTheme_RegistersDefaultAccentBrush()
@@ -25,15 +25,15 @@ public sealed class FreeWChromeBrushTokenTests
 
         var brush = dict["FreeWAccentBrush"] as SolidColorBrush;
         brush.Should().NotBeNull("applier must register FreeWAccentBrush");
-        brush!.Color.R.Should().Be(0x0F);
-        brush.Color.G.Should().Be(0x6D);
-        brush.Color.B.Should().Be(0x8C);
+        brush!.Color.R.Should().Be(0xA2);
+        brush.Color.G.Should().Be(0x67);
+        brush.Color.B.Should().Be(0x14);
     }
 
     /// <summary>
     /// Applying <see cref="BrandThemes.FreeXMidnight"/> with prefix "FreeW" (the FREEW_THEME=midnight
     /// path) produces a <c>FreeWRibbonButtonHoverBrush</c> whose value (#F9D9BC) differs from the
-    /// FreeW default (#E6F6FA).  This proves that <c>DynamicResource FreeWRibbonButtonHoverBrush</c>
+    /// FreeW default (#F6E3C2).  This proves that <c>DynamicResource FreeWRibbonButtonHoverBrush</c>
     /// in <c>FreeWRibbonResources.xaml</c> will reskin when an alternate theme is applied.
     /// </summary>
     [Fact]
@@ -79,7 +79,7 @@ public sealed class FreeWChromeBrushTokenTests
 
     /// <summary>
     /// Verifies that <c>FreeWStatusSurfaceBrush</c> is registered with the default value
-    /// (#17324D — navy, matching the title bar) so the status-bar chrome tracks the token.
+    /// (#4B2F12 — umber, matching the title bar) so the status-bar chrome tracks the token.
     /// </summary>
     [Fact]
     public void BuildResources_FreeWTheme_RegistersDefaultStatusSurfaceBrush()
@@ -88,9 +88,9 @@ public sealed class FreeWChromeBrushTokenTests
 
         var brush = dict["FreeWStatusSurfaceBrush"] as SolidColorBrush;
         brush.Should().NotBeNull("applier must register FreeWStatusSurfaceBrush");
-        brush!.Color.R.Should().Be(0x17);
-        brush.Color.G.Should().Be(0x32);
-        brush.Color.B.Should().Be(0x4D);
+        brush!.Color.R.Should().Be(0x4B);
+        brush.Color.G.Should().Be(0x2F);
+        brush.Color.B.Should().Be(0x12);
     }
 
     /// <summary>

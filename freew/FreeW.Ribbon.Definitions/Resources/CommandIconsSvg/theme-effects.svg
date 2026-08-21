@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Theme Effects">
   <rect width="32" height="32" fill="none"/>
-  <rect x="7" y="8" width="12" height="12" rx="2" fill="#E6F6FA" stroke="#0F6D8C" stroke-width="1.3"/>
+  <rect x="7" y="8" width="12" height="12" rx="2" fill="#FBF0DC" stroke="#A26714" stroke-width="1.3"/>
   <rect x="12.5" y="13.5" width="12" height="12" rx="2" fill="#ffffff" stroke="#242424" stroke-width="1.3"/>
   <path d="M22.5 6.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="#F7D774" stroke="#242424" stroke-width="0.8" stroke-linejoin="round"/>
-  <path d="M10 23.5c2.2 2 5.8 2.7 10 1.8" fill="none" stroke="#0F6D8C" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M10 23.5c2.2 2 5.8 2.7 10 1.8" fill="none" stroke="#A26714" stroke-width="1.2" stroke-linecap="round"/>
 </svg>

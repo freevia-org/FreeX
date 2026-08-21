@@ -246,7 +246,7 @@ public sealed partial class AutoFilterDialog : Window
         stack.Children.Add(_sortDescendingButton);
         stack.Children.Add(_sortByColorUnavailableButton);
         _sortByColorGroup.Content = _sortByColorPanel;
-        _sortByColorGroup.Margin = new Thickness(0, 8, 0, 0);
+        _sortByColorGroup.Margin = new Thickness(0, 4, 0, 0);
         stack.Children.Add(_sortByColorGroup);
         AddFilterMenuSeparator(stack);
         _clearFilterButton.Click += (_, _) =>
@@ -261,18 +261,18 @@ public sealed partial class AutoFilterDialog : Window
         stack.Children.Add(_clearFilterButton);
         stack.Children.Add(_filterByColorUnavailableButton);
         _filterByColorGroup.Content = _filterByColorPanel;
-        _filterByColorGroup.Margin = new Thickness(0, 8, 0, 0);
+        _filterByColorGroup.Margin = new Thickness(0, 4, 0, 0);
         stack.Children.Add(_filterByColorGroup);
         foreach (var filterButton in new[] { _textFiltersButton, _numberFiltersButton, _dateFiltersButton })
         {
-            filterButton.Margin = new Thickness(0, 8, 0, 0);
+            filterButton.Margin = new Thickness(0, 4, 0, 0);
             filterButton.Click += (_, _) => TryOpenFilterFamilySubmenu(filterButton);
             stack.Children.Add(filterButton);
         }
 
         AddFilterMenuSeparator(stack);
-        _searchBoxHost.Margin = new Thickness(0, 8, 0, 6);
-        _searchBox.MinHeight = 24;
+        _searchBoxHost.Margin = new Thickness(0, 4, 0, 4);
+        _searchBox.MinHeight = 22;
         _searchBoxHost.Children.Add(_searchBox);
         _searchBoxHost.Children.Add(_searchWatermark);
         _searchBox.ToolTip = UiText.Get("AutoFilter_Search3");
@@ -293,8 +293,8 @@ public sealed partial class AutoFilterDialog : Window
         stack.Children.Add(_selectAllBox);
 
         _checklistBox.ItemsSource = _items;
-        _checklistBox.Height = 180;
-        _checklistBox.Margin = new Thickness(0, 0, 0, 8);
+        _checklistBox.Height = 176;
+        _checklistBox.Margin = new Thickness(0, 0, 0, 4);
         _checklistBox.ItemTemplate = CreateItemTemplate();
         _checklistBox.PreviewKeyDown += ChecklistBox_PreviewKeyDown;
         AutomationProperties.SetName(_checklistBox, UiText.Get("AutoFilter_FilterValues"));

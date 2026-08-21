@@ -163,7 +163,7 @@ public sealed class PresentationDesignCommandPlannerTests
         title.StrokeBrushHex.Should().Be(content.StrokeBrushHex);
         visuals.ThumbnailBackgroundBrushHex.Should().Be("#FFFFFF");
         visuals.ThumbnailBorderBrushHex.Should().Be("#D9D9D9");
-        visuals.BadgeForegroundBrushHex.Should().Be("#B7472A");
+        visuals.BadgeForegroundBrushHex.Should().Be("#A23B72");
     }
 
     [Fact]

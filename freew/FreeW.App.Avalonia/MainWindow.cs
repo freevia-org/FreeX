@@ -470,7 +470,7 @@ public sealed partial class MainWindow : Window
             Body: frame.Root,
             TitleBarBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
                 ThemeResources.TitleBarBrush,
-                new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBar))),
             TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White)));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
@@ -2554,7 +2554,7 @@ public sealed partial class MainWindow : Window
         _statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
             Background: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
                 ThemeResources.StatusSurfaceBrush,
-                new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.StatusSurface))),
             LeftContent: left,
             RightItems: [viewSwitch, zoom])).Root;
         return _statusBar;

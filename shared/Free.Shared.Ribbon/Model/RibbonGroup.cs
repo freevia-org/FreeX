@@ -26,4 +26,19 @@ public sealed record RibbonGroup(
     string? KeyTip,
     int Priority,
     IReadOnlyList<RibbonControl> Controls,
-    RibbonGroupSizing Sizing);
+    RibbonGroupSizing Sizing)
+{
+    /// <summary>
+    /// Optional Office-style dialog launcher shown beside the group label in full ribbon layouts.
+    /// It intentionally remains outside <see cref="Controls"/> so adaptive collapsed-group menus
+    /// continue to expose only the group's primary commands.
+    /// </summary>
+    public RibbonGroupLauncher? Launcher { get; init; }
+}
+
+/// <summary>Command and accessible tooltip metadata for a ribbon group's dialog launcher.</summary>
+public sealed record RibbonGroupLauncher(
+    RibbonCommandId CommandId,
+    string TooltipTitle,
+    string? TooltipDescription = null,
+    string? KeyTip = null);

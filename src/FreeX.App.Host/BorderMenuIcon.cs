@@ -29,7 +29,50 @@ public enum BorderMenuIconKind
     StyleDashed,
     StyleDotted,
     StyleDouble,
-    More
+    More,
+    DrawBorder,
+    DrawBorderGrid,
+    EraseBorder
+}
+
+/// <summary>Maps the declarative Home Borders command ids to their Excel-style menu glyphs.</summary>
+internal static class BorderMenuIconCatalog
+{
+    private static readonly IReadOnlyDictionary<string, BorderMenuIconKind> Kinds =
+        new Dictionary<string, BorderMenuIconKind>(StringComparer.Ordinal)
+        {
+            ["Bottom Border"] = BorderMenuIconKind.Bottom,
+            ["Top Border"] = BorderMenuIconKind.Top,
+            ["Left Border"] = BorderMenuIconKind.Left,
+            ["Right Border"] = BorderMenuIconKind.Right,
+            ["No Border"] = BorderMenuIconKind.None,
+            ["All Borders"] = BorderMenuIconKind.All,
+            ["Outside Borders"] = BorderMenuIconKind.Outside,
+            ["Inside Borders"] = BorderMenuIconKind.Inside,
+            ["Thick Outside Borders"] = BorderMenuIconKind.ThickBox,
+            ["Bottom Double Border"] = BorderMenuIconKind.BottomDouble,
+            ["Thick Bottom Border"] = BorderMenuIconKind.ThickBottom,
+            ["Top and Bottom Border"] = BorderMenuIconKind.TopAndBottom,
+            ["Top and Thick Bottom Border"] = BorderMenuIconKind.TopAndThickBottom,
+            ["Top and Double Bottom Border"] = BorderMenuIconKind.TopAndDoubleBottom,
+            ["Draw Border"] = BorderMenuIconKind.DrawBorder,
+            ["Draw Border Grid"] = BorderMenuIconKind.DrawBorderGrid,
+            ["Erase Border"] = BorderMenuIconKind.EraseBorder,
+            ["Black"] = BorderMenuIconKind.ColorBlack,
+            ["Gray"] = BorderMenuIconKind.ColorGray,
+            ["Accent 1"] = BorderMenuIconKind.ColorAccent1,
+            ["Accent 2"] = BorderMenuIconKind.ColorAccent2,
+            ["Thin"] = BorderMenuIconKind.StyleThin,
+            ["Medium"] = BorderMenuIconKind.StyleMedium,
+            ["Thick"] = BorderMenuIconKind.StyleThick,
+            ["Dashed"] = BorderMenuIconKind.StyleDashed,
+            ["Dotted"] = BorderMenuIconKind.StyleDotted,
+            ["Double"] = BorderMenuIconKind.StyleDouble,
+            ["More Borders"] = BorderMenuIconKind.More,
+        };
+
+    public static bool TryGetKind(string commandId, out BorderMenuIconKind kind) =>
+        Kinds.TryGetValue(commandId, out kind);
 }
 
 public sealed class BorderMenuIcon : FrameworkElement
@@ -156,6 +199,16 @@ public sealed class BorderMenuIcon : FrameworkElement
                 DrawBox(dc, black, 1);
                 DrawLineSample(dc, accent, 1.2, null);
                 break;
+            case BorderMenuIconKind.DrawBorder:
+                DrawPencil(dc, accent);
+                break;
+            case BorderMenuIconKind.DrawBorderGrid:
+                DrawGrid(dc, black);
+                DrawPencil(dc, accent);
+                break;
+            case BorderMenuIconKind.EraseBorder:
+                DrawEraser(dc, black);
+                break;
         }
     }
 
@@ -211,6 +264,22 @@ public sealed class BorderMenuIcon : FrameworkElement
         }
 
         DrawLine(dc, pen, 3, 9, 15, 9);
+    }
+
+    private static void DrawPencil(DrawingContext dc, Brush brush)
+    {
+        dc.PushTransform(new RotateTransform(45, 9, 9));
+        dc.DrawRectangle(brush, CreatePen(Brushes.Black, 0.8), new Rect(7, 2.5, 4, 10));
+        dc.DrawGeometry(Brushes.Black, null, Geometry.Parse("M7,2.5 L11,2.5 L9,0.5 Z"));
+        dc.Pop();
+    }
+
+    private static void DrawEraser(DrawingContext dc, Brush brush)
+    {
+        dc.PushTransform(new RotateTransform(-35, 9, 9));
+        dc.DrawRectangle(Brushes.White, CreatePen(brush, 1), new Rect(5, 5, 8, 6));
+        dc.Pop();
+        DrawSlash(dc, brush);
     }
 
     private static Pen CreatePen(Brush brush, double thickness)

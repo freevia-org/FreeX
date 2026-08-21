@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Line Numbering Options">
   <rect width="32" height="32" fill="none"/>
   <path d="M10 8h14M10 12h14M10 16h11M10 22h14" stroke="#242424" stroke-width="1.2" stroke-linecap="round"/>
-  <path d="M5.5 8h1.5M5.5 12h1.5M5.5 16h1.5" stroke="#0F6D8C" stroke-width="1.4" stroke-linecap="round"/>
-  <circle cx="8" cy="24" r="2.2" fill="none" stroke="#0F6D8C" stroke-width="1.2"/>
-  <path d="M8 21v-1.2M8 28.2V27M5 24H3.8M12.2 24H11M5.9 21.9l-.8-.8M10.9 26.9l-.8-.8M10.1 21.9l.8-.8M5.1 26.9l.8-.8" stroke="#0F6D8C" stroke-width="1" stroke-linecap="round"/>
+  <path d="M5.5 8h1.5M5.5 12h1.5M5.5 16h1.5" stroke="#A26714" stroke-width="1.4" stroke-linecap="round"/>
+  <circle cx="8" cy="24" r="2.2" fill="none" stroke="#A26714" stroke-width="1.2"/>
+  <path d="M8 21v-1.2M8 28.2V27M5 24H3.8M12.2 24H11M5.9 21.9l-.8-.8M10.9 26.9l-.8-.8M10.1 21.9l.8-.8M5.1 26.9l.8-.8" stroke="#A26714" stroke-width="1" stroke-linecap="round"/>
 </svg>

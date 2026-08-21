@@ -7,8 +7,8 @@
   <!-- Text lines in main page -->
   <path d="M10 13.5h7M10 16.5h7M10 19.5h5" fill="none" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round"/>
   <!-- Blue editing cursor mark -->
-  <path d="M10 22.5h4" fill="none" stroke="#0F6D8C" stroke-width="1.3" stroke-linecap="round"/>
-  <rect x="14" y="21.5" width="1" height="2.5" rx="0.4" fill="#0F6D8C"/>
+  <path d="M10 22.5h4" fill="none" stroke="#A26714" stroke-width="1.3" stroke-linecap="round"/>
+  <rect x="14" y="21.5" width="1" height="2.5" rx="0.4" fill="#A26714"/>
   <!-- Page number badge -->
-  <text x="24.5" y="25" font-size="7" fill="#0F6D8C" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">P</text>
+  <text x="24.5" y="25" font-size="7" fill="#A26714" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">P</text>
 </svg>

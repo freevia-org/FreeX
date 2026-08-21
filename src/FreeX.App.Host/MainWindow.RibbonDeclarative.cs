@@ -103,6 +103,7 @@ public partial class MainWindow
             WireRenderedFormatPainterDoubleClick(renderedByName);
             PopulateAndWireRenderedHomeCombos(renderedByName);
             PopulateAndWireRenderedPageLayoutCombos(renderedByName);
+            ApplyRenderedHomeBorderMenuIcons(renderedByName);
         }
         catch (Exception ex)
         {
@@ -151,6 +152,31 @@ public partial class MainWindow
 
     private TabItem? FindRibbonTabByCatalogId(string catalogId) =>
         _ribbonTabsByCatalogId.GetValueOrDefault(catalogId);
+
+    private static void ApplyRenderedHomeBorderMenuIcons(IReadOnlyDictionary<string, Control> renderedByName)
+    {
+        if (!renderedByName.TryGetValue("Borders", out var borders) || borders.ContextMenu is not { } menu)
+            return;
+
+        foreach (var item in EnumerateMenuItems(menu.Items))
+        {
+            if (RibbonMetadata.TryGetCommandName(item, out var commandId) &&
+                BorderMenuIconCatalog.TryGetKind(commandId, out var kind))
+            {
+                item.Icon = new BorderMenuIcon { Kind = kind };
+            }
+        }
+    }
+
+    private static IEnumerable<MenuItem> EnumerateMenuItems(ItemCollection items)
+    {
+        foreach (var item in items.OfType<MenuItem>())
+        {
+            yield return item;
+            foreach (var child in EnumerateMenuItems(item.Items))
+                yield return child;
+        }
+    }
 
     private TabItem? FileTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.File);
     private TabItem? ShapeFormatTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.ShapeFormat);
