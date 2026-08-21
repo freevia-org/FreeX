@@ -21,7 +21,7 @@ public sealed partial class AutoFilterDialog
         var button = new Button
         {
             Visibility = visibility,
-            HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
+            HorizontalContentAlignment = System.Windows.HorizontalAlignment.Stretch,
             Padding = new Thickness(5, 2, 5, 2),
             Margin = new Thickness(0),
             MinHeight = 22,
@@ -34,25 +34,42 @@ public sealed partial class AutoFilterDialog
     private static void SetMenuCommandButtonContent(
         Button button,
         string content,
-        RibbonCommandIconKind iconKind)
+        RibbonCommandIconKind iconKind,
+        bool hasCascade = false)
     {
-        button.Content = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Children =
-            {
-                RibbonIconFactory.CreateIcon(new RibbonCommandIcon(iconKind), 14, Brushes.Black),
-                new AccessText
-                {
-                    Text = content,
-                    Margin = new Thickness(7, 0, 0, 0),
-                    VerticalAlignment = System.Windows.VerticalAlignment.Center
-                }
-            }
-        };
-    }
+        var contentPanel = new Grid();
+        contentPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        contentPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        contentPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-    private static string FormatCascadeMenuHeader(string header) => $"{header}    >";
+        var icon = RibbonIconFactory.CreateIcon(new RibbonCommandIcon(iconKind), 14, Brushes.Black);
+        Grid.SetColumn(icon, 0);
+        contentPanel.Children.Add(icon);
+
+        var label = new AccessText
+        {
+            Text = content,
+            Margin = new Thickness(7, 0, hasCascade ? 8 : 0, 0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        };
+        Grid.SetColumn(label, 1);
+        contentPanel.Children.Add(label);
+
+        if (hasCascade)
+        {
+            var cascade = new TextBlock
+            {
+                Text = "›",
+                FontSize = 18,
+                Margin = new Thickness(0, -2, 1, 0),
+                VerticalAlignment = System.Windows.VerticalAlignment.Center
+            };
+            Grid.SetColumn(cascade, 2);
+            contentPanel.Children.Add(cascade);
+        }
+
+        button.Content = contentPanel;
+    }
 
     private static void AddFilterMenuSeparator(Panel stack)
     {
@@ -186,15 +203,15 @@ public sealed partial class AutoFilterDialog
         _textFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Text
             ? Visibility.Visible
             : Visibility.Collapsed;
-        SetMenuCommandButtonContent(_textFiltersButton, FormatCascadeMenuHeader(UiText.Get("AutoFilter_TextFilters")), RibbonCommandIconKind.Filter);
+        SetMenuCommandButtonContent(_textFiltersButton, UiText.Get("AutoFilter_TextFilters"), RibbonCommandIconKind.Filter, hasCascade: true);
         _numberFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Number
             ? Visibility.Visible
             : Visibility.Collapsed;
-        SetMenuCommandButtonContent(_numberFiltersButton, FormatCascadeMenuHeader(UiText.Get("AutoFilter_NumberFilters")), RibbonCommandIconKind.Filter);
+        SetMenuCommandButtonContent(_numberFiltersButton, UiText.Get("AutoFilter_NumberFilters"), RibbonCommandIconKind.Filter, hasCascade: true);
         _dateFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Date
             ? Visibility.Visible
             : Visibility.Collapsed;
-        SetMenuCommandButtonContent(_dateFiltersButton, FormatCascadeMenuHeader(UiText.Get("AutoFilter_DateFilters")), RibbonCommandIconKind.Filter);
+        SetMenuCommandButtonContent(_dateFiltersButton, UiText.Get("AutoFilter_DateFilters"), RibbonCommandIconKind.Filter, hasCascade: true);
     }
 
     private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)
