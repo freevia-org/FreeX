@@ -147,6 +147,18 @@
         <Setter Property="MinHeight" Value="18"/>
     </Style>
 
+    <Style x:Key="RibbonGroupDialogLauncher" BasedOn="{StaticResource RibbonBtn}" TargetType="Button">
+        <Setter Property="Width" Value="14"/>
+        <Setter Property="Height" Value="16"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Margin" Value="0,0,1,1"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralMutedTextBrush}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="HorizontalAlignment" Value="Right"/>
+    </Style>
+
     <Style x:Key="RibbonGroupDivider" TargetType="Rectangle">
         <Setter Property="Width" Value="1"/>
         <Setter Property="Fill" Value="{DynamicResource ThemeNeutralBorderBrush}"/>

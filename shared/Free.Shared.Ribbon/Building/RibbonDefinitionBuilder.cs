@@ -57,6 +57,7 @@ public sealed class RibbonGroupBuilder
     private readonly int _priority;
     private readonly List<RibbonControl> _controls = new();
     private RibbonGroupSizing _sizing = RibbonGroupSizing.Default;
+    private RibbonGroupLauncher? _launcher;
 
     internal RibbonGroupBuilder(string id, string header, string? keyTip, int priority)
     {
@@ -168,13 +169,27 @@ public sealed class RibbonGroupBuilder
         return this;
     }
 
+    /// <summary>Adds the compact Office-style dialog launcher beside this group's label.</summary>
+    public RibbonGroupBuilder DialogLauncher(
+        string commandId,
+        string tooltipTitle,
+        string? tooltipDescription = null,
+        string? keyTip = null)
+    {
+        _launcher = new RibbonGroupLauncher(commandId, tooltipTitle, tooltipDescription, keyTip);
+        return this;
+    }
+
     private RibbonGroupBuilder Add<T>(T control, Func<T, T>? configure) where T : RibbonControl
     {
         _controls.Add(configure is null ? control : configure(control));
         return this;
     }
 
-    internal RibbonGroup Build() => new(_id, _header, _keyTip, _priority, _controls.ToArray(), _sizing);
+    internal RibbonGroup Build() => new(_id, _header, _keyTip, _priority, _controls.ToArray(), _sizing)
+    {
+        Launcher = _launcher
+    };
 }
 
 /// <summary>Fluent construction of a dropdown's menu contents.</summary>

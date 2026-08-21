@@ -22,6 +22,7 @@ public static class HomeRibbonDefinition
                 .Medium("Format Painter", "Format Painter", Ico.FormatPainter, "FP"))
 
             .Group("HomeFontGroup", "Font", "F", priority: 90, g => g
+                .DialogLauncher("Format Cells Font", "Font dialog", "Open Format Cells on the Font tab.")
                 .ComboBox("Font", "Font", c => c with
                 {
                     Width = 120,
@@ -45,6 +46,7 @@ public static class HomeRibbonDefinition
                 .Icon("Font Color", "Font Color", Ico.Color, "FC", dropdown: true))
 
             .Group("HomeAlignmentGroup", "Alignment", "A", priority: 80, g => g
+                .DialogLauncher("Format Cells Alignment", "Alignment dialog", "Open Format Cells on the Alignment tab.")
                 .IconToggle("Top Align", "Top Align", Ico.Align, "AT")
                 .IconToggle("Middle Align", "Middle Align", Ico.Align, "AM")
                 .IconToggle("Bottom Align", "Bottom Align", Ico.Align, "AB")
@@ -61,6 +63,7 @@ public static class HomeRibbonDefinition
                 .Medium("Merge & Center", "Merge & Center", Ico.Merge, "M", menu: HomeRibbonMenus.MergeCenter))
 
             .Group("HomeNumberGroup", "Number", "N", priority: 70, g => g
+                .DialogLauncher("Format Cells Number", "Number dialog", "Open Format Cells on the Number tab.")
                 .ComboBox("Number Format", "Number Format", c => c with
                 {
                     Width = 124,

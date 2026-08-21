@@ -236,6 +236,40 @@ public class RibbonWpfRendererTests
     }
 
     [Fact]
+    public void RenderedHomeTab_HasFontAlignmentAndNumberDialogLaunchers()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var host = BuildHost();
+            var tab = HomeRibbonDefinition.Build().FindTab("HomeTab")!;
+            var registry = new RibbonCommandRegistry();
+            var font = new RecordingCommand();
+            var alignment = new RecordingCommand();
+            var number = new RecordingCommand();
+            registry.Register("Format Cells Font", font);
+            registry.Register("Format Cells Alignment", alignment);
+            registry.Register("Format Cells Number", number);
+
+            host.Child = RibbonWpfRenderer.BuildTabContent(tab, host, registry);
+            Layout(host, 1880);
+
+            var launchers = Descendants(host)
+                .OfType<Button>()
+                .Where(button => button.Content is TextBlock { Text: "\u2197" })
+                .ToList();
+            launchers.Should().HaveCount(3);
+            launchers.Select(RibbonMetadata.GetCommandName).Should().BeEquivalentTo(
+                "Format Cells Font", "Format Cells Alignment", "Format Cells Number");
+
+            launchers.Single(button => RibbonMetadata.GetCommandName(button) == "Format Cells Alignment")
+                .RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            alignment.Invocations.Should().Be(1);
+            font.Invocations.Should().Be(0);
+            number.Invocations.Should().Be(0);
+        });
+    }
+
+    [Fact]
     public void RenderedHomeTab_IncludesVisibleSectionDividers()
     {
         StaTestRunner.Run(() =>

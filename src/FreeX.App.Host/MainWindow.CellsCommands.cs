@@ -368,6 +368,15 @@ public partial class MainWindow
 
     private void FormatCellsMenuItem_Click(object sender, RoutedEventArgs e) => OpenFormatCellsDialog();
 
+    private void FormatCellsFontLauncherBtn_Click(object sender, RoutedEventArgs e) =>
+        OpenFormatCellsDialog(FormatCellsDialogTab.Font);
+
+    private void FormatCellsAlignmentLauncherBtn_Click(object sender, RoutedEventArgs e) =>
+        OpenFormatCellsDialog(FormatCellsDialogTab.Alignment);
+
+    private void FormatCellsNumberLauncherBtn_Click(object sender, RoutedEventArgs e) =>
+        OpenFormatCellsDialog(FormatCellsDialogTab.Number);
+
     private void InsertRowBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;

@@ -23,6 +23,7 @@ public sealed class SharedRibbonControlResourcesTests
         "GroupLbl",
         "RibbonGroupPanel",
         "RibbonGroupLabelBorder",
+        "RibbonGroupDialogLauncher",
         "RibbonGroupDivider",
         "RibbonLargeButton",
         "RibbonIconButton",
@@ -166,6 +167,16 @@ public sealed class SharedRibbonControlResourcesTests
             };
             labelBorder.BorderThickness.Should().Be(new Thickness(0, 1, 0, 0));
             labelBorder.MinHeight.Should().Be(18d);
+
+            var launcher = new Button
+            {
+                Style = GetStyle(resources, "RibbonGroupDialogLauncher", typeof(Button))
+            };
+            launcher.Width.Should().Be(14d);
+            launcher.Height.Should().Be(16d);
+            launcher.Padding.Should().Be(new Thickness(0));
+            launcher.Margin.Should().Be(new Thickness(0, 0, 1, 1));
+            launcher.HorizontalAlignment.Should().Be(HorizontalAlignment.Right);
 
             var divider = new Rectangle
             {
