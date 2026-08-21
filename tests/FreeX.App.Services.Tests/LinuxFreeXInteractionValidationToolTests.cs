@@ -48,6 +48,22 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
+    public void InlineEditFocusedSelectorUsesKeyboardReadbackAndExactArtifacts()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+
+        runner.Should().Contain("\"inline-edit\"");
+        runner.Should().Contain("@(" + "\"inline-edit-f2-enter-commit\"" + ")");
+        probe.Should().Contain("if [[ \"$probe_selector\" == \"inline-edit\" ]]; then");
+        probe.Should().Contain("copy_cell_formula_by_keyboard \"$column_offset\" \"$row_offset\"");
+        probe.Should().Contain("local_artifacts+=\";inline-edit-commit-after.png;inline-edit-commit-after-cell.png\"");
+        probe.Should().Contain("inline-edit-commit-before-cell.png");
+    }
+
+    [Fact]
     public void GridAutofitSelectorRequiresColumnRowAndHiddenBoundarySchemaV2Evidence()
     {
         var runner = File.ReadAllText(RepositoryFileLocator.Find(

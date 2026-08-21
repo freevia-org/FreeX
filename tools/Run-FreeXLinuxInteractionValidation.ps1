@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
+    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -1287,7 +1287,9 @@ try {
         }
     }
 
-    $requiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
+    $requiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "inline-edit") {
+        @("inline-edit-f2-enter-commit")
+    } elseif ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
         @("name-box-dropdown-parity-native-crop")
     } elseif ($PhysicalProbeSelector -eq "name-box-dropdown") {
         @(
@@ -1422,7 +1424,9 @@ try {
         [string]$_.status -notin @("passed", "failed") -or
         [string]::IsNullOrWhiteSpace([string]$_.evidence)
     })
-    $artifactRequiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
+    $artifactRequiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "inline-edit") {
+        @("inline-edit-f2-enter-commit")
+    } elseif ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
         @("name-box-dropdown-parity-native-crop")
     } elseif ($PhysicalProbeSelector -eq "backstage-print") {
         @("backstage-print-ctrl-shift-f12-cancel")

@@ -268,15 +268,11 @@ copy_cell_display() {
 
 copy_cell_formula() {
     local column_offset="$1" row_offset="$2" address="$3"
-    set_clipboard_sentinel
-    select_cell "$column_offset" "$row_offset" "$address" || return 1
-    send_key F2
-    send_key ctrl+a
-    send_key ctrl+c
-    local value
-    value="$(clipboard_text)"
-    send_key Escape
-    printf '%s' "$value"
+    # After Enter commits an inline edit, Avalonia may leave focus on the detached
+    # editor for one input turn even though the active-cell border has repainted. Rebuild
+    # worksheet focus through the stable keyboard route before opening the editor again.
+    # This is the same readback path used by the passing grid-drag seed probes.
+    copy_cell_formula_by_keyboard "$column_offset" "$row_offset"
 }
 
 select_cell_by_keyboard() {
@@ -4406,6 +4402,52 @@ fi
 
 if [[ "$probe_selector" == "backstage-print" ]]; then
     probe_backstage_print_shortcut
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "inline-edit" ]]; then
+    # Focused Wave170 lane for the first high-signal failure from the authoritative all probe.
+    # Keep the artifact list exact on early failure so schema validation distinguishes a real
+    # failed postcondition from screenshots that were never captured.
+    local_artifacts="inline-edit-commit-before.png"
+    select_cell 0 0 A1
+    capture "inline-edit-commit-before.png"
+    crop_cell "$output/inline-edit-commit-before.png" "$output/inline-edit-commit-before-cell.png" 6 7
+    local_artifacts+=";inline-edit-commit-before-cell.png"
+    if select_cell 6 7 G8; then
+        send_key F2
+        type_text "X11InlineCommit"
+        capture "inline-edit-commit-editing.png"
+        local_artifacts+=";inline-edit-commit-editing.png"
+        send_key Return
+        committed_value="$(copy_cell_formula 6 7 G8 || printf 'selection-failed')"
+        send_key Escape
+        select_cell 0 0 A1 || true
+        capture "inline-edit-commit-after.png"
+        crop_cell "$output/inline-edit-commit-after.png" "$output/inline-edit-commit-after-cell.png" 6 7
+        local_artifacts+=";inline-edit-commit-after.png;inline-edit-commit-after-cell.png"
+        if region_changed "$output/inline-edit-commit-before-cell.png" "$output/inline-edit-commit-after-cell.png" 8 &&
+           [[ "$committed_value" == "X11InlineCommit" ]]; then
+            record "inline-edit-f2-enter-commit" "passed" "inline-edit-commit-editing.png; X11 clipboard='X11InlineCommit'" \
+                "F2/Enter committed the complete value and keyboard re-selection read it back from the production editor." \
+                "$local_artifacts"
+        else
+            record "inline-edit-f2-enter-commit" "failed" "inline-edit-commit-after-cell.png" \
+                "F2/Enter did not commit the complete value in calibrated G8 (clipboard='${committed_value}')." \
+                "$local_artifacts"
+        fi
+    else
+        record "inline-edit-f2-enter-commit" "failed" "inline-edit-commit-before.png" \
+            "Could not physically select calibrated cell G8." "$local_artifacts"
+    fi
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" \
+            "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused inline-edit probe."
+    fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
         exit 1
