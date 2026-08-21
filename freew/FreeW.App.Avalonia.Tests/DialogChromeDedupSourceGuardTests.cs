@@ -211,6 +211,20 @@ public sealed class DialogChromeDedupSourceGuardTests
             "dialog chrome must use AvaloniaCompactDialogChrome.WindowsStyle so Linux resolves the WPF-authority font family");
     }
 
+    [Fact]
+    public void Font_and_paragraph_dialogs_do_not_bypass_the_shared_font_authority()
+    {
+        var font = ReadAvaloniaSource("FontDialog.cs");
+        var paragraph = ReadAvaloniaSource("ParagraphDialog.cs");
+
+        font.Should().NotContain(
+            "FontFamily = new FontFamily(\"Segoe UI\")",
+            "the Font dialog must inherit the shared WindowsStyle fallback chain on Linux");
+        paragraph.Should().NotContain(
+            "FontFamily = new FontFamily(\"Segoe UI\")",
+            "the Paragraph dialog must inherit the shared WindowsStyle fallback chain on Linux");
+    }
+
     private static void AssertNoLocalCompactChrome(string source, string fileName)
     {
         var normalized = source.Replace("\r\n", "\n", StringComparison.Ordinal);

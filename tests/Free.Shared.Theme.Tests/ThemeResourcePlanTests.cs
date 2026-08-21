@@ -15,6 +15,7 @@ public sealed class ThemeResourcePlanTests
             "AccentSoft",
             "AccentPressed",
             "TitleBar",
+            "TitleBarForeground",
             "TitleBarHover",
             "TitleBarPressed",
             "TitleBarDisabled",

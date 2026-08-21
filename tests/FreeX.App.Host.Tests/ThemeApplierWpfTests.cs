@@ -15,10 +15,10 @@ public sealed class ThemeApplierWpfTests
     [Fact]
     public void WpfApplier_FreeXTitleBarBrush_MatchesThemeResourcesXaml()
     {
-        // ThemeResources.xaml: FreeXTitleBarBrush Color="#17324D"
+        // ThemeResources.xaml: FreeXTitleBarBrush Color="#F3F4F6"
         var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
         var brush = (SolidColorBrush)dict["FreeXTitleBarBrush"];
-        brush.Color.Should().Be(Color.FromRgb(0x17, 0x32, 0x4D));
+        brush.Color.Should().Be(Color.FromRgb(0xF3, 0xF4, 0xF6));
     }
 
     [Fact]
@@ -31,25 +31,22 @@ public sealed class ThemeApplierWpfTests
     }
 
     [Fact]
-    public void WpfApplier_FreeXTitleBarButtonBorderBrush_HasCorrectAlpha()
+    public void WpfApplier_FreeXTitleBarForegroundBrush_MatchesThemeResourcesXaml()
     {
-        // ThemeResources.xaml: FreeXTitleBarButtonBorderBrush Color="#55FFFFFF"
+        // ThemeResources.xaml: FreeXTitleBarForegroundBrush Color="#1F1F1F"
         var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
-        var brush = (SolidColorBrush)dict["FreeXTitleBarButtonBorderBrush"];
-        brush.Color.A.Should().Be(0x55);
-        brush.Color.R.Should().Be(0xFF);
-        brush.Color.G.Should().Be(0xFF);
-        brush.Color.B.Should().Be(0xFF);
+        var brush = (SolidColorBrush)dict["FreeXTitleBarForegroundBrush"];
+        brush.Color.Should().Be(Color.FromRgb(0x1F, 0x1F, 0x1F));
     }
 
     [Fact]
-    public void WpfApplier_AllTwentyOneBrushKeysPresent()
+    public void WpfApplier_AllTwentyTwoBrushKeysPresent()
     {
         var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
         var expected = new[]
         {
             "FreeXAccentBrush", "FreeXAccentDarkBrush", "FreeXAccentSoftBrush",
-            "FreeXAccentPressedBrush", "FreeXTitleBarBrush", "FreeXTitleBarHoverBrush",
+            "FreeXAccentPressedBrush", "FreeXTitleBarBrush", "FreeXTitleBarForegroundBrush", "FreeXTitleBarHoverBrush",
             "FreeXTitleBarPressedBrush", "FreeXTitleBarDisabledBrush",
             "FreeXTitleBarButtonBorderBrush", "FreeXRibbonButtonHoverBrush",
             "FreeXTextBrush", "FreeXMutedTextBrush", "FreeXSubtleTextBrush",
@@ -92,8 +89,8 @@ public sealed class ThemeApplierWpfTests
         // Retrieve from the merged-dict entries added by Apply (last added).
         var mergedDict = app.Resources.MergedDictionaries[^1];
         var brush = (SolidColorBrush)mergedDict["FreeXTitleBarBrush"];
-        // Default FreeX theme: #17324D — byte-identical to ThemeResources.xaml
-        brush.Color.Should().Be(Color.FromRgb(0x17, 0x32, 0x4D));
+        // Default FreeX theme: #F3F4F6 — byte-identical to ThemeResources.xaml
+        brush.Color.Should().Be(Color.FromRgb(0xF3, 0xF4, 0xF6));
     }
 
     [Fact]
@@ -111,7 +108,7 @@ public sealed class ThemeApplierWpfTests
         var defaultColor  = ((SolidColorBrush)app.Resources.MergedDictionaries[count - 2]["FreeXTitleBarBrush"]).Color;
         var midnightColor = ((SolidColorBrush)app.Resources.MergedDictionaries[count - 1]["FreeXTitleBarBrush"]).Color;
         midnightColor.Should().NotBe(defaultColor,
-            because: "FreeXMidnight has a near-black title bar, not the default navy");
+            because: "FreeXMidnight has a near-black title bar, unlike the default Office-light surface");
     }
 
     // ── Apply(ResourceDictionary, …) tests ────────────────────────────────────
@@ -126,7 +123,7 @@ public sealed class ThemeApplierWpfTests
         // The key is added to a merged-dict entry; look it up via MergedDictionaries[0].
         var inner = dict.MergedDictionaries[0];
         inner.Contains("FreeXTitleBarBrush").Should().BeTrue();
-        ((SolidColorBrush)inner["FreeXTitleBarBrush"]).Color.Should().Be(Color.FromRgb(0x17, 0x32, 0x4D));
+        ((SolidColorBrush)inner["FreeXTitleBarBrush"]).Color.Should().Be(Color.FromRgb(0xF3, 0xF4, 0xF6));
     }
 
     [Fact]

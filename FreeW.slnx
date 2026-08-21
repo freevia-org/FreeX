@@ -42,6 +42,7 @@
     <Project Path="freew/tools/FreeW.FieldShortcutFixture/FreeW.FieldShortcutFixture.csproj" />
     <Project Path="freew/tools/FreeW.GroupChildPhysicalFixture/FreeW.GroupChildPhysicalFixture.csproj" />
     <Project Path="freew/tools/FreeW.RibbonShot/FreeW.RibbonShot.csproj" />
+    <Project Path="freew/tools/FreeW.ShellVisualHarness.Avalonia/FreeW.ShellVisualHarness.Avalonia.csproj" />
     <Project Path="freew/tools/FreeW.PageLayoutShot/FreeW.PageLayoutShot.csproj" />
     <Project Path="freew/tools/FreeW.PdfRasterize/FreeW.PdfRasterize.csproj" />
     <Project Path="freew/tools/_corpus_charts/_corpus_charts.csproj" />

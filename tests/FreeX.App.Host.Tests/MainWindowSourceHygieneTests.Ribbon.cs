@@ -887,7 +887,7 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void TitleBarIcons_UseExplicitWhiteForeground()
+    public void TitleBarIcons_UseDynamicTitleBarForeground()
     {
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var titleBarStart = xaml.IndexOf("<!-- Title / quick-access bar", StringComparison.Ordinal);
@@ -903,11 +903,10 @@ public sealed partial class MainWindowSourceHygieneTests
         }
 
         titleBarCommands.Should().NotContain("Foreground=\"{Binding Foreground");
-        // WS-G round 4: title-bar foregrounds converted to DynamicResource for full-chrome reskin.
-        titleBarCommands.Split("Foreground=\"{DynamicResource FreeXWhiteBrush}\"").Length.Should().BeGreaterThanOrEqualTo(4);
+        titleBarCommands.Split("Foreground=\"{DynamicResource FreeXTitleBarForegroundBrush}\"").Length.Should().BeGreaterThanOrEqualTo(3);
         var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
         qatSource.Should().Contain("? \"FreeXTextBrush\"");
-        qatSource.Should().Contain(": \"FreeXWhiteBrush\"");
+        qatSource.Should().Contain(": \"FreeXTitleBarForegroundBrush\"");
     }
 
     [Fact]

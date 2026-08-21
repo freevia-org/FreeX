@@ -79,7 +79,7 @@
                         AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationName_Close}"
                         AutomationProperties.AutomationId="CloseSysBtn">
                     <local:RibbonIcon Kind="WindowClose" IconSize="18"
-                                      Foreground="{DynamicResource FreeXWhiteBrush}"/>
+                                      Foreground="{DynamicResource FreeXTitleBarForegroundBrush}"/>
                 </Button>
                 <Button x:Name="MaxRestoreBtn"  DockPanel.Dock="Right"
                         Style="{StaticResource SysBtnStyle}"      Click="MaxRestoreBtn_Click"
@@ -87,7 +87,7 @@
                         AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationName_MaximizeOrRestore}"
                         AutomationProperties.AutomationId="MaxRestoreBtn">
                     <local:RibbonIcon x:Name="MaxRestoreIcon" Kind="WindowMaximize" IconSize="18"
-                                      Foreground="{DynamicResource FreeXWhiteBrush}"/>
+                                      Foreground="{DynamicResource FreeXTitleBarForegroundBrush}"/>
                 </Button>
                 <Button x:Name="MinimizeBtn"    DockPanel.Dock="Right"
                         Style="{StaticResource SysBtnStyle}"      Click="MinimizeBtn_Click"
@@ -95,12 +95,12 @@
                         AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationName_Minimize}"
                         AutomationProperties.AutomationId="MinimizeBtn">
                     <local:RibbonIcon Kind="WindowMinimize" IconSize="18"
-                                      Foreground="{DynamicResource FreeXWhiteBrush}"/>
+                                      Foreground="{DynamicResource FreeXTitleBarForegroundBrush}"/>
                 </Button>
                 <!-- Workbook name centred -->
                 <TextBlock x:Name="WorkbookNameText"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                           FontSize="12" Foreground="{DynamicResource FreeXWhiteBrush}" FontWeight="SemiBold"/>
+                           FontSize="12" Foreground="{DynamicResource FreeXTitleBarForegroundBrush}" FontWeight="SemiBold"/>
             </DockPanel>
         </Border>
 

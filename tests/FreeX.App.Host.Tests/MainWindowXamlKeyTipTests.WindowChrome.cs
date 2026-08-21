@@ -133,10 +133,10 @@ public sealed partial class MainWindowXamlKeyTipTests
                 .Should()
                 .NotBeEmpty($"{styleKey} should not fall back to the native WPF button template");
 
-            style
-                .ToString(SaveOptions.DisableFormatting)
-                .Should()
-                .Contain("FreeXTitleBarHoverBrush", $"{styleKey} should use the green title/status hover color");
+            var styleText = style.ToString(SaveOptions.DisableFormatting);
+            styleText.Should().Contain(
+                styleKey == "StatusBarZoomButtonStyle" ? "FreeXAccentBrush" : "FreeXTitleBarHoverBrush",
+                $"{styleKey} should use its contrast-safe chrome hover color");
         }
 
         var closeStyle = ResourceStyle(resources, presentation, x, "CloseSysBtnStyle");
@@ -147,11 +147,11 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Should()
             .BeEmpty("the close button should share the same title-bar hover chrome as the other green-surface buttons");
 
-        var greenSurfaceStyleText = string.Concat(
+        var chromeStyleText = string.Concat(
             new[] { "StatusBarZoomButtonStyle", "SysBtnStyle", "TitleBarQatButton", "CloseSysBtnStyle" }
                 .Select(styleKey => ResourceStyle(resources, presentation, x, styleKey).ToString(SaveOptions.DisableFormatting)));
 
-        greenSurfaceStyleText.Should().NotContain("#0078", "green-surface hover should not use Windows blue accent colors");
-        greenSurfaceStyleText.Should().NotContain("SystemColors.Highlight", "green-surface hover should not use native highlight brushes");
+        chromeStyleText.Should().NotContain("#0078", "chrome hover should not use Windows blue accent colors");
+        chromeStyleText.Should().NotContain("SystemColors.Highlight", "chrome hover should not use native highlight brushes");
     }
 }

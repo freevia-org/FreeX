@@ -2,11 +2,12 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <SolidColorBrush x:Key="FreeXAccentBrush" Color="#0F6D8C"/>
     <SolidColorBrush x:Key="FreeXAccentDarkBrush" Color="#17324D"/>
-    <SolidColorBrush x:Key="FreeXTitleBarBrush" Color="#17324D"/>
-    <SolidColorBrush x:Key="FreeXTitleBarHoverBrush" Color="#0F6D8C"/>
-    <SolidColorBrush x:Key="FreeXTitleBarPressedBrush" Color="#10253A"/>
-    <SolidColorBrush x:Key="FreeXTitleBarDisabledBrush" Color="#8BA6B8"/>
-    <SolidColorBrush x:Key="FreeXTitleBarButtonBorderBrush" Color="#55FFFFFF"/>
+    <SolidColorBrush x:Key="FreeXTitleBarBrush" Color="#F3F4F6"/>
+    <SolidColorBrush x:Key="FreeXTitleBarForegroundBrush" Color="#1F1F1F"/>
+    <SolidColorBrush x:Key="FreeXTitleBarHoverBrush" Color="#E2E6EA"/>
+    <SolidColorBrush x:Key="FreeXTitleBarPressedBrush" Color="#D0D4D9"/>
+    <SolidColorBrush x:Key="FreeXTitleBarDisabledBrush" Color="#767676"/>
+    <SolidColorBrush x:Key="FreeXTitleBarButtonBorderBrush" Color="#C8CCD0"/>
     <SolidColorBrush x:Key="FreeXAccentSoftBrush" Color="#E6F6FA"/>
     <SolidColorBrush x:Key="FreeXAccentPressedBrush" Color="#CCEAF2"/>
     <SolidColorBrush x:Key="FreeXRibbonButtonHoverBrush" Color="#BEE6FD"/>

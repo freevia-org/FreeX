@@ -24,6 +24,20 @@ public sealed class AvaloniaRichTextEditorTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlideHeadlessApp).Assembly);
 
     [Fact]
+    public void RealizedSelectionBounds_MatchWpfGlyphBandCalibration()
+    {
+        var bounds = new Rect(20, 10, 100, 30);
+
+        var realized = AvaloniaRichTextEditingSurface.RealizeSelectionBounds(
+            bounds,
+            FlowDirection.LeftToRight,
+            horizontalScroll: 3,
+            verticalScroll: 4);
+
+        realized.Should().Be(new Rect(16, 8, 101, 26));
+    }
+
+    [Fact]
     public async Task Input_uses_the_portable_rich_text_semantic_identity()
     {
         await Session.Dispatch(() =>

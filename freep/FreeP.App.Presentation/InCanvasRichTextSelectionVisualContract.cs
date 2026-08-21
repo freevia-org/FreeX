@@ -32,6 +32,13 @@ public static class InCanvasRichTextSelectionVisualContract
     public const byte RealizedForegroundBlue = 0xB1;
     public const byte RealizedForegroundAlpha = 0xFF;
 
+    // Avalonia's TextLayout selection bounds include the full platform line box, while WPF's
+    // RichTextBox selection layer paints the tighter glyph-selection band. Keep this calibration
+    // in the shared contract so the realized surface does not grow an unexplained local palette.
+    public const double RealizedSelectionTopInsetDip = 2;
+    public const double RealizedSelectionBottomInsetDip = 2;
+    public const double RealizedSelectionLeadingExpandDip = 1;
+
     public static InCanvasRichTextSelectionRange NormalizeRange(
         int start,
         int end,

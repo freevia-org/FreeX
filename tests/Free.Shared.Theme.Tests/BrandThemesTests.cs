@@ -60,11 +60,12 @@ public sealed class BrandThemesTests
     [Fact] public void FreeX_AccentDark_Is_17324D()           => BrandThemes.FreeX.Colors.AccentDark.ToHex().Should().Be("#17324D");
     [Fact] public void FreeX_AccentSoft_Is_E6F6FA()           => BrandThemes.FreeX.Colors.AccentSoft.ToHex().Should().Be("#E6F6FA");
     [Fact] public void FreeX_AccentPressed_Is_CCEAF2()        => BrandThemes.FreeX.Colors.AccentPressed.ToHex().Should().Be("#CCEAF2");
-    [Fact] public void FreeX_TitleBar_Is_17324D()             => BrandThemes.FreeX.Colors.TitleBar.ToHex().Should().Be("#17324D");
-    [Fact] public void FreeX_TitleBarHover_Is_0F6D8C()        => BrandThemes.FreeX.Colors.TitleBarHover.ToHex().Should().Be("#0F6D8C");
-    [Fact] public void FreeX_TitleBarPressed_Is_10253A()      => BrandThemes.FreeX.Colors.TitleBarPressed.ToHex().Should().Be("#10253A");
-    [Fact] public void FreeX_TitleBarDisabled_Is_8BA6B8()     => BrandThemes.FreeX.Colors.TitleBarDisabled.ToHex().Should().Be("#8BA6B8");
-    [Fact] public void FreeX_TitleBarButtonBorder_Is_55FFFFFF() => BrandThemes.FreeX.Colors.TitleBarButtonBorder.ToHex().Should().Be("#55FFFFFF");
+    [Fact] public void FreeX_TitleBar_Is_F3F4F6()             => BrandThemes.FreeX.Colors.TitleBar.ToHex().Should().Be("#F3F4F6");
+    [Fact] public void FreeX_TitleBarForeground_Is_1F1F1F()   => BrandThemes.FreeX.Colors.TitleBarForeground.ToHex().Should().Be("#1F1F1F");
+    [Fact] public void FreeX_TitleBarHover_Is_E2E6EA()        => BrandThemes.FreeX.Colors.TitleBarHover.ToHex().Should().Be("#E2E6EA");
+    [Fact] public void FreeX_TitleBarPressed_Is_D0D4D9()      => BrandThemes.FreeX.Colors.TitleBarPressed.ToHex().Should().Be("#D0D4D9");
+    [Fact] public void FreeX_TitleBarDisabled_Is_767676()     => BrandThemes.FreeX.Colors.TitleBarDisabled.ToHex().Should().Be("#767676");
+    [Fact] public void FreeX_TitleBarButtonBorder_Is_C8CCD0() => BrandThemes.FreeX.Colors.TitleBarButtonBorder.ToHex().Should().Be("#C8CCD0");
     [Fact] public void FreeX_RibbonButtonHover_Is_BEE6FD()   => BrandThemes.FreeX.Colors.RibbonButtonHover.ToHex().Should().Be("#BEE6FD");
     [Fact] public void FreeX_Text_Is_1F1F1F()                 => BrandThemes.FreeX.Colors.Text.ToHex().Should().Be("#1F1F1F");
     [Fact] public void FreeX_MutedText_Is_5F6368()            => BrandThemes.FreeX.Colors.MutedText.ToHex().Should().Be("#5F6368");
@@ -108,6 +109,7 @@ public sealed class BrandThemesTests
     [Fact] public void FreeW_AccentSoft_Is_FBF0DC()           => BrandThemes.FreeW.Colors.AccentSoft.ToHex().Should().Be("#FBF0DC");
     [Fact] public void FreeW_AccentPressed_Is_F3D8AB()        => BrandThemes.FreeW.Colors.AccentPressed.ToHex().Should().Be("#F3D8AB");
     [Fact] public void FreeW_TitleBar_Is_4B2F12()             => BrandThemes.FreeW.Colors.TitleBar.ToHex().Should().Be("#4B2F12");
+    [Fact] public void FreeW_TitleBarForeground_Is_FFFFFF()   => BrandThemes.FreeW.Colors.TitleBarForeground.ToHex().Should().Be("#FFFFFF");
     [Fact] public void FreeW_TitleBarHover_Is_A26714()        => BrandThemes.FreeW.Colors.TitleBarHover.ToHex().Should().Be("#A26714");
     [Fact] public void FreeW_TitleBarPressed_Is_36200C()      => BrandThemes.FreeW.Colors.TitleBarPressed.ToHex().Should().Be("#36200C");
     [Fact] public void FreeW_TitleBarDisabled_Is_B49A75()     => BrandThemes.FreeW.Colors.TitleBarDisabled.ToHex().Should().Be("#B49A75");
@@ -150,6 +152,7 @@ public sealed class BrandThemesTests
     [Fact] public void FreeP_AccentSoft_Is_F9E7F1()           => BrandThemes.FreeP.Colors.AccentSoft.ToHex().Should().Be("#F9E7F1");
     [Fact] public void FreeP_AccentPressed_Is_F1CDE0()        => BrandThemes.FreeP.Colors.AccentPressed.ToHex().Should().Be("#F1CDE0");
     [Fact] public void FreeP_TitleBar_Is_4E213B()             => BrandThemes.FreeP.Colors.TitleBar.ToHex().Should().Be("#4E213B");
+    [Fact] public void FreeP_TitleBarForeground_Is_FFFFFF()   => BrandThemes.FreeP.Colors.TitleBarForeground.ToHex().Should().Be("#FFFFFF");
     [Fact] public void FreeP_TitleBarHover_Is_A23B72()        => BrandThemes.FreeP.Colors.TitleBarHover.ToHex().Should().Be("#A23B72");
     [Fact] public void FreeP_TitleBarPressed_Is_351426()      => BrandThemes.FreeP.Colors.TitleBarPressed.ToHex().Should().Be("#351426");
     [Fact] public void FreeP_TitleBarDisabled_Is_B18A9F()     => BrandThemes.FreeP.Colors.TitleBarDisabled.ToHex().Should().Be("#B18A9F");

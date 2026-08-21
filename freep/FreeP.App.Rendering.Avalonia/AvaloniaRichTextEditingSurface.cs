@@ -865,16 +865,41 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 foreach (var bounds in lineBounds)
                 {
                     var translated = bounds.Rectangle.Translate(item.Origin);
-                    result.Add(new Rect(
-                        translated.X - (includeHorizontalScroll ? _scrollOffsetX : 0),
-                        translated.Y - _scrollOffsetY,
-                        translated.Width,
-                        translated.Height));
+                    result.Add(RealizeSelectionBounds(
+                        translated,
+                        item.FlowDirection,
+                        includeHorizontalScroll ? _scrollOffsetX : 0,
+                        _scrollOffsetY));
                 }
             }
         }
 
         return result;
+    }
+
+    internal static Rect RealizeSelectionBounds(
+        Rect bounds,
+        FlowDirection flowDirection,
+        double horizontalScroll,
+        double verticalScroll)
+    {
+        double topInset = Math.Min(
+            InCanvasRichTextSelectionVisualContract.RealizedSelectionTopInsetDip,
+            Math.Max(0, (bounds.Height - 1) / 2));
+        double bottomInset = Math.Min(
+            InCanvasRichTextSelectionVisualContract.RealizedSelectionBottomInsetDip,
+            Math.Max(0, bounds.Height - 1 - topInset));
+        double width = bounds.Width +
+            InCanvasRichTextSelectionVisualContract.RealizedSelectionLeadingExpandDip;
+        double x = flowDirection == FlowDirection.RightToLeft
+            ? bounds.X
+            : bounds.X - InCanvasRichTextSelectionVisualContract.RealizedSelectionLeadingExpandDip;
+
+        return new Rect(
+            x - horizontalScroll,
+            bounds.Y + topInset - verticalScroll,
+            width,
+            Math.Max(1, bounds.Height - topInset - bottomInset));
     }
 
     private Rect BuildCaretRect()
