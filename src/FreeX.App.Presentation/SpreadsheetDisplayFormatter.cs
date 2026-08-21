@@ -63,6 +63,26 @@ public static class SpreadsheetDisplayFormatter
         return FormatCellValue(cell?.Value);
     }
 
+    /// <summary>
+    /// R162-formulabar-spill-readback: resolves the <see cref="Cell"/> to hand to
+    /// <see cref="FormatFormulaBarText(Cell?, CellAddress, bool, Sheet?, Workbook?)"/> for
+    /// <paramref name="address"/>. <c>Sheet.GetCell</c> returns null for a non-anchor dynamic-array
+    /// spill member (its value lives only in the spill overlay, never in cell storage), so passing
+    /// that null straight through makes the formula bar go blank for a cell the grid is visibly
+    /// painting a value into (the grid reads via <c>Sheet.GetValue</c>, which does consult the
+    /// overlay). When <paramref name="cell"/> is null, this falls back to a value-only
+    /// <see cref="Cell"/> synthesized from <c>Sheet.GetValue</c>, so the formula bar shows the
+    /// spilled value (matching Excel) instead of nothing. For a genuinely blank address this
+    /// synthesizes a cell wrapping <see cref="BlankValue"/>, which formats identically to the null
+    /// it replaces, so ordinary blank cells are unaffected.
+    /// Shared by both shells (WPF host and Avalonia) so the spill-member formula-bar resolution rule
+    /// exists in exactly one place -- callers that also need the raw, possibly-null cell for
+    /// style/alignment/reading-order must keep using the original cell, since a spill member has no
+    /// style/formula of its own to borrow from a synthetic cell.
+    /// </summary>
+    public static Cell? ResolveFormulaBarDisplayCell(Sheet? sheet, Cell? cell, CellAddress address) =>
+        cell ?? (sheet is null ? null : Cell.FromValue(sheet.GetValue(address)));
+
     private static bool IsHidden(Cell cell, CellAddress address, Sheet sheet, Workbook workbook)
     {
         var styleId = cell.StyleId != StyleId.Default

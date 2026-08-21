@@ -28445,13 +28445,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             range.End,
             useR1C1ReferenceStyle: false);
 
-    private string FormatEditText(Cell? cell, CellAddress address) =>
-        SpreadsheetDisplayFormatter.FormatFormulaBarText(
-            cell,
+    // R162-formulabar-spill-readback: resolves cell straight through ResolveFormulaBarDisplayCell so
+    // a non-anchor dynamic-array spill member (Sheet.GetCell returns null for those -- their value
+    // lives only in the spill overlay) shows its spilled value instead of a blank formula bar. This
+    // single helper backs every edit-start/selection-refresh call site in this file (RefreshShell,
+    // double-click, double-tap, F2), matching the WPF host's MainWindow.Editing.cs fix for the same
+    // gap; see SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell for the shared rule.
+    private string FormatEditText(Cell? cell, CellAddress address)
+    {
+        var sheet = _session.Workbook.GetSheet(address.Sheet);
+        return SpreadsheetDisplayFormatter.FormatFormulaBarText(
+            SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, cell, address),
             address,
             useR1C1ReferenceStyle: UseR1C1ReferenceStyle,
-            _session.Workbook.GetSheet(address.Sheet),
+            sheet,
             _session.Workbook);
+    }
 
     // Application options are loaded and adopted by the renderer-neutral runtime session. Hot edit
     // paths read its in-memory snapshot directly, so the Avalonia renderer needs no file-time cache.

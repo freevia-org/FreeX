@@ -1381,12 +1381,21 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             if (blocks[i] is Paragraph paragraph && paragraph.Formatting.ListKind is ListKind.Bullet or ListKind.Number)
             {
                 var kind = paragraph.Formatting.ListKind;
+                var markerText = paragraph.Formatting.ListMarkerText;
+                var numberFormat = paragraph.Formatting.ListNumberFormat;
                 var listStyleType = kind == ListKind.Number
-                    ? WriteListNumberFormatStyleType(paragraph.Formatting.ListNumberFormat)
-                    : WriteBulletListStyleType(paragraph.Formatting.ListMarkerText);
+                    ? WriteListNumberFormatStyleType(numberFormat)
+                    : WriteBulletListStyleType(markerText);
                 var listStyleAttr = listStyleType is null ? "" : $" style=\"list-style-type: {listStyleType}\"";
                 sb.Append(kind == ListKind.Number ? $"<ol{listStyleAttr}>" : $"<ul{listStyleAttr}>");
-                while (i < blocks.Count && blocks[i] is Paragraph item && item.Formatting.ListKind == kind)
+                // Grouped by the FULL marker identity (ListKind, ListMarkerText, ListNumberFormat) -- not
+                // ListKind alone -- so two adjacent same-kind lists with different captured markers (e.g. a
+                // square-bullet run immediately followed by a hollow-circle-bullet run) stay in separate
+                // <ul>/<ol> tags instead of merging into one, which would silently hand the second run the
+                // first run's marker on reload. Mirrors the marker-group key DocxWriter.BuildRestartOverrides
+                // uses for the same (kind, marker text, number format) identity.
+                while (i < blocks.Count && blocks[i] is Paragraph item && item.Formatting.ListKind == kind
+                    && item.Formatting.ListMarkerText == markerText && item.Formatting.ListNumberFormat == numberFormat)
                 {
                     sb.Append("<li>");
                     WriteRuns(sb, item.Runs, imageMode, images, noteLabels);

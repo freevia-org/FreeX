@@ -34,7 +34,7 @@ public partial class MainWindow
         CellAddressBox.Text = expandedRange.Start.Row == expandedRange.End.Row
             ? $"{row}:{row}"
             : $"{expandedRange.Start.Row}:{expandedRange.End.Row}";
-        var cell = sheet?.GetCell(_selectionAnchor.Value);
+        var cell = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(_selectionAnchor.Value), _selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
@@ -58,7 +58,7 @@ public partial class MainWindow
         CellAddressBox.Text = expandedRange.Start.Col == expandedRange.End.Col
             ? $"{FormatColumnReference(col)}:{FormatColumnReference(col)}"
             : $"{FormatColumnReference(expandedRange.Start.Col)}:{FormatColumnReference(expandedRange.End.Col)}";
-        var cell = sheet?.GetCell(_selectionAnchor.Value);
+        var cell = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(_selectionAnchor.Value), _selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
@@ -96,7 +96,7 @@ public partial class MainWindow
         CellAddressBox.Text = expandedRange.Start.Col == expandedRange.End.Col
             ? $"{FormatColumnReference(col)}:{FormatColumnReference(col)}"
             : $"{FormatColumnReference(expandedRange.Start.Col)}:{FormatColumnReference(expandedRange.End.Col)}";
-        var cell = sheet?.GetCell(_selectionAnchor.Value);
+        var cell = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(_selectionAnchor.Value), _selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
@@ -129,7 +129,7 @@ public partial class MainWindow
         CellAddressBox.Text = expandedRange.Start.Row == expandedRange.End.Row
             ? $"{row}:{row}"
             : $"{expandedRange.Start.Row}:{expandedRange.End.Row}";
-        var cell = sheet?.GetCell(_selectionAnchor.Value);
+        var cell = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(_selectionAnchor.Value), _selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
@@ -148,7 +148,8 @@ public partial class MainWindow
         SetSelectedRangesIfChanged(null);
         SheetGrid.SelectedRange = range;
         CellAddressBox.Text = FormatCellReference(_selectionAnchor.Value);
-        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        var selectAllSheet = _workbook.GetSheet(_currentSheetId);
+        var cell = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(selectAllSheet, selectAllSheet?.GetCell(_selectionAnchor.Value), _selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
@@ -286,7 +287,8 @@ public partial class MainWindow
                             var c1 = FormatColumnReference(range.Start.Col);
                             var c2 = FormatColumnReference(range.End.Col);
                             CellAddressBox.Text = c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
-                            var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+                            var colHeaderSheet = _workbook.GetSheet(_currentSheetId);
+                            var cell = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(colHeaderSheet, colHeaderSheet?.GetCell(_selectionAnchor.Value), _selectionAnchor.Value);
                             SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
                             SheetGrid.Focus();
                             RefreshToolbarAfterSelectionChange();
@@ -345,7 +347,8 @@ public partial class MainWindow
                         var r1 = range.Start.Row;
                         var r2 = range.End.Row;
                         CellAddressBox.Text = r1 == r2 ? $"{r1}:{r1}" : $"{r1}:{r2}";
-                        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+                        var rowHeaderSheet = _workbook.GetSheet(_currentSheetId);
+                        var cell = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(rowHeaderSheet, rowHeaderSheet?.GetCell(_selectionAnchor.Value), _selectionAnchor.Value);
                         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
                         SheetGrid.Focus();
                         RefreshToolbarAfterSelectionChange();
@@ -1107,7 +1110,7 @@ public partial class MainWindow
         }
 
         SetCellAddressBoxSelectionText(FormatCellReference(addr));
-        var cell = sheet?.GetCell(addr);
+        var cell = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(addr), addr);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, addr));
         FocusSheetGridIfNeeded();
         RefreshToolbarAfterSelectionChange();
@@ -1128,7 +1131,10 @@ public partial class MainWindow
         _selectionCursor = nextCorner;
         SheetGrid.SelectedRange = range;
         CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
-        SetFormulaBarSelectionText(FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(nextCorner), nextCorner));
+        var cycleCornerSheet = _workbook.GetSheet(_currentSheetId);
+        SetFormulaBarSelectionText(FormatFormulaBarText(
+            SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(cycleCornerSheet, cycleCornerSheet?.GetCell(nextCorner), nextCorner),
+            nextCorner));
         EnsureCellVisible(nextCorner);
         FocusSheetGridIfNeeded();
         RefreshToolbarAfterSelectionChange();
@@ -1163,7 +1169,7 @@ public partial class MainWindow
             SetSelectedRangesIfChanged(null);
             SheetGrid.SelectedRange = merge.Value;
             CellAddressBox.Text = FormatNameBoxSelectionText(merge.Value);
-            var mergedCell = sheet!.GetCell(merge.Value.Start);
+            var mergedCell = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet!.GetCell(merge.Value.Start), merge.Value.Start);
             SetFormulaBarSelectionText(FormatFormulaBarText(mergedCell, merge.Value.Start));
             FocusSheetGridIfNeeded();
             RefreshToolbarAfterSelectionChange();
@@ -1187,7 +1193,7 @@ public partial class MainWindow
         SheetGrid.SelectedRange = selectionRange;
         SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(selectionRange));
 
-        var cell = sheet?.GetCell(addr);
+        var cell = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(addr), addr);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, addr));
         FocusSheetGridIfNeeded();
         RefreshToolbarAfterSelectionChange();
@@ -1271,7 +1277,9 @@ public partial class MainWindow
         CellAddressBox.Text = snapshot.PrimaryRange.Start == snapshot.PrimaryRange.End
             ? FormatCellReference(snapshot.Anchor)
             : FormatRangeReference(snapshot.Anchor, snapshot.Cursor);
-        SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(snapshot.Anchor), snapshot.Anchor));
+        SetFormulaBarSelectionText(FormatFormulaBarText(
+            SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(snapshot.Anchor), snapshot.Anchor),
+            snapshot.Anchor));
 
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
@@ -1312,7 +1320,7 @@ public partial class MainWindow
             SetSelectedRangesIfChanged(null);
             SheetGrid.SelectedRange = currentRegion;
             CellAddressBox.Text = FormatRangeReference(currentRegion.Start, currentRegion.End);
-            var activeCellModel = sheet.GetCell(cell);
+            var activeCellModel = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet.GetCell(cell), cell);
             SetFormulaBarSelectionText(FormatFormulaBarText(activeCellModel, cell));
             SheetGrid.Focus();
             RefreshToolbarAfterSelectionChange();
@@ -1336,7 +1344,7 @@ public partial class MainWindow
             SetSelectedRangesIfChanged(null);
             SheetGrid.SelectedRange = currentRegion;
             CellAddressBox.Text = FormatRangeReference(currentRegion.Start, currentRegion.End);
-            SetFormulaBarSelectionText(FormatFormulaBarText(sheet.GetCell(cell), cell));
+            SetFormulaBarSelectionText(FormatFormulaBarText(SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet.GetCell(cell), cell), cell));
             SheetGrid.Focus();
             RefreshToolbarAfterSelectionChange();
             RefreshStatusBar();
@@ -1403,7 +1411,7 @@ public partial class MainWindow
         SetSelectedRangesIfChanged(null);
         SheetGrid.SelectedRange = expandedRange;
         CellAddressBox.Text = FormatNameBoxSelectionText(expandedRange);
-        var activeCellModel = sheet?.GetCell(effectiveActiveCell);
+        var activeCellModel = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(effectiveActiveCell), effectiveActiveCell);
         SetFormulaBarSelectionText(FormatFormulaBarText(activeCellModel, effectiveActiveCell));
         FocusSheetGridIfNeeded();
         RefreshToolbarAfterSelectionChange();
@@ -1511,7 +1519,9 @@ public partial class MainWindow
         SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));
 
         var formulaBarCell = clickedMerge?.Start ?? target;
-        SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(formulaBarCell), formulaBarCell));
+        SetFormulaBarSelectionText(FormatFormulaBarText(
+            SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(formulaBarCell), formulaBarCell),
+            formulaBarCell));
         FocusSheetGridIfNeeded();
         RefreshToolbarAfterDragSelectionChange();
         RefreshStatusBarAfterDragSelectionChange();
@@ -1685,7 +1695,8 @@ public partial class MainWindow
                 : $"{expandedRange.Start.Row}:{expandedRange.End.Row}";
         }
 
-        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        var headerDragSheet = _workbook.GetSheet(_currentSheetId);
+        var cell = SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(headerDragSheet, headerDragSheet?.GetCell(_selectionAnchor.Value), _selectionAnchor.Value);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterDragSelectionChange();
@@ -1787,8 +1798,9 @@ public partial class MainWindow
         SheetGrid.SelectedRange = primaryRange;
         SetSelectedRangesIfChanged(selectedRanges.Length > 1 ? selectedRanges : null);
         CellAddressBox.Text = FormatNameBoxSelectionText(primaryRange);
+        var sessionSheet = _workbook.GetSheet(_currentSheetId);
         SetFormulaBarSelectionText(FormatFormulaBarText(
-            _workbook.GetSheet(_currentSheetId)?.GetCell(_session.ActiveCell),
+            SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sessionSheet, sessionSheet?.GetCell(_session.ActiveCell), _session.ActiveCell),
             _session.ActiveCell));
 
         if (!previousSheetId.Equals(_currentSheetId))

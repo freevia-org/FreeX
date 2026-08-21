@@ -137,7 +137,14 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         extendSelection.Should().Contain("? GridSelectionNavigationPlanner.FormatDragDimensionText(range)");
         extendSelection.Should().Contain(": FormatRangeReference(range.Start, range.End));");
         addSelection.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));");
-        addSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(formulaBarCell), formulaBarCell));");
+        // R162-formulabar-spill-readback-selection-gesture: the raw sheet?.GetCell(formulaBarCell)
+        // result is no longer handed straight to FormatFormulaBarText -- it is resolved through
+        // SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell first, so a non-anchor spill
+        // member (which Sheet.GetCell returns null for) still shows its spilled value instead of a
+        // blank formula bar.
+        addSelection.Should().Contain(
+            "SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(formulaBarCell), formulaBarCell)");
+        addSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(");
         helper.Should().Contain("CellAddressBox.IsKeyboardFocusWithin");
         helper.Should().Contain("CellAddressBox.SetEditableTextUndoEnabled(false);");
         helper.Should().Contain("CellAddressBox.SetEditableTextUndoEnabled(true);");
