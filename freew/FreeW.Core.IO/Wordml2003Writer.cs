@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 using FreeW.Core.Model;
 
 namespace FreeW.Core.IO;
@@ -53,15 +54,27 @@ public static class Wordml2003Writer
     /// Builds the complete <see cref="XDocument"/> for the Word 2003 WordML output, including the
     /// <c>&lt;?mso-application progid="Word.Document"?&gt;</c> processing instruction. Exposed for
     /// unit-test inspection.
+    /// <para>
+    /// Every run's text ultimately comes from the model (typed content, or content carried in from an
+    /// RTF/DOCX import) and can contain an XML-1.0-illegal control character or lone surrogate, which
+    /// makes <see cref="XDocument.Save(XmlWriter)"/> throw <see cref="ArgumentException"/> and abort the
+    /// save with no file written. Rather than sanitizing at each of the several places above that build a
+    /// <c>w:t</c>/attribute from model text (easy to miss one, as a sibling writer for this same model
+    /// once did), <see cref="OoxmlXmlText.SanitizeInPlace"/> is applied once here, to the finished tree,
+    /// so every text node and attribute value is covered regardless of how it was built.
+    /// </para>
     /// </summary>
     public static XDocument BuildDocument(TextDocument document)
     {
         var root = BuildWordDocument(document);
 
-        return new XDocument(
+        var xml = new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XProcessingInstruction("mso-application", "progid=\"Word.Document\""),
             root);
+
+        OoxmlXmlText.SanitizeInPlace(xml);
+        return xml;
     }
 
     // -----------------------------------------------------------------------

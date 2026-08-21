@@ -129,8 +129,57 @@ public class DocumentOutlineTests
 
         outline.Select(entry => entry.Text).Should().Equal("Intro", "Heading Inside Table", "Conclusion");
         // The table-cell heading is anchored to the table's own top-level block index (1), same as the
-        // convention DocumentBodyParagraphs already uses for the INDEX feature.
-        outline[1].Should().Be(new OutlineEntry(1, 1, "Heading Inside Table", "Heading1"));
+        // convention DocumentBodyParagraphs already uses for the INDEX feature; its TableCellAddress
+        // pins down exactly which row/cell/paragraph within that table it came from.
+        outline[1].Should().Be(new OutlineEntry(
+            1, 1, "Heading Inside Table", "Heading1", new TableParagraphAddress(0, 0, 0)));
+    }
+
+    [Fact]
+    public void OfIncludingTableCells_TwoHeadingsInSameTable_ShareBlockIndexButHaveDistinctTableCellAddresses()
+    {
+        // Reproduces freew-toc-fields F1's root cause: two heading-styled paragraphs in different rows
+        // of the SAME table both anchor to the table's own BlockIndex (unavoidable -- a cell paragraph
+        // has no index of its own in TextDocument.Blocks), which is exactly why any consumer keyed
+        // purely by BlockIndex (a Dictionary<int,int>, or a live page-text delegate shaped as
+        // Func<int,string?>) can only ever store or return ONE value for both of them. TableCellAddress
+        // is the extra per-entry information a consumer needs to actually tell them apart.
+        var doc = new TextDocument();
+        var table = Table.Create(2, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("Introduction"));
+        table.Rows[0].Cells[0].Paragraphs[0].StyleId = "Heading1";
+        table.Rows[1].Cells[0].Paragraphs[0].Runs.Add(new Run("Appendix Z"));
+        table.Rows[1].Cells[0].Paragraphs[0].StyleId = "Heading1";
+        doc.Blocks.Add(table);
+
+        var outline = DocumentOutline.OfIncludingTableCells(doc);
+
+        outline.Should().HaveCount(2);
+        outline[0].Text.Should().Be("Introduction");
+        outline[1].Text.Should().Be("Appendix Z");
+
+        // Still share the table's own BlockIndex -- that convention is unchanged and, on its own,
+        // still collapses the two entries for a BlockIndex-only consumer.
+        outline[0].BlockIndex.Should().Be(outline[1].BlockIndex);
+
+        // But they are no longer indistinguishable: each carries its own row's address.
+        outline[0].TableCellAddress.Should().Be(new TableParagraphAddress(0, 0, 0));
+        outline[1].TableCellAddress.Should().Be(new TableParagraphAddress(1, 0, 0));
+        outline[0].TableCellAddress.Should().NotBe(outline[1].TableCellAddress);
+    }
+
+    [Fact]
+    public void Of_TopLevelHeadings_HaveNullTableCellAddress()
+    {
+        // Sibling no-regression case: Of() (the navigation-pane source) never descends into tables, so
+        // its entries must keep carrying a null TableCellAddress -- adding the field must not attach
+        // stray table-address data to ordinary top-level headings.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+
+        var outline = DocumentOutline.Of(doc);
+
+        outline.Should().ContainSingle().Which.TableCellAddress.Should().BeNull();
     }
 
     [Fact]

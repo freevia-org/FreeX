@@ -175,13 +175,42 @@ public static class StyleManager
     /// Remove the custom style <paramref name="styleId"/> from the catalog. Returns false (and removes nothing)
     /// when the id is a guarded built-in (see <see cref="IsBuiltIn"/>) or is not present. Returns
     /// true when a custom style was removed. Paragraphs still referencing the removed id fall back to the
-    /// document default formatting (an unknown StyleId resolves to nothing), mirroring Word.
+    /// document default formatting (an unknown StyleId resolves to nothing), mirroring Word. Any other style
+    /// whose <see cref="DocumentStyle.BasedOnStyleId"/> named the removed style is "promoted" onto the
+    /// removed style's own based-on (mirroring Word's own delete-style behaviour), so it keeps inheriting
+    /// from the deleted style's parent instead of being left with a dangling reference that would silently
+    /// drop the whole inherited chain from every paragraph/run still using that child style.
     /// </summary>
     public static bool DeleteStyle(TextDocument doc, string styleId)
     {
         ArgumentNullException.ThrowIfNull(doc);
-        if (styleId is null || IsBuiltIn(styleId))
+        if (styleId is null || IsBuiltIn(styleId) || !doc.Styles.TryGetValue(styleId, out var removed))
             return false;
+
+        var promotedBasedOn = removed.BasedOnStyleId;
+        foreach (var child in doc.Styles.Values.ToArray())
+        {
+            if (!string.Equals(child.BasedOnStyleId, styleId, StringComparison.Ordinal))
+                continue;
+
+            // DocumentStyle's BasedOnStyleId is init-only, so replace the entry rather than mutate it.
+            doc.Styles[child.Id] = new DocumentStyle
+            {
+                Id = child.Id,
+                Name = child.Name,
+                Type = child.Type,
+                BasedOnStyleId = promotedBasedOn,
+                NextStyleId = child.NextStyleId,
+                OutlineLevel = child.OutlineLevel,
+                Run = child.Run,
+                Paragraph = child.Paragraph,
+                TableBorders = child.TableBorders,
+                PreservedNumbering = child.PreservedNumbering,
+                LinkedStyleId = child.LinkedStyleId,
+                PreservedTableStyleXml = child.PreservedTableStyleXml,
+            };
+        }
+
         return doc.Styles.Remove(styleId);
     }
 

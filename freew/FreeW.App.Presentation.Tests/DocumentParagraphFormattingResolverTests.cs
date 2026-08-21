@@ -74,6 +74,31 @@ public sealed class DocumentParagraphFormattingResolverTests
     }
 
     [Fact]
+    public void Resolve_keeps_grandparent_formatting_after_the_middle_style_is_deleted()
+    {
+        // Reproduces freew-styles-inheritance F2: Grandparent carries real formatting, Middle is based on
+        // it (contributing nothing of its own), Child is based on Middle. Deleting Middle through
+        // StyleManager.DeleteStyle must promote Child onto Grandparent so this resolver — the same walk a
+        // paragraph in the live editor goes through — still picks up Grandparent's Center alignment
+        // afterwards, instead of the walk dying the instant it hits Child's now-dangling BasedOnStyleId.
+        var document = TextDocument.CreateEmpty();
+        var grandparent = StyleManager.CreateStyle(
+            document, "Grandparent", null, RunFormatting.Default,
+            new ParagraphFormatting { Alignment = TextAlignment.Center });
+        var middle = StyleManager.CreateStyle(document, "Middle", grandparent.Id, RunFormatting.Default, ParagraphFormatting.Default);
+        var child = StyleManager.CreateStyle(document, "Child", middle.Id, RunFormatting.Default, ParagraphFormatting.Default);
+        var paragraph = new Paragraph { StyleId = child.Id };
+
+        DocumentParagraphFormattingResolver.Resolve(document, paragraph).Alignment.Should().Be(TextAlignment.Center);
+
+        StyleManager.DeleteStyle(document, middle.Id).Should().BeTrue();
+
+        DocumentParagraphFormattingResolver.Resolve(document, paragraph).Alignment.Should().Be(
+            TextAlignment.Center,
+            "deleting the in-between style must not drop the grandparent's contribution from the cascade");
+    }
+
+    [Fact]
     public void Resolve_uses_document_line_defaults_without_a_style()
     {
         var document = TextDocument.CreateEmpty();

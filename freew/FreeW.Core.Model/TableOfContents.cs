@@ -57,13 +57,26 @@ public static class TableOfContents
     /// (<see cref="HeadingStyleId"/>) followed by one paragraph per heading in the document outline, in
     /// document order. Each entry's runs are the heading text, a tab, and an explicit-break-based page
     /// reference; its <see cref="ParagraphFormatting.IndentLeftPt"/> is <c>level * </c><see cref="IndentPerLevelPt"/>
-    /// and it carries a right-aligned dotted leader tab stop at the writable page width. Its style id is <c>TOC{level}</c> (clamped to
+    /// and it carries a right-aligned dotted leader tab stop at the writable width of the section the TOC is
+    /// being inserted into (see <paramref name="insertionBlockIndex"/>) — not necessarily the document's
+    /// final section, since <see cref="TextDocument.Page"/> only describes that last section and a TOC is
+    /// normally inserted as front matter in the first one. Its style id is <c>TOC{level}</c> (clamped to
     /// <see cref="MaxStyledLevel"/>). A document with no headings yields just the heading paragraph.
     /// Deterministic and side-effect free — it never mutates <paramref name="document"/>.
     /// </summary>
+    /// <param name="document">The document to build the TOC for.</param>
+    /// <param name="pageTextOf">Optional per-heading page-text override; see <see cref="BuildPageReferences"/>.</param>
+    /// <param name="insertionBlockIndex">
+    /// The block index the generated TOC paragraphs are about to be inserted before, used to resolve which
+    /// section's <see cref="PageSettings"/> sizes the entries' right tab stop (via
+    /// <see cref="PageSettingsSectionResolver"/>). A negative value (the default) preserves the historical
+    /// behavior of always using the final section's page settings, for callers that do not yet know (or
+    /// care about) the insertion point.
+    /// </param>
     public static IReadOnlyList<Paragraph> Build(
         TextDocument document,
-        Func<int, string?>? pageTextOf = null)
+        Func<int, string?>? pageTextOf = null,
+        int insertionBlockIndex = -1)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -74,7 +87,8 @@ public static class TableOfContents
 
         var outline = DocumentOutline.OfIncludingTableCells(document);
         var pageReferences = BuildPageReferences(document, outline);
-        var entryRightTabStopPt = EntryRightTabStopPt(document.Page);
+        var tocSectionIndex = PageSettingsSectionResolver.ResolveSectionIndex(document, insertionBlockIndex);
+        var entryRightTabStopPt = EntryRightTabStopPt(PageSettingsSectionResolver.Resolve(document, tocSectionIndex));
 
         foreach (var entry in outline)
         {

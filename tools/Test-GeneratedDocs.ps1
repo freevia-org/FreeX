@@ -64,6 +64,8 @@ Invoke-GeneratedDocsCheck -ScriptPath $FreeWMediaDialogParityEvidenceScriptPath 
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWPageLayoutDialogParityEvidenceScriptPath -Label "FreeW page-layout dialog parity evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWShellPlatformParityEvidenceScriptPath -Label "FreeW shell platform parity evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWCommandInventoryScriptPath -Label "FreeW command inventory"
+Invoke-GeneratedDocsCheck -ScriptPath $FreeWMailMergeDialogParityEvidenceScriptPath -Label "FreeW mail-merge dialog parity evidence"
+Invoke-GeneratedDocsCheck -ScriptPath $FreeWMediaDialogParityEvidenceScriptPath -Label "FreeW media dialog parity evidence"
 
 $resolvedCrossAppParityDashboardBehaviorScriptPath = Resolve-ToolRepoPath -Path $CrossAppParityDashboardBehaviorScriptPath -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedCrossAppParityDashboardBehaviorScriptPath)) {

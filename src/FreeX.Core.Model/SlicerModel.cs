@@ -20,8 +20,27 @@ public sealed class SlicerModel
     /// </summary>
     public List<string> ConnectedPivotTableNames { get; init; } = [];
 
-    public string? SourceFieldName { get; init; }
+    // R163-pivotslicer-rename-resilience: was `init`-only. SetSlicerSelectionCommand now self-heals
+    // this to the field's live header text once it recovers a stale binding via SourceFieldIndex (see
+    // below) -- see PivotTableSlicerCommands.cs's SetSlicerSelectionCommand.Apply.
+    public string? SourceFieldName { get; set; }
     public string? StyleName { get; init; }
+
+    /// <summary>
+    /// R163-pivotslicer-rename-resilience: the 0-based position of the pivot cache field this slicer is
+    /// bound to, tracked alongside <see cref="SourceFieldName"/> and kept in sync by
+    /// <c>SetSlicerSelectionCommand</c>/<c>AddSlicerCommand</c> (PivotTableSlicerCommands.cs) every time
+    /// the field is resolved. Retyping the source header cell only changes the field's NAME --
+    /// <c>PivotCacheFieldFactory.ReconcileFields</c> keeps it at the same POSITION across a refresh (the
+    /// same way <see cref="PivotFieldModel.SourceFieldIndex"/> already addresses row/column/page fields)
+    /// -- so when a live-header lookup by <see cref="SourceFieldName"/> comes up empty (the name no
+    /// longer exists), this lets the command fall back to the last-known position instead of failing
+    /// permanently with "Connected PivotTable field was not found." after an ordinary header rename.
+    /// Purely an in-session cache: Core.IO never reads or writes it, so it resets to null across a
+    /// save/reload (Excel's own slicer cache XML has no such position to persist), and the very next
+    /// successful by-name resolution after a reload repopulates it.
+    /// </summary>
+    public int? SourceFieldIndex { get; set; }
     public List<string> SelectedItems { get; } = [];
 
     /// <summary>

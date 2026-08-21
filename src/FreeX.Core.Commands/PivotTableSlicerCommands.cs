@@ -138,12 +138,47 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
                 headers,
                 slicer.SourceFieldName,
                 StringComparison.OrdinalIgnoreCase);
+            // SourceFieldIndex is ONE field on the slicer, but this loop visits every pivot table the
+            // slicer is connected to (Excel's Report Connections). Reading or writing it for a
+            // connected pivot other than the slicer's own source would mix positions between pivots
+            // that need not share a column order -- which corrupts the wrong pivot's filter rather
+            // than merely leaving it stale. So the position fallback, and the write-back that feeds
+            // it, are both scoped to the source pivot; every other connected pivot keeps the
+            // by-name-only behaviour it had before.
+            var isSourcePivot = string.Equals(
+                pivotTable.Name,
+                slicer.SourcePivotTableName,
+                StringComparison.OrdinalIgnoreCase);
+
             if (sourceFieldIndex < 0)
             {
-                if (string.Equals(pivotTable.Name, slicer.SourcePivotTableName, StringComparison.OrdinalIgnoreCase))
+                // R163-pivotslicer-rename-resilience: SourceFieldName is captured once, at slicer
+                // creation, and never updated -- if the source header this slicer is bound to gets
+                // retyped to a new name, the by-name lookup above fails forever even though
+                // PivotCacheFieldFactory.ReconcileFields keeps the underlying cache field at the SAME
+                // POSITION across the refresh (only its Name changes). Fall back to the slicer's
+                // last-known position and self-heal SourceFieldName to the new header text, so an
+                // ordinary rename+refresh doesn't permanently kill the slicer.
+                if (isSourcePivot
+                    && slicer.SourceFieldIndex is { } lastKnownIndex
+                    && lastKnownIndex >= 0
+                    && lastKnownIndex < headers.Count)
+                {
+                    sourceFieldIndex = lastKnownIndex;
+                    slicer.SourceFieldName = headers[lastKnownIndex];
+                }
+                else if (isSourcePivot)
+                {
                     return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
-                continue;
+                }
+                else
+                {
+                    continue;
+                }
             }
+
+            if (isSourcePivot)
+                slicer.SourceFieldIndex = sourceFieldIndex;
 
             resolvedTargets.Add((targetSheet, pivotTable, sourceFieldIndex));
         }
@@ -441,6 +476,10 @@ public sealed class AddSlicerCommand : IWorkbookCommand
             CacheName = $"Slicer_{PivotTableSlicerTimelineCommandHelpers.SanitizeCacheName(_slicerName, "Slicer")}",
             SourcePivotTableName = target.Value.PivotTable.Name,
             SourceFieldName = headers[sourceFieldIndex],
+            // R163-pivotslicer-rename-resilience: seed the position alongside the name so a later
+            // rename of this header can be self-healed by SetSlicerSelectionCommand.Apply instead of
+            // permanently breaking this slicer -- see SlicerModel.SourceFieldIndex.
+            SourceFieldIndex = sourceFieldIndex,
             DrawingAnchor = PivotTableFloatingControlAnchor.CreateDefault(target.Value.PivotTable),
             // R114-commands-pivot-sharedItems: SlicerItemResolver.ResolveAvailableItems only resolves a
             // pivot slicer's items when CacheItems is non-empty (mirroring the native

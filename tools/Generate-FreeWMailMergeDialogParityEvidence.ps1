@@ -73,13 +73,13 @@ $gapLines = ($surfaces | ForEach-Object { "| $($_.name) | $($_.status) | $($_.sh
 $markdownText = @"
 # FreeW Mail Merge Dialog Parity
 
-Generated from the WPF authority and shared/presentation/Avalonia source hashes. This report is deterministic; run `tools/Generate-FreeWMailMergeDialogParityEvidence.ps1 -Check` to verify freshness.
+Generated from the WPF authority and shared/presentation/Avalonia source hashes. This report is deterministic; run ``tools/Generate-FreeWMailMergeDialogParityEvidence.ps1 -Check`` to verify freshness.
 
-- Schema: `$($evidence.schema)`
+- Schema: ``$($evidence.schema)``
 - Surfaces inventoried: $($surfaces.Count)
 - Implemented dialog/policy surfaces: $implemented
 - Implemented policy-only surfaces: $policyOnly
-- Authority: `$($evidence.authority)`
+- Authority: ``$($evidence.authority)``
 
 | Surface | Status | Shared policy | Exact shell-wiring gap |
 |---|---|---|---|
@@ -91,7 +91,7 @@ MainWindow and ribbon command/definition routes are included in the generated so
 
 ## Freshness
 
-The JSON records SHA-256 hashes for every authority, implementation, and focused-test input. `-Check` regenerates both artifacts in memory and fails if either committed artifact differs.
+The JSON records SHA-256 hashes for every authority, implementation, and focused-test input. ``-Check`` regenerates both artifacts in memory and fails if either committed artifact differs.
 "@
 
 if ($Check) {

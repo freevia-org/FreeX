@@ -86,6 +86,23 @@ public static class PasteCommandFactory
             return new RejectedWorkbookCommand("Paste", "Paste destination range is outside the worksheet bounds.");
         }
 
+        // shared-large-document-limits-F1: mirror CreateInternalPasteCommand's tiled-destination
+        // guard (MaxTiledPasteCellCount, above) for the EXTERNAL-clipboard tiling path. Without
+        // this, tiling a short external-text block across a whole-sheet destination (reachable via
+        // Ctrl+A on a blank sheet, then Ctrl+V from a non-FreeX source) builds the `edits` list
+        // below with targetRowCount*targetColCount iterations -- up to ~17.18 billion cells -- on
+        // the synchronous UI thread, which either OOMs or hangs indefinitely with no warning.
+        // WorksheetBounds.TryGetRectangleEnd above only rejects a rectangle that overruns the
+        // worksheet edges; it says nothing about the cell COUNT, so a whole-sheet destination
+        // passes that check every time.
+        var targetCellCount = targetRowCount * targetColCount;
+        if (targetCellCount > (ulong)MaxTiledPasteCellCount)
+        {
+            return new RejectedWorkbookCommand(
+                "Paste",
+                $"Paste destination is too large to fill with the copied cells ({targetRowCount:N0} x {targetColCount:N0} = {targetCellCount:N0} cells; the limit is {MaxTiledPasteCellCount:N0}). Select a smaller destination range and paste again.");
+        }
+
         var edits = new List<(CellAddress Address, string Text)>();
         for (var rowOffset = 0UL; rowOffset < targetRowCount; rowOffset++)
         {

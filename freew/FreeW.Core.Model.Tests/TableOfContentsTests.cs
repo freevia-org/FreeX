@@ -218,6 +218,81 @@ public class TableOfContentsTests
             .Which.Should().Be(new TabStop(500, TabStopAlignment.Right, TabLeader.Dots));
     }
 
+    // freew-toc-fields F2: a TOC is normally inserted as front matter in the document's FIRST section,
+    // but the entries' right tab stop used to always be sized from document.Page -- the FINAL section's
+    // page settings (see TextDocument.Page's own doc comment). In a report whose last section is a wide
+    // landscape appendix, that pushed the front-matter TOC's page-number column past its own (narrower,
+    // portrait) section's right margin.
+    [Fact]
+    public void Build_EntryRightTabStopUsesInsertionSectionWidth_NotFinalSectionWidth()
+    {
+        var doc = new TextDocument();
+        // First (front-matter) section: default portrait Letter -> 612 - 72 - 72 = 468pt usable.
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("End of front matter")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+        });
+        doc.Blocks.Add(new Paragraph("Appendix heading") { StyleId = "Heading1" });
+
+        // Final section: landscape Letter -> 792 - 72 - 72 = 648pt usable, wider than the front section.
+        doc.Page.WidthPt = 792;
+        doc.Page.HeightPt = 612;
+
+        // The TOC is being inserted at block 0 -- inside the front (portrait) section, not the final one.
+        var entry = TableOfContents.Build(doc, insertionBlockIndex: 0)[1];
+
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Should().Be(new TabStop(468, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    // Sibling/no-regression case for F2: callers that have not been updated to pass an insertion index
+    // (insertionBlockIndex omitted, defaulting to -1) must keep the pre-fix behavior of sizing from the
+    // final section's page settings -- unchanged from before the fix, in either section-count shape.
+    [Fact]
+    public void Build_EntryRightTabStopUsesFinalSectionWidth_WhenInsertionIndexOmitted()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("End of front matter")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+        });
+        doc.Blocks.Add(new Paragraph("Appendix heading") { StyleId = "Heading1" });
+
+        doc.Page.WidthPt = 792;
+        doc.Page.HeightPt = 612;
+
+        var entry = TableOfContents.Build(doc)[1];
+
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Should().Be(new TabStop(648, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    // Sibling/no-regression case for F2: when the TOC genuinely is inserted into the final (here,
+    // landscape) section, resolving that section's own settings must still yield its own (wider) width,
+    // not the front section's.
+    [Fact]
+    public void Build_EntryRightTabStopUsesFinalSectionWidth_WhenInsertedThere()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("End of front matter")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+        });
+        doc.Blocks.Add(new Paragraph("Appendix heading") { StyleId = "Heading1" });
+
+        doc.Page.WidthPt = 792;
+        doc.Page.HeightPt = 612;
+
+        // Inserted at the appendix heading's own index -- inside the final (landscape) section.
+        var entry = TableOfContents.Build(doc, insertionBlockIndex: 2)[1];
+
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Should().Be(new TabStop(648, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
     [Fact]
     public void Build_ExplicitPageBreaksBeforeOrInsidePrecedingContentAdvanceLaterHeadingPageNumbers()
     {

@@ -297,7 +297,7 @@ public sealed class DocumentReferenceEditingCoordinator
         var insertAt = replaceExisting && existing.Length > 0
             ? existing[0]
             : Math.Clamp(insertionIndex, 0, _session.Document.Blocks.Count);
-        var paragraphs = TableOfContents.Build(_session.Document, pageTextResolverFactory());
+        var paragraphs = TableOfContents.Build(_session.Document, pageTextResolverFactory(), insertAt);
         var commands = new List<IDocumentCommand>(existing.Length + paragraphs.Count);
         if (replaceExisting)
         {
@@ -318,7 +318,7 @@ public sealed class DocumentReferenceEditingCoordinator
             for (var pass = 0; pass < maxStabilizationPasses; pass++)
             {
                 refreshLayout?.Invoke();
-                var stabilized = TableOfContents.Build(_session.Document, pageTextResolverFactory());
+                var stabilized = TableOfContents.Build(_session.Document, pageTextResolverFactory(), insertAt);
                 if (TableOfContents.MatchesGeneratedRegionAt(_session.Document, insertAt, stabilized))
                 {
                     isStable = true;
@@ -332,7 +332,7 @@ public sealed class DocumentReferenceEditingCoordinator
             if (!isStable)
             {
                 refreshLayout?.Invoke();
-                var finalCheck = TableOfContents.Build(_session.Document, pageTextResolverFactory());
+                var finalCheck = TableOfContents.Build(_session.Document, pageTextResolverFactory(), insertAt);
                 if (!TableOfContents.MatchesGeneratedRegionAt(_session.Document, insertAt, finalCheck))
                     throw new InvalidOperationException("Table of Contents pagination did not stabilize.");
             }

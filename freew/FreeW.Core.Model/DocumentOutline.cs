@@ -11,7 +11,19 @@ namespace FreeW.Core.Model;
 /// <param name="Level">Outline depth: 0 for Title, 1 for Heading 1, 2 for Heading 2, and so on.</param>
 /// <param name="Text">The heading paragraph's plain text (may be empty for a blank heading).</param>
 /// <param name="StyleId">The style id that classified this paragraph as a heading/title.</param>
-public readonly record struct OutlineEntry(int BlockIndex, int Level, string Text, string StyleId);
+/// <param name="TableCellAddress">
+/// Null for a top-level heading. For a heading styled inside a table cell (see
+/// <see cref="DocumentOutline.OfIncludingTableCells"/>), the address of the paragraph within its
+/// containing <see cref="Table"/> (the same <see cref="BlockIndex"/> the table itself occupies), so a
+/// consumer can tell apart two entries that share that BlockIndex because they came from the same
+/// table's different rows/cells.
+/// </param>
+public readonly record struct OutlineEntry(
+    int BlockIndex,
+    int Level,
+    string Text,
+    string StyleId,
+    TableParagraphAddress? TableCellAddress = null);
 
 /// <summary>
 /// Pure, WPF-free extraction of a document's heading outline (the navigation-pane model). Lives in
@@ -64,9 +76,12 @@ public static class DocumentOutline
     /// INDEX feature) — since a cell paragraph has no index of its own in that top-level list. Two headings
     /// in different cells of the same table therefore share a <see cref="OutlineEntry.BlockIndex"/>, which
     /// makes this method unsuitable for anything that promotes/demotes/moves/collapses a heading by block
-    /// index (the navigation pane and outline view use <see cref="Of"/> for that); it is meant for
-    /// generators — such as <see cref="TableOfContents"/> — that only need every heading's text, level,
-    /// and an approximate document-order anchor.
+    /// index (the navigation pane and outline view use <see cref="Of"/> for that). Each such entry's
+    /// <see cref="OutlineEntry.TableCellAddress"/> carries the paragraph's exact row/cell (and, for a
+    /// nested table, its recursive address) so a consumer that needs to tell the entries apart — such as
+    /// <see cref="TableOfContents"/>, when approximating a distinct page per row — still can. This method
+    /// is meant for generators that only need every heading's text, level, and an approximate
+    /// document-order anchor.
     /// </summary>
     public static IReadOnlyList<OutlineEntry> OfIncludingTableCells(TextDocument document)
     {
@@ -81,7 +96,8 @@ public static class DocumentOutline
                     location.BlockIndex,
                     level,
                     location.Paragraph.PlainText,
-                    location.Paragraph.StyleId!));
+                    location.Paragraph.StyleId!,
+                    location.TableParagraph));
             }
         }
         return entries;

@@ -23,6 +23,37 @@ namespace FreeW.Core.IO.Tests;
 /// A future hand-written composer -- for a brand-new field kind, or a second call site for an existing
 /// one -- fails this test the moment it bypasses the sanitizer, instead of waiting for the next audit
 /// round to notice it by inspection.
+///
+/// <para>
+/// <b>Scope, stated plainly so the next reviewer does not over-trust this file (round 163):</b> this is a
+/// regex scan of ONE source file, <c>DocxWriter.cs</c>, and nothing else. It was originally described as
+/// "closing the class of a hand-written composer bypassing the sanitizer", which overclaimed: round 163
+/// found <see cref="Wordml2003Writer"/> -- a second, already-registered writer for the same
+/// <c>TextDocument</c> model, in this same project -- building <c>w:t</c> from raw <c>run.Text</c> with
+/// zero sanitization, completely invisible to this scanner because it never reads that file. This test
+/// does NOT, and structurally cannot, cover:
+/// <list type="bullet">
+///   <item>any writer other than <c>DocxWriter.cs</c> -- <c>Wordml2003Writer.cs</c>,
+///   <c>RtfWriter.cs</c>, or any future writer, each needs its own guard (or, better, a behavioral one --
+///   see below);</item>
+///   <item>a call site that aliases the namespace variable, e.g. <c>var w2 = W; new XElement(w2 + "t",
+///   text)</c> -- the regex requires the literal token <c>W +</c> immediately inside the constructor
+///   call, so a renamed variable never matches <see cref="SiteStart"/> at all;</item>
+///   <item>an element built via <c>XElement.Parse(rawXmlString)</c> from a hand-concatenated string --
+///   there is no <c>new XElement(W + "...")</c> call for the scanner to find, so a composer built this
+///   way is invisible even though it produces the exact same unsanitized <c>w:t</c>.</item>
+/// </list>
+/// Both evasions above were demonstrated against this file's own scan logic in round 163 and are real,
+/// not hypothetical. Wordml2003Writer's fix (round 163) deliberately does NOT extend this per-call-site
+/// pattern: it sanitizes the whole built <see cref="System.Xml.Linq.XDocument"/> once, immediately before
+/// serialization (see <c>Free.Shared.Opc.OoxmlXmlText.SanitizeInPlace</c>, already used the same way by
+/// FreeP's PptxPackageWriter), which is immune to both evasions above because it walks the finished tree
+/// rather than trusting any particular call-site shape in the source text. The corresponding behavioral
+/// guard for that writer -- exercising the real Save As gesture rather than scanning source text -- lives
+/// in <c>Wordml2003ControlCharSanitizationTests</c>. An accurate narrow guard beats an inaccurate broad
+/// claim: this file is kept because it still catches the DocxWriter-specific case it was built for, not
+/// because it is, or ever was, a complete guard for "every writer of this model".
+/// </para>
 /// </summary>
 public class DocxWriterInstructionSanitizationInvariantTests
 {

@@ -450,6 +450,79 @@ public class StyleManagerTests
         doc.Styles.Should().NotContainKey(created.Id);
     }
 
+    // ── F2: deleting a style another style is based on must not leave a dangling BasedOnStyleId ─────
+    // Regression coverage: DeleteStyle used to only guard built-in/unknown ids and otherwise just remove
+    // the entry, leaving any other style's BasedOnStyleId pointing at an id no longer in the catalog. The
+    // formatting-resolver walk (ResolveStyleChain/StyleChain) stops the instant TryGetValue fails, so every
+    // property contributed by anything *above* the deleted style in its own chain silently vanished from
+    // the cascade too. Word instead "promotes" such children onto the deleted style's own based-on.
+
+    [Fact]
+    public void DeleteStyle_PromotesChild_OntoDeletedStylesOwnBasedOn_InsteadOfDangling()
+    {
+        var doc = TextDocument.CreateEmpty();
+        var grandparent = StyleManager.CreateStyle(
+            doc, "Grandparent", null, RunFormatting.Default,
+            new ParagraphFormatting { Alignment = TextAlignment.Center });
+        var parent = StyleManager.CreateStyle(doc, "Parent", grandparent.Id, RunFormatting.Default, ParagraphFormatting.Default);
+        var child = StyleManager.CreateStyle(doc, "Child", parent.Id, RunFormatting.Default, ParagraphFormatting.Default);
+
+        StyleManager.DeleteStyle(doc, parent.Id).Should().BeTrue();
+
+        doc.Styles.Should().NotContainKey(parent.Id);
+        doc.Styles[child.Id].BasedOnStyleId.Should().Be(grandparent.Id,
+            "the child must be re-pointed onto the deleted style's own parent, not left dangling");
+
+        // The promoted chain must resolve end-to-end: every id it now walks through must actually exist,
+        // exactly what DocumentParagraphFormattingResolver.ResolveStyleChain / DocumentRunFormattingResolver
+        // .StyleChain require in order to keep pulling in the grandparent's own contribution.
+        var current = doc.Styles[child.Id].BasedOnStyleId;
+        var hops = 0;
+        while (current is not null)
+        {
+            doc.Styles.Should().ContainKey(current, $"the promoted based-on chain must not dangle at '{current}'");
+            current = doc.Styles[current].BasedOnStyleId;
+            hops++;
+            hops.Should().BeLessThan(10, "guards against an infinite loop masking the assertion above");
+        }
+    }
+
+    [Fact]
+    public void DeleteStyle_ChildOfARootStyle_ClearsBasedOn_InsteadOfDangling()
+    {
+        // Matches the finding's exact repro shape: the deleted style itself has no based-on (it is a root
+        // custom style), so promotion has nothing to re-point onto — the child's BasedOnStyleId must become
+        // null (an ordinary, resolvable "no based-on" style), never the stale, now-nonexistent id.
+        var doc = TextDocument.CreateEmpty();
+        var baseStyle = StyleManager.CreateStyle(
+            doc, "BaseCustom", null, RunFormatting.Default,
+            new ParagraphFormatting { Alignment = TextAlignment.Center });
+        var child = StyleManager.CreateStyle(doc, "ChildCustom", baseStyle.Id, RunFormatting.Default, ParagraphFormatting.Default);
+
+        StyleManager.DeleteStyle(doc, baseStyle.Id).Should().BeTrue();
+
+        doc.Styles.Should().NotContainKey(baseStyle.Id);
+        doc.Styles[child.Id].BasedOnStyleId.Should().BeNull(
+            "with no grandparent to promote onto, the child must end up with no based-on rather than a dangling one");
+    }
+
+    [Fact]
+    public void DeleteStyle_LeafStyleNobodyBasesOn_TouchesNoOtherStyle()
+    {
+        // Adjacent case: deleting a style that nothing else is based on must behave exactly as before —
+        // only the deleted entry itself is removed, every other custom style's BasedOnStyleId is untouched.
+        var doc = TextDocument.CreateEmpty();
+        var unrelatedParent = StyleManager.CreateStyle(doc, "UnrelatedParent", null, RunFormatting.Default, ParagraphFormatting.Default);
+        var unrelatedChild = StyleManager.CreateStyle(doc, "UnrelatedChild", unrelatedParent.Id, RunFormatting.Default, ParagraphFormatting.Default);
+        var leaf = StyleManager.CreateStyle(doc, "Leaf", unrelatedParent.Id, RunFormatting.Default, ParagraphFormatting.Default);
+
+        StyleManager.DeleteStyle(doc, leaf.Id).Should().BeTrue();
+
+        doc.Styles.Should().NotContainKey(leaf.Id);
+        doc.Styles[unrelatedChild.Id].BasedOnStyleId.Should().Be(unrelatedParent.Id,
+            "a style unrelated to the deleted one must keep its own based-on untouched");
+    }
+
     // ── GA3: CreateStyle must not allow a duplicate display name ───────────────────────────────────
     // Regression coverage: CreateStyle used to only disambiguate the styleId, not the display Name, so
     // creating a style named "Heading 1" (colliding with the built-in "Heading1"/"Heading 1") produced a

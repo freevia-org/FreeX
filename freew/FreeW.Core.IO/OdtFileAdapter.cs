@@ -689,14 +689,14 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                 // Open new nested list(s) down to `level`, each hosted inside the previous level's last item.
                 var startLevel = frames.Count == 0 ? 0 : frames[^1].Level + 1;
                 for (var lv = startLevel; lv <= level; lv++)
-                    frames.Add(OpenListFrame(frames.Count == 0 ? null : frames[^1], lv, kind, parent, styles));
+                    frames.Add(OpenListFrame(frames.Count == 0 ? null : frames[^1], lv, kind, parent, styles, p.Formatting));
             }
             else if (frames[^1].Kind != kind)
             {
                 // Same level, but the bullet/number kind changed: start a sibling list at this level.
                 var closed = frames[^1];
                 frames.RemoveAt(frames.Count - 1);
-                frames.Add(OpenListFrame(frames.Count == 0 ? null : frames[^1], closed.Level, kind, parent, styles));
+                frames.Add(OpenListFrame(frames.Count == 0 ? null : frames[^1], closed.Level, kind, parent, styles, p.Formatting));
             }
 
             var top = frames[^1];
@@ -710,13 +710,17 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
     // Mirrors the Avalonia editor's MaxListDepth-1 clamp (levels 0..8, 9 nesting levels).
     private const int MaxOdtListLevel = 8;
 
-    private static ListFrame OpenListFrame(ListFrame? outer, int level, ListKind kind, XElement bodyParent, OdtStyleWriter styles)
+    private static ListFrame OpenListFrame(ListFrame? outer, int level, ListKind kind, XElement bodyParent, OdtStyleWriter styles, ParagraphFormatting formatting)
     {
         // Root-level lists attach directly to the surrounding body/cell; nested lists must live inside
         // the enclosing level's current list-item (synthesizing a pass-through one if none exists yet,
         // e.g. when a paragraph jumps straight from level 0 to level 2 in one step).
         var container = outer is null ? bodyParent : EnsureLastItem(outer);
-        var listEl = new XElement(Text + "list", new XAttribute(Text + "style-name", styles.ListStyleName(kind)));
+        // meta F2 (round 163): the paragraph opening this frame carries whatever marker ReadList captured
+        // (or FreeW's own defaults, for a FreeW-authored list) straight through to the emitted style,
+        // instead of ListStyleName silently normalizing every list of a given kind to one hardcoded glyph.
+        var listEl = new XElement(Text + "list",
+            new XAttribute(Text + "style-name", styles.ListStyleName(kind, formatting.ListMarkerText, formatting.ListNumberFormat)));
         container.Add(listEl);
         return new ListFrame { Level = level, Kind = kind, ListEl = listEl, LastItem = null };
     }
@@ -1425,7 +1429,8 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         private readonly Dictionary<string, string> _runNames = new(StringComparer.Ordinal);
         private readonly List<XElement> _paraStyles = new();
         private readonly List<XElement> _runStyles = new();
-        private readonly Dictionary<ListKind, string> _listStyleNames = new();
+        private readonly Dictionary<(ListKind Kind, string? MarkerText, ListNumberFormat NumberFormat), string> _listStyleNames = new();
+        private readonly Dictionary<string, int> _listStyleCounters = new(StringComparer.Ordinal);
         private readonly List<XElement> _listStyles = new();
         private int _tableCounter;
 
@@ -1461,8 +1466,17 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         /// lists at any supported depth resolve to a valid style. <see cref="ListKind.MultiLevel"/> gets its
         /// own style (rather than sharing <see cref="ListKind.Number"/>'s) so <see cref="OdtStyleTable.IsMultiLevelList"/>
         /// can tell it apart from a plain numbered list on read via its per-level <c>text:display-levels</c>.
+        ///
+        /// <para>
+        /// meta F2 (round 163): <paramref name="markerText"/>/<paramref name="numberFormat"/> — the very
+        /// values <see cref="OdtFileAdapter.ReadList"/> now captures from a foreign document (round 162,
+        /// meta F3) — are folded into the cache key so a custom bullet glyph or non-decimal numbering gets
+        /// its OWN <c>text:list-style</c> instead of collapsing onto the one shared "LB1"/"LN1" style that
+        /// always wrote FreeW's own default. A save-and-reload of an untouched foreign list must reproduce
+        /// its marker, not silently discard it at save time.
+        /// </para>
         /// </summary>
-        public string ListStyleName(ListKind kind)
+        public string ListStyleName(ListKind kind, string? markerText, ListNumberFormat numberFormat)
         {
             var key = kind switch
             {
@@ -1470,17 +1484,26 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                 ListKind.MultiLevel => ListKind.MultiLevel,
                 _ => ListKind.Number
             };
-            if (_listStyleNames.TryGetValue(key, out var existing))
+            // Only the field a given kind actually renders participates: a bullet's num-format is never
+            // read, and a numbered list's marker text isn't ODT-modelled (ReadList only ever fills
+            // ListMarkerText for ListKind.Bullet), so leaving the other at its default keeps FreeW-authored
+            // lists (both fields at default) sharing the same single style they always did.
+            var effectiveMarker = key == ListKind.Bullet ? markerText : null;
+            var effectiveFormat = key == ListKind.Bullet ? ListNumberFormat.Decimal : numberFormat;
+            var cacheKey = (key, effectiveMarker, effectiveFormat);
+            if (_listStyleNames.TryGetValue(cacheKey, out var existing))
                 return existing;
 
-            var name = key switch
+            var prefix = key switch
             {
-                ListKind.Bullet => "LB1",
-                ListKind.MultiLevel => "LM1",
-                _ => "LN1"
+                ListKind.Bullet => "LB",
+                ListKind.MultiLevel => "LM",
+                _ => "LN"
             };
-            _listStyleNames[key] = name;
-            _listStyles.Add(BuildListStyle(name, key));
+            var ordinal = _listStyleCounters[prefix] = _listStyleCounters.GetValueOrDefault(prefix) + 1;
+            var name = prefix + ordinal;
+            _listStyleNames[cacheKey] = name;
+            _listStyles.Add(BuildListStyle(name, key, effectiveMarker, effectiveFormat));
             return name;
         }
 
@@ -1551,9 +1574,14 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
 
         private const int ListStyleLevels = 9; // matches the Avalonia editor's MaxListDepth.
 
-        private static XElement BuildListStyle(string name, ListKind kind)
+        private static XElement BuildListStyle(string name, ListKind kind, string? markerText, ListNumberFormat numberFormat)
         {
             var numbered = kind != ListKind.Bullet;
+            // meta F2 (round 163): fall back to FreeW's own default only when no foreign marker was
+            // captured (markerText null / numberFormat Decimal, its default) — otherwise re-emit the exact
+            // glyph/format ReadList captured, so an untouched foreign list survives a save-and-reload.
+            var bulletChar = markerText ?? "•";
+            var numFormat = FormatOdtNumFormat(numberFormat);
             var listStyle = new XElement(Text + "list-style", new XAttribute(Style + "name", name));
             for (var level = 1; level <= ListStyleLevels; level++)
             {
@@ -1567,7 +1595,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                 {
                     levelStyle = new XElement(Text + "list-level-style-number",
                         new XAttribute(Text + "level", level),
-                        new XAttribute(Style + "num-format", "1"),
+                        new XAttribute(Style + "num-format", numFormat),
                         new XAttribute(Style + "num-suffix", "."),
                         levelProps);
 
@@ -1582,7 +1610,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                 {
                     levelStyle = new XElement(Text + "list-level-style-bullet",
                         new XAttribute(Text + "level", level),
-                        new XAttribute(Text + "bullet-char", "•"),
+                        new XAttribute(Text + "bullet-char", bulletChar),
                         levelProps);
                 }
 
@@ -1590,6 +1618,17 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
             }
             return listStyle;
         }
+
+        /// <summary>Inverse of <see cref="OdtStyleTable"/>'s read-side num-format mapping — the round-trip
+        /// partner that lets a captured <see cref="ListNumberFormat"/> survive a save with no edits.</summary>
+        private static string FormatOdtNumFormat(ListNumberFormat format) => format switch
+        {
+            ListNumberFormat.LowerLetter => "a",
+            ListNumberFormat.UpperLetter => "A",
+            ListNumberFormat.LowerRoman => "i",
+            ListNumberFormat.UpperRoman => "I",
+            _ => "1",
+        };
     }
 
     /// <summary>Collects images on write into the package's <c>Pictures/</c> folder + manifest media types.</summary>

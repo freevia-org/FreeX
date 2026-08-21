@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Reflection;
 using System.Xml.Linq;
 using ClosedXML.Excel;
+using ClosedXML.Parser;
 using FreeX.Core.Model;
 using NPOI.POIFS.FileSystem;
 
@@ -2237,6 +2238,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             if (IsClosedXmlSharedFormulaReconstructionFailure(ex))
                 return OpenOrphanedSharedFormulaSlavesStripped();
 
+            if (IsClosedXmlDefinedNameParsingFailure(ex))
+                return OpenWithUnparseableExternalWorkbookDefinedNamesStripped();
+
             packageStream.Position = 0;
             var fallbackPackageStream = MeasurePackagePreparation(() => CreateClosedXmlParsePackage(
                 packageStream,
@@ -2303,6 +2307,36 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             {
                 if (!ReferenceEquals(orphanStrippedPackageStream, packageStream))
                     orphanStrippedPackageStream.Dispose();
+                throw;
+            }
+        }
+
+        ClosedXmlLoadResult OpenWithUnparseableExternalWorkbookDefinedNamesStripped()
+        {
+            packageStream.Position = 0;
+            var definedNameStrippedPackageStream = MeasurePackagePreparation(() =>
+            {
+                var basePackageStream = CreateClosedXmlParsePackage(
+                    packageStream,
+                    styleOnlyWorksheetPathsToStrip,
+                    sanitizationHints,
+                    removeUnsupportedConditionalFormatting: false);
+                var strippedPackageStream = StripUnparseableExternalWorkbookDefinedNames(basePackageStream);
+                if (!ReferenceEquals(basePackageStream, packageStream) &&
+                    !ReferenceEquals(basePackageStream, strippedPackageStream))
+                    basePackageStream.Dispose();
+                return strippedPackageStream;
+            });
+            try
+            {
+                return Complete(
+                    definedNameStrippedPackageStream,
+                    MeasureWorkbookOpen(() => new XLWorkbook(definedNameStrippedPackageStream)));
+            }
+            catch
+            {
+                if (!ReferenceEquals(definedNameStrippedPackageStream, packageStream))
+                    definedNameStrippedPackageStream.Dispose();
                 throw;
             }
         }
@@ -2485,6 +2519,108 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
 
     private static bool IsClosedXmlAssembly(Assembly? assembly) =>
         assembly?.GetName().Name?.StartsWith("ClosedXML", StringComparison.Ordinal) == true;
+
+    // ClosedXML eagerly parses every <definedName>'s RefersTo formula text while constructing
+    // XLWorkbook (XLWorkbook..ctor -> LoadDefinedNames), long before XlsxNamedRangeMapper's own
+    // classification (IsUnmodelableDefinedNameRefersTo) ever gets a chance to run. A filename-
+    // bracket external-workbook reference -- e.g. '[Budget.xlsx]Sheet1'!$A$1, the shape ECMA-376
+    // 18.14.4 permits and other producers/hand-edited files legitimately write -- is not a token
+    // ClosedXML's own formula grammar recognizes at all, so it throws ClosedXML.Parser.
+    // ParsingException ("Unable to determine token for ...") and takes the whole workbook load
+    // down with it, even though FreeX never models this reference either way (R87-io-external-
+    // links-5-1 / R140-freex-external-links). Recognize the failure by type -- ClosedXML.Parser
+    // is a small, focused assembly (transitively referenced via the ClosedXML package) and this is
+    // the one exception type it exposes for "could not tokenize this formula text" -- so the
+    // caller can retry with just the unparseable defined name(s) removed from this ClosedXML-only
+    // parse copy instead of failing the whole load.
+    private static bool IsClosedXmlDefinedNameParsingFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is ParsingException)
+                return true;
+        }
+
+        return false;
+    }
+
+    // Removes only the <definedName> elements whose RefersTo is the filename-bracket external-
+    // workbook reference shape that crashes ClosedXML's formula parser (see
+    // IsClosedXmlDefinedNameParsingFailure above) from a ClosedXML-only parse copy of the
+    // package -- never from the caller's original packageStream, which remains the pristine
+    // source that XlsxWorkbookMetadataPreserver.MergeDefinedNames / XlsxFileAdapter.
+    // SourcePackageSnapshot.RestorePatchWorkbookDefinedNames read from to resurrect exactly this
+    // kind of never-modeled defined name on save (XlsxNamedRangeMapper.
+    // IsUnmodelableDefinedNameRefersTo already classifies the filename-bracket form as
+    // unmodelable, so removing it here only prevents the ClosedXML load crash; it does not change
+    // what gets modeled or resurrected).
+    //
+    // Always edits a fresh, independently-owned copy rather than mutating <paramref
+    // name="packageStream"/> in place: CreateClosedXmlParsePackage is free to hand back the
+    // caller's own stream unchanged when no other sanitization was required (its "nothing to do"
+    // fast path), and that stream can be the non-writable, publicly-visible-buffer view
+    // CreateLoadPackageStream constructs to avoid copying the original file bytes -- ZipArchive's
+    // Update mode requires read+write+seek, which such a view does not support.
+    private static MemoryStream StripUnparseableExternalWorkbookDefinedNames(MemoryStream packageStream)
+    {
+        packageStream.Position = 0;
+        var workingStream = new MemoryStream();
+        packageStream.CopyTo(workingStream);
+        packageStream.Position = 0;
+        workingStream.Position = 0;
+
+        using (var archive = new ZipArchive(workingStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is not null)
+            {
+                XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+                var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+                var definedNames = workbookXml.Root?.Element(workbookNs + "definedNames");
+                var unparseableNames = definedNames?
+                    .Elements(workbookNs + "definedName")
+                    .Where(definedName =>
+                        IsClosedXmlUnparseableExternalWorkbookDefinedNameRefersTo(definedName.Value))
+                    .ToList();
+                if (unparseableNames is { Count: > 0 })
+                {
+                    unparseableNames.Remove();
+                    XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+                }
+            }
+        }
+
+        workingStream.Position = 0;
+        return workingStream;
+    }
+
+    // Narrower sibling of XlsxNamedRangeMapper.IsUnmodelableDefinedNameRefersTo's bracket-
+    // detection: that predicate treats BOTH the numeric-ordinal form ('[1]Sheet1'!$A$1, which
+    // ClosedXML parses fine) and the filename-bracket form ('[Budget.xlsx]Sheet1'!$A$1, which
+    // ClosedXML cannot parse at all) as unmodelable, because FreeX models neither. This one only
+    // needs to identify the sub-case that actually crashes ClosedXML's parser, so the numeric-
+    // ordinal form -- already loading successfully today -- is deliberately left untouched here.
+    private static bool IsClosedXmlUnparseableExternalWorkbookDefinedNameRefersTo(string refersTo)
+    {
+        var body = refersTo.Trim();
+        if (body.StartsWith('='))
+            body = body[1..].Trim();
+
+        var scanStart = body.Length > 0 && body[0] == '\'' ? 1 : 0;
+        if (scanStart >= body.Length || body[scanStart] != '[')
+            return false;
+
+        var closeBracket = body.IndexOf(']', scanStart + 1);
+        if (closeBracket <= scanStart)
+            return false;
+
+        var bracketContent = body[(scanStart + 1)..closeBracket];
+        return !int.TryParse(
+            bracketContent,
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out _);
+    }
 
     private static readonly XNamespace SharedFormulaWorksheetNamespace =
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
