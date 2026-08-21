@@ -235,6 +235,110 @@ public static class PptxPackageWriter
         WriteArchive(archive, presentation, packageKindOverride);
     }
 
+    // ── Slide Zoom target reconciliation (R162 F1) ────────────────────────────────
+
+    /// <summary>
+    /// Re-resolves every Slide Zoom's <see cref="PreservedObjectInfo.ZoomTargetSlideNumericId"/>
+    /// (and the <c>sldId</c> attribute baked into its <see cref="PreservedObjectInfo.RawXml"/>)
+    /// against the target slide's actual save-time NumericId, using the stable
+    /// <see cref="PreservedObjectInfo.ZoomTargetSlideId"/> captured when the Zoom was authored
+    /// or last retargeted. Without this, a Slide Zoom's numeric target — baked speculatively
+    /// before this slide list's final shape was known — silently points at whatever slide
+    /// absorbs that numeric id once duplicate/inserted slides shift the allocation, with no
+    /// error on save or reopen. Zooms with no <c>ZoomTargetSlideId</c> (authored before this
+    /// field existed) are left exactly as they were. Must run before any slide XML is
+    /// serialized into the archive (see call site in <see cref="WriteArchive"/>).
+    /// </summary>
+    private static void ReconcileSlideZoomTargets(List<Slide> slides)
+    {
+        Dictionary<Slide, uint>? finalNumericIds = null;
+        foreach (var slide in slides)
+        {
+            foreach (var shape in EnumerateShapesRecursive(slide.Shapes))
+            {
+                if (shape.PreservedObject is not { ObjectKind: PreservedObjectKind.Zoom } info
+                    || string.IsNullOrEmpty(info.ZoomTargetSlideId))
+                    continue;
+
+                finalNumericIds ??= ComputeFinalSlideNumericIds(slides);
+                var target = slides.FirstOrDefault(s =>
+                    string.Equals(s.Id, info.ZoomTargetSlideId, StringComparison.Ordinal));
+                if (target is null
+                    || !finalNumericIds.TryGetValue(target, out var finalId)
+                    || finalId == 0
+                    || info.ZoomTargetSlideNumericId == finalId)
+                    continue;
+
+                info.ZoomTargetSlideNumericId = finalId;
+                info.RawXml = PatchSldZoomObjTargetId(info.RawXml, finalId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Predicts, without mutating anything, the FINAL numeric slide id each slide will receive
+    /// from the allocation the main per-slide loop performs a little further down (same
+    /// 256-upward algorithm, same used-id tracking) — so <see cref="ReconcileSlideZoomTargets"/>
+    /// can correct preserved Slide Zoom targets before that loop's slide XML is serialized.
+    /// Read-only with respect to <see cref="Slide.NumericId"/>: the main loop still performs
+    /// its own (identical, deterministic) assignment and is the single place that mutates it.
+    /// </summary>
+    private static Dictionary<Slide, uint> ComputeFinalSlideNumericIds(IReadOnlyList<Slide> slides)
+    {
+        var result = new Dictionary<Slide, uint>();
+        uint counter = 256;
+        var used = new HashSet<uint>();
+        foreach (var slide in slides)
+        {
+            var numericId = slide.NumericId.GetValueOrDefault();
+            if (numericId == 0 || !used.Add(numericId))
+            {
+                do { numericId = counter++; } while (!used.Add(numericId));
+            }
+            else if (numericId >= counter)
+            {
+                counter = numericId + 1;
+            }
+            result[slide] = numericId;
+        }
+        return result;
+    }
+
+    private static IEnumerable<SlideShape> EnumerateShapesRecursive(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return shape;
+            if (shape.Children.Count > 0)
+                foreach (var child in EnumerateShapesRecursive(shape.Children))
+                    yield return child;
+        }
+    }
+
+    /// <summary>Patches the <c>sldId</c> attribute of every <c>p:sldZmObj</c> (Slide Zoom target)
+    /// element in a preserved object's raw XML to <paramref name="numericId"/>. Returns the XML
+    /// unchanged if it doesn't parse or carries no such element.</summary>
+    private static string PatchSldZoomObjTargetId(string rawXml, uint numericId)
+    {
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return rawXml;
+
+        XElement root;
+        try { root = XElement.Parse(rawXml, LoadOptions.PreserveWhitespace); }
+        catch { return rawXml; }
+
+        var targets = root.DescendantsAndSelf()
+            .Where(element => element.Name.LocalName == "sldZmObj")
+            .ToArray();
+        if (targets.Length == 0)
+            return rawXml;
+
+        foreach (var target in targets)
+            target.SetAttributeValue("sldId", numericId);
+
+        return root.ToString(SaveOptions.DisableFormatting);
+    }
+
     // ── Core archive writing ──────────────────────────────────────────────────────
 
     private static void WriteArchive(
@@ -719,6 +823,18 @@ public static class PptxPackageWriter
         // pre-scan predicting a different reindexed path than the writer actually produced, which
         // is exactly the FA1 phantom-Override bug the pre-scan's own doc comment warns about.
         int preservedPartCounter = 1;
+
+        // R162 F1 fix: a Slide Zoom's target numeric id is baked speculatively at authoring
+        // time (SlideZoomInsertionPlanner) or carried over from a previously-read file, and
+        // goes stale the moment a slide is duplicated/inserted before the target — the
+        // newly-inserted (NumericId == null) slide can consume the numeric id that was baked
+        // in, silently retargeting the saved Slide Zoom to the wrong slide. Re-resolve every
+        // Slide Zoom's target against the FINAL numeric ids the loop below will assign —
+        // computed read-only here, before any slide XML is serialized — and re-patch both
+        // ZoomTargetSlideNumericId and the sldId attribute in RawXml when they've drifted.
+        // Must run before the loop below writes any slide XML to the archive.
+        ReconcileSlideZoomTargets(presentation.Slides);
+
         for (int si = 0; si < presentation.Slides.Count; si++)
         {
             var slide = presentation.Slides[si];

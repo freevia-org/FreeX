@@ -160,6 +160,19 @@ public sealed class PreservedObjectInfo
     /// </summary>
     public uint? ZoomTargetSlideNumericId { get; set; }
 
+    /// <summary>
+    /// The stable <see cref="Slide.Id"/> of the slide a Slide Zoom targets, captured
+    /// alongside <see cref="ZoomTargetSlideNumericId"/> so the writer can re-resolve the
+    /// numeric id against the target slide's actual, freshly-assigned save-time NumericId.
+    /// The numeric id is baked speculatively when the Zoom is authored (or read from a file
+    /// whose numeric ids were only valid at the time it was written) and goes stale the
+    /// moment another slide is inserted or duplicated before the target — this stable id
+    /// lets the writer detect and correct that drift instead of emitting a dangling/wrong
+    /// sldId. Null for Zooms authored before this field existed; those keep the old
+    /// best-effort (non-re-resolved) behavior.
+    /// </summary>
+    public string? ZoomTargetSlideId { get; set; }
+
     /// <summary>Stable section GUID targeted by a Section Zoom, when present.</summary>
     public string? ZoomTargetSectionId { get; set; }
 

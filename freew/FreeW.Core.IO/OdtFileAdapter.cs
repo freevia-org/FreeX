@@ -147,6 +147,12 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
     private IEnumerable<Paragraph> ReadList(XElement list, ReadContext ctx, int level)
     {
         var kind = ListKindOf(list, ctx);
+        var styleName = (string?)list.Attribute(Text + "style-name");
+        // meta F3 (round 162): the referenced text:list-style's own level captures the actual bullet
+        // glyph (text:bullet-char) / number format (style:num-format) this list uses, instead of
+        // silently normalizing every foreign list to FreeW's own default marker.
+        var markerText = kind == ListKind.Bullet ? ctx.Styles.BulletCharAt(styleName, level) : null;
+        var numberFormat = kind == ListKind.Number ? ctx.Styles.NumberFormatAt(styleName, level) : ListNumberFormat.Decimal;
         foreach (var item in list.Elements(Text + "list-item"))
         {
             foreach (var child in item.Elements())
@@ -154,7 +160,13 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                 if (child.Name == Text + "p" || child.Name == Text + "h")
                 {
                     var p = ReadParagraph(child, ctx);
-                    p.Formatting = p.Formatting with { ListKind = kind, ListLevel = level };
+                    p.Formatting = p.Formatting with
+                    {
+                        ListKind = kind,
+                        ListLevel = level,
+                        ListMarkerText = markerText,
+                        ListNumberFormat = numberFormat,
+                    };
                     yield return p;
                 }
                 else if (child.Name == Text + "list")
@@ -1193,6 +1205,8 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         private readonly Dictionary<string, bool> _listNumbered = new(StringComparer.Ordinal);
         private readonly Dictionary<string, bool> _listMultiLevel = new(StringComparer.Ordinal);
         private readonly Dictionary<string, double> _columnWidths = new(StringComparer.Ordinal);
+        private readonly Dictionary<(string StyleName, int Level), string?> _bulletChars = new();
+        private readonly Dictionary<(string StyleName, int Level), ListNumberFormat> _numberFormats = new();
 
         public void Collect(XElement? root)
         {
@@ -1231,6 +1245,21 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                         // which ODF expresses via text:display-levels > 1 on a list-level-style-number.
                         _listMultiLevel[name] = ls.Elements(Text + "list-level-style-number")
                             .Any(lvl => ((int?)lvl.Attribute(Text + "display-levels") ?? 1) > 1);
+
+                        // meta F3 (round 162): capture each level's actual bullet-char / num-format so a
+                        // foreign list's real marker survives instead of being silently normalized to
+                        // FreeW's own default ('•' bullet / decimal numbering).
+                        foreach (var bulletLevel in ls.Elements(Text + "list-level-style-bullet"))
+                        {
+                            var lvl = ((int?)bulletLevel.Attribute(Text + "level") ?? 1) - 1;
+                            var bulletChar = (string?)bulletLevel.Attribute(Text + "bullet-char");
+                            _bulletChars[(name, lvl)] = bulletChar is null or "•" ? null : bulletChar;
+                        }
+                        foreach (var numberLevel in ls.Elements(Text + "list-level-style-number"))
+                        {
+                            var lvl = ((int?)numberLevel.Attribute(Text + "level") ?? 1) - 1;
+                            _numberFormats[(name, lvl)] = MapOdtNumFormat((string?)numberLevel.Attribute(Style + "num-format"));
+                        }
                     }
                 }
             }
@@ -1273,6 +1302,25 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
 
         public double? ColumnWidthPt(string? styleName) =>
             !string.IsNullOrEmpty(styleName) && _columnWidths.TryGetValue(styleName, out var w) ? w : null;
+
+        /// <summary>The captured <c>text:bullet-char</c> at the given (0-based) level, or null for FreeW's
+        /// own default marker ('•') -- see <see cref="ParagraphFormatting.ListMarkerText"/>.</summary>
+        public string? BulletCharAt(string? styleName, int level) =>
+            !string.IsNullOrEmpty(styleName) && _bulletChars.TryGetValue((styleName, level), out var c) ? c : null;
+
+        /// <summary>The captured <c>style:num-format</c> at the given (0-based) level, defaulting to
+        /// <see cref="ListNumberFormat.Decimal"/> when unrecorded.</summary>
+        public ListNumberFormat NumberFormatAt(string? styleName, int level) =>
+            !string.IsNullOrEmpty(styleName) && _numberFormats.TryGetValue((styleName, level), out var f) ? f : ListNumberFormat.Decimal;
+
+        private static ListNumberFormat MapOdtNumFormat(string? numFormat) => numFormat switch
+        {
+            "a" => ListNumberFormat.LowerLetter,
+            "A" => ListNumberFormat.UpperLetter,
+            "i" => ListNumberFormat.LowerRoman,
+            "I" => ListNumberFormat.UpperRoman,
+            _ => ListNumberFormat.Decimal,
+        };
 
         private static RunFormatting ParseRun(XElement? tp)
         {

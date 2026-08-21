@@ -71,6 +71,42 @@ public class TableOfAuthoritiesRoundTripTests
     }
 
     [Fact]
+    public void CitationMark_WithControlCharacterInLongCitation_SavesAndReloads()
+    {
+        // A C0 control code (e.g. pasted from a legacy source) must not abort the save the way
+        // WordArt text once did (commit e3efcd6ae1) -- the sanitizer drops the illegal character
+        // instead of letting XDocument.Save throw and lose the whole document.
+        const string verticalTab = "";
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.CitationMark(new Citation(
+            "Brown" + verticalTab + "v. Board of Education", CitationCategory.Cases, "Br" + verticalTab + "own")));
+        doc.Blocks.Add(paragraph);
+
+        var result = RoundTrip(doc);
+
+        var citationRun = result.Blocks.OfType<Paragraph>().Single().Runs.Single(r => r.Citation is not null);
+        citationRun.Citation!.LongCitation.Should().Be("Brownv. Board of Education");
+        citationRun.Citation.ShortCitation.Should().Be("Brown");
+    }
+
+    [Fact]
+    public void CitationMark_WithLoneSurrogateInLongCitation_DoesNotThrow()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.CitationMark(new Citation("Ban\uD83Dner", CitationCategory.Cases, "Short")));
+        doc.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        var write = () => DocxWriter.Write(doc, stream);
+
+        write.Should().NotThrow();
+    }
+
+    [Fact]
     public void CitationMark_EmitsWordCompatibleComplexTaFieldWithSwitches()
     {
         using var stream = new MemoryStream();

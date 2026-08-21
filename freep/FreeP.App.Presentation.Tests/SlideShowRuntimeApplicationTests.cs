@@ -439,6 +439,163 @@ public sealed class SlideShowRuntimeApplicationTests
         runtime.DisplaySlide.Should().BeSameAs(presentation.Slides[2]);
     }
 
+    [Fact]
+    public void StartRendererSession_PlaysWithPreviousHeadOnTheStartingSlide_WithoutAnyAdvance()
+    {
+        // Round-162 F1: the slide the show STARTS on (F5 / Shift+F5 in either shell) is
+        // displayed via DisplayCurrentSlide(animated:false) followed by StartRendererSession()
+        // -- see both shells' SlideShowWindow Loaded handler -- never through a
+        // NavigateToSlide host command, so the round-161 fix (wired only into
+        // SlideShowSessionController.ExecuteHostCommand's NavigateToSlide case) never reached
+        // it. This drives the runtime exactly the way both shells do: BindRenderer, then the
+        // real DisplayCurrentSlide/StartRendererSession pair, with NO ExecuteAdvance() at all.
+        var presentation = MakePresentation(1);
+        AddEntranceAnimation(presentation.Slides[0], shapeId: 1, AnimationTrigger.WithPrevious);
+
+        var events = new List<string>();
+        var runtime = CreateRuntime(presentation);
+        var displayRenderer = new RecordingDisplayRenderer(events);
+        runtime.BindRenderer(
+            NoOpRenderer() with { PlayAnimationStep = step => events.Add($"animation:{step.Entries.Count}") },
+            displayRenderer);
+
+        // Exactly what both shells' Loaded handler does -- no Advance() anywhere.
+        runtime.DisplayCurrentSlide(animated: false);
+        runtime.StartRendererSession();
+
+        events.Should().Contain(
+            "animation:1",
+            "the WithPrevious head on the starting slide must auto-play with no click at all");
+        runtime.Controller.HasPendingSteps.Should().BeFalse(
+            "the head was already consumed, so a later Advance() must not re-deliver it");
+    }
+
+    [Fact]
+    public void StartRendererSession_DoesNotAutoPlayAnOrdinaryOnClickHeadOnTheStartingSlide()
+    {
+        // Sibling / no-regression for F1: the far more common case -- a starting slide whose
+        // lead animation is legitimately OnClick -- must keep requiring its own click.
+        var presentation = MakePresentation(1);
+        AddEntranceAnimation(presentation.Slides[0], shapeId: 1, AnimationTrigger.OnClick);
+
+        var events = new List<string>();
+        var runtime = CreateRuntime(presentation);
+        var displayRenderer = new RecordingDisplayRenderer(events);
+        runtime.BindRenderer(
+            NoOpRenderer() with { PlayAnimationStep = _ => events.Add("animation") },
+            displayRenderer);
+
+        runtime.DisplayCurrentSlide(animated: false);
+        runtime.StartRendererSession();
+
+        events.Should().NotContain(
+            "animation",
+            "an ordinary OnClick head must still require its own click, even on the starting slide");
+        runtime.Controller.HasPendingSteps.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExecuteHiddenSlideReveal_PlaysWithPreviousHeadOnTheRevealedHiddenSlide_WithoutAnyAdvance()
+    {
+        // Round-162 F2: RevealHiddenSlide sets the revealed hidden slide directly and never
+        // touches Controller, so SlideShowController.ConsumeEntryAutoPlayStep (which resolves
+        // its head from Controller.CurrentSlide) can never see it. Slide 1 is hidden and its
+        // own lead animation is WithPrevious; revealing it (the production
+        // ExecuteHiddenSlideReveal path used by the 'H' key, a hyperlink, and a typed hidden
+        // slide number) must auto-play that head with no extra Advance(), same as an
+        // ordinary navigated-to slide.
+        var presentation = MakePresentation(2);
+        presentation.Slides[1].IsHidden = true;
+        AddEntranceAnimation(presentation.Slides[1], shapeId: 1, AnimationTrigger.WithPrevious);
+
+        var events = new List<string>();
+        var runtime = CreateRuntime(presentation);
+        var displayRenderer = new RecordingDisplayRenderer(events);
+        // The real shells wire DisplayCurrentSlideWithoutAnimation to call straight back into
+        // _runtime.DisplayCurrentSlide(animated: false) (see both SlideShowWindow.cs's
+        // BindRenderer call: "() => DisplayCurrentSlide(animated: false)") -- that recursive
+        // hop through the one production chokepoint is exactly what this finding is about, so
+        // the fake renderer must reproduce it rather than leaving it a true no-op.
+        runtime.BindRenderer(
+            NoOpRenderer() with
+            {
+                PlayAnimationStep = step => events.Add($"animation:{step.Entries.Count}"),
+                DisplayCurrentSlideWithoutAnimation = () => runtime.DisplayCurrentSlide(animated: false),
+            },
+            displayRenderer);
+
+        runtime.DisplayCurrentSlide(animated: false);
+        runtime.StartRendererSession();
+        events.Clear();
+
+        var revealed = runtime.ExecuteHiddenSlideReveal();
+
+        revealed.Should().BeSameAs(presentation.Slides[1]);
+        events.Should().Contain(
+            "animation:1",
+            "the hidden slide's own WithPrevious head must auto-play the instant it is revealed");
+
+        // Idempotency: a redundant re-display of the same still-revealed hidden slide (e.g. a
+        // second DisplayCurrentSlideWithoutAnimation call before any real navigation clears the
+        // reveal) must not re-deliver the same head a second time.
+        events.Clear();
+        runtime.DisplayCurrentSlide(animated: false);
+        events.Should().NotContain("animation:1", "the revealed slide's head was already consumed once");
+    }
+
+    [Fact]
+    public void ExecuteHiddenSlideReveal_DoesNotAutoPlayAnOrdinaryOnClickHeadOnTheRevealedSlide()
+    {
+        // Sibling / no-regression for F2: a hidden slide whose lead animation is legitimately
+        // OnClick must still require its own click after being revealed.
+        var presentation = MakePresentation(2);
+        presentation.Slides[1].IsHidden = true;
+        AddEntranceAnimation(presentation.Slides[1], shapeId: 1, AnimationTrigger.OnClick);
+
+        var events = new List<string>();
+        var runtime = CreateRuntime(presentation);
+        var displayRenderer = new RecordingDisplayRenderer(events);
+        runtime.BindRenderer(
+            NoOpRenderer() with
+            {
+                PlayAnimationStep = _ => events.Add("animation"),
+                DisplayCurrentSlideWithoutAnimation = () => runtime.DisplayCurrentSlide(animated: false),
+            },
+            displayRenderer);
+
+        runtime.DisplayCurrentSlide(animated: false);
+        runtime.StartRendererSession();
+        events.Clear();
+
+        runtime.ExecuteHiddenSlideReveal();
+
+        events.Should().NotContain(
+            "animation",
+            "an ordinary OnClick head on the revealed hidden slide must still require its own click");
+    }
+
+    private static void AddEntranceAnimation(Slide slide, uint shapeId, AnimationTrigger trigger)
+    {
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = shapeId,
+            Name = $"Shape{shapeId}",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Appear,
+            Trigger = trigger,
+            DurationMs = trigger == AnimationTrigger.OnClick ? 300 : 400,
+            DelayMs = 0,
+        });
+    }
+
     private static SlideShowRuntimeApplication CreateRuntime(
         Presentation presentation,
         SlideShowRuntimeCaptionPreference? captionPreference = null,

@@ -164,6 +164,14 @@ public static class RtfReader
         private readonly Dictionary<int, string> _fontTable = new();
         // \listtable: maps \listid → ListKind, populated by ParseListTable.
         private readonly Dictionary<int, ListKind> _listTable = new();
+        // meta F3 (round 162): maps \listid → the first level's \levelnfc, translated to ListNumberFormat,
+        // for a ListKind.Number list -- so a foreign lower-roman/letter numbered list keeps its counter
+        // format instead of being silently normalized to FreeW's decimal default. (A ListKind.Bullet list's
+        // actual glyph is NOT captured here: RTF encodes it via \leveltext as a length-prefixed, often
+        // Symbol/Wingdings-font-encoded byte string, and decoding that correctly needs a font-cmap mapping
+        // this reader has no infrastructure for -- capturing it naively would risk displaying the wrong
+        // glyph, which is worse than the existing default.)
+        private readonly Dictionary<int, ListNumberFormat> _listNumberFormatTable = new();
 
         public TextDocument Parse()
         {
@@ -694,7 +702,7 @@ public static class RtfReader
                     {
                         // Closing brace of the \listtable group itself — commit the last list and exit.
                         if (currentListId >= 0 && firstLevelNfc >= 0)
-                            _listTable[currentListId] = ResolveListKind(currentListId, firstLevelNfc);
+                            CommitListEntry(currentListId, firstLevelNfc);
                         if (_stack.Count > 0)
                             _state = _stack.Pop();
                         _pos++;
@@ -713,7 +721,7 @@ public static class RtfReader
                     {
                         // Closing a {\list} sub-group — commit and reset.
                         if (currentListId >= 0 && firstLevelNfc >= 0)
-                            _listTable[currentListId] = ResolveListKind(currentListId, firstLevelNfc);
+                            CommitListEntry(currentListId, firstLevelNfc);
                         currentListId = -1;
                         firstLevelNfc = -1;
                         firstLevelSeen = false;
@@ -797,6 +805,31 @@ public static class RtfReader
                 return ListKind.MultiLevel;
             return ListKind.Number;
         }
+
+        /// <summary>Commits one <c>{\list …}</c> sub-group's resolved kind (and, for a Number list, its
+        /// counter format) into <see cref="_listTable"/>/<see cref="_listNumberFormatTable"/>.</summary>
+        private void CommitListEntry(int listId, int firstLevelNfc)
+        {
+            var kind = ResolveListKind(listId, firstLevelNfc);
+            _listTable[listId] = kind;
+            if (kind == ListKind.Number)
+                _listNumberFormatTable[listId] = MapRtfLevelNfc(firstLevelNfc);
+        }
+
+        /// <summary>
+        /// Maps a <c>\levelnfc</c> value to <see cref="ListNumberFormat"/> (standard RTF numbering-format
+        /// codes: 0=Arabic/decimal, 1=upper-case Roman, 2=lower-case Roman, 3=upper-case letter, 4=lower-case
+        /// letter; 23=bullet is handled separately by <see cref="ResolveListKind"/>). Anything else falls
+        /// back to Decimal.
+        /// </summary>
+        private static ListNumberFormat MapRtfLevelNfc(int nfc) => nfc switch
+        {
+            1 => ListNumberFormat.UpperRoman,
+            2 => ListNumberFormat.LowerRoman,
+            3 => ListNumberFormat.UpperLetter,
+            4 => ListNumberFormat.LowerLetter,
+            _ => ListNumberFormat.Decimal,
+        };
 
         private void SkipControlInTable()
         {
@@ -992,6 +1025,10 @@ public static class RtfReader
                 {
                     ListKind  = kind,
                     ListLevel = _state.PendingListLevel,
+                    ListNumberFormat = kind == ListKind.Number
+                        && _listNumberFormatTable.TryGetValue(_state.PendingListId, out var numberFormat)
+                        ? numberFormat
+                        : f.ListNumberFormat,
                 };
             }
             return f;

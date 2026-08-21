@@ -1210,7 +1210,8 @@ public sealed class EditingSession
             ZoomTargetKind.Slide,
             plan.TargetSlideNumericId,
             sectionId: null,
-            $"Zoom to {plan.TargetDisplayName}"));
+            $"Zoom to {plan.TargetDisplayName}",
+            newSlideId: plan.TargetSlideId));
         return CurrentSlide is { } slide
             && FindShape(slide.Shapes, shapeId)?.PreservedObject?.ZoomTargetSlideNumericId
                 == plan.TargetSlideNumericId;

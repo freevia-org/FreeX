@@ -95,6 +95,7 @@ public static class SlideZoomInsertionPlanner
             {
                 ObjectKind = PreservedObjectKind.Zoom,
                 ZoomTargetSlideNumericId = plan.TargetSlideNumericId,
+                ZoomTargetSlideId = plan.TargetSlideId,
                 ZoomProperties = new ZoomObjectProperties(true, "preview", null, true),
                 RawXml = BuildRawXml(shapeId, plan.TargetSlideNumericId),
             },

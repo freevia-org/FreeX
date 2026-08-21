@@ -466,17 +466,29 @@ public static class DocumentCompare
 
     // One word-diff unit: either a plain-text token (ObjectRun is null) or a single non-text run carried
     // through atomically (ObjectRun is the source run; Text is only its literal text, used for offsetting).
-    private readonly record struct DiffUnit(string Text, Run? ObjectRun);
+    // CommentId is the comment-range anchor (Run.CommentId) the token's source text was covered by, if any
+    // -- see the remark on BuildDiffUnits' commentSpans tracking for how a plain-text token recovers this
+    // after its source runs have been concatenated and re-tokenized.
+    private readonly record struct DiffUnit(string Text, Run? ObjectRun, int? CommentId = null);
 
     // Splits a paragraph's runs into diff units. Consecutive plain-text runs are concatenated and tokenized
     // together (so a word split across two runs by a formatting change, e.g. bold "Hel" + "lo", still
     // tokenizes as one word "Hello" exactly as whole-paragraph tokenization did before this method existed);
     // a run flagged by IsCompareAtomicRun becomes its own single unit and is never handed to the tokenizer,
     // so its special content survives the diff instead of being silently dropped.
+    //
+    // A plain run can still carry Run.CommentId (the highlighted comment-range span, as opposed to the
+    // trailing IsCommentReference marker run, which IS atomic). Concatenating such a run's text into the
+    // shared buffer and re-tokenizing it would otherwise silently drop which characters were covered by the
+    // comment, so each plain run's [start, length) offset into the buffer is recorded in commentSpans when
+    // it carries a CommentId; once the buffer is tokenized, each token looks up the span containing its own
+    // start offset and carries that CommentId forward onto its DiffUnit, so the eventual result Run for that
+    // token can be stamped with CommentId too (see AppendRun) instead of losing the comment anchor.
     private static List<DiffUnit> BuildDiffUnits(Paragraph paragraph, bool useExactTokens)
     {
         var units = new List<DiffUnit>();
         var plainBuffer = new System.Text.StringBuilder();
+        var commentSpans = new List<(int Start, int Length, int CommentId)>();
 
         void FlushPlain()
         {
@@ -485,8 +497,14 @@ public static class DocumentCompare
             var text = plainBuffer.ToString();
             plainBuffer.Clear();
             var tokens = useExactTokens ? Tokenize(text) : TokenizeComparisonSegments(text);
+            var offset = 0;
             foreach (var token in tokens)
-                units.Add(new DiffUnit(token, null));
+            {
+                var commentId = FindCoveringCommentId(commentSpans, offset);
+                units.Add(new DiffUnit(token, null, commentId));
+                offset += token.Length;
+            }
+            commentSpans.Clear();
         }
 
         foreach (var run in paragraph.Runs)
@@ -498,10 +516,27 @@ public static class DocumentCompare
                 continue;
             }
 
+            if (run.CommentId is { } runCommentId && run.Text.Length > 0)
+                commentSpans.Add((plainBuffer.Length, run.Text.Length, runCommentId));
             plainBuffer.Append(run.Text);
         }
         FlushPlain();
         return units;
+    }
+
+    // Finds the comment id (if any) of the plain-run span covering buffer offset `tokenStart` -- i.e. the
+    // comment anchored to whichever source run contributed the token's first character. A token that
+    // straddles a span boundary (e.g. a word split mid-anchor across a commented and an uncommented run)
+    // is attributed to the run its first character came from, mirroring how a comment range conventionally
+    // starts at the beginning of the anchored text.
+    private static int? FindCoveringCommentId(List<(int Start, int Length, int CommentId)> spans, int tokenStart)
+    {
+        foreach (var span in spans)
+        {
+            if (tokenStart >= span.Start && tokenStart < span.Start + span.Length)
+                return span.CommentId;
+        }
+        return null;
     }
 
     // True for a run whose content cannot be represented as plain text: cloning just its literal Text into
@@ -570,15 +605,18 @@ public static class DocumentCompare
             return;
         }
 
-        AppendRun(paragraph, unit.Text, kind, author, dateXml);
+        AppendRun(paragraph, unit.Text, unit.CommentId, kind, author, dateXml);
     }
 
     // Append one token as a run with the given revision kind. None-kind runs carry no revision metadata.
-    private static void AppendRun(Paragraph paragraph, string token, RevisionKind kind, string author, string? dateXml)
+    // commentId (recovered by BuildDiffUnits from the token's source run) is carried onto the new run so a
+    // comment's highlighted range survives a word-level diff instead of only the trailing reference marker
+    // (which is IsCompareAtomicRun and so is cloned whole, bypassing this path) surviving.
+    private static void AppendRun(Paragraph paragraph, string token, int? commentId, RevisionKind kind, string author, string? dateXml)
     {
         if (token.Length == 0)
             return;
-        var run = new Run(token);
+        var run = new Run(token) { CommentId = commentId };
         if (kind != RevisionKind.None)
         {
             run.Revision = kind;

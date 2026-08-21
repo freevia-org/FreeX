@@ -1,4 +1,7 @@
+using System.IO;
+using System.Linq;
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
@@ -160,6 +163,88 @@ public sealed class SlideZoomInsertionPlannerTests
             out var plan).Should().BeTrue();
 
         plan.TargetSlideNumericId.Should().Be(257);
+    }
+
+    // R162 F1: a Slide Zoom's target numeric id is baked speculatively when the zoom is
+    // authored (see EffectiveNumericId above). If a slide is later duplicated/inserted before
+    // the target -- an ordinary, unrelated edit -- the baked numeric id can be stolen by the
+    // new slide, and the saved package's sldId silently points at the wrong slide. This must
+    // be corrected by the time the file is actually written, so the assertion below goes all
+    // the way through PptxPackageWriter + PptxPackageReader rather than only inspecting the
+    // in-memory plan.
+    [Fact]
+    public void Duplicating_a_slide_before_the_zoom_target_still_saves_the_right_target()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Unrelated" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Host" });
+        presentation.Slides.Add(new Slide { Id = "slide-3", Title = "Target" });
+
+        // Baked while only these three (shape-less) slides exist, so the prediction (258) is
+        // correct for the CURRENT state -- exactly like SlideZoomInsertionPlannerTests above.
+        var shape = SlideZoomInsertionPlanner.CreateShape(presentation, 1, "slide-3");
+        presentation.Slides[1].Shapes.Add(shape);
+        shape.PreservedObject!.ZoomTargetSlideNumericId.Should().Be(258);
+
+        // Completely ordinary, unrelated edit made AFTER the zoom was authored: duplicate the
+        // first (shape-less) slide and land the copy before the zoom's target. SlideCloner
+        // always gives the duplicate a null NumericId, so it competes for the same 256-upward
+        // allocation the zoom's numeric id was already predicted from, shifting "slide-3"'s
+        // real save-time id to 259 -- one past what the zoom baked in.
+        presentation.Slides.Insert(0, SlideCloner.CloneSlide(presentation.Slides[0]));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var reopened = PptxPackageReader.Read(stream);
+
+        var targetSlide = reopened.Slides.Single(slide => slide.Title == "Target");
+        var zoomShape = reopened.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Single(candidate => candidate.Kind == SlideShapeKind.Zoom);
+
+        targetSlide.NumericId.Should().Be(259);
+        zoomShape.PreservedObject!.ZoomTargetSlideNumericId.Should().Be(targetSlide.NumericId);
+        zoomShape.PreservedObject.RawXml.Should().Contain($"sldId=\"{targetSlide.NumericId}\"");
+    }
+
+    // Sibling/adjacent case (rule 10): retargeting a Slide Zoom (SetZoomTargetCommand, via
+    // EditingSession.SetSlideZoomTarget) must keep working correctly under the same save-time
+    // reconciliation -- the fix must not revert a legitimate retarget back to the zoom's
+    // original target just because a slide was later duplicated/inserted too.
+    [Fact]
+    public void Retargeted_zoom_still_saves_the_new_target_after_a_later_duplicate()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "host", Title = "Host" });
+        presentation.Slides.Add(new Slide { Id = "unrelated", Title = "Unrelated" });
+        presentation.Slides.Add(new Slide { Id = "old-target", Title = "OldTarget" });
+        presentation.Slides.Add(new Slide { Id = "new-target", Title = "NewTarget" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSlideZoom("old-target");
+        session.SetSlideZoomTarget(shape.Id, "new-target").Should().BeTrue();
+        shape.PreservedObject!.ZoomTargetSlideNumericId.Should().Be(259);
+
+        // Another ordinary, unrelated edit made AFTER the retarget: duplicate the "Unrelated"
+        // slide and land the copy ahead of everything, shifting "NewTarget"'s real save-time id
+        // from the 259 the retarget baked in to 260.
+        presentation.Slides.Insert(0, SlideCloner.CloneSlide(presentation.Slides[1]));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var reopened = PptxPackageReader.Read(stream);
+
+        var targetSlide = reopened.Slides.Single(slide => slide.Title == "NewTarget");
+        var oldTargetSlide = reopened.Slides.Single(slide => slide.Title == "OldTarget");
+        var zoomShape = reopened.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Single(candidate => candidate.Kind == SlideShapeKind.Zoom);
+
+        targetSlide.NumericId.Should().Be(260);
+        zoomShape.PreservedObject!.ZoomTargetSlideNumericId.Should().Be(targetSlide.NumericId);
+        zoomShape.PreservedObject.ZoomTargetSlideNumericId.Should().NotBe(oldTargetSlide.NumericId);
     }
 
     private static Presentation BuildPresentation()

@@ -17,9 +17,11 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
     private readonly uint _shapeId;
     private readonly ZoomTargetKind _targetKind;
     private readonly uint? _newSlideNumericId;
+    private readonly string? _newSlideId;
     private readonly string? _newSectionId;
     private readonly string _newAlternativeText;
     private uint? _oldSlideNumericId;
+    private string? _oldSlideId;
     private string? _oldSectionId;
     private string? _oldRawXml;
     private string? _oldAlternativeText;
@@ -35,7 +37,8 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
         ZoomTargetKind targetKind,
         uint? slideNumericId,
         string? sectionId,
-        string alternativeText)
+        string alternativeText,
+        string? newSlideId = null)
     {
         _slideIndex = slideIndex;
         _shapeId = shapeId;
@@ -43,6 +46,12 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
         _newSlideNumericId = targetKind == ZoomTargetKind.Slide
             ? slideNumericId ?? throw new ArgumentNullException(nameof(slideNumericId))
             : null;
+        // The stable Slide.Id backing _newSlideNumericId, when the caller has it (e.g. from
+        // SlideZoomInsertionPlanner's plan). Lets PptxPackageWriter re-resolve the numeric id
+        // against the target slide's actual save-time NumericId if slides are inserted or
+        // duplicated before it after this retarget. Optional/nullable for back-compat callers
+        // that only have the numeric id — those keep the prior, non-re-resolved behavior.
+        _newSlideId = targetKind == ZoomTargetKind.Slide ? newSlideId : null;
         _newSectionId = targetKind == ZoomTargetKind.Section
             ? string.IsNullOrWhiteSpace(sectionId)
                 ? throw new ArgumentException("A Section Zoom target is required.", nameof(sectionId))
@@ -80,6 +89,7 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
             return;
 
         _oldSlideNumericId = info.ZoomTargetSlideNumericId;
+        _oldSlideId = info.ZoomTargetSlideId;
         _oldSectionId = info.ZoomTargetSectionId;
         _oldRawXml = info.RawXml;
         _oldAlternativeText = shape.AlternativeText;
@@ -98,6 +108,7 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
             return;
 
         info.ZoomTargetSlideNumericId = _targetKind == ZoomTargetKind.Slide ? _newSlideNumericId : null;
+        info.ZoomTargetSlideId = _targetKind == ZoomTargetKind.Slide ? _newSlideId : null;
         info.ZoomTargetSectionId = _targetKind == ZoomTargetKind.Section ? _newSectionId : null;
         if (TryClearAutoPreview(rawXml, info, out var previewRelId, out var previewPath, out var clearedXml))
         {
@@ -121,6 +132,7 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
             return;
 
         info.ZoomTargetSlideNumericId = _oldSlideNumericId;
+        info.ZoomTargetSlideId = _oldSlideId;
         info.ZoomTargetSectionId = _oldSectionId;
         if (_oldRawXml is not null)
             info.RawXml = _oldRawXml;

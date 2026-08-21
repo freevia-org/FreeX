@@ -249,4 +249,19 @@ public class CrossReferenceRoundTripTests
 
         Instruction(WithCrossReference(field, "1")).Should().Contain("PAGEREF").And.Contain("_Ref10");
     }
+
+    [Fact]
+    public void RefField_WithControlCharacterInBookmarkName_SavesAndReloads()
+    {
+        // Same class of bug as the Mark Citation TA field (round 162): unlike real Word, this app does not
+        // restrict bookmark names to identifier characters, so a pasted C0 control code in the name must
+        // not abort the save with an ArgumentException from XDocument.Save.
+        const string verticalTab = "\v";
+        var field = new CrossReferenceField(CrossRefFieldKind.Ref, "_Ref" + verticalTab + "1", CrossRefInsertAs.Text, Hyperlink: false);
+
+        var result = RoundTrip(WithCrossReference(field, "Chapter One"));
+
+        var run = result.Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.CrossReference!.Target.Should().Be("_Ref1");
+    }
 }

@@ -289,6 +289,8 @@ internal static class PptxChartWriter
             try
             {
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
+                if (chart.RegenerateWorkbookOnSave)
+                    ReconcileChartExSeriesCount(preserved, chart);
                 UpdateChartExTitle(preserved, chart);
                 UpdateChartExLegend(preserved, chart);
                 UpdateChartExAreaFormatting(preserved, chart);
@@ -597,6 +599,101 @@ internal static class PptxChartWriter
             .FirstOrDefault();
         return string.Equals(layoutId, "waterfall", StringComparison.OrdinalIgnoreCase) &&
                string.Equals(chart.ChartExLayoutId ?? layoutId, "waterfall", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Grows or shrinks the preserved &lt;cx:series&gt;/&lt;cx:data&gt; nodes so their count
+    /// matches <paramref name="chart"/>.Series.Count before any of the ChartEx updaters run.
+    ///
+    /// Both series-count-changing edit paths (<c>ReplaceChartDataCommand.ApplyForward</c> and
+    /// <c>AddChartSeriesCommand</c>) only ever grow or shrink the model's series list at the
+    /// TAIL, so a positional 1:1 mapping of the first <c>min(old,new)</c> physical series to
+    /// <paramref name="chart"/>.Series stays valid; only the tail differs. Without this step,
+    /// every ChartEx updater's <c>series.Count != chart.Series.Count</c> guard trips and the
+    /// entire edit — including category/value changes to the UNCHANGED leading series bundled
+    /// into the same commit — is silently discarded (confirmed finding freep-chart-data F1).
+    ///
+    /// A net-new series is a deep copy of the last existing physical series (a reasonable
+    /// visual default, matching how the classic-chart writer starts a new series blank), given
+    /// a fresh unique id/dataId; a net-removed series drops the last physical series and, only
+    /// when no surviving series still points at it, its own (non-category) data payload — the
+    /// shared category dimension is never touched here.
+    /// </summary>
+    private static void ReconcileChartExSeriesCount(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+
+        var chartData = document.Descendants(cx + "chartData").FirstOrDefault();
+        if (chartData is null)
+            return;
+
+        var series = document.Descendants(cx + "plotAreaRegion")
+            .Elements(cx + "series")
+            .ToList();
+        if (series.Count == 0 || series.Count == chart.Series.Count)
+            return;
+
+        var dataElements = chartData.Elements(cx + "data").ToList();
+        var categoryData = FindChartExCategoryData(dataElements, cx);
+
+        if (chart.Series.Count > series.Count)
+        {
+            var template = series[^1];
+            var templateDataId = TryParseChartExId(template.Element(cx + "dataId")?.Attribute("val")?.Value);
+            var templateData = templateDataId is null
+                ? null
+                : dataElements.FirstOrDefault(data => TryParseChartExId(data.Attribute("id")?.Value) == templateDataId);
+            if (templateData is null)
+                return;
+
+            var nextId = dataElements
+                .Select(data => TryParseChartExId(data.Attribute("id")?.Value) ?? -1)
+                .DefaultIfEmpty(-1)
+                .Max() + 1;
+
+            var anchor = template;
+            var toAdd = chart.Series.Count - series.Count;
+            for (var i = 0; i < toAdd; i++)
+            {
+                var clonedData = new XElement(templateData);
+                clonedData.Elements(cx + "strDim").Remove();
+                clonedData.SetAttributeValue("id", nextId);
+                chartData.Add(clonedData);
+
+                var clonedSeries = new XElement(anchor);
+                var dataIdEl = clonedSeries.Element(cx + "dataId");
+                if (dataIdEl is not null)
+                    dataIdEl.SetAttributeValue("val", nextId);
+                if (clonedSeries.Attribute("uniqueId") is not null)
+                    clonedSeries.SetAttributeValue("uniqueId", Guid.NewGuid().ToString("B"));
+
+                anchor.AddAfterSelf(clonedSeries);
+                anchor = clonedSeries;
+                nextId++;
+            }
+        }
+        else
+        {
+            var remaining = series;
+            var toRemove = series.Count - chart.Series.Count;
+            for (var i = 0; i < toRemove; i++)
+            {
+                var doomed = remaining[^1];
+                remaining = remaining.Take(remaining.Count - 1).ToList();
+                var doomedDataId = TryParseChartExId(doomed.Element(cx + "dataId")?.Attribute("val")?.Value);
+                doomed.Remove();
+
+                if (doomedDataId is null)
+                    continue;
+                var doomedData = dataElements.FirstOrDefault(
+                    data => TryParseChartExId(data.Attribute("id")?.Value) == doomedDataId);
+                if (doomedData is null || doomedData == categoryData)
+                    continue;
+                if (remaining.Any(s => TryParseChartExId(s.Element(cx + "dataId")?.Attribute("val")?.Value) == doomedDataId))
+                    continue;
+                doomedData.Remove();
+            }
+        }
     }
 
     /// <summary>

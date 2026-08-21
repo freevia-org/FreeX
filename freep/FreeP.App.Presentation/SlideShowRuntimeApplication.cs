@@ -206,13 +206,43 @@ public sealed class SlideShowRuntimeApplication
             callbacks.InternalHyperlinkNavigated);
     }
 
+    /// <summary>
+    /// Round-162: the single production chokepoint where a slide actually becomes visible
+    /// to the audience. Both shells' SlideShowWindow reach here -- and only here -- for
+    /// EVERY route that puts a new slide on screen: the initial slide when the show starts
+    /// (Loaded, before StartRendererSession), every ordinary NavigateToSlide navigation
+    /// (Advance/Back/slide-number/hyperlink/Zoom/kiosk-restart, via the renderer's
+    /// NavigateToSlide callback), and a revealed hidden slide (via the renderer's
+    /// DisplayCurrentSlideWithoutAnimation callback -- see ExecuteHiddenSlideReveal). See
+    /// RendererShared/SlideShowWindow.PortableSurface.cs's private DisplayCurrentSlide, which
+    /// every one of those call sites goes through.
+    ///
+    /// So this is where the entry auto-play head (see
+    /// SlideShowSessionController.ConsumeEntryAutoPlayStep) is resolved and played for real:
+    /// after the slide is actually displayed (its shapes exist for the animation to target),
+    /// regardless of whether this particular display used a slide transition (the `animated`
+    /// flag governs only the slide-level transition/cut, not object entrance animations --
+    /// a hidden-slide reveal deliberately skips the transition via animated:false but must
+    /// still play its own WithPrevious/AfterPrevious head, matching PowerPoint). Consuming is
+    /// idempotent per slide-entry (see ConsumeEntryAutoPlayStep's own doc comment), so this
+    /// is safe to call on every display without double-playing a head that a lower-level
+    /// caller already consumed.
+    /// </summary>
     public SlideShowDisplayRendererPlan DisplayCurrentSlide(
         bool animated,
         int? zoomTransitionDurationMs = null,
-        bool zoomShowBackground = true) =>
-        _displayCoordinator.Display(
+        bool zoomShowBackground = true)
+    {
+        var plan = _displayCoordinator.Display(
             BuildDisplayPlan(animated, zoomTransitionDurationMs, zoomShowBackground),
             RequireDisplayRenderer());
+        if (_session.ConsumeEntryAutoPlayStep() is { } entryAutoPlayStep)
+        {
+            RequireRenderer().PlayAnimationStep(entryAutoPlayStep);
+        }
+
+        return plan;
+    }
 
     public SlideShowDisplayRendererPlan StartRendererSession() =>
         _displayCoordinator.StartSession(KioskRestartInterval, RequireDisplayRenderer());

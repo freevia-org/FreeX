@@ -84,6 +84,31 @@ public class TableFormulaRoundTripTests
     }
 
     [Fact]
+    public void FormulaField_WithControlCharacterInExpression_SavesAndReloads()
+    {
+        // Same class of bug as the Mark Citation TA field (round 162): the formula box is a free-typed
+        // TextBox, so a pasted C0 control code must not abort the save with an ArgumentException from
+        // XDocument.Save -- the sanitizer should drop the illegal character instead.
+        const string verticalTab = "\v";
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = new Table();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.TableFormulaFieldRun(
+            new TableFormulaField("=SUM(ABOVE" + verticalTab + ")", "#,##0.00" + verticalTab),
+            cachedResult: "30.00"));
+        table.Rows.Add(SingleCellRow(paragraph));
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+        var run = result.Blocks.OfType<Table>().Single().Rows[0].Cells[0].Paragraphs[0].Runs.Single();
+
+        run.TableFormula.Should().NotBeNull();
+        run.TableFormula!.Expression.Should().Be("=SUM(ABOVE)");
+        run.TableFormula.NumberFormat.Should().Be("#,##0.00");
+    }
+
+    [Fact]
     public void FormulaField_WithoutNumberFormat_OmitsSwitch()
     {
         var doc = TextDocument.CreateEmpty();

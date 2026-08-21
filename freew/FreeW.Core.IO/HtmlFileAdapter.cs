@@ -690,15 +690,123 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
     private static IEnumerable<Paragraph> ReadList(IElement list, Func<string, InlineImage?> imageResolver, IReadOnlyDictionary<string, string> msoStyleMap)
     {
         var kind = list.LocalName.Equals("ol", StringComparison.OrdinalIgnoreCase) ? ListKind.Number : ListKind.Bullet;
+        var declarations = HtmlCssFormatting.ParseDeclarations(list.GetAttribute("style"));
+        var styleType = declarations.GetValueOrDefault("list-style-type");
+        var typeAttribute = list.GetAttribute("type");
+
+        var baseFormatting = ParagraphFormatting.Default with { ListKind = kind };
+        baseFormatting = kind == ListKind.Bullet
+            ? baseFormatting with { ListMarkerText = ReadBulletGlyph(styleType ?? typeAttribute) }
+            : baseFormatting with
+            {
+                ListNumberFormat = ReadListNumberFormatFromCss(styleType)
+                    ?? ReadListNumberFormatFromTypeAttribute(typeAttribute)
+                    ?? ListNumberFormat.Decimal,
+            };
+
         foreach (var item in list.Children.Where(child => child.LocalName.Equals("li", StringComparison.OrdinalIgnoreCase)))
         {
             yield return ReadParagraph(
                 item,
-                ParagraphFormatting.Default with { ListKind = kind },
+                baseFormatting,
                 null,
                 imageResolver);
         }
     }
+
+    /// <summary>
+    /// Maps a <c>list-style-type</c> CSS value (or a legacy <c>type="disc|circle|square"</c> attribute) for
+    /// a <see cref="ListKind.Bullet"/> list to the literal glyph <see cref="ParagraphFormatting.ListMarkerText"/>
+    /// stores, mirroring how <see cref="DocxReader"/> normalizes a captured <c>w:lvlText</c>: null means
+    /// "FreeW's own default marker" ('•'), so the common "disc"/unspecified case round-trips to null
+    /// instead of an explicit-but-identical override. A quoted CSS string value (e.g. <c>'- '</c>, produced by
+    /// <see cref="WriteBulletListStyleType"/> for a glyph with no standard keyword) carries the glyph verbatim.
+    /// </summary>
+    private static string? ReadBulletGlyph(string? styleType)
+    {
+        if (string.IsNullOrWhiteSpace(styleType))
+            return null;
+
+        var trimmed = styleType.Trim();
+        if (trimmed.Length >= 2 &&
+            ((trimmed[0] == '"' && trimmed[^1] == '"') || (trimmed[0] == '\'' && trimmed[^1] == '\'')))
+        {
+            var glyph = trimmed[1..^1];
+            return glyph.Length == 0 || glyph == "•" ? null : glyph;
+        }
+
+        return trimmed.ToLowerInvariant() switch
+        {
+            "circle" => "o",
+            "square" => "▪",
+            _ => null, // "disc", "none", or anything unrecognized falls back to FreeW's default bullet.
+        };
+    }
+
+    /// <summary>Maps a <c>list-style-type</c> CSS keyword for a <see cref="ListKind.Number"/> list to
+    /// <see cref="ListNumberFormat"/>, or null when the value isn't one of the recognized counter keywords
+    /// (falls back to <see cref="ReadListNumberFormatFromTypeAttribute"/>, then FreeW's decimal default).</summary>
+    private static ListNumberFormat? ReadListNumberFormatFromCss(string? styleType)
+    {
+        if (string.IsNullOrWhiteSpace(styleType))
+            return null;
+
+        return styleType.Trim().ToLowerInvariant() switch
+        {
+            "decimal" => ListNumberFormat.Decimal,
+            "lower-alpha" or "lower-latin" => ListNumberFormat.LowerLetter,
+            "upper-alpha" or "upper-latin" => ListNumberFormat.UpperLetter,
+            "lower-roman" => ListNumberFormat.LowerRoman,
+            "upper-roman" => ListNumberFormat.UpperRoman,
+            _ => null,
+        };
+    }
+
+    /// <summary>Maps the legacy HTML <c>&lt;ol type="1|a|A|i|I"&gt;</c> attribute to <see cref="ListNumberFormat"/>.</summary>
+    private static ListNumberFormat? ReadListNumberFormatFromTypeAttribute(string? typeAttribute)
+    {
+        if (string.IsNullOrWhiteSpace(typeAttribute))
+            return null;
+
+        return typeAttribute.Trim() switch
+        {
+            "1" => ListNumberFormat.Decimal,
+            "a" => ListNumberFormat.LowerLetter,
+            "A" => ListNumberFormat.UpperLetter,
+            "i" => ListNumberFormat.LowerRoman,
+            "I" => ListNumberFormat.UpperRoman,
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// The inverse of <see cref="ReadBulletGlyph"/>: renders a captured bullet glyph back to a
+    /// <c>list-style-type</c> value, or null when it's FreeW's own default (so the tag is emitted with no
+    /// style attribute at all, matching output from before this marker was captured).
+    /// </summary>
+    private static string? WriteBulletListStyleType(string? markerText)
+    {
+        if (string.IsNullOrEmpty(markerText) || markerText == "•")
+            return null;
+
+        return markerText switch
+        {
+            "o" => "circle",
+            "▪" => "square",
+            _ => $"\"{markerText}\"",
+        };
+    }
+
+    /// <summary>The inverse of <see cref="ReadListNumberFormatFromCss"/>: null for the Decimal default keeps
+    /// the tag free of a style attribute, matching output from before this format was captured.</summary>
+    private static string? WriteListNumberFormatStyleType(ListNumberFormat format) => format switch
+    {
+        ListNumberFormat.LowerLetter => "lower-alpha",
+        ListNumberFormat.UpperLetter => "upper-alpha",
+        ListNumberFormat.LowerRoman => "lower-roman",
+        ListNumberFormat.UpperRoman => "upper-roman",
+        _ => null,
+    };
 
     private static Paragraph ReadParagraph(
         IElement element,
@@ -1273,7 +1381,11 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             if (blocks[i] is Paragraph paragraph && paragraph.Formatting.ListKind is ListKind.Bullet or ListKind.Number)
             {
                 var kind = paragraph.Formatting.ListKind;
-                sb.Append(kind == ListKind.Number ? "<ol>" : "<ul>");
+                var listStyleType = kind == ListKind.Number
+                    ? WriteListNumberFormatStyleType(paragraph.Formatting.ListNumberFormat)
+                    : WriteBulletListStyleType(paragraph.Formatting.ListMarkerText);
+                var listStyleAttr = listStyleType is null ? "" : $" style=\"list-style-type: {listStyleType}\"";
+                sb.Append(kind == ListKind.Number ? $"<ol{listStyleAttr}>" : $"<ul{listStyleAttr}>");
                 while (i < blocks.Count && blocks[i] is Paragraph item && item.Formatting.ListKind == kind)
                 {
                     sb.Append("<li>");

@@ -187,6 +187,55 @@ public class DocumentCombineTests
     }
 
     [Fact]
+    public void BothReviewersUnchanged_ButRevisedACopySplitsTextIntoMoreRuns_DoesNotDuplicateText()
+    {
+        // freew-compare-merge F2: neither reviewer touched this paragraph's text, but reviewer A's copy
+        // happens to carry the identical text split into more runs than reviewer B's copy (e.g. because an
+        // unrelated formatting/comment/hyperlink boundary sits inside A's copy only). blacklineA (the
+        // original->revisedA diff) then carries A's own run split verbatim -- DocumentCompare returns the
+        // anchor's revised paragraph run-list-unmodified whenever the anchor's run counts differ even
+        // though the plain text matches -- so MergeParagraph must not mistake A's extra run boundary for
+        // extra content once B's shorter run list is exhausted.
+        var original = DocWith("The quick fox jumps");
+
+        var revisedA = new TextDocument();
+        var revisedAParagraph = new Paragraph();
+        revisedAParagraph.Runs.Add(new Run("The quick"));
+        revisedAParagraph.Runs.Add(new Run(" fox jumps"));
+        revisedA.Blocks.Add(revisedAParagraph);
+
+        var revisedB = DocWith("The quick fox jumps");
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+
+        TrackChanges.HasRevisions(result).Should().BeFalse();
+        result.Paragraphs.Single().PlainText.Should().Be("The quick fox jumps");
+    }
+
+    [Fact]
+    public void BothReviewersUnchanged_ButRevisedBCopySplitsTextIntoMoreRuns_StillDoesNotDuplicateText()
+    {
+        // Sibling no-regression case for F2: the split now sits on B's side instead of A's (B's copy has
+        // more runs than A's for the same unedited text). This direction was already handled correctly
+        // (the loop naturally drains B's finer split once A's single run is exhausted, since only the
+        // "B exhausted first" branch blindly re-emitted leftover content) -- assert it stays that way.
+        var original = DocWith("The quick fox jumps");
+
+        var revisedA = DocWith("The quick fox jumps");
+
+        var revisedB = new TextDocument();
+        var revisedBParagraph = new Paragraph();
+        revisedBParagraph.Runs.Add(new Run("The quick"));
+        revisedBParagraph.Runs.Add(new Run(" fox jumps"));
+        revisedB.Blocks.Add(revisedBParagraph);
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+
+        TrackChanges.HasRevisions(result).Should().BeFalse();
+        result.Paragraphs.Single().PlainText.Should().Be("The quick fox jumps");
+    }
+
+    [Fact]
     public void Combine_DoesNotMutateAnyInput()
     {
         var original = DocWith("the quick brown fox");

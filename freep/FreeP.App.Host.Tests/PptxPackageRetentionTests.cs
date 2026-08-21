@@ -1242,6 +1242,112 @@ public sealed class PptxPackageRetentionTests
         Relationship(chartRels, ChartColorStyleRelType, "colors1.xml").Should().NotBeNull();
     }
 
+    private const string ChartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+
+    [Fact]
+    public void ReadWriteRead_ChartExDataEdit_AddingASeries_KeepsTheWholeEditInsteadOfDiscardingIt()
+    {
+        // Reproduces the confirmed finding freep-chart-data F1: bundling a series-count change
+        // (Edit Data's "+ Series") into the same commit as category/value edits on a native
+        // ChartEx chart must NOT silently revert everything to the pre-edit data. Before the
+        // fix, UpdateChartExData's "series.Count != chart.Series.Count" guard tripped on the
+        // now-mismatched count and threw away the entire edit, including the rename/value
+        // changes to the UNCHANGED first series.
+        using var source = BuildPptxWithChartExWorkbookAndStyleSidecars();
+        var loaded = PptxPackageReader.Read(source);
+        var chartShape = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+        chartShape.Chart!.IsChartEx.Should().BeTrue();
+        chartShape.Chart.Series.Should().HaveCount(1);
+
+        new ReplaceChartDataCommand(
+            slideIndex: 0,
+            shapeId: chartShape.Id,
+            categories: ["New East", "New West"],
+            seriesNames: ["New Actual", "New Actual 2"],
+            values: [new double?[] { 77, 88 }, new double?[] { 5, 6 }]).Apply(loaded);
+
+        chartShape.Chart.Series.Should().HaveCount(2, "the in-memory model must reflect the added series");
+        chartShape.Chart.RegenerateWorkbookOnSave.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        using var archive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read);
+
+        XNamespace cx = ChartExUri;
+        var chartExXml = LoadXml(archive, "ppt/charts/chartEx1.xml");
+        var seriesElements = chartExXml.Descendants(cx + "series").ToList();
+        seriesElements.Should().HaveCount(2, "the saved package must carry a physical series for each model series");
+
+        var flat = chartExXml.ToString(SaveOptions.DisableFormatting);
+        flat.Should().Contain("New East").And.Contain("New West");
+        flat.Should().Contain("New Actual").And.Contain("New Actual 2");
+        flat.Should().Contain("77").And.Contain("88").And.Contain("5").And.Contain("6");
+        flat.Should().NotContain("Old East", "the rename bundled into the same commit must not be reverted");
+        flat.Should().NotContain("Old Actual", "the pre-edit series must not survive the save");
+
+        // Round-trip through the reader too - the whole point of the fix is that reopening
+        // the saved file shows the user's edit, not the pre-edit chart.
+        using var reopened = new MemoryStream(saved.ToArray());
+        var reloaded = PptxPackageReader.Read(reopened);
+        var reloadedChart = reloaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        reloadedChart.Series.Should().HaveCount(2);
+        reloadedChart.Categories.Should().Equal("New East", "New West");
+        reloadedChart.Series[0].Name.Should().Be("New Actual");
+        reloadedChart.Series[0].Values.Should().Equal(77.0, 88.0);
+        reloadedChart.Series[1].Name.Should().Be("New Actual 2");
+        reloadedChart.Series[1].Values.Should().Equal(5.0, 6.0);
+    }
+
+    [Fact]
+    public void ReadWriteRead_ChartExDataEdit_RemovingASeries_KeepsTheEditedRemainderInsteadOfDiscardingIt()
+    {
+        // Sibling no-regression / adjacent-case coverage for freep-chart-data F1: the opposite
+        // direction (Edit Data's "- Series") must also survive a save instead of tripping the
+        // same series-count guard. Start from a 2-series chart and remove the tail series while
+        // renaming a category on the surviving one, in the same commit.
+        using var source = BuildPptxWithChartExWorkbookAndStyleSidecars();
+        var loaded = PptxPackageReader.Read(source);
+        var chartShape = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+
+        // Grow to 2 series first (same command the app itself would use), then save+reload so
+        // the fixture under test starts from a genuine 2-physical-series ChartEx package.
+        new ReplaceChartDataCommand(
+            slideIndex: 0,
+            shapeId: chartShape.Id,
+            categories: ["East", "West"],
+            seriesNames: ["Actual", "Actual 2"],
+            values: [new double?[] { 1, 2 }, new double?[] { 3, 4 }]).Apply(loaded);
+        using var grown = new MemoryStream();
+        PptxPackageWriter.Write(loaded, grown);
+        grown.Position = 0;
+        var reloaded = PptxPackageReader.Read(grown);
+        var reloadedChartShape = reloaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+        reloadedChartShape.Chart!.Series.Should().HaveCount(2);
+
+        // Now remove the second series and rename a category on the (unchanged-data) survivor,
+        // all in one commit.
+        new ReplaceChartDataCommand(
+            slideIndex: 0,
+            shapeId: reloadedChartShape.Id,
+            categories: ["Renamed East", "West"],
+            seriesNames: ["Actual"],
+            values: [new double?[] { 1, 2 }]).Apply(reloaded);
+        reloadedChartShape.Chart.Series.Should().HaveCount(1);
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, saved);
+        using var archive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read);
+
+        XNamespace cx = ChartExUri;
+        var chartExXml = LoadXml(archive, "ppt/charts/chartEx1.xml");
+        var seriesElements = chartExXml.Descendants(cx + "series").ToList();
+        seriesElements.Should().HaveCount(1, "the removed series must not survive the save");
+
+        var flat = chartExXml.ToString(SaveOptions.DisableFormatting);
+        flat.Should().Contain("Renamed East", "the rename bundled with the removal must not be reverted");
+        flat.Should().NotContain("Actual 2", "the removed series' name must not survive the save");
+    }
+
     [Fact]
     public void ReadWriteRead_MultiChartSemanticEdit_RegeneratesOnlyEditedChartWorkbookAndPreservesChartWorkbookMapping()
     {

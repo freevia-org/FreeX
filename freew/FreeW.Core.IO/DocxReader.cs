@@ -31,6 +31,11 @@ public static class DocxReader
         public static readonly DuplicateDrawingIdentityMarker Instance = new();
     }
 
+    // OLE/CFB compound-file signature -- shared by legacy Word 97-2003 .doc/.dot binaries and any other
+    // compound-file document (see FreeX's XlsxFileAdapter.CompoundFileBinarySignature for the .xlsx sibling
+    // of this same check).
+    private static readonly byte[] CompoundFileBinarySignature = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+
     public static TextDocument Read(string path)
     {
         using var stream = File.OpenRead(path);
@@ -39,9 +44,57 @@ public static class DocxReader
         return document;
     }
 
+    /// <summary>
+    /// Opens <paramref name="stream"/> as a ZIP/OPC package, sniffing its content first so a mismatched
+    /// file (a legacy .doc renamed to .docx, a truncated download, an empty file, or any other binary
+    /// saved with a WordprocessingML extension) surfaces a clear message instead of letting
+    /// <see cref="ZipArchive"/>'s raw "End of Central Directory record could not be found" exception
+    /// reach the user verbatim.
+    /// </summary>
+    private static ZipArchive OpenZipArchive(Stream stream)
+    {
+        if (stream.CanSeek)
+        {
+            var startPosition = stream.Position;
+            Span<byte> header = stackalloc byte[8];
+            var bytesRead = stream.ReadAtLeast(header, header.Length, throwOnEndOfStream: false);
+            stream.Position = startPosition;
+
+            if (bytesRead >= CompoundFileBinarySignature.Length
+                && header[..CompoundFileBinarySignature.Length].SequenceEqual(CompoundFileBinarySignature))
+            {
+                throw new InvalidDataException(
+                    "Could not read this as a Word document (.docx/.docm/.dotx/.dotm). The file appears to be " +
+                    "a legacy Word 97-2003 (.doc/.dot) binary document, or another OLE compound-file document, " +
+                    "saved with a WordprocessingML extension. Open it as a Word 97-2003 (.doc) document instead, " +
+                    "or re-save it from Word as .docx.");
+            }
+
+            // A well-formed ZIP/OPC package always starts with a local file header ("PK\x03\x04") --
+            // or, for a (degenerate) empty archive, the end-of-central-directory record ("PK\x05\x06").
+            if (bytesRead < 2 || header[0] != (byte)'P' || header[1] != (byte)'K')
+            {
+                throw new InvalidDataException(
+                    "Could not read this as a Word document (.docx/.docm/.dotx/.dotm). The file is not a valid " +
+                    "OOXML package -- it may be empty, truncated, or saved in a different format under this extension.");
+            }
+        }
+
+        try
+        {
+            return new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        }
+        catch (InvalidDataException ex)
+        {
+            throw new InvalidDataException(
+                "Could not read this as a Word document (.docx/.docm/.dotx/.dotm). The file is not a valid " +
+                "OOXML package -- it may be corrupted or truncated.", ex);
+        }
+    }
+
     public static TextDocument Read(Stream stream)
     {
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        using var archive = OpenZipArchive(stream);
         // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
         WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(archive);
         var documentXml = LoadPart(archive, "word/document.xml")

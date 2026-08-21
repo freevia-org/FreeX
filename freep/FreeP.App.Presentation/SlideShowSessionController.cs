@@ -69,6 +69,7 @@ public sealed class SlideShowSessionController
     private string _slideNumberBuffer = string.Empty;
     private Slide? _revealedHiddenSlide;
     private int _revealedHiddenSlideSourceIndex = -1;
+    private bool _revealedHiddenSlideEntryStepConsumed;
 
     public SlideShowSessionController(
         Presentation presentation,
@@ -466,6 +467,7 @@ public sealed class SlideShowSessionController
 
         _revealedHiddenSlide = target.Slide;
         _revealedHiddenSlideSourceIndex = target.SourceSlideIndex;
+        _revealedHiddenSlideEntryStepConsumed = false;
 
         // The revealed slide is hidden, so it has no index of its own in the playback route;
         // stamp subsequent ink strokes with the encoded absolute slide index instead of leaving
@@ -476,6 +478,49 @@ public sealed class SlideShowSessionController
             SlideShowInkExecutionPlanner.EncodeHiddenSlideInkIndex(target.SourceSlideIndex));
 
         return _revealedHiddenSlide;
+    }
+
+    /// <summary>
+    /// Round-162: resolves the entry auto-play head for whatever slide is actually on
+    /// screen right now, so every route that puts a new slide in front of the audience --
+    /// session start, ordinary Advance/Back/slide-number/hyperlink/Zoom navigation, kiosk
+    /// restart, AND a revealed hidden slide -- goes through one place. The single production
+    /// caller is <see cref="SlideShowRuntimeApplication.DisplayCurrentSlide"/>, which every
+    /// shell reaches for every one of those routes (see its own doc comment); this method
+    /// only decides WHICH slide's head to resolve.
+    ///
+    /// When a hidden slide is revealed (<see cref="RevealHiddenSlide"/>), <see cref="Controller"/>
+    /// is deliberately left untouched (advancing away from the reveal resumes the route at its
+    /// unchanged position), so <see cref="SlideShowController.ConsumeEntryAutoPlayStep"/> would
+    /// resolve the WRONG slide's head. This method instead builds the revealed slide's own steps
+    /// on demand and consumes its head at most once per reveal via
+    /// <see cref="_revealedHiddenSlideEntryStepConsumed"/> (reset by <see cref="RevealHiddenSlide"/>
+    /// and by <see cref="ExecuteHostCommand"/>, mirroring how <see cref="SlideShowController"/>
+    /// itself gates on <c>PendingStepIndex</c>).
+    /// </summary>
+    public AnimationStep? ConsumeEntryAutoPlayStep()
+    {
+        if (_revealedHiddenSlide is null)
+        {
+            return Controller.ConsumeEntryAutoPlayStep();
+        }
+
+        if (_revealedHiddenSlideEntryStepConsumed || !Controller.ShowWithAnimation)
+        {
+            return null;
+        }
+
+        _revealedHiddenSlideEntryStepConsumed = true;
+        var steps = SlideShowController.BuildSteps(_revealedHiddenSlide);
+        if (steps.Count == 0)
+        {
+            return null;
+        }
+
+        var head = steps[0];
+        return head.Entries.Count == 0 || head.Entries[0].Animation.Trigger == AnimationTrigger.OnClick
+            ? null
+            : head;
     }
 
     public SlideShowPointerClickIntent PlanPointerClick(SlideShowCanvasPointer pointer) =>
@@ -637,6 +682,7 @@ public sealed class SlideShowSessionController
 
         _revealedHiddenSlide = null;
         _revealedHiddenSlideSourceIndex = -1;
+        _revealedHiddenSlideEntryStepConsumed = false;
 
         if (command.StopAutoAdvance)
         {
@@ -659,15 +705,22 @@ public sealed class SlideShowSessionController
                     command.AnimateSlide,
                     command.TransitionDurationMs,
                     command.UseDestinationBackground));
-                // round-161 (was disclosed as productionCallSite NONE YET): a WithPrevious/
-                // AfterPrevious main-sequence head must auto-play the instant the slide is
-                // entered rather than waiting for the next click -- see
-                // SlideShowController.ConsumeEntryAutoPlayStep's own doc comment. This is the
-                // single place both the WPF and Avalonia shells reach for every navigation
-                // (Advance/Back/jump/zoom all funnel their NavigateToSlide command here), so
-                // wiring it here gives both shells the fix from one call site. Runs after
-                // callbacks.NavigateToSlide so the destination slide's shapes already exist
-                // for the animation to target.
+                // round-161: a WithPrevious/AfterPrevious main-sequence head must auto-play
+                // the instant the slide is entered rather than waiting for the next click --
+                // see SlideShowController.ConsumeEntryAutoPlayStep's own doc comment.
+                //
+                // round-162: in production, callbacks.NavigateToSlide above IS
+                // SlideShowRuntimeApplication.DisplayCurrentSlide (via the shell's renderer
+                // callback), which now resolves and plays this same head itself as the actual
+                // single chokepoint every route funnels through -- see
+                // SlideShowSessionController.ConsumeEntryAutoPlayStep and
+                // SlideShowRuntimeApplication.DisplayCurrentSlide's doc comments. So by the
+                // time control returns here, the head has ALREADY been consumed and this call
+                // is a harmless no-op in the real app. It is kept only because
+                // SlideShowSessionControllerTests.PlanAdvance_ThenExecuteHostCommand_PlaysWithPreviousHead_WithoutASecondAdvance
+                // exercises this reducer directly with a bare callback that does not recurse
+                // into DisplayCurrentSlide, and that test is a deliberate round-161 contract --
+                // removing this line would fail it for no production benefit.
                 if (Controller.ConsumeEntryAutoPlayStep() is { } entryAutoPlayStep)
                 {
                     callbacks.PlayAnimationStep(entryAutoPlayStep);

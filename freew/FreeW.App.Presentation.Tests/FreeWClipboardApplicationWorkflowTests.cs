@@ -71,6 +71,39 @@ public sealed class FreeWClipboardApplicationWorkflowTests
         plan.PreferRichDocument.Should().BeTrue("a FreeX cell-range copy's formatting must survive Keep Source Formatting paste into FreeW");
     }
 
+    // meta F3 (round 162): a foreign application's HTML clipboard payload carrying a non-default list
+    // marker (a CSS square bullet, a CSS lower-roman numbered list) must keep that marker through the
+    // HTML clipboard fallback path -- ReadAsync's HTML fallback reuses HtmlFileAdapter (see
+    // TryParseHtmlDocument above), so this is the clipboard half of the same fix HtmlFileAdapter got.
+    [Fact]
+    public async Task ReadPasteSpecialAsync_PreservesForeignBulletGlyphAndNumberFormatFromHtmlClipboard()
+    {
+        const string html =
+            "<html><body>" +
+            "<ul style=\"list-style-type: square\"><li>Alpha</li></ul>" +
+            "<ol style=\"list-style-type: lower-roman\"><li>One</li></ol>" +
+            "</body></html>";
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                new PlatformClipboardContent(
+                    Text: "Alpha\r\nOne",
+                    CustomData: [PlatformClipboardData.FromText("HTML Format", html)])),
+        };
+
+        var result = await FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(clipboard);
+
+        result.IsSuccess.Should().BeTrue();
+        var paragraphs = result.Payload!.RichDocument!.Paragraphs.ToList();
+
+        paragraphs.Should().Contain(p => p.Formatting.ListKind == ListKind.Bullet
+                && p.Formatting.ListMarkerText == "▪",
+            "a pasted CSS square bullet must not be silently normalized to FreeW's default round bullet");
+        paragraphs.Should().Contain(p => p.Formatting.ListKind == ListKind.Number
+                && p.Formatting.ListNumberFormat == ListNumberFormat.LowerRoman,
+            "a pasted CSS lower-roman numbered list must not be silently normalized to FreeW's decimal default");
+    }
+
     // freew-paste-formats F1: a clipboard carrying ONLY a bitmap (a screenshot, Paint's Ctrl+C, a PDF
     // viewer's "Copy image") has none of the text-shaped custom formats above and no Text, so before the
     // fix ReadPasteSpecialAsync -- which backs the default Ctrl+V/ribbon Paste and Paste Special's Keep

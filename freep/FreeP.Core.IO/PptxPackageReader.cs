@@ -96,6 +96,14 @@ public static class PptxPackageReader
         CopyToMemoryStreamWithLimit(stream, ms, WorkbookOpenSizeGuard.DefaultMaxFileBytes);
         ms.Position = 0;
 
+        // Sniff before handing the buffer to ZipArchive, which otherwise throws an opaque
+        // InvalidDataException ("End of Central Directory record could not be found") for ANY
+        // non-ZIP content -- including a legacy PowerPoint 97-2003 (.ppt, OLE2/CFB) file renamed or
+        // misidentified as .pptx. FreeP has no dedicated legacy-binary reader at all (unlike FreeW's
+        // LegacyDocFileAdapter / FreeX's LegacyXlsFileAdapter), so give that specific, actionable case
+        // its own message instead of letting a raw ZIP-parser exception reach the user.
+        EnsureLooksLikePptxPackage(ms);
+
         using var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: false);
         // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
         WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(archive);
@@ -104,6 +112,45 @@ public static class PptxPackageReader
         presentation.PackageSnapshot = snapshot;
         presentation.PackageKind = DetectPackageKind(snapshot);
         return presentation;
+    }
+
+    // ZIP local-file-header signature ("PK") every OOXML package (.pptx/.potx) must start with --
+    // same 2-byte sniff FreeX's WorkbookOpenTargetPlanner.LooksLikeZipPackage and the shared
+    // AutosaveSnapshotStore.LooksLikeZipArchive use before trusting a buffer to ZipArchive.
+    private static readonly byte[] ZipSignature = [0x50, 0x4B];
+
+    // OLE2/Compound File Binary signature every legacy binary Office document (.doc/.xls/.ppt
+    // 97-2003) starts with -- the same magic LegacyDocWriter emits on the .doc write side.
+    private static readonly byte[] CompoundFileSignature = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+
+    /// <summary>
+    /// Throws a clear, actionable <see cref="InvalidDataException"/> before <paramref name="ms"/> is
+    /// handed to <see cref="ZipArchive"/> if its content doesn't start with the ZIP signature every
+    /// .pptx package must have. Distinguishes a legacy PowerPoint 97-2003 (.ppt, OLE2/CFB) file --
+    /// which FreeP cannot read at all -- from any other non-ZIP content, so the user sees a message
+    /// naming the problem instead of ZipArchive's raw "End of Central Directory record could not be
+    /// found" exception.
+    /// </summary>
+    private static void EnsureLooksLikePptxPackage(MemoryStream ms)
+    {
+        var buffer = ms.GetBuffer();
+        var length = ms.Length;
+
+        if (length >= ZipSignature.Length && buffer.AsSpan(0, ZipSignature.Length).SequenceEqual(ZipSignature))
+            return;
+
+        if (length >= CompoundFileSignature.Length &&
+            buffer.AsSpan(0, CompoundFileSignature.Length).SequenceEqual(CompoundFileSignature))
+        {
+            throw new InvalidDataException(
+                "This file is a legacy PowerPoint 97-2003 (.ppt) presentation. FreeP cannot open the " +
+                "legacy binary PowerPoint format -- save it as .pptx from PowerPoint first, or open a " +
+                "different file.");
+        }
+
+        throw new InvalidDataException(
+            "The file doesn't look like a valid .pptx presentation. It may have been renamed from a " +
+            "different file type, or it may be corrupt.");
     }
 
     /// <summary>
@@ -1923,7 +1970,7 @@ public static class PptxPackageReader
         // Unknown graphicFrame type — preserve verbatim (Wave 25A: no-silent-loss guarantee).
         // EA3: pass mcChoiceEl so ReadPreservedGraphicFrame can capture the Requires token.
         var preserved = ReadPreservedGraphicFrame(gfEl, graphicData, uri, cNvPr, offX, offY, extCx, extCy,
-            archive, partPath, wasAlternateContent, mcChoiceEl, alternateContentFallbackXml);
+            archive, partPath, wasAlternateContent, mcChoiceEl, alternateContentFallbackXml, allSlides);
         var preservedHlink = cNvPr?.Element(A + "hlinkClick");
         if (preservedHlink is not null)
             preserved.Hyperlink = ResolveHlinkClick(preservedHlink, slideRels, allSlides, slideDir, slidePartPathToId);
@@ -1977,7 +2024,8 @@ public static class PptxPackageReader
         XElement gfEl, XElement graphicData, string? uri,
         XElement? cNvPr, long offX, long offY, long extCx, long extCy,
         ZipArchive archive, string partPath, bool wasAlternateContent,
-        XElement? mcChoiceEl = null, string? alternateContentFallbackXml = null)
+        XElement? mcChoiceEl = null, string? alternateContentFallbackXml = null,
+        List<Slide>? allSlides = null)
     {
         var kind = IsZoomUri(uri) ? PreservedObjectKind.Zoom
                  : Is3dModelUri(uri) ? PreservedObjectKind.Model3d
@@ -2014,6 +2062,14 @@ public static class PptxPackageReader
             ObjectKind          = kind,
             ZoomTargetSlideNumericId = kind == PreservedObjectKind.Zoom
                 ? ReadZoomTargetSlideNumericId(gfEl)
+                : null,
+            // R162 F1: resolve the loaded numeric target to the stable Slide.Id of whichever
+            // slide currently holds that numeric id, so the writer can re-patch the target if
+            // a slide is duplicated/inserted before it and saved again without ever
+            // re-authoring the zoom (SlideZoomInsertionPlanner/SetZoomTargetCommand aren't
+            // involved on a plain re-save, so they can't refresh this on their own).
+            ZoomTargetSlideId = kind == PreservedObjectKind.Zoom
+                ? ResolveZoomTargetSlideId(ReadZoomTargetSlideNumericId(gfEl), allSlides)
                 : null,
             ZoomTargetSectionId = kind == PreservedObjectKind.Zoom
                 ? ReadZoomTargetSectionId(gfEl)
@@ -2067,6 +2123,20 @@ public static class PptxPackageReader
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "sldZmObj", StringComparison.OrdinalIgnoreCase))
             ?.Attribute("sldId")?.Value;
         return uint.TryParse(target, out var slideId) ? slideId : null;
+    }
+
+    /// <summary>
+    /// Finds the stable <see cref="Slide.Id"/> of whichever slide in <paramref name="allSlides"/>
+    /// currently carries <paramref name="numericId"/>, so a loaded Slide Zoom's target survives
+    /// as a slide-identity reference (not just the numeric id, which the writer may need to
+    /// reassign — see <c>PptxPackageWriter.ReconcileSlideZoomTargets</c>). Returns null when the
+    /// numeric id is absent or unmatched (e.g. a dangling/corrupt reference) rather than guessing.
+    /// </summary>
+    private static string? ResolveZoomTargetSlideId(uint? numericId, List<Slide>? allSlides)
+    {
+        if (numericId is not { } id || id == 0 || allSlides is null)
+            return null;
+        return allSlides.FirstOrDefault(slide => slide.NumericId == id)?.Id;
     }
 
     private static string? ReadZoomTargetSectionId(XElement graphicFrame) =>

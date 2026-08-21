@@ -365,29 +365,16 @@ public static class DocumentCombine
             var bSpine = bi < bRuns.Count ? bRuns[bi] : null;
             if (bSpine is null)
             {
-                // A still has spine runs but B is exhausted — carry A's mark through (A-insert or ordinary).
+                // A still has spine runs but B is exhausted. By construction blacklineA's spine text (its
+                // None+Inserted runs) and blacklineB's spine text (its None+Deleted runs) both equal
+                // revisedA's plain text for this paragraph, so if B's run list runs out first, whatever
+                // aRun content remains here was already emitted verbatim as part of the wider B run(s)
+                // already stamped above -- the two blacklines simply split the identical spine text into a
+                // different number of runs (e.g. only one reviewer's copy has a comment/hyperlink/bookmark
+                // anchor splitting a run boundary inside an otherwise-untouched span). Re-adding it would
+                // duplicate that text (see finding freew-compare-merge F2), so just advance past it.
                 if (aRun is not null)
-                {
-                    if (aRun.Revision == RevisionKind.Inserted)
-                    {
-                        merged.Runs.Add(RemapANotes(
-                            RemapAComment(
-                                Stamp(aRun, RevisionKind.Inserted, authorA, dateXml),
-                                commentIdMapA),
-                            footnoteIdMapA,
-                            endnoteIdMapA));
-                    }
-                    else
-                    {
-                        merged.Runs.Add(RemapANotes(
-                            RemapAComment(
-                                Stamp(aRun, RevisionKind.None, null, null),
-                                commentIdMapA),
-                            footnoteIdMapA,
-                            endnoteIdMapA));
-                    }
                     ai++;
-                }
                 continue;
             }
 

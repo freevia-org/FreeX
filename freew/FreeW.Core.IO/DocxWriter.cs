@@ -3912,7 +3912,10 @@ public static class DocxWriter
     /// Builds the <c>w:fldSimple/@w:instr</c> for a table-cell formula field: the formula expression
     /// (with a leading <c>=</c>) plus, when a number format is set, a <c>\#</c> numeric-picture switch with
     /// the quoted format — e.g. <c> =SUM(ABOVE) \# "#,##0.00" </c>. The surrounding spaces match how Word
-    /// writes field instructions.
+    /// writes field instructions. <see cref="Expression"/> is free-typed by the user in the Table Formula
+    /// dialog, so the result is run through <see cref="SanitizeXmlText"/> like every other instruction
+    /// composer in this file — an unescaped C0 control or lone surrogate here would otherwise abort the
+    /// whole save with an <see cref="ArgumentException"/> from <see cref="XDocument.Save"/>.
     /// </summary>
     private static string TableFormulaInstruction(TableFormulaField formula)
     {
@@ -3922,14 +3925,19 @@ public static class DocxWriter
         var instr = " " + expression + " ";
         if (formula.NumberFormat is { Length: > 0 } format)
             instr += "\\# \"" + format + "\" ";
-        return instr;
+        return SanitizeXmlText(instr);
     }
 
     /// <summary>
     /// Builds the <c>w:fldSimple/@w:instr</c> for a Mark Citation (TA) field: <c> TA \l "long" \s "short"
     /// \c N </c>, where <c>\l</c> is the full citation, <c>\s</c> the short form (omitted when blank) and
     /// <c>\c</c> Word's numeric category. The surrounding spaces match how Word writes field instructions.
-    /// Embedded double-quotes in the citation text are dropped so the instruction stays well-formed.
+    /// Embedded double-quotes in the citation text are dropped so the instruction stays well-formed. The
+    /// citation text is user-typed (References &gt; Mark Citation) and only trimmed at the model boundary
+    /// (see <see cref="Citation"/>), so the result is run through <see cref="SanitizeXmlText"/> like every
+    /// other instruction composer in this file — this is the hand-written composer that the WordArt sweep
+    /// (commit e3efcd6ae1) missed, because it never called the shared sanitizer or the generic field
+    /// builder.
     /// </summary>
     private static string CitationInstruction(Citation citation)
     {
@@ -3938,7 +3946,7 @@ public static class DocxWriter
         if (citation.ShortCitation.Length > 0)
             instr += " \\s \"" + Clean(citation.ShortCitation) + "\"";
         instr += " \\c " + (int)citation.Category + " ";
-        return instr;
+        return SanitizeXmlText(instr);
     }
 
     /// <summary>
@@ -3947,6 +3955,9 @@ public static class DocxWriter
     /// "insert reference to" switch (<c>\w</c> heading number, <c>\n</c> paragraph number, <c>\p</c>
     /// above/below) and a trailing <c>\h</c> when the reference is a hyperlink — e.g.
     /// <c> REF _Ref1 \w \h </c>. The surrounding spaces match how Word writes field instructions.
+    /// <paramref name="field"/>'s Target is a bookmark name, which (unlike Word) this app does not
+    /// restrict to identifier characters, so the result is run through <see cref="SanitizeXmlText"/> like
+    /// every other instruction composer in this file.
     /// </summary>
     private static string CrossReferenceInstruction(CrossReferenceField field)
     {
@@ -3973,7 +3984,7 @@ public static class DocxWriter
         if (field.Hyperlink)
             builder.Append(" \\h");
         builder.Append(' ');
-        return builder.ToString();
+        return SanitizeXmlText(builder.ToString());
     }
 
     private static XElement BuildGenericSimpleField(

@@ -727,6 +727,76 @@ public class DocumentCompareTests
         result.Comments.Should().BeEmpty();
     }
 
+    [Fact]
+    public void Compare_WordDiffedParagraph_PreservesCommentAnchorOnUnchangedRun()
+    {
+        // Same shape as the r162 F1 finding's repro: "The [quick]{comment} fox jumps" -> "The [quick]
+        // {comment} fox leaps" -- only "jumps"->"leaps" changes, so the paragraph's plain text differs and
+        // DiffParagraph word-diffs it instead of carrying it through as a whole-paragraph anchor. The
+        // "quick" run (which carries CommentId, not IsCommentReference) must not lose its comment anchor
+        // just because it sits in a paragraph that also has an unrelated edit.
+        var original = new TextDocument();
+        var originalParagraph = new Paragraph();
+        originalParagraph.Runs.Add(new Run("The "));
+        originalParagraph.Runs.Add(new Run("quick") { CommentId = 5 });
+        originalParagraph.Runs.Add(Run.CommentReference(5));
+        originalParagraph.Runs.Add(new Run(" fox jumps"));
+        original.Blocks.Add(originalParagraph);
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("The "));
+        revisedParagraph.Runs.Add(new Run("quick") { CommentId = 5 });
+        revisedParagraph.Runs.Add(Run.CommentReference(5));
+        revisedParagraph.Runs.Add(new Run(" fox leaps"));
+        revised.Blocks.Add(revisedParagraph);
+        revised.Comments[5] = new Comment(5, "Nice adjective", "Alice", "A");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var paragraph = result.Paragraphs.Single();
+        // The comment's highlighted range must still cover "quick" as an ordinary (non-reference) run...
+        paragraph.Runs.Should().Contain(run =>
+            run.CommentId == 5 && !run.IsCommentReference && run.Text.Trim() == "quick" && run.Revision == RevisionKind.None);
+        // ...alongside its trailing reference marker...
+        paragraph.Runs.Should().Contain(run => run.CommentId == 5 && run.IsCommentReference);
+        // ...and the unrelated word-level edit elsewhere in the same paragraph still tracks normally.
+        paragraph.Runs.Should().Contain(run => run.Revision == RevisionKind.Deleted && run.Text.Trim() == "jumps");
+        paragraph.Runs.Should().Contain(run => run.Revision == RevisionKind.Inserted && run.Text.Trim() == "leaps");
+        result.Comments.Should().ContainKey(5);
+    }
+
+    [Fact]
+    public void Compare_WordDiffedParagraph_CommentAnchoredOnDeletedWord_StillReconciles()
+    {
+        // Adjacent case to the above: the comment is anchored directly on the word that gets replaced (not
+        // on an untouched neighboring word). The deleted run must still carry CommentId=5 so the existing
+        // ReconcileDeletedCommentAnchors machinery (which scans for Deleted runs with CommentId, see
+        // DocumentCompare.cs) picks the original comment thread up into the result, exactly as it already
+        // does for whole-paragraph deletions.
+        var original = new TextDocument();
+        var originalParagraph = new Paragraph();
+        originalParagraph.Runs.Add(new Run("The fox "));
+        originalParagraph.Runs.Add(new Run("jumps") { CommentId = 5 });
+        originalParagraph.Runs.Add(Run.CommentReference(5));
+        original.Blocks.Add(originalParagraph);
+        original.Comments[5] = new Comment(5, "Verb choice", "Alice", "A");
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("The fox "));
+        revisedParagraph.Runs.Add(new Run("leaps"));
+        revised.Blocks.Add(revisedParagraph);
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var paragraph = result.Paragraphs.Single();
+        paragraph.Runs.Should().Contain(run =>
+            run.Revision == RevisionKind.Deleted && run.CommentId == 5 && run.Text.Trim() == "jumps");
+        result.Comments.Should().ContainKey(5);
+        result.Comments[5].PlainText.Should().Be("Verb choice");
+    }
+
     // -----------------------------------------------------------------------
     // Style catalog for whole-paragraph deletions (r134 MED: dangling StyleId reference)
     // -----------------------------------------------------------------------
