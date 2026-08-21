@@ -117,6 +117,7 @@ static int RenderAll(string outDir)
     var sectionLandscapeP2Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 2);
     var trackedChangesPath = VisualEvidenceOutputPath(outDir, "f2-tracked-changes", 1);
     var commentsPath = VisualEvidenceOutputPath(outDir, "f2-comments", 1);
+    var outOfBodyCommentsPath = VisualEvidenceOutputPath(outDir, "f2-outofbody-comments", 1);
     var reviewProofingDepthPath = VisualEvidenceOutputPath(outDir, "review-proofing-visual-depth", 1);
     var reviewProtectionProofingPath = VisualEvidenceOutputPath(outDir, "review-protection-proofing-comments-only", 1);
     var reviewCompareProofPath = VisualEvidenceOutputPath(outDir, "review-compare-visual-proof", 1);
@@ -397,6 +398,17 @@ static int RenderAll(string outDir)
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument,
         pageNumber: 1,
         pageCount: 1);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, outOfBodyCommentsPath,
+        width: 960, height: 1200,
+        label: "F2 Out-of-body Comments",
+        scenarioId: "f2-outofbody-comments",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildOutOfBodyCommentsReviewDocument,
+        pageNumber: 1,
+        pageCount: 1,
+        hasFootnotes: true);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, reviewProofingDepthPath,
@@ -1254,6 +1266,7 @@ static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "wordart-picture-watermark-layout", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-tracked-changes", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-comments", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "f2-outofbody-comments", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "review-compare-visual-proof", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "review-proofing-visual-depth", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "review-protection-proofing-comments-only", StringComparison.OrdinalIgnoreCase) ||

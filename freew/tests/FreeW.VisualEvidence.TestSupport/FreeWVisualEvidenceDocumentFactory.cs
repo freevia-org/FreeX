@@ -570,6 +570,74 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    /// <summary>
+    /// Small review-markup fixture whose only comment anchors live outside the main body story.
+    /// The body footnote reference keeps the note visible in Word's printed page while header,
+    /// footer, and footnote ranges verify that DOCX round-tripping preserves non-body comment stories.
+    /// The printable Word/Avalonia page is intentionally kept separate from FidelityRender's explicit
+    /// review-markup balloon overlay; this fixture asserts shared semantic coverage, not balloon pixels
+    /// across those two presentation modes.
+    /// </summary>
+    public static TextDocument BuildOutOfBodyCommentsReviewDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Title = "Out-of-body review comments";
+        doc.Properties.Comments = "Header, footer, and footnote comment anchor visual evidence.";
+
+        var header = new HeaderFooter();
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(new Run("Header review anchor: "));
+        headerParagraph.Runs.Add(new Run("header note") { CommentId = 31 });
+        headerParagraph.Runs.Add(Run.CommentReference(31));
+        header.Paragraphs.Add(headerParagraph);
+        doc.FinalSectionHeadersFooters.Header = header;
+
+        var footer = new HeaderFooter();
+        var footerParagraph = new Paragraph();
+        footerParagraph.Runs.Add(new Run("Footer review anchor: "));
+        footerParagraph.Runs.Add(new Run("footer note") { CommentId = 32 });
+        footerParagraph.Runs.Add(Run.CommentReference(32));
+        footer.Paragraphs.Add(footerParagraph);
+        doc.FinalSectionHeadersFooters.Footer = footer;
+
+        doc.Blocks.Add(StyledParagraph("Out-of-body review comments", "Heading1"));
+        var body = new Paragraph();
+        body.Runs.Add(new Run("This page has no body comment anchor; its review comments are attached to the header and footnote"));
+        body.Runs.Add(Run.FootnoteReference(1));
+        body.Runs.Add(new Run("."));
+        doc.Blocks.Add(body);
+
+        var footnote = new Footnote(1);
+        var footnoteParagraph = new Paragraph();
+        footnoteParagraph.Runs.Add(new Run("Footnote review anchor: "));
+        footnoteParagraph.Runs.Add(new Run("footnote note") { CommentId = 33 });
+        footnoteParagraph.Runs.Add(Run.CommentReference(33));
+        footnote.Content.Add(footnoteParagraph);
+        doc.Footnotes[1] = footnote;
+
+        doc.Comments[31] = new Comment(31, "Header comment by Alice: retained outside the body story.")
+        {
+            Author = "Alice",
+            Initials = "A",
+            DateXml = "2026-08-21T09:00:00Z"
+        };
+        doc.Comments[32] = new Comment(32, "Footer comment by Bob: retained outside the body story.")
+        {
+            Author = "Bob",
+            Initials = "B",
+            DateXml = "2026-08-21T09:05:00Z"
+        };
+        doc.Comments[33] = new Comment(33, "Footnote comment by Carol: retained outside the body story.")
+        {
+            Author = "Carol",
+            Initials = "C",
+            DateXml = "2026-08-21T09:10:00Z"
+        };
+
+        return doc;
+    }
+
     public static TextDocument BuildReviewProofingVisualDepthDocument()
     {
         var doc = TextDocument.CreateEmpty();

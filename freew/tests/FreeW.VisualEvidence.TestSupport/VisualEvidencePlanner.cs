@@ -735,6 +735,14 @@ public static class FreeWVisualEvidencePlanner
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsComments = true }),
         new(
+            "f2-outofbody-comments",
+            "F2 header and footnote anchored comment visual composition.",
+            ["f2", "page-composition", "print-layout", "comments", "comment-anchors", "header-footer", "footnotes", "body-text"],
+            "f2-outofbody-comments_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsComments = true, ExpectsFootnotes = true }),
+        new(
             "f2-01-float-wrap",
             "Floating image square/tight wrap visual fidelity capture.",
             [
@@ -2475,16 +2483,23 @@ public static class FreeWVisualEvidencePlanner
                 "text=" + NormalizeEvidenceSignatureText(entry.Run.Text))))
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToList();
-        var commentAnchors = document.Blocks
+        var bodyCommentAnchors = document.Blocks
             .OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)
             .Where(run => run.CommentId is not null && !run.IsCommentReference)
             .Count();
-        var commentReferences = document.Blocks
+        var bodyCommentReferences = document.Blocks
             .OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)
             .Where(run => run.CommentId is not null && run.IsCommentReference)
             .Count();
+        // CommentListPlanner owns the authoritative non-body story walk used by both review hosts.
+        // Preserve body range/marker accounting and supplement it with one range/reference per
+        // distinct header/footer/footnote/endnote thread exposed by that shared planner.
+        var outOfBodyCommentCount = CommentListPlanner.Build(document)
+            .Count(item => item.Anchor.IsHeaderFooterOrNoteAnchor);
+        var commentAnchors = bodyCommentAnchors + outOfBodyCommentCount;
+        var commentReferences = bodyCommentReferences + outOfBodyCommentCount;
         var commentSignatures = document.Comments.Values
             .SelectMany(comment => comment.ThreadInOrder()
                 .Select(threadComment => string.Join(

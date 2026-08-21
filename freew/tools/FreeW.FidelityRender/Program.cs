@@ -2913,6 +2913,12 @@ static void GenerateF2FlowCorpus(string outDir)
     }
 
     {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildOutOfBodyCommentsReviewDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-outofbody-comments.docx"));
+        Console.WriteLine("  wrote f2-outofbody-comments.docx");
+    }
+
+    {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "review-proofing-visual-depth.docx"));
         Console.WriteLine("  wrote review-proofing-visual-depth.docx");

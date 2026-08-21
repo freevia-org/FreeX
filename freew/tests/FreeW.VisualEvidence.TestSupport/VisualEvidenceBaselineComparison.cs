@@ -120,6 +120,7 @@ public static class FreeWVisualBaselineComparisonPlanner
             "equation-structures",
             "f2-tracked-changes",
             "f2-comments",
+            "f2-outofbody-comments",
             "review-proofing-visual-depth",
             "review-protection-proofing-comments-only",
             "review-compare-visual-proof",

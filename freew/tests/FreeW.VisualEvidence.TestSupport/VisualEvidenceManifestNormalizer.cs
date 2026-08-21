@@ -306,6 +306,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "f2-tracked-changes",
         "f2-comments",
+        "f2-outofbody-comments",
         "review-proofing-visual-depth",
         "review-protection-proofing-comments-only",
         "review-compare-visual-proof",
@@ -390,7 +391,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static IReadOnlyList<string> ReviewMarkupVisualProofScenarioIds { get; } =
     [
         "f2-tracked-changes",
-        "f2-comments"
+        "f2-comments",
+        "f2-outofbody-comments"
     ];
     public static IReadOnlyList<string> ReviewProofingVisualProofScenarioIds { get; } =
     [
@@ -2460,7 +2462,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
             if (markup.RevisionStableSignatures.Count < markup.RevisionCount)
                 failures.Add($"{rowName} revision signatures must cover every tracked revision");
         }
-        else if (string.Equals(scenarioId, "f2-comments", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(scenarioId, "f2-comments", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(scenarioId, "f2-outofbody-comments", StringComparison.OrdinalIgnoreCase))
         {
             if (markup.CommentCount <= 0)
                 failures.Add($"{rowName} expected comment thread evidence");

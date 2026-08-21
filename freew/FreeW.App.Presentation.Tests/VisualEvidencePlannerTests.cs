@@ -33,6 +33,7 @@ public sealed class VisualEvidencePlannerTests : IDisposable
             "f2-section-landscape",
             "f2-tracked-changes",
             "f2-comments",
+            "f2-outofbody-comments",
             "f2-01-float-wrap",
             "review-proofing-visual-depth",
             "review-protection-proofing-comments-only",
@@ -68,6 +69,13 @@ public sealed class VisualEvidencePlannerTests : IDisposable
         commentsScenario.ExpectedFeatureTags.Should().Contain(["f2", "comments", "comment-anchors"]);
         commentsScenario.ExpectedOutputNamePattern.Should().Be("f2-comments_p{page}.png");
         commentsScenario.Composition.ExpectsComments.Should().BeTrue();
+
+        var outOfBodyCommentsScenario = FreeWVisualEvidencePlanner.ResolveScenario("f2-outofbody-comments");
+        outOfBodyCommentsScenario.ExpectedFeatureTags.Should().Contain(
+            ["f2", "comments", "comment-anchors", "header-footer", "footnotes"]);
+        outOfBodyCommentsScenario.ExpectedOutputNamePattern.Should().Be("f2-outofbody-comments_p{page}.png");
+        outOfBodyCommentsScenario.Composition.ExpectsComments.Should().BeTrue();
+        outOfBodyCommentsScenario.Composition.ExpectsFootnotes.Should().BeTrue();
 
         var reviewProofingScenario = FreeWVisualEvidencePlanner.ResolveScenario("review-proofing-visual-depth");
         reviewProofingScenario.ExpectedFeatureTags.Should().Contain([
@@ -350,6 +358,28 @@ public sealed class VisualEvidencePlannerTests : IDisposable
         pictureWatermarkScenario.Composition.ExpectsColumns.Should().BeTrue();
         pictureWatermarkScenario.Composition.ExpectsPageBorder.Should().BeTrue();
         pictureWatermarkScenario.Composition.ExpectsFloatingObjects.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ReviewMarkupExpectation_CountsHeaderFooterAndFootnoteCommentAnchors()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildOutOfBodyCommentsReviewDocument();
+
+        var markup = FreeWVisualEvidencePlanner.BuildReviewMarkupExpectation(document);
+        var balloonSources = ReviewBalloonLayoutPlanner.BuildSources(document, ReviewDisplayPolicy.Default)
+            .Where(source => source.Kind == ReviewBalloonKind.Comment)
+            .ToArray();
+
+        markup.CommentCount.Should().Be(3);
+        markup.CommentAnchorCount.Should().Be(3);
+        markup.CommentReferenceCount.Should().Be(3);
+        markup.Authors.Should().Contain(["Alice", "Bob", "Carol"]);
+        markup.CommentStableSignatures.Should().HaveCount(3);
+        balloonSources.Select(source => source.Author).Should().Equal("Alice", "Bob", "Carol");
+        balloonSources.Select(source => source.BodyText).Should().Equal(
+            "Header comment by Alice: retained outside the body story.",
+            "Footer comment by Bob: retained outside the body story.",
+            "Footnote comment by Carol: retained outside the body story.");
     }
 
     [Fact]
@@ -1719,8 +1749,8 @@ public sealed class VisualEvidencePlannerTests : IDisposable
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(30);
-            plan.ExpectedBaselinePngCount.Should().Be(90);
+            plan.ExpectedFixtureCount.Should().Be(31);
+            plan.ExpectedBaselinePngCount.Should().Be(93);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
                 "f2-hf-images.docx",
@@ -1729,6 +1759,7 @@ public sealed class VisualEvidencePlannerTests : IDisposable
                 "references-heavy-fields.docx",
                 "legal-reference-section-page-numbers.docx",
                 "equation-structures.docx",
+                "f2-outofbody-comments.docx",
                 "review-proofing-visual-depth.docx",
                 "review-protection-proofing-comments-only.docx",
                 "review-compare-visual-proof.docx",
@@ -1765,6 +1796,8 @@ public sealed class VisualEvidencePlannerTests : IDisposable
                 .ExpectedBaselinePaths.Should().Contain("f2-hf-images/f2-hf-images_p2.png");
             plan.Fixtures.Single(f => f.ScenarioId == "f2-01-float-wrap")
                 .ExpectedBaselinePaths.Should().Contain("f2-01-float-wrap/f2-01-float-wrap_p1.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "f2-outofbody-comments")
+                .ExpectedBaselinePaths.Should().Contain("f2-outofbody-comments/f2-outofbody-comments_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "review-proofing-visual-depth")
                 .ExpectedBaselinePaths.Should().Contain("review-proofing-visual-depth/review-proofing-visual-depth_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "review-protection-proofing-comments-only")
@@ -8873,7 +8906,8 @@ public sealed class VisualEvidencePlannerTests : IDisposable
             pageCount,
             outputName,
             scenario.LayoutKind,
-            hasFootnotes: string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase),
+            hasFootnotes: string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(scenarioId, "f2-outofbody-comments", StringComparison.OrdinalIgnoreCase),
             hasEndnotes: string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
                 && pageNumber == pageCount,
             sectionOrdinal: sectionPage?.SectionOrdinal,
@@ -8987,6 +9021,7 @@ public sealed class VisualEvidencePlannerTests : IDisposable
             "equation-structures" => FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument(),
             "f2-tracked-changes" => FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument(),
             "f2-comments" => FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument(),
+            "f2-outofbody-comments" => FreeWVisualEvidenceDocumentFactory.BuildOutOfBodyCommentsReviewDocument(),
             "review-proofing-visual-depth" => FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument(),
             "review-protection-proofing-comments-only" => FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument(),
             "review-compare-visual-proof" => FreeWVisualEvidenceDocumentFactory.BuildReviewCompareVisualProofDocument(),
