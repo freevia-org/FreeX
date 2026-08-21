@@ -20,6 +20,10 @@ public static class PresentationCommentPaneVisualMetrics
     public const double AddCommentInputMinimumWidth = 220;
     public const double AddCommentButtonWidth = 102;
     public const double CardBottomMargin = 6;
+    public const string ButtonBackgroundHex = "#DDDDDD";
+    public const string ButtonBorderHex = "#A6A69D";
+    public const string TextBoxBackgroundHex = "#FFFFFF";
+    public const string TextBoxBorderHex = "#B5B7BB";
 
     /// <summary>
     /// The compact toolbar fits above the selected comment card. Fixed action

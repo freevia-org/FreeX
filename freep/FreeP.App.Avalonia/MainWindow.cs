@@ -70,6 +70,31 @@ public sealed partial class MainWindow : Window,
     IPresentationAltTextPaneHostView,
     IPresentationReadingOrderPaneHostView
 {
+    // The comments strip is hosted by the main window rather than a dialog, so it does not
+    // receive FreePDialogWindow's compact WPF-style control chrome automatically. Keep its
+    // realized Avalonia controls on the same shared metric/color contract as the WPF host.
+    private static AvaloniaCompactDialogChromeStyle ReviewCommentPaneChromeStyle { get; } =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ControlHeight = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            ButtonHeight = PresentationCommentPaneVisualMetrics.CompactControlHeight,
+            FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
+            ButtonPadding = new Thickness(8, 0),
+            TextBoxPadding = new Thickness(4, 0),
+            ButtonBackgroundBrush = new SolidColorBrush(
+                Color.Parse(PresentationCommentPaneVisualMetrics.ButtonBackgroundHex)),
+            ButtonBorderBrush = new SolidColorBrush(
+                Color.Parse(PresentationCommentPaneVisualMetrics.ButtonBorderHex)),
+            DefaultButtonBorderBrush = new SolidColorBrush(
+                Color.Parse(PresentationCommentPaneVisualMetrics.ButtonBorderHex)),
+            InputBorderBrush = new SolidColorBrush(
+                Color.Parse(PresentationCommentPaneVisualMetrics.TextBoxBorderHex)),
+            FocusedInputBorderBrush = new SolidColorBrush(
+                Color.Parse(PresentationCommentPaneVisualMetrics.TextBoxBorderHex)),
+            TextBoxBackgroundBrush = new SolidColorBrush(
+                Color.Parse(PresentationCommentPaneVisualMetrics.TextBoxBackgroundHex)),
+        };
+
     private sealed class SlideSectionNamePromptDialog : FreePDialogWindow
     {
     }
@@ -1077,7 +1102,7 @@ public sealed partial class MainWindow : Window,
         _reviewCommentsPaneHost = new Border
         {
             Background      = FreePBrushes.NotesSurface,
-            BorderBrush     = FreePBrushes.DisabledBorder,
+            BorderBrush     = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(0, 1, 0, 0),
             MaxHeight       = 100,
             IsVisible       = false,
@@ -3953,6 +3978,10 @@ public sealed partial class MainWindow : Window,
             Tag      = PresentationSemanticIdentityCatalog.CommentsPaneCloseTag,
             Margin   = new Thickness(6, 0, 0, 6),
         };
+        AvaloniaCompactDialogChrome.ApplyButton(
+            close,
+            ReviewCommentPaneChromeStyle,
+            PresentationCommentPaneVisualMetrics.CloseMinimumWidth);
         close.Click += (_, _) => HideReviewCommentsPane();
         DockPanel.SetDock(close, Dock.Right);
         summaryRow.Children.Add(close);
@@ -4012,6 +4041,10 @@ public sealed partial class MainWindow : Window,
                 Width     = PresentationCommentPaneVisualMetrics.ToolbarActionWidth(action.CommandId),
                 Margin    = new Thickness(0, 0, 6, 6),
             };
+            AvaloniaCompactDialogChrome.ApplyButton(
+                button,
+                ReviewCommentPaneChromeStyle,
+                PresentationCommentPaneVisualMetrics.ToolbarActionWidth(action.CommandId));
             AutomationProperties.SetAutomationId(button, action.CommandId);
             AutomationProperties.SetName(button, action.Label);
             button.Click += (_, _) => _reviewPaneHostCoordinator.ExecuteCommentCommand(action.CommandId);
@@ -4109,6 +4142,7 @@ public sealed partial class MainWindow : Window,
             VerticalContentAlignment = VerticalAlignment.Center,
             Margin   = new Thickness(0, 0, 6, 0),
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(input, ReviewCommentPaneChromeStyle);
         var button = new Button
         {
             Content  = PresentationPaneTextResources.NewCommentCommand,
@@ -4119,6 +4153,10 @@ public sealed partial class MainWindow : Window,
             Padding  = new Thickness(8, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
         };
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            ReviewCommentPaneChromeStyle,
+            PresentationCommentPaneVisualMetrics.AddCommentButtonWidth);
         button.Click += (_, _) => AddComment(input.Text, author: ResolveCommentAuthor());
 
         return new StackPanel
