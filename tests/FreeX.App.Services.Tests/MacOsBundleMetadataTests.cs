@@ -28,7 +28,7 @@ public sealed class MacOsBundleMetadataTests
         PlistString(plist, "CFBundlePackageType").Should().Be("APPL");
         PlistString(plist, "LSMinimumSystemVersion").Should().Be("12.0");
         PlistString(plist, "CFBundleIconFile").Should().Be("FreeX.icns");
-        AssertIcnsFile(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Packaging", "macos", "FreeX.icns"));
+        AssertIcnsFile(RepositoryFileLocator.Find("shared", "Free.Shared.Shell", "Resources", "FreeX.icns"));
 
         var documentTypesElement = PlistArray(plist, "CFBundleDocumentTypes");
         documentTypesElement.Should().NotBeNull("the preview app should advertise Finder-openable workbook formats");
@@ -623,9 +623,9 @@ public sealed class MacOsBundleMetadataTests
             offset = checked(offset + (int)entryLength);
         }
 
-        entryTypes.Should().Contain("icp4");
-        entryTypes.Should().Contain("icp5");
+        entryTypes.Should().Contain("ic07");
         entryTypes.Should().Contain("ic08");
+        entryTypes.Should().Contain("ic09");
     }
 
     private static uint ReadBigEndianUInt32(byte[] bytes, int offset) =>
