@@ -34,6 +34,15 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void PageLayoutShot_CropsBorderWatermarkToTheWordComparablePageSurface()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));
+
+        source.Should().MatchRegex("ShouldCaptureWordComparablePageSurface\\([\\s\\S]*?string.Equals\\(scenarioId, \"page-composition-border-watermark\", StringComparison.OrdinalIgnoreCase\\)");
+        source.Should().Contain("CropToDocumentPageSurface(");
+    }
+
+    [Fact]
     public void PageLayoutShot_CropsReviewCompareToTheWordComparablePageSurface()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));

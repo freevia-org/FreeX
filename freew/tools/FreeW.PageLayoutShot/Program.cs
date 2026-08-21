@@ -1237,6 +1237,7 @@ static DocumentNoteRegionPlan? BuildEvidenceNoteRegionPlan(
 
 static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "page-composition-columns", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "page-composition-border-watermark", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "equation-structures", StringComparison.OrdinalIgnoreCase) ||
