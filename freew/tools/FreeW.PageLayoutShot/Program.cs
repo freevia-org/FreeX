@@ -1254,6 +1254,7 @@ static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "f2-comments", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "review-compare-visual-proof", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "review-proofing-visual-depth", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "review-combine-visual-proof", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-section-landscape", StringComparison.OrdinalIgnoreCase);
 
 static bool ShouldNormalizeSectionPageSurfaceToWordBaseline(string scenarioId) =>
