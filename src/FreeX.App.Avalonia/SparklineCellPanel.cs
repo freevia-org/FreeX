@@ -292,19 +292,27 @@ internal sealed class SparklineCellPanel : Panel
 
     private void BuildColumns(LayoutRect rect, CellColor seriesColor, CellColor negativeColor)
     {
-        var positiveFill = BrushForColor(seriesColor);
-        var negativeFill = BrushForColor(negativeColor);
+        var colors = SparklineColumnColorPlanner.ResolveBarColors(
+            _sparkline,
+            _values,
+            seriesColor,
+            negativeColor,
+            _sparkline.HighPointColor ?? DefaultHighColor,
+            _sparkline.LowPointColor ?? DefaultLowColor,
+            _sparkline.FirstPointColor ?? DefaultFirstColor,
+            _sparkline.LastPointColor ?? DefaultLastColor);
 
         // R91-meta-2: model-deriving overload — derives both Kind (winLoss) and RightToLeft from
         // the sparkline itself; see BuildLine's CalculateLineLayout call above for the rationale.
         var layout = SparklineLayoutEngine.CalculateColumnLayout(_sparkline, _values, rect, _overrideMaxAbs);
-        foreach (var bar in layout.Bars)
+        for (var index = 0; index < layout.Bars.Count; index++)
         {
+            var bar = layout.Bars[index];
             Children.Add(new AvaloniaRectangle
             {
                 Width  = Math.Max(1, bar.Rect.Width),
                 Height = Math.Max(1, bar.Rect.Height),
-                Fill   = bar.IsNegative ? negativeFill : positiveFill,
+                Fill   = BrushForColor(colors[index]),
                 Margin = new Thickness(bar.Rect.X, bar.Rect.Y, 0, 0),
                 HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
                 VerticalAlignment   = AvaloniaVerticalAlignment.Top,

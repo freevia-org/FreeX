@@ -558,6 +558,35 @@ public sealed class SparklinePanelRenderTests
     }
 
     [Fact]
+    public async Task SparklineCellPanel_ColumnLowPoint_OverridesNegativeBarColor()
+    {
+        await Session.Dispatch(() =>
+        {
+            var low = new CellColor(255, 192, 0);
+            var values = new double[] { 5, -3, 8, -1, 4, -6, 2 };
+            var sparkline = new SparklineModel
+            {
+                Kind = SparklineKind.Column,
+                NegativeColor = new CellColor(255, 0, 0),
+                LowPointColor = low,
+                ShowNegativePoints = true,
+                ShowLowPoint = true
+            };
+            var panel = new SparklineCellPanel(values, sparkline);
+
+            panel.Measure(new Size(140, 24));
+            panel.Arrange(new Rect(0, 0, 140, 24));
+
+            var bars = panel.Children.OfType<Rectangle>().ToList();
+            bars.Should().HaveCount(7);
+            ((SolidColorBrush)bars[5].Fill!).Color.Should().Be(new Color(255, low.R, low.G, low.B),
+                "the low negative value has the authored low-point color, not the negative color");
+            ((SolidColorBrush)bars[1].Fill!).Color.Should().Be(new Color(255, 255, 0, 0),
+                "other negative values retain their negative-point color");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task SparklineCellPanel_CustomLineWeight_AppliedToStrokeThickness()
     {
         await Session.Dispatch(() =>

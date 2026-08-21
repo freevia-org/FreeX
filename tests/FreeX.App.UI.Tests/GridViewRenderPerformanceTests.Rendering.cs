@@ -597,6 +597,17 @@ public sealed partial class GridViewRenderPerformanceTests
         // Engine calls are still used (no layout math re-implemented here).
         source.Should().Contain("SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer");
         source.Should().Contain("SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer");
+        var columnRendererStart = source.IndexOf("private static void DrawColumnSparkline(", StringComparison.Ordinal);
+        var columnRenderer = source[
+            columnRendererStart..
+            source.IndexOf("private struct ColumnSparklineDrawingConsumer", columnRendererStart, StringComparison.Ordinal)];
+        columnRenderer.Should().Contain("SparklineColumnColorPlanner.ResolveBarColors(");
+
+        var lineRendererStart = source.IndexOf("private static void DrawLineSparkline(", StringComparison.Ordinal);
+        var lineRenderer = source[
+            lineRendererStart..
+            source.IndexOf("private static void DrawColumnSparkline(", lineRendererStart, StringComparison.Ordinal)];
+        lineRenderer.Should().NotContain("SparklineColumnColorPlanner.ResolveBarColors(");
         source.Should().NotContain("BuildSparklineRowMetricLookup");
         source.Should().NotContain("BuildSparklineColumnMetricLookup");
         source.Should().NotContain("CalculateLineLayout(values, rect)");

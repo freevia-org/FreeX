@@ -244,11 +244,18 @@ public partial class GridView
         IReadOnlyList<double> values,
         Rect rect,
         bool winLoss,
-        Brush positiveFill,
-        Brush negativeFill,
+        CellColor seriesColor,
+        CellColor negativeColor,
+        CellColor highColor,
+        CellColor lowColor,
+        CellColor firstColor,
+        CellColor lastColor,
+        Dictionary<CellColor, SolidColorBrush>? brushCache,
         double? overrideMaxAbs)
     {
-        var consumer = new ColumnSparklineDrawingConsumer(dc, positiveFill, negativeFill);
+        var colors = SparklineColumnColorPlanner.ResolveBarColors(
+            sparkline, values, seriesColor, negativeColor, highColor, lowColor, firstColor, lastColor);
+        var consumer = new ColumnSparklineDrawingConsumer(dc, colors, brushCache);
         SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs, sparkline.RightToLeft);
     }
 
@@ -263,13 +270,26 @@ public partial class GridView
             dc.DrawLine(pen, start, end);
     }
 
-    private readonly struct ColumnSparklineDrawingConsumer(
-        DrawingContext dc,
-        Brush positiveFill,
-        Brush negativeFill) : ISparklineColumnLayoutConsumer
+    private struct ColumnSparklineDrawingConsumer : ISparklineColumnLayoutConsumer
     {
+        private readonly DrawingContext _dc;
+        private readonly IReadOnlyList<CellColor> _colors;
+        private readonly Dictionary<CellColor, SolidColorBrush>? _brushCache;
+        private int _barIndex;
+
+        public ColumnSparklineDrawingConsumer(
+            DrawingContext dc,
+            IReadOnlyList<CellColor> colors,
+            Dictionary<CellColor, SolidColorBrush>? brushCache)
+        {
+            _dc = dc;
+            _colors = colors;
+            _brushCache = brushCache;
+            _barIndex = 0;
+        }
+
         public void AcceptBar(Rect rect, bool isNegative) =>
-            dc.DrawRectangle(isNegative ? negativeFill : positiveFill, null, rect);
+            _dc.DrawRectangle(BrushForCellColor(_colors[_barIndex++], _brushCache), null, rect);
     }
 
     // ── Entry point ───────────────────────────────────────────────────────────
@@ -325,6 +345,10 @@ public partial class GridView
                 ? sparkline.NegativeColor ?? DefaultNegativeCellColor
                 : seriesColor;
             var axisColor = sparkline.AxisColor ?? DefaultAxisCellColor;
+            var highColor = sparkline.HighPointColor ?? DefaultHighCellColor;
+            var lowColor = sparkline.LowPointColor ?? DefaultLowCellColor;
+            var firstColor = sparkline.FirstPointColor ?? DefaultFirstCellColor;
+            var lastColor = sparkline.LastPointColor ?? DefaultLastCellColor;
 
             dc.PushClip(GetCellClipGeometry(rect));
 
@@ -344,8 +368,7 @@ public partial class GridView
                 DrawColumnSparkline(
                     dc, sparkline, values, rect,
                     sparkline.Kind == SparklineKind.WinLoss,
-                    BrushForCellColor(seriesColor,   _brushCache),
-                    BrushForCellColor(negativeColor, _brushCache),
+                    seriesColor, negativeColor, highColor, lowColor, firstColor, lastColor, _brushCache,
                     axisScale.MaximumAbsolute);
             }
 
@@ -390,6 +413,10 @@ public partial class GridView
             ? sparkline.NegativeColor ?? DefaultNegativeCellColor
             : seriesColor;
         var axisColor = sparkline.AxisColor ?? DefaultAxisCellColor;
+        var highColor = sparkline.HighPointColor ?? DefaultHighCellColor;
+        var lowColor = sparkline.LowPointColor ?? DefaultLowCellColor;
+        var firstColor = sparkline.FirstPointColor ?? DefaultFirstCellColor;
+        var lastColor = sparkline.LastPointColor ?? DefaultLastCellColor;
 
         var clipGeometry = new RectangleGeometry(rect);
         dc.PushClip(clipGeometry);
@@ -408,8 +435,7 @@ public partial class GridView
             DrawColumnSparkline(
                 dc, sparkline, values, rect,
                 sparkline.Kind == SparklineKind.WinLoss,
-                BrushForCellColor(seriesColor,   brushCache),
-                BrushForCellColor(negativeColor, brushCache),
+                seriesColor, negativeColor, highColor, lowColor, firstColor, lastColor, brushCache,
                 axisScale.MaximumAbsolute);
         }
 
