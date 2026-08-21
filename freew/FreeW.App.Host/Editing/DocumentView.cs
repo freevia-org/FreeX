@@ -15211,7 +15211,36 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         PlaceCaretAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset);
+
+        // r161: the same bypass round 160 fixed in the Avalonia shell. This shared portable path is
+        // what an ordinary Backspace or Delete takes; only when it DECLINES does the native fallback
+        // run, and the prune lives there. So a comment whose last anchoring run was inside the
+        // deleted range was orphaned here and kept forever.
+        //
+        // It stays hidden for a comment this app created, because that always sits in the same
+        // paragraph as its reference run and the portable gate then declines. A comment imported
+        // from Word can span a paragraph boundary -- DocxReader tracks the open range in a
+        // paragraph-local variable and cannot follow it -- and that is the case this reaches.
+        //
+        // Prune the model directly rather than calling
+        // PruneOrphanedNoteAndCommentAnchorsAfterNativeEdit: that helper re-runs CommitToModel to
+        // sync from the live FlowDocument, which is correct after a NATIVE edit and wrong here,
+        // where the portable session has already mutated the model and the FlowDocument is stale.
+        PruneOrphanedNoteAndCommentAnchorsAfterPortableEdit();
         return true;
+    }
+
+    /// <summary>
+    /// Drops any footnote, endnote or comment left with no anchoring run after a portable body edit.
+    /// Unlike <see cref="PruneOrphanedNoteAndCommentAnchorsAfterNativeEdit"/> this does NOT resync
+    /// from the FlowDocument first -- see the remark at the call site.
+    /// </summary>
+    private void PruneOrphanedNoteAndCommentAnchorsAfterPortableEdit()
+    {
+        if (_model.Footnotes.Count == 0 && _model.Endnotes.Count == 0 && _model.Comments.Count == 0)
+            return;
+
+        DocumentInspector.PruneOrphanedNoteAndCommentAnchors(_model);
     }
 
     private bool TryApplyBodyParagraphBreak()
