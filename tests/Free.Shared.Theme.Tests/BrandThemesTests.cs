@@ -103,33 +103,26 @@ public sealed class BrandThemesTests
         BrandThemes.FreeXMidnight.IconSetId.Should().Be("freex");
     }
 
-    // ── FreeW byte-identical check (WS-G round 5) ────────────────────────────────────────
-    // Values are sourced from FreeW's REAL chrome as of round 5:
-    //   MainWindow.cs TitleBarColor=#17324D, BadgeColor=#0F6D8C (lines 114-115)
-    //   MainWindow.cs BuildStatusBar surface=#17324D (line 776)
-    //   FreeWRibbonResources.xaml FreeXAccentBrush=#0F6D8C, FreeXAccentDarkBrush=#17324D (lines 13-14)
-    //   FreeWRibbonResources.xaml FreeXAccentSoftBrush=#E6F6FA, FreeXRibbonButtonHoverBrush=#E6F6FA (lines 16-17)
-    //   FreeWRibbonResources.xaml FreeXAccentPressedBrush=#CFEAF1 (line 15)
-    //   SisterBackstageTheme.FreeW.LinkColor=#0F6D8C (previously hard-coded, now routed through Accent token)
+    // ── FreeW owned amber/umber palette ────────────────────────────────────────────────
 
-    [Fact] public void FreeW_Accent_Is_0F6D8C()               => BrandThemes.FreeW.Colors.Accent.ToHex().Should().Be("#0F6D8C");
-    [Fact] public void FreeW_AccentDark_Is_17324D()           => BrandThemes.FreeW.Colors.AccentDark.ToHex().Should().Be("#17324D");
-    [Fact] public void FreeW_AccentSoft_Is_E6F6FA()           => BrandThemes.FreeW.Colors.AccentSoft.ToHex().Should().Be("#E6F6FA");
-    [Fact] public void FreeW_AccentPressed_Is_CFEAF1()        => BrandThemes.FreeW.Colors.AccentPressed.ToHex().Should().Be("#CFEAF1");
-    [Fact] public void FreeW_TitleBar_Is_17324D()             => BrandThemes.FreeW.Colors.TitleBar.ToHex().Should().Be("#17324D");
+    [Fact] public void FreeW_Accent_Is_A26714()               => BrandThemes.FreeW.Colors.Accent.ToHex().Should().Be("#A26714");
+    [Fact] public void FreeW_AccentDark_Is_4B2F12()           => BrandThemes.FreeW.Colors.AccentDark.ToHex().Should().Be("#4B2F12");
+    [Fact] public void FreeW_AccentSoft_Is_FBF0DC()           => BrandThemes.FreeW.Colors.AccentSoft.ToHex().Should().Be("#FBF0DC");
+    [Fact] public void FreeW_AccentPressed_Is_F3D8AB()        => BrandThemes.FreeW.Colors.AccentPressed.ToHex().Should().Be("#F3D8AB");
+    [Fact] public void FreeW_TitleBar_Is_4B2F12()             => BrandThemes.FreeW.Colors.TitleBar.ToHex().Should().Be("#4B2F12");
     [Fact] public void FreeW_TitleBarForeground_Is_FFFFFF()   => BrandThemes.FreeW.Colors.TitleBarForeground.ToHex().Should().Be("#FFFFFF");
-    [Fact] public void FreeW_TitleBarHover_Is_0F6D8C()        => BrandThemes.FreeW.Colors.TitleBarHover.ToHex().Should().Be("#0F6D8C");
-    [Fact] public void FreeW_TitleBarPressed_Is_10253A()      => BrandThemes.FreeW.Colors.TitleBarPressed.ToHex().Should().Be("#10253A");
-    [Fact] public void FreeW_TitleBarDisabled_Is_8BA6B8()     => BrandThemes.FreeW.Colors.TitleBarDisabled.ToHex().Should().Be("#8BA6B8");
+    [Fact] public void FreeW_TitleBarHover_Is_A26714()        => BrandThemes.FreeW.Colors.TitleBarHover.ToHex().Should().Be("#A26714");
+    [Fact] public void FreeW_TitleBarPressed_Is_36200C()      => BrandThemes.FreeW.Colors.TitleBarPressed.ToHex().Should().Be("#36200C");
+    [Fact] public void FreeW_TitleBarDisabled_Is_B49A75()     => BrandThemes.FreeW.Colors.TitleBarDisabled.ToHex().Should().Be("#B49A75");
     [Fact] public void FreeW_TitleBarButtonBorder_Is_55FFFFFF() => BrandThemes.FreeW.Colors.TitleBarButtonBorder.ToHex().Should().Be("#55FFFFFF");
-    [Fact] public void FreeW_RibbonButtonHover_Is_E6F6FA()   => BrandThemes.FreeW.Colors.RibbonButtonHover.ToHex().Should().Be("#E6F6FA");
+    [Fact] public void FreeW_RibbonButtonHover_Is_F6E3C2()   => BrandThemes.FreeW.Colors.RibbonButtonHover.ToHex().Should().Be("#F6E3C2");
     [Fact] public void FreeW_Text_Is_1F1F1F()                 => BrandThemes.FreeW.Colors.Text.ToHex().Should().Be("#1F1F1F");
     [Fact] public void FreeW_MutedText_Is_5F6368()            => BrandThemes.FreeW.Colors.MutedText.ToHex().Should().Be("#5F6368");
     [Fact] public void FreeW_SubtleText_Is_767676()           => BrandThemes.FreeW.Colors.SubtleText.ToHex().Should().Be("#767676");
     [Fact] public void FreeW_RibbonSurface_Is_FFFFFF()        => BrandThemes.FreeW.Colors.RibbonSurface.ToHex().Should().Be("#FFFFFF");
     [Fact] public void FreeW_ChromeSurface_Is_F7F8F8()        => BrandThemes.FreeW.Colors.ChromeSurface.ToHex().Should().Be("#F7F8F8");
     [Fact] public void FreeW_SheetSurface_Is_F3F3F3()         => BrandThemes.FreeW.Colors.SheetSurface.ToHex().Should().Be("#F3F3F3");
-    [Fact] public void FreeW_StatusSurface_Is_17324D()        => BrandThemes.FreeW.Colors.StatusSurface.ToHex().Should().Be("#17324D");
+    [Fact] public void FreeW_StatusSurface_Is_4B2F12()        => BrandThemes.FreeW.Colors.StatusSurface.ToHex().Should().Be("#4B2F12");
     [Fact] public void FreeW_StatusForeground_Is_FFFFFF()     => BrandThemes.FreeW.Colors.StatusForeground.ToHex().Should().Be("#FFFFFF");
     [Fact] public void FreeW_Border_Is_DADCE0()               => BrandThemes.FreeW.Colors.Border.ToHex().Should().Be("#DADCE0");
     [Fact] public void FreeW_BorderStrong_Is_C8CCD0()         => BrandThemes.FreeW.Colors.BorderStrong.ToHex().Should().Be("#C8CCD0");
@@ -139,10 +132,7 @@ public sealed class BrandThemesTests
     [Fact]
     public void FreeW_Accent_MatchesBackstageTokenAnchor()
     {
-        // The backstage link accent (BackstageView.cs) is now routed through BrandThemes.FreeW.Colors.Accent.
-        // This test is the byte-identical anchor: the token value must match what was previously
-        // the hard-coded SisterBackstageTheme.FreeW.LinkColor (#0F6D8C).
-        BrandThemes.FreeW.Colors.Accent.ToHex().Should().Be("#0F6D8C");
+        BrandThemes.FreeW.Colors.Accent.ToHex().Should().Be("#A26714");
     }
 
     [Fact]
@@ -154,38 +144,29 @@ public sealed class BrandThemesTests
     [Fact]
     public void FreeW_DiffersFromFreeX_OnAccent()
     {
-        // FreeW and FreeX currently share the same palette (FreeW hasn't been customised yet),
-        // but the token definitions are separate so a future redesign won't require touching FreeX.
-        // This test documents the CURRENT state — both equal #0F6D8C — and will be updated
-        // when FreeW receives its own branded chrome.
-        BrandThemes.FreeW.Colors.Accent.ToHex().Should().Be(BrandThemes.FreeX.Colors.Accent.ToHex());
+        BrandThemes.FreeW.Colors.Accent.ToHex().Should().NotBe(BrandThemes.FreeX.Colors.Accent.ToHex());
     }
 
-    // ── FreeP byte-identical check (WS-G round 6) ────────────────────────────────────────────
-    // Values are sourced from FreeP's REAL chrome as of round 6:
-    //   MainWindow.cs ChromeOptions.TitleBarColor=#B7472A, BadgeColor=#8F3721 (lines 24-25)
-    //   MainWindow.cs BuildStatusBar surface=#B7472A (line 192)
-    //   MainWindow.cs RibbonShellBuilder FileTabAccent=#B7472A, FileTabHover=#8F3721 (lines 237-238)
-    //   SisterBackstageTheme.FreeP.LinkColor=#B7472A (previously hard-coded, now routed through Accent token)
+    // ── FreeP owned berry/plum palette ─────────────────────────────────────────────────
 
-    [Fact] public void FreeP_Accent_Is_B7472A()               => BrandThemes.FreeP.Colors.Accent.ToHex().Should().Be("#B7472A");
-    [Fact] public void FreeP_AccentDark_Is_8F3721()           => BrandThemes.FreeP.Colors.AccentDark.ToHex().Should().Be("#8F3721");
-    [Fact] public void FreeP_AccentSoft_Is_F9EAE6()           => BrandThemes.FreeP.Colors.AccentSoft.ToHex().Should().Be("#F9EAE6");
-    [Fact] public void FreeP_AccentPressed_Is_F2D2CB()        => BrandThemes.FreeP.Colors.AccentPressed.ToHex().Should().Be("#F2D2CB");
-    [Fact] public void FreeP_TitleBar_Is_B7472A()             => BrandThemes.FreeP.Colors.TitleBar.ToHex().Should().Be("#B7472A");
+    [Fact] public void FreeP_Accent_Is_A23B72()               => BrandThemes.FreeP.Colors.Accent.ToHex().Should().Be("#A23B72");
+    [Fact] public void FreeP_AccentDark_Is_4E213B()           => BrandThemes.FreeP.Colors.AccentDark.ToHex().Should().Be("#4E213B");
+    [Fact] public void FreeP_AccentSoft_Is_F9E7F1()           => BrandThemes.FreeP.Colors.AccentSoft.ToHex().Should().Be("#F9E7F1");
+    [Fact] public void FreeP_AccentPressed_Is_F1CDE0()        => BrandThemes.FreeP.Colors.AccentPressed.ToHex().Should().Be("#F1CDE0");
+    [Fact] public void FreeP_TitleBar_Is_4E213B()             => BrandThemes.FreeP.Colors.TitleBar.ToHex().Should().Be("#4E213B");
     [Fact] public void FreeP_TitleBarForeground_Is_FFFFFF()   => BrandThemes.FreeP.Colors.TitleBarForeground.ToHex().Should().Be("#FFFFFF");
-    [Fact] public void FreeP_TitleBarHover_Is_C95A3D()        => BrandThemes.FreeP.Colors.TitleBarHover.ToHex().Should().Be("#C95A3D");
-    [Fact] public void FreeP_TitleBarPressed_Is_8F3721()      => BrandThemes.FreeP.Colors.TitleBarPressed.ToHex().Should().Be("#8F3721");
-    [Fact] public void FreeP_TitleBarDisabled_Is_8BA6B8()     => BrandThemes.FreeP.Colors.TitleBarDisabled.ToHex().Should().Be("#8BA6B8");
+    [Fact] public void FreeP_TitleBarHover_Is_A23B72()        => BrandThemes.FreeP.Colors.TitleBarHover.ToHex().Should().Be("#A23B72");
+    [Fact] public void FreeP_TitleBarPressed_Is_351426()      => BrandThemes.FreeP.Colors.TitleBarPressed.ToHex().Should().Be("#351426");
+    [Fact] public void FreeP_TitleBarDisabled_Is_B18A9F()     => BrandThemes.FreeP.Colors.TitleBarDisabled.ToHex().Should().Be("#B18A9F");
     [Fact] public void FreeP_TitleBarButtonBorder_Is_55FFFFFF() => BrandThemes.FreeP.Colors.TitleBarButtonBorder.ToHex().Should().Be("#55FFFFFF");
-    [Fact] public void FreeP_RibbonButtonHover_Is_FDDDD6()   => BrandThemes.FreeP.Colors.RibbonButtonHover.ToHex().Should().Be("#FDDDD6");
+    [Fact] public void FreeP_RibbonButtonHover_Is_F3D7E6()   => BrandThemes.FreeP.Colors.RibbonButtonHover.ToHex().Should().Be("#F3D7E6");
     [Fact] public void FreeP_Text_Is_1F1F1F()                 => BrandThemes.FreeP.Colors.Text.ToHex().Should().Be("#1F1F1F");
     [Fact] public void FreeP_MutedText_Is_5F6368()            => BrandThemes.FreeP.Colors.MutedText.ToHex().Should().Be("#5F6368");
     [Fact] public void FreeP_SubtleText_Is_767676()           => BrandThemes.FreeP.Colors.SubtleText.ToHex().Should().Be("#767676");
     [Fact] public void FreeP_RibbonSurface_Is_FFFFFF()        => BrandThemes.FreeP.Colors.RibbonSurface.ToHex().Should().Be("#FFFFFF");
     [Fact] public void FreeP_ChromeSurface_Is_F7F8F8()        => BrandThemes.FreeP.Colors.ChromeSurface.ToHex().Should().Be("#F7F8F8");
     [Fact] public void FreeP_SheetSurface_Is_F3F3F3()         => BrandThemes.FreeP.Colors.SheetSurface.ToHex().Should().Be("#F3F3F3");
-    [Fact] public void FreeP_StatusSurface_Is_B7472A()        => BrandThemes.FreeP.Colors.StatusSurface.ToHex().Should().Be("#B7472A");
+    [Fact] public void FreeP_StatusSurface_Is_4E213B()        => BrandThemes.FreeP.Colors.StatusSurface.ToHex().Should().Be("#4E213B");
     [Fact] public void FreeP_StatusForeground_Is_FFFFFF()     => BrandThemes.FreeP.Colors.StatusForeground.ToHex().Should().Be("#FFFFFF");
     [Fact] public void FreeP_Border_Is_DADCE0()               => BrandThemes.FreeP.Colors.Border.ToHex().Should().Be("#DADCE0");
     [Fact] public void FreeP_BorderStrong_Is_C8CCD0()         => BrandThemes.FreeP.Colors.BorderStrong.ToHex().Should().Be("#C8CCD0");
@@ -195,10 +176,7 @@ public sealed class BrandThemesTests
     [Fact]
     public void FreeP_Accent_MatchesBackstageTokenAnchor()
     {
-        // The backstage link accent (BackstageView.cs) is now routed through BrandThemes.FreeP.Colors.Accent.
-        // This test is the byte-identical anchor: the token value must match what was previously
-        // the hard-coded SisterBackstageTheme.FreeP.LinkColor (#B7472A).
-        BrandThemes.FreeP.Colors.Accent.ToHex().Should().Be("#B7472A");
+        BrandThemes.FreeP.Colors.Accent.ToHex().Should().Be("#A23B72");
     }
 
     [Fact]
@@ -210,7 +188,6 @@ public sealed class BrandThemesTests
     [Fact]
     public void FreeP_DiffersFromFreeX_OnAccent()
     {
-        // FreeP uses a distinct brick palette; the token must differ from FreeX's navy.
         BrandThemes.FreeP.Colors.Accent.ToHex().Should().NotBe(BrandThemes.FreeX.Colors.Accent.ToHex());
     }
 

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Heading 1">
   <rect width="32" height="32" fill="none"/>
   <rect x="6.5" y="5.5" width="19" height="21" rx="1.5" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
-  <text x="15.5" y="15.5" text-anchor="middle" font-size="10.5" fill="#0F6D8C" font-family="Segoe UI,Arial,sans-serif" font-weight="700">H1</text>
+  <text x="15.5" y="15.5" text-anchor="middle" font-size="10.5" fill="#A26714" font-family="Segoe UI,Arial,sans-serif" font-weight="700">H1</text>
   <path d="M10 20h12M10 23.5h8" fill="none" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round"/>
 </svg>

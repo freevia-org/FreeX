@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Theme;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -196,10 +197,10 @@ public static class SlidePanePlanner
     public const double DefaultSelectedBorderThickness = 2.0;
     public const string DefaultPaneBackgroundHex = "#E0E0E0";
     public const string DefaultItemNormalBackgroundHex = "#F5F5F5";
-    public const string DefaultItemSelectedBackgroundHex = "#FFE0D6";
+    public static readonly string DefaultItemSelectedBackgroundHex = BrandThemes.FreeP.Colors.AccentSoft.ToHex();
     public const string DefaultItemHoverBackgroundHex = "#EBEBEB";
     public const string DefaultItemNormalBorderHex = "#CCCCCC";
-    public const string DefaultItemSelectedBorderHex = "#B7472A";
+    public static readonly string DefaultItemSelectedBorderHex = BrandThemes.FreeP.Colors.Accent.ToHex();
     public const string DefaultThumbnailBorderHex = "#CCCCCC";
     public const string DefaultLabelForegroundHex = "#444444";
     public const double DefaultSectionHeaderDisclosureWidth = 14.0;
@@ -216,7 +217,7 @@ public static class SlidePanePlanner
     public const string DefaultSectionHeaderCollapsedDisclosureText = ">";
     public const double DefaultDropIndicatorThickness = 2.0;
     public const double DefaultDropIndicatorHorizontalInset = 0.0;
-    public const string DefaultDropIndicatorAccentHex = "#B7472A";
+    public static readonly string DefaultDropIndicatorAccentHex = BrandThemes.FreeP.Colors.Accent.ToHex();
 
     public static SlidePaneSessionProjection BuildSessionProjection(
         IReadOnlyList<Slide> slides,

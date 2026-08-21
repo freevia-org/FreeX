@@ -7,8 +7,8 @@ namespace FreeP.App.Avalonia.Tests;
 public sealed class FreePThemeBrushTokenTests
 {
     [Theory]
-    [InlineData("FreePAccentBrush", 0xB7, 0x47, 0x2A)]
-    [InlineData("FreePAccentDarkBrush", 0x8F, 0x37, 0x21)]
+    [InlineData("FreePAccentBrush", 0xA2, 0x3B, 0x72)]
+    [InlineData("FreePAccentDarkBrush", 0x4E, 0x21, 0x3B)]
     [InlineData("FreePSheetSurfaceBrush", 0xF3, 0xF3, 0xF3)]
     [InlineData("FreePWhiteBrush", 0xFF, 0xFF, 0xFF)]
     public void BuildResources_RegistersRendererConsumedBrushes(

@@ -86,42 +86,41 @@ public sealed class ThemeApplierWpfRound9Tests
         brush.Color.Should().Be(Color.FromRgb(0xBE, 0xE6, 0xFD));
     }
 
-    // ── FreeP accent key values (brick — the intended visual change) ──────────
+    // ── FreeP owned berry/plum accent values ───────────────────────────────────
 
     [Fact]
-    public void WpfApplier_FreeP_ThemeAccentBrush_Is_Brick_B7472A()
+    public void WpfApplier_FreeP_ThemeAccentBrush_Is_Berry_A23B72()
     {
         var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeP, "FreeP");
         var brush = (SolidColorBrush)dict["ThemeAccentBrush"];
-        brush.Color.Should().Be(Color.FromRgb(0xB7, 0x47, 0x2A));
+        brush.Color.Should().Be(Color.FromRgb(0xA2, 0x3B, 0x72));
     }
 
     [Fact]
-    public void WpfApplier_FreeP_ThemeAccentSoftBrush_Is_BrickSoft_F9EAE6()
+    public void WpfApplier_FreeP_ThemeAccentSoftBrush_Is_BerrySoft_F9E7F1()
     {
         var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeP, "FreeP");
         var brush = (SolidColorBrush)dict["ThemeAccentSoftBrush"];
-        brush.Color.Should().Be(Color.FromRgb(0xF9, 0xEA, 0xE6));
+        brush.Color.Should().Be(Color.FromRgb(0xF9, 0xE7, 0xF1));
     }
 
     [Fact]
-    public void WpfApplier_FreeP_ThemeAccentPressedBrush_Is_BrickPressed_F2D2CB()
+    public void WpfApplier_FreeP_ThemeAccentPressedBrush_Is_BerryPressed_F1CDE0()
     {
         var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeP, "FreeP");
         var brush = (SolidColorBrush)dict["ThemeAccentPressedBrush"];
-        brush.Color.Should().Be(Color.FromRgb(0xF2, 0xD2, 0xCB));
+        brush.Color.Should().Be(Color.FromRgb(0xF1, 0xCD, 0xE0));
     }
 
     [Fact]
-    public void WpfApplier_FreeP_ThemeRibbonButtonHoverBrush_Is_BrickHover_FDDDD6()
+    public void WpfApplier_FreeP_ThemeRibbonButtonHoverBrush_Is_BerryHover_F3D7E6()
     {
         var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeP, "FreeP");
         var brush = (SolidColorBrush)dict["ThemeRibbonButtonHoverBrush"];
-        brush.Color.Should().Be(Color.FromRgb(0xFD, 0xDD, 0xD6));
+        brush.Color.Should().Be(Color.FromRgb(0xF3, 0xD7, 0xE6));
     }
 
-    // ── Core guarantee: FreeX vs FreeP DIFFER; FreeX vs FreeW are IDENTICAL ──
-    // This is the proof that per-app accent reskin works while FreeX/FreeW remain byte-identical.
+    // ── Core guarantee: every product accent family is distinct ───────────────
 
     [Fact]
     public void ThemeAccentBrush_FreeX_vs_FreeP_AreDifferent()
@@ -133,11 +132,11 @@ public sealed class ThemeApplierWpfRound9Tests
         var freepColor = ((SolidColorBrush)freepDict["ThemeAccentBrush"]).Color;
 
         freepColor.Should().NotBe(freexColor,
-            because: "FreeP uses brick (#B7472A) while FreeX uses teal (#0F6D8C) — per-app accent reskin");
+            because: "FreeP uses berry (#A23B72) while FreeX uses teal (#0F6D8C)");
     }
 
     [Fact]
-    public void ThemeAccentBrush_FreeX_vs_FreeW_AreIdentical()
+    public void ThemeAccentBrush_FreeX_vs_FreeW_AreDifferent()
     {
         var freexDict = WpfThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
         var freewDict = WpfThemeApplier.BuildResources(BrandThemes.FreeW, "FreeW");
@@ -145,19 +144,15 @@ public sealed class ThemeApplierWpfRound9Tests
         var freexColor = ((SolidColorBrush)freexDict["ThemeAccentBrush"]).Color;
         var freewColor = ((SolidColorBrush)freewDict["ThemeAccentBrush"]).Color;
 
-        freewColor.Should().Be(freexColor,
-            because: "FreeW and FreeX both use the teal accent (#0F6D8C) — byte-identical shared ribbon");
+        freewColor.Should().NotBe(freexColor,
+            because: "FreeW uses amber (#A26714) while FreeX uses teal (#0F6D8C)");
     }
 
-    // Note: only ThemeAccentBrush / ThemeAccentDarkBrush / ThemeAccentSoftBrush are byte-identical
-    // between FreeX and FreeW.  ThemeAccentPressedBrush differs (#CCEAF2 vs #CFEAF1) and
-    // ThemeRibbonButtonHoverBrush differs (#BEE6FD vs #E6F6FA) — these are preserved per-app values
-    // that happen to have slightly different tints despite both apps sharing the same base accent.
     [Theory]
     [InlineData("ThemeAccentBrush")]
     [InlineData("ThemeAccentDarkBrush")]
     [InlineData("ThemeAccentSoftBrush")]
-    public void AccentBrush_FreeX_vs_FreeW_AreIdentical_ForBaseAccentKeys(string key)
+    public void AccentBrush_FreeX_vs_FreeW_AreDifferent_ForBaseAccentKeys(string key)
     {
         var freexDict = WpfThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
         var freewDict = WpfThemeApplier.BuildResources(BrandThemes.FreeW, "FreeW");
@@ -165,8 +160,8 @@ public sealed class ThemeApplierWpfRound9Tests
         var freexColor = ((SolidColorBrush)freexDict[key]).Color;
         var freewColor = ((SolidColorBrush)freewDict[key]).Color;
 
-        freewColor.Should().Be(freexColor,
-            because: $"FreeW and FreeX share the same base teal accent — '{key}' must be byte-identical");
+        freewColor.Should().NotBe(freexColor,
+            because: $"FreeW owns an amber/umber palette — '{key}' must differ from FreeX");
     }
 
     [Theory]
@@ -183,7 +178,7 @@ public sealed class ThemeApplierWpfRound9Tests
         var freepColor = ((SolidColorBrush)freepDict[key]).Color;
 
         freepColor.Should().NotBe(freexColor,
-            because: $"FreeP uses a distinct brick palette — '{key}' must differ from FreeX teal");
+            because: $"FreeP uses a distinct berry/plum palette — '{key}' must differ from FreeX teal");
     }
 
     // ── Round 8 neutral keys are unaffected (regression guard) ───────────────

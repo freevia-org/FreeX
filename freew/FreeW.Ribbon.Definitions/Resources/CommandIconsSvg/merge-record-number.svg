@@ -3,6 +3,6 @@
   <!-- Hash / number sign -->
   <line x1="12" y1="8"  x2="10" y2="24" stroke="#242424" stroke-width="1.7" stroke-linecap="round"/>
   <line x1="18" y1="8"  x2="16" y2="24" stroke="#242424" stroke-width="1.7" stroke-linecap="round"/>
-  <line x1="8"  y1="14" x2="22" y2="14" stroke="#0F6D8C" stroke-width="1.7" stroke-linecap="round"/>
-  <line x1="7"  y1="19" x2="21" y2="19" stroke="#0F6D8C" stroke-width="1.7" stroke-linecap="round"/>
+  <line x1="8"  y1="14" x2="22" y2="14" stroke="#A26714" stroke-width="1.7" stroke-linecap="round"/>
+  <line x1="7"  y1="19" x2="21" y2="19" stroke="#A26714" stroke-width="1.7" stroke-linecap="round"/>
 </svg>

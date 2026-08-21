@@ -3,7 +3,7 @@
   <rect x="3" y="3" width="10" height="10" rx="1" fill="none" stroke="#242424" stroke-width="1.6"/>
   <rect x="19" y="3" width="10" height="10" rx="1" fill="none" stroke="#242424" stroke-width="1.6"/>
   <rect x="3" y="19" width="10" height="10" rx="1" fill="none" stroke="#242424" stroke-width="1.6"/>
-  <rect x="19" y="19" width="10" height="10" rx="1" fill="none" stroke="#0F6D8C" stroke-width="1.6"/>
-  <line x1="24" y1="21" x2="24" y2="27" stroke="#0F6D8C" stroke-width="1.8" stroke-linecap="round"/>
-  <line x1="21" y1="24" x2="27" y2="24" stroke="#0F6D8C" stroke-width="1.8" stroke-linecap="round"/>
+  <rect x="19" y="19" width="10" height="10" rx="1" fill="none" stroke="#A26714" stroke-width="1.6"/>
+  <line x1="24" y1="21" x2="24" y2="27" stroke="#A26714" stroke-width="1.8" stroke-linecap="round"/>
+  <line x1="21" y1="24" x2="27" y2="24" stroke="#A26714" stroke-width="1.8" stroke-linecap="round"/>
 </svg>

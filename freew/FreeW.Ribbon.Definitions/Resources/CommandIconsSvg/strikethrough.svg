@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Strikethrough">
   <rect width="32" height="32" fill="none"/>
   <text x="16" y="16" font-size="22" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">S</text>
-  <path d="M6 16h20" stroke="#0F6D8C" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M6 16h20" stroke="#A26714" stroke-width="2.4" stroke-linecap="round"/>
 </svg>

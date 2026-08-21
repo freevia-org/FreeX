@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Smartart">
   <rect width="32" height="32" fill="none"/>
-  <circle cx="10" cy="10" r="4" fill="#dcecff" stroke="#0F6D8C" stroke-width="1.2"/>
+  <circle cx="10" cy="10" r="4" fill="#dcecff" stroke="#A26714" stroke-width="1.2"/>
   <circle cx="22" cy="10" r="4" fill="#fff4ce" stroke="#242424" stroke-width="1.2"/>
   <circle cx="16" cy="22" r="4" fill="#e2f0d9" stroke="#107C10" stroke-width="1.2"/>
   <path d="M14 10h4M12 13l3 6M20 13l-3 6" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round"/>

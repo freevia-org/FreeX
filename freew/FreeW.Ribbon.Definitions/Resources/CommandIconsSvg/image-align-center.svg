@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Image Align Center">
   <rect width="32" height="32" fill="none"/>
-  <path d="M16 6v21" stroke="#0F6D8C" stroke-width="1" stroke-dasharray="2 2"/>
-  <rect x="11" y="9" width="10" height="8" fill="#dcecff" stroke="#0F6D8C" stroke-width="1.2"/>
+  <path d="M16 6v21" stroke="#A26714" stroke-width="1" stroke-dasharray="2 2"/>
+  <rect x="11" y="9" width="10" height="8" fill="#dcecff" stroke="#A26714" stroke-width="1.2"/>
   <path d="M7 22h18M10 26h12" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round"/>
 </svg>

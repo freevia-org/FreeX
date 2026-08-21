@@ -3,7 +3,7 @@
   <!-- group bounding box dashed (fading) -->
   <rect x="3" y="3" width="26" height="26" rx="2" fill="none" stroke="#c0c0c0" stroke-width="1.2" stroke-dasharray="3 2"/>
   <!-- child A: separating to top-left -->
-  <rect x="5" y="5" width="10" height="10" rx="1.5" fill="#0F6D8C" opacity="0.85"/>
+  <rect x="5" y="5" width="10" height="10" rx="1.5" fill="#A26714" opacity="0.85"/>
   <!-- child B: separating to bottom-right -->
   <rect x="17" y="17" width="10" height="10" rx="1.5" fill="#E07020" opacity="0.85"/>
   <!-- individual selection handles on child A -->

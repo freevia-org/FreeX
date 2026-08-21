@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Nth root">
   <rect width="32" height="32" fill="none"/>
   <text x="3" y="14" font-family="Cambria, 'Times New Roman', serif" font-size="9" font-style="italic" fill="#242424">n</text>
-  <path d="M6 18L10 25L15 8H27" fill="none" stroke="#0F6D8C" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M6 18L10 25L15 8H27" fill="none" stroke="#A26714" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
   <text x="20" y="22" font-family="Cambria, 'Times New Roman', serif" font-size="11" font-style="italic" text-anchor="middle" fill="#242424">x</text>
 </svg>

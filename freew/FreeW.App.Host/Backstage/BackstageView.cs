@@ -23,14 +23,13 @@ namespace FreeW.App.Host.Backstage;
 /// The backstage rail colours (sidebar/hover/selected/separator) come from <see cref="SisterBackstageTheme.FreeW"/>.
 /// The in-content link accent is sourced from the design-token (<see cref="BrandThemes.FreeW"/> Accent role)
 /// so that changing the theme value propagates to the backstage — byte-identical today since
-/// <c>BrandThemes.FreeW.Colors.Accent == #0F6D8C</c> matches the previous hard-coded <c>LinkColor</c>.
+/// The link accent is sourced from <see cref="BrandThemes.FreeW"/>.
 /// </summary>
 internal sealed partial class BackstageView : UserControl
 {
     private static readonly SisterBackstageTheme Theme = SisterBackstageTheme.FreeW;
 
-    // Link accent sourced from the design token (BrandThemes.FreeW.Colors.Accent = #0F6D8C).
-    // Byte-identical to the previous hard-coded SisterBackstageTheme.FreeW.LinkColor (#0F6D8C).
+    // Link accent sourced from the canonical shared theme.
     private static readonly SisterBackstagePaneResources BackstageResources = new(
         WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.Accent),
         Theme.TileWidth,

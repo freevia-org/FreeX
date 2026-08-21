@@ -2,8 +2,8 @@
   <rect width="32" height="32" fill="none"/>
   <!-- "a-b" with a gear dot: automatic hyphenation -->
   <text x="9.5" y="16" font-size="13" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">a</text>
-  <path d="M14 16h5" fill="none" stroke="#0F6D8C" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M14 16h5" fill="none" stroke="#A26714" stroke-width="2.2" stroke-linecap="round"/>
   <text x="23.5" y="16" font-size="13" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">b</text>
-  <circle cx="16" cy="26" r="3.2" fill="none" stroke="#0F6D8C" stroke-width="2"/>
-  <circle cx="16" cy="26" r="0.8" fill="#0F6D8C"/>
+  <circle cx="16" cy="26" r="3.2" fill="none" stroke="#A26714" stroke-width="2"/>
+  <circle cx="16" cy="26" r="0.8" fill="#A26714"/>
 </svg>

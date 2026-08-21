@@ -1,8 +1,8 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Insert Page Number in Header">
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Insert Page Number in Header">
   <rect width="32" height="32" fill="none"/>
   <path d="M8 4.5h12l4 4V27H8z" fill="#ffffff" stroke="#242424" stroke-width="1.4" stroke-linejoin="round"/>
   <path d="M20 4.5V9h4" fill="none" stroke="#242424" stroke-width="1" stroke-linejoin="round"/>
-  <rect x="9.5" y="7.5" width="13" height="3" fill="#0F6D8C" opacity="0.35"/>
-  <circle cx="20" cy="22" r="5" fill="#0F6D8C"/>
+  <rect x="9.5" y="7.5" width="13" height="3" fill="#A26714" opacity="0.35"/>
+  <circle cx="20" cy="22" r="5" fill="#A26714"/>
   <text x="20" y="22.5" font-size="7" fill="#ffffff" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">1</text>
 </svg>

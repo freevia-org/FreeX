@@ -14,8 +14,8 @@ namespace FreeP.App.Host.Tests;
 public sealed class FreePChromeBrushTokenTests
 {
     [Theory]
-    [InlineData("FreePAccentBrush", 0xB7, 0x47, 0x2A)]
-    [InlineData("FreePAccentDarkBrush", 0x8F, 0x37, 0x21)]
+    [InlineData("FreePAccentBrush", 0xA2, 0x3B, 0x72)]
+    [InlineData("FreePAccentDarkBrush", 0x4E, 0x21, 0x3B)]
     [InlineData("FreePSheetSurfaceBrush", 0xF3, 0xF3, 0xF3)]
     [InlineData("FreePWhiteBrush", 0xFF, 0xFF, 0xFF)]
     public void BuildResources_RegistersRendererConsumedBrushes(
@@ -32,7 +32,7 @@ public sealed class FreePChromeBrushTokenTests
 
     /// <summary>
     /// Applying the default <see cref="BrandThemes.FreeP"/> theme with prefix "FreeP" produces
-    /// <c>FreePTitleBarBrush</c> = #B7472A, byte-identical to the previous hardcoded literal.
+    /// <c>FreePTitleBarBrush</c> uses the canonical plum #4E213B.
     /// </summary>
     [Fact]
     public void BuildResources_FreePTheme_RegistersDefaultTitleBarBrush()
@@ -41,14 +41,14 @@ public sealed class FreePChromeBrushTokenTests
 
         var brush = dict["FreePTitleBarBrush"] as SolidColorBrush;
         brush.Should().NotBeNull("applier must register FreePTitleBarBrush");
-        brush!.Color.R.Should().Be(0xB7, "TitleBar Red   = 0xB7");
-        brush.Color.G.Should().Be(0x47, "TitleBar Green = 0x47");
-        brush.Color.B.Should().Be(0x2A, "TitleBar Blue  = 0x2A");
+        brush!.Color.R.Should().Be(0x4E);
+        brush.Color.G.Should().Be(0x21);
+        brush.Color.B.Should().Be(0x3B);
     }
 
     /// <summary>
     /// Applying the default <see cref="BrandThemes.FreeP"/> theme produces
-    /// <c>FreePStatusSurfaceBrush</c> = #B7472A, byte-identical to the previous hardcoded literal.
+    /// <c>FreePStatusSurfaceBrush</c> uses the canonical plum #4E213B.
     /// </summary>
     [Fact]
     public void BuildResources_FreePTheme_RegistersDefaultStatusSurfaceBrush()
@@ -57,9 +57,9 @@ public sealed class FreePChromeBrushTokenTests
 
         var brush = dict["FreePStatusSurfaceBrush"] as SolidColorBrush;
         brush.Should().NotBeNull("applier must register FreePStatusSurfaceBrush");
-        brush!.Color.R.Should().Be(0xB7, "StatusSurface Red   = 0xB7");
-        brush.Color.G.Should().Be(0x47, "StatusSurface Green = 0x47");
-        brush.Color.B.Should().Be(0x2A, "StatusSurface Blue  = 0x2A");
+        brush!.Color.R.Should().Be(0x4E);
+        brush.Color.G.Should().Be(0x21);
+        brush.Color.B.Should().Be(0x3B);
     }
 
     /// <summary>
