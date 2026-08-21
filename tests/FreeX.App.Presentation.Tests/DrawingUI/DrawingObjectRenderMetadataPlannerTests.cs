@@ -126,6 +126,33 @@ public sealed class DrawingObjectRenderMetadataPlannerTests
     }
 
     [Fact]
+    public void ResolveBoundsShapeRenderMetadata_ProjectsGradientOnlyForNonLineShapes()
+    {
+        var shape = new DrawingObjectBounds(
+            SelectionPaneObjectKind.Shape,
+            Guid.NewGuid(),
+            "Gradient",
+            AnchorRow: 1,
+            AnchorCol: 1,
+            Left: 0,
+            Top: 0,
+            Width: 40,
+            Height: 20,
+            ShapeKind: DrawingShapeKind.Rectangle,
+            FillColor: new CellColor(91, 155, 213),
+            GradientFillEndColor: new CellColor(255, 255, 255),
+            GradientFillDirection: DrawingShapeGradientDirection.Vertical);
+
+        var line = shape with { ShapeKind = DrawingShapeKind.Line };
+
+        DrawingObjectRenderMetadataPlanner.ResolveBoundsShapeRenderMetadata(shape).FillGradient.Should()
+            .Be(new DrawingShapeFillGradientMetadata(
+                new CellColor(255, 255, 255),
+                DrawingShapeGradientDirection.Vertical));
+        DrawingObjectRenderMetadataPlanner.ResolveBoundsShapeRenderMetadata(line).FillGradient.Should().BeNull();
+    }
+
+    [Fact]
     public void CreatePlaceholderMetadata_UsesTrimmedNameOrIndexedFallback()
     {
         DrawingObjectRenderMetadataPlanner.CreatePlaceholderMetadata("Picture", "  Logo  ", 4)

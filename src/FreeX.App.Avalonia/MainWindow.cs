@@ -5650,9 +5650,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // WordArt with no body fill (FillColor=null) uses Transparent so the styled text shows alone.
         // WordArt WITH an authored body fill still renders the box behind the styled text, matching
         // Excel which shows the filled box and the styled run text together.
-        var fill = metadata.FillColor is { } fc
-            ? Brush(fc)
-            : Brushes.Transparent;
+        var fill = metadata.FillGradient is { } gradient && metadata.FillColor is { } gradientStart
+            ? CreateDrawingShapeGradientBrush(gradientStart, gradient)
+            : metadata.FillColor is { } fc
+                ? Brush(fc)
+                : Brushes.Transparent;
         // When OutlineHasNoFill is set the shape explicitly has no border stroke.
         IBrush? strokeBrush = metadata.OutlineColor is { } outlineColor
             ? Brush(outlineColor)
@@ -5696,6 +5698,34 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         return shapeControl;
+    }
+
+    private static IBrush CreateDrawingShapeGradientBrush(
+        CellColor startColor,
+        DrawingShapeFillGradientMetadata gradient)
+    {
+        var (startPoint, endPoint) = gradient.Direction switch
+        {
+            DrawingShapeGradientDirection.Horizontal =>
+                (new RelativePoint(0, 0.5, RelativeUnit.Relative), new RelativePoint(1, 0.5, RelativeUnit.Relative)),
+            DrawingShapeGradientDirection.Vertical =>
+                (new RelativePoint(0.5, 0, RelativeUnit.Relative), new RelativePoint(0.5, 1, RelativeUnit.Relative)),
+            DrawingShapeGradientDirection.DiagonalUp =>
+                (new RelativePoint(0, 1, RelativeUnit.Relative), new RelativePoint(1, 0, RelativeUnit.Relative)),
+            _ =>
+                (new RelativePoint(0, 0, RelativeUnit.Relative), new RelativePoint(1, 1, RelativeUnit.Relative)),
+        };
+
+        return new LinearGradientBrush
+        {
+            StartPoint = startPoint,
+            EndPoint = endPoint,
+            GradientStops =
+            {
+                new GradientStop(Color.FromRgb(startColor.R, startColor.G, startColor.B), 0),
+                new GradientStop(Color.FromRgb(gradient.EndColor.R, gradient.EndColor.G, gradient.EndColor.B), 1),
+            },
+        };
     }
 
     /// <summary>

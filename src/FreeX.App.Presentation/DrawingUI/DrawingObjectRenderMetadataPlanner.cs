@@ -108,10 +108,14 @@ public static class DrawingObjectRenderMetadataPlanner
             : drawingObject.OutlineColor ?? DrawingShapeModel.DefaultOutlineColor;
         var isLineLike = drawingObject.ShapeKind is { } kind &&
             DrawingShapeKindSupport.IsLineLike(kind);
+        var gradient = drawingObject.GradientFillEndColor is { } gradientEnd && !isLineLike
+            ? new DrawingShapeFillGradientMetadata(gradientEnd, drawingObject.GradientFillDirection)
+            : (DrawingShapeFillGradientMetadata?)null;
 
         return new DrawingObjectBoundsShapeRenderMetadata(
             fill,
             outline,
+            gradient,
             ResolveOutlineThicknessDip(drawingObject.OutlineWidthPoints),
             drawingObject.OutlineDash,
             isLineLike,
@@ -376,6 +380,7 @@ public readonly record struct TextBoxRenderMetadata(
 public readonly record struct DrawingObjectBoundsShapeRenderMetadata(
     CellColor? FillColor,
     CellColor? OutlineColor,
+    DrawingShapeFillGradientMetadata? FillGradient,
     double OutlineThicknessDip,
     DrawingShapeOutlineDash OutlineDash,
     bool IsLineLike,

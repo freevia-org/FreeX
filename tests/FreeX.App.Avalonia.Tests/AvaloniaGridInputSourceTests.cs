@@ -477,17 +477,23 @@ public sealed class AvaloniaGridInputSourceTests
             source.IndexOf("private static Control CreateDrawingShapeVisual(", StringComparison.Ordinal)..
             source.IndexOf("private static void AddArrowheadOverlays(", StringComparison.Ordinal)];
 
-        // The body fill should now be driven by FillColor alone (non-null = has fill).
-        // The old unconditional IsWordArt → Transparent gate must be gone.
+        // The body fill is driven by shared metadata; the old unconditional IsWordArt →
+        // Transparent gate must be gone.
         createVisual.Should().Contain(
             "var metadata = DrawingObjectRenderMetadataPlanner.ResolveBoundsShapeRenderMetadata(drawingObject);",
             "body fill fallback policy should be owned by the shared Presentation planner");
         createVisual.Should().Contain(
-            "var fill = metadata.FillColor is { } fc",
-            "Avalonia should only translate resolved colors to brushes");
+            "metadata.FillColor is { } fc",
+            "Avalonia should retain the resolved-color solid-fill fallback");
         createVisual.Should().Contain(
             ": Brushes.Transparent;",
             "null resolved fill still renders transparently for WordArt without an authored body fill");
+        createVisual.Should().Contain(
+            "metadata.FillGradient is { } gradient && metadata.FillColor is { } gradientStart",
+            "authored viewport gradient metadata must take precedence over the solid-fill fallback");
+        createVisual.Should().Contain(
+            "CreateDrawingShapeGradientBrush(gradientStart, gradient)",
+            "the gradient branch must create an Avalonia brush from the propagated endpoints");
 
         // The old pattern that gated fill on !IsWordArt unconditionally must not appear.
         createVisual.Should().NotContain(

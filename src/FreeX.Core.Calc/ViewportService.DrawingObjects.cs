@@ -79,6 +79,8 @@ public sealed partial class ViewportService
             shape.FlipVertical,
             ShapeKind: shape.Kind,
             FillColor: ResolveShapeFillColor(shape, theme),
+            GradientFillEndColor: shape.GradientFillEndColor,
+            GradientFillDirection: shape.GetEffectiveGradientFillDirection(),
             OutlineColor: ResolveShapeOutlineColor(shape, theme),
             Effect: BuildShapeEffect(shape),
             OutlineWidthPoints: shape.OutlineWidthPoints,

@@ -184,7 +184,11 @@ public sealed record DrawingObjectBounds(
     bool IsWordArt = false,
     CellColor? ShapeTextGradientEndColor = null,
     CellColor? ShapeTextOutlineColor = null,
-    double ShapeTextOutlineWidthPoints = 0);
+    double ShapeTextOutlineWidthPoints = 0,
+    // Authored shape gradient fill, projected from DrawingShapeModel for hosts that render
+    // drawing overlays from viewport bounds rather than the original model.
+    CellColor? GradientFillEndColor = null,
+    DrawingShapeGradientDirection GradientFillDirection = DrawingShapeGradientDirection.DiagonalDown);
 
 /// <summary>
 /// Render-plan projection of a drawing object's authored visual effect (shadow / glow /

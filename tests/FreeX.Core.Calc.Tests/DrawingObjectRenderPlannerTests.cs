@@ -248,6 +248,28 @@ public sealed class DrawingObjectRenderPlannerTests
     }
 
     [Fact]
+    public void GetViewport_ShapeBoundsExposeAuthoredGradientFill()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            FillColor = new CellColor(91, 155, 213),
+            GradientFillEndColor = new CellColor(255, 255, 255),
+            GradientFillDirection = DrawingShapeGradientDirection.Vertical,
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook, sheet.Id, new ViewportRequest(1, 1, 120, 120));
+
+        var bounds = viewport.DrawingObjects.Single(b => b.Id == shape.Id);
+        bounds.GradientFillEndColor.Should().Be(new CellColor(255, 255, 255));
+        bounds.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.Vertical);
+    }
+
+    [Fact]
     public void GetViewport_ShapeBoundsExposeOutlineHasNoFill()
     {
         var workbook = new Workbook("test");
