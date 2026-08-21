@@ -24,6 +24,12 @@ public static class RibbonMenuKeyTipScopePlanner
             item.InputGestureText = GetScopedKeyTip(item, scopePrefix) ?? "";
     }
 
+    public static void ClearInputGestureText(ItemsControl scopeOwner)
+    {
+        foreach (var item in EnumerateMenuItems(scopeOwner))
+            item.InputGestureText = string.Empty;
+    }
+
     private static IEnumerable<MenuItem> EnumerateMenuItems(ItemsControl scopeOwner)
     {
         foreach (var item in scopeOwner.Items.OfType<MenuItem>())

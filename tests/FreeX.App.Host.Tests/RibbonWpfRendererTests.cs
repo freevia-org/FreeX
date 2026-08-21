@@ -236,6 +236,17 @@ public class RibbonWpfRendererTests
     }
 
     [Fact]
+    public void HomeDefinition_UsesCompactIconControlsForEditing()
+    {
+        var editing = HomeRibbonDefinition.Build()
+            .FindTab("HomeTab")!
+            .Groups.Single(group => group.Id == "HomeEditingGroup");
+
+        editing.Controls.Should().OnlyContain(control =>
+            control.PreferredLayout == RibbonCommandLayoutKind.Small);
+    }
+
+    [Fact]
     public void RenderedHomeTab_HasFontAlignmentAndNumberDialogLaunchers()
     {
         StaTestRunner.Run(() =>

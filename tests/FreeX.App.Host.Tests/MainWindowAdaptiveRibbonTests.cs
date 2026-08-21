@@ -96,7 +96,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void HomeRibbon_KeepsCellsVisibleBeforeEditingAtCommonWideWidths()
+    public void HomeRibbon_KeepsCellsVisibleBeforeFoldingCompactEditingAtCommonWideWidths()
     {
         StaTestRunner.Run(() =>
         {
@@ -110,7 +110,10 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             harness.CollapsedRibbonGroupNames.Should().Contain("Editing", harness.DebugRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().Contain(
                 ["Insert", "Delete", "Format"],
-                "Excel keeps the Cells group visible at common wide widths and collapses Editing first");
+                "Excel keeps the Cells group visible at common wide widths and folds the compact Editing group before clipping");
+            harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                0.5,
+                $"the compact Home groups must fit rather than clip; {harness.DebugActiveRibbonChildren}");
         });
     }
 

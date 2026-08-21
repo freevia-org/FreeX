@@ -90,11 +90,11 @@ public static class HomeRibbonDefinition
                 .Medium("Format", "Format", Ico.Size, "O", menu: HomeRibbonMenus.Format))
 
             .Group("HomeEditingGroup", "Editing", "G", priority: 40, g => g
-                .Medium("AutoSum", "AutoSum", Ico.Sum, "U", menu: HomeRibbonMenus.AutoSum)
-                .Medium("Fill", "Fill", Ico.Fill, "FI", menu: HomeRibbonMenus.Fill)
-                .Medium("Clear", "Clear", Ico.Clear, "E", menu: HomeRibbonMenus.Clear)
-                .Medium("Sort & Filter", "Sort & Filter", Ico.Sort, "S", menu: HomeRibbonMenus.SortFilter)
-                .Medium("Find & Select", "Find & Select", Ico.Search, "FD", menu: HomeRibbonMenus.FindSelect)))
+                .Icon("AutoSum", "AutoSum", Ico.Sum, "U", menu: HomeRibbonMenus.AutoSum)
+                .Icon("Fill", "Fill", Ico.Fill, "FI", menu: HomeRibbonMenus.Fill)
+                .Icon("Clear", "Clear", Ico.Clear, "E", menu: HomeRibbonMenus.Clear)
+                .Icon("Sort & Filter", "Sort & Filter", Ico.Sort, "S", menu: HomeRibbonMenus.SortFilter)
+                .Icon("Find & Select", "Find & Select", Ico.Search, "FD", menu: HomeRibbonMenus.FindSelect)))
         .Build()
         .FindTab("HomeTab")!;
 }

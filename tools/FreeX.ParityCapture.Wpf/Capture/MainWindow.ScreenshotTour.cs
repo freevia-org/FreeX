@@ -1101,6 +1101,7 @@ public partial class MainWindow
 
         try
         {
+            RibbonMenuKeyTipScopePlanner.ClearInputGestureText(menu);
             menu.PlacementTarget = bordersButton;
             menu.Placement = PlacementMode.Bottom;
             menu.IsOpen = true;
@@ -13652,7 +13653,6 @@ public partial class MainWindow
 
         try
         {
-            MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
             menu.PlacementTarget = target;
             menu.Placement = PlacementMode.Bottom;
             menu.IsOpen = true;
