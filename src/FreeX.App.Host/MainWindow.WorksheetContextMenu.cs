@@ -42,11 +42,14 @@ public partial class MainWindow
         menu.Opened += WorksheetContextMenu_Opened;
         menu.Closed += (_, _) =>
         {
+            CloseWorksheetContextMiniToolbar();
             if (ReferenceEquals(SheetGrid.ContextMenu, menu))
                 SheetGrid.ContextMenu = null;
         };
         SheetGrid.ContextMenu = menu;
         PositionWorksheetContextMenu(menu, gridPos);
+        if (!_suppressWorksheetContextMiniToolbar)
+            ShowWorksheetContextMiniToolbar(targetKind, gridPos);
         menu.IsOpen = true;
     }
 
@@ -244,7 +247,15 @@ public partial class MainWindow
             return;
 
         var address = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
-        OnGridContextMenuRequested(address, GetKeyboardContextMenuGridPoint(address));
+        _suppressWorksheetContextMiniToolbar = true;
+        try
+        {
+            OnGridContextMenuRequested(address, GetKeyboardContextMenuGridPoint(address));
+        }
+        finally
+        {
+            _suppressWorksheetContextMiniToolbar = false;
+        }
     }
 
     private void ResolveContextThreadedComment(CellAddress address, bool resolved)

@@ -105,6 +105,22 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     }
 
     [Fact]
+    public void WorksheetContextMenu_ShowsAndClosesExcelStyleMiniToolbar()
+    {
+        var menuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var toolbarSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMiniToolbar.cs");
+
+        menuSource.Should().Contain("ShowWorksheetContextMiniToolbar(targetKind, gridPos);");
+        menuSource.Should().Contain("CloseWorksheetContextMiniToolbar();");
+        toolbarSource.Should().Contain("WorksheetContextMenuTargetKind.Worksheet");
+        toolbarSource.Should().Contain("AutomationProperties.SetAutomationId(toolbar, \"WorksheetContextMiniToolbar\")");
+        toolbarSource.Should().Contain("ApplyFontToggleShortcut(FontToggleShortcut.Bold)");
+        toolbarSource.Should().Contain("ApplyFontToggleShortcut(FontToggleShortcut.Italic)");
+        toolbarSource.Should().Contain("ApplyHorizontalAlignment(FreeX.Core.Model.HorizontalAlignment.Center)");
+        toolbarSource.Should().Contain("FillColorBtn_Click(this, new RoutedEventArgs())");
+    }
+
+    [Fact]
     public void ContextMenuStateSkipsValidationLookupWhenSheetHasNoValidationRules()
     {
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");

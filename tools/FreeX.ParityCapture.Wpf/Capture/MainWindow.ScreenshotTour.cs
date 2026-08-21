@@ -67,6 +67,7 @@ public partial class MainWindow
     private const string RibbonOverflowKeytipTourOutputDirectoryName = "ribbon-overflow-keytip-tour";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
+    private const string WorksheetContextMiniToolbarTourCaptureFileName = "freex_context_menu_mini_toolbar_opened";
     private const string WorksheetContextTargetsTourOutputDirectoryName = "worksheet-context-targets-tour";
     private const string WorksheetContextSubmittedTourOutputDirectoryName = "worksheet-context-submitted-tour";
     private const string WorksheetContextSubmittedTourSavedWorkbookFileName = "freex_worksheet_context_submitted_saved.fxl";
@@ -2521,6 +2522,8 @@ public partial class MainWindow
             await WaitForRibbonScreenshotRenderPassAsync();
 
             await CaptureElementAsync(menu, outputDir, WorksheetContextMenuTourCaptureFileName);
+            if (_worksheetContextMiniToolbar?.Child is FrameworkElement miniToolbar)
+                await CaptureElementAsync(miniToolbar, outputDir, WorksheetContextMiniToolbarTourCaptureFileName);
             ValidateWorksheetContextMenuTourEvidence(outputDir);
             await WriteWorksheetContextMenuTourManifestAsync(outputDir, menu, address);
         }
@@ -2560,6 +2563,7 @@ public partial class MainWindow
         foreach (var fileName in new[]
         {
             $"{WorksheetContextMenuTourCaptureFileName}.png",
+            $"{WorksheetContextMiniToolbarTourCaptureFileName}.png",
             WorksheetContextMenuTourManifestFileName
         })
         {
@@ -2574,6 +2578,10 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, $"{WorksheetContextMenuTourCaptureFileName}.png");
         if (!File.Exists(path))
             throw new InvalidOperationException("Worksheet context menu tour did not create the planned FreeX context menu capture.");
+
+        var toolbarPath = Path.Combine(outputDir, $"{WorksheetContextMiniToolbarTourCaptureFileName}.png");
+        if (!File.Exists(toolbarPath))
+            throw new InvalidOperationException("Worksheet context menu tour did not create the planned mini toolbar capture.");
     }
 
     private async Task CapturePrintPreviewTourAsync(string outputDir)
