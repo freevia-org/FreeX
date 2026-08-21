@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -29,5 +30,16 @@ public sealed class ShapeGeometryWpfAdapterTests
         DrawingShapeKindSupport.IsLineLike(DrawingShapeKind.ElbowConnector).Should().BeTrue();
         DrawingShapeKindSupport.IsLineLike(DrawingShapeKind.CurvedConnector).Should().BeTrue();
         DrawingShapeKindSupport.IsLineLike(DrawingShapeKind.RightArrow).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Create_UsesNonzeroFillRuleForOverlappingCalloutContours()
+    {
+        var geometry = ShapeGeometryWpfAdapter.Create(
+            DrawingShapeKind.RectangularCallout,
+            new Rect(10, 20, 120, 80));
+
+        geometry.Should().BeOfType<StreamGeometry>();
+        ((StreamGeometry)geometry).FillRule.Should().Be(FillRule.Nonzero);
     }
 }

@@ -28,7 +28,10 @@ public static class ShapeGeometryWpfAdapter
 
     private static Geometry ToGeometry(ShapeGeometry shape)
     {
-        var geometry = new StreamGeometry();
+        // Preset callouts and compound shapes use overlapping contours. The default even-odd
+        // rule turns their overlap into a cutout (for example, a white callout tail); DrawingML
+        // treats those contours as a filled union.
+        var geometry = new StreamGeometry { FillRule = FillRule.Nonzero };
         using (var context = geometry.Open())
         {
             foreach (var contour in shape.Contours)
