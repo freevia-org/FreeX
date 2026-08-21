@@ -5,7 +5,7 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class ReviewRevisionColorPlannerTests
 {
     [Fact]
-    public void BuildAuthorColors_assigns_word_palette_in_first_revision_order()
+    public void BuildAuthorColors_assigns_current_visible_word_palette_in_first_revision_order()
     {
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
@@ -23,11 +23,11 @@ public sealed class ReviewRevisionColorPlannerTests
 
         colors.Should().BeEquivalentTo(new Dictionary<string, string>
         {
-            ["Alice"] = "#0070C0",
-            ["Bob"] = "#8064A2",
-            ["Carol"] = "#70AD47",
+            ["Alice"] = "#D13438",
+            ["Bob"] = "#0078D4",
+            ["Carol"] = "#5C2E91",
         });
-        ReviewRevisionColorPlanner.ResolveColorHex(colors, " ALICE ").Should().Be("#0070C0");
+        ReviewRevisionColorPlanner.ResolveColorHex(colors, " ALICE ").Should().Be("#D13438");
     }
 
     [Fact]

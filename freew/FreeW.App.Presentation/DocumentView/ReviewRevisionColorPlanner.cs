@@ -10,13 +10,14 @@ public static class ReviewRevisionColorPlanner
 {
     public const string FallbackColorHex = "#C00040";
 
-    // The first three colours are the palette Word emits for the author sequence in the
-    // tracked-change corpus. The remaining entries keep later authors distinct and deterministic.
+    // The first three colours are the current visible-Word markup palette for the Alice/Bob/Carol
+    // sequence in the tracked-change corpus. The remaining entries keep later authors distinct
+    // and deterministic.
     private static readonly string[] AuthorPalette =
     [
-        "#0070C0",
-        "#8064A2",
-        "#70AD47",
+        "#D13438",
+        "#0078D4",
+        "#5C2E91",
         "#C00040",
         "#ED7D31",
         "#5B9BD5",
