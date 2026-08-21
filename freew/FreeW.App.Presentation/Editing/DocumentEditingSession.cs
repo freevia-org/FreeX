@@ -201,6 +201,9 @@ public sealed class DocumentEditingSession
         foreach (var (id, style) in source.Styles)
             Document.Styles.TryAdd(id, style);
 
+        var insertAt = ResolveInsertionIndexAfter(caretBlockIndex);
+        RestartUnrelatedNumberListRuns(clones, PrecedingParagraphContinuesNumberList(insertAt - 1));
+
         return InsertBlocksAfter(caretBlockIndex, clones, "Insert Text from File");
     }
 
@@ -322,11 +325,59 @@ public sealed class DocumentEditingSession
             caretBlockOffset = 0;
         }
 
+        RestartUnrelatedNumberListRuns(blocks, PrecedingParagraphContinuesNumberList(caret.BlockIndex - 1));
+
         _commands.Execute(new ReplaceBlocksCommand(caret.BlockIndex, 1, blocks));
         result = new DocumentParagraphEditResult(
             new DocumentTextPosition(caret.BlockIndex + caretBlock, caretBlockOffset),
             ReplacedBlockCount: 1);
         return true;
+    }
+
+    /// <summary>
+    /// True when the paragraph at <paramref name="index"/> is itself a Number-kind list paragraph --
+    /// i.e. content spliced in immediately after it would be continuing that same list rather than
+    /// starting an unrelated new one. Mirrors
+    /// <see cref="DocumentParagraphFormattingCoordinator.ToggleListKind"/>'s own adjacency check for the
+    /// ribbon Numbering button.
+    /// </summary>
+    private bool PrecedingParagraphContinuesNumberList(int index) =>
+        index >= 0
+        && index < Document.Blocks.Count
+        && Document.Blocks[index] is Paragraph paragraph
+        && paragraph.Formatting.ListKind == ListKind.Number;
+
+    /// <summary>
+    /// Paste ("Insert Text from File", Ctrl+V, and the ribbon Paste button) clones every source
+    /// paragraph's <see cref="ParagraphFormatting.ListStartOverride"/> verbatim (see
+    /// <see cref="DocumentMerge.CloneBlocksForInsertion"/>) -- correct for a paragraph that continues its
+    /// own source list, but wrong the moment a Number-kind run lands somewhere that isn't already
+    /// rendering that same list: the shared per-document counter in
+    /// <see cref="DocumentListMarkerSequencePlanner"/> would otherwise just keep counting up from
+    /// whatever unrelated list last left off. This mirrors the exact restart detection
+    /// <see cref="DocumentParagraphFormattingCoordinator.ToggleListKind"/> already performs for the
+    /// ribbon Numbering button: only the first paragraph of each newly-unrelated Number run is forced to
+    /// restart at 1 (a paragraph that already carries an explicit override -- the source's own deliberate
+    /// restart/continue mark -- is left untouched); every following paragraph in that same run keeps
+    /// counting from there. A run interrupted by a non-Number paragraph (or a table) partway through the
+    /// pasted content is itself unrelated to whatever came before it, so it restarts too.
+    /// </summary>
+    private static void RestartUnrelatedNumberListRuns(IReadOnlyList<Block> blocks, bool precedingContinuesNumberList)
+    {
+        var previousWasNumberList = precedingContinuesNumberList;
+        foreach (var block in blocks)
+        {
+            if (block is not Paragraph paragraph || paragraph.Formatting.ListKind != ListKind.Number)
+            {
+                previousWasNumberList = false;
+                continue;
+            }
+
+            if (!previousWasNumberList && paragraph.Formatting.ListStartOverride is null)
+                paragraph.Formatting = paragraph.Formatting with { ListStartOverride = 1 };
+
+            previousWasNumberList = true;
+        }
     }
 
     /// <summary>
@@ -1532,12 +1583,22 @@ public sealed class DocumentEditingSession
         return true;
     }
 
+    /// <summary>
+    /// Whether a (possibly cross-paragraph) delete/replace span can restructure every paragraph it
+    /// touches. A paragraph owning a <see cref="Paragraph.SectionBreak"/> is allowed inside the span, not
+    /// just at a caret boundary: per Word's rule, merging across it discards the section(s) that end
+    /// strictly before <see cref="DocumentTextRange.End"/>'s paragraph and keeps that last paragraph's own
+    /// section break -- exactly what <see cref="TryMergeBodyParagraphWithPrevious"/> and
+    /// <see cref="TryMergeBodyParagraphWithNext"/> already do for a collapsed caret via
+    /// <see cref="SurvivingSectionBreak"/>. <see cref="BuildRangeReplacement"/> is what actually carries
+    /// that surviving break onto the merged paragraph.
+    /// </summary>
     private bool CanRestructure(DocumentTextRange span)
     {
         var survivor = Document.Blocks[span.Start.BlockIndex] as Paragraph;
         for (var blockIndex = span.Start.BlockIndex; blockIndex <= span.End.BlockIndex; blockIndex++)
         {
-            if (Document.Blocks[blockIndex] is not Paragraph paragraph || !CanRestructure(paragraph))
+            if (Document.Blocks[blockIndex] is not Paragraph paragraph || !CanRestructureAllowingSectionBreak(paragraph))
                 return false;
 
             // freew-cc-6: everything past the first block is replaced by the merged paragraph, so a
@@ -1568,6 +1629,12 @@ public sealed class DocumentEditingSession
             });
         }
         AppendClonedRuns(replacement, endParagraph, span.End.Offset, endParagraph.PlainText.Length);
+        // Any section break strictly before the end paragraph is being deleted along with that
+        // paragraph's own block (see CanRestructure(DocumentTextRange)'s section-break allowance); per
+        // SurvivingSectionBreak's rule the merged paragraph keeps only the END paragraph's own break (or
+        // lack of one). When no section break is involved anywhere in the span this is always already
+        // null, so it is a no-op for every other caller of this helper.
+        replacement.SectionBreak = endParagraph.SectionBreak;
         CoalesceEditableRuns(replacement);
         return replacement;
     }

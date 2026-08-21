@@ -67,10 +67,25 @@ public static class DataValidationPreviewPlanner
 
         lines.Add($"In-cell dropdown: {(rule.ShowDropdown ? "Shown" : "Hidden")}");
 
-        var items = DataValidationService.GetListItems(rule, sheet, activeCell, workbook);
+        // DataValidationService.GetListItems is gated on ShowDropdown because its other caller
+        // (DataValidationDropdownPlanner) uses it to decide whether to draw the in-cell arrow.
+        // The preview describes what the rule actually enforces, not whether Excel draws an
+        // arrow, so when the user has hidden the dropdown we still resolve the list contents by
+        // asking as if it were shown (via an unpersisted clone); ShowDropdown itself is reported
+        // truthfully on the line above.
+        var items = rule.ShowDropdown
+            ? DataValidationService.GetListItems(rule, sheet, activeCell, workbook)
+            : DataValidationService.GetListItems(CloneWithDropdownShown(rule), sheet, activeCell, workbook);
         lines.Add(items.Count == 0
             ? "List items: none available"
             : $"List items: {FormatListItems(items)}");
+    }
+
+    private static DataValidation CloneWithDropdownShown(DataValidation rule)
+    {
+        var clone = rule.Clone();
+        clone.ShowDropdown = true;
+        return clone;
     }
 
     private static void AddPromptPreview(List<string> lines, DataValidation rule)

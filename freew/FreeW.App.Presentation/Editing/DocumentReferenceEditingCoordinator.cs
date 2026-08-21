@@ -289,11 +289,11 @@ public sealed class DocumentReferenceEditingCoordinator
             throw new ArgumentOutOfRangeException(nameof(maxStabilizationPasses));
 
         TableOfContents.EnsureStyles(_session.Document);
-        var existing = _session.Document.Blocks
+        var existing = FirstContiguousRun(_session.Document.Blocks
             .Select((block, index) => (block, index))
             .Where(item => TableOfContents.IsTocParagraph(item.block))
             .Select(item => item.index)
-            .ToArray();
+            .ToArray());
         var insertAt = replaceExisting && existing.Length > 0
             ? existing[0]
             : Math.Clamp(insertionIndex, 0, _session.Document.Blocks.Count);
@@ -346,6 +346,25 @@ public sealed class DocumentReferenceEditingCoordinator
                 _session.Commands.RollbackUndoGroup();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Narrows a sorted set of block indices down to only its first maximal run of consecutive
+    /// indices. A document can legitimately hold more than one independent Table of Contents field
+    /// (e.g. a main TOC plus a second TOC for an appendix); <see cref="TableOfContents.IsTocParagraph"/>
+    /// matches every one of them indiscriminately, so without this narrowing a refresh would delete
+    /// every TOC-marked paragraph in the document and reinsert only a single merged region. Scoping to
+    /// the first contiguous run leaves any other, separately-located TOC region untouched.
+    /// </summary>
+    private static int[] FirstContiguousRun(int[] sortedIndices)
+    {
+        if (sortedIndices.Length == 0)
+            return sortedIndices;
+
+        var end = 1;
+        while (end < sortedIndices.Length && sortedIndices[end] == sortedIndices[end - 1] + 1)
+            end++;
+        return end == sortedIndices.Length ? sortedIndices : sortedIndices[..end];
     }
 
     private void ReplaceTableOfContentsRegion(

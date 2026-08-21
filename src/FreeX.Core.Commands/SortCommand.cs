@@ -61,6 +61,17 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     // color filter is hiding (sheet.ColumnFilterOwnedRows) must be permuted in lockstep with
     // FilterHiddenRows/ValueFilterHiddenRows, or it keeps naming the pre-sort row positions.
     private Dictionary<uint, HashSet<uint>>? _columnFilterOwnedRowsSnapshot;
+    // R161-commands-sort-outline-1: mirrors _rowStyleSnapshot/_hiddenRowsSnapshot above -- a
+    // row's outline nesting level (sheet.RowOutlineLevels), its Data>Group collapsed-hidden
+    // state (sheet.GroupHiddenRows) and its collapsed-group "+/-" anchor marker
+    // (sheet.CollapsedAnchorRows) belong to the row's CONTENT exactly like HiddenRows does, and
+    // Sheet.IsRowEffectivelyHidden treats GroupHiddenRows as an equal-status hidden mechanism
+    // alongside HiddenRows/FilterHiddenRows. Left unpermuted, the outline level and collapsed/
+    // hidden flags stay pinned to the physical row number while the row's content moves
+    // elsewhere, so a sort silently hides/reveals the wrong rows.
+    private Dictionary<uint, int>? _rowOutlineLevelSnapshot;
+    private HashSet<uint>? _groupHiddenRowsSnapshot;
+    private HashSet<uint>? _collapsedAnchorRowsSnapshot;
     // R141: mirrors _rowStyleSnapshot/_hiddenRowsSnapshot above, but for a Left-to-Right sort,
     // which permutes COLUMNS instead of rows. A column's width, whole-column default style
     // (sheet.ColumnStyles) and hidden state belong to the column's CONTENT the same way a row's
@@ -303,6 +314,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         _filterHiddenRowsSnapshot = CaptureFilterHiddenRows(sheet, startRow, rowCount);
         _valueFilterHiddenRowsSnapshot = CaptureValueFilterHiddenRows(sheet, startRow, rowCount);
         _columnFilterOwnedRowsSnapshot = CaptureColumnFilterOwnedRows(sheet, startRow, rowCount);
+        _rowOutlineLevelSnapshot = CaptureRowOutlineLevels(sheet, startRow, rowCount);
+        _groupHiddenRowsSnapshot = CaptureGroupHiddenRows(sheet, startRow, rowCount);
+        _collapsedAnchorRowsSnapshot = CaptureCollapsedAnchorRows(sheet, startRow, rowCount);
         // R141: a top-to-bottom sort permutes ROWS, so per-COLUMN state (widths, banner styles,
         // hidden flags) is untouched by it -- null here means Revert skips restoring what Apply
         // never moved, mirroring the row-snapshot nulling ApplyLeftToRight does below.
@@ -316,7 +330,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         _shownCommentsSnapshot = payloadCapture.ShownCommentsSnapshot;
         _threadedCommentSnapshot = payloadCapture.ThreadedCommentSnapshot;
 
-        var rows = new List<(SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, bool IsValueFilterHidden, List<uint>? OwnedFilterColumns, int OriginalIndex)>(rowCount);
+        var rows = new List<(SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, bool IsValueFilterHidden, List<uint>? OwnedFilterColumns, bool HasOutlineLevel, int OutlineLevel, bool IsGroupHidden, bool IsCollapsedAnchor, int OriginalIndex)>(rowCount);
 
         for (int ri = 0; ri < rowCount; ri++)
         {
@@ -334,7 +348,14 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     (ownedFilterColumns ??= []).Add(col);
             }
 
-            rows.Add((payloadCapture.Rows[ri], hasRowHeight, rowHeight, isHidden, isFilterHidden, isValueFilterHidden, ownedFilterColumns, ri));
+            // R161-commands-sort-outline-1: carry each row's outline nesting level and
+            // Data>Group collapsed-hidden/anchor markers along with it, mirroring HiddenRows/
+            // FilterHiddenRows above, so they land on the row's new post-sort position below.
+            var hasOutlineLevel = sheet.RowOutlineLevels.TryGetValue(row, out var outlineLevel);
+            var isGroupHidden = sheet.GroupHiddenRows.Contains(row);
+            var isCollapsedAnchor = sheet.CollapsedAnchorRows.Contains(row);
+
+            rows.Add((payloadCapture.Rows[ri], hasRowHeight, rowHeight, isHidden, isFilterHidden, isValueFilterHidden, ownedFilterColumns, hasOutlineLevel, outlineLevel, isGroupHidden, isCollapsedAnchor, ri));
         }
 
         // R45-commands-sort-filter-interaction-3-1: Excel's Sort never moves a row that the
@@ -346,7 +367,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         // hidden rows are therefore excluded from the sort worklist entirely here so they never
         // enter the comparator and never receive another row's content.
         var visibleSlots = new List<int>(rowCount);
-        var sortable = new List<(SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, bool IsValueFilterHidden, List<uint>? OwnedFilterColumns, int OriginalIndex)>(rowCount);
+        var sortable = new List<(SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, bool IsValueFilterHidden, List<uint>? OwnedFilterColumns, bool HasOutlineLevel, int OutlineLevel, bool IsGroupHidden, bool IsCollapsedAnchor, int OriginalIndex)>(rowCount);
         for (int ri = 0; ri < rowCount; ri++)
         {
             if (rows[ri].IsFilterHidden || rows[ri].IsValueFilterHidden)
@@ -454,7 +475,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         // (OriginalIndex == ri, so no permutation/formula-rewrite happens for them below), and
         // the sorted visible rows are dropped back into exactly the physical slots that were
         // visible before the sort, in their new order.
-        var finalRows = new (SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, bool IsValueFilterHidden, List<uint>? OwnedFilterColumns, int OriginalIndex)[rowCount];
+        var finalRows = new (SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, bool IsValueFilterHidden, List<uint>? OwnedFilterColumns, bool HasOutlineLevel, int OutlineLevel, bool IsGroupHidden, bool IsCollapsedAnchor, int OriginalIndex)[rowCount];
         for (int ri = 0; ri < rowCount; ri++)
             finalRows[ri] = rows[ri];
         for (int k = 0; k < visibleSlots.Count; k++)
@@ -505,6 +526,24 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                 foreach (var col in ownedFilterColumns)
                     sheet.ColumnFilterOwnedRows[col].Add(row);
             }
+
+            // R161-commands-sort-outline-1: sheet.RowOutlineLevels/GroupHiddenRows/
+            // CollapsedAnchorRows must be permuted in lockstep with HiddenRows/FilterHiddenRows
+            // above -- they describe the same kind of per-row state (outline nesting level, and
+            // whether a Data>Group collapse hides this row or marks it as the group's visible
+            // "+/-" anchor), and Sheet.IsRowEffectivelyHidden treats GroupHiddenRows as an
+            // equal-status hidden mechanism alongside HiddenRows. Left unpermuted, the outline/
+            // collapse markers would stay pinned to the physical row instead of following the
+            // row's content to its new position.
+            sheet.RowOutlineLevels.Remove(row);
+            if (finalRows[ri].HasOutlineLevel)
+                sheet.RowOutlineLevels[row] = finalRows[ri].OutlineLevel;
+            sheet.GroupHiddenRows.Remove(row);
+            if (finalRows[ri].IsGroupHidden)
+                sheet.GroupHiddenRows.Add(row);
+            sheet.CollapsedAnchorRows.Remove(row);
+            if (finalRows[ri].IsCollapsedAnchor)
+                sheet.CollapsedAnchorRows.Add(row);
 
             // N37: rows are permuted from OriginalIndex to ri — Excel rewrites each moved
             // formula's relative references the same way a cut/paste to the new row would,
@@ -582,6 +621,12 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         _filterHiddenRowsSnapshot = null;
         _valueFilterHiddenRowsSnapshot = null;
         _columnFilterOwnedRowsSnapshot = null;
+        // R161-commands-sort-outline-1: a Left-to-Right sort permutes COLUMNS, so per-ROW
+        // outline/group-collapse state is untouched by it -- null here means Revert skips
+        // restoring what Apply never moved, mirroring the row-state nulling just above.
+        _rowOutlineLevelSnapshot = null;
+        _groupHiddenRowsSnapshot = null;
+        _collapsedAnchorRowsSnapshot = null;
         // R141: capture the column-level analogs of RowHeights/RowStyles/HiddenRows so they can
         // be permuted onto each column's new position below, the mirror image of what Apply's
         // top-to-bottom path does for rows.
@@ -932,6 +977,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         RestoreFilterHiddenRows(sheet);
         RestoreValueFilterHiddenRows(sheet);
         RestoreColumnFilterOwnedRows(sheet);
+        RestoreRowOutlineLevels(sheet);
+        RestoreGroupHiddenRows(sheet);
+        RestoreCollapsedAnchorRows(sheet);
         RestoreColumnWidths(sheet);
         RestoreColumnStyles(sheet);
         RestoreHiddenCols(sheet);
@@ -1114,6 +1162,52 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     set.Add(row);
                 }
             }
+        }
+
+        return snapshot;
+    }
+
+    // R161-commands-sort-outline-1: mirrors CaptureRowStyles above -- captures each row's
+    // outline nesting level (sheet.RowOutlineLevels) within the sort range so it can be
+    // permuted (and restored on Revert) in lockstep with the row's content.
+    private static Dictionary<uint, int> CaptureRowOutlineLevels(Sheet sheet, uint startRow, int rowCount)
+    {
+        var snapshot = new Dictionary<uint, int>();
+        for (int ri = 0; ri < rowCount; ri++)
+        {
+            var row = startRow + (uint)ri;
+            if (sheet.RowOutlineLevels.TryGetValue(row, out var level))
+                snapshot[row] = level;
+        }
+
+        return snapshot;
+    }
+
+    // R161-commands-sort-outline-1: mirrors CaptureHiddenRows above, but for
+    // sheet.GroupHiddenRows -- the rows a Data>Group outline collapse is currently hiding.
+    private static HashSet<uint> CaptureGroupHiddenRows(Sheet sheet, uint startRow, int rowCount)
+    {
+        var snapshot = new HashSet<uint>();
+        for (int ri = 0; ri < rowCount; ri++)
+        {
+            var row = startRow + (uint)ri;
+            if (sheet.GroupHiddenRows.Contains(row))
+                snapshot.Add(row);
+        }
+
+        return snapshot;
+    }
+
+    // R161-commands-sort-outline-1: mirrors CaptureHiddenRows above, but for
+    // sheet.CollapsedAnchorRows -- the visible "+/-" anchor row of a collapsed outline group.
+    private static HashSet<uint> CaptureCollapsedAnchorRows(Sheet sheet, uint startRow, int rowCount)
+    {
+        var snapshot = new HashSet<uint>();
+        for (int ri = 0; ri < rowCount; ri++)
+        {
+            var row = startRow + (uint)ri;
+            if (sheet.CollapsedAnchorRows.Contains(row))
+                snapshot.Add(row);
         }
 
         return snapshot;
@@ -1384,6 +1478,48 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             foreach (var row in ownedRows)
                 targetSet.Add(row);
         }
+    }
+
+    // R161-commands-sort-outline-1: mirrors RestoreRowStyles above, but for
+    // sheet.RowOutlineLevels.
+    private void RestoreRowOutlineLevels(Sheet sheet)
+    {
+        if (_rowOutlineLevelSnapshot is null)
+            return;
+
+        for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+            sheet.RowOutlineLevels.Remove(row);
+
+        foreach (var (row, level) in _rowOutlineLevelSnapshot)
+            sheet.RowOutlineLevels[row] = level;
+    }
+
+    // R161-commands-sort-outline-1: mirrors RestoreHiddenRows above, but for
+    // sheet.GroupHiddenRows.
+    private void RestoreGroupHiddenRows(Sheet sheet)
+    {
+        if (_groupHiddenRowsSnapshot is null)
+            return;
+
+        for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+            sheet.GroupHiddenRows.Remove(row);
+
+        foreach (var row in _groupHiddenRowsSnapshot)
+            sheet.GroupHiddenRows.Add(row);
+    }
+
+    // R161-commands-sort-outline-1: mirrors RestoreHiddenRows above, but for
+    // sheet.CollapsedAnchorRows.
+    private void RestoreCollapsedAnchorRows(Sheet sheet)
+    {
+        if (_collapsedAnchorRowsSnapshot is null)
+            return;
+
+        for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+            sheet.CollapsedAnchorRows.Remove(row);
+
+        foreach (var row in _collapsedAnchorRowsSnapshot)
+            sheet.CollapsedAnchorRows.Add(row);
     }
 
     // R141: mirrors RestoreRowHeights/RestoreRowStyles/RestoreHiddenRows above, but for the

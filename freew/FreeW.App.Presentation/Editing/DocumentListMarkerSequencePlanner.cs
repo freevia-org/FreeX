@@ -39,10 +39,16 @@ public sealed class DocumentListMarkerSequencePlanner
             case ListKind.Number:
                 _numberCounters[level] = ListRestartCounter.NextCount(_numberCounters[level], formatting.ListStartOverride);
                 Array.Clear(_numberCounters, level + 1, MaximumDepth - level - 1);
+                // formatting.ListMarkerText carries the source document's actual w:lvlText pattern (e.g.
+                // "%1)", "(%1)") when it isn't FreeW's own default "N." shape; formatting.ListNumberFormat
+                // carries the actual w:numFmt (lowerLetter/upperRoman/\u2026) instead of always decimal. Both
+                // default to the classic shape (null pattern, Decimal) for every FreeW-authored list and any
+                // paragraph read through a numbering lookup with no captured marker data (sweep99 F1).
                 return new DocumentListMarkerPlan(
                     kind,
                     level,
-                    $"{_numberCounters[level]}.",
+                    MultiLevelListMarkerFormatter.FormatSingleLevelMarker(
+                        formatting.ListMarkerText, _numberCounters[level], formatting.ListNumberFormat),
                     _numberCounters[level]);
 
             case ListKind.MultiLevel:
@@ -53,7 +59,10 @@ public sealed class DocumentListMarkerSequencePlanner
                     NumberValue: null);
 
             case ListKind.Bullet:
-                return new DocumentListMarkerPlan(kind, level, "\u2022", NumberValue: null);
+                // formatting.ListMarkerText carries the source document's actual bullet glyph (e.g. "-",
+                // "\u25aa") when it isn't FreeW's own default round bullet; null (FreeW-authored bullets, and any
+                // paragraph with no captured marker data) keeps the classic "\u2022" (sweep99 F1).
+                return new DocumentListMarkerPlan(kind, level, formatting.ListMarkerText ?? "\u2022", NumberValue: null);
 
             default:
                 return new DocumentListMarkerPlan(ListKind.None, level, MarkerText: null, NumberValue: null);

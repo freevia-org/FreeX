@@ -1529,11 +1529,26 @@ internal static partial class RowColumnShiftHelpers
             if (hostSheet is null)
                 continue;
 
-            if (shift.ShiftRange(entry.SourceRange) is not { } sourceRange ||
-                shift.ShiftRange(entry.TargetRange) is not { } targetRange)
-            {
-                continue;
-            }
+            // R161-commands-pivot-rowcol-delete-fully-consumed-source: a whole-row/whole-column
+            // delete that fully consumes the pivot's SourceRange (or, far less commonly, its
+            // TargetRange) makes AddressShift.ShiftRange return null for that range -- there is no
+            // valid post-delete location for a range whose every row/column was just deleted.
+            // Falling through to `continue` here used to skip the PivotTables.Add below entirely,
+            // silently dropping the PivotTableModel from the live workbook model: the bound
+            // PivotCacheModel became a permanent orphan (nothing else ever removes it from
+            // workbook.PivotCaches), the pivot's previously-rendered output cells were left as dead
+            // static values with no model behind them, and any later command addressing the pivot by
+            // name (Refresh, Options, a bound slicer/chart) failed via CommandGuards.TryFindPivotTable
+            // with "PivotTable was not found." even though the user could still see what looked like a
+            // normal pivot on the sheet. Real Excel does not delete the pivot object itself just
+            // because its source data went away -- the pivot survives (with a stale source the user
+            // can fix via Change Data Source, or a Refresh that now reads whatever content shifted
+            // into the old coordinates) instead of vanishing outright. Falling back to the PRE-shift
+            // range whenever ShiftRange has nothing valid to move it to keeps the PivotTableModel
+            // (and its cache) alive and discoverable by name, exactly like ShiftRange already leaves a
+            // range on a different sheet untouched rather than dropping it.
+            var sourceRange = shift.ShiftRange(entry.SourceRange) ?? entry.SourceRange;
+            var targetRange = shift.ShiftRange(entry.TargetRange) ?? entry.TargetRange;
 
             entry.PivotTable.SourceRange = sourceRange;
             entry.PivotTable.TargetRange = targetRange;

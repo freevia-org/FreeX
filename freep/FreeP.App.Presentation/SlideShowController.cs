@@ -183,6 +183,40 @@ public sealed class SlideShowController
     }
 
     /// <summary>
+    /// If the current slide's first click-step is not actually gated behind a click -- i.e. its
+    /// lead entry's stored <see cref="ShapeAnimation.Trigger"/> is <see cref="AnimationTrigger.WithPrevious"/>
+    /// or <see cref="AnimationTrigger.AfterPrevious"/> rather than <see cref="AnimationTrigger.OnClick"/>,
+    /// meaning it was authored (or promoted -- see round-160/161) to auto-play as soon as the slide
+    /// begins -- returns that step and marks it consumed, so a later <see cref="Advance"/> does not
+    /// re-deliver it as a click-gated step. Returns <see langword="null"/> when the first step
+    /// legitimately requires a click, when the first step has already been consumed (by this method
+    /// or by <see cref="Advance"/>), or when there are no steps at all.
+    ///
+    /// <see cref="BuildSteps"/> always groups a slide's very first main-sequence animation into its
+    /// own click-step regardless of its stored trigger (so the file/model and undo/redo commands
+    /// that promote a new head never need to rewrite it -- see the round-160/161 notes in
+    /// PresentationCommands.cs). That is correct for grouping, but it means a WithPrevious/AfterPrevious
+    /// head would otherwise sit in <see cref="CurrentSteps"/>[0] waiting for the same click an OnClick
+    /// head waits for -- one Advance() more than real PowerPoint needs for such a head. Callers should
+    /// invoke this immediately after navigating onto a slide (the initial slide when the show starts,
+    /// and after every <see cref="AdvanceResult.NavigateToSlide"/> / <see cref="BackResult.NavigateToSlide"/>)
+    /// and play the returned step alongside the slide's own transition, instead of waiting for the
+    /// presenter's next Advance().
+    /// </summary>
+    public AnimationStep? ConsumeEntryAutoPlayStep()
+    {
+        if (PendingStepIndex != 0 || _currentSteps.Count == 0)
+            return null;
+
+        var head = _currentSteps[0];
+        if (head.Entries.Count == 0 || head.Entries[0].Animation.Trigger == AnimationTrigger.OnClick)
+            return null;
+
+        PendingStepIndex = 1;
+        return head;
+    }
+
+    /// <summary>
     /// Enters a Zoom target, optionally recording the current slide for PowerPoint's
     /// Return to Parent behavior.
     /// </summary>

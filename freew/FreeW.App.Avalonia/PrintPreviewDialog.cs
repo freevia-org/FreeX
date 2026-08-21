@@ -29,7 +29,8 @@ internal sealed class PrintPreviewDialog : Window
         string displayName,
         Func<Task>? createPdf = null,
         BackstageDirectPrintCapability? directPrintCapability = null,
-        Func<Task>? directPrint = null)
+        Func<Task>? directPrint = null,
+        FreeW.App.Presentation.DocumentView.ReviewDisplayState? reviewDisplayState = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -54,6 +55,18 @@ internal sealed class PrintPreviewDialog : Window
         _preview.LoadDocument(document);
         _preview.ViewMode = DocumentViewMode.PrintLayout;
         _preview.Focusable = false;
+        if (reviewDisplayState is { } liveReviewState)
+        {
+            // Seed the preview's review-display state (Display for Review + the three Show Markup
+            // toggles) from the live editor. The layout/line-breaking pass gates hidden/deleted runs
+            // by this policy (see DocumentView.RevisionDecision(...).IsTextVisible), so a mismatch here
+            // means the preview's content and page count would disagree with what ExportPdfAsync/
+            // PrintAsync actually render from the live editor instance.
+            _preview.ApplyDisplayForReview(liveReviewState.DisplayMode);
+            _preview.ApplyShowMarkupInsertionsAndDeletions(liveReviewState.ShowInsertionsAndDeletions);
+            _preview.ApplyShowMarkupComments(liveReviewState.ShowComments);
+            _preview.ApplyShowMarkupFormatting(liveReviewState.ShowFormatting);
+        }
         AutomationProperties.SetAutomationId(_preview, "PrintPreviewDocumentView");
 
         Content = BuildShell(state);

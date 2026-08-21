@@ -2824,11 +2824,15 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
         {
             slide.LayoutId = _newLayoutId;
             foreach (var state in _updatedPlaceholders)
-                state.ApplyTargetGeometry();
+                state.ApplyTargetGeometry(slide);
 
+            // Identity check (by shape Id), not reference equality: an intervening command
+            // (e.g. a header/footer edit) can have wholesale-replaced the Slide/shape objects
+            // via SlideCloner since this placeholder was originally added, so the cached
+            // `placeholder` object may no longer be the one actually sitting in slide.Shapes.
             foreach (var placeholder in _addedPlaceholders)
             {
-                if (!slide.Shapes.Contains(placeholder))
+                if (!slide.Shapes.Any(shape => shape.Id == placeholder.Id))
                     slide.Shapes.Add(placeholder);
             }
 
@@ -2846,7 +2850,7 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
 
             var state = new PlaceholderGeometryState(shape, target);
             _updatedPlaceholders.Add(state);
-            state.ApplyTargetGeometry();
+            state.ApplyTargetGeometry(slide);
         }
 
         var nextShapeId = NextShapeId(slide);
@@ -2917,10 +2921,22 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
         slide.LayoutId = _oldLayoutId;
 
         foreach (var state in _updatedPlaceholders)
-            state.RestoreOriginalGeometry();
+            state.RestoreOriginalGeometry(slide);
 
+        // Resolve by shape Id, not by reference: an intervening command (e.g. a header/footer
+        // edit routed through HeaderFooterCommandPlanner) can have wholesale-replaced the Slide
+        // object -- and every shape on it -- via SlideCloner.CloneSlidePreservingIdentity since
+        // this placeholder was materialized. The cached `placeholder` reference then points at a
+        // detached clone no longer in slide.Shapes, so List<T>.Remove(placeholder) (reference
+        // equality; SlideShape has no Equals override) would silently no-op and leave the actual,
+        // currently-visible placeholder shape stranded on the slide forever. Shape Id survives
+        // the clone (SlideCloner.CloneShape copies it verbatim), so look up the live shape with
+        // the same Id and remove that.
         foreach (var placeholder in _addedPlaceholders)
-            slide.Shapes.Remove(placeholder);
+        {
+            if (SlideShapeTraversal.FindById(slide, placeholder.Id) is { } live)
+                slide.Shapes.Remove(live);
+        }
     }
 
     private static SlideShape? FindMatchingPlaceholder(
@@ -3014,7 +3030,17 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
 
     private sealed class PlaceholderGeometryState
     {
-        private readonly SlideShape _shape;
+        // Resolved by shape Id (not held as a direct object reference): a command's Apply/Revert
+        // can be separated by an arbitrary number of intervening commands on the shared undo
+        // stack, and some of those -- HeaderFooterCommandPlanner's ApplyHeaderFooterCommand is
+        // the concrete example -- replace the whole Slide object (SlideCloner.CloneSlidePreservingIdentity),
+        // which allocates a brand-new SlideShape clone for every shape on the slide. A cached
+        // reference to the pre-clone shape then points at a detached object no longer in
+        // slide.Shapes, so mutating it silently has zero effect. Shape Id survives the clone
+        // (SlideCloner.CloneShape copies it verbatim), so resolving through it against the
+        // *current* slide's shape list at the moment of use is what keeps this robust to any
+        // wholesale Slide replacement that happens in between.
+        private readonly uint _shapeId;
         private readonly SlideShape _target;
         private readonly long _offsetX;
         private readonly long _offsetY;
@@ -3027,7 +3053,7 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
 
         public PlaceholderGeometryState(SlideShape shape, SlideShape target)
         {
-            _shape = shape;
+            _shapeId = shape.Id;
             _target = target;
             _offsetX = shape.OffsetXEmu;
             _offsetY = shape.OffsetYEmu;
@@ -3039,28 +3065,34 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
             _explicitZero = shape.HasExplicitZeroExtentTransform;
         }
 
-        public void ApplyTargetGeometry()
+        public void ApplyTargetGeometry(Slide slide)
         {
-            _shape.OffsetXEmu = _target.OffsetXEmu;
-            _shape.OffsetYEmu = _target.OffsetYEmu;
-            _shape.ExtentCxEmu = _target.ExtentCxEmu;
-            _shape.ExtentCyEmu = _target.ExtentCyEmu;
-            _shape.RotationDeg = _target.RotationDeg;
-            _shape.FlipH = _target.FlipH;
-            _shape.FlipV = _target.FlipV;
-            _shape.HasExplicitZeroExtentTransform = _target.HasExplicitZeroExtentTransform;
+            if (SlideShapeTraversal.FindById(slide, _shapeId) is not { } shape)
+                return;
+
+            shape.OffsetXEmu = _target.OffsetXEmu;
+            shape.OffsetYEmu = _target.OffsetYEmu;
+            shape.ExtentCxEmu = _target.ExtentCxEmu;
+            shape.ExtentCyEmu = _target.ExtentCyEmu;
+            shape.RotationDeg = _target.RotationDeg;
+            shape.FlipH = _target.FlipH;
+            shape.FlipV = _target.FlipV;
+            shape.HasExplicitZeroExtentTransform = _target.HasExplicitZeroExtentTransform;
         }
 
-        public void RestoreOriginalGeometry()
+        public void RestoreOriginalGeometry(Slide slide)
         {
-            _shape.OffsetXEmu = _offsetX;
-            _shape.OffsetYEmu = _offsetY;
-            _shape.ExtentCxEmu = _extentCx;
-            _shape.ExtentCyEmu = _extentCy;
-            _shape.RotationDeg = _rotation;
-            _shape.FlipH = _flipH;
-            _shape.FlipV = _flipV;
-            _shape.HasExplicitZeroExtentTransform = _explicitZero;
+            if (SlideShapeTraversal.FindById(slide, _shapeId) is not { } shape)
+                return;
+
+            shape.OffsetXEmu = _offsetX;
+            shape.OffsetYEmu = _offsetY;
+            shape.ExtentCxEmu = _extentCx;
+            shape.ExtentCyEmu = _extentCy;
+            shape.RotationDeg = _rotation;
+            shape.FlipH = _flipH;
+            shape.FlipV = _flipV;
+            shape.HasExplicitZeroExtentTransform = _explicitZero;
         }
     }
 }
@@ -3351,13 +3383,16 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
         // If the SmartArt's animation was the main-sequence head (or the head of some unrelated
         // trigger group keyed by a different TriggerShapeId), whatever animation is now first
         // simply keeps its own stored Trigger. A head with a WithPrevious/AfterPrevious trigger
-        // is not stale or broken: PptxPackageWriter.BuildClickGroupEl writes it verbatim and
-        // SlideShowController.BuildSteps starts a head unconditionally regardless of its stored
-        // trigger, so the file and live playback already treat "first in the group" as the thing
-        // that matters -- exactly as real PowerPoint does when the animation ahead of it is
-        // deleted. Rewriting it to On Click here would silently discard the user's authored
-        // auto-play setting (round-160 finding). Revert below restores the whole captured list
-        // wholesale, so no undo bookkeeping is needed.
+        // is not stale or broken: PptxPackageWriter.BuildClickGroupEl writes it verbatim, so the
+        // file already treats "first in the group" as the thing that matters, exactly as real
+        // PowerPoint does when the animation ahead of it is deleted. (Round-161 correction: the
+        // live SlideShowController player is a separate concern from the file/model above -- its
+        // BuildSteps groups a head into its own click-step regardless of the stored trigger, which
+        // used to force one extra, unwanted Advance() before such a head appeared; see
+        // SlideShowController.ConsumeEntryAutoPlayStep(). That playback detail does not change
+        // what belongs in the model: rewriting the trigger to On Click here would still silently
+        // discard the user's authored auto-play setting (round-160 finding).) Revert below
+        // restores the whole captured list wholesale, so no undo bookkeeping is needed.
         slide.AnimationBuildListXml = DeleteShapeCommand.RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             new HashSet<uint> { _smartArtId });
@@ -3514,11 +3549,14 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         // unrelated trigger group), whatever animation is now first simply keeps its own stored
         // Trigger. A single Delete can carry away several shapes at once (deletedShapeIds), so it
         // can simultaneously promote a new head in more than one group -- neither one needs any
-        // correction: PptxPackageWriter.BuildClickGroupEl writes a head's trigger verbatim and
-        // SlideShowController.BuildSteps starts a head unconditionally regardless of its stored
-        // trigger, so "first in the group" already behaves correctly on its own (round-160
-        // finding). Revert below restores the whole captured list wholesale, so no undo
-        // bookkeeping is needed.
+        // correction: PptxPackageWriter.BuildClickGroupEl writes a head's trigger verbatim, so
+        // "first in the group" already keeps the right setting at the file/model level (round-160
+        // finding). (Round-161 correction: the live SlideShowController player used to gate that
+        // head behind one extra, unwanted Advance() regardless -- BuildSteps groups a head into
+        // its own click-step no matter its stored trigger; see
+        // SlideShowController.ConsumeEntryAutoPlayStep(). That playback gap did not make forcing
+        // the trigger back to On Click here correct.) Revert below restores the whole captured
+        // list wholesale, so no undo bookkeeping is needed.
         slide.AnimationBuildListXml = RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             deletedShapeIds);
@@ -5307,9 +5345,15 @@ public sealed class AddShapeAnimationCommand : IPresentationCommand
 // fix to PptxPackageWriter.BuildClickGroupEl, which stopped forcing a click-group head to OnClick
 // because real PowerPoint allows the very first animation of a sequence to be authored with
 // Start:"With Previous"/"After Previous" and have it auto-play when the slide (or trigger) begins --
-// BuildClickGroupEl now writes anim.Trigger verbatim, and SlideShowController.BuildSteps already
-// starts a head unconditionally ("anim.Trigger == OnClick || current is null") regardless of its
-// stored trigger. A promoted head is, at the file/model level, indistinguishable from an authored
+// BuildClickGroupEl now writes anim.Trigger verbatim. (Round-161 correction: this note used to
+// also cite SlideShowController.BuildSteps's unconditional "anim.Trigger == OnClick || current is
+// null" as proof live playback already honoured a promoted head's trigger too. It doesn't: that
+// line groups the head into its own click-step regardless of the stored trigger, so the live
+// player still gated a WithPrevious/AfterPrevious head behind one extra, unwanted Advance() --
+// SlideShowController.ConsumeEntryAutoPlayStep() now lets a caller fire that head on slide entry
+// instead of waiting for a click. That playback gap never bore on the conclusion below, though:
+// forcing the promoted head back to OnClick here would still be wrong.) A promoted head is, at
+// the file/model level, indistinguishable from an authored
 // one: PowerPoint itself does not rewrite a surviving animation's Start setting when an earlier one
 // in its group is deleted or reordered away -- it keeps whatever Start value it already had. So
 // forcing OnClick here was not fixing staleness; it was silently discarding the user's authored

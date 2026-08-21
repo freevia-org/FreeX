@@ -52,7 +52,7 @@ public partial class MainWindow : IAutosaveWorkbookSource
         {
             Interval = AutosaveService.DefaultInterval
         };
-        _autosaveTimer.Tick += (_, _) => _autosaveService?.OnTimerTick();
+        _autosaveTimer.Tick += (_, _) => OnAutosaveTimerTick();
         _autosaveTimer.Start();
 
         // Delete snapshot on clean save and on normal close.
@@ -130,4 +130,37 @@ public partial class MainWindow : IAutosaveWorkbookSource
 
     /// <summary>Exposed for App.xaml.cs crash handler to attempt a best-effort emergency save.</summary>
     internal AutosaveService? AutosaveServiceForCrashHandler => _autosaveService;
+
+    /// <summary>
+    /// The periodic autosave <see cref="DispatcherTimer"/>'s Tick handler. Skips the tick entirely
+    /// while the save-input gate is held (<see cref="ShouldSkipAutosaveTickForSave"/>): that gate
+    /// is non-zero both in the window doing its OWN explicit save and in every "New Window" sibling
+    /// the save-in-progress broadcast reached (see AdjustSaveGate / ApplySaveInProgress in
+    /// MainWindow.Backstage.cs, and the identical reasoning already applied to the queued
+    /// viewport-resize refresh via <c>ShouldDeferViewportResizeRefreshForSave</c> in
+    /// MainWindow.WorkbookUiState.cs). Without this, an autosave tick landing mid-save calls
+    /// ReconcileViewStateForSnapshot -&gt; ReconcileViewStateForSave, which writes THIS window's
+    /// view-state fields (zoom/freeze/split/active cell) directly onto the shared Sheet objects
+    /// that the OTHER window's background save thread is concurrently serializing -- and then
+    /// serializes the whole live Workbook itself on the UI thread while that background thread is
+    /// reading it, both unsynchronized. Simply skipping is sufficient: the timer keeps its normal
+    /// cadence and fires again next interval once the gate has released, so no snapshot is lost,
+    /// only deferred. Named (rather than inlined in the Tick lambda) so it can be invoked directly
+    /// from a test without needing the real DispatcherTimer to fire.
+    /// </summary>
+    private void OnAutosaveTimerTick()
+    {
+        if (ShouldSkipAutosaveTickForSave)
+            return;
+
+        _autosaveService?.OnTimerTick();
+    }
+
+    /// <summary>
+    /// Whether the autosave timer's tick must be skipped because a save is in flight -- either
+    /// THIS window's own explicit save, or a "New Window" sibling's save that broadcast the gate
+    /// into this window. Non-zero for the same duration <c>ShouldDeferViewportResizeRefreshForSave</c>
+    /// (MainWindow.WorkbookUiState.cs) reports true.
+    /// </summary>
+    internal bool ShouldSkipAutosaveTickForSave => _saveGateHoldCount > 0;
 }

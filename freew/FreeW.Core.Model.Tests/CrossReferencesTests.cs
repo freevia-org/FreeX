@@ -546,6 +546,24 @@ public class CrossReferencesTests
     }
 
     [Fact]
+    public void ResolveText_ParagraphNumber_DoesNotRestartWhenANonListParagraphInterruptsTheList()
+    {
+        // R132 taught DocumentListMarkerSequencePlanner (the on-screen renderer) that an ordinary paragraph
+        // interrupting a numbered list must NOT restart the count -- the interrupting paragraph is simply
+        // skipped and the running total carries through untouched (only an explicit ListStartOverride
+        // restarts it). ParagraphNumberAt must agree: it shares ListRestartCounter's RULE with the renderer,
+        // and must also share the renderer's choice to leave the counter alone on a non-list paragraph.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Step one") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number, ListStartOverride = 1 } });
+        doc.Blocks.Add(new Paragraph("Step two") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+        doc.Blocks.Add(new Paragraph("An ordinary explanatory paragraph, not part of the list."));
+        doc.Blocks.Add(new Paragraph("Step three") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+
+        CrossReferences.ResolveText(doc, CrossRefType.NumberedItem, new CrossRefTarget("Step three", null, 3), CrossRefInsertAs.ParagraphNumber, 0)
+            .Should().Be("3)");
+    }
+
+    [Fact]
     public void ResolveText_ParagraphNumber_HigherListStartOverrideJumpsForwardAndKeepsCountingFromThere()
     {
         // Sibling to the restart test above: an override that jumps the count FORWARD (not just back to 1)

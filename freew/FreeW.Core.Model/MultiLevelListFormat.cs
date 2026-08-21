@@ -172,6 +172,36 @@ public static class MultiLevelListMarkerFormatter
         _ => "decimal"
     };
 
+    /// <summary>
+    /// Formats a single flat (non-multilevel) <see cref="ListKind.Number"/> marker from its captured
+    /// <c>w:lvlText</c> pattern: each "%N" token is substituted with <paramref name="value"/> formatted per
+    /// <paramref name="format"/> (a flat list has only one counter, so every placeholder — however numbered
+    /// — resolves to the same running value); every other character, including any literal separator/prefix/
+    /// suffix the source list actually used (")", ":", "(", …), is copied through unchanged. A null
+    /// <paramref name="pattern"/> (no captured lvlText — true for every FreeW-authored numbered list) falls
+    /// back to the classic "N." shape this class has always produced.
+    /// </summary>
+    public static string FormatSingleLevelMarker(string? pattern, int value, ListNumberFormat format)
+    {
+        var text = pattern ?? "%1.";
+        var formattedValue = FormatNumber(value, format);
+        var builder = new System.Text.StringBuilder(text.Length);
+        for (var i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            if (ch == '%' && i + 1 < text.Length && text[i + 1] is >= '1' and <= '9')
+            {
+                builder.Append(formattedValue);
+                i++;
+            }
+            else
+            {
+                builder.Append(ch);
+            }
+        }
+        return builder.ToString();
+    }
+
     public static ListNumberFormat FromOoxmlToken(string? token) => token switch
     {
         "lowerLetter" => ListNumberFormat.LowerLetter,

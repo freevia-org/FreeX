@@ -89,6 +89,49 @@ public sealed class DataValidationPreviewPlannerTests
     }
 
     [Fact]
+    public void Create_ListRuleWithHiddenDropdownStillReportsListItems()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var target = new CellAddress(sheet.Id, 2, 2);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(target, target),
+            Type = DvType.List,
+            Formula1 = "Yes,No,Maybe",
+            ShowDropdown = false,
+        });
+
+        var plan = DataValidationPreviewPlanner.Create(workbook, sheet, target, new GridRange(target, target));
+
+        plan.HasApplicableRule.Should().BeTrue();
+        plan.Text.Should().Contain("In-cell dropdown: Hidden");
+        plan.Text.Should().Contain("List items: Yes, No, Maybe");
+        plan.Text.Should().NotContain("List items: none available");
+    }
+
+    [Fact]
+    public void Create_ListRuleWithShownDropdownStillReportsListItems()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var target = new CellAddress(sheet.Id, 2, 2);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(target, target),
+            Type = DvType.List,
+            Formula1 = "Yes,No,Maybe",
+            ShowDropdown = true,
+        });
+
+        var plan = DataValidationPreviewPlanner.Create(workbook, sheet, target, new GridRange(target, target));
+
+        plan.HasApplicableRule.Should().BeTrue();
+        plan.Text.Should().Contain("In-cell dropdown: Shown");
+        plan.Text.Should().Contain("List items: Yes, No, Maybe");
+    }
+
+    [Fact]
     public void Create_TruncatesLongListItemPreview()
     {
         var workbook = CreateWorkbook();

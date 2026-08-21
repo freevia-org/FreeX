@@ -18794,6 +18794,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (!result.Success)
         {
+            // R161-freex-data-validation-ui-F2: a Warning/Information ("AskToContinue") alert's
+            // Cancel answer must discard the invalid entry and revert the formula bar to the
+            // cell's committed value -- exactly like Escape -- while its No answer instead leaves
+            // the invalid text in place so the user can keep fixing it (Excel's AskToContinue
+            // semantics; mirrors WPF's ShouldRestoreOnCancel in MainWindow.Editing.cs). Without
+            // this, both answers left the formula edit session dangling: FormulaEditAddress stayed
+            // set and the formula bar kept showing the rejected text even though the in-cell editor
+            // overlay was already torn down by the caller.
+            if (result.Failure is
+                {
+                    Kind: WorkbookCellEditFailureKind.DataValidationDeclined,
+                    AlertStyle: { } declinedAlertStyle,
+                    PromptDecision: { } decision
+                } &&
+                ShouldDiscardFormulaEditOnDecline(declinedAlertStyle, decision))
+            {
+                _session.CancelFormulaEdit();
+                _formulaBoxEditOriginalText = null;
+                ClearFormulaRangeEntryState();
+                RefreshShell(UiText.Get("MainLoc_Ready"));
+            }
+
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_EditFailed"));
             return false;
         }
@@ -18815,6 +18837,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell(UiText.Format("MainLoc_EditedCellStatusFormat", FormatCellReference(address)));
         return true;
     }
+
+    /// <summary>
+    /// Mirrors the WPF host's <c>ShouldRestoreOnCancel</c> (MainWindow.Editing.cs): decides whether
+    /// a declined AskToContinue data-validation alert should discard the invalid entry. Excel's
+    /// Information style offers only OK/Cancel (Cancel discards), and its Warning style offers
+    /// Yes/No/Cancel (Cancel also discards, while No instead leaves the invalid entry for the user
+    /// to fix). Stop style never reaches AskToContinue (it's always Block), so it never discards
+    /// here.
+    /// </summary>
+    private static bool ShouldDiscardFormulaEditOnDecline(DvAlertStyle alertStyle, UserMessageResult decision) =>
+        decision == UserMessageResult.Cancel && alertStyle != DvAlertStyle.Stop;
 
     // Ctrl+Enter ("fill selection with same value"): commits the same entered text into every
     // cell of the current selection as a single undoable command, mirroring the WPF host's

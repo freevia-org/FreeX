@@ -6825,6 +6825,8 @@ public static class DocxReader
         var listKind = ListKind.None;
         var listLevel = 0;
         int? listStartOverride = null;
+        string? listMarkerText = null;
+        var listNumberFormat = ListNumberFormat.Decimal;
         var numPr = pPr.Element(W + "numPr");
         if (numPr is not null)
         {
@@ -6834,6 +6836,15 @@ public static class DocxReader
                 listKind = kind;
                 listLevel = ParseInt(numPr.Element(W + "ilvl")?.Attribute(W + "val")?.Value);
                 listStartOverride = startOverrides?.Resolve(kind, numId, listLevel);
+                // The richer per-numId marker data only exists on the NumberingLookup this reader builds
+                // (see ReadNumbering); a caller using the plain empty-dictionary convenience overload (no
+                // numbering context, e.g. style definitions) has none, so the list keeps FreeW's default
+                // marker/format — matching this method's behavior before ListMarkerText/ListNumberFormat existed.
+                if (numbering is NumberingLookup lookup)
+                {
+                    listMarkerText = lookup.MarkerTextByNumId.GetValueOrDefault(numId);
+                    listNumberFormat = lookup.NumberFormatByNumId.GetValueOrDefault(numId, ListNumberFormat.Decimal);
+                }
             }
         }
 
@@ -6947,6 +6958,8 @@ public static class DocxReader
             ListKind = listKind,
             ListLevel = listLevel,
             ListStartOverride = listStartOverride,
+            ListMarkerText = listMarkerText,
+            ListNumberFormat = listNumberFormat,
             TabStops = ReadTabStops(pPr.Element(W + "tabs"))
         };
     }
@@ -7303,10 +7316,47 @@ public static class DocxReader
         }
     }
 
-    private static (Dictionary<int, ListKind> KindByNumId, NumberingRestartState RestartState) ReadNumbering(
+    /// <summary>
+    /// A <see cref="ListKind"/> lookup keyed by numId, exactly like the plain dictionary this used to be,
+    /// PLUS (for a <see cref="ListKind.Bullet"/> or <see cref="ListKind.Number"/> numId only) the actual
+    /// marker glyph/pattern and number format the source document specified — so <c>ReadParagraphFormatting</c>
+    /// can populate <see cref="ParagraphFormatting.ListMarkerText"/>/<see cref="ParagraphFormatting.ListNumberFormat"/>
+    /// without every one of the ~40 call sites that thread a plain <c>IReadOnlyDictionary&lt;int, ListKind&gt;</c>
+    /// through headers/footers/footnotes/comments/etc. needing new parameters: since this subclasses
+    /// <see cref="Dictionary{TKey,TValue}"/> (which already implements that interface), it passes anywhere the
+    /// old plain dictionary did, and only the one site that needs the richer data casts back to it.
+    /// </summary>
+    private sealed class NumberingLookup : Dictionary<int, ListKind>
+    {
+        public Dictionary<int, string?> MarkerTextByNumId { get; } = [];
+        public Dictionary<int, ListNumberFormat> NumberFormatByNumId { get; } = [];
+    }
+
+    /// <summary>
+    /// Normalizes a flat (non-multilevel) abstractNum/lvlOverride level's raw <c>w:numFmt</c>/<c>w:lvlText</c>
+    /// into the (MarkerText, NumberFormat) pair <see cref="ParagraphFormatting"/> stores: a null
+    /// <see cref="ParagraphFormatting.ListMarkerText"/> means "FreeW's own default marker" (a plain round
+    /// bullet, or a decimal counter suffixed with '.'), so a list that already matches that exact shape —
+    /// every FreeW-authored bullet/number list, and any foreign list that happens to use the same shape —
+    /// normalizes back to null/Decimal here instead of round-tripping as an explicit-but-identical override.
+    /// Without this, re-reading a file FreeW itself just saved would make BuildNumbering allocate a needless
+    /// duplicate abstractNum for every list on every subsequent save, since the captured text ("•"/"%1.")
+    /// would no longer equal the sentinel the writer checks for "no override needed".
+    /// </summary>
+    private static (string? MarkerText, ListNumberFormat NumberFormat) NormalizeFlatListMarker(
+        string? numFmtToken, string? lvlText)
+    {
+        var format = MultiLevelListMarkerFormatter.FromOoxmlToken(numFmtToken);
+        var isDefaultShape = numFmtToken == "bullet"
+            ? lvlText is null or "•"
+            : format == ListNumberFormat.Decimal && lvlText is null or "%1.";
+        return (isDefaultShape ? null : lvlText, format);
+    }
+
+    private static (NumberingLookup KindByNumId, NumberingRestartState RestartState) ReadNumbering(
         ZipArchive archive, TextDocument document)
     {
-        var map = new Dictionary<int, ListKind>();
+        var map = new NumberingLookup();
         var startOverrides = new Dictionary<(int, int), int>();
         var defaultStarts = new Dictionary<(int, int), int>();
         var numberingXml = LoadPart(archive, "word/numbering.xml");
@@ -7329,6 +7379,12 @@ public static class DocxReader
         // abstractNumId -> (level -> declared w:start). Every numId built on a given abstract inherits
         // these as its own per-level default start (see NumberingRestartState) unless overridden.
         var abstractLevelStarts = new Dictionary<int, Dictionary<int, int>>();
+        // abstractNumId -> level-0's raw lvlText/numFmt for a NON-multilevel (flat Bullet/Number) abstractNum,
+        // so the numId map below can carry the actual marker instead of collapsing every such list to the
+        // same hardcoded round bullet / plain "N." decimal (sweep99 F1). Multilevel abstractNums already
+        // capture their own per-level lvlText/numFmt above and don't need this.
+        var abstractMarkerTexts = new Dictionary<int, string?>();
+        var abstractNumberFormats = new Dictionary<int, ListNumberFormat>();
         foreach (var abstractNum in root.Elements(W + "abstractNum"))
         {
             var abstractNumId = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
@@ -7339,12 +7395,19 @@ public static class DocxReader
             // whose level-0 happens to be a bullet (e.g. Word's List Bullet Multilevel style) is
             // MultiLevel, not Bullet — the deeper levels carry decimal/letter formats that the model
             // must expose for correct display/editing of sub-levels.
-            var numFmt = levels.FirstOrDefault()?.Element(W + "numFmt")?.Attribute(W + "val")?.Value;
+            var level0 = levels.FirstOrDefault();
+            var numFmt = level0?.Element(W + "numFmt")?.Attribute(W + "val")?.Value;
             var isMultiLevel = IsMultiLevel(abstractNum, levels);
             if (isMultiLevel)
             {
                 abstractMultiLevelFormats[abstractNumId] = ReadMultiLevelNumberFormats(levels);
                 abstractMultiLevelLevelTexts[abstractNumId] = ReadMultiLevelLevelTexts(levels);
+            }
+            else
+            {
+                var lvlText0 = level0?.Element(W + "lvlText")?.Attribute(W + "val")?.Value;
+                (abstractMarkerTexts[abstractNumId], abstractNumberFormats[abstractNumId]) =
+                    NormalizeFlatListMarker(numFmt, lvlText0);
             }
             abstractKinds[abstractNumId] = isMultiLevel
                 ? ListKind.MultiLevel
@@ -7387,16 +7450,38 @@ public static class DocxReader
                     foreach (var (level, start) in levelStarts)
                         defaultStarts[(numId, level)] = start;
                 }
+                if (kind is ListKind.Bullet or ListKind.Number)
+                {
+                    if (abstractMarkerTexts.TryGetValue(abstractNumId, out var markerText))
+                        map.MarkerTextByNumId[numId] = markerText;
+                    if (abstractNumberFormats.TryGetValue(abstractNumId, out var numberFormat))
+                        map.NumberFormatByNumId[numId] = numberFormat;
+                }
             }
 
             // Detect restart-override w:num elements: each w:lvlOverride/w:startOverride pair is a
             // counter-reset override for one list level, emitted by FreeW or by Word for the same purpose.
+            // A lvlOverride can ALSO carry a full w:lvl child instead — Word's per-instance "redefine just
+            // this list" customization (distinct from editing the shared abstractNum/List Style) — which
+            // redefines the marker for that ONE numId; for a flat Bullet/Number list (the only kind this
+            // marker data models) that instance-scoped lvlText/numFmt overrides the abstractNum's own
+            // default captured above (sweep99 F2), instead of being silently dropped.
             foreach (var lvlOverride in num.Elements(W + "lvlOverride"))
             {
+                var level = ParseInt(lvlOverride.Attribute(W + "ilvl")?.Value);
+                if (lvlOverride.Element(W + "lvl") is { } overriddenLvl)
+                {
+                    if (level == 0 && kind is ListKind.Bullet or ListKind.Number)
+                    {
+                        (map.MarkerTextByNumId[numId], map.NumberFormatByNumId[numId]) = NormalizeFlatListMarker(
+                            overriddenLvl.Element(W + "numFmt")?.Attribute(W + "val")?.Value,
+                            overriddenLvl.Element(W + "lvlText")?.Attribute(W + "val")?.Value);
+                    }
+                    continue;
+                }
                 var startOverrideEl = lvlOverride.Element(W + "startOverride");
                 if (startOverrideEl is null)
                     continue;
-                var level = ParseInt(lvlOverride.Attribute(W + "ilvl")?.Value);
                 var startVal = ParseInt(startOverrideEl.Attribute(W + "val")?.Value);
                 startOverrides[(numId, level)] = startVal;
             }

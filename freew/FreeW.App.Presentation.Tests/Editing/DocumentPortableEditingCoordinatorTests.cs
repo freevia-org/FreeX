@@ -1560,6 +1560,59 @@ public sealed class DocumentReferenceEditingCoordinatorTests
     }
 
     [Fact]
+    public void RefreshTableOfContentsPreservesASecondIndependentTocRegion()
+    {
+        // Two independently inserted TOC fields (e.g. a main TOC plus a second TOC ahead of an
+        // appendix) must both survive "Update Table of Contents" -- only the region the refresh
+        // targets (the first one) should be replaced; a second, separately-located TOC region must
+        // not be silently deleted.
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Chapter 1") { StyleId = "Heading1" });
+        document.Blocks.Add(new Paragraph("Appendix A") { StyleId = "Heading1" });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.InsertTableOfContents(0, pageTextResolver: null).Applied.Should().BeTrue();
+        var appendixHeadingIndex = document.Blocks
+            .OfType<Paragraph>()
+            .ToList()
+            .FindIndex(paragraph => paragraph.PlainText == "Appendix A");
+        session.References.InsertTableOfContents(appendixHeadingIndex, pageTextResolver: null)
+            .Applied.Should().BeTrue();
+
+        CountContiguousTocRegions(document).Should().Be(
+            2,
+            "two independently inserted TOC fields should be distinct regions before any refresh");
+
+        session.References.RefreshTableOfContents(pageTextResolver: null).Applied.Should().BeTrue();
+
+        CountContiguousTocRegions(document).Should().Be(
+            2,
+            "Update Table of Contents must not delete a second, independent TOC region -- " +
+            "only the first region it targets should be replaced");
+        document.Blocks.OfType<Paragraph>()
+            .Count(paragraph => paragraph.StyleId == TableOfContents.HeadingStyleId)
+            .Should().Be(2);
+        document.Blocks.OfType<Paragraph>()
+            .Should().Contain(paragraph => paragraph.PlainText == "Appendix A");
+    }
+
+    private static int CountContiguousTocRegions(TextDocument document)
+    {
+        var regionCount = 0;
+        var inRegion = false;
+        foreach (var block in document.Blocks)
+        {
+            var isTocParagraph = TableOfContents.IsTocParagraph(block);
+            if (isTocParagraph && !inRegion)
+                regionCount++;
+            inRegion = isTocParagraph;
+        }
+
+        return regionCount;
+    }
+
+    [Fact]
     public void TocInsertStabilizesPageTextInsideOnePortableUndoGroup()
     {
         var heading = new Paragraph("Paged heading") { StyleId = "Heading1" };

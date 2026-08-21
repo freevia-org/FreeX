@@ -1318,7 +1318,8 @@ public sealed partial class MainWindow : Window
                 _fileWorkflow.DisplayName,
                 ExportPdfAsync,
                 DirectPrintCapability,
-                PrintAsync).ShowDialog(this);
+                PrintAsync,
+                _editor.CurrentReviewDisplayState).ShowDialog(this);
         }
         catch (Exception ex)
         {

@@ -8699,9 +8699,13 @@ public static class DocxWriter
     /// (kind, level, startAt) value) so two runs that restart at the same number stay separate list
     /// instances — sharing one id would make the second run continue the first instead of restarting.
     /// </remarks>
-    private sealed class RestartNumbering(IReadOnlyDictionary<Paragraph, RestartGroup> anchors)
+    private sealed class RestartNumbering(
+        IReadOnlyDictionary<Paragraph, RestartGroup> anchors,
+        IReadOnlyDictionary<(ListKind Kind, string? MarkerText, ListNumberFormat NumberFormat), MarkerGroup>? markerGroups = null)
     {
         private readonly Dictionary<ListKind, int> _activeNumIds = [];
+        private readonly IReadOnlyDictionary<(ListKind, string?, ListNumberFormat), MarkerGroup> _markerGroups =
+            markerGroups ?? new Dictionary<(ListKind, string?, ListNumberFormat), MarkerGroup>();
 
         /// <summary>
         /// First allocated group per (kind, level, startAt) value. Only used for a restart paragraph the
@@ -8717,16 +8721,36 @@ public static class DocxWriter
         /// <summary>The allocated restart groups, one per anchor paragraph, for BuildNumbering to emit.</summary>
         public IEnumerable<RestartGroup> Groups => anchors.Values;
 
+        /// <summary>
+        /// The allocated marker-override groups, one per distinct non-default (kind, marker text, number
+        /// format) combination actually used by a Bullet/Number paragraph, for BuildNumbering to emit.
+        /// </summary>
+        public IEnumerable<MarkerGroup> MarkerGroups => _markerGroups.Values;
+
         /// <summary>Clears the active ids; called once per story so stories never inherit each other's runs.</summary>
         public void BeginStory() => _activeNumIds.Clear();
 
         /// <summary>
         /// Resolves the w:numId for a list paragraph: a restart anchor claims (and becomes) its dedicated
         /// override id, a continuation paragraph reuses the id its anchor established, and anything else
-        /// (bullets, or a kind with no restart yet) uses <paramref name="baseNumId"/>.
+        /// (bullets, or a kind with no restart yet) uses <paramref name="baseNumId"/> — except that a
+        /// Bullet/Number paragraph whose captured marker differs from FreeW's own default first resolves
+        /// <paramref name="baseNumId"/> to its dedicated marker-group numId (sweep99 F1), so the base a
+        /// restart anchor falls back to (when no equivalent restart group exists yet) still carries the
+        /// right marker. A paragraph that is BOTH a restart anchor AND carries a non-default marker keeps
+        /// only the restart (its anchor id always wins over the marker group) — restarting a foreign list
+        /// AND customizing its glyph in the same instance is rare enough that this narrower composition,
+        /// not full round-trip of that one combination, is the accepted gap.
         /// </summary>
         public int ResolveNumId(Paragraph paragraph, ListKind kind, int level, int? startOverride, int baseNumId)
         {
+            var f = paragraph.Formatting;
+            if (kind is ListKind.Bullet or ListKind.Number
+                && _markerGroups.TryGetValue((kind, f.ListMarkerText, f.ListNumberFormat), out var markerGroup))
+            {
+                baseNumId = markerGroup.NumId;
+            }
+
             if (kind is not (ListKind.Number or ListKind.MultiLevel))
                 return baseNumId;
             // A restart anchor (a paragraph BuildRestartOverrides allocated an id for): switch the active
@@ -8752,6 +8776,15 @@ public static class DocxWriter
     private readonly record struct RestartGroup(int NumId, ListKind Kind, int Level, int StartAt);
 
     /// <summary>
+    /// One allocated marker-override abstractNum/num pair: shared by every Bullet/Number paragraph using the
+    /// same non-default (kind, marker text, number format) combination, so <c>BuildNumbering</c> can emit the
+    /// document's ACTUAL glyph/format (sweep99 F1) instead of always substituting FreeW's own hardcoded round
+    /// bullet / plain decimal-with-period definitions.
+    /// </summary>
+    private readonly record struct MarkerGroup(
+        int AbstractNumId, int NumId, ListKind Kind, string? MarkerText, ListNumberFormat NumberFormat);
+
+    /// <summary>
     /// Builds the restart-override state: every paragraph that carries a non-null
     /// <see cref="ParagraphFormatting.ListStartOverride"/> on a Number or MultiLevel list is a restart
     /// ANCHOR and gets its own <c>w:numId</c> (above the preserved block), so <c>BuildNumbering</c> can emit
@@ -8760,17 +8793,45 @@ public static class DocxWriter
     /// Keyed by paragraph identity (Paragraph has reference equality), so two runs restarting at the SAME
     /// number get distinct instances and the second really restarts instead of continuing the first, and so
     /// the allocation order never has to match the order the parts are written in.
+    /// <para>
+    /// The SAME walk also allocates a <see cref="MarkerGroup"/> for every distinct non-default
+    /// (kind, marker text, number format) a Bullet/Number paragraph carries (<see cref="ParagraphFormatting.ListMarkerText"/>/
+    /// <see cref="ParagraphFormatting.ListNumberFormat"/>, populated by <c>DocxReader.ReadParagraphFormatting</c>
+    /// from a foreign document's actual numbering.xml) — one shared group per combination, not per paragraph,
+    /// since every Bullet/Number list already shares one flat render-time counter regardless of numId. Both
+    /// allocations share one numId counter (no risk of collision, just interleaved allocation order); marker
+    /// groups get their own abstractNumId range, disjoint from the preserved block.
+    /// </para>
     /// Returns an empty state (never null) so callers always have a valid lookup.
     /// </summary>
     private static RestartNumbering BuildRestartOverrides(
         TextDocument document, PreservedNumberingPlan? preserved)
     {
         var anchors = new Dictionary<Paragraph, RestartGroup>();
+        var markerGroups = new Dictionary<(ListKind, string?, ListNumberFormat), MarkerGroup>();
         // Override numIds must be clear of FreeW's fixed 1/2/3 AND the preserved range (4..4+preserved.Nums.Count-1).
         var nextOverrideNumId = PreservedNumIdStart + (preserved?.Nums.Count ?? 0);
+        // Marker abstractNumIds must be clear of FreeW's fixed 0/1/2 AND the preserved abstract range
+        // (3..3+preserved.AbstractNums.Count-1).
+        var nextMarkerAbstractId = PreservedAbstractNumIdStart + (preserved?.AbstractNums.Count ?? 0);
         foreach (var paragraph in EnumerateStoryParagraphs(document))
         {
             var f = paragraph.Formatting;
+
+            if (f.ListKind is ListKind.Bullet or ListKind.Number)
+            {
+                var isDefaultMarker = f.ListKind == ListKind.Bullet
+                    ? f.ListMarkerText is null
+                    : f.ListMarkerText is null && f.ListNumberFormat == ListNumberFormat.Decimal;
+                if (!isDefaultMarker)
+                {
+                    var key = (f.ListKind, f.ListMarkerText, f.ListNumberFormat);
+                    if (!markerGroups.ContainsKey(key))
+                        markerGroups[key] = new MarkerGroup(
+                            nextMarkerAbstractId++, nextOverrideNumId++, f.ListKind, f.ListMarkerText, f.ListNumberFormat);
+                }
+            }
+
             if (f.ListKind is not (ListKind.Number or ListKind.MultiLevel))
                 continue;
             if (f.ListStartOverride is not { } startAt)
@@ -8781,7 +8842,7 @@ public static class DocxWriter
             if (!anchors.ContainsKey(paragraph))
                 anchors[paragraph] = new RestartGroup(nextOverrideNumId++, f.ListKind, level, startAt);
         }
-        return new RestartNumbering(anchors);
+        return new RestartNumbering(anchors, markerGroups);
     }
 
     /// <summary>
@@ -8866,6 +8927,22 @@ public static class DocxWriter
         if (preserved is not null)
             numbering.Add(preserved.AbstractNums.Select(a => new XElement(a)));
 
+        // Marker-override abstractNum definitions (sweep99 F1): one per distinct non-default (kind, marker
+        // text, number format) a Bullet/Number paragraph actually carries, each with its OWN real numFmt/
+        // lvlText instead of FreeW's fixed bullet('•')/decimal('%1.') shape, so a dash-bulleted or
+        // lowerLetter/upperRoman list read from a foreign document keeps its actual marker on save.
+        if (includeFreeWNumbering && restartOverrides is not null)
+        {
+            foreach (var group in restartOverrides.MarkerGroups)
+            {
+                var numFmtToken = group.Kind == ListKind.Bullet
+                    ? "bullet"
+                    : MultiLevelListMarkerFormatter.ToOoxmlToken(group.NumberFormat);
+                var lvlText = group.MarkerText ?? (group.Kind == ListKind.Bullet ? "•" : "%1.");
+                numbering.Add(AbstractNum(group.AbstractNumId, numFmtToken, lvlText));
+            }
+        }
+
         if (includeFreeWNumbering)
         {
             numbering.Add(
@@ -8877,6 +8954,13 @@ public static class DocxWriter
         // collide with FreeW's fixed 1/2/3 and the body paragraphs' re-emitted numPr resolve to a valid w:num.
         if (preserved is not null)
             numbering.Add(preserved.Nums.Select(n => new XElement(n)));
+
+        // The matching w:num instances for the marker-override abstractNums above, one each.
+        if (includeFreeWNumbering && restartOverrides is not null)
+        {
+            foreach (var group in restartOverrides.MarkerGroups)
+                numbering.Add(Num(group.NumId, group.AbstractNumId));
+        }
 
         // Restart-override w:num elements: one per distinct (ListKind, level, startAt) group, each
         // referencing the same abstractNumId as the base kind (0=bullet, 1=decimal, 2=multilevel) but adding

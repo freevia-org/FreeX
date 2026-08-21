@@ -32,6 +32,18 @@ public sealed partial class MainWindow
             return;
         }
 
+        // Avalonia's TabControl, unlike WPF's, has no native Ctrl+Tab/Ctrl+Shift+Tab handling to switch
+        // the selected tab regardless of where focus sits inside the current tab's content. GetDialogTabStops
+        // deliberately excludes TabControl/TabItem from the plain Tab cycle (they are containers, not stops),
+        // which otherwise leaves every tab but the initially-focused one permanently unreachable by keyboard.
+        if (args.Key == Key.Tab &&
+            (args.KeyModifiers == KeyModifiers.Control || args.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)))
+        {
+            if (TryCycleDialogTabControlSelection(dialog, root, reverse: args.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)))
+                args.Handled = true;
+            return;
+        }
+
         if (args.Key != Key.Tab ||
             (args.KeyModifiers != KeyModifiers.None && args.KeyModifiers != KeyModifiers.Shift))
             return;
@@ -57,6 +69,62 @@ public sealed partial class MainWindow
                     FocusDialogControl(tabStops[nextIndex]);
             },
             DispatcherPriority.Input);
+    }
+
+    private static bool TryCycleDialogTabControlSelection(Window dialog, Control root, bool reverse)
+    {
+        var tabControl = (root as TabControl) ?? root.GetLogicalDescendants()
+            .OfType<TabControl>()
+            .FirstOrDefault(control => control.IsVisible && control.IsEffectivelyEnabled);
+        if (tabControl is null || tabControl.ItemCount <= 1)
+            return false;
+
+        var itemCount = tabControl.ItemCount;
+        var currentIndex = tabControl.SelectedIndex;
+        var nextIndex = reverse
+            ? currentIndex <= 0 ? itemCount - 1 : currentIndex - 1
+            : currentIndex < 0 || currentIndex == itemCount - 1 ? 0 : currentIndex + 1;
+
+        tabControl.SelectedIndex = nextIndex;
+
+        if (tabControl.SelectedItem is not TabItem selected)
+            return true;
+
+        if (TryFocusFirstFocusableInTabContent(selected))
+            return true;
+
+        // The newly-selected tab's content is usually realized only after a layout pass (it is swapped
+        // in by the TabControl's content presenter, which has not measured/arranged the new child yet at
+        // the moment the key is handled). Land on the tab header itself in the meantime -- never leave
+        // focus stranded on the tab that is no longer selected -- and retry into the content once layout
+        // has caught up, the same way the plain Tab cycle below retries via Dispatcher.Post.
+        FocusDialogControl(selected);
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (dialog.IsVisible)
+                    TryFocusFirstFocusableInTabContent(selected);
+            },
+            DispatcherPriority.Input);
+
+        return true;
+    }
+
+    private static bool TryFocusFirstFocusableInTabContent(TabItem selected)
+    {
+        if (selected.Content is not Control content)
+            return false;
+
+        var firstFocusable = content.GetVisualDescendants()
+            .OfType<Control>()
+            .Prepend(content)
+            .FirstOrDefault(control =>
+                control.Focusable &&
+                KeyboardNavigation.GetIsTabStop(control) &&
+                control.IsVisible &&
+                control.IsEffectivelyEnabled);
+
+        return firstFocusable is not null && FocusDialogControl(firstFocusable);
     }
 
     private static bool FocusDialogControl(Control target)

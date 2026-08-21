@@ -347,12 +347,15 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         // If the group's own animation was the main-sequence head (or the head of some unrelated
         // trigger group keyed by a different TriggerShapeId), whatever animation is now first
         // simply keeps its own stored Trigger: PptxPackageWriter.BuildClickGroupEl writes a head's
-        // trigger verbatim and SlideShowController.BuildSteps starts a head unconditionally
-        // regardless of its stored trigger, so "first in the group" already behaves correctly on
-        // its own -- forcing it to On Click here would silently discard an authored auto-play
-        // setting (round-160 finding; see the NOTE in PresentationCommands.cs above
-        // RemoveShapeAnimationCommand). Revert below restores the whole captured list wholesale,
-        // so no undo bookkeeping is needed.
+        // trigger verbatim, so "first in the group" already keeps the right setting at the
+        // file/model level -- forcing it to On Click here would silently discard an authored
+        // auto-play setting (round-160 finding; see the NOTE in PresentationCommands.cs above
+        // RemoveShapeAnimationCommand). (Round-161 correction: the live SlideShowController player
+        // is a separate concern -- it used to gate that same head behind one extra, unwanted
+        // Advance() regardless of its stored trigger; see
+        // SlideShowController.ConsumeEntryAutoPlayStep(). That playback gap never made forcing the
+        // trigger back to On Click here correct.) Revert below restores the whole captured list
+        // wholesale, so no undo bookkeeping is needed.
         slide.AnimationBuildListXml = DeleteShapeCommand.RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             new HashSet<uint> { _groupId });

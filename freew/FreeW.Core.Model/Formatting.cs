@@ -514,6 +514,31 @@ public sealed record ParagraphFormatting
     public int? ListStartOverride { get; init; }
 
     /// <summary>
+    /// The literal <c>w:lvlText</c> pattern captured from the source document's numbering definition for a
+    /// <see cref="ListKind.Bullet"/> or <see cref="ListKind.Number"/> paragraph, or null when the list uses
+    /// FreeW's own default marker (a plain round bullet '•', or a decimal counter suffixed with '.', e.g.
+    /// "1."). For <see cref="ListKind.Bullet"/> this is the literal glyph (e.g. "-", "▪", "o") copied through
+    /// verbatim — bullet lvlText never carries a "%N" placeholder. For <see cref="ListKind.Number"/> it is
+    /// the pattern with its "%1" counter placeholder intact (e.g. "%1)", "(%1)"), formatted the same way as
+    /// <see cref="MultiLevelListMarkerFormatter.FormatSingleLevelMarker"/> formats a multilevel level's
+    /// pattern, using <see cref="ListNumberFormat"/> to render the counter value. Ignored for every other
+    /// <see cref="ListKind"/>. Round-trips to docx: the reader captures it from the paragraph's abstractNum
+    /// (or a per-instance <c>w:lvlOverride/w:lvl</c>, which takes precedence for that one numId), and the
+    /// writer re-emits a dedicated abstractNum/num pair carrying it verbatim instead of silently substituting
+    /// FreeW's own hardcoded bullet/decimal definition.
+    /// </summary>
+    public string? ListMarkerText { get; init; }
+
+    /// <summary>
+    /// The counter format (decimal/lowerLetter/upperLetter/lowerRoman/upperRoman) for a
+    /// <see cref="ListKind.Number"/> paragraph's marker, captured from the source document's <c>w:numFmt</c>.
+    /// Defaults to <see cref="ListNumberFormat.Decimal"/> — FreeW's own default and the value every
+    /// FreeW-authored numbered list already uses — so existing paragraphs are unaffected. Ignored for every
+    /// other <see cref="ListKind"/> (a bullet's glyph comes from <see cref="ListMarkerText"/> alone).
+    /// </summary>
+    public ListNumberFormat ListNumberFormat { get; init; } = ListNumberFormat.Decimal;
+
+    /// <summary>
     /// Box border around the paragraph (pPr/w:pBdr), or null for no border. Mirrors how table
     /// borders are modelled; round-trips to docx as the four <c>w:pBdr</c> edges.
     /// </summary>

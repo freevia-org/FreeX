@@ -586,9 +586,10 @@ public static class CrossReferences
     }
 
     // The 1-based ordinal of the numbered-list paragraph at blockIndex among the run of numbered items it
-    // belongs to, formatted as "N)". A break in numbered-list paragraphs restarts the count, and so does a
-    // paragraph carrying ListStartOverride (docx's w:lvlOverride/startOverride) -- the same restart rule
-    // DocumentListMarkerSequencePlanner uses for the on-screen list markers, shared here via
+    // belongs to, formatted as "N)". A non-list paragraph interrupting the list does NOT restart the
+    // count -- it is simply skipped, same as DocumentListMarkerSequencePlanner's Advance() -- only a
+    // paragraph carrying ListStartOverride (docx's w:lvlOverride/startOverride) restarts it, the same
+    // restart rule DocumentListMarkerSequencePlanner uses for the on-screen list markers, shared here via
     // ListRestartCounter so the two never diverge. Empty when the paragraph is not a numbered item.
     private static string ParagraphNumberAt(TextDocument doc, int? blockIndex)
     {
@@ -601,7 +602,11 @@ public static class CrossReferences
         {
             var paragraph = blocks[i] as Paragraph;
             var numbered = paragraph?.Formatting.ListKind is ListKind.Number or ListKind.MultiLevel;
-            count = numbered ? ListRestartCounter.NextCount(count, paragraph!.Formatting.ListStartOverride) : 0;
+            // A non-list paragraph does NOT reset the running count -- it simply leaves it untouched, the
+            // same as DocumentListMarkerSequencePlanner's Advance(), which an interrupting paragraph never
+            // calls (R132). Only an explicit ListStartOverride restarts the sequence.
+            if (numbered)
+                count = ListRestartCounter.NextCount(count, paragraph!.Formatting.ListStartOverride);
             if (i == target)
                 return numbered ? count.ToString(CultureInfo.InvariantCulture) + ")" : string.Empty;
         }
