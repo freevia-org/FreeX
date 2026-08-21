@@ -1682,6 +1682,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         source.Should().Contain("new ImageBrush(bitmap)");
         source.Should().Contain("SourceRect = CreateDrawingImageSourceRect(crop)");
+        var imageVisualStart = source.IndexOf("private static Control CreateDrawingImageVisual(", StringComparison.Ordinal);
+        var imageVisualEnd = source.IndexOf("private static RelativeRect CreateDrawingImageSourceRect(", imageVisualStart, StringComparison.Ordinal);
+        imageVisualStart.Should().BeGreaterThanOrEqualTo(0);
+        imageVisualEnd.Should().BeGreaterThan(imageVisualStart);
+        var imageVisual = source[imageVisualStart..imageVisualEnd];
+        imageVisual.Should().Contain("ClipToBounds = true");
+        imageVisual.Should().Contain("return CreateDrawingObjectBoundsMarker(drawingObject, width, height);");
+        imageVisual.Should().NotContain("BorderBrush = DrawingObjectBoundsBorder");
+        imageVisual.Should().NotContain("BorderThickness = new Thickness(1)");
         source.Should().Contain("private static Control CreateDrawingCellRangeSnapshotVisual(");
         source.Should().Contain("renderPlan.PictureGrid is not { } pictureGrid");
         // Round-8 finding N52: PictureModel.Cells has no uniqueness constraint on (RowOffset,

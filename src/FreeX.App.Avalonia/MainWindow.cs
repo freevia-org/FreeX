@@ -6030,8 +6030,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 Width = Math.Max(1, width),
                 Height = Math.Max(1, height),
-                BorderBrush = DrawingObjectBoundsBorder,
-                BorderThickness = new Thickness(1),
                 ClipToBounds = true,
                 IsHitTestVisible = false,
             };
