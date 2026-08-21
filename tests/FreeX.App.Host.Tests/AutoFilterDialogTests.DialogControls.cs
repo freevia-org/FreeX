@@ -220,6 +220,39 @@ public sealed partial class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_ExposeDisabledColorCommandsWhenColumnHasNoColors()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var menuPlan = new AutoFilterMenuPlan(
+                "Score",
+                AutoFilterMenuFilterKind.Number,
+                [
+                    new AutoFilterMenuEntry("Sort Smallest to Largest", AutoFilterMenuEntryKind.SortAscending),
+                    new AutoFilterMenuEntry("Sort Largest to Smallest", AutoFilterMenuEntryKind.SortDescending),
+                    new AutoFilterMenuEntry(new AutoFilterChecklistItem("1", "1"))
+                ]);
+            var dialog = new AutoFilterDialog(menuPlan);
+            dialog.Show();
+            try
+            {
+                var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog).ToList();
+                var sortByColor = buttons.Single(button => WpfTestTree.FindVisualDescendants<TextBlock>(button)
+                    .Any(text => text.Text.StartsWith("Sort by Color", StringComparison.Ordinal)));
+                var filterByColor = buttons.Single(button => WpfTestTree.FindVisualDescendants<TextBlock>(button)
+                    .Any(text => text.Text.StartsWith("Filter by Color", StringComparison.Ordinal)));
+
+                sortByColor.IsEnabled.Should().BeFalse();
+                filterByColor.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void DialogControls_ConsumeSharedMenuPlanRowsWithoutOwningPopupPolicy()
     {
         var source = ReadAutoFilterDialogSources();

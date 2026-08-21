@@ -80,7 +80,9 @@ public sealed partial class AutoFilterDialog : Window
     private readonly TextBox _criteriaValueBox2 = new() { Visibility = Visibility.Collapsed };
     private readonly Button _sortAscendingButton = CreateMenuCommandButton(UiText.Get("AutoFilter_SortAToZ"), RibbonCommandIconKind.SortAscending);
     private readonly Button _sortDescendingButton = CreateMenuCommandButton(UiText.Get("AutoFilter_SortZToA"), RibbonCommandIconKind.SortDescending);
+    private readonly Button _sortByColorUnavailableButton = CreateMenuCommandButton(UiText.Get("AutoFilter_SortByColor"), RibbonCommandIconKind.Color, Visibility.Collapsed);
     private readonly Button _clearFilterButton = CreateMenuCommandButton(UiText.Get("AutoFilter_ClearFilterFrom2"), RibbonCommandIconKind.Clear);
+    private readonly Button _filterByColorUnavailableButton = CreateMenuCommandButton(UiText.Get("AutoFilter_FilterByColor"), RibbonCommandIconKind.Color, Visibility.Collapsed);
     private readonly GroupBox _filterByColorGroup = new() { Header = UiText.Get("AutoFilter_FilterByColor2"), Visibility = Visibility.Collapsed };
     private readonly StackPanel _filterByColorPanel = new();
     private readonly List<Button> _colorChoiceButtons = [];
@@ -162,6 +164,7 @@ public sealed partial class AutoFilterDialog : Window
             _datePresetBox.Visibility = Visibility.Visible;
 
         var colorOptions = menuPlan.ColorOptions ?? [];
+        ConfigureUnavailableColorCommands(colorOptions);
         if (colorOptions.Count > 0 && AutoFilterDialogCriteriaPlanner.HasFilterByColorEntry(menuPlan))
             PopulateColorChoices(colorOptions);
 
@@ -241,6 +244,7 @@ public sealed partial class AutoFilterDialog : Window
         _sortDescendingButton.Click += (_, _) => ApplySortCommand(AutoFilterSortDirection.Descending);
         stack.Children.Add(_sortAscendingButton);
         stack.Children.Add(_sortDescendingButton);
+        stack.Children.Add(_sortByColorUnavailableButton);
         _sortByColorGroup.Content = _sortByColorPanel;
         _sortByColorGroup.Margin = new Thickness(0, 8, 0, 0);
         stack.Children.Add(_sortByColorGroup);
@@ -255,6 +259,7 @@ public sealed partial class AutoFilterDialog : Window
             CommitResult(AutoFilterDialogCriteriaPlanner.CreateClearFilterResult());
         };
         stack.Children.Add(_clearFilterButton);
+        stack.Children.Add(_filterByColorUnavailableButton);
         _filterByColorGroup.Content = _filterByColorPanel;
         _filterByColorGroup.Margin = new Thickness(0, 8, 0, 0);
         stack.Children.Add(_filterByColorGroup);
@@ -350,6 +355,23 @@ public sealed partial class AutoFilterDialog : Window
         PreviewKeyDown += AutoFilterDialog_PreviewKeyDown;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
         UpdateSelectAllBoxState();
+    }
+
+    private void ConfigureUnavailableColorCommands(IReadOnlyList<AutoFilterColorOption> colorOptions)
+    {
+        var hasColorOptions = colorOptions.Count > 0;
+        _sortByColorUnavailableButton.Visibility = hasColorOptions ? Visibility.Collapsed : Visibility.Visible;
+        _filterByColorUnavailableButton.Visibility = hasColorOptions ? Visibility.Collapsed : Visibility.Visible;
+        _sortByColorUnavailableButton.IsEnabled = false;
+        _filterByColorUnavailableButton.IsEnabled = false;
+        SetMenuCommandButtonContent(
+            _sortByColorUnavailableButton,
+            FormatCascadeMenuHeader(UiText.Get("AutoFilter_SortByColor")),
+            RibbonCommandIconKind.Color);
+        SetMenuCommandButtonContent(
+            _filterByColorUnavailableButton,
+            FormatCascadeMenuHeader(UiText.Get("AutoFilter_FilterByColor")),
+            RibbonCommandIconKind.Color);
     }
 
     public void ConfigureAsModelessFlyout()
