@@ -10,6 +10,8 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private const string OfficeDefaultNarrowFontName = "Aptos Narrow";
+
     private bool _suppressWorksheetContextMiniToolbar;
     private Popup? _worksheetContextMiniToolbar;
 
@@ -31,7 +33,7 @@ public partial class MainWindow
             SnapsToDevicePixels = true,
             Child = CreateWorksheetContextMiniToolbarContent()
         };
-        AutomationProperties.SetName(toolbar, "Mini toolbar");
+        AutomationProperties.SetName(toolbar, UiText.Get("WorksheetContextMiniToolbar_AutomationName"));
         AutomationProperties.SetAutomationId(toolbar, "WorksheetContextMiniToolbar");
 
         _worksheetContextMiniToolbar = new Popup
@@ -56,14 +58,14 @@ public partial class MainWindow
             Width = 76,
             Height = 26,
             IsEditable = true,
-            Text = "Aptos Narrow",
+            Text = OfficeDefaultNarrowFontName,
             Margin = new Thickness(0, 0, 3, 0),
-            ItemsSource = new[] { "Aptos Narrow", "Aptos", "Calibri", "Arial" }
+            ItemsSource = new[] { OfficeDefaultNarrowFontName, "Aptos", "Calibri", "Arial" }
         };
         fontName.SelectionChanged += FontNameBox_SelectionChanged;
         fontName.KeyDown += FontNameBox_KeyDown;
         fontName.LostKeyboardFocus += FontNameBox_LostKeyboardFocus;
-        AutomationProperties.SetName(fontName, "Font");
+        AutomationProperties.SetName(fontName, UiText.Get("MainWindow_AutomationName_Font"));
         commands.Children.Add(fontName);
 
         var fontSize = new ComboBox
@@ -78,13 +80,13 @@ public partial class MainWindow
         fontSize.SelectionChanged += FontSizeBox_SelectionChanged;
         fontSize.KeyDown += FontSizeBox_KeyDown;
         fontSize.LostKeyboardFocus += FontSizeBox_LostKeyboardFocus;
-        AutomationProperties.SetName(fontSize, "Font Size");
+        AutomationProperties.SetName(fontSize, UiText.Get("MainWindow_AutomationName_FontSize"));
         commands.Children.Add(fontSize);
 
-        commands.Children.Add(CreateWorksheetContextMiniToolbarButton("B", "Bold", () => ApplyFontToggleShortcut(FontToggleShortcut.Bold), FontWeights.Bold));
-        commands.Children.Add(CreateWorksheetContextMiniToolbarButton("I", "Italic", () => ApplyFontToggleShortcut(FontToggleShortcut.Italic), fontStyle: FontStyles.Italic));
-        commands.Children.Add(CreateWorksheetContextMiniToolbarButton("≡", "Center", () => ApplyHorizontalAlignment(FreeX.Core.Model.HorizontalAlignment.Center)));
-        commands.Children.Add(CreateWorksheetContextMiniToolbarButton("▰", "Fill Color", () => FillColorBtn_Click(this, new RoutedEventArgs())));
+        commands.Children.Add(CreateWorksheetContextMiniToolbarButton("B", UiText.Get("MainWindow_TooltipTitle_Bold"), () => ApplyFontToggleShortcut(FontToggleShortcut.Bold), FontWeights.Bold));
+        commands.Children.Add(CreateWorksheetContextMiniToolbarButton("I", UiText.Get("MainWindow_TooltipTitle_Italic"), () => ApplyFontToggleShortcut(FontToggleShortcut.Italic), fontStyle: FontStyles.Italic));
+        commands.Children.Add(CreateWorksheetContextMiniToolbarButton("≡", UiText.Get("MainWindow_TooltipTitle_Center"), () => ApplyHorizontalAlignment(FreeX.Core.Model.HorizontalAlignment.Center)));
+        commands.Children.Add(CreateWorksheetContextMiniToolbarButton("▰", UiText.Get("MainWindow_AutomationName_FillColor"), () => FillColorBtn_Click(this, new RoutedEventArgs())));
 
         return commands;
     }

@@ -20843,4 +20843,7 @@ and {0} more.</value>
   <data name="WorksheetContextMenu_SearchToolTip" xml:space="preserve">
     <value>Search commands in this menu</value>
   </data>
+  <data name="WorksheetContextMiniToolbar_AutomationName" xml:space="preserve">
+    <value>Mini toolbar</value>
+  </data>
 </root>
