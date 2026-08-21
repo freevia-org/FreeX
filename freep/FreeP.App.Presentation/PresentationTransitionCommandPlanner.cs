@@ -543,7 +543,7 @@ public static class PresentationTransitionCommandPlanner
             return null;
         }
 
-        return new SlideTransition
+        var clone = new SlideTransition
         {
             Kind = transition.Kind,
             Direction = transition.Direction,
@@ -552,6 +552,9 @@ public static class PresentationTransitionCommandPlanner
             AdvanceOnClick = transition.AdvanceOnClick,
             AdvanceAfterMs = transition.AdvanceAfterMs,
             RawXml = transition.RawXml,
+            WasAlternateContent = transition.WasAlternateContent,
+            McRequiresToken = transition.McRequiresToken,
+            AlternateContentFallbackXml = transition.AlternateContentFallbackXml,
             MorphOption = transition.MorphOption,
             WheelSpokeCount = transition.WheelSpokeCount,
             Sound = transition.Sound is null
@@ -566,5 +569,12 @@ public static class PresentationTransitionCommandPlanner
                     IsBuiltIn = transition.Sound.IsBuiltIn,
                 },
         };
+
+        foreach (var kvp in transition.McRequiresNsUris)
+        {
+            clone.McRequiresNsUris[kvp.Key] = kvp.Value;
+        }
+
+        return clone;
     }
 }

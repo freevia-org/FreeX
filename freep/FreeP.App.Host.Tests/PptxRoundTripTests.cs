@@ -2704,6 +2704,114 @@ public sealed class Shape3dAndMotionRegressionTests
             "AfterPrevious trigger must survive round-trip");
     }
 
+    // ── Round 160 F1: main-sequence head can legitimately auto-play (not OnClick) ──
+
+    /// <summary>
+    /// Real PowerPoint allows the FIRST animation on a slide to be authored with
+    /// Start:"After Previous" (or "With Previous"), in which case it plays automatically
+    /// the instant the slide appears — no click required. Before the fix,
+    /// BuildClickGroupEl unconditionally rewrote the head of any click-group (including
+    /// the very first one, seeded because it is animation index 0 in the main sequence)
+    /// to AnimationTrigger.OnClick, so BuildBuildItemEl always wrote delay="indefinite"
+    /// for it and the reader (which honestly reflects whatever delay it finds) read the
+    /// auto-play setting back as OnClick. Both the write side and the read side must be
+    /// exercised together: asserting only that the writer emits a different delay string
+    /// would not prove the round trip actually preserves the user's authored trigger.
+    /// </summary>
+    [Fact]
+    public void Round160F1_MainSequenceHead_AutoPlayTrigger_RoundTrips()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 5, Name = "AutoPlay Box", Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
+        });
+
+        // The ONLY animation on the slide (main sequence, TriggerShapeId == null) —
+        // this is the "head" that BuildClickGroupEl used to force to OnClick.
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId    = 5,
+            Kind       = AnimationKind.Entrance,
+            Preset     = AnimationPreset.Fade,
+            Trigger    = AnimationTrigger.AfterPrevious,
+            DelayMs    = 300,
+            DurationMs = 500,
+        });
+
+        var writeStream = new MemoryStream();
+        PptxPackageWriter.Write(pres, writeStream);
+        writeStream.Position = 0;
+
+        // Confirm the write side directly: the click-group's build item must NOT carry
+        // delay="indefinite" (OnClick semantics) for this auto-play head.
+        using (var zip = new ZipArchive(writeStream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var slideXml = new StreamReader(zip.GetEntry("ppt/slides/slide1.xml")!.Open()).ReadToEnd();
+            var doc = XDocument.Parse(slideXml);
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            var mainSeq = doc.Descendants(p + "seq")
+                .First(s => s.Element(p + "cTn")?.Attribute("nodeType")?.Value == "mainSeq");
+            var buildItemCTn = mainSeq
+                .Element(p + "cTn")!
+                .Element(p + "childTnLst")!
+                .Elements(p + "par").First()   // the click-group container
+                .Element(p + "cTn")!
+                .Element(p + "childTnLst")!
+                .Elements(p + "par").First()   // the build item itself
+                .Element(p + "cTn")!;
+            var delay = buildItemCTn.Element(p + "stCondLst")?.Element(p + "cond")?.Attribute("delay")?.Value;
+            delay.Should().Be("300",
+                "an AfterPrevious head must write its own delay, not the OnClick 'indefinite' sentinel");
+        }
+
+        // And the round trip: write → read must reproduce the model's authored trigger.
+        writeStream.Position = 0;
+        var reloaded = PptxPackageReader.Read(writeStream);
+        var roundTripped = reloaded.Slides[0].Animations.Single();
+        roundTripped.Trigger.Should().Be(AnimationTrigger.AfterPrevious,
+            "the user's auto-play head must survive a save/reload round trip (round-160 F1)");
+        roundTripped.DelayMs.Should().Be(300, "the head's own delay must survive alongside its trigger");
+    }
+
+    /// <summary>
+    /// Sibling no-regression: the ordinary case — a click-group whose head really was
+    /// authored as OnClick — must keep writing delay="indefinite" and reading back as
+    /// OnClick. This is the overwhelmingly common case and must not regress.
+    /// </summary>
+    [Fact]
+    public void Round160F1_MainSequenceHead_OnClickTrigger_StillRoundTrips()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 6, Name = "Click Box", Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId    = 6,
+            Kind       = AnimationKind.Entrance,
+            Preset     = AnimationPreset.Fade,
+            Trigger    = AnimationTrigger.OnClick,
+            DurationMs = 500,
+        });
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        var anim = loaded.Slides[0].Animations.Single();
+        anim.Trigger.Should().Be(AnimationTrigger.OnClick,
+            "an ordinary click-triggered head must still round-trip as OnClick");
+    }
+
     [Fact]
     public void ParagraphBuildList_PreservesThroughReadWriteRoundTrip()
     {

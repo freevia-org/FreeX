@@ -29,6 +29,17 @@ public sealed class ReplaceOneCommand : IPresentationCommand
 
     public string Label => "Replace";
 
+    // The dialog is modeless (see the Apply comment below): a match that no longer resolves --
+    // or resolves to different characters than the ones originally matched -- must not push an
+    // undo-stack entry, or Ctrl/Cmd+Z consumes a phantom step that changed nothing instead of the
+    // user's actual last edit. Mirrors ReplaceAllCommand.HasEffect's pre-check below.
+    public bool HasEffect(Presentation p)
+    {
+        var body = ResolveTextBody(p, _match);
+        if (body is null) return false;
+        return FindReplaceMatchResolver.TryResolveSpan(body, _match, out _, out _);
+    }
+
     public void Apply(Presentation p)
     {
         _capturedRuns.Clear();
@@ -290,10 +301,12 @@ internal static class FindReplaceMatchResolver
         if (match.CharStart < 0 || match.CharStart > startRun.Text.Length)
             return false;
 
+        string liveText;
         if (end == match.RunIndex)
         {
             if (match.CharEnd < match.CharStart || match.CharEnd > startRun.Text.Length)
                 return false;
+            liveText = startRun.Text.Substring(match.CharStart, match.CharEnd - match.CharStart);
         }
         else
         {
@@ -301,7 +314,24 @@ internal static class FindReplaceMatchResolver
             int endOffset = match.ResolvedEndCharOffset;
             if (endOffset < 0 || endOffset > endRun.Text.Length)
                 return false;
+
+            // Reassemble the live text the offsets currently span: the start run's tail, every
+            // fully-swallowed run in between, and the end run's head -- the same spans
+            // FindReplaceRunSpanWriter.ApplyReplacement would touch.
+            var sb = new System.Text.StringBuilder();
+            sb.Append(startRun.Text, match.CharStart, startRun.Text.Length - match.CharStart);
+            for (int ri = match.RunIndex + 1; ri < end; ri++)
+                sb.Append(candidateParagraph.Runs[ri].Text);
+            sb.Append(endRun.Text, 0, endOffset);
+            liveText = sb.ToString();
         }
+
+        // Bounds alone only prove the offsets still fall inside a run -- not that the
+        // characters there are still the word that was matched. Without this, an in-place edit
+        // to the SAME run that happens to leave it long enough (retyping the sentence, say) would
+        // resolve "successfully" and splice the replacement into unrelated live text.
+        if (!string.Equals(liveText, match.MatchedText, StringComparison.Ordinal))
+            return false;
 
         paragraph   = candidateParagraph;
         endRunIndex = end;

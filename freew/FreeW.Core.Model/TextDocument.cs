@@ -208,6 +208,43 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     /// TIFF (49 49 2A 00 / 4D 4D 00 2A), EMF (01 00 00 00 … " EMF" at offset 40) and the WMF placeable
     /// header (D7 CD C6 9A) / classic WMF header (01 00 09 00 / 02 00 09 00).
     /// </summary>
+    /// <summary>
+    /// Whether <paramref name="bytes"/> actually begins with a signature of a format we render.
+    ///
+    /// <para>
+    /// SECURITY. <see cref="DetectFormat"/> returns Png for unrecognised data by design, so callers
+    /// always get a usable format -- which means it can never be used to decide whether something
+    /// IS an image. Any path that reads a file whose path came from untrusted content (an
+    /// <c>&lt;img src="file:///..."&gt;</c> in downloaded or pasted HTML, a linked-picture
+    /// relationship target in a .docx) must ask THIS before embedding the bytes, or it will embed
+    /// arbitrary local files and label them PNG -- a local-file disclosure the user triggers with
+    /// their own Open or Paste.
+    /// </para>
+    ///
+    /// <para>
+    /// It lives beside <see cref="DetectFormat"/> deliberately. This started as a private copy in
+    /// one reader whose EMF arm checked only the leading four bytes while DetectFormat also
+    /// required the " EMF" marker at offset 40 -- so a file with a common binary prefix passed the
+    /// guard and failed the decoder. Two signature lists that must agree is the defect this
+    /// program keeps paying for; there is one list, here, and it is the same one DetectFormat uses.
+    /// </para>
+    /// </summary>
+    public static bool HasRecognisedSignature(byte[] bytes) =>
+        bytes is not null && bytes.Length >= 2 && DetectsExplicitly(bytes);
+
+    private static bool DetectsExplicitly(byte[] bytes)
+    {
+        // Png is DetectFormat's fallback, so "it said Png" is not evidence on its own -- check the
+        // PNG signature directly and otherwise require a non-fallback answer.
+        if (bytes.Length >= 4
+            && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+        {
+            return true;
+        }
+
+        return DetectFormat(bytes) != ImageFormat.Png;
+    }
+
     public static ImageFormat DetectFormat(byte[] bytes)
     {
         if (bytes is null || bytes.Length < 2)

@@ -3350,9 +3350,13 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
             (animation.TriggerShapeId is { } triggerShapeId && triggerShapeId == _smartArtId));
         // If the SmartArt's animation was the main-sequence head, whatever animation is now
         // first needs its stored trigger corrected to On Click (see ShapeAnimationAnchorFix) --
-        // otherwise the Animation Pane keeps showing a stale With/After Previous label. Revert
-        // below restores the whole captured list wholesale, so no undo bookkeeping is needed here.
+        // otherwise the Animation Pane keeps showing a stale With/After Previous label. The
+        // SmartArt could independently have headed some unrelated trigger group too (a second
+        // animation on the same shape, keyed by a different TriggerShapeId), so that group's
+        // head needs the identical check. Revert below restores the whole captured list
+        // wholesale, so no undo bookkeeping is needed for either correction here.
         ShapeAnimationAnchorFix.NormalizeMainSequenceHead(slide.Animations);
+        ShapeAnimationAnchorFix.NormalizeTriggerGroupHeads(slide.Animations);
         slide.AnimationBuildListXml = DeleteShapeCommand.RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             new HashSet<uint> { _smartArtId });
@@ -3507,9 +3511,13 @@ public sealed class DeleteShapeCommand : IPresentationCommand
             (animation.TriggerShapeId is { } triggerShapeId && deletedShapeIds.Contains(triggerShapeId)));
         // If the deleted shape's animation was the main-sequence head, whatever animation is now
         // first needs its stored trigger corrected to On Click (see ShapeAnimationAnchorFix) --
-        // otherwise the Animation Pane keeps showing a stale With/After Previous label. Revert
-        // below restores the whole captured list wholesale, so no undo bookkeeping is needed here.
+        // otherwise the Animation Pane keeps showing a stale With/After Previous label. A single
+        // Delete can carry away several shapes at once (deletedShapeIds), so it can simultaneously
+        // have removed the main-sequence head AND, independently, the head of an unrelated trigger
+        // group -- both promoted heads need the identical correction. Revert below restores the
+        // whole captured list wholesale, so no undo bookkeeping is needed for either here.
         ShapeAnimationAnchorFix.NormalizeMainSequenceHead(slide.Animations);
+        ShapeAnimationAnchorFix.NormalizeTriggerGroupHeads(slide.Animations);
         slide.AnimationBuildListXml = RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             deletedShapeIds);
@@ -5293,15 +5301,24 @@ public sealed class AddShapeAnimationCommand : IPresentationCommand
 
 /// <summary>
 /// A <see cref="ShapeAnimation.Trigger"/> of WithPrevious/AfterPrevious is only meaningful relative
-/// to a preceding animation in the same main-sequence click-group. The very first main-sequence
-/// animation (the one with <see cref="ShapeAnimation.TriggerShapeId"/> null) is always started by a
-/// click regardless of its stored trigger -- both live playback
-/// (SlideShowController.BuildSteps: "anim.Trigger == OnClick || current is null") and the package
-/// writer (PptxPackageWriter.BuildTimingEl/BuildClickGroupEl: "clickGroups.Count == 0" starts a new
-/// group unconditionally) treat it as On Click. When a command promotes a different animation into
-/// that leading slot, its stored Trigger must be corrected to On Click too, or the Animation Pane
-/// (which reads Trigger verbatim) keeps showing a stale With/After Previous label that silently
-/// flips to On Click the next time the file round-trips through save/reload.
+/// to a preceding animation in the same click-group. The very first main-sequence animation (the one
+/// with <see cref="ShapeAnimation.TriggerShapeId"/> null) is always started by a click regardless of
+/// its stored trigger -- both live playback (SlideShowController.BuildSteps: "anim.Trigger == OnClick
+/// || current is null") and the package writer (PptxPackageWriter.BuildTimingEl/BuildClickGroupEl:
+/// "clickGroups.Count == 0" starts a new group unconditionally) treat it as On Click. When a command
+/// promotes a different animation into that leading slot, its stored Trigger must be corrected to On
+/// Click too, or the Animation Pane (which reads Trigger verbatim) keeps showing a stale With/After
+/// Previous label that silently flips to On Click the next time the file round-trips through
+/// save/reload.
+///
+/// The first animation of each distinct trigger group (entries sharing a common non-null
+/// <see cref="ShapeAnimation.TriggerShapeId"/>) needs the identical correction, and for a stronger
+/// reason: a trigger group has no slide-entrance moment to legitimately auto-play against the way the
+/// main sequence's head can -- it exists only because its designated trigger shape was clicked, so
+/// its head can never mean anything but On Click. PptxPackageWriter.BuildClickGroupEl forces
+/// <c>i == 0 ? OnClick : anim.Trigger</c> for the first click-group of a trigger sequence exactly as
+/// it does for the main sequence, so the same stale-label gap applies. See
+/// <see cref="NormalizeTriggerGroupHeads"/>.
 /// </summary>
 internal static class ShapeAnimationAnchorFix
 {
@@ -5329,6 +5346,41 @@ internal static class ShapeAnimationAnchorFix
         head.Trigger = AnimationTrigger.OnClick;
         return (head, oldTrigger);
     }
+
+    /// <summary>
+    /// For every distinct trigger group in <paramref name="anims"/> (entries sharing a common
+    /// non-null <see cref="ShapeAnimation.TriggerShapeId"/>, taken in list order to match
+    /// PptxPackageWriter's <c>GroupBy(a => a.TriggerShapeId!.Value)</c>), corrects the group's first
+    /// entry to On Click when its stored trigger is something else, and returns each correction
+    /// (animation plus previous trigger) so the caller can restore it on undo. This is the
+    /// trigger-group counterpart of <see cref="NormalizeMainSequenceHead"/> -- it never inspects or
+    /// changes the main-sequence head itself, only entries with a non-null TriggerShapeId. A single
+    /// remove/reorder of one animation can promote at most one trigger group's head (only the group
+    /// the removed/reordered entry itself belonged to), but this returns every correction made so
+    /// undo is exact even if that ever changes. Returns an empty list when no correction was needed.
+    /// </summary>
+    public static IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)> NormalizeTriggerGroupHeads(
+        IList<ShapeAnimation> anims)
+    {
+        List<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>? fixes = null;
+        var seenTriggerShapeIds = new HashSet<uint>();
+
+        foreach (var a in anims)
+        {
+            if (a.TriggerShapeId is not { } triggerShapeId || !seenTriggerShapeIds.Add(triggerShapeId))
+                continue;
+
+            if (a.Trigger == AnimationTrigger.OnClick)
+                continue;
+
+            var oldTrigger = a.Trigger;
+            a.Trigger = AnimationTrigger.OnClick;
+            (fixes ??= new()).Add((a, oldTrigger));
+        }
+
+        return (IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>?)fixes
+            ?? Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
+    }
 }
 
 /// <summary>
@@ -5342,6 +5394,8 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
     private ShapeAnimation? _captured;
     private ShapeAnimation? _promotedHead;
     private AnimationTrigger _promotedHeadOldTrigger;
+    private IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)> _promotedTriggerHeads =
+        Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
 
     public RemoveShapeAnimationCommand(int slideIndex, int animationIndex)
     {
@@ -5362,6 +5416,10 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
         var fix = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
         _promotedHead           = fix?.Animation;
         _promotedHeadOldTrigger = fix?.OldTrigger ?? default;
+        // The removed entry could equally have been the head of an unrelated trigger group (its
+        // own TriggerShapeId non-null) rather than the main sequence's; that group's newly
+        // promoted head needs the identical On-Click correction (see ShapeAnimationAnchorFix).
+        _promotedTriggerHeads = ShapeAnimationAnchorFix.NormalizeTriggerGroupHeads(anims);
     }
 
     public void Revert(Presentation p)
@@ -5377,6 +5435,10 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
             _promotedHead.Trigger = _promotedHeadOldTrigger;
             _promotedHead = null;
         }
+
+        foreach (var (animation, oldTrigger) in _promotedTriggerHeads)
+            animation.Trigger = oldTrigger;
+        _promotedTriggerHeads = Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
     }
 }
 
@@ -5390,6 +5452,8 @@ public sealed class ReorderShapeAnimationCommand : IPresentationCommand
     private readonly int _to;
     private ShapeAnimation? _promotedHead;
     private AnimationTrigger _promotedHeadOldTrigger;
+    private IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)> _promotedTriggerHeads =
+        Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
 
     public ReorderShapeAnimationCommand(int slideIndex, int fromIndex, int toIndex)
     {
@@ -5407,6 +5471,10 @@ public sealed class ReorderShapeAnimationCommand : IPresentationCommand
         var fix = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
         _promotedHead           = fix?.Animation;
         _promotedHeadOldTrigger = fix?.OldTrigger ?? default;
+        // The moved entry could equally have vacated the head slot of an unrelated trigger group
+        // (its own TriggerShapeId non-null) rather than the main sequence's; that group's newly
+        // promoted head needs the identical On-Click correction (see ShapeAnimationAnchorFix).
+        _promotedTriggerHeads = ShapeAnimationAnchorFix.NormalizeTriggerGroupHeads(anims);
     }
 
     public void Revert(Presentation p)
@@ -5417,6 +5485,10 @@ public sealed class ReorderShapeAnimationCommand : IPresentationCommand
             _promotedHead.Trigger = _promotedHeadOldTrigger;
             _promotedHead = null;
         }
+
+        foreach (var (animation, oldTrigger) in _promotedTriggerHeads)
+            animation.Trigger = oldTrigger;
+        _promotedTriggerHeads = Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
     }
 
     private bool MoveInList(Presentation p, int from, int to)

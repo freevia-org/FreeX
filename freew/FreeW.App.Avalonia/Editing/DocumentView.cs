@@ -18234,11 +18234,27 @@ public sealed partial class DocumentView : Control
         var bodyStart = bodyRange.Normalize().Start;
         if (bodyStart.BlockIndex < 0
             || bodyStart.BlockIndex >= _doc.Blocks.Count
-            || _doc.Blocks[bodyStart.BlockIndex] is not Paragraph paragraph
-            // AV-NOTE: IsTextReplaceable, not IsEditable — a footnote/endnote reference must not freeze
-            // the paragraph's text (Word keeps it editable). IsEditable stays the LAYOUT selector.
-            || !IsTextReplaceable(paragraph))
+            || _doc.Blocks[bodyStart.BlockIndex] is not Paragraph paragraph)
         {
+            return;
+        }
+
+        // AV-NOTE: IsTextReplaceable, not IsEditable — a footnote/endnote reference must not freeze
+        // the paragraph's text (Word keeps it editable). IsEditable stays the LAYOUT selector.
+        if (!IsTextReplaceable(paragraph))
+        {
+            // AV-PASTE-IMG-TEXT (r160, finding r159-open F3): IsTextReplaceable excludes any paragraph
+            // holding an image run so the ParaCells/SetRuns fast path below never has to rebuild an
+            // image it cannot represent as a Cell. That must not make the paragraph untypeable outright:
+            // pasting a clipboard that carries both an image and independent plain text
+            // (MainWindow.ApplyClipboardPastePlan) splices the image in first via PasteKeepSourceFormatting,
+            // then calls straight back into InsertText for the accompanying text — landing the caret in
+            // that very same now-image-bearing paragraph. When the image is the ONLY thing blocking the
+            // fast path (no equation/field/content-control lock, no active selection), insert the text
+            // structurally instead, straight into paragraph.Runs via RevisionEditPlanner.InsertText — the
+            // same run-list splice the "structurally special paragraphs" fallback further below already
+            // uses for other cases — so the image run itself is never touched or rebuilt.
+            TryInsertTextBesideImage(paragraph, bodyStart.BlockIndex, bodyStart.Offset, text);
             return;
         }
 
@@ -18325,6 +18341,74 @@ public sealed partial class DocumentView : Control
         catch
         {
             if (ownsFallbackUndoGroup)
+                _bus.AbortUndoGroup();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// AV-PASTE-IMG-TEXT (r160, finding r159-open F3): inserts <paramref name="text"/> at
+    /// <paramref name="offset"/> in a body paragraph that <see cref="IsTextReplaceable"/> refused solely
+    /// because it holds an image run — the shape left behind by a synthesized-image clipboard paste
+    /// (<c>PasteKeepSourceFormatting</c>) whose accompanying plain text still needs to land somewhere.
+    /// Declines (no-op, matching the prior silent-drop behaviour) when editing is locked, the paragraph
+    /// carries a content-control lock, a run holds an equation/field/complex-field, or a selection is
+    /// active — none of those are the gesture this exists for, and each already has its own handling
+    /// elsewhere. <see cref="RevisionEditPlanner.InsertText"/> splices the new run straight into
+    /// <see cref="Paragraph.Runs"/> at the character offset (an image run contributes zero characters, so
+    /// it is skipped over, never rebuilt), which is exactly how the "structurally special paragraphs"
+    /// fallback just above already handles paragraphs the ParaCells/SetRuns fast path cannot take.
+    /// </summary>
+    private void TryInsertTextBesideImage(Paragraph paragraph, int blockIndex, int offset, string text)
+    {
+        if (IsEditingLocked
+            || HasLockedContentControl(paragraph)
+            || ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl)
+            || paragraph.Runs.Any(r =>
+                r.Equation is not null || r.FieldKind != RunFieldKind.None || r.ComplexField is not null)
+            || NormalizedSelection() is not null)
+        {
+            return;
+        }
+
+        var fmt = _pendingRunFmt ?? ActiveFormatting(paragraph, offset);
+        _pendingRunFmt = null;
+        var link = ActiveLink(paragraph, offset);
+        var ownsUndoGroup = !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        try
+        {
+            _bus.Execute(new ReplaceParagraphRunsCommand(blockIndex, p =>
+            {
+                RevisionEditPlanner.InsertText(
+                    p,
+                    offset,
+                    text,
+                    fmt,
+                    TrackChangesEnabled
+                        ? new RevisionEditPlanner.InsertOptions(
+                            RevisionKind.Inserted,
+                            RevisionAuthor,
+                            _editingSession.RevisionDateXmlForEdit(),
+                            link?.Url,
+                            link?.Anchor,
+                            link?.Tooltip)
+                        : new RevisionEditPlanner.InsertOptions(
+                            HyperlinkUrl: link?.Url,
+                            HyperlinkAnchor: link?.Anchor,
+                            HyperlinkTooltip: link?.Tooltip));
+                CoalesceAdjacentPlainTextRuns(p);
+                CoalesceAdjacentHyperlinkRuns(p);
+            }));
+            _caret = new DocPosition(blockIndex, offset + text.Length);
+            _selectionAnchor = _caret;
+            if (ownsUndoGroup)
+                _bus.CommitUndoGroup("Insert text");
+        }
+        catch
+        {
+            if (ownsUndoGroup)
                 _bus.AbortUndoGroup();
             throw;
         }
@@ -19369,6 +19453,10 @@ public sealed partial class DocumentView : Control
                     cells.RemoveAt(offset - 1);
                 SetRuns(p, cells);
             }));
+            // AV-COMMENT-PRUNE (r160, freew-comments-review F1): see DeleteSelection's identical call —
+            // this single-character Backspace rebuilds the paragraph from ParaCells the same way and can
+            // just as easily remove a comment's last anchor cell.
+            PruneOrphanedCommentAndNoteAnchorsIfAny();
             _caret = new DocPosition(block, offset - 1);
             _selectionAnchor = _caret;
         }
@@ -19522,6 +19610,10 @@ public sealed partial class DocumentView : Control
                     cells.RemoveAt(offset);
                 SetRuns(p, cells);
             }));
+            // AV-COMMENT-PRUNE (r160, freew-comments-review F1): see DeleteSelection's identical call —
+            // this single-character forward-delete rebuilds the paragraph from ParaCells the same way and
+            // can just as easily remove a comment's last anchor cell.
+            PruneOrphanedCommentAndNoteAnchorsIfAny();
         }
     }
 
@@ -20176,7 +20268,26 @@ public sealed partial class DocumentView : Control
             _caret = new DocPosition(sel.Start.Block, sel.Start.Offset);
         }
 
+        // AV-COMMENT-PRUNE (r160, freew-comments-review F1): both branches above rebuild a paragraph's
+        // runs from ParaCells, which drops a comment's textless reference run outright once every cell
+        // it anchored is gone — the WPF host's equivalent structural fallback is native RichTextBox
+        // editing, which triggers PruneOrphanedNoteAndCommentAnchorsAfterNativeEdit afterward; this hand
+        // -rolled editor has no such choke point, so it must prune here or the anchorless entry lingers
+        // in TextDocument.Comments forever and keeps being written into every future save.
+        PruneOrphanedCommentAndNoteAnchorsIfAny();
         _selectionAnchor = _caret;
+    }
+
+    /// <summary>
+    /// AV-COMMENT-PRUNE (r160, freew-comments-review F1): removes any footnote/endnote/comment entry
+    /// that just lost its last anchor run. Cheap early-exit when the document has none of the three, so
+    /// ordinary typing/deleting in a document with no notes or comments pays nothing extra.
+    /// </summary>
+    private void PruneOrphanedCommentAndNoteAnchorsIfAny()
+    {
+        if (_doc.Footnotes.Count == 0 && _doc.Endnotes.Count == 0 && _doc.Comments.Count == 0)
+            return;
+        DocumentInspector.PruneOrphanedNoteAndCommentAnchors(_doc);
     }
 
     private DocumentTextRange CurrentBodyTextRange()
@@ -25204,15 +25315,25 @@ public sealed partial class DocumentView : Control
     {
         if (IsEditingLocked || TrackChangesEnabled)
             return false;
-        if (source.Start.Block != source.End.Block)
-            return false;
-        if (_doc.Blocks[source.Start.Block] is not Paragraph sourceParagraph || !IsEditable(sourceParagraph))
-            return false;
+        // AV-DRAGMOVE-MULTIPARA (r160, shared-drag-drop-content F1): the source used to have to live
+        // inside one paragraph — any selection crossing a paragraph boundary armed the drag (cursor and
+        // all) and then silently no-opped at drop, restoring the original selection with no error. Word's
+        // own within-page drag-drop (which the WPF host gets for free from native RichTextBox) is not
+        // limited that way, so walk every block the selection spans instead of only the first.
+        for (var block = source.Start.Block; block <= source.End.Block; block++)
+        {
+            if (block < 0 || block >= _doc.Blocks.Count
+                || _doc.Blocks[block] is not Paragraph blockParagraph
+                || !IsEditable(blockParagraph))
+            {
+                return false;
+            }
+        }
         if (SelectionReachesLockedContentControl(source))
             return false;
         if (!TryHitTest(releasePoint, out var drop) || _cellCaret is not null)
             return false;
-        if (drop.Block != source.Start.Block)
+        if (drop.Block < 0 || drop.Block >= _doc.Blocks.Count || _doc.Blocks[drop.Block] is not Paragraph)
             return false;
         if (Compare(drop, source.Start) >= 0 && Compare(drop, source.End) <= 0)
             return false; // drop inside (or right at the edge of) the source range — a documented no-op.
@@ -25227,29 +25348,55 @@ public sealed partial class DocumentView : Control
         {
             _selectionAnchor = drop;
             _caret = drop;
-            InsertText(text);
+            InsertBodyTextAcrossParagraphs(text);
             return true;
         }
 
-        // Move: delete the source range first, shifting a drop point that sat after it back by the
-        // removed length (a drop before the source range is unaffected — DeleteSelection() is a plain
-        // same-paragraph splice, so nothing before the removed span moves). The delete and the
-        // re-insert are two separate bus commands (AV-UNDOGROUP, same reasoning as InsertText's own
-        // selection-replace fallback) — grouped so one Ctrl+Z restores the pre-drag text, matching
-        // Word's own drag-move.
-        var removedLength = source.End.Offset - source.Start.Offset;
-        var adjustedOffset = drop.Offset >= source.End.Offset ? drop.Offset - removedLength : drop.Offset;
+        // Move: delete the source range first, then translate the drop point across the deletion.
+        // Within one paragraph that is just the removed-length shift this always did; a drop past a
+        // MULTI-paragraph source lands in the single paragraph DeleteSelection() merges the whole span
+        // into (see its cross-block branch), at the source's start block with the source's own start
+        // offset plus however far past the source's end the drop originally sat. A drop strictly between
+        // the source's own blocks can't reach here — it is already caught by the containment check above,
+        // since the block-range compare treats it as inside the source. The delete and the re-insert are
+        // two separate bus commands (AV-UNDOGROUP, same reasoning as InsertText's own selection-replace
+        // fallback) — grouped so one Ctrl+Z restores the pre-drag text, matching Word's own drag-move.
+        var adjustedDrop =
+            drop.Block == source.End.Block && drop.Offset > source.End.Offset
+                ? new DocPosition(source.Start.Block, source.Start.Offset + (drop.Offset - source.End.Offset))
+                : drop.Block > source.End.Block
+                    ? new DocPosition(drop.Block - (source.End.Block - source.Start.Block), drop.Offset)
+                    : drop; // drop.Block < source.Start.Block, or == source.Start.Block before the range.
         var ownsUndoGroup = !_bus.IsUndoGroupOpen;
         if (ownsUndoGroup)
             _bus.BeginUndoGroup();
         DeleteSelection();
-        var adjustedDrop = new DocPosition(source.Start.Block, adjustedOffset);
         _selectionAnchor = adjustedDrop;
         _caret = adjustedDrop;
-        InsertText(text);
+        InsertBodyTextAcrossParagraphs(text);
         if (ownsUndoGroup)
             _bus.CommitUndoGroup("Move Text");
         return true;
+    }
+
+    /// <summary>
+    /// AV-DRAGMOVE-MULTIPARA (r160, shared-drag-drop-content F1): re-inserts dragged text at the caret,
+    /// splitting on the '\n' <see cref="SelectedText"/> (via ProjectSelectionText) uses to join a
+    /// multi-paragraph selection's lines, and re-creating a paragraph break between each — the same
+    /// line-by-line loop <see cref="PasteNormalizedText"/> already uses for a multi-line clipboard paste.
+    /// A single-paragraph drag's text never contains '\n', so this is exactly one <see cref="InsertText"/>
+    /// call for that case — unchanged from before this fix.
+    /// </summary>
+    private void InsertBodyTextAcrossParagraphs(string text)
+    {
+        var lines = text.Split('\n');
+        InsertText(lines[0]);
+        for (var i = 1; i < lines.Length; i++)
+        {
+            InsertParagraphBreak();
+            if (lines[i].Length > 0)
+                InsertText(lines[i]);
+        }
     }
 
     // ---- Model helpers --------------------------------------------------------------------------

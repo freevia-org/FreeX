@@ -8,7 +8,8 @@ public sealed record CommentAnchorPosition(
     int Offset,
     int? TableRowIndex = null,
     int? TableGridColumnIndex = null,
-    int? TableParagraphIndex = null)
+    int? TableParagraphIndex = null,
+    bool IsHeaderFooterOrNoteAnchor = false)
 {
     public bool IsTableAnchor =>
         TableRowIndex is not null &&
@@ -40,42 +41,116 @@ public static class CommentListPlanner
         {
             foreach (var paragraph in ParagraphsInBlock(document.Blocks[blockIndex]))
             {
-                var offset = 0;
-                foreach (var run in paragraph.Runs)
-                {
-                    if (run.CommentId is not { } commentId)
-                    {
-                        offset += run.Text.Length;
-                        continue;
-                    }
-
-                    var topLevelId = TopLevelCommentId(document, commentId);
-                    if (!seen.Add(topLevelId) || !document.Comments.TryGetValue(topLevelId, out var comment))
-                    {
-                        offset += run.Text.Length;
-                        continue;
-                    }
-
-                    items.Add(new CommentListItem(
-                        topLevelId,
-                        new CommentAnchorPosition(
-                            blockIndex,
-                            offset,
-                            paragraph.TableRowIndex,
-                            paragraph.TableGridColumnIndex,
-                            paragraph.TableParagraphIndex),
-                        string.IsNullOrWhiteSpace(comment.Author) ? "Unknown" : comment.Author,
-                        comment.PlainText,
-                        comment.Replies.Count,
-                        comment.Resolved,
-                        comment.DateXml));
-
-                    offset += run.Text.Length;
-                }
+                var capturedBlockIndex = blockIndex;
+                AddCommentsInParagraph(
+                    document,
+                    paragraph.Paragraph,
+                    offset => new CommentAnchorPosition(
+                        capturedBlockIndex,
+                        offset,
+                        paragraph.TableRowIndex,
+                        paragraph.TableGridColumnIndex,
+                        paragraph.TableParagraphIndex),
+                    items,
+                    seen);
             }
         }
 
+        // Comments legitimately anchor outside the body too: Word allows one in a header, footer,
+        // footnote, or endnote (mirrors CommentCommands.EnumerateCommentAnchorParagraphs, which walks
+        // this identical set for the same reason). None of these paragraphs has a body block index, so
+        // they are appended after the body with a synthetic index just past its range -- harmless for
+        // the balloon strip's existing ordinal-position approximation in ReviewBalloonLayoutPlanner --
+        // and flagged via IsHeaderFooterOrNoteAnchor so SelectAdjacent below can keep Next/Previous
+        // Comment cycling through only the body/table anchors the shells already know how to place a
+        // caret in, exactly as it did before this method saw these comments at all.
+        var outOfBodyBlockIndex = document.Blocks.Count;
+        foreach (var paragraph in OutOfBodyParagraphs(document))
+        {
+            var capturedBlockIndex = outOfBodyBlockIndex;
+            AddCommentsInParagraph(
+                document,
+                paragraph,
+                offset => new CommentAnchorPosition(capturedBlockIndex, offset, IsHeaderFooterOrNoteAnchor: true),
+                items,
+                seen);
+            outOfBodyBlockIndex++;
+        }
+
         return items;
+    }
+
+    private static void AddCommentsInParagraph(
+        TextDocument document,
+        Paragraph paragraph,
+        Func<int, CommentAnchorPosition> anchorAt,
+        List<CommentListItem> items,
+        HashSet<int> seen)
+    {
+        var offset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.CommentId is not { } commentId)
+            {
+                offset += run.Text.Length;
+                continue;
+            }
+
+            var topLevelId = TopLevelCommentId(document, commentId);
+            if (!seen.Add(topLevelId) || !document.Comments.TryGetValue(topLevelId, out var comment))
+            {
+                offset += run.Text.Length;
+                continue;
+            }
+
+            items.Add(new CommentListItem(
+                topLevelId,
+                anchorAt(offset),
+                string.IsNullOrWhiteSpace(comment.Author) ? "Unknown" : comment.Author,
+                comment.PlainText,
+                comment.Replies.Count,
+                comment.Resolved,
+                comment.DateXml));
+
+            offset += run.Text.Length;
+        }
+    }
+
+    /// <summary>
+    /// Every header/footer of every document section (default, even, and first-page slots), plus every
+    /// footnote's and endnote's own content paragraphs, in that order. Mirrors
+    /// <c>CommentCommands.EnumerateCommentAnchorParagraphs</c>'s identical out-of-body walk.
+    /// </summary>
+    private static IEnumerable<Paragraph> OutOfBodyParagraphs(TextDocument document)
+    {
+        foreach (var section in document.Sections)
+        {
+            var headersFooters = section.HeadersFooters;
+            foreach (var headerFooter in new[]
+                     {
+                         headersFooters.Header,
+                         headersFooters.Footer,
+                         headersFooters.EvenHeader,
+                         headersFooters.EvenFooter,
+                         headersFooters.FirstHeader,
+                         headersFooters.FirstFooter,
+                     })
+            {
+                if (headerFooter is null)
+                    continue;
+
+                foreach (var paragraph in headerFooter.Paragraphs)
+                    yield return paragraph;
+            }
+        }
+
+        foreach (var footnote in document.Footnotes.Values)
+            foreach (var paragraph in footnote.Content)
+                yield return paragraph;
+
+        foreach (var endnote in document.Endnotes.Values)
+            foreach (var paragraph in endnote.Content)
+                yield return paragraph;
     }
 
     public static CommentListItem? SelectAdjacent(
@@ -85,18 +160,24 @@ public static class CommentListPlanner
     {
         ArgumentNullException.ThrowIfNull(items);
 
-        if (items.Count == 0)
+        // Next/Previous Comment moves the on-screen caret, and the shells only know how to place a
+        // caret in a body or table position -- a header/footer/footnote/endnote anchor has no caret
+        // destination yet, so it is excluded from the cycle here (rather than in Build, which still
+        // reports it for the Comments list and the markup-balloon strip). This keeps navigation
+        // behaviour over body/table comments identical to before Build started reporting these too.
+        var navigable = items.Where(item => !item.Anchor.IsHeaderFooterOrNoteAnchor).ToList();
+        if (navigable.Count == 0)
             return null;
 
         var step = direction < 0 ? -1 : 1;
         var currentIndex = currentTopLevelCommentId is { } id
-            ? IndexOf(items, id)
+            ? IndexOf(navigable, id)
             : -1;
         var nextIndex = currentIndex < 0
-            ? (step > 0 ? 0 : items.Count - 1)
-            : (currentIndex + step + items.Count) % items.Count;
+            ? (step > 0 ? 0 : navigable.Count - 1)
+            : (currentIndex + step + navigable.Count) % navigable.Count;
 
-        return items[nextIndex];
+        return navigable[nextIndex];
     }
 
     private static int IndexOf(IReadOnlyList<CommentListItem> items, int commentId)

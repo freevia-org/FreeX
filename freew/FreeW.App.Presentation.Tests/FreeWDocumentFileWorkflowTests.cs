@@ -164,6 +164,64 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
         File.ReadAllText(differentPath).Should().Be("my edit");
     }
 
+    // shared-window-lifecycle F1: ApplyWindowState is the seam View > New Window's host-level
+    // LoadDocumentWindow calls to give the new window's OWN workflow instance an external-
+    // modification baseline equivalent to what OpenPathAsync would have captured, since New Window
+    // never goes through Open. Proves the mechanism directly: establishing the baseline this way,
+    // with no OpenPathAsync call at all, still catches a write that happens afterward.
+    [Fact]
+    public async Task ApplyWindowState_WithExistingPath_EstablishesBaselineThatCatchesALaterExternalWrite()
+    {
+        var adapter = new RecordingAdapter(".docx", canSave: true, Document("loaded"));
+        var (workflow, lifecycle) = CreateWorkflow(adapter, currentDocument: Document("window B's edit"));
+        var path = Path.Combine(TempDirectory, "Shared.docx");
+        await File.WriteAllTextAsync(path, "window A's edit");
+
+        // Mirrors the state LoadDocumentWindow hands a new window: FileCommands.ApplyDocumentState
+        // gives the shared path to this workflow's OWN lifecycle (CurrentPath), while
+        // ApplyWindowState gives it the matching guard baseline -- this workflow instance never
+        // itself called OpenPathAsync/SaveTargetAsync.
+        lifecycle.ApplyDocumentState(path, isDirty: false);
+        workflow.ApplyWindowState(path);
+
+        // The source window (a different FileCommands/workflow instance) saves to the same path.
+        await File.WriteAllTextAsync(path, "window A's SECOND edit");
+        File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path) + TimeSpan.FromMinutes(1));
+
+        var result = await workflow.SaveCurrentPathAsync(path);
+
+        result.Outcome.Should().Be(
+            DocumentFileExecutionOutcome.ExternalWriteConflict,
+            "without ApplyWindowState this baseline would be null and the write would go through unchecked");
+        File.ReadAllText(path).Should().Be("window A's SECOND edit");
+    }
+
+    // Sibling/no-regression: a brand-new, never-saved document (CurrentPath null) has nothing to
+    // compare against -- ApplyWindowState(null) must leave the guard off, same as a document that
+    // was simply never opened.
+    [Fact]
+    public async Task ApplyWindowState_WithNullPath_NeverFiresGuardOnFirstSave()
+    {
+        var promptInvoked = false;
+        var adapter = new RecordingAdapter(".docx", canSave: true, Document("loaded"));
+        var (workflow, _) = CreateWorkflow(
+            adapter,
+            currentDocument: Document("untitled edit"),
+            confirmExternallyModifiedOverwriteAsync: (_, _) =>
+            {
+                promptInvoked = true;
+                return ValueTask.FromResult(false);
+            });
+
+        workflow.ApplyWindowState(null);
+
+        var path = Path.Combine(TempDirectory, "FirstSave.docx");
+        var result = await workflow.SavePathAsync(path);
+
+        result.Succeeded.Should().BeTrue();
+        promptInvoked.Should().BeFalse();
+    }
+
     [Fact]
     public async Task SaveCurrentPathAsync_ReadOnlyFormatRequestsSaveAs()
     {

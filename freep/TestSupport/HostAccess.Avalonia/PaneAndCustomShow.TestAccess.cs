@@ -45,10 +45,35 @@ internal sealed partial class CustomShowDialog
 
 internal sealed partial class SelectionPane
 {
+    /// <summary>
+    /// Records each row's real LostFocus commit delegate as it is built, so tests can invoke the
+    /// exact same production code path (production's <c>CommitName</c> local function) that a real
+    /// focus round-trip runs, without depending on Avalonia's focus/visual-tree machinery being
+    /// fully live in a headless test host.
+    /// </summary>
+    private readonly Dictionary<TextBox, Action> _renameCommitActionsForTests = new();
+
+    partial void OnRenameCommitObserved(TextBox rename, Action commit) =>
+        _renameCommitActionsForTests[rename] = commit;
+
     internal IReadOnlyList<string?> RenameToolTipsForTests =>
         _items.Children
             .OfType<DockPanel>()
             .Select(row => row.Children.OfType<TextBox>().SingleOrDefault())
             .Select(textBox => textBox is null ? null : ToolTip.GetTip(textBox)?.ToString())
             .ToArray();
+
+    internal IReadOnlyList<TextBox> RenameTextBoxesForTests =>
+        _items.Children
+            .OfType<DockPanel>()
+            .Select(row => row.Children.OfType<TextBox>().Single())
+            .ToArray();
+
+    /// <summary>
+    /// Simulates a plain focus round-trip (tab in, tab out / click away with no typed edit) on
+    /// the rename box for row <paramref name="rowIndex"/> by invoking production's real LostFocus
+    /// commit delegate directly, exactly as Avalonia would when the box loses focus unedited.
+    /// </summary>
+    internal void BlurRenameWithoutEditingForTests(int rowIndex) =>
+        _renameCommitActionsForTests[RenameTextBoxesForTests[rowIndex]]();
 }

@@ -1363,6 +1363,20 @@ public partial class GridView
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && (_selectionMoveDragging || _autofillDragging))
+        {
+            // F2 fix (round 160): Escape must abort an in-progress border-drag range
+            // move or fill-handle autofill drag while the mouse button is still down.
+            // Releasing capture triggers OnLostMouseCapture -> CancelActiveCapturedGridDrag,
+            // the same non-committing cleanup path used when capture is lost any other way
+            // (e.g. Alt-Tab). Deliberately left unhandled/not returned: the host's own
+            // window-level Escape handler (MainWindow.Selection.cs's CancelCopyAndTransientModes)
+            // clears unrelated transient state -- clipboard marquee, format painter, border-draw
+            // mode -- that can be active at the same time as a border/fill-handle drag, and must
+            // keep running exactly as it did before this fix.
+            ReleaseMouseCapture();
+        }
+
         if (e.Key == Key.Escape && _activeCommentPreviewKey.HasValue)
         {
             DismissCommentPreview();

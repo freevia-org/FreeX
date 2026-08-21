@@ -180,6 +180,11 @@ internal sealed class FileCommands
             plan.CurrentPath,
             plan.IsDirty,
             () => _editor.CurrentFileName = plan.CurrentPath is null ? null : Path.GetFileName(plan.CurrentPath));
+        // Without this, this window's own external-modification guard baseline stays null forever
+        // (New Window never goes through Open/Save), so its first save would skip the conflict
+        // check even if the source window saved to the same path in between. See
+        // FreeWDocumentFileWorkflow.ApplyWindowState for the full rationale.
+        _documentWorkflow.ApplyWindowState(plan.CurrentPath);
     }
 
     /// <summary>

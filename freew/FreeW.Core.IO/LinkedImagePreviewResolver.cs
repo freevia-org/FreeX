@@ -70,6 +70,23 @@ public static class LinkedImagePreviewResolver
             if (!file.Exists || file.Length <= 0 || file.Length > MaxPreviewBytes)
                 return false;
             bytes = File.ReadAllBytes(file.FullName);
+
+            // r160-remediation: SECURITY. The path comes from a .docx's external linked-picture
+            // relationship target, which is attacker-controlled content -- a document can point it
+            // at any local file the user can read. Without this check those bytes were read and
+            // stored verbatim in ResolvedLinkedImageBytes, which DisplayBytes hands straight to the
+            // renderers and which the user may then save or forward: the same local-file disclosure
+            // the HTML reader was hardened against, through a second door nobody had gated.
+            //
+            // InlineImage.HasRecognisedSignature is the one signature list, shared with
+            // DetectFormat. Do NOT substitute DetectFormat here: it answers Png for unrecognised
+            // data by design, so it can say what a file is but never whether it is an image.
+            if (!InlineImage.HasRecognisedSignature(bytes))
+            {
+                bytes = [];
+                return false;
+            }
+
             return bytes.Length > 0;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)

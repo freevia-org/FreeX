@@ -128,6 +128,25 @@ public partial class MainWindow
         Func<WorkbookWorksheetStructureResult> execute,
         out WorkbookWorksheetStructureResult result)
     {
+        // R160-formula-editing-F2: Insert/Delete Rows/Columns/Cells (every caller of this shared
+        // choke point) shift every cell address below/right of the target, so a still-open Formula
+        // Bar/inline edit must commit to its CURRENT (pre-shift) address before that shift runs --
+        // otherwise the SynchronizeWorkbookSessionSelection() call just below re-pushes the same
+        // _formulaEditCell the edit started with, the structural command's own success path
+        // (WorkbookSession.ApplySuccessfulPreservedSelectionCommandResult) correctly clears
+        // WorkbookSession.FormulaEditAddress afterward, but the LATER commit (CommitEdit, once the
+        // user finishes the still-open edit) synchronizes selection state again and resurrects that
+        // same stale, never-invalidated address, landing the edit on whatever now occupies it
+        // instead of the cell it actually belonged to. TryCommitPendingSpellCheckEdit already is the
+        // established "commit whatever is pending, unless a formula-reference point-mode entry is
+        // active" gate (used the same way before Spell Check runs); reusing it here mirrors Excel,
+        // which always finishes an in-progress edit before a ribbon structural command can run, so
+        // the edit's value shifts along with everything else instead of being silently resurrected
+        // onto the wrong cell afterwards. A best-effort call: if nothing is pending it is a no-op,
+        // and if a formula-reference point-mode entry is active it intentionally leaves that edit
+        // open (matching the existing skip at MainWindow.Editing.cs's inline-editor LostFocus path).
+        TryCommitPendingSpellCheckEdit();
+
         SynchronizeWorkbookSessionSelection();
         result = execute();
         return CompleteWorksheetSessionCommand(result.EditResult, result.CommandTitle);
@@ -482,7 +501,22 @@ public partial class MainWindow
         InvalidateNavigationCaches();
         ApplyWorkbookSessionSelectionToRenderer();
         afterSelectionApplied?.Invoke();
-        SyncWindowViewState([_currentSheetId]);
+        // Undo/Redo of a metadata-only command (e.g. a grouped Zoom/Gridlines/ViewMode/Show
+        // Formulas change fanned out across every grouped sheet as one CompositeWorkbookCommand,
+        // MainWindow.ViewCommands.cs's SetWorksheetViewMode et al.) reports no AffectedCells, and
+        // WorkbookCellEditResult never exposes the command's own sheet-id set here -- so, mirroring
+        // the Avalonia shell's WorkbookSession.ApplySuccessfulHistoryResult (which loops every
+        // Workbook.Sheets entry through InvalidateAllPerViewOverridesForSheet in exactly this
+        // "no affected cells" branch, for exactly this reason), refresh this window's per-window
+        // view-state cache for EVERY sheet rather than only the currently active one. Otherwise a
+        // grouped sheet that wasn't active when Undo/Redo ran keeps returning its stale pre-
+        // undo/redo Zoom/ViewMode/etc. snapshot the next time the user switches to its tab, and
+        // that stale snapshot gets written back into the saved file by ReconcileViewStateForSave.
+        // A plain cell-edit Undo/Redo (AffectedCells.Count > 0, including a grouped cell edit)
+        // never touches view-setting fields, so it keeps refreshing only the active sheet's cache.
+        SyncWindowViewState(result.AffectedCells.Count == 0
+            ? _workbook.Sheets.Select(sheet => sheet.Id).ToList()
+            : [_currentSheetId]);
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();

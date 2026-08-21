@@ -1912,7 +1912,7 @@ public sealed partial class DocumentView : RichTextBox
     internal bool ApplyClipboardPastePlan(FreeWClipboardPastePlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        if (plan.RichDocument is { } source && PasteKeepSourceFormatting(source))
+        if (plan.RichDocument is { } source)
         {
             // freew-clip-image-text (R159): a synthesized image RichDocument (freew-paste-formats F1)
             // does not fold the clipboard's independent Text into itself the way an HTML/RTF
@@ -1921,15 +1921,38 @@ public sealed partial class DocumentView : RichTextBox
             // silently discarded just because the image pasted successfully. Insert it too, after the
             // image, at the caret PasteKeepSourceFormatting just left there. An HTML/RTF RichDocument
             // already contains its Text, so this never runs for that case -- doing so there would
-            // duplicate the paste.
-            if (plan.RichDocumentIsSynthesizedImage)
+            // duplicate the paste. Computed up front (PlanPasteText is a pure query) so it is known
+            // BEFORE the paste whether a second command push is coming, and only then is an undo group
+            // opened -- every other RichDocument paste keeps pushing its single command exactly as
+            // before.
+            DocumentPasteTextPlan? imageTextPlan = plan.RichDocumentIsSynthesizedImage
+                ? _editingSession.Interaction.PlanPasteText(plan.Text, plan.TextKind)
+                : null;
+            var groupsImageAndText = imageTextPlan is { HasText: true };
+
+            // freew-clip-image-text-undo (R160): the image insert (PasteKeepSourceFormatting, below)
+            // and the accompanying-text insert (InsertText, below) each push their own command onto the
+            // shared DocumentCommandBus. Left unwrapped, that is two independent undo entries for what
+            // the user experienced as one paste, so a single Ctrl+Z removed only the text and left the
+            // pasted image behind. Grouping both pushes into one composite makes one Undo revert the
+            // whole paste.
+            if (groupsImageAndText)
+                _commands.BeginUndoGroup();
+
+            var pasted = PasteKeepSourceFormatting(source);
+            if (pasted)
             {
-                var imageTextPlan = _editingSession.Interaction.PlanPasteText(plan.Text, plan.TextKind);
-                if (imageTextPlan.HasText)
-                    InsertText(imageTextPlan.Text);
+                if (groupsImageAndText)
+                    InsertText(imageTextPlan!.Text);
+
+                if (groupsImageAndText)
+                    _commands.CommitUndoGroup("Paste");
+
+                return true;
             }
 
-            return true;
+            if (groupsImageAndText)
+                _commands.AbortUndoGroup();
         }
 
         var textPlan = _editingSession.Interaction.PlanPasteText(plan.Text, plan.TextKind);

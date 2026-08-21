@@ -499,8 +499,19 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         FormulaBar.GotKeyboardFocus += (_, _) => CaptureFormulaEditCell();
         FormulaBar.SelectionChanged += (_, _) =>
         {
-            if (!_isApplyingFormulaEditorText)
-                ClearFormulaReferenceEntrySpanIfCaretLeftReference(FormulaBar);
+            if (_isApplyingFormulaEditorText)
+                return;
+
+            ClearFormulaReferenceEntrySpanIfCaretLeftReference(FormulaBar);
+
+            // R160-formula-editing-F1: SelectionChanged also fires on a caret-only move (arrow
+            // keys, clicking to reposition) with no TextChanged alongside it, but the live
+            // signature-help tooltip is caret-position-sensitive -- it re-bolds whichever argument
+            // the caret currently sits inside and hides once the caret leaves the call entirely.
+            // Refresh it here too, gated the same way as the TextChanged-driven refresh just below
+            // (skip while the inline editor is the live editing surface; it owns the tooltip then).
+            if (_inlineEditor?.IsVisible != true)
+                RefreshFormulaSignatureHelp(FormulaBar);
         };
         FormulaBar.TextChanged += (_, _) =>
         {
@@ -553,6 +564,31 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     }
 
     internal WorkbookSession Session => _session;
+
+    // R160-formula-editing-F1: test-only readback of the live signature-help tooltip's state, so a
+    // headless test can assert which argument is bolded after a caret-only move (no TextChanged)
+    // without reaching into the private popup/textblock fields declared in MainWindow.Editing.cs.
+    internal bool FormulaSignatureHelpIsOpenForTest => _signatureHelpPopup?.IsOpen == true;
+
+    internal string? FormulaSignatureHelpBoldArgumentForTest
+    {
+        get
+        {
+            if (_signatureHelpPopup?.IsOpen != true || _signatureHelpTextBlock is null)
+                return null;
+
+            foreach (var inline in _signatureHelpTextBlock.Inlines)
+            {
+                if (inline is System.Windows.Documents.Run { FontWeight: var weight } run
+                    && weight == FontWeights.Bold)
+                {
+                    return run.Text;
+                }
+            }
+
+            return null;
+        }
+    }
 
     private void RecordDiagnosticEvent(string eventName, IReadOnlyDictionary<string, string?>? properties = null) =>
         _diagnostics?.RecordEvent(eventName, properties);

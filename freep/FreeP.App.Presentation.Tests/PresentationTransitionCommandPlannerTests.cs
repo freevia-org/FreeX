@@ -443,4 +443,107 @@ public sealed class PresentationTransitionCommandPlannerTests
         editor.Undo();
         presentation.Slides[0].Transition.Should().BeNull();
     }
+
+    // ── F1: CloneTransition must preserve mc:AlternateContent re-wrap metadata ─────────
+
+    private static SlideTransition MakeAlternateContentOtherTransition()
+    {
+        var transition = new SlideTransition
+        {
+            Kind = TransitionKind.Other,
+            RawXml = "<p:transition spd=\"fast\"><p14:futureEffectNotYetKnown/></p:transition>",
+            WasAlternateContent = true,
+            McRequiresToken = "p14",
+            AlternateContentFallbackXml =
+                "<p:transition spd=\"fast\"><p:fade/></p:transition>",
+        };
+        transition.McRequiresNsUris["p14"] = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+        return transition;
+    }
+
+    [Fact]
+    public void CloneTransition_OtherKindWrappedInAlternateContent_PreservesRewrapMetadata()
+    {
+        // F1: before the fix, CloneTransition copied Kind/RawXml/etc. but silently dropped
+        // WasAlternateContent/McRequiresToken/McRequiresNsUris/AlternateContentFallbackXml,
+        // so any subsequent edit through this clone helper (duration/advance-on-click/
+        // advance-after/apply-all/sound) would make the writer emit the unrecognized
+        // extension element as a bare, invalid direct child of p:transition and lose the
+        // original mc:Fallback degrade-path content.
+        var source = MakeAlternateContentOtherTransition();
+
+        var clone = PresentationTransitionCommandPlanner.CloneTransition(source);
+
+        clone.Should().NotBeNull();
+        clone!.Kind.Should().Be(TransitionKind.Other);
+        clone.WasAlternateContent.Should().BeTrue();
+        clone.McRequiresToken.Should().Be("p14");
+        clone.McRequiresNsUris.Should().ContainKey("p14");
+        clone.McRequiresNsUris["p14"].Should().Be("http://schemas.microsoft.com/office/powerpoint/2010/main");
+        clone.AlternateContentFallbackXml.Should().Be(source.AlternateContentFallbackXml);
+
+        // The clone must be an independent copy of the namespace dictionary, not an alias.
+        clone.McRequiresNsUris["p14"] = "changed";
+        source.McRequiresNsUris["p14"].Should().Be("http://schemas.microsoft.com/office/powerpoint/2010/main");
+    }
+
+    [Fact]
+    public void BuildDurationTransition_OnAlternateContentOtherTransition_PreservesRewrapMetadata()
+    {
+        // The concrete user gesture from the finding: changing the Duration combo on a slide
+        // whose transition is an mc:AlternateContent-wrapped unrecognized effect must not
+        // strip the wrapping metadata needed to re-wrap it correctly on save.
+        var source = MakeAlternateContentOtherTransition();
+
+        var result = PresentationTransitionCommandPlanner.BuildDurationTransition(source, 750);
+
+        result.Kind.Should().Be(TransitionKind.Other);
+        result.DurationMs.Should().Be(750);
+        result.WasAlternateContent.Should().BeTrue();
+        result.McRequiresToken.Should().Be("p14");
+        result.McRequiresNsUris.Should().ContainKey("p14");
+        result.AlternateContentFallbackXml.Should().Be(source.AlternateContentFallbackXml);
+    }
+
+    [Fact]
+    public void BuildApplyToAllTransitions_OnAlternateContentOtherTransition_PreservesRewrapMetadataOnEveryClone()
+    {
+        // Sibling gesture named in the finding: "Apply To All Slides" propagates through the
+        // same CloneTransition helper for every slide in the deck.
+        var source = MakeAlternateContentOtherTransition();
+
+        var transitions = PresentationTransitionCommandPlanner.BuildApplyToAllTransitions(3, source);
+
+        transitions.Should().HaveCount(3);
+        foreach (var t in transitions)
+        {
+            t.Should().NotBeNull();
+            t!.WasAlternateContent.Should().BeTrue();
+            t.McRequiresToken.Should().Be("p14");
+            t.AlternateContentFallbackXml.Should().Be(source.AlternateContentFallbackXml);
+        }
+    }
+
+    [Fact]
+    public void CloneTransition_KnownKindTransition_StaysNonAlternateContent()
+    {
+        // Sibling no-regression: an ordinary known-kind transition that was never wrapped in
+        // mc:AlternateContent must keep cloning exactly as before -- the fix must not start
+        // fabricating AlternateContent metadata for transitions that never had any.
+        var source = new SlideTransition
+        {
+            Kind = TransitionKind.Fade,
+            DurationMs = 500,
+            AdvanceOnClick = true,
+        };
+
+        var clone = PresentationTransitionCommandPlanner.CloneTransition(source);
+
+        clone.Should().NotBeNull();
+        clone!.Kind.Should().Be(TransitionKind.Fade);
+        clone.WasAlternateContent.Should().BeFalse();
+        clone.McRequiresToken.Should().BeNull();
+        clone.McRequiresNsUris.Should().BeEmpty();
+        clone.AlternateContentFallbackXml.Should().BeNull();
+    }
 }

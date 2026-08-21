@@ -1002,6 +1002,179 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DeleteShapeCommand_ShapeHeadsMainSequenceAndTriggerGroup_NormalizesBothPromotedHeads()
+    {
+        // A single shape can carry more than one animation effect. Here shape 1 owns two of them:
+        // one is the main-sequence head (TriggerShapeId null), the other is the head of the
+        // unrelated trigger-99 click-group (TriggerShapeId == shape 99's id). Deleting shape 1
+        // removes both animations in the same Apply call, promoting a new head in *each* group at
+        // once. ShapeAnimationAnchorFix must correct both promoted heads back to On Click, not
+        // just whichever one the main-sequence-only check happens to find (r159-open F2).
+        var (p, bus) = Make();
+        var deleted = MakeShape(1);
+        var trigger99 = MakeShape(99);
+        var second = MakeShape(2);
+        var third = MakeShape(3);
+        p.Slides[0].Shapes.Add(deleted);
+        p.Slides[0].Shapes.Add(trigger99);
+        p.Slides[0].Shapes.Add(second);
+        p.Slides[0].Shapes.Add(third);
+
+        // Main sequence: [mainHead(shape1) -- deleted, mainSecond(shape2) -- promoted].
+        var mainHead = new ShapeAnimation { ShapeId = 1, TriggerShapeId = null, Trigger = AnimationTrigger.OnClick };
+        var mainSecond = new ShapeAnimation { ShapeId = 2, TriggerShapeId = null, Trigger = AnimationTrigger.WithPrevious };
+        // Trigger group 99: [groupHead(shape1) -- deleted, groupSecond(shape3) -- promoted].
+        var groupHead = new ShapeAnimation { ShapeId = 1, TriggerShapeId = 99, Trigger = AnimationTrigger.OnClick };
+        var groupSecond = new ShapeAnimation { ShapeId = 3, TriggerShapeId = 99, Trigger = AnimationTrigger.AfterPrevious };
+
+        p.Slides[0].Animations.Add(mainHead);
+        p.Slides[0].Animations.Add(mainSecond);
+        p.Slides[0].Animations.Add(groupHead);
+        p.Slides[0].Animations.Add(groupSecond);
+
+        bus.Execute(new DeleteShapeCommand(0, deleted.Id));
+
+        var anims = p.Slides[0].Animations;
+        anims.Should().ContainInOrder(mainSecond, groupSecond);
+        anims.Should().HaveCount(2);
+
+        // Both promoted heads must end up On Click -- the main-sequence one AND the trigger-99
+        // one. Before the fix, only the first one NormalizeMainSequenceHead happened to check
+        // (the main sequence) was corrected; the trigger-99 head stayed on its stale After
+        // Previous trigger, which is exactly the stale label an auditor reproduced in the
+        // Animation Pane.
+        mainSecond.Trigger.Should().Be(AnimationTrigger.OnClick,
+            "the promoted main-sequence head is unplayable as anything but On Click");
+        groupSecond.Trigger.Should().Be(AnimationTrigger.OnClick,
+            "the promoted trigger-99 head is unplayable as anything but On Click");
+
+        // Not asserting on bus.Undo() here: DeleteShapeCommand.Revert re-adds the very same
+        // ShapeAnimation instances it captured before the correction ran, and this fix mutates
+        // Trigger in place on those instances, so undo cannot actually recover the pre-correction
+        // value for either promoted head -- a separate, pre-existing gap in the "wholesale
+        // restore needs no bookkeeping" assumption that predates this fix and applies identically
+        // to the main-sequence-only case, so it is out of scope for this finding.
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_ShapeHeadsOnlyMainSequence_LeavesAlreadyCorrectTriggerGroupUntouched()
+    {
+        // Sibling no-regression case for the multi-group fix above: when only ONE group is
+        // actually perturbed by the delete, an unrelated trigger group that is already
+        // well-formed (head already On Click, non-head member keeping its own stored trigger)
+        // must come through completely untouched. This guards against the trigger-group repair
+        // over-correcting groups the delete never touched.
+        var (p, bus) = Make();
+        var deleted = MakeShape(1);
+        var trigger99 = MakeShape(99);
+        var second = MakeShape(2);
+        var third = MakeShape(3);
+        p.Slides[0].Shapes.Add(deleted);
+        p.Slides[0].Shapes.Add(trigger99);
+        p.Slides[0].Shapes.Add(second);
+        p.Slides[0].Shapes.Add(third);
+
+        // Main sequence: [mainHead(shape1) -- deleted, mainSecond(shape2) -- promoted].
+        var mainHead = new ShapeAnimation { ShapeId = 1, TriggerShapeId = null, Trigger = AnimationTrigger.OnClick };
+        var mainSecond = new ShapeAnimation { ShapeId = 2, TriggerShapeId = null, Trigger = AnimationTrigger.AfterPrevious };
+        // Trigger group 99 is unrelated to shape 1 and already well-formed: head already On Click,
+        // second entry legitimately keeping its own With Previous.
+        var groupHead = new ShapeAnimation { ShapeId = 3, TriggerShapeId = 99, Trigger = AnimationTrigger.OnClick };
+        var groupNonHead = new ShapeAnimation { ShapeId = 2, TriggerShapeId = 99, Trigger = AnimationTrigger.WithPrevious };
+
+        p.Slides[0].Animations.Add(mainHead);
+        p.Slides[0].Animations.Add(mainSecond);
+        p.Slides[0].Animations.Add(groupHead);
+        p.Slides[0].Animations.Add(groupNonHead);
+
+        bus.Execute(new DeleteShapeCommand(0, deleted.Id));
+
+        var anims = p.Slides[0].Animations;
+        anims.Should().ContainInOrder(mainSecond, groupHead, groupNonHead);
+
+        // The genuinely promoted head is corrected...
+        mainSecond.Trigger.Should().Be(AnimationTrigger.OnClick);
+        // ...but the already-correct, unrelated group is left exactly as it was.
+        groupHead.Trigger.Should().Be(AnimationTrigger.OnClick);
+        groupNonHead.Trigger.Should().Be(AnimationTrigger.WithPrevious,
+            "a non-head entry's own stored trigger must never be touched");
+    }
+
+    [Fact]
+    public void RemoveShapeAnimationCommand_RemovingTriggerGroupHead_NormalizesPromotedHeadAndUndoRestoresIt()
+    {
+        // RemoveShapeAnimationCommand (the Animation Pane's own "Remove" action) can just as
+        // easily remove a trigger group's own head as the main sequence's. Removing the group's
+        // current head promotes its second entry into the head slot, and that entry must be
+        // corrected to On Click exactly as a main-sequence promotion would be (r159-open F2).
+        var (p, bus) = Make();
+        var shape1 = MakeShape(1);
+        var trigger99 = MakeShape(99);
+        var shape2 = MakeShape(2);
+        p.Slides[0].Shapes.Add(shape1);
+        p.Slides[0].Shapes.Add(trigger99);
+        p.Slides[0].Shapes.Add(shape2);
+
+        var groupHead = new ShapeAnimation { ShapeId = 1, TriggerShapeId = 99, Trigger = AnimationTrigger.OnClick };
+        var groupSecond = new ShapeAnimation { ShapeId = 2, TriggerShapeId = 99, Trigger = AnimationTrigger.AfterPrevious };
+        p.Slides[0].Animations.Add(groupHead);
+        p.Slides[0].Animations.Add(groupSecond);
+
+        bus.Execute(new RemoveShapeAnimationCommand(0, 0));
+
+        var anims = p.Slides[0].Animations;
+        anims.Should().ContainSingle().Which.Should().BeSameAs(groupSecond);
+        groupSecond.Trigger.Should().Be(AnimationTrigger.OnClick,
+            "the promoted trigger-group head is unplayable as anything but On Click");
+
+        bus.Undo();
+
+        p.Slides[0].Animations.Should().ContainInOrder(groupHead, groupSecond);
+        groupSecond.Trigger.Should().Be(AnimationTrigger.AfterPrevious,
+            "undo must restore the promoted entry's own pre-correction trigger");
+    }
+
+    [Fact]
+    public void ReorderShapeAnimationCommand_VacatingTriggerGroupHead_NormalizesPromotedHeadAndUndoRestoresIt()
+    {
+        // Same gap as the Remove case above, but reached via Move Earlier/Later: reordering the
+        // current trigger-group head out of slot 0 promotes the next entry, which must likewise
+        // be corrected to On Click, with undo restoring its original stored trigger.
+        var (p, bus) = Make();
+        var shape1 = MakeShape(1);
+        var trigger99 = MakeShape(99);
+        var shape2 = MakeShape(2);
+        var shape3 = MakeShape(3);
+        p.Slides[0].Shapes.Add(shape1);
+        p.Slides[0].Shapes.Add(trigger99);
+        p.Slides[0].Shapes.Add(shape2);
+        p.Slides[0].Shapes.Add(shape3);
+
+        var groupHead = new ShapeAnimation { ShapeId = 1, TriggerShapeId = 99, Trigger = AnimationTrigger.OnClick };
+        var groupSecond = new ShapeAnimation { ShapeId = 2, TriggerShapeId = 99, Trigger = AnimationTrigger.WithPrevious };
+        var mainAnim = new ShapeAnimation { ShapeId = 3, TriggerShapeId = null, Trigger = AnimationTrigger.OnClick };
+        p.Slides[0].Animations.Add(groupHead);
+        p.Slides[0].Animations.Add(groupSecond);
+        p.Slides[0].Animations.Add(mainAnim);
+
+        // Move the current head (index 0) after groupSecond, promoting groupSecond into the head slot.
+        bus.Execute(new ReorderShapeAnimationCommand(0, 0, 1));
+
+        var anims = p.Slides[0].Animations;
+        anims.Should().ContainInOrder(groupSecond, groupHead, mainAnim);
+        groupSecond.Trigger.Should().Be(AnimationTrigger.OnClick,
+            "the promoted trigger-group head is unplayable as anything but On Click");
+        // The moved (former head) entry keeps its own On Click value untouched -- nothing to prove
+        // beyond it not having changed, since it was already On Click.
+
+        bus.Undo();
+
+        p.Slides[0].Animations.Should().ContainInOrder(groupHead, groupSecond, mainAnim);
+        groupSecond.Trigger.Should().Be(AnimationTrigger.WithPrevious,
+            "undo must restore the promoted entry's own pre-correction trigger");
+    }
+
+    [Fact]
     public void DeleteShapeCommand_DetachesConnectedEndpoints_AndUndoRestoresThem()
     {
         var (p, bus) = Make();

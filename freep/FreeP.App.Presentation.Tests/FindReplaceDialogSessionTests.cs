@@ -180,6 +180,48 @@ public sealed class FindReplaceDialogSessionTests
         session.ReplaceAll().StatusText.Should().Be("changed total 2");
     }
 
+    [Fact]
+    public void Navigate_RefreshesMatchesAfterExternalDocumentEditWhileDialogStaysOpen()
+    {
+        // Round-160 shared-find-navigation F2: the dialog is modeless, so the slide canvas can
+        // keep changing while it stays open. Before the fix, EnsureMatches only re-searches when
+        // _matches is empty, so a document edit made through the live EditingSession (not through
+        // SetQuery/SetMatchCase/SetWholeWord) left the cached match set -- and its "Match X of Y"
+        // count -- stale for the rest of the session.
+        var (editor, _) = MakeSession("cat");
+        var session = new FindReplaceDialogSession(editor);
+        session.SetQuery("cat");
+
+        var first = session.Navigate(+1);
+        first.MatchCount.Should().Be(1);
+        first.StatusText.Should().Be("Match 1 of 1");
+
+        // Simulate the user editing the canvas directly while the dialog stays open: a second
+        // shape containing the search term is added through the same undoable EditingSession the
+        // dialog was constructed with -- no SetQuery/SetMatchCase/SetWholeWord call in between.
+        editor.InsertTextBox("cat");
+
+        var second = session.Navigate(+1);
+        second.MatchCount.Should().Be(2);
+        second.StatusText.Should().Be("Match 1 of 2");
+    }
+
+    [Fact]
+    public void Navigate_WithoutInterveningDocumentEdits_KeepsCyclingSameMatchSetStably()
+    {
+        // Sibling no-regression case for F2: plain Find Next/Previous navigation selects a shape
+        // via EditingSession.NavigateTo, which never routes through the undo Bus, so it must not
+        // trip the new document-changed invalidation and reset an otherwise-live match cycle.
+        var (editor, _) = MakeSession("cat cat cat");
+        var session = new FindReplaceDialogSession(editor);
+        session.SetQuery("cat");
+
+        session.Navigate(+1).StatusText.Should().Be("Match 1 of 3");
+        session.Navigate(+1).StatusText.Should().Be("Match 2 of 3");
+        session.Navigate(+1).StatusText.Should().Be("Match 3 of 3");
+        session.Navigate(+1).StatusText.Should().Be("Match 1 of 3");
+    }
+
     private static (EditingSession Editor, SlideShape Shape) MakeSession(string text)
     {
         var presentation = new Presentation

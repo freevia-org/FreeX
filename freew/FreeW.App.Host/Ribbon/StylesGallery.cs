@@ -26,7 +26,7 @@ internal sealed class StylesGallery : Control
     private static readonly (string Name, string Id)[] BuiltIns =
     [
         ("Normal", "Normal"),
-        ("No Spacing", "Normal"),
+        ("No Spacing", "NoSpacing"),
         ("Heading 1", "Heading1"),
         ("Heading 2", "Heading2"),
         ("Heading 3", "Heading3"),
@@ -84,13 +84,26 @@ internal sealed class StylesGallery : Control
     }
 
     // The styles to show: the built-ins that exist in the document, plus any custom paragraph styles.
+    // "Normal" and "No Spacing" are Word's two always-offered Quick Styles -- shown (and, since a fresh
+    // document only auto-seeds the built-ins that carry a formatting role, NoSpacing does not -- seeded)
+    // regardless of whether the document's catalog already defines them, exactly like Normal already was.
+    // Seeding here (idempotent; a no-op once the style exists) also satisfies the Styles.ContainsKey
+    // guards in DocumentView.PreviewParagraphStyle/CommitStylePreview, which would otherwise silently
+    // no-op the very first hover/click on a brand-new document.
     private IEnumerable<(string Name, string Id)> Entries()
     {
         var model = _editor.Model;
         foreach (var entry in BuiltIns)
         {
-            if (entry.Id == "Normal" || model.Styles.ContainsKey(entry.Id))
+            if (entry.Id is "Normal" or "NoSpacing")
+            {
+                BuiltInStyles.EnsureSeeded(model, entry.Id);
                 yield return entry;
+            }
+            else if (model.Styles.ContainsKey(entry.Id))
+            {
+                yield return entry;
+            }
         }
 
         var builtInIds = new HashSet<string>(BuiltIns.Select(e => e.Id));

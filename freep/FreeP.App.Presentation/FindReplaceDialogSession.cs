@@ -31,6 +31,26 @@ public sealed class FindReplaceDialogSession
         WholeWord = InitialState.WholeWord;
         ShowReplace = InitialState.ShowReplace;
         LastWorkflowPlan = RefreshWorkflowPlan();
+
+        // The dialog is modeless, so the slide canvas can keep changing (new or deleted
+        // occurrences of the search term) while this session's cached _matches still reflects
+        // whatever query/option edit last populated it. Track the presentation's own change
+        // notification so an edit made outside the dialog invalidates the cache too, not only
+        // SetQuery/SetMatchCase/SetWholeWord. Subscribed through a weakly-referencing handler
+        // (rather than "_editor.Changed += InvalidateSearch") so this short-lived dialog session
+        // never gets pinned alive by the much longer-lived EditingSession/Bus after the dialog
+        // closes -- see round-160 shared-find-navigation F2.
+        _editor.Changed += CreateWeakInvalidationHandler(this);
+    }
+
+    private static Action CreateWeakInvalidationHandler(FindReplaceDialogSession session)
+    {
+        var weakSession = new WeakReference<FindReplaceDialogSession>(session);
+        return () =>
+        {
+            if (weakSession.TryGetTarget(out var target))
+                target.InvalidateSearch();
+        };
     }
 
     public FindReplaceDialogInitialState InitialState { get; }

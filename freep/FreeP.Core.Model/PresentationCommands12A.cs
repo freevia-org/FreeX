@@ -346,9 +346,13 @@ public sealed class UngroupShapeCommand : IPresentationCommand
             (animation.TriggerShapeId is { } triggerShapeId && triggerShapeId == _groupId));
         // If the group's own animation was the main-sequence head, whatever animation is now
         // first needs its stored trigger corrected to On Click (see ShapeAnimationAnchorFix) --
-        // otherwise the Animation Pane keeps showing a stale With/After Previous label. Revert
-        // below restores the whole captured list wholesale, so no undo bookkeeping is needed here.
+        // otherwise the Animation Pane keeps showing a stale With/After Previous label. The group
+        // could independently have headed some unrelated trigger group too (a second animation on
+        // the group shape, keyed by a different TriggerShapeId), so that group's head needs the
+        // identical check. Revert below restores the whole captured list wholesale, so no undo
+        // bookkeeping is needed for either correction here.
         ShapeAnimationAnchorFix.NormalizeMainSequenceHead(slide.Animations);
+        ShapeAnimationAnchorFix.NormalizeTriggerGroupHeads(slide.Animations);
         slide.AnimationBuildListXml = DeleteShapeCommand.RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             new HashSet<uint> { _groupId });

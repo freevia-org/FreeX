@@ -2666,11 +2666,17 @@ public static class PptxPackageWriter
     private static XElement BuildClickGroupEl(List<ShapeAnimation> group, ref uint nodeId)
     {
         var buildItems = new List<XElement>();
-        for (int i = 0; i < group.Count; i++)
+        foreach (var anim in group)
         {
-            var anim = group[i];
-            var itemTrigger = i == 0 ? AnimationTrigger.OnClick : anim.Trigger;
-            buildItems.Add(BuildBuildItemEl(anim, itemTrigger, ref nodeId));
+            // Emit exactly what the model records. A click-group head is usually
+            // OnClick (that trigger is what started the group in the first place —
+            // see the partition loop above), but the very first click-group of the
+            // main sequence (or of a trigger sequence) can legitimately be seeded by
+            // an AfterPrevious/WithPrevious animation when it is the slide's/trigger's
+            // very first animation (PowerPoint allows the first build to auto-play with
+            // no click). Forcing that head to OnClick here would silently rewrite the
+            // user's authored "plays automatically" setting into "requires a click".
+            buildItems.Add(BuildBuildItemEl(anim, anim.Trigger, ref nodeId));
         }
 
         return new XElement(P + "par",

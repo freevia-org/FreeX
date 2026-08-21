@@ -87,6 +87,15 @@ public sealed partial class MainWindow
 
     internal IReadOnlyList<string?> SelectionPaneRenameToolTipsForTests => _selectionPane.RenameToolTipsForTests;
 
+    internal string SelectionPaneRenameTextForTests(int rowIndex) =>
+        _selectionPane.RenameTextBoxesForTests[rowIndex].Text ?? string.Empty;
+
+    internal TextBox SelectionPaneRenameTextBoxForTests(int rowIndex) =>
+        _selectionPane.RenameTextBoxesForTests[rowIndex];
+
+    internal void BlurSelectionPaneRenameWithoutEditingForTests(int rowIndex) =>
+        _selectionPane.BlurRenameWithoutEditingForTests(rowIndex);
+
     internal bool IsShellShortcutTargetForTests(Control? focused) => IsShellShortcutTarget(focused);
 
     internal ListBoxItem? SelectedSlidePaneItemForTests => GetCurrentSlidePaneItem();

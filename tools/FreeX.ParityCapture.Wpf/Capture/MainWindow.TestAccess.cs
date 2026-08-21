@@ -205,6 +205,15 @@ public partial class MainWindow
 
     internal bool ExecuteUndoForTest() => ExecuteUndo();
 
+    internal bool ExecuteRedoForTest() => ExecuteRedo();
+
+    internal void SetGroupedSheetIdsForTest(IEnumerable<SheetId> sheetIds)
+    {
+        _groupedSheetIds.Clear();
+        foreach (var sheetId in sheetIds)
+            _groupedSheetIds.Add(sheetId);
+    }
+
     internal void CreateNewWorkbookForTest() => CreateNewWorkbook();
 
     internal void EnterRibbonKeyTipModeForTest(FreeXRibbonKeyTipInputScope scope) =>

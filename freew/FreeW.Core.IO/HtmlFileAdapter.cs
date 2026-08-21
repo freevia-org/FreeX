@@ -96,36 +96,14 @@ public sealed class HtmlFileAdapter : IDocumentFileAdapter
     private const long MaxLocalImageBytes = 64L * 1024 * 1024;
 
     /// <summary>
-    /// Whether <paramref name="bytes"/> starts with a signature of a format we actually render.
-    /// Deliberately NOT <see cref="InlineImage.DetectFormat"/>: that returns Png for unrecognised
-    /// data by design, which would let any file masquerade as an image here.
+    /// r160-remediation: delegates to the one signature list, which lives beside
+    /// InlineImage.DetectFormat so the guard and the decoder cannot drift. The private copy this
+    /// replaces had exactly that drift -- its EMF arm checked only the leading four bytes while
+    /// DetectFormat also requires the " EMF" marker at offset 40, so a file with a common binary
+    /// prefix passed the guard, failed the decoder, and was embedded labelled as PNG.
     /// </summary>
-    private static bool HasRecognisedImageSignature(byte[] bytes)
-    {
-        bool Starts(params byte[] signature)
-        {
-            if (bytes.Length < signature.Length)
-                return false;
-            for (var i = 0; i < signature.Length; i++)
-            {
-                if (bytes[i] != signature[i])
-                    return false;
-            }
-
-            return true;
-        }
-
-        return Starts(0x89, 0x50, 0x4E, 0x47)              // PNG
-            || Starts(0xFF, 0xD8, 0xFF)                     // JPEG
-            || Starts(0x47, 0x49, 0x46, 0x38)               // GIF87a/GIF89a
-            || Starts(0x42, 0x4D)                           // BMP
-            || Starts(0x49, 0x49, 0x2A, 0x00)               // TIFF little-endian
-            || Starts(0x4D, 0x4D, 0x00, 0x2A)               // TIFF big-endian
-            || Starts(0xD7, 0xCD, 0xC6, 0x9A)               // placeable WMF
-            || Starts(0x01, 0x00, 0x09, 0x00)               // classic WMF
-            || Starts(0x02, 0x00, 0x09, 0x00)               // classic WMF
-            || Starts(0x01, 0x00, 0x00, 0x00);              // EMF
-    }
+    private static bool HasRecognisedImageSignature(byte[] bytes) =>
+        InlineImage.HasRecognisedSignature(bytes);
 
     private static InlineImage? ResolveLocalFileImage(string src)
     {

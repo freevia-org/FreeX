@@ -127,8 +127,14 @@ internal sealed partial class SelectionPane : Border
         ToolTip.SetTip(rename, PresentationSelectionPaneItemPlan.RenameToolTipText);
         void CommitName()
         {
+            // A focus round-trip with no typed edit must not commit anything: item.ShapeName can be
+            // a display-only fallback label (e.g. "Shape") for a shape whose real Name is still blank,
+            // so an unconditional commit here would persist that placeholder as the shape's real name.
+            if (rename.Text == item.ShapeName)
+                return;
             itemForm.CommitRename(rename.Text, restoreName => rename.Text = restoreName);
         }
+        OnRenameCommitObserved(rename, CommitName);
         rename.LostFocus += (_, _) => CommitName();
         rename.KeyDown += (_, args) =>
         {
@@ -208,4 +214,9 @@ internal sealed partial class SelectionPane : Border
 
     private static SolidColorBrush ToBrush(FreeP.Core.Model.SrgbColor color) =>
         new(Color.FromRgb(color.R, color.G, color.B));
+
+    // Optional diagnostics observer: implemented by TestSupport\HostAccess.Avalonia\PaneAndCustomShow.TestAccess.cs
+    // when compiled into a diagnostics host, so a harness can invoke the exact same commit delegate
+    // that a real LostFocus/Enter runs. Compiles away to nothing in an ordinary shipping build.
+    partial void OnRenameCommitObserved(TextBox rename, Action commit);
 }

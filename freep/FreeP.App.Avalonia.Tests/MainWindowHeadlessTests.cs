@@ -1239,6 +1239,93 @@ public sealed class MainWindowHeadlessTests : IDisposable
     }
 
     [Fact]
+    public async Task SelectionPane_blank_named_shape_focus_roundtrip_does_not_commit_placeholder_name()
+    {
+        string seededText = string.Empty;
+        string? nameAfterBlur = null;
+        var changedCountAfterBlur = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = window.Editor.InsertTextBox("Selection target");
+            // Simulate an imported .pptx whose <p:cNvPr name=""/> was empty: the model's real
+            // Name is blank even though the pane must still show a display-only fallback label.
+            shape.Name = string.Empty;
+            window.ShowSelectionPane();
+
+            seededText = window.SelectionPaneRenameTextForTests(0);
+
+            // Count real command executions from here on: EditingSession.Changed fires exactly once
+            // per bus.Execute() call that actually had an effect (see PresentationCommandBus.Execute).
+            var changedCount = 0;
+            window.Editor.Changed += () => changedCount++;
+
+            // Tab/click into the rename box and away again with zero typed input.
+            window.BlurSelectionPaneRenameWithoutEditingForTests(0);
+
+            nameAfterBlur = shape.Name;
+            changedCountAfterBlur = changedCount;
+        });
+
+        if (!ran) return;
+        seededText.Should().Be(
+            "Shape",
+            "the pane substitutes a display-only fallback label for a blank shape name");
+        nameAfterBlur.Should().BeEmpty(
+            "a plain focus round-trip with no typed edit must not persist the fallback label as the shape's real name");
+        changedCountAfterBlur.Should().Be(
+            0,
+            "an untouched focus round-trip must not execute any command (no rename, no undo entry)");
+    }
+
+    [Fact]
+    public async Task SelectionPane_named_shape_focus_roundtrip_still_commits_when_actually_edited()
+    {
+        string? nameAfterUntouchedBlur = null;
+        var changedCountAfterUntouchedBlur = -1;
+        string? nameAfterRealEdit = null;
+        var changedCountAfterRealEdit = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = window.Editor.InsertTextBox("Selection target");
+            shape.Name = "Explicit name";
+            window.ShowSelectionPane();
+
+            var changedCount = 0;
+            window.Editor.Changed += () => changedCount++;
+
+            // Sibling/no-regression case: an untouched round-trip on an already-named shape
+            // must still be a no-op (matches pre-existing behaviour via SetShapeNameCommand.HasEffect).
+            window.BlurSelectionPaneRenameWithoutEditingForTests(0);
+            nameAfterUntouchedBlur = shape.Name;
+            changedCountAfterUntouchedBlur = changedCount;
+
+            // A genuine edit must still commit, and it must still be a real, undoable entry.
+            window.SelectionPaneRenameTextBoxForTests(0).Text = "Renamed for real";
+            window.BlurSelectionPaneRenameWithoutEditingForTests(0);
+            nameAfterRealEdit = shape.Name;
+            changedCountAfterRealEdit = changedCount;
+        });
+
+        if (!ran) return;
+        nameAfterUntouchedBlur.Should().Be(
+            "Explicit name",
+            "an untouched round-trip on an already-named shape must remain a no-op");
+        changedCountAfterUntouchedBlur.Should().Be(
+            0,
+            "an untouched round-trip on an already-named shape must not execute any command either");
+        nameAfterRealEdit.Should().Be(
+            "Renamed for real",
+            "an actually typed rename must still commit through LostFocus");
+        changedCountAfterRealEdit.Should().Be(
+            1,
+            "the genuine rename must still execute exactly one real, undoable command");
+    }
+
+    [Fact]
     public async Task SlidePane_thumbnails_project_shared_visual_chrome_plan()
     {
         SlidePaneThumbnailVisualPlan? firstPlan = null;

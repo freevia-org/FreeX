@@ -260,6 +260,26 @@ public sealed class FreeWDocumentFileWorkflow
         return new(result.Outcome, target, result.CompatibilityPlan, result.Exception);
     }
 
+    /// <summary>
+    /// Rebase this workflow's external-modification guard baseline for a top-level window opened
+    /// via View &gt; New Window, which shares <paramref name="path"/> (CurrentPath) and dirty state
+    /// with the window it was cloned from but gets its OWN <see cref="FreeWDocumentFileWorkflow"/>
+    /// instance -- and therefore its own <see cref="_currentFileSourceLastWriteTimeUtc"/>, which
+    /// otherwise stays at its default null forever (New Window never calls OpenPathAsync/SaveTargetAsync,
+    /// the only two paths that normally set it). A null baseline makes <see cref="SaveTargetAsync"/>
+    /// skip the conflict check entirely (r137-remediation2), so the new window's first save would
+    /// always write straight through even if the source window saved in between. Callers pass the
+    /// path this window was handed (<c>FreeWDocumentWindowPlan.CurrentPath</c>); the same on-disk
+    /// write-time capture used at Open/Recover time re-establishes an equivalent baseline here.
+    /// </summary>
+    public void ApplyWindowState(string? path)
+    {
+        _currentFileSourceLastWriteTimeUtc =
+            path is not null && File.Exists(path)
+                ? File.GetLastWriteTimeUtc(path)
+                : null;
+    }
+
     private void PublishOpenedDocument(DocumentOpenResult result, bool suppressRecentFiles)
     {
         _currentFileSourceLastWriteTimeUtc = result.SourceLastWriteTimeUtc;

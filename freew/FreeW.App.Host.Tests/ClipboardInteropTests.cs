@@ -127,6 +127,48 @@ public sealed class ClipboardInteropTests
             "the clipboard's independent plain text must survive alongside the image, not be silently discarded");
     }
 
+    // R160 F2: PasteKeepSourceFormatting(source) (the image insert) and the follow-up InsertText(...)
+    // (the accompanying text) used to each push their own independent entry onto the shared
+    // DocumentCommandBus, so a single Undo after this exact paste removed only the text and left the
+    // pasted image (plus an empty paragraph) behind. Both pushes must now land in ONE undo group so a
+    // single Undo reverts the whole paste -- image and text together -- in one gesture.
+    [StaFact]
+    public void Paste_ImageWithAccompanyingText_UndoOnceRemovesTheWholePaste()
+    {
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                new PlatformClipboardContent(
+                    Text: "C:\\Users\\ann\\Pictures\\screenshot.png",
+                    Image: new PlatformClipboardImage(OnePixelPngBytes, PixelWidth: 1, PixelHeight: 1))),
+        };
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph());
+        var view = new DocumentView(clipboard);
+        view.LoadModel(document);
+        var wpfParagraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        view.CaretPosition = wpfParagraph.ContentStart;
+
+        ApplicationCommands.Paste.Execute(null, view);
+
+        view.CommitToModel();
+        view.Model.Paragraphs.SelectMany(p => p.Runs).Any(r => r.Image != null).Should().BeTrue(
+            "setup check: the paste must have landed the image before we try to undo it");
+        view.Model.Paragraphs.Any(p => p.PlainText.Contains("screenshot.png")).Should().BeTrue(
+            "setup check: the paste must have landed the text before we try to undo it");
+
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+
+        view.CommitToModel();
+        view.Model.Paragraphs.SelectMany(p => p.Runs).Any(r => r.Image != null).Should().BeFalse(
+            "a single Undo after an image+text paste must remove the image too, not just the text");
+        view.Model.Paragraphs.Any(p => p.PlainText.Contains("screenshot.png")).Should().BeFalse(
+            "a single Undo after an image+text paste must remove the accompanying text");
+    }
+
     // Sibling no-regression: an HTML/RTF-derived RichDocument already contains the clipboard's Text
     // (RTF/HTML rendering IS the text plus formatting), so the extra text-insert this fix adds must not
     // fire for it -- otherwise pasting "Bold plain" would land as "Bold plainBold plain".
@@ -159,6 +201,45 @@ public sealed class ClipboardInteropTests
         plainText.Should().Be(
             "Bold plain",
             "an HTML/RTF RichDocument already contains the clipboard's Text, so it must not be inserted a second time");
+    }
+
+    // Sibling no-regression for the R160 F2 undo-grouping fix: an HTML/RTF RichDocument paste only ever
+    // made ONE push onto the command bus (it carries its own Text, so the accompanying-text branch never
+    // runs -- see the test above), so a single Undo already fully reverted it before this fix. The
+    // grouping change must leave that single-push case alone rather than wrapping it in a group too.
+    [StaFact]
+    public void Paste_RtfWithAccompanyingText_UndoOnceRemovesTheWholePaste()
+    {
+        const string rtf = @"{\rtf1\ansi\b Bold\b0  plain}";
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                new PlatformClipboardContent(
+                    Text: "Bold plain",
+                    CustomData: [PlatformClipboardData.FromText(
+                        FreeWClipboardApplicationWorkflow.RichTextFormat,
+                        rtf)])),
+        };
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph());
+        var view = new DocumentView(clipboard);
+        view.LoadModel(document);
+        var wpfParagraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        view.CaretPosition = wpfParagraph.ContentStart;
+
+        ApplicationCommands.Paste.Execute(null, view);
+        view.CommitToModel();
+        string.Concat(view.Model.Paragraphs.Select(p => p.PlainText)).Should().Be("Bold plain",
+            "setup check: the paste must have landed before we try to undo it");
+
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+
+        view.CommitToModel();
+        string.Concat(view.Model.Paragraphs.Select(p => p.PlainText)).Should().BeEmpty(
+            "a single Undo must still fully revert a plain rich-document paste, exactly as before the undo-grouping fix");
     }
 
     [StaFact]
