@@ -216,23 +216,11 @@ public static class ArrowheadGeometry
         bool flipVertical,
         DrawingShapeKind kind)
     {
-        // ShapeGeometryBuilder defines the canonical start/end corner for each line kind.
-        // For Line: diagonal (0,0)→(w,h); for ElbowConnector: (0,0)→(w,h) bent at midpoint;
-        // for CurvedConnector: (~0,~0)→(~w,~h). We use the logical endpoints for arrow placement.
-        LayoutPoint rawStart, rawEnd;
-        if (kind == DrawingShapeKind.CurvedConnector)
-        {
-            // CurvedConnector: start≈(0.05,0.18)→end≈(0.95,0.82) of the bounding box
-            rawStart = new LayoutPoint(left + width * 0.05, top + height * 0.18);
-            rawEnd = new LayoutPoint(left + width * 0.95, top + height * 0.82);
-        }
-        else
-        {
-            // Line and ElbowConnector: logical (0,0)→(w,h) of the bounding box.
-            // ElbowConnector bends through the middle but its endpoints are still corners.
-            rawStart = new LayoutPoint(left, top);
-            rawEnd = new LayoutPoint(left + width, top + height);
-        }
+        // ShapeGeometryBuilder's line-like geometries start at the top-left and end at the
+        // bottom-right of their bounds. Arrowheads must use those actual endpoints: using an
+        // invented inset for a curved connector detaches the arrowhead from the rendered path.
+        LayoutPoint rawStart = new(left, top);
+        LayoutPoint rawEnd = new(left + width, top + height);
 
         // Apply flip transforms about the bounding-box center (mirrors the renderer's transform).
         if (flipHorizontal || flipVertical)

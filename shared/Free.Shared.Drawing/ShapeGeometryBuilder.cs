@@ -517,18 +517,21 @@ public static class ShapeGeometryBuilder
 
     /// <summary>
     /// Renders a <see cref="DrawingShapeKind.CurvedConnector"/> as a single smooth cubic Bézier
-    /// from the top-left corner of the bounding box to the bottom-right corner.  Control points
-    /// produce a classic S-curve that is faithful to how Excel draws curvedConnector3 by default.
+    /// from the top-left corner of the bounding box to the bottom-right corner. Control points
+    /// keep both endpoint tangents horizontal and cross over midway, matching Excel's default
+    /// curvedConnector3 S-curve rather than a vertical-start bow.
     /// The host renderer applies flip/rotation for other orientations.
     /// </summary>
     private static ShapeGeometry CurvedConnector(LayoutRect rect)
     {
         // S-curve: start at top-left (0,0), end at bottom-right (1,1).
-        // Control points at (0, 0.5) and (1, 0.5) produce a smooth horizontal-bias S.
+        // Excel leaves the start heading right and enters the end horizontally. Keeping the
+        // controls on the top and bottom edges produces that sideways S rather than a curve
+        // which initially drops straight down.
         var start = P(rect, 0, 0);
         ShapeSegment[] segments =
         [
-            ShapeSegment.BezierTo(P(rect, 0, 0.5), P(rect, 1, 0.5), P(rect, 1, 1))
+            ShapeSegment.BezierTo(P(rect, 0.67, 0), P(rect, 0.33, 1), P(rect, 1, 1))
         ];
         return Single(new ShapeContour(start, segments, Closed: false, Filled: false));
     }

@@ -227,15 +227,12 @@ public sealed class ArrowheadGeometryTests
     }
 
     [Fact]
-    public void LineEndpoints_CurvedConnector_ReturnsFractionalEndpoints()
+    public void LineEndpoints_CurvedConnector_ReturnsGeometryEndpoints()
     {
         var (start, end, _) = ArrowheadGeometry.LineEndpoints(0, 0, 200, 100, flipHorizontal: false, flipVertical: false, DrawingShapeKind.CurvedConnector);
 
-        // CurvedConnector uses 5%/18% and 95%/82% of bounding box
-        start.X.Should().BeApproximately(200 * 0.05, 1e-9);
-        start.Y.Should().BeApproximately(100 * 0.18, 1e-9);
-        end.X.Should().BeApproximately(200 * 0.95, 1e-9);
-        end.Y.Should().BeApproximately(100 * 0.82, 1e-9);
+        start.Should().Be(new LayoutPoint(0, 0));
+        end.Should().Be(new LayoutPoint(200, 100));
     }
 
     [Fact]

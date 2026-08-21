@@ -398,6 +398,16 @@ public sealed class ShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void CurvedConnector_UsesHorizontalEndpointTangents()
+    {
+        var contour = ShapeGeometryBuilder.Build(DrawingShapeKind.CurvedConnector, Bounds).Contours.Single();
+        var segment = contour.Segments.Single();
+
+        segment.Control1.Should().Be(new LayoutPoint(Bounds.Left + Bounds.Width * 0.67, Bounds.Top));
+        segment.Control2.Should().Be(new LayoutPoint(Bounds.Left + Bounds.Width * 0.33, Bounds.Bottom));
+    }
+
+    [Fact]
     public void CurvedConnector_IsOpenUnfilledSingleBezier()
     {
         var contour = ShapeGeometryBuilder.Build(DrawingShapeKind.CurvedConnector, Bounds).Contours.Single();
