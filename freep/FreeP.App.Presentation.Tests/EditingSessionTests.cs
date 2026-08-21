@@ -1430,8 +1430,13 @@ public sealed class EditingSessionTests
         // same way the Animation Pane's own Remove/Reorder buttons do, and none of them force a
         // newly promoted head to On Click any more -- PptxPackageWriter.BuildClickGroupEl writes a
         // head's trigger verbatim and SlideShowController.BuildSteps starts a head unconditionally
-        // regardless of its stored trigger, matching real PowerPoint's behaviour when the
-        // animation ahead of a With/After-Previous entry is deleted.
+        // regardless of its stored trigger. This only checks the file/model-level round trip
+        // (the promoted head keeps its own stored trigger); it is NOT a claim that playback
+        // matches real PowerPoint at that point -- round-161 found that a promoted
+        // With/After-Previous head still needed an extra Advance() to auto-play until
+        // SlideShowSessionController.ExecuteHostCommand was wired to call
+        // SlideShowController.ConsumeEntryAutoPlayStep (see SlideShowSessionControllerTests for
+        // that playback-level coverage).
         var sess   = Make();
         var shape1 = MakeShape(1);
         var shape2 = MakeShape(2);
@@ -1721,8 +1726,12 @@ public sealed class EditingSessionTests
         // That promoted head must keep its own stored trigger rather than being forced to On
         // Click -- PptxPackageWriter.BuildClickGroupEl writes a head's trigger verbatim and
         // SlideShowController.BuildSteps starts a head unconditionally regardless of its stored
-        // trigger, matching real PowerPoint's behaviour when the animation ahead of an
-        // After-Previous entry is removed.
+        // trigger. This only checks the file/model-level round trip (the promoted head keeps
+        // its own stored trigger); it is NOT a claim that playback matches real PowerPoint at
+        // that point -- round-161 found that a promoted With/After-Previous head still needed
+        // an extra Advance() to auto-play until SlideShowSessionController.ExecuteHostCommand
+        // was wired to call SlideShowController.ConsumeEntryAutoPlayStep (see
+        // SlideShowSessionControllerTests for that playback-level coverage).
         var sess  = Make();
         var group = new SlideShape { Id = 40, Kind = SlideShapeKind.Group };
         group.Children.Add(MakeShape(41));

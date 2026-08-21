@@ -659,6 +659,19 @@ public sealed class SlideShowSessionController
                     command.AnimateSlide,
                     command.TransitionDurationMs,
                     command.UseDestinationBackground));
+                // round-161 (was disclosed as productionCallSite NONE YET): a WithPrevious/
+                // AfterPrevious main-sequence head must auto-play the instant the slide is
+                // entered rather than waiting for the next click -- see
+                // SlideShowController.ConsumeEntryAutoPlayStep's own doc comment. This is the
+                // single place both the WPF and Avalonia shells reach for every navigation
+                // (Advance/Back/jump/zoom all funnel their NavigateToSlide command here), so
+                // wiring it here gives both shells the fix from one call site. Runs after
+                // callbacks.NavigateToSlide so the destination slide's shapes already exist
+                // for the animation to target.
+                if (Controller.ConsumeEntryAutoPlayStep() is { } entryAutoPlayStep)
+                {
+                    callbacks.PlayAnimationStep(entryAutoPlayStep);
+                }
                 break;
         }
     }

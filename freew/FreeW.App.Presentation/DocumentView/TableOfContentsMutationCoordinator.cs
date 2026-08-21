@@ -88,11 +88,31 @@ public static class TableOfContentsMutationCoordinator
 
     private static void DeleteAllGeneratedRegions(TextDocument document, DocumentCommandBus commandBus)
     {
-        var indices = Enumerable.Range(0, document.Blocks.Count)
+        var indices = FirstContiguousRun(Enumerable.Range(0, document.Blocks.Count)
             .Where(index => TableOfContents.IsTocParagraph(document.Blocks[index]))
-            .ToArray();
+            .ToArray());
         for (var index = indices.Length - 1; index >= 0; index--)
             commandBus.Execute(new DeleteParagraphCommand(indices[index]));
+    }
+
+    /// <summary>
+    /// Narrows a sorted set of block indices down to only its first maximal run of consecutive
+    /// indices. A document can legitimately hold more than one independent Table of Contents field
+    /// (e.g. a main TOC plus a second TOC for an appendix); <see cref="TableOfContents.IsTocParagraph"/>
+    /// matches every one of them indiscriminately, so without this narrowing a refresh would delete
+    /// every TOC-marked paragraph in the document and reinsert only a single merged region. Scoping to
+    /// the first contiguous run leaves any other, separately-located TOC region untouched. Mirrors
+    /// DocumentReferenceEditingCoordinator.FirstContiguousRun, the fix applied to the shipping coordinator.
+    /// </summary>
+    private static int[] FirstContiguousRun(int[] sortedIndices)
+    {
+        if (sortedIndices.Length == 0)
+            return sortedIndices;
+
+        var end = 1;
+        while (end < sortedIndices.Length && sortedIndices[end] == sortedIndices[end - 1] + 1)
+            end++;
+        return end == sortedIndices.Length ? sortedIndices : sortedIndices[..end];
     }
 
     private static void InsertRegion(

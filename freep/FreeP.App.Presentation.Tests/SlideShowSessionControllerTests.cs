@@ -390,6 +390,124 @@ public sealed class SlideShowSessionControllerTests
         command.SlideIndex.Should().Be(2);
     }
 
+    // round-161 remediation (U1): SlideShowController.ConsumeEntryAutoPlayStep existed but
+    // nothing in production called it. The auditor reproduced the gap by driving the
+    // controller the way the real host does -- PlanAdvance() then ExecuteHostCommand() --
+    // landing on a slide whose main sequence starts with a WithPrevious head, and found that
+    // single round trip navigated but never played the head (a second Advance() was needed
+    // to see it). This test goes through that exact production path -- the same
+    // PlanAdvance()/ExecuteHostCommand() pair SlideShowRuntimeApplication.ExecuteAdvance uses,
+    // which both the WPF and Avalonia SlideShowWindow shells call via the shared
+    // RendererShared/SlideShowWindow.RuntimeSession.cs partial -- and asserts the head plays
+    // within that ONE round trip, unlike SlideShowControllerEntryAutoPlayTests' five tests,
+    // which call ConsumeEntryAutoPlayStep directly and so cannot see whether anything upstream
+    // actually invokes it.
+    [Fact]
+    public void PlanAdvance_ThenExecuteHostCommand_PlaysWithPreviousHead_WithoutASecondAdvance()
+    {
+        var presentation = MakePresentation(2);
+        AddEntranceAnimation(presentation.Slides[1], shapeId: 1, AnimationTrigger.WithPrevious);
+
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var started = new DateTimeOffset(2026, 8, 20, 9, 0, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("entry auto-play production test"));
+
+        var navigatedSlideIndices = new List<int>();
+        var playedSteps = new List<AnimationStep>();
+        var callbacks = new SlideShowHostExecutionCallbacks(
+            () => { },
+            _ => { },
+            step => playedSteps.Add(step),
+            request => navigatedSlideIndices.Add(request.SlideIndex));
+
+        // Slide 0 has no animations, so this first PlanAdvance()/ExecuteHostCommand round trip
+        // navigates straight to slide 1 -- the "plain sequential Advance() from the previous
+        // slide" the auditor drove.
+        var command = session.PlanAdvance();
+        command.Kind.Should().Be(SlideShowHostCommandKind.NavigateToSlide);
+        session.ExecuteHostCommand(command, started, callbacks);
+
+        navigatedSlideIndices.Should().Equal(new[] { 1 });
+        playedSteps.Should().ContainSingle(
+            "the WithPrevious head must auto-play in the SAME round trip that navigated onto its slide, with no extra Advance()");
+        playedSteps[0].Entries.Should().ContainSingle(
+            e => e.Animation.Trigger == AnimationTrigger.WithPrevious);
+
+        // The head must not be re-delivered by a later Advance(): slide 1's only main-sequence
+        // entry was the already-consumed head, so the next PlanAdvance() should report the show
+        // is over rather than replaying it.
+        playedSteps.Clear();
+        var second = session.PlanAdvance();
+        second.Kind.Should().Be(
+            SlideShowHostCommandKind.Close,
+            "slide 1's only animation was the auto-played head, so nothing is left to click through");
+        playedSteps.Should().BeEmpty();
+    }
+
+    // Sibling / no-regression: the far more common case -- a slide whose first main-sequence
+    // animation is legitimately OnClick -- must keep requiring its own Advance() through this
+    // exact production path, unaffected by the entry-auto-play wiring above.
+    [Fact]
+    public void PlanAdvance_ThenExecuteHostCommand_DoesNotAutoPlayAnOrdinaryOnClickHead()
+    {
+        var presentation = MakePresentation(2);
+        AddEntranceAnimation(presentation.Slides[1], shapeId: 1, AnimationTrigger.OnClick);
+
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var started = new DateTimeOffset(2026, 8, 20, 9, 0, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("entry auto-play sibling test"));
+
+        var playedSteps = new List<AnimationStep>();
+        var callbacks = new SlideShowHostExecutionCallbacks(
+            () => { },
+            _ => { },
+            step => playedSteps.Add(step),
+            _ => { });
+
+        var command = session.PlanAdvance();
+        session.ExecuteHostCommand(command, started, callbacks);
+
+        playedSteps.Should().BeEmpty(
+            "an ordinary OnClick head must keep requiring its own click, matching PowerPoint");
+
+        var second = session.PlanAdvance();
+        second.Kind.Should().Be(SlideShowHostCommandKind.PlayAnimationStep);
+        session.ExecuteHostCommand(second, started, callbacks);
+
+        playedSteps.Should().ContainSingle();
+        playedSteps[0].Entries.Should().ContainSingle(e => e.Animation.Trigger == AnimationTrigger.OnClick);
+    }
+
+    private static void AddEntranceAnimation(Slide slide, uint shapeId, AnimationTrigger trigger)
+    {
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = shapeId,
+            Name = $"Shape{shapeId}",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Appear,
+            Trigger = trigger,
+            DurationMs = trigger == AnimationTrigger.OnClick ? 300 : 400,
+            DelayMs = 0,
+        });
+    }
+
     private static TextBody MakeNotes(string text)
     {
         var body = new TextBody();

@@ -5,13 +5,46 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class TableOfContentsMutationCoordinatorTests
 {
     [Fact]
-    public void Refresh_replaces_all_existing_regions_at_first_marker_and_undo_restores_them()
+    public void Refresh_replaces_only_the_first_contiguous_region_and_leaves_a_second_region_untouched()
     {
+        // Two independent TOC regions (e.g. a main TOC plus an appendix TOC) separated by a body
+        // paragraph. Refreshing must scope its delete to the first contiguous run of TOC-marked
+        // paragraphs -- not every TOC-marked paragraph in the document -- so the second, unrelated
+        // region survives untouched. This mirrors DocumentReferenceEditingCoordinator.FirstContiguousRun.
         var firstOld = TocParagraph("Old A");
         var secondOld = TocParagraph("Old B");
         var body = new Paragraph("Body");
         var heading = Heading("Chapter");
         var document = DocumentWith(firstOld, body, secondOld, heading);
+        var bus = new DocumentCommandBus(new Context(document));
+        var insertionIndex = TableOfContentsMutationCoordinator.FindRefreshInsertionIndex(document);
+
+        TableOfContentsMutationCoordinator.Apply(
+            document,
+            bus,
+            insertionIndex,
+            "Update Table of Contents",
+            replaceExisting: true,
+            () => TableOfContents.Build(document));
+
+        document.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal(TableOfContents.HeadingText, "Chapter\t1", "Body", "Old B", "Chapter");
+        document.Blocks[0].Should().BeOfType<Paragraph>()
+            .Which.PlainText.Should().Be(TableOfContents.HeadingText);
+
+        bus.Undo().Should().BeTrue();
+        document.Blocks.Should().Equal(firstOld, body, secondOld, heading);
+    }
+
+    [Fact]
+    public void Refresh_replaces_a_single_contiguous_region_in_full_no_regression()
+    {
+        // No-regression sibling: when there is only one (contiguous) generated region, scoping to the
+        // first contiguous run must still replace the whole thing, exactly as before this change.
+        var firstOld = TocParagraph("Old A");
+        var secondOld = TocParagraph("Old B");
+        var heading = Heading("Chapter");
+        var document = DocumentWith(firstOld, secondOld, heading);
         var bus = new DocumentCommandBus(new Context(document));
         var insertionIndex = TableOfContentsMutationCoordinator.FindRefreshInsertionIndex(document);
 
@@ -30,7 +63,7 @@ public sealed class TableOfContentsMutationCoordinatorTests
             .Which.PlainText.Should().Be(TableOfContents.HeadingText);
 
         bus.Undo().Should().BeTrue();
-        document.Blocks.Should().Equal(firstOld, body, secondOld, heading);
+        document.Blocks.Should().Equal(firstOld, secondOld, heading);
     }
 
     [Fact]

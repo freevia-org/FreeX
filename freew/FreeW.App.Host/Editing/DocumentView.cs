@@ -5585,15 +5585,25 @@ public sealed partial class DocumentView : RichTextBox
                 }
 
                 // MultiLevel lists suppress WPF's built-in marker and render a computed accumulated marker
-                // instead (WPF cannot accumulate "1.1.1"); other kinds use the built-in WPF marker. The
-                // marker state persists across the whole render pass (declared above the outer loop) and
-                // each item's ListStartOverride is threaded through so an explicit restart is honored.
+                // instead (WPF cannot accumulate "1.1.1"); Bullet/Number lists normally use the built-in
+                // WPF marker (Disc/Decimal) UNLESS the source document captured a non-default glyph/numFmt
+                // (a dash bullet, a lowerLetter list, …) -- WPF's native TextMarkerStyle enum cannot
+                // represent those, so U2 remediation extends the MultiLevel precedent to them too: suppress
+                // the native marker and prepend the real computed text instead, exactly like MultiLevel
+                // already does. A plain FreeW-authored Bullet/Number list (no captured marker data) keeps
+                // rendering via the native marker unchanged -- see HasCapturedMarkerText. The marker state
+                // persists across the whole render pass (declared above the outer loop) and each item's
+                // ListStartOverride is threaded through so an explicit restart is honored.
                 var markerPlans = listParagraphs
                     .Select(item => listMarkerSequence.Advance(item.Paragraph))
                     .ToList();
-                var markers = kind == ListKind.MultiLevel
+                var usesComputedMarkerText = kind == ListKind.MultiLevel
+                    || listParagraphs.Any(item => HasCapturedMarkerText(kind, item.Paragraph.Formatting));
+                var markers = usesComputedMarkerText
                     ? markerPlans.Select(plan => plan.MarkerText ?? string.Empty).ToList()
                     : null;
+                if (markers is not null)
+                    list.MarkerStyle = TextMarkerStyle.None;
                 // R132 remediation: honor an explicit restart override for Number-kind lists (mirrors the
                 // MultiLevel branch above); otherwise continue from the running count left by the last
                 // Number list, so an interrupting non-list paragraph does not restart numbering at 1.
@@ -8378,6 +8388,22 @@ public sealed partial class DocumentView : RichTextBox
         ListKind.Number => TextMarkerStyle.Decimal,
         ListKind.MultiLevel => TextMarkerStyle.None,
         _ => TextMarkerStyle.Disc
+    };
+
+    // U2 remediation: WPF's TextMarkerStyle enum can only draw its own classic Disc/Decimal glyphs -- it
+    // cannot reproduce a source document's actual captured w:lvlText/w:numFmt (a "-" dash bullet, a
+    // lowerLetter list, a custom "%1)" pattern, ...). ParagraphFormatting.ListMarkerText/ListNumberFormat
+    // already capture that data (see DocumentListMarkerSequencePlanner.Advance) and the Avalonia renderer
+    // already draws it as text unconditionally; this predicate tells the Render loop above when a
+    // Bullet/Number paragraph needs the same "prepend the real computed text" treatment MultiLevel already
+    // gets, versus when it's an ordinary FreeW-authored list that should keep rendering via the native
+    // marker unchanged (no captured data -> no visual change).
+    private static bool HasCapturedMarkerText(ListKind kind, ParagraphFormatting formatting) => kind switch
+    {
+        ListKind.Number => formatting.ListMarkerText is not null
+            || formatting.ListNumberFormat != ListNumberFormat.Decimal,
+        ListKind.Bullet => formatting.ListMarkerText is not null,
+        _ => false
     };
 
     /// <summary>

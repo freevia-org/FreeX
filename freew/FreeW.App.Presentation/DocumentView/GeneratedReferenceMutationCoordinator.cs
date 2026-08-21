@@ -51,12 +51,35 @@ public static class GeneratedReferenceMutationCoordinator
         ArgumentNullException.ThrowIfNull(isGeneratedBlock);
         ArgumentNullException.ThrowIfNull(buildGenerated);
 
-        var indices = Enumerable.Range(0, document.Blocks.Count)
+        // r161-remediation: scope to the FIRST contiguous run, the same narrowing applied to
+        // DocumentReferenceEditingCoordinator (the shipping path) and to
+        // TableOfContentsMutationCoordinator. A document can legitimately hold more than one
+        // independent generated region -- a main table of contents and a second one for an appendix,
+        // say -- and the predicate matches every one of them. Without this, refreshing one region
+        // deleted them all and reinserted a single merged region at the first marker.
+        var indices = FirstContiguousRun(Enumerable.Range(0, document.Blocks.Count)
             .Where(index => isGeneratedBlock(document.Blocks[index]))
-            .ToArray();
+            .ToArray());
         var insertIndex = indices.Length > 0 ? indices[0] : document.Blocks.Count;
         Array.Reverse(indices);
         return ApplyAtomic(document, commandBus, insertIndex, label, indices, buildGenerated);
+    }
+
+    /// <summary>
+    /// Narrows a sorted set of block indices to its first maximal run of consecutive indices, so a
+    /// refresh touches one generated region rather than every region the predicate matches. Mirrors
+    /// DocumentReferenceEditingCoordinator.FirstContiguousRun and the copy in
+    /// TableOfContentsMutationCoordinator; see the remark at the call site for why this is needed.
+    /// </summary>
+    private static int[] FirstContiguousRun(int[] sortedIndices)
+    {
+        if (sortedIndices.Length == 0)
+            return sortedIndices;
+
+        var end = 1;
+        while (end < sortedIndices.Length && sortedIndices[end] == sortedIndices[end - 1] + 1)
+            end++;
+        return end == sortedIndices.Length ? sortedIndices : sortedIndices[..end];
     }
 
     public static GeneratedReferenceMutationResult ApplyPlan(

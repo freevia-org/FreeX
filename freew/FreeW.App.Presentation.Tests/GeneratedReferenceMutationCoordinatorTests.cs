@@ -23,8 +23,16 @@ public sealed class GeneratedReferenceMutationCoordinatorTests
         bus.CanUndo.Should().BeFalse();
     }
 
+    /// <summary>
+    /// r161 remediation. This test previously asserted the opposite: that refreshing collapsed EVERY
+    /// generated block in the document into one region at the first marker, deleting the second.
+    /// That is the destructive behaviour the shipping coordinator was fixed to stop doing, and a
+    /// test asserting it would have defended the defect the moment anyone wired this coordinator up.
+    /// A document may legitimately hold two independent generated regions -- a main table of
+    /// contents and one for an appendix -- and refreshing one must leave the other alone.
+    /// </summary>
     [Fact]
-    public void Refresh_replaces_scattered_region_at_first_marker_and_undo_restores_exact_blocks()
+    public void Refresh_replaces_only_the_first_region_and_leaves_a_separate_one_untouched()
     {
         var oldA = Generated("Old A");
         var body = new Paragraph("Body");
@@ -34,15 +42,16 @@ public sealed class GeneratedReferenceMutationCoordinatorTests
         var bus = new DocumentCommandBus(new Context(document));
         var replacement = new[] { Generated("New") };
 
-        var result = GeneratedReferenceMutationCoordinator.Refresh(
+        GeneratedReferenceMutationCoordinator.Refresh(
             document,
             bus,
             block => block is Paragraph paragraph && paragraph.StyleId == "Generated",
             () => replacement,
             "Update Index");
 
-        result.Should().Be(new GeneratedReferenceMutationResult(0, 1));
-        document.Blocks.Should().Equal(replacement[0], body, tail);
+        // The second generated region is a separate field and must survive a refresh of the first.
+        document.Blocks.Should().Equal(replacement[0], body, oldB, tail);
+
         bus.Undo().Should().BeTrue();
         document.Blocks.Should().Equal(oldA, body, oldB, tail);
     }
