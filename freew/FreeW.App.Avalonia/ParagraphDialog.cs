@@ -26,7 +26,6 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     private static AvaloniaCompactDialogChromeStyle DialogChromeStyle =>
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
-            FontFamily = new FontFamily("Segoe UI"),
             ControlHeight = 20,
             TextBoxHeight = 18,
             ComboBoxHeight = 22,
