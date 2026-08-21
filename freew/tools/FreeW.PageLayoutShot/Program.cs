@@ -3,6 +3,7 @@
 //
 // Usage:
 //   FreeW.PageLayoutShot [<output-dir>] [--scenario <scenario-id> ...]
+//   FreeW.PageLayoutShot [<output-dir>] --input-docx <path> [--input-page-count <n>] [--input-output-stem <stem>]
 //
 // If <output-dir> is omitted PNGs are written next to the executable:
 //   freew_print_layout.png  — Print Layout (grey desk + discrete white pages + drop-shadow)
@@ -13,6 +14,7 @@
 
 using System;
 using System.IO;
+using System.Security.Cryptography;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
@@ -29,6 +31,9 @@ using FreeW.Core.Model;
 using SkiaSharp;
 
 var positionalArgs = new List<string>();
+string? inputDocxPath = null;
+var inputPageCount = 1;
+string? inputOutputStem = null;
 for (var i = 0; i < args.Length; i++)
 {
     if (string.Equals(args[i], "--scenario", StringComparison.OrdinalIgnoreCase))
@@ -49,11 +54,44 @@ for (var i = 0; i < args.Length; i++)
         continue;
     }
 
+    if (string.Equals(args[i], "--input-docx", StringComparison.OrdinalIgnoreCase))
+    {
+        if (++i >= args.Length || string.IsNullOrWhiteSpace(args[i]))
+            throw new ArgumentException("--input-docx requires an existing .docx path.");
+
+        inputDocxPath = Path.GetFullPath(args[i]);
+        if (!File.Exists(inputDocxPath) || !string.Equals(Path.GetExtension(inputDocxPath), ".docx", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("--input-docx requires an existing .docx path.");
+
+        continue;
+    }
+
+    if (string.Equals(args[i], "--input-page-count", StringComparison.OrdinalIgnoreCase))
+    {
+        if (++i >= args.Length || !int.TryParse(args[i], out inputPageCount) || inputPageCount < 1)
+            throw new ArgumentException("--input-page-count requires a positive integer.");
+
+        continue;
+    }
+
+    if (string.Equals(args[i], "--input-output-stem", StringComparison.OrdinalIgnoreCase))
+    {
+        if (++i >= args.Length || string.IsNullOrWhiteSpace(args[i]))
+            throw new ArgumentException("--input-output-stem requires a non-empty value.");
+
+        inputOutputStem = args[i];
+        continue;
+    }
+
     positionalArgs.Add(args[i]);
 }
 
 if (positionalArgs.Count > 1)
-    throw new ArgumentException("usage: FreeW.PageLayoutShot [<output-dir>] [--scenario <scenario-id> ...]");
+    throw new ArgumentException("usage: FreeW.PageLayoutShot [<output-dir>] [--scenario <scenario-id> ...] [--input-docx <path> [--input-page-count <n>] [--input-output-stem <stem>]]");
+
+var inputDocxCapture = inputDocxPath is null
+    ? null
+    : InputDocxCaptureOptions.Create(inputDocxPath, inputPageCount, inputOutputStem);
 
 var outDir = positionalArgs.Count > 0 ? positionalArgs[0] : AppContext.BaseDirectory;
 
@@ -69,7 +107,7 @@ Dispatcher.UIThread.Post(() =>
 {
     try
     {
-        exitCode = RenderAll(outDir);
+        exitCode = RenderAll(outDir, inputDocxCapture);
     }
     catch (Exception ex)
     {
@@ -86,9 +124,11 @@ Dispatcher.UIThread.RunJobs();
 done.Wait();
 return exitCode;
 
-static int RenderAll(string outDir)
+static int RenderAll(string outDir, InputDocxCaptureOptions? inputDocxCapture)
 {
     Directory.CreateDirectory(outDir);
+    if (inputDocxCapture is not null)
+        return RenderInputDocx(outDir, inputDocxCapture);
 
     var printPath = Path.GetFullPath(Path.Combine(outDir, "freew_print_layout.png"));
     var webPath   = Path.GetFullPath(Path.Combine(outDir, "freew_web_layout.png"));
@@ -626,6 +666,37 @@ static int RenderAll(string outDir)
     return 0;
 }
 
+static int RenderInputDocx(string outDir, InputDocxCaptureOptions input)
+{
+    var evidence = new List<FreeWVisualEvidenceRow>();
+    var sourceDocument = DocxReader.Read(input.FullPath);
+    for (var pageNumber = 1; pageNumber <= input.PageCount; pageNumber++)
+    {
+        var outputPath = VisualEvidenceOutputPath(outDir, input.ScenarioId, pageNumber);
+        var rc = RenderMode(
+            DocumentViewMode.PrintLayout,
+            outputPath,
+            width: 960,
+            height: 1200,
+            label: $"Input DOCX {input.FileName} p{pageNumber}",
+            scenarioId: input.ScenarioId,
+            evidence: evidence,
+            documentFactory: () => sourceDocument,
+            pageNumber: pageNumber,
+            pageCount: input.PageCount,
+            alignViewportToRequestedPage: pageNumber > 1,
+            forceWordComparablePageSurface: true,
+            bypassScenarioSelection: true,
+            bypassFixtureSource: true,
+            hostMetadata: input.HostMetadata);
+        if (rc != 0)
+            return rc;
+    }
+
+    FreeWVisualEvidencePlanner.WriteManifest(outDir, evidence);
+    return 0;
+}
+
 static TextDocument BuildColumnsDocument()
 {
     var doc = TextDocument.CreateEmpty();
@@ -846,14 +917,20 @@ static int RenderMode(
     bool alignViewportToRequestedPage = false,
     bool hasFootnotes = false,
     bool hasEndnotes = false,
-    bool isSyntheticPage = false)
+    bool isSyntheticPage = false,
+    bool forceWordComparablePageSurface = false,
+    bool bypassScenarioSelection = false,
+    bool bypassFixtureSource = false,
+    IReadOnlyDictionary<string, string>? hostMetadata = null)
 {
-    if (!PageShotScenarioSelection.Includes(scenarioId))
+    if (!bypassScenarioSelection && !PageShotScenarioSelection.Includes(scenarioId))
         return 0;
 
-    var sourceDocument = PageShotFixtureSource.Resolve(
-        scenarioId,
-        documentFactory ?? BuildMultiPageDocument);
+    var sourceDocument = bypassFixtureSource
+        ? (documentFactory ?? BuildMultiPageDocument)()
+        : PageShotFixtureSource.Resolve(
+            scenarioId,
+            documentFactory ?? BuildMultiPageDocument);
     if (alignViewportToRequestedPage && pageNumber > 1)
     {
         var surfacePlan = DocumentViewLayoutPlanner.BuildSurfacePlan(
@@ -912,7 +989,7 @@ static int RenderMode(
     using var stream = new MemoryStream();
     bitmap.Save(stream);
     var bytes = stream.ToArray();
-    var capturesWordComparablePageSurface = ShouldCaptureWordComparablePageSurface(scenarioId);
+    var capturesWordComparablePageSurface = forceWordComparablePageSurface || ShouldCaptureWordComparablePageSurface(scenarioId);
     // An isolated section surface always renders its selected source page as page one.
     var cropPageNumber = sectionPageSurface is null ? pageNumber : 1;
     var captureWidth = width;
@@ -962,7 +1039,8 @@ static int RenderMode(
             sectionGeometrySurfacePlan: sectionPageSurface,
             document: doc,
             evidenceDocument: sectionPageSurface is null ? null : sourceDocument,
-            noteRegionOverlayApplied: false);
+            noteRegionOverlayApplied: false,
+            additionalHostMetadata: hostMetadata);
         Console.WriteLine($"[PageLayoutShot] {label}: {bytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -985,7 +1063,7 @@ static int RenderMode(
     {
         var fallbackWidth = width;
         var fallbackHeight = height;
-        if (ShouldCaptureWordComparablePageSurface(scenarioId))
+        if (capturesWordComparablePageSurface)
         {
             (pngBytes, fallbackWidth, fallbackHeight) = CropToDocumentPageSurface(
                 pngBytes,
@@ -1038,7 +1116,8 @@ static int RenderMode(
             sectionGeometrySurfacePlan: sectionPageSurface,
             document: doc,
             evidenceDocument: sectionPageSurface is null ? null : sourceDocument,
-            noteRegionOverlayApplied: true);
+            noteRegionOverlayApplied: true,
+            additionalHostMetadata: hostMetadata);
         Console.WriteLine($"[PageLayoutShot] {label} (Skia fallback): {pngBytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -1122,7 +1201,8 @@ static void AddAvaloniaEvidence(
     FreeWVisualSectionGeometrySurfacePlan? sectionGeometrySurfacePlan = null,
     TextDocument? document = null,
     TextDocument? evidenceDocument = null,
-    bool noteRegionOverlayApplied = false)
+    bool noteRegionOverlayApplied = false,
+    IReadOnlyDictionary<string, string>? additionalHostMetadata = null)
 {
     var expectationDocument = evidenceDocument ?? document;
     var stats = ComputePngPixelStats(pngBytes, pixelWidth, pixelHeight);
@@ -1176,6 +1256,12 @@ static void AddAvaloniaEvidence(
             .ToString(System.Globalization.CultureInfo.InvariantCulture);
         metadata["sectionSurfacePageTopDip"] = sectionGeometrySurfacePlan.PageTopDip
             .ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    if (additionalHostMetadata is not null)
+    {
+        foreach (var (key, value) in additionalHostMetadata)
+            metadata[key] = value;
     }
 
     var noteRegionPlan = BuildEvidenceNoteRegionPlan(document, page, pageNumber, hasFootnotes, hasEndnotes, isSyntheticPage);
@@ -1811,6 +1897,52 @@ static class PageShotFixtureSource
             : scenarioId;
         var path = Path.Combine(FixtureDirectory, fixtureId + ".docx");
         return File.Exists(path) ? DocxReader.Read(path) : fallback();
+    }
+}
+
+/// <summary>
+/// Captures a caller-supplied DOCX through the ordinary DocxReader/DocumentView path without
+/// allowing a fixture alias or synthetic scenario factory to replace the requested source.
+/// The scenario identity is content-addressed so an evidence manifest can be trusted after the
+/// caller has cleaned its temporary capture directory.
+/// </summary>
+sealed record InputDocxCaptureOptions(
+    string FullPath,
+    string FileName,
+    string ScenarioId,
+    int PageCount,
+    IReadOnlyDictionary<string, string> HostMetadata)
+{
+    public static InputDocxCaptureOptions Create(string fullPath, int pageCount, string? outputStem)
+    {
+        var sourceBytes = File.ReadAllBytes(fullPath);
+        var sha256 = Convert.ToHexString(SHA256.HashData(sourceBytes)).ToLowerInvariant();
+        var stem = SanitizeOutputStem(outputStem ?? Path.GetFileNameWithoutExtension(fullPath));
+        var scenarioId = $"input-docx-{stem}-{sha256[..12]}";
+        var fileName = Path.GetFileName(fullPath);
+        return new InputDocxCaptureOptions(
+            fullPath,
+            fileName,
+            scenarioId,
+            pageCount,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["captureMode"] = "input-docx-comparable-page-surface",
+                ["inputDocxFileName"] = fileName,
+                ["inputDocxSha256"] = sha256,
+                ["inputRequestedPageCount"] = pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["inputSourceTrust"] = "explicit-path-sha256"
+            });
+    }
+
+    private static string SanitizeOutputStem(string value)
+    {
+        var sanitized = new string(value
+            .Trim()
+            .ToLowerInvariant()
+            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray())
+            .Trim('-');
+        return string.IsNullOrWhiteSpace(sanitized) ? "document" : sanitized;
     }
 }
 

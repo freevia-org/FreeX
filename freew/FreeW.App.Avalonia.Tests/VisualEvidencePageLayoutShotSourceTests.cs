@@ -5,6 +5,25 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class VisualEvidencePageLayoutShotSourceTests
 {
     [Fact]
+    public void PageLayoutShot_OffersTrustedComparableInputDocxCaptureWithoutChangingRendererBehavior()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));
+
+        source.Should().Contain("--input-docx requires an existing .docx path.");
+        source.Should().Contain("--input-page-count requires a positive integer.");
+        source.Should().Contain("--input-output-stem requires a non-empty value.");
+        source.Should().Contain("return RenderInputDocx(outDir, inputDocxCapture);");
+        source.Should().Contain("var sourceDocument = DocxReader.Read(input.FullPath);");
+        source.Should().Contain("forceWordComparablePageSurface: true");
+        source.Should().Contain("bypassFixtureSource: true");
+        source.Should().Contain("captureMode\"] = \"input-docx-comparable-page-surface\"");
+        source.Should().Contain("inputDocxSha256");
+        source.Should().Contain("inputSourceTrust\"] = \"explicit-path-sha256\"");
+        source.Should().Contain("SHA256.HashData(sourceBytes)");
+        source.Should().Contain("forceWordComparablePageSurface || ShouldCaptureWordComparablePageSurface(scenarioId)");
+    }
+
+    [Fact]
     public void PageLayoutShot_NormalizesSectionPageSurfacesToTheWordBaselineRasterBounds()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));
@@ -106,7 +125,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("FreeWVisualEvidencePlanner.WriteManifest(outDir, evidence)");
         source.Should().Contain("--scenario requires a scenario id.");
         source.Should().Contain("PageShotScenarioSelection.Add(args[i]);");
-        source.Should().Contain("if (!PageShotScenarioSelection.Includes(scenarioId))");
+        source.Should().Contain("if (!bypassScenarioSelection && !PageShotScenarioSelection.Includes(scenarioId))");
         source.Should().Contain("PageShotScenarioSelection.Includes(\"page-composition-floating-image\")");
         source.Should().Contain("AddAvaloniaEvidence(");
         source.Should().Contain("FreeWVisualEvidencePlanner.BuildEvidenceRow(");
