@@ -41,13 +41,13 @@ public sealed class ThemeApplierAvaloniaTests
     [Fact]
     public void AvaloniaApplier_FreeXTitleBarBrush_MatchesPalette()
     {
-        // FreeXTitleBarBrush should be #17324D (A=255)
+        // FreeXTitleBarBrush should be the light Office surface #F3F4F6 (A=255)
         var dict = AvaloniaThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
         var brush = (ImmutableSolidColorBrush)dict["FreeXTitleBarBrush"]!;
         brush.Color.A.Should().Be(255);
-        brush.Color.R.Should().Be(0x17);
-        brush.Color.G.Should().Be(0x32);
-        brush.Color.B.Should().Be(0x4D);
+        brush.Color.R.Should().Be(0xF3);
+        brush.Color.G.Should().Be(0xF4);
+        brush.Color.B.Should().Be(0xF6);
     }
 
     [Fact]
@@ -66,13 +66,13 @@ public sealed class ThemeApplierAvaloniaTests
     [Fact]
     public void AvaloniaApplier_FreeXStatusSurfaceBrush_FreeX_IsCorrectColor()
     {
-        // FreeX default: StatusSurface = #17324D (same navy as the title bar)
+        // FreeX default: StatusSurface = #F3F4F6 (same light Office surface as the title bar)
         var dict = AvaloniaThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
         var brush = (ImmutableSolidColorBrush)dict["FreeXStatusSurfaceBrush"]!;
         brush.Color.A.Should().Be(255);
-        brush.Color.R.Should().Be(0x17);
-        brush.Color.G.Should().Be(0x32);
-        brush.Color.B.Should().Be(0x4D);
+        brush.Color.R.Should().Be(0xF3);
+        brush.Color.G.Should().Be(0xF4);
+        brush.Color.B.Should().Be(0xF6);
     }
 
     [Fact]

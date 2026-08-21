@@ -147,6 +147,7 @@ public sealed class DialogTabControlKeyboardSwitchTests
                 initial.Should().NotBeNull();
                 initial!.Focus().Should().BeTrue();
 
+                var returnedToInitial = false;
                 for (var step = 1; step <= 40; step++)
                 {
                     Send(dialog, Key.Tab, RawInputModifiers.None);
@@ -154,11 +155,15 @@ public sealed class DialogTabControlKeyboardSwitchTests
 
                     var focused = dialog.FocusManager?.GetFocusedElement();
                     focused.Should().NotBeNull($"plain Tab must not lose focus at step {step}");
-                    if (ReferenceEquals(focused, initial))
-                        return 0;
+                    if (!ReferenceEquals(focused, initial))
+                        continue;
+
+                    returnedToInitial = true;
+                    break;
                 }
 
-                throw new Xunit.Sdk.XunitException("Plain Tab cycle within the Font tab did not return to its start within 40 steps.");
+                returnedToInitial.Should().BeTrue(
+                    "the plain Tab cycle within the Font tab must return to its start within 40 steps");
             }
             finally
             {
@@ -169,6 +174,8 @@ public sealed class DialogTabControlKeyboardSwitchTests
                 owner.AllowCloseWithoutDirtyPromptForParityCapture();
                 owner.Close();
             }
+
+            return true;
         }, CancellationToken.None);
     }
 
