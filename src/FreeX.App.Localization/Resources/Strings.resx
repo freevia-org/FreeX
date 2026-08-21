@@ -20834,4 +20834,13 @@ and {0} more.</value>
   <data name="Worksheet_SelectAllToolTip" xml:space="preserve">
     <value>Select all</value>
   </data>
+  <data name="WorksheetContextMenu_SearchHelpText" xml:space="preserve">
+    <value>Type to filter commands in this menu.</value>
+  </data>
+  <data name="WorksheetContextMenu_SearchLabel" xml:space="preserve">
+    <value>Search the menus</value>
+  </data>
+  <data name="WorksheetContextMenu_SearchToolTip" xml:space="preserve">
+    <value>Search commands in this menu</value>
+  </data>
 </root>

@@ -102,10 +102,10 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         borders.Groups.SelectMany(group => group.Items)
             .Should()
             .ContainInOrder(
+                "No Border",
                 "All Borders",
                 "Outside Borders",
                 "Inside Borders",
-                "No Border",
                 "Draw Border",
                 "Draw Border Grid",
                 "Erase Border",

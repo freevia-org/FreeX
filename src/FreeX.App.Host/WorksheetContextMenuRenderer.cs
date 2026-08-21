@@ -56,16 +56,17 @@ internal static class WorksheetContextMenuRenderer
         var searchBox = new TextBox
         {
             Padding = new Thickness(6, 3, 6, 3),
-            ToolTip = "Search commands in this menu"
+            ToolTip = UiText.Get("WorksheetContextMenu_SearchToolTip")
         };
-        AutomationProperties.SetName(searchBox, "Search the menus");
-        AutomationProperties.SetHelpText(searchBox, "Type to filter commands in this menu.");
+        var searchLabel = UiText.Get("WorksheetContextMenu_SearchLabel");
+        AutomationProperties.SetName(searchBox, searchLabel);
+        AutomationProperties.SetHelpText(searchBox, UiText.Get("WorksheetContextMenu_SearchHelpText"));
 
         var searchHeader = new Grid { Width = 180, Margin = new Thickness(2) };
         searchHeader.Children.Add(searchBox);
         var watermark = new TextBlock
         {
-            Text = "Search the menus",
+            Text = searchLabel,
             Margin = new Thickness(9, 0, 4, 0),
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = Brushes.Gray,
@@ -82,7 +83,7 @@ internal static class WorksheetContextMenuRenderer
             Padding = new Thickness(3),
             IsEnabled = true
         };
-        AutomationProperties.SetName(searchItem, "Search the menus");
+        AutomationProperties.SetName(searchItem, searchLabel);
         menu.Items.Insert(0, searchItem);
         menu.Items.Insert(1, new Separator { Tag = SearchMenuItemTag });
 

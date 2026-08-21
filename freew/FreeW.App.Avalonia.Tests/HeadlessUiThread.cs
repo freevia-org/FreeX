@@ -18,7 +18,7 @@ namespace FreeW.App.Avalonia.Tests;
 /// <c>if (!ran) return;</c> guards therefore turned an assertion failure inside the dispatched body into
 /// a silently PASSING test: the exception was swallowed, <c>ran</c> came back false, and the test
 /// returned before its remaining assertions ran. Same class of defect as the
-/// <c>Dispatch(async () =&gt; …)</c> async-void binding that once let 154 tests pass without executing.
+/// <c>Dispatch</c> async-lambda overload binding that once let 154 tests pass without executing.
 /// </para>
 /// <para>
 /// The backend is probed ONCE instead, so the original skip intent survives, and the body's own
