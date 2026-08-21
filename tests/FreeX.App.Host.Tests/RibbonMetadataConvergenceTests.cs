@@ -164,6 +164,28 @@ public sealed class RibbonMetadataConvergenceTests
     }
 
     [Fact]
+    public void HomeBordersMenu_PrioritizesExcelPrimaryBorderChoices()
+    {
+        HomeBorderMenuCatalog.Presets.Select(item => item.CommandId)
+            .Should()
+            .Equal(
+                "Bottom Border",
+                "Top Border",
+                "Left Border",
+                "Right Border",
+                "No Border",
+                "All Borders",
+                "Outside Borders",
+                "Inside Borders",
+                "Thick Outside Borders",
+                "Bottom Double Border",
+                "Thick Bottom Border",
+                "Top and Bottom Border",
+                "Top and Thick Bottom Border",
+                "Top and Double Bottom Border");
+    }
+
+    [Fact]
     public void ArrangeMenu_OwnsStableIconsWithoutEnglishLabelReconstruction()
     {
         var arrangeMenu = FreeXRibbon.Build().Tabs

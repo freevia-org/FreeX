@@ -48,17 +48,17 @@ public static class HomeBorderMenuCatalog
 {
     public static readonly IReadOnlyList<HomeBorderMenuCatalogItem> Presets =
     [
-        Item("All Borders", "A", HomeBorderMenuSection.Presets),
-        Item("Outside Borders", "O", HomeBorderMenuSection.Presets),
-        Item("Inside Borders", "I", HomeBorderMenuSection.Presets),
-        Item("No Border", "N", HomeBorderMenuSection.Presets),
         Item("Bottom Border", "B", HomeBorderMenuSection.Presets),
         Item("Top Border", "T", HomeBorderMenuSection.Presets),
         Item("Left Border", "L", HomeBorderMenuSection.Presets),
         Item("Right Border", "R", HomeBorderMenuSection.Presets),
-        Item("Thick Bottom Border", "K", HomeBorderMenuSection.Presets),
-        Item("Bottom Double Border", "D", HomeBorderMenuSection.Presets),
+        Item("No Border", "N", HomeBorderMenuSection.Presets),
+        Item("All Borders", "A", HomeBorderMenuSection.Presets),
+        Item("Outside Borders", "O", HomeBorderMenuSection.Presets),
+        Item("Inside Borders", "I", HomeBorderMenuSection.Presets),
         Item("Thick Outside Borders", "X", HomeBorderMenuSection.Presets),
+        Item("Bottom Double Border", "D", HomeBorderMenuSection.Presets),
+        Item("Thick Bottom Border", "K", HomeBorderMenuSection.Presets),
         Item("Top and Bottom Border", "U", HomeBorderMenuSection.Presets),
         Item("Top and Thick Bottom Border", "H", HomeBorderMenuSection.Presets),
         Item("Top and Double Bottom Border", "J", HomeBorderMenuSection.Presets),
@@ -99,13 +99,11 @@ public static class HomeBorderMenuCatalog
 
     public static void Build(RibbonMenuBuilder menu)
     {
-        Add(menu, Presets.Take(4));
+        Add(menu, Presets.Take(5));
         menu.Separator();
-        Add(menu, Presets.Skip(4).Take(4));
+        Add(menu, Presets.Skip(5).Take(4));
         menu.Separator();
-        Add(menu, Presets.Skip(8).Take(2));
-        menu.Separator();
-        Add(menu, Presets.Skip(10));
+        Add(menu, Presets.Skip(9));
         menu.Separator();
         Add(menu, Draw);
         menu.Separator();
