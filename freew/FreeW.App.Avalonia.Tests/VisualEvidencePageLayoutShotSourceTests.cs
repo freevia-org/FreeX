@@ -43,6 +43,15 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void PageLayoutShot_CropsReviewProofingToTheWordComparablePageSurface()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));
+
+        source.Should().MatchRegex("ShouldCaptureWordComparablePageSurface\\([\\s\\S]*?string.Equals\\(scenarioId, \"review-proofing-visual-depth\", StringComparison.OrdinalIgnoreCase\\)");
+        source.Should().Contain("CropToDocumentPageSurface(");
+    }
+
+    [Fact]
     public void PageLayoutShot_EmitsSharedVisualEvidenceManifestAndTrustChecks()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));
