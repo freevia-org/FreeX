@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Automation;
 using Avalonia.VisualTree;
 using FreeW.App.Avalonia;
 using FreeW.App.Presentation.Dialogs;
@@ -43,6 +44,38 @@ public sealed class ManualHyphenationDialogParityTests
 
                 escape.Handled.Should().BeTrue();
                 (await resultTask).Should().Be(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Cancel));
+            }
+            finally
+            {
+                owner.Close();
+            }
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Realized_action_semantics_match_the_Wpf_authority()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var owner = new Window();
+            owner.Show();
+            try
+            {
+                var dialog = new ManualHyphenationDialog(Candidate());
+                var resultTask = dialog.ShowDialog<ManualHyphenationDialogResult?>(owner);
+
+                var buttons = dialog.GetVisualDescendants().OfType<Button>().ToArray();
+                buttons.Select(button => AutomationProperties.GetName(button))
+                    .Should().Equal("Accept hyphenation", "Skip hyphenation", "Cancel");
+                buttons.Single(button => AutomationProperties.GetName(button) == "Accept hyphenation")
+                    .IsDefault.Should().BeTrue();
+                buttons.Single(button => AutomationProperties.GetName(button) == "Cancel")
+                    .IsCancel.Should().BeTrue();
+                dialog.GetVisualDescendants().OfType<ComboBox>().Single().IsFocused.Should().BeTrue();
+
+                dialog.Close(null);
+                (await resultTask).Should().BeNull();
             }
             finally
             {

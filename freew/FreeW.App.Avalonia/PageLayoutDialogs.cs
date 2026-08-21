@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Localization;
@@ -499,7 +500,16 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
         content.Children.Add(_choices);
         content.Children.Add(buttons);
         Content = content;
-        Opened += (_, _) => ResolveFocusTarget(ManualHyphenationPlanner.FocusPlan.InitialFocusTarget).Focus();
+        Opened += (_, _) =>
+        {
+            // Fluent's realized Button template derives the accessible name from Content. Reapply
+            // the WPF-authority action names after realization so semantic evidence and assistive
+            // technology see the same actions as the native dialog.
+            ApplyActionName(yes, surface.Field(ManualHyphenationDialogField.Yes));
+            ApplyActionName(no, surface.Field(ManualHyphenationDialogField.No));
+            ApplyActionName(cancel, ShellStrings.Current.Cancel);
+            ResolveFocusTarget(ManualHyphenationPlanner.FocusPlan.InitialFocusTarget).Focus();
+        };
 
         KeyDown += (_, e) =>
         {
@@ -533,6 +543,14 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
         ManualHyphenationDialogField.Choices => _choices,
         _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
     };
+
+    private static void ApplyActionName(
+        Button button,
+        DialogFieldSurfaceSpec<ManualHyphenationDialogField> field) =>
+        AutomationProperties.SetName(button, field.AutomationName);
+
+    private static void ApplyActionName(Button button, string text) =>
+        AutomationProperties.SetName(button, ShellStrings.Current.CreateAutomationName(text));
 
     public static async Task ShowAndApplyAsync(Window owner, DocumentView editor, Action<string> report)
     {
