@@ -742,6 +742,21 @@ public sealed partial class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void WordArtRendering_ExplicitTextNoFill_SuppressesOnlyWordArtGlyphFill()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var drawText = source[
+            source.IndexOf("private void DrawShapeText", StringComparison.Ordinal)..
+            source.IndexOf("private readonly record struct DrawingObjectBrushKey", StringComparison.Ordinal)];
+
+        drawText.Should().Contain("var suppressWordArtTextFill = shape.IsWordArt && shape.ShapeTextHasNoFill;");
+        drawText.Should().Contain("dc.DrawGeometry(suppressWordArtTextFill ? null : textBrush, outlinePen, textGeometry);");
+        drawText.Should().Contain("else if (!(shape.IsWordArt && shape.ShapeTextHasNoFill))");
+        drawText.Should().NotContain("shape.ShapeTextHasNoFill ? null : textBrush",
+            "the no-fill semantics must not suppress ordinary rich-shape text");
+    }
+
+    [Fact]
     public void NativeSlicerRendering_DrawsSelectedTilesWithoutMaterializingArray()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");

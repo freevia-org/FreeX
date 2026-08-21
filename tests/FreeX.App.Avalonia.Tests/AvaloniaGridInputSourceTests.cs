@@ -501,6 +501,20 @@ public sealed class AvaloniaGridInputSourceTests
             "IsWordArt must not unconditionally suppress FillColor-bearing shapes");
     }
 
+    [Fact]
+    public void WordArtOverlay_ExplicitTextNoFill_RetainsOutlineOnly()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var overlayMethod = source[
+            source.IndexOf("private static Control CreateShapeTextOverlay", StringComparison.Ordinal)..
+            source.IndexOf("// Maps DrawingShapeOutlineDash", StringComparison.Ordinal)];
+
+        overlayMethod.Should().Contain("if (!(d.IsWordArt && d.ShapeTextHasNoFill))");
+        overlayMethod.Should().Contain("return d.IsWordArt && d.ShapeTextHasNoFill");
+        overlayMethod.Should().Contain("panel.Children.Add(fillBlock);");
+        overlayMethod.Should().Contain("return panel;", "outlined no-fill WordArt must keep its offset outline layer");
+    }
+
     private static string RepoFile(params string[] parts) =>
         Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

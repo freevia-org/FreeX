@@ -85,6 +85,32 @@ public sealed class WordArtRoundTripTests
         shape.ShapeTextOutlineWidthPoints.Should().BeApproximately(1.0, 0.01,
             "12700 EMU = 1 pt");
         shape.ShapeTextGradientEndColor.Should().BeNull("only solidFill on run — no gradient");
+        shape.ShapeTextHasNoFill.Should().BeFalse("solid-fill WordArt must retain its glyph fill");
+    }
+
+    [Fact]
+    public void XlsxDrawingPartReader_Reads_WordArt_ExplicitNoFill_RetainsOutline()
+    {
+        var drawingXml = XDocument.Parse("""
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="2700000" cy="900000"/>
+                <xdr:sp><xdr:nvSpPr><xdr:cNvPr id="5" name="Outline WordArt"/><xdr:cNvSpPr/></xdr:nvSpPr>
+                  <xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></xdr:spPr>
+                  <xdr:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr sz="3600"><a:ln w="12700"><a:solidFill><a:srgbClr val="C55A11"/></a:solidFill></a:ln><a:noFill/></a:rPr><a:t>Outline</a:t></a:r></a:p></xdr:txBody>
+                  <xdr:clientData/></xdr:sp>
+              </xdr:oneCellAnchor>
+            </xdr:wsDr>
+            """);
+
+        var (_, shapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
+        var shape = shapes.Should().ContainSingle().Subject;
+
+        shape.IsWordArt.Should().BeTrue("the run has an authored text outline");
+        shape.ShapeTextHasNoFill.Should().BeTrue("a:rPr/a:noFill is an explicit outline-only request");
+        shape.ShapeTextColor.Should().BeNull("noFill is not a missing authored fill");
+        shape.ShapeTextOutlineColor.Should().Be(new CellColor(0xC5, 0x5A, 0x11));
+        shape.ShapeTextOutlineWidthPoints.Should().BeApproximately(1.0, 0.01);
     }
 
     [Fact]
@@ -237,6 +263,38 @@ public sealed class WordArtRoundTripTests
         loaded.ShapeTextOutlineColor.Should().Be(new CellColor(0x8B, 0x00, 0x00));
         loaded.ShapeTextOutlineWidthPoints.Should().BeApproximately(1.5, 0.05);
         loaded.ShapeTextGradientEndColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTrips_WordArt_ExplicitNoFill_RetainingOutline()
+    {
+        var workbook = CreateWordArtWorkbook(
+            isWordArt: true,
+            warpPreset: null,
+            textColor: new CellColor(0xFF, 0x45, 0x00),
+            gradEndColor: null,
+            outlineColor: new CellColor(0xC5, 0x5A, 0x11),
+            outlineWidthPt: 1.0);
+        workbook.GetSheetAt(0).DrawingShapes.Single().ShapeTextHasNoFill = true;
+
+        using var stream = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, stream);
+
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var rPr = LoadDrawingXml(archive).Descendants(DrawingNs + "rPr").Should().ContainSingle().Subject;
+            rPr.Element(DrawingNs + "noFill").Should().NotBeNull();
+            rPr.Element(DrawingNs + "solidFill").Should().BeNull("explicit noFill must win over the model's fallback color");
+            rPr.Element(DrawingNs + "ln").Should().NotBeNull("the visible WordArt outline must survive");
+        }
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0).DrawingShapes.Should().ContainSingle().Subject;
+        loaded.IsWordArt.Should().BeTrue();
+        loaded.ShapeTextHasNoFill.Should().BeTrue();
+        loaded.ShapeTextOutlineColor.Should().Be(new CellColor(0xC5, 0x5A, 0x11));
     }
 
     [Fact]

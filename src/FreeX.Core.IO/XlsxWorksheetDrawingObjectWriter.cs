@@ -1363,7 +1363,11 @@ internal static class XlsxWorksheetDrawingObjectWriter
         // Gradient (WordArt) takes priority over solid fill.
         var hasGradEnd = shape.ShapeTextGradientEndColor is not null ||
                          shape.ShapeTextGradientEndThemeColor is not null;
-        if (shape.IsWordArt && hasGradEnd)
+        if (shape.IsWordArt && shape.ShapeTextHasNoFill)
+        {
+            rPr.Add(new XElement(drawingNs + "noFill"));
+        }
+        else if (shape.IsWordArt && hasGradEnd)
         {
             // Emit <a:gradFill> with two stops; use the authored angle (default 5400000 = 90° top-to-bottom).
             var gradFill = new XElement(drawingNs + "gradFill",

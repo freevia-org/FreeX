@@ -5949,12 +5949,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     IsHitTestVisible = false,
                 });
             }
-            // Fill text on top so gradient/color renders over the outline.
-            panel.Children.Add(fillBlock);
+            // Explicit WordArt <a:noFill/> retains only the outline; normal and gradient
+            // WordArt still paint the fill over those outline copies.
+            if (!(d.IsWordArt && d.ShapeTextHasNoFill))
+                panel.Children.Add(fillBlock);
             return panel;
         }
 
-        return fillBlock;
+        return d.IsWordArt && d.ShapeTextHasNoFill
+            ? new Canvas { Width = w, Height = h, IsHitTestVisible = false }
+            : fillBlock;
     }
 
     // Maps DrawingShapeOutlineDash → dash arrays compatible with Avalonia StrokeDashArray.

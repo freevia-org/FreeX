@@ -188,7 +188,9 @@ public sealed record DrawingObjectBounds(
     // Authored shape gradient fill, projected from DrawingShapeModel for hosts that render
     // drawing overlays from viewport bounds rather than the original model.
     CellColor? GradientFillEndColor = null,
-    DrawingShapeGradientDirection GradientFillDirection = DrawingShapeGradientDirection.DiagonalDown);
+    DrawingShapeGradientDirection GradientFillDirection = DrawingShapeGradientDirection.DiagonalDown,
+    // Explicit <a:rPr><a:noFill/> for WordArt text. Trailing default preserves existing callers.
+    bool ShapeTextHasNoFill = false);
 
 /// <summary>
 /// Render-plan projection of a drawing object's authored visual effect (shadow / glow /

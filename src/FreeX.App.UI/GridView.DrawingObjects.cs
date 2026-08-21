@@ -1992,9 +1992,10 @@ public partial class GridView
 
             // Build text geometry and draw it with both fill and stroke.
             var textGeometry = formatted.BuildGeometry(new Point(textLeft, textTop));
-            dc.DrawGeometry(textBrush, outlinePen, textGeometry);
+            var suppressWordArtTextFill = shape.IsWordArt && shape.ShapeTextHasNoFill;
+            dc.DrawGeometry(suppressWordArtTextFill ? null : textBrush, outlinePen, textGeometry);
         }
-        else
+        else if (!(shape.IsWordArt && shape.ShapeTextHasNoFill))
         {
             dc.DrawText(formatted, new Point(textLeft, textTop));
         }

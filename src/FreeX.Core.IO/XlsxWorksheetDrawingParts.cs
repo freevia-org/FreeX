@@ -215,7 +215,9 @@ internal sealed record XlsxShapePackagePart(
     // <xdr:cNvPr><a:extLst> carries the "Mark as decorative" extension (see
     // XlsxWorksheetDrawingParts.ReadNonVisualDecorative) -- mirrors XlsxPicturePackagePart's
     // IsDecorative field.
-    bool IsDecorative = false);
+    bool IsDecorative = false,
+    /// <summary>True when the first WordArt run explicitly has <c>&lt;a:noFill/&gt;</c>.</summary>
+    bool ShapeTextHasNoFill = false);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -960,7 +962,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             // family isn't part of that helper's return (shapes don't track it either), so it's
             // read separately from the same first run.
             var (txBoxFontSizePt, txBoxBold, txBoxItalic, _, txBoxColor, txBoxThemeColor, txBoxHAlign, txBoxVAnchor,
-                 _, _, _, _, _, _, _, _, _) = ReadShapeTextFormatting(txBodyElement, drawingNs);
+                 _, _, _, _, _, _, _, _, _, _) = ReadShapeTextFormatting(txBodyElement, drawingNs);
             var txBoxFontFamily = ReadShapeTextFontFamily(txBodyElement, drawingNs);
 
             textBoxes.Add(new XlsxTextBoxPackagePart(
@@ -1005,7 +1007,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
              textColor, textThemeColor, textHAlign, textVAnchor, textWrap,
              isWordArt, warpPreset,
              textGradEndColor, textGradEndThemeColor, textGradAngle,
-             textOutlineColor, textOutlineThemeColor, textOutlineWidthPt) =
+             textOutlineColor, textOutlineThemeColor, textOutlineWidthPt, textHasNoFill) =
             ReadShapeTextFormatting(txBodyElement, drawingNs);
 
         shapes.Add(new XlsxShapePackagePart(
@@ -1060,7 +1062,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             textOutlineWidthPt,
             ReadShapeAdjustValues(spPr, drawingNs),
             hyperlink,
-            isDecorative));
+            isDecorative,
+            textHasNoFill));
     }
 
     /// <summary>
@@ -1119,19 +1122,20 @@ internal static partial class XlsxWorksheetDrawingPartReader
         DrawingShapeTextHAlign HAlign, DrawingShapeTextVAnchor VAnchor, bool Wrap,
         bool IsWordArt, string? WarpPreset,
         CellColor? GradEndColor, WorkbookThemeColorReference? GradEndThemeColor, long GradAngle,
-        CellColor? OutlineColor, WorkbookThemeColorReference? OutlineThemeColor, double OutlineWidthPt)
+        CellColor? OutlineColor, WorkbookThemeColorReference? OutlineThemeColor, double OutlineWidthPt,
+        bool TextHasNoFill)
         ReadShapeTextFormatting(XElement? txBody, XNamespace drawingNs)
     {
         static (double, bool, bool, bool, CellColor?, WorkbookThemeColorReference?,
             DrawingShapeTextHAlign, DrawingShapeTextVAnchor, bool,
             bool, string?,
             CellColor?, WorkbookThemeColorReference?, long,
-            CellColor?, WorkbookThemeColorReference?, double)
+            CellColor?, WorkbookThemeColorReference?, double, bool)
             Default(DrawingShapeTextHAlign hAlign = DrawingShapeTextHAlign.Left,
                     DrawingShapeTextVAnchor vAnchor = DrawingShapeTextVAnchor.Middle,
                     bool wrap = true)
             => (0, false, false, false, null, null, hAlign, vAnchor, wrap,
-                false, null, null, null, 5400000L, null, null, 0);
+                false, null, null, null, 5400000L, null, null, 0, false);
 
         if (txBody is null)
             return Default();
@@ -1182,6 +1186,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                         !string.Equals(uAttr, "none", StringComparison.OrdinalIgnoreCase);
 
         // ── Text solid fill (normal) ────────────────────────────────────────
+        var textHasNoFill = rPr.Element(drawingNs + "noFill") is not null;
         var solidFill = rPr.Element(drawingNs + "solidFill");
         var textColor = ReadDrawingSolidFillColor(solidFill, drawingNs);
         WorkbookThemeColorReference? textThemeColor = solidFill is not null &&
@@ -1240,7 +1245,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
         return (fontSizePt, bold, italic, underline, textColor, textThemeColor, hAlign, vAnchor, wrap,
                 isWordArt, warpPreset,
                 gradEndColor, gradEndThemeColor, gradAngle,
-                textOutlineColor, textOutlineThemeColor, textOutlineWidthPt);
+                textOutlineColor, textOutlineThemeColor, textOutlineWidthPt, textHasNoFill);
     }
 
     /// <summary>

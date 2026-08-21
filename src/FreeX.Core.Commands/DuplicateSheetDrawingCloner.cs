@@ -638,6 +638,7 @@ internal static class DuplicateSheetDrawingCloner
             EndConnectedShapeId = shape.EndConnectedShapeId,
             EndConnectedShapeConnectionIndex = shape.EndConnectedShapeConnectionIndex,
             IsWordArt = shape.IsWordArt,
+            ShapeTextHasNoFill = shape.ShapeTextHasNoFill,
             WarpPreset = shape.WarpPreset,
             ShapeTextGradientEndColor = shape.ShapeTextGradientEndColor,
             ShapeTextGradientEndThemeColor = shape.ShapeTextGradientEndThemeColor,

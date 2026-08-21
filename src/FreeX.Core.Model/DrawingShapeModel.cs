@@ -299,6 +299,13 @@ public sealed class DrawingShapeModel
     public bool IsWordArt { get; set; }
 
     /// <summary>
+    /// True when the first authored WordArt run explicitly uses
+    /// <c>&lt;a:rPr&gt;&lt;a:noFill/&gt;</c>. This is distinct from an absent fill: the
+    /// renderer must suppress the glyph fill while retaining any authored text outline.
+    /// </summary>
+    public bool ShapeTextHasNoFill { get; set; }
+
+    /// <summary>
     /// The <c>prst</c> attribute value from <c>&lt;a:prstTxWarp prst="..."&gt;</c>, e.g. "textWave1".
     /// Preserved for round-trip; warp rendering is deferred — the text is rendered flat.
     /// <see langword="null"/> when no warp preset is authored.

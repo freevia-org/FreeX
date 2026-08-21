@@ -277,6 +277,7 @@ public sealed partial class XlsxFileAdapter
                 ShapeTextVAnchor = shapePart.ShapeTextVAnchor,
                 ShapeTextWrap = shapePart.ShapeTextWrap,
                 IsWordArt = shapePart.IsWordArt,
+                ShapeTextHasNoFill = shapePart.ShapeTextHasNoFill,
                 WarpPreset = shapePart.WarpPreset,
                 ShapeTextGradientEndColor = shapePart.ShapeTextGradientEndColor,
                 ShapeTextGradientEndThemeColor = shapePart.ShapeTextGradientEndThemeColor,

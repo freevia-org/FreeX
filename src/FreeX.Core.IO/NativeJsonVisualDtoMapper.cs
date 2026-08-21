@@ -246,6 +246,7 @@ internal static class NativeJsonVisualDtoMapper
         ShapeTextVAnchor = ValidEnumOrDefault(shape.ShapeTextVAnchor, DrawingShapeTextVAnchor.Middle),
         ShapeTextWrap = shape.ShapeTextWrap,
         IsWordArt = shape.IsWordArt,
+        ShapeTextHasNoFill = shape.ShapeTextHasNoFill,
         WarpPreset = shape.WarpPreset,
         ShapeTextGradientEndColor = shape.ShapeTextGradientEndColor is { } gradEnd ? FormatColor(gradEnd) : null,
         ShapeTextGradientEndThemeColor = FromThemeColorReference(shape.ShapeTextGradientEndThemeColor),
@@ -316,6 +317,7 @@ internal static class NativeJsonVisualDtoMapper
                 ShapeTextVAnchor = ValidEnumOrDefault(shapeDto.ShapeTextVAnchor, DrawingShapeTextVAnchor.Middle),
                 ShapeTextWrap = shapeDto.ShapeTextWrap,
                 IsWordArt = shapeDto.IsWordArt,
+                ShapeTextHasNoFill = shapeDto.ShapeTextHasNoFill,
                 WarpPreset = shapeDto.WarpPreset,
                 ShapeTextGradientEndColor = shapeDto.ShapeTextGradientEndColor is { } gradEnd ? ParseColor(gradEnd) : null,
                 ShapeTextGradientEndThemeColor = ToThemeColorReference(shapeDto.ShapeTextGradientEndThemeColor),
@@ -500,6 +502,7 @@ internal class DrawingShapeDto
     public bool ShapeTextWrap { get; set; } = true;
     // ── WordArt ──────────────────────────────────────────────────────────
     public bool IsWordArt { get; set; }
+    public bool ShapeTextHasNoFill { get; set; }
     public string? WarpPreset { get; set; }
     public string? ShapeTextGradientEndColor { get; set; }
     public ThemeColorReferenceDto? ShapeTextGradientEndThemeColor { get; set; }

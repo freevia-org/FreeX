@@ -350,6 +350,7 @@ public sealed class DrawingObjectRenderPlannerTests
             Kind = DrawingShapeKind.Rectangle,
             HasFill = false,   // WordArt typically has no body fill
             IsWordArt = true,
+            ShapeTextHasNoFill = true,
             WarpPreset = "textWave1",
             ShapeText = "FreeX",
             ShapeTextFontSizePoints = 36,
@@ -366,6 +367,7 @@ public sealed class DrawingObjectRenderPlannerTests
 
         var bounds = viewport.DrawingObjects.Single(b => b.Id == shape.Id);
         bounds.IsWordArt.Should().BeTrue();
+        bounds.ShapeTextHasNoFill.Should().BeTrue("the explicit WordArt noFill flag is renderer metadata");
         bounds.ShapeText.Should().Be("FreeX");
         bounds.ShapeTextColor.Should().Be(new CellColor(0xFF, 0x45, 0x00));
         bounds.ShapeTextGradientEndColor.Should().Be(new CellColor(0x00, 0x00, 0xFF));
@@ -421,6 +423,7 @@ public sealed class DrawingObjectRenderPlannerTests
 
         var bounds = viewport.DrawingObjects.Single(b => b.Id == shape.Id);
         bounds.IsWordArt.Should().BeFalse();
+        bounds.ShapeTextHasNoFill.Should().BeFalse();
         bounds.ShapeTextGradientEndColor.Should().BeNull();
         bounds.ShapeTextOutlineColor.Should().BeNull();
         bounds.ShapeTextOutlineWidthPoints.Should().Be(0);
@@ -437,6 +440,7 @@ public sealed class DrawingObjectRenderPlannerTests
             ShapeKind: DrawingShapeKind.Rectangle);
 
         bounds.IsWordArt.Should().BeFalse();
+        bounds.ShapeTextHasNoFill.Should().BeFalse();
         bounds.ShapeTextGradientEndColor.Should().BeNull();
         bounds.ShapeTextOutlineColor.Should().BeNull();
         bounds.ShapeTextOutlineWidthPoints.Should().Be(0);
