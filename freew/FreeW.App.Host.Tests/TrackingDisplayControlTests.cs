@@ -144,8 +144,10 @@ public sealed class TrackingDisplayControlTests
             .ToDictionary(
                 run => run.Text,
                 run => ((System.Windows.Media.SolidColorBrush)run.Foreground).Color);
-        rendered["alice"].Should().Be(System.Windows.Media.Color.FromRgb(0x00, 0x70, 0xC0));
-        rendered["bob"].Should().Be(System.Windows.Media.Color.FromRgb(0x80, 0x64, 0xA2));
+        // The author palette is ReviewRevisionColorPlanner.AuthorPalette, aligned to Word's visible
+        // markup colours; these used to pin the pre-alignment pair.
+        rendered["alice"].Should().Be(System.Windows.Media.Color.FromRgb(0xD1, 0x34, 0x38));
+        rendered["bob"].Should().Be(System.Windows.Media.Color.FromRgb(0x00, 0x78, 0xD4));
 
         view.CommitToModel();
 
