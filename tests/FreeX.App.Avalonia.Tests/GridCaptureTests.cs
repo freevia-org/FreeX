@@ -217,12 +217,63 @@ public sealed class GridCaptureTests
             24, 132, 196, 255,
         };
 
-        var chartBounds = new[] { new ChartPixelBounds(Left: 2, Top: 0, Width: 1, Height: 1) };
+        var chartBounds = new[] { new GridCaptureOverlayBounds(Left: 2, Top: 0, Width: 1, Height: 1) };
 
         ParityCaptureOutputGuard.ValidateGridPixels(cellsOnlyPixels, width: 2, height: 1, chartBounds, minimumChromaticPixels: 1)
-            .Should().Contain("chart bounds");
+            .Should().Contain("drawing-overlay pixels");
         ParityCaptureOutputGuard.ValidateGridPixels(chartPixels, width: 3, height: 1, chartBounds, minimumChromaticPixels: 1)
             .Should().BeNull();
+    }
+
+    [Fact]
+    public void GridCaptureOutputGuard_RequiresExpectedShapeFillPixels_InTheirOverlayRegions()
+    {
+        var fills = new[]
+        {
+            new CellColor(91, 155, 213),
+            new CellColor(255, 192, 0),
+            new CellColor(112, 173, 71),
+            new CellColor(255, 102, 0),
+            new CellColor(155, 99, 178),
+        };
+        var pixels = new byte[fills.Length * 4];
+        for (var index = 0; index < fills.Length; index++)
+        {
+            var offset = index * 4;
+            pixels[offset] = fills[index].R;
+            pixels[offset + 1] = fills[index].G;
+            pixels[offset + 2] = fills[index].B;
+            pixels[offset + 3] = 255;
+        }
+
+        var overlayBounds = Enumerable.Range(0, fills.Length)
+            .Select(index => new GridCaptureOverlayBounds(index, 0, 1, 1))
+            .ToArray();
+        var expectedFills = overlayBounds
+            .Zip(fills, (bounds, fill) => new GridCaptureFillColorRegion(bounds, fill, MinimumPixelCount: 1))
+            .ToArray();
+
+        ParityCaptureOutputGuard.ValidateGridPixels(
+                pixels,
+                width: fills.Length,
+                height: 1,
+                overlayBounds,
+                minimumChromaticPixels: fills.Length,
+                expectedFills)
+            .Should().BeNull();
+
+        pixels[3 * 4] = 255;
+        pixels[3 * 4 + 1] = 255;
+        pixels[3 * 4 + 2] = 255;
+
+        ParityCaptureOutputGuard.ValidateGridPixels(
+                pixels,
+                width: fills.Length,
+                height: 1,
+                overlayBounds,
+                minimumChromaticPixels: fills.Length - 1,
+                expectedFills)
+            .Should().Contain("expected shape fill pixels");
     }
 
     [Fact]

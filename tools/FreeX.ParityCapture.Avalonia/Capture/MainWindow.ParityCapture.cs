@@ -4567,15 +4567,26 @@ public sealed partial class MainWindow
             // use a two-pass approach: render the cell grid first, then render the Canvas overlay into
             // a second bitmap and blit it on top via CreateDrawingContext (additive draw).
             var chartPixelBounds = GetVisibleChartPixelBounds(sheet, range, pixelWidth, pixelHeight);
-            var chartOverlapsRange = chartPixelBounds.Count > 0;
+            var drawingObjectPixelBounds = GetVisibleNonChartDrawingPixelBounds(
+                sheet,
+                range,
+                pixelWidth,
+                pixelHeight);
+            var overlayPixelBounds = chartPixelBounds.Concat(drawingObjectPixelBounds).ToArray();
+            var expectedShapeFillRegions = GetVisibleDrawingShapeFillRegions(
+                workbook.Theme,
+                sheet,
+                range,
+                pixelWidth,
+                pixelHeight);
             RenderAttachedGridCaptureToPng(
                 gridControl,
                 pixelWidth,
                 pixelHeight,
                 pngPath,
-                includeDrawingOverlays: chartOverlapsRange,
-                chartPixelBounds);
-            if (ParityCaptureOutputGuard.ValidateGridPngOutput(pngPath, chartPixelBounds) is { } captureValidationError)
+                includeDrawingOverlays: overlayPixelBounds.Length > 0,
+                overlayPixelBounds);
+            if (ParityCaptureOutputGuard.ValidateGridPngOutput(pngPath, overlayPixelBounds, expectedShapeFillRegions) is { } captureValidationError)
                 return GridCaptureFailure(workbookPath, rangeText, outputDirectory, captureValidationError);
 
             // ── 7. Write the JSON log file alongside the PNG ──────────────────────────────────────
@@ -4631,7 +4642,7 @@ public sealed partial class MainWindow
     private static bool HasVisibleChartOverlappingRange(Sheet sheet, GridRange range)
         => GetVisibleChartPixelBounds(sheet, range, int.MaxValue, int.MaxValue).Count > 0;
 
-    private static IReadOnlyList<ChartPixelBounds> GetVisibleChartPixelBounds(
+    private static IReadOnlyList<GridCaptureOverlayBounds> GetVisibleChartPixelBounds(
         Sheet sheet,
         GridRange range,
         int captureWidth,
@@ -4646,7 +4657,7 @@ public sealed partial class MainWindow
             .Where(chart => chart.IsVisible &&
                             chart.Left < right && chart.Left + chart.Width > left &&
                             chart.Top < bottom && chart.Top + chart.Height > top)
-            .Select(chart => ChartPixelBounds.FromAbsoluteBounds(
+            .Select(chart => GridCaptureOverlayBounds.FromAbsoluteBounds(
                 chart.Left - left,
                 chart.Top - top,
                 chart.Width,
@@ -4655,6 +4666,139 @@ public sealed partial class MainWindow
                 captureHeight))
             .Where(bounds => !bounds.IsEmpty)
             .ToArray();
+    }
+
+    private static IReadOnlyList<GridCaptureOverlayBounds> GetVisibleNonChartDrawingPixelBounds(
+        Sheet sheet,
+        GridRange range,
+        int captureWidth,
+        int captureHeight)
+    {
+        var bounds = new List<GridCaptureOverlayBounds>();
+        AddVisibleAnchoredObjectPixelBounds(
+            bounds,
+            sheet,
+            range,
+            captureWidth,
+            captureHeight,
+            sheet.DrawingShapes.Where(shape => shape.IsVisible)
+                .Select(shape => (shape.Anchor, shape.AnchorOffsetX, shape.AnchorOffsetY, shape.Width, shape.Height)));
+        AddVisibleAnchoredObjectPixelBounds(
+            bounds,
+            sheet,
+            range,
+            captureWidth,
+            captureHeight,
+            sheet.Pictures.Where(picture => picture.IsVisible)
+                .Select(picture => (picture.Anchor, picture.AnchorOffsetX, picture.AnchorOffsetY, picture.Width, picture.Height)));
+        AddVisibleAnchoredObjectPixelBounds(
+            bounds,
+            sheet,
+            range,
+            captureWidth,
+            captureHeight,
+            sheet.TextBoxes.Where(textBox => textBox.IsVisible)
+                .Select(textBox => (textBox.Anchor, textBox.AnchorOffsetX, textBox.AnchorOffsetY, textBox.Width, textBox.Height)));
+        return bounds;
+    }
+
+    private static IReadOnlyList<GridCaptureFillColorRegion> GetVisibleDrawingShapeFillRegions(
+        WorkbookTheme theme,
+        Sheet sheet,
+        GridRange range,
+        int captureWidth,
+        int captureHeight)
+    {
+        var regions = new List<GridCaptureFillColorRegion>();
+        foreach (var shape in sheet.DrawingShapes)
+        {
+            if (!shape.IsVisible ||
+                shape.GradientFillEndColor is not null ||
+                shape.ResolveFillColor(theme, DrawingShapeModel.ResolveDefaultFillColor(theme)) is not { } fillColor)
+                continue;
+
+            if (TryGetAnchoredObjectPixelBounds(
+                    sheet,
+                    range,
+                    captureWidth,
+                    captureHeight,
+                    shape.Anchor,
+                    shape.AnchorOffsetX,
+                    shape.AnchorOffsetY,
+                    shape.Width,
+                    shape.Height,
+                    out var bounds))
+            {
+                regions.Add(new GridCaptureFillColorRegion(bounds, fillColor));
+            }
+        }
+
+        return regions;
+    }
+
+    private static void AddVisibleAnchoredObjectPixelBounds(
+        ICollection<GridCaptureOverlayBounds> destination,
+        Sheet sheet,
+        GridRange range,
+        int captureWidth,
+        int captureHeight,
+        IEnumerable<(CellAddress Anchor, double OffsetX, double OffsetY, double Width, double Height)> objects)
+    {
+        foreach (var drawingObject in objects)
+        {
+            if (TryGetAnchoredObjectPixelBounds(
+                    sheet,
+                    range,
+                    captureWidth,
+                    captureHeight,
+                    drawingObject.Anchor,
+                    drawingObject.OffsetX,
+                    drawingObject.OffsetY,
+                    drawingObject.Width,
+                    drawingObject.Height,
+                    out var bounds))
+            {
+                destination.Add(bounds);
+            }
+        }
+    }
+
+    private static bool TryGetAnchoredObjectPixelBounds(
+        Sheet sheet,
+        GridRange range,
+        int captureWidth,
+        int captureHeight,
+        CellAddress anchor,
+        double offsetX,
+        double offsetY,
+        double width,
+        double height,
+        out GridCaptureOverlayBounds bounds)
+    {
+        bounds = default;
+        if (anchor.Sheet != sheet.Id ||
+            !double.IsFinite(offsetX) ||
+            !double.IsFinite(offsetY) ||
+            !double.IsFinite(width) ||
+            !double.IsFinite(height) ||
+            width <= 0 ||
+            height <= 0)
+        {
+            return false;
+        }
+
+        var rangeLeft = SumSheetColumnPixels(sheet, 1, range.Start.Col - 1);
+        var rangeTop = SumSheetRowPixels(sheet, 1, range.Start.Row - 1);
+        var absoluteLeft = SumSheetColumnPixels(sheet, 1, anchor.Col - 1) + offsetX;
+        var absoluteTop = SumSheetRowPixels(sheet, 1, anchor.Row - 1) + offsetY;
+        bounds = GridCaptureOverlayBounds.FromAbsoluteBounds(
+            absoluteLeft - rangeLeft,
+            absoluteTop - rangeTop,
+            width,
+            height,
+            captureWidth,
+            captureHeight);
+        return !bounds.IsEmpty;
     }
 
     private static double SumSheetColumnPixels(Sheet sheet, uint firstColumn, uint count)
@@ -4694,7 +4838,7 @@ public sealed partial class MainWindow
         int height,
         string path,
         bool includeDrawingOverlays,
-        IReadOnlyList<ChartPixelBounds> chartPixelBounds)
+        IReadOnlyList<GridCaptureOverlayBounds> overlayPixelBounds)
     {
         var originalContent = _sheetGridHost.Content;
         var originalWidth = _sheetGridHost.Width;
@@ -4772,7 +4916,7 @@ public sealed partial class MainWindow
             Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
             RenderVisualToPngWithOverlay(overlayComposite, width, height, overlayPath);
             overlayComposite.Children.Clear();
-            CompositeChartOverlayPng(basePath, overlayPath, path, chartPixelBounds);
+            CompositeDrawingOverlayPng(basePath, overlayPath, path, overlayPixelBounds);
         }
         finally
         {
@@ -4805,16 +4949,16 @@ public sealed partial class MainWindow
         }
     }
 
-    private static void CompositeChartOverlayPng(
+    private static void CompositeDrawingOverlayPng(
         string basePath,
         string overlayPath,
         string outputPath,
-        IReadOnlyList<ChartPixelBounds> chartPixelBounds)
+        IReadOnlyList<GridCaptureOverlayBounds> overlayPixelBounds)
     {
         using var baseBitmap = SKBitmap.Decode(basePath)
             ?? throw new InvalidDataException("The captured grid base PNG could not be decoded.");
         using var overlayBitmap = SKBitmap.Decode(overlayPath)
-            ?? throw new InvalidDataException("The captured chart overlay PNG could not be decoded.");
+            ?? throw new InvalidDataException("The captured drawing-overlay PNG could not be decoded.");
         if (baseBitmap.Width != overlayBitmap.Width || baseBitmap.Height != overlayBitmap.Height)
             throw new InvalidDataException("The captured grid base and chart overlay dimensions differ.");
 
@@ -4827,9 +4971,9 @@ public sealed partial class MainWindow
             for (var x = 0; x < composed.Width; x++)
             {
                 var overlayPixel = overlayBitmap.GetPixel(x, y);
-                var inChartBounds = chartPixelBounds.Any(bounds => bounds.Contains(x, y));
+                var inOverlayBounds = overlayPixelBounds.Any(bounds => bounds.Contains(x, y));
                 if (overlayPixel.Alpha == 0 ||
-                    (!inChartBounds && overlayPixel.Red == 0 && overlayPixel.Green == 0 && overlayPixel.Blue == 0))
+                    (!inOverlayBounds && overlayPixel.Red == 0 && overlayPixel.Green == 0 && overlayPixel.Blue == 0))
                 {
                     continue;
                 }

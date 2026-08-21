@@ -122,14 +122,19 @@ internal sealed record ParitySurfaceResult(
     };
 }
 
-internal readonly record struct ChartPixelBounds(int Left, int Top, int Width, int Height)
+/// <summary>
+/// Pixel bounds of a sheet drawing overlay within a cropped parity-grid capture.  The same
+/// clipping geometry is used for charts and ordinary anchored drawing objects so the headless
+/// scratch compositor can preserve legitimate black pixels without retaining its black canvas.
+/// </summary>
+internal readonly record struct GridCaptureOverlayBounds(int Left, int Top, int Width, int Height)
 {
     public bool IsEmpty => Width <= 0 || Height <= 0;
 
     public bool Contains(int x, int y) =>
         x >= Left && x < Left + Width && y >= Top && y < Top + Height;
 
-    public static ChartPixelBounds FromAbsoluteBounds(
+    public static GridCaptureOverlayBounds FromAbsoluteBounds(
         double left,
         double top,
         double width,
@@ -141,9 +146,18 @@ internal readonly record struct ChartPixelBounds(int Left, int Top, int Width, i
         var clampedTop = Math.Clamp((int)Math.Floor(top), 0, captureHeight);
         var clampedRight = Math.Clamp((int)Math.Ceiling(left + width), 0, captureWidth);
         var clampedBottom = Math.Clamp((int)Math.Ceiling(top + height), 0, captureHeight);
-        return new ChartPixelBounds(clampedLeft, clampedTop, clampedRight - clampedLeft, clampedBottom - clampedTop);
+        return new GridCaptureOverlayBounds(clampedLeft, clampedTop, clampedRight - clampedLeft, clampedBottom - clampedTop);
     }
 }
+
+/// <summary>
+/// An authored solid shape fill expected within a drawing-overlay region.  The guard is deliberately
+/// strict enough to reject a cells-only capture while allowing normal edge antialiasing.
+/// </summary>
+internal readonly record struct GridCaptureFillColorRegion(
+    GridCaptureOverlayBounds Bounds,
+    CellColor FillColor,
+    int MinimumPixelCount = 16);
 
 internal static class ParityCaptureOutputGuard
 {
@@ -210,9 +224,10 @@ internal static class ParityCaptureOutputGuard
 
     internal static string? ValidateGridPngOutput(
         string pngPath,
-        IReadOnlyList<ChartPixelBounds> chartPixelBounds)
+        IReadOnlyList<GridCaptureOverlayBounds> overlayBounds,
+        IReadOnlyList<GridCaptureFillColorRegion>? expectedFillRegions = null)
     {
-        ArgumentNullException.ThrowIfNull(chartPixelBounds);
+        ArgumentNullException.ThrowIfNull(overlayBounds);
 
         var basicValidation = ValidatePngOutput(pngPath);
         if (basicValidation is not null)
@@ -221,7 +236,7 @@ internal static class ParityCaptureOutputGuard
         try
         {
             var (rgba, width, height) = DecodeRgbaPng(File.ReadAllBytes(pngPath));
-            return ValidateGridPixels(rgba, width, height, chartPixelBounds, minimumChromaticPixels: 64);
+            return ValidateGridPixels(rgba, width, height, overlayBounds, minimumChromaticPixels: 64, expectedFillRegions);
         }
         catch (Exception ex) when (ex is InvalidDataException or NotSupportedException)
         {
@@ -276,15 +291,16 @@ internal static class ParityCaptureOutputGuard
         ReadOnlySpan<byte> rgba,
         int width,
         int height,
-        IReadOnlyList<ChartPixelBounds> chartPixelBounds,
-        int minimumChromaticPixels)
+        IReadOnlyList<GridCaptureOverlayBounds> overlayBounds,
+        int minimumChromaticPixels,
+        IReadOnlyList<GridCaptureFillColorRegion>? expectedFillRegions = null)
     {
-        ArgumentNullException.ThrowIfNull(chartPixelBounds);
+        ArgumentNullException.ThrowIfNull(overlayBounds);
 
         var baselineValidation = ValidateGridPixels(rgba, width, height);
         if (baselineValidation is not null)
             return baselineValidation;
-        if (chartPixelBounds.Count == 0)
+        if (overlayBounds.Count == 0)
             return null;
 
         var chromaticPixelCount = 0;
@@ -292,7 +308,7 @@ internal static class ParityCaptureOutputGuard
         {
             for (var x = 0; x < width; x++)
             {
-                if (!chartPixelBounds.Any(bounds => bounds.Contains(x, y)))
+                if (!overlayBounds.Any(bounds => bounds.Contains(x, y)))
                     continue;
 
                 var index = ((y * width) + x) * 4;
@@ -305,9 +321,46 @@ internal static class ParityCaptureOutputGuard
             }
         }
 
-        return chromaticPixelCount < minimumChromaticPixels
-            ? $"Grid PNG output is missing expected chart pixels in the chart bounds (found {chromaticPixelCount}, require {minimumChromaticPixels})."
-            : null;
+        if (chromaticPixelCount < minimumChromaticPixels)
+            return $"Grid PNG output is missing expected drawing-overlay pixels in the overlay bounds (found {chromaticPixelCount}, require {minimumChromaticPixels}).";
+
+        if (expectedFillRegions is null)
+            return null;
+
+        foreach (var expectedFill in expectedFillRegions)
+        {
+            var matchingPixelCount = 0;
+            var bounds = expectedFill.Bounds;
+            var left = Math.Clamp(bounds.Left, 0, width);
+            var top = Math.Clamp(bounds.Top, 0, height);
+            var right = Math.Clamp(bounds.Left + bounds.Width, 0, width);
+            var bottom = Math.Clamp(bounds.Top + bounds.Height, 0, height);
+            for (var y = top; y < bottom; y++)
+            {
+                for (var x = left; x < right; x++)
+                {
+                    var index = ((y * width) + x) * 4;
+                    if (rgba[index + 3] == 0 ||
+                        Math.Abs(rgba[index] - expectedFill.FillColor.R) > 4 ||
+                        Math.Abs(rgba[index + 1] - expectedFill.FillColor.G) > 4 ||
+                        Math.Abs(rgba[index + 2] - expectedFill.FillColor.B) > 4)
+                    {
+                        continue;
+                    }
+
+                    matchingPixelCount++;
+                }
+            }
+
+            if (matchingPixelCount < expectedFill.MinimumPixelCount)
+            {
+                return $"Grid PNG output is missing expected shape fill pixels in overlay bounds " +
+                       $"({bounds.Left},{bounds.Top},{bounds.Width},{bounds.Height}) " +
+                       $"(found {matchingPixelCount}, require {expectedFill.MinimumPixelCount}).";
+            }
+        }
+
+        return null;
     }
 
     private static (byte[] Rgba, int Width, int Height) DecodeRgbaPng(byte[] png)
