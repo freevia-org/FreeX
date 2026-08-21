@@ -118,6 +118,23 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void HomeRibbon_StylesLargeTileCaptionsDoNotClipAtWideWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetRibbonWidth(1465);
+            if (!harness.CanUseRequestedRibbonWidth(1465))
+                return;
+
+            harness.CollapsedRibbonGroupNames.Should().NotContain("Styles", harness.DebugRibbonChildren);
+            harness.ActiveRibbonGroupClippedCommandLabels("Styles").Should().BeEmpty(
+                "narrow Office-style large tiles must wrap their labels instead of cropping Conditional Formatting or Format as Table");
+        });
+    }
+
+    [Fact]
     public void FormulasRibbon_KeepsFunctionLibraryExpandedAtNormalWideWidths()
     {
         StaTestRunner.Run(() =>

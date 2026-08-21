@@ -419,9 +419,9 @@ public static class RibbonWpfRenderer
             TextWrapping = TextWrapping.Wrap,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 2, 0, 0),
-            MaxWidth = 128
+            MaxWidth = LargeCaptionWidth(options, fallback: 128)
         };
-        EnsureNaturalLabelWidth(caption);
+        EnsureNaturalLargeLabelWidth(caption, options);
         RibbonMetadata.SetRole(caption, RibbonMetadataRole.CommandLabel);
         if (HasMenu(control) && !options.UseExternalDropdownZones)
             caption.Inlines.Add(new System.Windows.Documents.Run("  ▾") { FontSize = 9 });
@@ -484,6 +484,20 @@ public static class RibbonWpfRenderer
         {
             label.MinWidth = Math.Max(label.MinWidth, Math.Ceiling(label.DesiredSize.Width));
         }
+    }
+
+    // Host renderers that deliberately use narrow Office-style large tiles need their captions to wrap
+    // within the tile. Giving those captions their natural minimum width makes WPF arrange them wider
+    // than the button and crops the first/last characters instead.
+    private static double LargeCaptionWidth(RibbonWpfRendererOptions options, double fallback) =>
+        options.LargeButtonWidth is { } width
+            ? Math.Max(0, width - 6)
+            : fallback;
+
+    private static void EnsureNaturalLargeLabelWidth(TextBlock label, RibbonWpfRendererOptions options)
+    {
+        if (options.LargeButtonWidth is null)
+            EnsureNaturalLabelWidth(label);
     }
 
     private static FrameworkElement BuildIconControl(
@@ -557,15 +571,16 @@ public static class RibbonWpfRenderer
             TextWrapping = TextWrapping.Wrap,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 2, 0, 0),
-            MaxWidth = 74
+            MaxWidth = LargeCaptionWidth(options, fallback: 74)
         };
-        EnsureNaturalLabelWidth(caption);
+        EnsureNaturalLargeLabelWidth(caption, options);
         RibbonMetadata.SetRole(caption, RibbonMetadataRole.CommandLabel);
         primaryContent.Children.Add(caption);
         RibbonMetadata.SetCommandContentLayout(primaryContent, RibbonCommandContentLayout.Large);
 
         var primary = NewButton(control, resourceHost, "RibbonLargeButton");
-        primary.Width = 80;
+        var largeButtonWidth = options.LargeButtonWidth ?? 80;
+        primary.Width = largeButtonWidth;
         primary.HorizontalContentAlignment = HorizontalAlignment.Center;
         primary.VerticalContentAlignment = VerticalAlignment.Center;
         ((ContentControl)primary).Content = primaryContent;
@@ -578,12 +593,12 @@ public static class RibbonWpfRenderer
             stateStore,
             options,
             RibbonCommandContentLayout.Large,
-            width: 80,
+            width: largeButtonWidth,
             height: 20);
 
         var split = new Grid
         {
-            Width = 80,
+            Width = largeButtonWidth,
             Height = 76,
             RowDefinitions =
             {
