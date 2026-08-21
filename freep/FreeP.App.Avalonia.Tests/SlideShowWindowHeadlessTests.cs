@@ -34,19 +34,9 @@ public sealed class SlideShowWindowHeadlessTests
             AppProduct.Current = new AppProductIdentity("FreeP", "FREEP_DIAGNOSTICS", "FreeP");
     }
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            // Headless drawing unavailable; skip gracefully.
-            return false;
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too,
+    // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -1124,9 +1114,9 @@ public sealed class SlideShowWindowHeadlessTests
                     command!.Execute(RibbonCommandContext.Empty);
 
                     Dispatcher.UIThread.RunJobs();
-                    var desktop = Application.Current?.ApplicationLifetime
-                        as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-                    var slideShow = desktop?.Windows.OfType<SlideShowWindow>()
+                    // Found through the owner it was shown with: the headless harness has no
+                    // classic-desktop lifetime, so desktop.Windows was always null here.
+                    var slideShow = owner.OwnedWindows.OfType<SlideShowWindow>()
                         .Single(window => window.IsVisible);
                     slideShow.Should().NotBeNull();
                     slideShow!.PresenterToolPlan.Recording.TimingIntent.Should().Be(timingCommand.Intent);
@@ -1145,50 +1135,69 @@ public sealed class SlideShowWindowHeadlessTests
     [Fact]
     public async Task MainWindow_StartSlideShow_assigns_visible_owner_lifecycle()
     {
-        MainWindow? owner = null;
-        SlideShowWindow? slideShow = null;
+        var showVisibleAfterLaunch = false;
+        var showVisibleAfterOwnerClose = true;
         var ran = await OnUiThread(() =>
         {
-            owner = new MainWindow(Array.Empty<string>());
+            var owner = new MainWindow(Array.Empty<string>());
             owner.Editor.SelectSlide(0);
             owner.Show();
             owner.StartSlideShow(fromStart: true);
 
-            var desktop = Application.Current?.ApplicationLifetime
-                as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-            slideShow = desktop?.Windows.OfType<SlideShowWindow>().Single(window => window.IsVisible);
-            slideShow.Should().NotBeNull();
+            // The headless harness has no classic-desktop lifetime, so desktop.Windows was always null
+            // here. The show is opened with Show(owner) — the ownership this test is about — so it is
+            // found through the owner it was given.
+            var slideShow = owner.OwnedWindows.OfType<SlideShowWindow>().Single();
+            showVisibleAfterLaunch = slideShow.IsVisible;
+
+            // The first Close() always cancels and resumes asynchronously (the shared close coordinator
+            // confirms first), so the close has to be pumped before the owned window's fate can be read.
             owner.Close();
-            slideShow!.IsVisible.Should().BeFalse();
+            for (var pump = 0; pump < 8 && owner.IsVisible; pump++)
+                Dispatcher.UIThread.RunJobs();
+
+            showVisibleAfterOwnerClose = slideShow.IsVisible;
         });
 
         if (!ran) return;
+        showVisibleAfterLaunch.Should().BeTrue("the show is launched visible, owned by the editor window");
+        showVisibleAfterOwnerClose.Should().BeFalse(
+            "a full-screen slide show must not outlive the editor window that owns it");
     }
 
     [Fact]
     public async Task MainWindow_StartSlideShow_preserves_editor_selection_and_restores_focus_on_close()
     {
-        MainWindow? owner = null;
+        var currentSlideIndex = -1;
+        var focusRestoreCount = -1;
         var ran = await OnUiThread(() =>
         {
-            owner = new MainWindow(Array.Empty<string>());
+            var owner = new MainWindow(Array.Empty<string>());
             owner.Editor.SelectSlide(0);
             owner.Show();
             owner.StartSlideShow(fromStart: true);
 
-            var desktop = Application.Current?.ApplicationLifetime
-                as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-            var slideShow = desktop?.Windows.OfType<SlideShowWindow>().Single(window => window.IsVisible);
+            // The headless harness has no classic-desktop lifetime, so desktop.Windows was always null
+            // here. The show is opened with Show(owner), which is precisely what this test is about, so
+            // it is found through the owner it was given.
+            var slideShow = owner.OwnedWindows.OfType<SlideShowWindow>().Single(window => window.IsVisible);
             slideShow.Should().NotBeNull();
             slideShow!.Controller.GoToSlide(1);
             slideShow.Close();
+
+            currentSlideIndex = owner.CurrentSlideIndex;
+            focusRestoreCount = owner.OwnerFocusRestoreCountForTests;
+
+            // Closing the owner belongs on the UI thread: it used to sit after the guard below, where it
+            // ran on the xUnit thread and threw "a different thread owns it" -- invisible only because
+            // the swallowed assertion above made `ran` false and skipped it entirely.
+            owner.Close();
         });
 
         if (!ran) return;
-        owner!.CurrentSlideIndex.Should().Be(0,
+        currentSlideIndex.Should().Be(0,
             "WPF keeps the editor's selected slide unchanged while slideshow playback advances independently");
-        owner.OwnerFocusRestoreCountForTests.Should().Be(1);
-        owner.Close();
+        focusRestoreCount.Should().Be(1);
     }
 
     // ── Ribbon definition ───────────────────────────────────────────────────────
@@ -1429,10 +1438,13 @@ public sealed class SlideShowWindowHeadlessTests
                     sourceSlideIndex: 0,
                     targetDropIndex: 3,
                     isInsideList: true).Should().BeTrue();
+                // A drop inside the list runs the SAME controller mutation the plan call above already
+                // ran (only one of the two happens in a real gesture), so this is that move applied to
+                // the list as it now stands: the head slide goes to the end again.
                 presentation.CustomShows[0].SlideIds.Should().Equal(
-                    presentation.Slides[0].Id,
                     presentation.Slides[2].Id,
-                    presentation.Slides[2].Id);
+                    presentation.Slides[2].Id,
+                    presentation.Slides[0].Id);
             }
             finally
             {
@@ -1749,15 +1761,22 @@ public sealed class SlideShowWindowHeadlessTests
                 "stepping back from the landing slide must navigate to slide 0 and run DisplayCurrentSlide -> PrepareAnimationOverlay for it");
             window.Controller.CurrentSlideIndex.Should().Be(0, "the animated shape's slide must now be current");
 
-            var rangeField = typeof(SlideShowWindow).GetField(
-                "_paragraphRangeAnimElements", BindingFlags.NonPublic | BindingFlags.Instance);
-            var naiveField = typeof(SlideShowWindow).GetField(
-                "_paragraphAnimElements", BindingFlags.NonPublic | BindingFlags.Instance);
-            rangeField.Should().NotBeNull("PrepareAnimationOverlay's ranged-overlay dictionary must still exist");
-            naiveField.Should().NotBeNull("PrepareAnimationOverlay's naive per-paragraph dictionary must still exist");
+            // The two private dictionaries this used to reflect on (_paragraphRangeAnimElements /
+            // _paragraphAnimElements) were folded into the shared SlideShowAnimationTargetRegistry, so
+            // the overlay state is read from that instead -- and read through the registry's own field
+            // names, which the shared type owns.
+            var registryField = typeof(SlideShowWindow).GetField(
+                "_animationTargets", BindingFlags.NonPublic | BindingFlags.Instance);
+            registryField.Should().NotBeNull("PrepareAnimationOverlay's target registry must still exist");
+            var registry = registryField!.GetValue(window)!;
 
-            var rangedElements = (System.Collections.IDictionary)rangeField!.GetValue(window)!;
-            var naiveElements = (System.Collections.IDictionary)naiveField!.GetValue(window)!;
+            static System.Collections.IDictionary RegistryMap(object registry, string name) =>
+                (System.Collections.IDictionary)registry.GetType()
+                    .GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!
+                    .GetValue(registry)!;
+
+            var rangedElements = RegistryMap(registry, "_paragraphRanges");
+            var naiveElements = RegistryMap(registry, "_paragraphs");
 
             rangedCount = rangedElements.Count;
             rangedHasAnim0 = rangedElements.Contains(rangeAnim0);

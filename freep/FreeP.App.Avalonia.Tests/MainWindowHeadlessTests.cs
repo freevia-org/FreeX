@@ -73,39 +73,12 @@ public sealed class MainWindowHeadlessTests : IDisposable
 
     public void Dispose() => _temporaryDirectory.Dispose();
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            // Headless drawing unavailable in this CI environment; skip gracefully.
-            return false;
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too,
+    // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
-    private static async Task<bool> OnUiThreadAsync(Func<Task> action)
-    {
-        try
-        {
-            await Session.Dispatch(
-                async () =>
-                {
-                    await action();
-                    return true;
-                },
-                CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            // Headless drawing unavailable in this CI environment; skip gracefully.
-            return false;
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too.
+    private static Task<bool> OnUiThreadAsync(Func<Task> action) => HeadlessUiThread.RunAsync(action);
 
     // ── Construction ────────────────────────────────────────────────────────────
 
@@ -2120,7 +2093,9 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 window.Editor.Select(table.Id);
                 window.Editor.SetActiveTableCell(0, 0);
                 window.ActivateTableCellEditForTests(table.Id, 0, 0).Should().BeTrue();
-                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                // No dispatcher pump here: in the headless harness pumping delivers a LostFocus to the
+                // freshly opened in-canvas editor (nothing holds focus), which commits and CLOSES the
+                // edit -- so the editor this test then looks for no longer exists.
                 shapeCountBefore = window.Editor.CurrentSlide!.Shapes.Count;
 
                 var registry = window.BuildCommandRegistry();
@@ -2377,11 +2352,16 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 window.Editor.Select(shape.Id);
                 window.Editor.SetActiveTableCell(0, 0);
                 window.ActivateTableCellEditForTests(shape.Id, 0, 0).Should().BeTrue();
-                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                // No dispatcher pump here: in the headless harness pumping delivers a LostFocus to the
+                // freshly opened in-canvas editor (nothing holds focus), which commits and CLOSES the
+                // edit -- so the editor this test then looks for no longer exists.
 
                 window.GetVisualDescendants()
+                    // The rich-editor CLASS only marks a cell that has rich formatting, so a plain-text
+                    // cell's editor carried no such class and this found nothing. The plan on Tag is set
+                    // whenever the editor opens, which is the identity this needs.
                     .OfType<TextBox>()
-                    .Single(control => control.Classes.Contains("freep-table-cell-rich-editor"))
+                    .Single(control => control.Tag is InCanvasTableCellRichTextEditPlan)
                     .Text = "Committed before fill";
 
                 var registry = window.BuildCommandRegistry();
@@ -2588,11 +2568,13 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 window.Editor.Select(shape.Id);
                 window.Editor.SetActiveTableCell(0, 0);
                 window.ActivateTableCellEditForTests(shape.Id, 0, 0).Should().BeTrue();
-                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                // No dispatcher pump here: in the headless harness pumping delivers a LostFocus to the
+                // freshly opened in-canvas editor (nothing holds focus), which commits and CLOSES the
+                // edit -- so the editor this test then looks for no longer exists.
 
                 var inlineEditor = window.GetVisualDescendants()
                     .OfType<TextBox>()
-                    .Single(control => control.Classes.Contains("freep-table-cell-rich-editor"));
+                    .Single(control => control.Tag is InCanvasTableCellRichTextEditPlan);
                 inlineEditor.Text = "Committed by ribbon";
 
                 var registry = window.BuildCommandRegistry();
@@ -2646,14 +2628,19 @@ public sealed class MainWindowHeadlessTests : IDisposable
                     {
                         new Paragraph { Runs = { new Run { Text = "Context cell", Italic = true } } },
                     },
+                    // The rich-editor CLASS only marks a cell that has rich formatting, so a plain-text
+                    // cell's editor carried no such class and this found nothing. The plan on Tag is set
+                    // whenever the editor opens, which is the identity this needs.
                 };
                 window.Editor.Select(shape.Id);
                 window.Editor.SetActiveTableCell(0, 0);
                 window.ActivateTableCellEditForTests(shape.Id, 0, 0).Should().BeTrue();
-                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                // No dispatcher pump here: in the headless harness pumping delivers a LostFocus to the
+                // freshly opened in-canvas editor (nothing holds focus), which commits and CLOSES the
+                // edit -- so the editor this test then looks for no longer exists.
                 window.GetVisualDescendants()
                     .OfType<TextBox>()
-                    .Single(control => control.Classes.Contains("freep-table-cell-rich-editor"))
+                    .Single(control => control.Tag is InCanvasTableCellRichTextEditPlan)
                     .Text = "Committed by context menu";
 
                 var menu = window.BuildTableContextMenuForTests(shape.Id);
@@ -4627,8 +4614,14 @@ public sealed class MainWindowHeadlessTests : IDisposable
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fade", out var fade).Should().BeTrue();
+
             var hero = window.Editor.InsertDefaultRectangle();
             window.Editor.Select(hero.Id);
+            // An easing edit needs an animation to ease: without this the slide had none, so the pane
+            // row addressed below did not exist.
+            fade!.Execute(RibbonCommandContext.Empty);
             window.ShowAnimationPane();
 
             easingPlan = window.ApplyAnimationPaneEasingEditForTests(0, "35.5%", "12%");
@@ -5200,8 +5193,12 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public async Task AccessibilityCheckerPane_card_chrome_matches_Wpf_authority()
     {
-        Button? actionButton = null;
-        TextBlock? selectedIssue = null;
+        double actionHeight = -1;
+        CornerRadius actionCornerRadius = default;
+        global::Avalonia.Media.FontFamily? actionFontFamily = null;
+        var foundSelectedIssue = false;
+        Thickness selectedIssueMargin = default;
+        global::Avalonia.Media.FontFamily? selectedIssueFontFamily = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -5212,17 +5209,30 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 {
                     Id = 700,
                     Name = "Missing alt text",
+                    // Only shapes that CARRY meaning need alt text (picture, chart, SmartArt, media,
+                    // ...) -- a default auto-shape raises no issue, so this pane had no row at all and
+                    // none of the card chrome below existed.
+                    Kind = SlideShapeKind.Picture,
                     AlternativeText = string.Empty,
                 });
                 window.Editor.Select(700);
                 window.ShowAccessibilityCheckerPane();
 
-                actionButton = window.GetLogicalDescendants()
+                var actionButton = window.GetLogicalDescendants()
                     .OfType<Button>()
                     .Single(button => Equals(button.Content, "Open Alt Text"));
-                selectedIssue = window.GetLogicalDescendants()
+                var selectedIssue = window.GetLogicalDescendants()
                     .OfType<TextBlock>()
                     .Single(text => text.Text == "Selected issue");
+
+                // Read the chrome HERE: an Avalonia property read verifies dispatcher access, and these
+                // used to be read after the guard below — on the xUnit thread — which throws.
+                actionHeight = actionButton.Height;
+                actionCornerRadius = actionButton.CornerRadius;
+                actionFontFamily = actionButton.FontFamily;
+                foundSelectedIssue = true;
+                selectedIssueMargin = selectedIssue.Margin;
+                selectedIssueFontFamily = selectedIssue.FontFamily;
             }
             finally
             {
@@ -5231,13 +5241,12 @@ public sealed class MainWindowHeadlessTests : IDisposable
         });
 
         if (!ran) return;
-        actionButton.Should().NotBeNull();
-        actionButton!.Height.Should().Be(20);
-        actionButton.CornerRadius.Should().Be(new CornerRadius(0));
-        actionButton.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
-        selectedIssue.Should().NotBeNull();
-        selectedIssue!.Margin.Should().Be(new Thickness(0, 2, 0, 0));
-        selectedIssue.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
+        actionHeight.Should().Be(20);
+        actionCornerRadius.Should().Be(new CornerRadius(0));
+        actionFontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
+        foundSelectedIssue.Should().BeTrue();
+        selectedIssueMargin.Should().Be(new Thickness(0, 2, 0, 0));
+        selectedIssueFontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
     }
 
     [Fact]
@@ -6315,7 +6324,16 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 .Should().BeTrue();
 
             noSelectionPlan = window.ShowReviewCommentsPane();
+            // Opening the pane with a comment present SELECTS it (the planner falls back to the first
+            // visible comment when nothing is chosen), so Resolve is available and carries no reason.
             noSelectionPlan.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
+                .DisabledReason.Should().BeNull();
+            // The "nothing to select" state is a slide with NO comments, and that is where the message
+            // this used to expect belongs.
+            PresentationReviewWorkflowPlanner
+                .BuildCommentPanePlan([new Slide { Title = "No comments" }], slideIndex: 0)
+                .Actions.Single(action =>
                     action.CommandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
                 .DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.MissingCommentMessage);
 

@@ -36,19 +36,9 @@ public sealed class CommentAuthorIdentityStampingTests : IDisposable
 
     public void Dispose() => _temporaryDirectory.Dispose();
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            // Headless drawing unavailable in this CI environment; skip gracefully.
-            return false;
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too,
+    // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
     [Fact]
     public async Task ResolveCommentAuthor_PrefersPresentationPropertiesAuthor()

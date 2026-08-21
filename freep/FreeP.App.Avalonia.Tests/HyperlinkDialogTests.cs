@@ -72,8 +72,11 @@ public sealed class HyperlinkDialogTests
             var buttonRow = grid.Children.OfType<StackPanel>().Single(panel => Grid.GetRow(panel) == 5);
             var buttons = buttonRow.Children.OfType<Button>().ToArray();
 
-            dialog.Width.Should().BeApproximately(405.3333333333333, 0.001);
-            dialog.Height.Should().Be(216);
+            // The dialog was deliberately aligned to WPF's content-sized 406x212 raster at the shared
+            // 96-DPI capture target (see HyperlinkDialog's own comment); this pinned the geometry from
+            // before that alignment.
+            dialog.Width.Should().Be(406);
+            dialog.Height.Should().Be(212);
             urlRadio.Template.Should().NotBeNull();
             slideRadio.Template.Should().NotBeNull();
             urlBox.PlaceholderText.Should().BeNull();
@@ -278,18 +281,9 @@ public sealed class HyperlinkDialogTests
         });
     }
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too,
+    // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
     private static HyperlinkDialogRequest CreateRequest() => new(
         [new HyperlinkDialogSlideOption("s1", "1. Slide")],
