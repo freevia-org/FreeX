@@ -1971,9 +1971,17 @@ public partial class GridView
                 rect.Top + ShapeTextVPad + Math.Max(0, (textHeight - textBlockHeight) / 2),
         };
 
-        // Horizontal origin: for Left alignment start at left+pad; Center/Right anchors are
-        // expressed from the left edge of the max-width box.
-        var textLeft = rect.Left + ShapeTextHPad;
+        // Horizontal origin: a no-wrap run has no width constraint, so center/right alignment is relative to its
+        // supplied origin. Anchor that origin at the matching shape edge instead of the left
+        // edge; otherwise centered WordArt clips its leading glyphs.
+        var textLeft = !shape.ShapeTextWrap
+            ? hAlign switch
+            {
+                TextAlignment.Center => rect.Left + rect.Width / 2,
+                TextAlignment.Right => rect.Right - ShapeTextHPad,
+                _ => rect.Left + ShapeTextHPad,
+            }
+            : rect.Left + ShapeTextHPad;
 
         // Clip to the shape's bounding rectangle so text doesn't bleed outside.
         var clipRect = new Rect(rect.Left, rect.Top, rect.Width, rect.Height);

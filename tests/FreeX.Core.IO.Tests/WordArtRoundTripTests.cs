@@ -84,6 +84,7 @@ public sealed class WordArtRoundTripTests
         shape.ShapeTextOutlineColor.Should().Be(new CellColor(0x8B, 0x00, 0x00));
         shape.ShapeTextOutlineWidthPoints.Should().BeApproximately(1.0, 0.01,
             "12700 EMU = 1 pt");
+        shape.OutlineHasNoFill.Should().BeTrue("a borderless WordArt has no shape-level a:ln element");
         shape.ShapeTextGradientEndColor.Should().BeNull("only solidFill on run — no gradient");
         shape.ShapeTextHasNoFill.Should().BeFalse("solid-fill WordArt must retain its glyph fill");
     }

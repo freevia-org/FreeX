@@ -1010,6 +1010,11 @@ internal static partial class XlsxWorksheetDrawingPartReader
              textOutlineColor, textOutlineThemeColor, textOutlineWidthPt, textHasNoFill) =
             ReadShapeTextFormatting(txBodyElement, drawingNs);
 
+        // A WordArt object whose shape properties have no <a:ln> is borderless in Excel.
+        // Unlike an ordinary autoshape, its visible ink comes from the run-level WordArt text
+        // fill/outline; applying FreeX's ordinary default outline creates a spurious rectangle.
+        var effectiveOutlineHasNoFill = outlineHasNoFill || (isWordArt && lnElement is null);
+
         shapes.Add(new XlsxShapePackagePart(
             kind,
             name,
@@ -1033,7 +1038,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             xfrmWidthPixels,
             xfrmHeightPixels,
             outlineWidthPoints,
-            outlineHasNoFill,
+            effectiveOutlineHasNoFill,
             outlineDash,
             ReadDrawingArrowhead(lnElement, drawingNs, "headEnd"),
             ReadDrawingArrowhead(lnElement, drawingNs, "tailEnd"),
