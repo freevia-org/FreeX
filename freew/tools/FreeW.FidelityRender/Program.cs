@@ -765,11 +765,6 @@ static void RenderDocumentComposite(
             thisPageWDip - thisMarginLeft - thisMarginRight,
             thisPixH - thisMarginBottom));
 
-        // Word's All Markup capture adds black gutter bars beside contiguous revision spans. The
-        // paginator exposes no public text-line rectangles once detached, so use the already-painted
-        // revision colours to recover the exact local geometry before composing the non-content layer.
-        DrawTrackedRevisionChangeBars(bmp, doc, thisMarginLeft, thisMarginRight);
-
         // ─ Layer 3: page border (draw into a separate DrawingVisual, composite onto bmp) ─────────
         if (hasPageBorder && pageBorderLayer == PageBorderRenderLayer.InFrontOfText)
         {
@@ -1116,106 +1111,6 @@ static void RenderDocumentComposite(
         evidence.Add(row);
         Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({evidenceBitmap.PixelWidth}x{evidenceBitmap.PixelHeight}, {pageCount}/{actualPageCountWithEndnotes} pages emitted, composite endnotes)");
     }
-}
-
-static void DrawTrackedRevisionChangeBars(
-    RenderTargetBitmap pageBitmap,
-    TextDocument document,
-    double marginLeftDip,
-    double marginRightDip)
-{
-    var authorColors = ReviewRevisionColorPlanner.BuildAuthorColors(document);
-    if (authorColors.Count == 0)
-        return;
-
-    var revisionColors = authorColors.Values
-        .Append(ReviewRevisionColorPlanner.FallbackColorHex)
-        .Select(hex => ParseHexColor(hex, Colors.Black))
-        .Select(color => (color.R, color.G, color.B))
-        .ToHashSet();
-    var width = pageBitmap.PixelWidth;
-    var height = pageBitmap.PixelHeight;
-    var stride = width * 4;
-    var pixels = new byte[stride * height];
-    pageBitmap.CopyPixels(pixels, stride, 0);
-    var revisionRows = new bool[height];
-    var ordinaryInkRows = new bool[height];
-    var contentLeft = Math.Clamp((int)Math.Floor(marginLeftDip), 0, width);
-    var contentRight = Math.Clamp((int)Math.Ceiling(width - marginRightDip), contentLeft, width);
-
-    for (var y = 0; y < height; y++)
-    {
-        for (var x = contentLeft; x < contentRight; x++)
-        {
-            var offset = y * stride + x * 4;
-            var blue = pixels[offset];
-            var green = pixels[offset + 1];
-            var red = pixels[offset + 2];
-            if (revisionColors.Contains((red, green, blue)))
-                revisionRows[y] = true;
-            else if (red < 80 && green < 80 && blue < 80)
-                ordinaryInkRows[y] = true;
-        }
-    }
-
-    var revisionBands = new List<(int Top, int Bottom)>();
-    for (var y = 0; y < height;)
-    {
-        if (!revisionRows[y])
-        {
-            y++;
-            continue;
-        }
-
-        var top = y;
-        var bottom = y;
-        for (y++; y < height; y++)
-        {
-            if (revisionRows[y])
-            {
-                bottom = y;
-                continue;
-            }
-
-            var nextInk = y + 1 < height && revisionRows[y + 1];
-            if (!nextInk)
-                break;
-        }
-        revisionBands.Add((top, bottom));
-    }
-
-    if (revisionBands.Count == 0)
-        return;
-
-    var visual = new DrawingVisual();
-    using (var context = visual.RenderOpen())
-    {
-        var pen = new Pen(Brushes.Black, 1);
-        var barX = Math.Round(marginLeftDip / 2) + 0.5;
-        for (var index = 0; index < revisionBands.Count;)
-        {
-            var top = revisionBands[index].Top;
-            var bottom = revisionBands[index].Bottom;
-            var isCoalesced = false;
-            while (index + 1 < revisionBands.Count
-                && revisionBands[index + 1].Top - bottom <= 24)
-            {
-                index++;
-                bottom = revisionBands[index].Bottom;
-                isCoalesced = true;
-            }
-
-            var nextOrdinaryInk = Enumerable.Range(bottom + 1, Math.Max(0, height - bottom - 1))
-                .FirstOrDefault(y => ordinaryInkRows[y], -1);
-            var barTop = Math.Max(0, top - 5 + (isCoalesced ? 1 : 0));
-            var barBottom = nextOrdinaryInk >= 0
-                ? Math.Max(barTop, nextOrdinaryInk - 4)
-                : Math.Min(height - 1, bottom + 6);
-            context.DrawLine(pen, new Point(barX, barTop), new Point(barX, barBottom));
-            index++;
-        }
-    }
-    pageBitmap.Render(visual);
 }
 
 static RenderTargetBitmap NormalizeWordBaselineRasterSurface(RenderTargetBitmap bitmap)

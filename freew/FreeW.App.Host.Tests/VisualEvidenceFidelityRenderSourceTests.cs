@@ -268,14 +268,12 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
-    public void FidelityRender_composites_tracked_revision_gutter_bars()
+    public void FidelityRender_does_not_inject_tracked_revision_gutter_bars_into_document_capture()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
 
-        source.Should().Contain("DrawTrackedRevisionChangeBars(bmp, doc, thisMarginLeft, thisMarginRight)");
-        source.Should().Contain("ReviewRevisionColorPlanner.BuildAuthorColors(document)");
-        source.Should().Contain("pageBitmap.CopyPixels(pixels, stride, 0)");
-        source.Should().Contain("var barX = Math.Round(marginLeftDip / 2) + 0.5;");
+        source.Should().NotContain("DrawTrackedRevisionChangeBars");
+        source.Should().NotContain("var barX = Math.Round(marginLeftDip / 2) + 0.5;");
     }
 
     [Fact]
