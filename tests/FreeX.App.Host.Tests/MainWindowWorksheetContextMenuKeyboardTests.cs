@@ -500,6 +500,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
 
         public IReadOnlyList<string> OpenMenuHeaders =>
             ActiveContextMenu?.Items.OfType<MenuItem>()
+                .Where(item => !WorksheetContextMenuRenderer.IsSearchMenuItem(item))
                 .Select(item => item.Header?.ToString() ?? "")
                 .ToList() ?? [];
 
