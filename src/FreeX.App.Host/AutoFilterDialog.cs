@@ -366,12 +366,14 @@ public sealed partial class AutoFilterDialog : Window
         _filterByColorUnavailableButton.IsEnabled = false;
         SetMenuCommandButtonContent(
             _sortByColorUnavailableButton,
-            FormatCascadeMenuHeader(UiText.Get("AutoFilter_SortByColor")),
-            RibbonCommandIconKind.Color);
+            UiText.Get("AutoFilter_SortByColor"),
+            RibbonCommandIconKind.Color,
+            hasCascade: true);
         SetMenuCommandButtonContent(
             _filterByColorUnavailableButton,
-            FormatCascadeMenuHeader(UiText.Get("AutoFilter_FilterByColor")),
-            RibbonCommandIconKind.Color);
+            UiText.Get("AutoFilter_FilterByColor"),
+            RibbonCommandIconKind.Color,
+            hasCascade: true);
     }
 
     public void ConfigureAsModelessFlyout()

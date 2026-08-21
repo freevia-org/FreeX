@@ -112,11 +112,12 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("CreateMenuCommandButton(UiText.Get(\"AutoFilter_SortAToZ\"), RibbonCommandIconKind.SortAscending)");
         source.Should().Contain("CreateMenuCommandButton(UiText.Get(\"AutoFilter_SortZToA\"), RibbonCommandIconKind.SortDescending)");
         source.Should().Contain("CreateMenuCommandButton(UiText.Get(\"AutoFilter_ClearFilterFrom2\"), RibbonCommandIconKind.Clear)");
-        source.Should().Contain("SetMenuCommandButtonContent(_textFiltersButton, FormatCascadeMenuHeader(UiText.Get(\"AutoFilter_TextFilters\")), RibbonCommandIconKind.Filter)");
+        source.Should().Contain("SetMenuCommandButtonContent(_textFiltersButton, UiText.Get(\"AutoFilter_TextFilters\"), RibbonCommandIconKind.Filter, hasCascade: true)");
         source.Should().Contain("RibbonIconFactory.CreateIcon(new RibbonCommandIcon(iconKind), 14, Brushes.Black)");
         source.Should().Contain("new AccessText");
         source.Should().Contain("CreateMenuCommandButtonTemplate()");
         source.Should().Contain("AutoFilterMenuCommandContent");
+        source.Should().Contain("Grid.SetColumn(cascade, 2)");
     }
 
     [Fact]
