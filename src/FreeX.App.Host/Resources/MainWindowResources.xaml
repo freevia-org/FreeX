@@ -53,12 +53,12 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource FreeXTitleBarHoverBrush}"/>
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource FreeXTitleBarButtonBorderBrush}"/>
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource FreeXAccentBrush}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#55FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource FreeXTitleBarPressedBrush}"/>
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource FreeXTitleBarButtonBorderBrush}"/>
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource FreeXAccentDarkBrush}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#55FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Chrome" Property="Background" Value="Transparent"/>
@@ -103,16 +103,16 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource FreeXTitleBarHoverBrush}"/>
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource FreeXTitleBarButtonBorderBrush}"/>
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource FreeXAccentBrush}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#55FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource FreeXTitleBarPressedBrush}"/>
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource FreeXTitleBarButtonBorderBrush}"/>
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource FreeXAccentDarkBrush}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#55FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource FreeXTitleBarHoverBrush}"/>
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource FreeXTitleBarButtonBorderBrush}"/>
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource FreeXAccentBrush}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#55FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Chrome" Property="Background" Value="Transparent"/>
@@ -128,7 +128,7 @@
         <Style x:Key="TitleBarQatButton" BasedOn="{StaticResource RibbonBtn}" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeXTitleBarForegroundBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="2"/>
             <Setter Property="Cursor" Value="Arrow"/>
@@ -162,17 +162,17 @@
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{DynamicResource FreeXTitleBarHoverBrush}"/>
                     <Setter Property="BorderBrush" Value="{DynamicResource FreeXTitleBarButtonBorderBrush}"/>
-                    <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource FreeXTitleBarForegroundBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
                     <Setter Property="Background" Value="{DynamicResource FreeXTitleBarPressedBrush}"/>
                     <Setter Property="BorderBrush" Value="{DynamicResource FreeXTitleBarButtonBorderBrush}"/>
-                    <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource FreeXTitleBarForegroundBrush}"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Background" Value="Transparent"/>
                     <Setter Property="BorderBrush" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource FreeXTitleBarForegroundBrush}"/>
                     <Setter Property="Cursor" Value="Arrow"/>
                 </Trigger>
             </Style.Triggers>

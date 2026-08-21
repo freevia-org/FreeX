@@ -129,7 +129,7 @@ public sealed class ThemeApplierWpfRound8Tests
         var expected = new[]
         {
             "FreeXAccentBrush", "FreeXAccentDarkBrush", "FreeXAccentSoftBrush",
-            "FreeXAccentPressedBrush", "FreeXTitleBarBrush", "FreeXTitleBarHoverBrush",
+            "FreeXAccentPressedBrush", "FreeXTitleBarBrush", "FreeXTitleBarForegroundBrush", "FreeXTitleBarHoverBrush",
             "FreeXTitleBarPressedBrush", "FreeXTitleBarDisabledBrush",
             "FreeXTitleBarButtonBorderBrush", "FreeXRibbonButtonHoverBrush",
             "FreeXTextBrush", "FreeXMutedTextBrush", "FreeXSubtleTextBrush",
