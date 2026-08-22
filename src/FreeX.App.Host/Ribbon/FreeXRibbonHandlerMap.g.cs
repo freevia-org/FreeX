@@ -502,6 +502,7 @@ public partial class MainWindow
             ["Shapes"] = new(static (owner, sender, eventArgs) => owner.ShapesBtn_Click(sender, eventArgs), nameof(ShapesBtn_Click)),
             ["Share"] = new(static (owner, sender, eventArgs) => owner.ShareWorkbookBtn_Click(sender, eventArgs), nameof(ShareWorkbookBtn_Click)),
             ["Show Comments"] = new(static (owner, sender, eventArgs) => owner.ReviewShowCommentsBtn_Click(sender, eventArgs), nameof(ReviewShowCommentsBtn_Click)),
+            ["Show Changes"] = new(static (owner, sender, eventArgs) => owner.ReviewShowChangesBtn_Click(sender, eventArgs), nameof(ReviewShowChangesBtn_Click)),
             ["Show Detail"] = new(static (owner, sender, eventArgs) => owner.ExpandGroupBtn_Click(sender, eventArgs), nameof(ExpandGroupBtn_Click)),
             ["Show Details"] = new(static (owner, sender, eventArgs) => owner.PivotTableShowDetailsBtn_Click(sender, eventArgs), nameof(PivotTableShowDetailsBtn_Click)),
             ["Show Formulas"] = new(static (owner, sender, eventArgs) => owner.ShowFormulasBtn_Click(sender, eventArgs), nameof(ShowFormulasBtn_Click)),

@@ -223,6 +223,9 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Large("Check Accessibility", "Check Accessibility", Ico.Accessibility, "CA")
                 .Medium("Alt Text", "Alt Text", Ico.Label, "T"))
+            .Group("ReviewChangesGroup", "Changes", null, priority: 110,
+                g => g
+                .Large("Show Changes", "Show Changes", Ico.History, "CH"))
             .Group("ReviewCommentsGroup", "Comments", null, priority: 90,
                 g => g
                 .Large("New Comment", "New Comment", Ico.Comment, "CM")

@@ -19,6 +19,7 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private CommentListWindow? _reviewCommentsWindow;
+    private SessionChangesWindow? _sessionChangesWindow;
 
     private void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -105,6 +106,26 @@ public partial class MainWindow
         var report = WorkbookPerformanceService.Analyze(_workbook);
         var dialog = new WorkbookPerformanceDialog(report) { Owner = this };
         dialog.ShowDialog();
+    }
+
+    private void ReviewShowChangesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var plan = SessionChangesPlanner.Create(
+            _session.GetUndoHistory(SessionChangesPlanner.MaxEntries),
+            _session.GetRedoHistory(SessionChangesPlanner.MaxEntries));
+
+        if (_sessionChangesWindow is null || !_sessionChangesWindow.IsLoaded)
+        {
+            _sessionChangesWindow = new SessionChangesWindow(plan) { Owner = this };
+            _sessionChangesWindow.Closed += (_, _) => _sessionChangesWindow = null;
+            _sessionChangesWindow.Show();
+            return;
+        }
+
+        _sessionChangesWindow.Refresh(plan);
+        if (_sessionChangesWindow.WindowState == WindowState.Minimized)
+            _sessionChangesWindow.WindowState = WindowState.Normal;
+        _sessionChangesWindow.Activate();
     }
 
     /// <summary>

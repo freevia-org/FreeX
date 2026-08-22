@@ -55,6 +55,10 @@ public sealed class ReviewCommandSourceTests
         source.Should().NotContain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(");
         source.Should().NotContain("SpellCheckWorkflowPlanner.BuildReplacementCommand(");
         source.Should().Contain("WorkbookStatisticsService.GetStatistics(_workbook)");
+        source.Should().Contain("SessionChangesPlanner.Create(");
+        source.Should().Contain("_session.GetUndoHistory(SessionChangesPlanner.MaxEntries)");
+        source.Should().Contain("_session.GetRedoHistory(SessionChangesPlanner.MaxEntries)");
+        source.Should().Contain("new SessionChangesWindow(plan) { Owner = this }");
         source.Should().Contain("AccessibilityCheckerService.FindIssues(_workbook)");
         source.Should().Contain("DrawingTargetResolver.GetTargetAltTextObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind)");
         source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildAltTextCommand(");

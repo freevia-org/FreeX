@@ -165,8 +165,7 @@ public sealed class RibbonDisabledCommandGuardrailTests
         "Pictures > Place over Cells > Stock Images over Cells",
         "Pictures > Place over Cells > Online Pictures over Cells",
         "Print Area > Add to Print Area",
-        "Group > Auto Outline",
-        "Show Changes"
+        "Group > Auto Outline"
     };
 
     private sealed record GuardedRibbonCommand(
