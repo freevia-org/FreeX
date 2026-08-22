@@ -17,7 +17,12 @@ namespace FreeW.App.Avalonia;
 
 internal static class PageLayoutDialogChrome
 {
-    internal static readonly AvaloniaCompactDialogChromeStyle Style = AvaloniaCompactDialogChrome.WindowsStyle;
+    internal static readonly AvaloniaCompactDialogChromeStyle Style =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            FocusedInputBorderBrush = new SolidColorBrush(
+                Color.Parse(CompactDialogVisualTokens.FocusedInputBorderHex))
+        };
 
     internal static TextBox NumberBox(
         string text,

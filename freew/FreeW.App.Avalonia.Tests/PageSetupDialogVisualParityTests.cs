@@ -168,4 +168,16 @@ public sealed class PageSetupDialogVisualParityTests
         source.Should().Contain("foreach (var button in ((Panel)actions).Children.OfType<Button>())");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, actionStyle, metrics.ActionButtonWidth);");
     }
+
+    [Fact]
+    public async Task Page_setup_inputs_use_the_Wpf_native_keyboard_focus_border()
+    {
+        await Session.Dispatch(() =>
+        {
+            var focusedBorder = PageLayoutDialogChrome.Style.FocusedInputBorderBrush
+                .Should().BeOfType<SolidColorBrush>().Subject;
+
+            focusedBorder.Color.Should().Be(Color.FromRgb(0x56, 0x9D, 0xE5));
+        }, CancellationToken.None);
+    }
 }

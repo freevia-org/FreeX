@@ -38,6 +38,10 @@ public static class CompactDialogVisualTokens
 
     public const string BorderHex = "#C8C8C8";
     public const string FieldBorderHex = "#B7BCC2";
+    // WPF's native compact input template keeps its keyboard-focus ring blue even when the
+    // product's button/default accent is themed. Avalonia routes that opt into WPF input chrome
+    // consume this fixed authority token instead of substituting the brand accent.
+    public const string FocusedInputBorderHex = "#569DE5";
     public const string DisabledFieldBorderHex = "#D0D1D4";
     public const string DisabledForegroundHex = "#9AA0A6";
     public const string DisabledBorderHex = "#E0E0E0";
