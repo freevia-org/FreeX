@@ -7,25 +7,36 @@ namespace FreeP.App.Rendering.Avalonia.Tests;
 public sealed class SlideCanvasAptosRasterPolicyTests
 {
     [Fact]
-    public void UsesImportedAptosBodyFont_MatchesOnlyTheMeasuredNoAutofitBody()
+    public void UsesFixedSizeAptosBodyFallback_MatchesSemanticRenderingRoute()
     {
-        var matching = CreateLayout(8);
-
-        SlideCanvas.UsesImportedAptosBodyFont(matching).Should().BeTrue();
-        SlideCanvas.UsesImportedAptosBodyFont(CreateLayout(7)).Should().BeFalse();
-        SlideCanvas.UsesImportedAptosBodyFont(
+        SlideCanvas.UsesFixedSizeAptosBodyFallback(CreateLayout(8)).Should().BeTrue();
+        SlideCanvas.UsesFixedSizeAptosBodyFallback(
+            CreateLayout(2, bold: true)).Should().BeTrue();
+        SlideCanvas.UsesFixedSizeAptosBodyFallback(
             CreateLayout(8, TextAutoFitKind.Normal)).Should().BeFalse();
-        SlideCanvas.UsesImportedAptosBodyFont(
-            CreateLayout(8, TextAutoFitKind.None, BulletKind.Char)).Should().BeFalse();
+        SlideCanvas.UsesFixedSizeAptosBodyFallback(
+            CreateLayout(8, bulletKind: BulletKind.Char)).Should().BeFalse();
+        SlideCanvas.UsesFixedSizeAptosBodyFallback(
+            CreateLayout(8, fontFamily: "Calibri")).Should().BeFalse();
+        SlideCanvas.UsesFixedSizeAptosBodyFallback(
+            CreateLayout(8, fontSizePt: 24.0)).Should().BeFalse();
+        SlideCanvas.UsesFixedSizeAptosBodyFallback(
+            CreateLayout(8, columnCount: 2)).Should().BeFalse();
+        SlideCanvas.UsesFixedSizeAptosBodyFallback(CreateLayout(0)).Should().BeFalse();
     }
 
     private static ResolvedTextLayout CreateLayout(
         int paragraphCount,
         TextAutoFitKind autoFitKind = TextAutoFitKind.None,
-        BulletKind bulletKind = BulletKind.None) =>
+        BulletKind bulletKind = BulletKind.None,
+        string fontFamily = "Aptos",
+        double fontSizePt = 18.0,
+        bool bold = false,
+        int columnCount = 1) =>
         new()
         {
             AutoFitKind = autoFitKind,
+            ColumnCount = columnCount,
             Paragraphs = Enumerable.Range(0, paragraphCount)
                 .Select(_ => new ResolvedParagraph
                 {
@@ -34,8 +45,9 @@ public sealed class SlideCanvasAptosRasterPolicyTests
                         new ResolvedRun
                         {
                             Text = "Office body",
-                            FontFamily = "Aptos",
-                            FontSizePt = 18.0,
+                            FontFamily = fontFamily,
+                            FontSizePt = fontSizePt,
+                            Bold = bold,
                             Color = SrgbColor.Black
                         }
                     },

@@ -38,6 +38,8 @@ public sealed partial class SlideCanvas : Control
 {
     private const double PowerPointDefaultLineSpacingFactor = 1.18;
     private const double PowerPointFixedTextLineSpacingFactor = 1.20;
+    private const double PowerPointAptosBodyCalibrationFontSizePt = 18.0;
+    private const double PowerPointFixedSizeAptosBodyFontScale = 0.945;
 
     // ── Styled / direct properties ──────────────────────────────────────────
 
@@ -1502,22 +1504,30 @@ public sealed partial class SlideCanvas : Control
                     request.Paragraph,
                     request.MaxWidthDip,
                     request.Text.Wrap,
-                    request.Text.AutoFitKind);
+                    request.Text.AutoFitKind,
+                    UsesFixedSizeAptosBodyFallback(request.Text)
+                        ? PowerPointFixedSizeAptosBodyFontScale
+                        : null);
                 return new TextNativeMeasurement<FormattedText>(
                     formattedText,
                     formattedText.Height,
                     formattedText.Width);
             });
-        RenderMeasuredParagraphsAvalonia(dc, plan, bounds);
+        RenderMeasuredParagraphsAvalonia(
+            dc,
+            plan,
+            bounds,
+            applyFixedSizeAptosBodyFallback: UsesFixedSizeAptosBodyFallback(text));
     }
 
     private static void RenderMeasuredParagraphsAvalonia(
         DrawingContext dc,
         TextMeasuredBlockLayoutPlan<FormattedText> plan,
-        LayoutRect bounds)
+        LayoutRect bounds,
+        bool applyFixedSizeAptosBodyFallback = false)
     {
         var renderText = plan.RenderText;
-        using IDisposable? textOptionsScope = UsesImportedAptosBodyFont(renderText)
+        using IDisposable? textOptionsScope = applyFixedSizeAptosBodyFallback
             ? dc.PushTextOptions(new TextOptions
             {
                 TextRenderingMode = TextRenderingMode.Antialias,
@@ -1558,19 +1568,19 @@ public sealed partial class SlideCanvas : Control
                 }));
     }
 
-    // Office/WPF rasterize this imported no-autofit body as grayscale text. Keep
-    // the correction exact to the measured corpus shape so normal Avalonia text
-    // and other Aptos layouts retain the host's default rendering behavior.
-    internal static bool UsesImportedAptosBodyFont(ResolvedTextLayout text) =>
+    // Fixed-size Aptos bodies use Arial on this host. Keep their measurement and
+    // grayscale raster policy together while leaving mixed-font and bullet paths
+    // on Avalonia's defaults.
+    internal static bool UsesFixedSizeAptosBodyFallback(ResolvedTextLayout text) =>
         text.AutoFitKind == TextAutoFitKind.None
-        && text.Paragraphs.Count == 8
+        && text.ColumnCount == 1
+        && text.Paragraphs.Count > 0
         && text.Paragraphs.All(paragraph =>
-            paragraph.Runs.Count == 1
-            && string.Equals(paragraph.Runs[0].FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
-            && Math.Abs(paragraph.Runs[0].FontSizePt - 18.0) < 0.01
-            && !paragraph.Runs[0].Bold
-            && !paragraph.Runs[0].Italic
-            && paragraph.BulletKind == BulletKind.None);
+            paragraph.BulletKind == BulletKind.None
+            && paragraph.Runs.Count > 0
+            && paragraph.Runs.All(run =>
+                string.Equals(run.FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+                && Math.Abs(run.FontSizePt - PowerPointAptosBodyCalibrationFontSizePt) < 0.01));
 
     /// <summary>
     /// Wave 19A: draws a bullet glyph or number string at the given position.
@@ -1883,14 +1893,15 @@ public sealed partial class SlideCanvas : Control
         ResolvedParagraph para,
         double maxWidth,
         bool wrap,
-        TextAutoFitKind autoFitKind = TextAutoFitKind.None)
+        TextAutoFitKind autoFitKind = TextAutoFitKind.None,
+        double? fontScaleOverride = null)
     {
         var sb = new System.Text.StringBuilder();
         foreach (var run in para.Runs) sb.Append(run.Text);
         string txt = sb.Length == 0 ? " " : sb.ToString();
 
         var firstRun = para.Runs[0];
-        double fontScale = ResolvePowerPointFontScale(firstRun.FontFamily);
+        double fontScale = fontScaleOverride ?? ResolvePowerPointFontScale(firstRun.FontFamily);
         var typeface = new Typeface(
             ResolvePowerPointFontFamily(firstRun.FontFamily),
             firstRun.Italic ? FontStyle.Italic : FontStyle.Normal,
@@ -1935,7 +1946,7 @@ public sealed partial class SlideCanvas : Control
             if (run.Underline)    ft.SetTextDecorations(TextDecorations.Underline, pos, len);
             if (run.Strikethrough)ft.SetTextDecorations(TextDecorations.Strikethrough, pos, len);
             ft.SetFontFamily(ResolvePowerPointFontFamily(run.FontFamily), pos, len);
-            double runFontScale = ResolvePowerPointFontScale(run.FontFamily);
+            double runFontScale = fontScaleOverride ?? ResolvePowerPointFontScale(run.FontFamily);
             ft.SetFontSize(run.FontSizePt * (96.0 / 72.0) * runFontScale, pos, len);
             ft.SetForegroundBrush(
                 new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B)),
