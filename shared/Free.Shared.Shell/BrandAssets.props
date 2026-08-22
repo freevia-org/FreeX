@@ -1,7 +1,7 @@
 <Project>
   <!--
     Build-time counterpart to Theme.VisualAssets. App projects set FreeBrand once and consume the
-    resulting canonical paths for WPF resources, executable icons, Avalonia runtime content,
+    resulting canonical paths for WPF resources, executable icons, cross-platform runtime content,
     macOS ICNS bundles, and Linux SVG packaging.
   -->
   <PropertyGroup Condition="'$(FreeBrand)' == 'FreeX'">

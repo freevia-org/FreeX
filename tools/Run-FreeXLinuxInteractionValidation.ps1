@@ -654,6 +654,7 @@ function Start-ValidationSession {
         [string]$DocumentPath = "",
         [string]$MemoryLimit = "",
         [switch]$ReusePublishedPayload,
+        [switch]$FreeXPhysicalEvidence,
         [ValidateSet("Application", "Validation", "TestSupport")]
         [string]$HostMode = "Validation"
     )
@@ -675,6 +676,9 @@ function Start-ValidationSession {
     if ($SkipPublish -or $ReusePublishedPayload) { $startArguments.SkipPublish = $true }
     if (-not [string]::IsNullOrWhiteSpace($MemoryLimit)) {
         $startArguments.MemoryLimit = $MemoryLimit
+    }
+    if ($FreeXPhysicalEvidence) {
+        $startArguments.FreeXPhysicalEvidence = $true
     }
 
     & $harness @startArguments
@@ -1279,7 +1283,8 @@ try {
         # Physical X11 evidence must exercise the packaged FreeX application executable. The
         # TestSupport host is a managed-validation executable and cannot provide this lane's
         # production input authority.
-        $x11Session = Start-ValidationSession -HostMode Application -AppArgument $x11AppArguments -DocumentPath $PhysicalDocumentPath
+        $x11Session = Start-ValidationSession -HostMode Application -AppArgument $x11AppArguments `
+            -DocumentPath $PhysicalDocumentPath -FreeXPhysicalEvidence
         if ($PhysicalOnly) {
             Ensure-ReportProvenance
         }

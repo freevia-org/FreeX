@@ -416,9 +416,16 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("local home_ready=false");
         probe.Should().Contain("for _ in $(seq 1 20)");
         probe.Should().Contain("if ! $home_ready");
-        probe.Should().Contain("if len(candidates) == 1");
+        probe.Should().Contain("read_name_box_popup");
+        probe.Should().Contain("payload.get(\"stage\") != \"popup-opened\"");
+        probe.Should().Contain(
+            "The production Name Box popup did not emit exactly one popup-opened identity event.");
+        probe.Should().Contain("if [[ \"$popup_host\" == \"overlay-layer\" ]]");
         probe.Should().Contain("-crop \"208x136+${popup_x}+${popup_y}\" +repage");
-        probe.Should().Contain("\"evidenceProvenance\": \"native-x11-root-crop\"");
+        probe.Should().Contain("\"evidenceProvenance\": provenance");
+        probe.Should().Contain("provenance=\"native-x11-root-crop\"");
+        probe.Should().Contain("content_color_count");
+        probe.Should().Contain("\"$content_color_count\" -gt 1");
         probe.Should().Contain("\"resized\": False");
         probe.Should().NotContain("-resize 208x136");
     }

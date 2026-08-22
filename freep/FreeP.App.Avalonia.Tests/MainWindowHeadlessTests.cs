@@ -661,12 +661,21 @@ public sealed class MainWindowHeadlessTests : IDisposable
         var avaloniaProject = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"));
         var wpfProject = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "FreeP.App.Host.csproj"));
         var wpfWindow = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "MainWindow.cs"));
+        var brandAssets = File.ReadAllText(FindRepoFile(
+            "shared", "Free.Shared.Shell", "BrandAssets.props"));
 
-        avaloniaProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeP.ico")
-            .And.Contain(@"shared\Free.Shared.Shell\Resources\FreeP.svg")
-            .And.Contain(@"shared\Free.Shared.Shell\Resources\FreeP.icns");
-        wpfProject.Should().Contain(@"<ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeP.ico</ApplicationIcon>");
-        wpfWindow.Should().Contain("IconUri = \"pack://application:,,,/FreeP.App.Host;component/Resources/FreeP.ico\"");
+        brandAssets.Should().Contain("<BrandAssetBaseName>FreeP</BrandAssetBaseName>")
+            .And.Contain("<BrandWindowsIconPath>")
+            .And.Contain("<BrandScalableIconPath>")
+            .And.Contain("<BrandMacOsIconPath>");
+        avaloniaProject.Should().Contain(@"..\..\shared\Free.Shared.Shell\BrandAssets.props")
+            .And.Contain("$(BrandWindowsIconPath)")
+            .And.Contain("$(BrandScalableIconPath)")
+            .And.Contain("$(BrandMacOsIconPath)");
+        wpfProject.Should().Contain(@"..\..\shared\Free.Shared.Shell\BrandAssets.props")
+            .And.Contain("<ApplicationIcon>$(BrandWindowsIconPath)</ApplicationIcon>");
+        wpfWindow.Should().Contain(
+            "IconUri = Program.ActiveTheme.VisualAssets.GetWpfPackUri(\"FreeP.App.Host\")");
     }
 
     [Fact]

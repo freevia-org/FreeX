@@ -54,6 +54,7 @@ param(
     [string]$CupsDryRunMode = "success",
     [string]$SessionMetadataPath = "",
     [switch]$SkipPublish,
+    [switch]$FreeXPhysicalEvidence,
     [switch]$SkipImageBuild,
     [switch]$OpenBrowser,
     [switch]$Replace
@@ -355,6 +356,9 @@ if (-not $SkipPublish) {
     if ($App -eq "FreeP") {
         # FreeP selects its Windows target on a Windows host unless the Linux target is explicit.
         $publishArguments += "-p:FreePWindowsBuild=false"
+    }
+    if ($FreeXPhysicalEvidence -and $App -eq "FreeX" -and $HostMode -eq "Application") {
+        $publishArguments += "-p:FreeXPhysicalEvidence=true"
     }
     & dotnet publish $projectPath @publishArguments
     if ($LASTEXITCODE -ne 0) {

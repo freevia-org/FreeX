@@ -92,6 +92,10 @@
     <Compile Include="..\..\tools\FreeX.Validation.Avalonia\RendererHost\Program.ValidationHost.cs"
              Link="Program.ValidationHost.cs" />
   </ItemGroup>
+  <ItemGroup Condition="'$(FreeXPhysicalEvidence)' == 'true'">
+    <Compile Include="..\..\tools\FreeX.ParityCapture.Avalonia\Capture\MainWindow.NameBoxPhysicalEvidence.cs"
+             Link="MainWindow.NameBoxPhysicalEvidence.cs" />
+  </ItemGroup>
   <ItemGroup>
     <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.Opc" />

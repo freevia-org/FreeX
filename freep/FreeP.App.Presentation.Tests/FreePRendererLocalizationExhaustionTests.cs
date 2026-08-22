@@ -26,8 +26,6 @@ public sealed class FreePRendererLocalizationExhaustionTests
                 "resource-key suffix passed to PrintDialogText",
             [Literal("FreeP.App.Host/Backstage/BackstageView.cs", "Options")] =
                 "Backstage route identifier",
-            [Literal("FreeP.App.Host/MainWindow.cs", "P")] =
-                "FreeP application badge",
             [Literal("FreeP.App.Host/MainWindow.cs", "Info")] =
                 "Backstage route identifier",
             [Literal("FreeP.App.Host/MainWindow.cs", "Print")] =

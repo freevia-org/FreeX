@@ -38,7 +38,8 @@ public sealed class NameBoxDropdownParityCaptureSourceTests
     public void AvaloniaParityCapture_KeepsPhysicalFixtureSeparate()
     {
         var capture = WorkspaceFileLocator.ReadAllText("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
-        var physicalEvidence = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.NameBoxPhysicalEvidence.cs");
+        var physicalEvidence = WorkspaceFileLocator.ReadAllText(
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.NameBoxPhysicalEvidence.cs");
         var avaloniaSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.cs");
         var rendererAccess = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Avalonia", "MainWindow.RendererAccess.cs");
