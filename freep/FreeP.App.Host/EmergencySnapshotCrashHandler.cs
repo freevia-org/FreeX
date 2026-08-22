@@ -1,5 +1,5 @@
 using System.Windows;
-using System.Windows.Threading;
+using Free.Shared.Shell.Wpf;
 
 namespace FreeP.App.Host;
 
@@ -14,14 +14,6 @@ namespace FreeP.App.Host;
 internal static class EmergencySnapshotCrashHandler
 {
     /// <summary>
-    /// Bound on the dispatcher marshal below. A wedged UI thread must degrade to "no snapshot",
-    /// never to "the crash handler never returns" -- see the class remarks on FreeW's Avalonia
-    /// sibling for why a crash handler that hangs is strictly worse than the data loss it exists
-    /// to avoid.
-    /// </summary>
-    private static readonly TimeSpan DispatcherTimeout = TimeSpan.FromSeconds(8);
-
-    /// <summary>
     /// Best-effort emergency snapshot of every open dirty presentation window. Must never throw.
     ///
     /// <para>
@@ -35,53 +27,10 @@ internal static class EmergencySnapshotCrashHandler
     /// </summary>
     public static void TryEmergencySnapshotAllWindows()
     {
-        try
+        WpfEmergencySnapshotFanOut.TrySnapshotAllWindows(window =>
         {
-            var dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher is null)
-                return;
-
-            if (dispatcher.CheckAccess())
-            {
-                TryEmergencySnapshotAllWindowsOnDispatcher();
-            }
-            else
-            {
-                dispatcher.Invoke(
-                    TryEmergencySnapshotAllWindowsOnDispatcher,
-                    DispatcherPriority.Send,
-                    System.Threading.CancellationToken.None,
-                    DispatcherTimeout);
-            }
-        }
-        catch
-        {
-            // Outer guard — crash handlers must never throw.
-        }
-    }
-
-    private static void TryEmergencySnapshotAllWindowsOnDispatcher()
-    {
-        try
-        {
-            foreach (Window window in Application.Current.Windows)
-            {
-                if (window is not MainWindow mainWindow)
-                    continue;
-
-                try
-                {
-                    mainWindow.AutosaveCoordinatorForCrashHandler?.TryEmergencySnapshot();
-                }
-                catch
-                {
-                    // A crash handler must never throw.
-                }
-            }
-        }
-        catch
-        {
-            // Outer guard — crash handlers must never throw.
-        }
+            if (window is MainWindow mainWindow)
+                mainWindow.AutosaveCoordinatorForCrashHandler?.TryEmergencySnapshot();
+        });
     }
 }

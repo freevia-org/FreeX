@@ -1,8 +1,8 @@
 using System;
 using System.Windows;
-using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Shell;
 
@@ -14,7 +14,7 @@ namespace FreeW.App.Host;
 internal sealed partial class AutosaveCoordinator
 {
     private readonly FileCommands _file;
-    private readonly DispatcherTimer _timer;
+    private readonly WpfAutosaveTimer _timer;
     private readonly FreeWAutosaveSession _session;
     private readonly Func<AutosaveRecoveryCandidate, bool>? _recoverInNewWindow;
 
@@ -37,8 +37,7 @@ internal sealed partial class AutosaveCoordinator
             });
         _session = sessionFactory?.Invoke(ports) ?? new FreeWAutosaveSession(ports);
         _recoverInNewWindow = recoverInNewWindow;
-        _timer = new DispatcherTimer { Interval = FreeWAutosaveSession.DefaultInterval };
-        _timer.Tick += (_, _) => _session.Snapshot();
+        _timer = new WpfAutosaveTimer(FreeWAutosaveSession.DefaultInterval, _session.Snapshot);
     }
 
     public void Start() => _timer.Start();
