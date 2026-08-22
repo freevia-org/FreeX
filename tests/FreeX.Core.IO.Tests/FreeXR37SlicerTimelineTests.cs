@@ -316,6 +316,36 @@ public sealed class FreeXR37SlicerTimelineTests
     }
 
     [Fact]
+    public void HeaderlessTableSlicerSelectionChange_ResaveKeepsFirstDataRowInNativeIndexSpace()
+    {
+        using var source = SaveWorkbook(BuildTableSlicerWorkbook(headerRowCount: 0));
+        InjectNativeTabularSelection(
+            source,
+            "xl/slicerCaches/slicerCache1.xml",
+            selectedIndex: 0,
+            itemCount: 4);
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        var slicer = loaded.Slicers.Should().ContainSingle().Subject;
+        slicer.SelectedItems.Clear();
+        slicer.SelectedItems.Add("Widget");
+        slicer.SelectionCaptured = true;
+
+        var sheet = loaded.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 9), new NumberValue(1));
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+
+        var items = ReadNativeCacheItems(saved, "xl/slicerCaches/slicerCache1.xml");
+        items.Should().HaveCount(4);
+        items.Should().ContainSingle(item => item.Selected).Which.Index.Should().Be(1,
+            "a headerless table's first range row is data at index 0, so Widget remains index 1");
+    }
+
+    [Fact]
     public void TableSlicerUnchangedSelection_ResaveLeavesNativeCacheItemFlagsUntouched()
     {
         // Sibling/no-regression case: when the model never captured a selection change
@@ -398,7 +428,7 @@ public sealed class FreeXR37SlicerTimelineTests
         return workbook;
     }
 
-    private static Workbook BuildTableSlicerWorkbook()
+    private static Workbook BuildTableSlicerWorkbook(int? headerRowCount = null)
     {
         var workbook = new Workbook("TableSlicerNativeSelectionR37");
         var sheet = workbook.AddSheet("Data");
@@ -417,7 +447,8 @@ public sealed class FreeXR37SlicerTimelineTests
             Name = "CategoryTable",
             DisplayName = "CategoryTable",
             Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)),
-            HasAutoFilter = true
+            HasAutoFilter = true,
+            HeaderRowCount = headerRowCount
         };
         table.Columns.Add(new StructuredTableColumnModel(11, "Category"));
         table.Columns.Add(new StructuredTableColumnModel(12, "Amount"));
@@ -440,10 +471,15 @@ public sealed class FreeXR37SlicerTimelineTests
     /// <summary>
     /// Rewrites the freshly-saved slicerCache part to also carry the NATIVE
     /// &lt;data&gt;&lt;tabular&gt;&lt;items&gt;&lt;i x="N" s="1"/&gt; selection form (what a real Excel-authored
-    /// file stores), selecting only <paramref name="selectedIndex"/> among 3 items. The fresh FreeX writer
+    /// file stores), selecting only <paramref name="selectedIndex"/> among <paramref name="itemCount"/>
+    /// items. The fresh FreeX writer
     /// never emits this native form itself, so this simulates "loaded a real Excel workbook".
     /// </summary>
-    private static void InjectNativeTabularSelection(MemoryStream package, string cacheEntryName, int selectedIndex)
+    private static void InjectNativeTabularSelection(
+        MemoryStream package,
+        string cacheEntryName,
+        int selectedIndex,
+        int itemCount = 3)
     {
         package.Position = 0;
         using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
@@ -457,9 +493,11 @@ public sealed class FreeXR37SlicerTimelineTests
             var data = new XElement(SlicerXmlNs + "data",
                 new XElement(SlicerXmlNs + "tabular",
                     new XElement(SlicerXmlNs + "items",
-                        new XElement(SlicerXmlNs + "i", new XAttribute("x", 0), selectedIndex == 0 ? new XAttribute("s", "1") : null),
-                        new XElement(SlicerXmlNs + "i", new XAttribute("x", 1), selectedIndex == 1 ? new XAttribute("s", "1") : null),
-                        new XElement(SlicerXmlNs + "i", new XAttribute("x", 2), selectedIndex == 2 ? new XAttribute("s", "1") : null))));
+                        Enumerable.Range(0, itemCount).Select(index =>
+                            new XElement(
+                                SlicerXmlNs + "i",
+                                new XAttribute("x", index),
+                                selectedIndex == index ? new XAttribute("s", "1") : null)))));
             root.Add(data);
 
             entry.Delete();

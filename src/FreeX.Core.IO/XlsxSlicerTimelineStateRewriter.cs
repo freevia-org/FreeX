@@ -1076,18 +1076,17 @@ internal static class XlsxSlicerTimelineStateRewriter
     /// for one -- leaving <see cref="RewriteNativeCacheItemSelection"/> a permanent no-op for every table
     /// slicer and the native <c>&lt;i s="1"&gt;</c> flags Excel reads permanently stale after a selection
     /// change. Resolve the caption list from the referenced structured table's column distinct values
-    /// instead, mirroring FreeX.Core.Commands.SlicerItemResolver.ResolveTableColumnItems/DistinctColumnValues's
-    /// own first-occurrence-order computation (header row skipped, case-insensitive de-dup) so the index space
-    /// patched here agrees with what the rest of FreeX treats as that slicer's available items.
+    /// instead through <see cref="StructuredTableCaptionResolver"/>, so the structural-row rules, scalar
+    /// formatting, and first-occurrence index space patched here agree with the slicer's available items.
     /// </para>
     /// </summary>
     private static IReadOnlyList<string?>? ResolveRawSharedItemCaptions(ZipArchive archive, Workbook workbook, SlicerModel slicer)
     {
-        if (slicer.SourceTableId is { } tableId && slicer.SourceTableColumnId is { } columnId)
+        if (slicer.SourceTableId is { } tableId &&
+            slicer.SourceTableColumnId is { } columnId &&
+            StructuredTableCaptionResolver.TryResolveColumnCaptions(workbook, tableId, columnId, out var tableCaptions))
         {
-            var tableCaptions = ResolveStructuredTableColumnCaptions(workbook, tableId, columnId);
-            if (tableCaptions is not null)
-                return tableCaptions;
+            return tableCaptions;
         }
 
         var fieldName = slicer.SourceFieldName;
@@ -1158,79 +1157,6 @@ internal static class XlsxSlicerTimelineStateRewriter
             .Select(item => ResolveRawSharedItemCaption(item, field))
             .ToList();
     }
-
-    /// <summary>
-    /// Resolves the distinct, first-occurrence-ordered caption list for a table slicer's referenced
-    /// structured-table column, or <see langword="null"/> when the table/column can't be found. Mirrors
-    /// <c>FreeX.Core.Commands.SlicerItemResolver.ResolveTableColumnItems</c>/<c>DistinctColumnValues</c>
-    /// exactly (header row skipped, <see cref="StringComparer.CurrentCultureIgnoreCase"/> de-dup) so the
-    /// caption&lt;-&gt;index space used to patch the native <c>&lt;i s="1"&gt;</c> flags here agrees with
-    /// what the rest of FreeX treats as that slicer's available items.
-    /// </summary>
-    private static IReadOnlyList<string?>? ResolveStructuredTableColumnCaptions(Workbook workbook, int tableId, int columnId)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            foreach (var table in sheet.StructuredTables)
-            {
-                if (table.Id != tableId)
-                    continue;
-
-                var columnOffset = -1;
-                for (var index = 0; index < table.Columns.Count; index++)
-                {
-                    if (table.Columns[index].Id == columnId)
-                    {
-                        columnOffset = index;
-                        break;
-                    }
-                }
-
-                if (columnOffset < 0)
-                    return null;
-
-                return DistinctStructuredTableColumnValues(sheet, table.Range, columnOffset);
-            }
-        }
-
-        return null;
-    }
-
-    private static IReadOnlyList<string?> DistinctStructuredTableColumnValues(Sheet sheet, GridRange range, int columnOffset)
-    {
-        var col = range.Start.Col + (uint)columnOffset;
-        if (col > range.End.Col)
-            return [];
-
-        // Skip the header row (the table's first row is the header).
-        var firstDataRow = range.Start.Row + 1;
-        var seen = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
-        var items = new List<string?>();
-        for (var row = firstDataRow; row <= range.End.Row; row++)
-        {
-            var text = ToStructuredTableCellDisplayText(sheet.GetCell(row, col)?.Value ?? BlankValue.Instance);
-            if (string.IsNullOrEmpty(text))
-                continue;
-            if (seen.Add(text))
-                items.Add(text);
-        }
-
-        return items;
-    }
-
-    // Mirrors FreeX.Core.Commands.SlicerItemResolver.ToDisplayText exactly, so a table slicer's cell values
-    // format into the same caption the resolver/renderer and SetSlicerSelectionCommand compare against.
-    private static string ToStructuredTableCellDisplayText(ScalarValue value) =>
-        value switch
-        {
-            TextValue t => t.Value,
-            NumberValue n => n.Value.ToString(CultureInfo.CurrentCulture),
-            BoolValue b => b.Value ? "TRUE" : "FALSE",
-            DateTimeValue d => d.ToDateTime().ToString(CultureInfo.CurrentCulture),
-            BlankValue => string.Empty,
-            ErrorValue => string.Empty,
-            _ => value.ToString() ?? string.Empty,
-        };
 
     /// <summary>Resolves a single raw <c>&lt;sharedItems&gt;</c> child's caption, or null when it has no
     /// <c>v</c> (e.g. <c>&lt;m/&gt;</c>) so it can never match a selection.</summary>
