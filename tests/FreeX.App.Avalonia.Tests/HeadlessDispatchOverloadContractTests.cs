@@ -29,6 +29,16 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class HeadlessDispatchOverloadContractTests
 {
     private const string CallMarker = "Dispatch(async";
+    private static readonly string[] AuthoritativeSourceDirectories =
+    [
+        "freep",
+        "freew",
+        "freew-fidelity-corpus",
+        "shared",
+        "src",
+        "tests",
+        "tools",
+    ];
 
     [Fact]
     public void EveryAsyncDispatchLambda_ReturnsAValue_SoFailuresPropagate()
@@ -66,12 +76,53 @@ public sealed class HeadlessDispatchOverloadContractTests
             Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
-    private static IEnumerable<string> EnumerateSourceFiles(string root) =>
-        Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
-            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                        && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                        // This file documents the banned shape in prose, so it would match itself.
-                        && !Path.GetFileName(path).Equals($"{nameof(HeadlessDispatchOverloadContractTests)}.cs", StringComparison.Ordinal));
+    [Fact]
+    public void SourceScanner_IsBoundedToAuthoritativeSourceRoots()
+    {
+        var root = FunctionalParityMatrix.RepoRoot();
+        var files = EnumerateSourceFiles(root).ToArray();
+        var relativePaths = files
+            .Select(path => Path.GetRelativePath(root, path).Replace('\\', '/'))
+            .ToArray();
+        var forbiddenPaths = relativePaths
+            .Where(path => path.Split('/', StringSplitOptions.RemoveEmptyEntries)
+                .Any(segment => IsIgnoredSourceSegment(segment)))
+            .ToArray();
+
+        files.Should().NotBeEmpty("the contract scanner must inspect the checked-out source tree");
+        forbiddenPaths.Should().BeEmpty("the contract scanner must not enter generated or scratch trees");
+        relativePaths
+            .Select(path => path.Split('/')[0])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Should()
+            .BeEquivalentTo(AuthoritativeSourceDirectories, options => options.WithStrictOrdering());
+    }
+
+    private static IEnumerable<string> EnumerateSourceFiles(string root)
+    {
+        foreach (var relativeDirectory in AuthoritativeSourceDirectories)
+        {
+            var directory = Path.Combine(root, relativeDirectory);
+            if (!Directory.Exists(directory)) continue;
+
+            foreach (var path in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
+            {
+                var relativePath = Path.GetRelativePath(root, path);
+                var segments = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (segments.Any(IsIgnoredSourceSegment))
+                    continue;
+
+                // This file documents the banned shape in prose, so it would match itself.
+                if (Path.GetFileName(path).Equals($"{nameof(HeadlessDispatchOverloadContractTests)}.cs", StringComparison.Ordinal))
+                    continue;
+
+                yield return path;
+            }
+        }
+    }
+
+    private static bool IsIgnoredSourceSegment(string segment) =>
+        segment is ".git" or ".claude" or ".worktrees" or "bin" or "obj";
 
     /// <summary>
     /// Returns true when the lambda body opened after the <c>Dispatch(async</c> at
