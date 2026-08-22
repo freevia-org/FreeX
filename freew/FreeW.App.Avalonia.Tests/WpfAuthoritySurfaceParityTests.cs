@@ -51,7 +51,13 @@ public sealed class WpfAuthoritySurfaceParityTests
                 AboutDialogMetrics.RootMargin,
                 AboutDialogMetrics.FreeWAvaloniaRootRightMargin,
                 AboutDialogMetrics.RootMargin));
-            text.FontSize.Should().Be(AboutDialogMetrics.AvaloniaTextFontSize);
+            text.Padding.Should().Be(new Thickness(
+                AboutDialogMetrics.AvaloniaTextPaddingLeft,
+                FreeWAboutDialogPresentation.AvaloniaTextPaddingTop,
+                FreeWAboutDialogPresentation.AvaloniaTextPaddingRight,
+                AboutDialogMetrics.TextPadding));
+            text.FontSize.Should().Be(FreeWAboutDialogPresentation.AvaloniaTextFontSize);
+            text.LineHeight.Should().Be(FreeWAboutDialogPresentation.AvaloniaTextLineHeight);
             text.Text.Should().Contain("A free word processor for DOCX editing and format-fidelity work.");
             text.Text.Should().Contain(FreeWProductInfo.DesktopRendererDescription);
             text.Text.Should().Contain("Help > Legal Notices");

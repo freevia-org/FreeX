@@ -1,4 +1,5 @@
 using System.Reflection;
+using Free.Shared.Shell;
 using FreeW.App.Presentation;
 
 namespace FreeW.App.Presentation.Tests;
@@ -34,6 +35,11 @@ public sealed class FreeWProductInfoTests
         avalonia.OkAutomationId.Should().Be(wpf.OkAutomationId);
         avalonia.HelpText.Should().Be(wpf.HelpText);
         avalonia.AvaloniaRootRightMargin.Should().Be(17);
+        avalonia.AvaloniaTextPaddingRight.Should().Be(AboutDialogMetrics.TextPadding);
+        avalonia.AvaloniaTextFontSize.Should().Be(AboutDialogMetrics.TextFontSize);
+        avalonia.AvaloniaTextPaddingTop.Should().Be(AboutDialogMetrics.TextPadding + 1);
+        avalonia.AvaloniaDefaultButtonAccent.Should().BeTrue();
+        avalonia.AvaloniaTextLineHeight.Should().Be(16.6);
         wpf.AboutText.Should().Be(avalonia.AboutText);
     }
 

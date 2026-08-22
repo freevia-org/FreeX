@@ -8,4 +8,9 @@ public sealed record AboutDialogPresentation(
     string TextAutomationId,
     string OkAutomationId,
     string HelpText,
-    double AvaloniaRootRightMargin = AboutDialogMetrics.RootMargin);
+    double AvaloniaRootRightMargin = AboutDialogMetrics.RootMargin,
+    double AvaloniaTextPaddingRight = AboutDialogMetrics.AvaloniaTextPaddingRight,
+    double AvaloniaTextFontSize = AboutDialogMetrics.AvaloniaTextFontSize,
+    double AvaloniaTextPaddingTop = AboutDialogMetrics.AvaloniaTextPaddingTop,
+    bool AvaloniaDefaultButtonAccent = false,
+    double AvaloniaTextLineHeight = AboutDialogMetrics.AvaloniaTextLineHeight);

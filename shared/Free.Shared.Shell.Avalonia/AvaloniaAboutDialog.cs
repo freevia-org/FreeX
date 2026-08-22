@@ -15,6 +15,11 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
     private const string AboutViewportClass = "free-about-document-viewport";
     private Button _okButton = null!;
     private readonly TextBox _aboutTextBox;
+    private readonly double _textPaddingRight;
+    private readonly double _textFontSize;
+    private readonly double _textPaddingTop;
+    private readonly bool _defaultButtonAccent;
+    private readonly double _textLineHeight;
 
     public AvaloniaAboutDialog(AboutDialogPresentation presentation)
         : this(
@@ -24,7 +29,12 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
             presentation.TextAutomationId,
             presentation.OkAutomationId,
             presentation.HelpText,
-            presentation.AvaloniaRootRightMargin)
+            presentation.AvaloniaRootRightMargin,
+            presentation.AvaloniaTextPaddingRight,
+            presentation.AvaloniaTextFontSize,
+            presentation.AvaloniaTextPaddingTop,
+            presentation.AvaloniaDefaultButtonAccent,
+            presentation.AvaloniaTextLineHeight)
     {
         ArgumentNullException.ThrowIfNull(presentation);
     }
@@ -36,7 +46,12 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
         string textAutomationId,
         string okAutomationId,
         string helpText,
-        double? rightContentMargin = null)
+        double? rightContentMargin = null,
+        double? textPaddingRight = null,
+        double? textFontSize = null,
+        double? textPaddingTop = null,
+        bool defaultButtonAccent = false,
+        double? textLineHeight = null)
     {
         Title = windowTitle;
         Width = AboutDialogMetrics.Width;
@@ -46,6 +61,11 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = true;
         ShowInTaskbar = false;
+        _textPaddingRight = textPaddingRight ?? AboutDialogMetrics.AvaloniaTextPaddingRight;
+        _textFontSize = textFontSize ?? AboutDialogMetrics.AvaloniaTextFontSize;
+        _textPaddingTop = textPaddingTop ?? AboutDialogMetrics.AvaloniaTextPaddingTop;
+        _defaultButtonAccent = defaultButtonAccent;
+        _textLineHeight = textLineHeight ?? AboutDialogMetrics.AvaloniaTextLineHeight;
 
         AutomationProperties.SetName(this, windowTitle);
         AutomationProperties.SetAutomationId(this, dialogAutomationId);
@@ -57,13 +77,13 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
             IsReadOnly = true,
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            FontSize = AboutDialogMetrics.AvaloniaTextFontSize,
+            FontSize = _textFontSize,
             Padding = new Thickness(
                 AboutDialogMetrics.AvaloniaTextPaddingLeft,
-                AboutDialogMetrics.AvaloniaTextPaddingTop,
-                AboutDialogMetrics.AvaloniaTextPaddingRight,
+                _textPaddingTop,
+                _textPaddingRight,
                 AboutDialogMetrics.TextPadding),
-            LineHeight = AboutDialogMetrics.AvaloniaTextLineHeight,
+            LineHeight = _textLineHeight,
             BorderThickness = new Thickness(1),
             MinHeight = AboutDialogMetrics.TextMinHeight,
         };
@@ -108,9 +128,7 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
             ok,
             AvaloniaCompactDialogChrome.WindowsStyle,
             minWidth: AboutDialogMetrics.ButtonWidth,
-            // Preserve IsDefault for keyboard behavior, but match the WPF resting border. WPF's
-            // default button is neutral in the authority capture while the text box owns focus.
-            isDefault: false);
+            isDefault: _defaultButtonAccent);
         AutomationProperties.SetAutomationId(ok, okAutomationId);
         AutomationProperties.SetHelpText(ok, helpText);
         ok.Click += (_, _) => Close();
@@ -134,12 +152,12 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
         _aboutTextBox.Margin = new Thickness(0);
         _aboutTextBox.Padding = new Thickness(
             AboutDialogMetrics.AvaloniaTextPaddingLeft,
-            AboutDialogMetrics.AvaloniaTextPaddingTop,
-            AboutDialogMetrics.AvaloniaTextPaddingRight,
+            _textPaddingTop,
+            _textPaddingRight,
             AboutDialogMetrics.TextPadding);
         _aboutTextBox.VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Center;
-        _aboutTextBox.FontSize = AboutDialogMetrics.AvaloniaTextFontSize;
-        _aboutTextBox.LineHeight = AboutDialogMetrics.AvaloniaTextLineHeight;
+        _aboutTextBox.FontSize = _textFontSize;
+        _aboutTextBox.LineHeight = _textLineHeight;
         // The WPF authority centers the short About document inside its read-only viewport.
         // Avalonia's outer TextBox alignment does not reach the template-owned ScrollViewer,
         // so style that realized document host through the control's local template scope.

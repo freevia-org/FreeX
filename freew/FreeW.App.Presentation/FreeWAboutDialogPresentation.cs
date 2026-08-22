@@ -15,6 +15,13 @@ public static class FreeWAboutDialogPresentation
     // The WPF authority paints the final content pixel at x=528 in the 560x600
     // harness frame. Avalonia needs the measured one-DIP right-edge reserve.
     public const double AvaloniaRootRightMargin = AboutDialogMetrics.FreeWAvaloniaRootRightMargin;
+    // WPF's native About TextBox keeps its standard 8-DIP right inset. Keep the shared
+    // Avalonia default unchanged for other products and pass FreeW's measured inset here.
+    public const double AvaloniaTextPaddingRight = AboutDialogMetrics.TextPadding;
+    public const double AvaloniaTextFontSize = AboutDialogMetrics.TextFontSize;
+    public const double AvaloniaTextPaddingTop = AboutDialogMetrics.TextPadding + 1;
+    public const bool AvaloniaDefaultButtonAccent = true;
+    public const double AvaloniaTextLineHeight = 16.6;
 
     public static AboutDialogPresentation Create(Assembly assembly)
     {
@@ -27,6 +34,11 @@ public static class FreeWAboutDialogPresentation
             TextAutomationId,
             OkAutomationId,
             HelpText,
-            AvaloniaRootRightMargin);
+            AvaloniaRootRightMargin,
+            AvaloniaTextPaddingRight,
+            AvaloniaTextFontSize,
+            AvaloniaTextPaddingTop,
+            AvaloniaDefaultButtonAccent,
+            AvaloniaTextLineHeight);
     }
 }
