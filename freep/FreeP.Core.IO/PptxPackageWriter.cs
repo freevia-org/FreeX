@@ -3508,7 +3508,10 @@ public static class PptxPackageWriter
     // themes created programmatically (no source file to preserve from).
     private static XElement BuildThemeFontSchemeXml(PresentationTheme theme)
     {
-        if (TryPatchNativeFontScheme(theme.NativeFontSchemeXml, theme.FontScheme.MajorLatinFont, theme.FontScheme.MinorLatinFont) is { } patched)
+        if (DrawingMlThemeXml.TryPatchNativeFontScheme(
+                theme.NativeFontSchemeXml,
+                theme.FontScheme.MajorLatinFont,
+                theme.FontScheme.MinorLatinFont) is { } patched)
             return patched;
 
         return new XElement(A + "fontScheme", new XAttribute("name", theme.Name),
@@ -3520,29 +3523,6 @@ public static class PptxPackageWriter
                 new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MinorLatinFont)),
                 new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
                 new XElement(A + "cs", new XAttribute("typeface", string.Empty))));
-    }
-
-    private static XElement? TryPatchNativeFontScheme(string? fontSchemeXml, string majorFontName, string minorFontName)
-    {
-        if (string.IsNullOrWhiteSpace(fontSchemeXml))
-            return null;
-
-        XElement fontScheme;
-        try
-        {
-            fontScheme = XElement.Parse(fontSchemeXml);
-        }
-        catch (XmlException)
-        {
-            return null;
-        }
-
-        if (fontScheme.Name != A + "fontScheme")
-            return null;
-
-        fontScheme.Element(A + "majorFont")?.Element(A + "latin")?.SetAttributeValue("typeface", majorFontName);
-        fontScheme.Element(A + "minorFont")?.Element(A + "latin")?.SetAttributeValue("typeface", minorFontName);
-        return fontScheme;
     }
 
     // Round-trip fidelity: when this theme was read from a real .pptx, theme.FillStyles /

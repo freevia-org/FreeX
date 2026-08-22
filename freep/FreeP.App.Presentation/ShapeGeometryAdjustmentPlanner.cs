@@ -141,7 +141,11 @@ public static class ShapeGeometryAdjustmentPlanner
                 DefaultCornerAdjustment,
                 MaxCornerAdjustment);
             var minDimension = Math.Min(boundsDip.Width, boundsDip.Height);
-            var radius = ResolveRoundedRectangleCornerRadius(shape, minDimension);
+            var radius = PresetShapeAdjustmentMath.RoundedRectangleCornerRadius(
+                minDimension,
+                shape.PresetGeometryAdjustments.TryGetValue("adj", out var authoredAdjustment)
+                    ? authoredAdjustment
+                    : null);
             return new ShapeGeometryAdjustmentPlan(
                 shape.Id,
                 CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
@@ -374,7 +378,9 @@ public static class ShapeGeometryAdjustmentPlanner
                     new ShapeGeometryAdjustmentHandlePlan(
                         "adj1",
                         "Ribbon fold depth",
-                        new LayoutPoint(boundsDip.Left + boundsDip.Width / 2, boundsDip.Top + boundsDip.Height * ResolveRibbonBandTop(fold)),
+                        new LayoutPoint(
+                            boundsDip.Left + boundsDip.Width / 2,
+                            boundsDip.Top + boundsDip.Height * PresetShapeAdjustmentMath.RibbonBandTop(fold)),
                         fold,
                         0,
                         MaxRibbonFoldAdjustment),
@@ -848,33 +854,6 @@ public static class ShapeGeometryAdjustmentPlanner
         shape.PresetGeometryAdjustments.TryGetValue(name, out var value)
             ? Math.Clamp(value, minimum, maximum)
             : fallback;
-
-    /// <summary>
-    /// Mirrors <c>ShapeGeometryBuilder</c>'s private RoundedRectangle corner-radius formula
-    /// exactly: an unauthored shape (no "adj" guide) renders with a fixed 2-18 DIP corner
-    /// regardless of size, while an authored "adj" guide scales freely with the shorter side.
-    /// Applying the unclamped scale-with-size formula to the no-adj default (as this used to)
-    /// let the handle float away from the actual rendered corner on any shape bigger than
-    /// ~100 DIP in its shorter dimension.
-    /// </summary>
-    private static double ResolveRoundedRectangleCornerRadius(SlideShape shape, double minDimension)
-    {
-        if (!shape.PresetGeometryAdjustments.TryGetValue("adj", out var adjustment))
-            return Math.Clamp(minDimension * 0.18, 2, 18);
-
-        return minDimension * Math.Clamp(adjustment, 0, MaxCornerAdjustment) / 100000.0;
-    }
-
-    /// <summary>
-    /// Mirrors <c>ShapeGeometryBuilder</c>'s private Ribbon "bandTop" formula exactly: the
-    /// renderer floors the top-band edge at 4% of the shape height (and caps it at 45%)
-    /// regardless of how small/large the authored adj1 fold-depth guide is. Using the raw,
-    /// unclamped fold value here let the "Ribbon fold depth" handle drift away to
-    /// boundsDip.Top for any adj1 under that 4% floor (e.g. adj1=0), detached from the fold
-    /// line the shape actually renders.
-    /// </summary>
-    private static double ResolveRibbonBandTop(double fold) =>
-        Math.Clamp(fold / 100000.0, 0.04, 0.45);
 
     private static bool IsDirectionalArrow(DrawingShapeKind kind) =>
         kind is DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or

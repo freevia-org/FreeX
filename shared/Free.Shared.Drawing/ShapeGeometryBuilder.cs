@@ -58,7 +58,11 @@ public static class ShapeGeometryBuilder
 
         return kind switch
         {
-            DrawingShapeKind.RoundedRectangle => RoundedRectangle(rect, CornerRadius(rect, adjustments)),
+            DrawingShapeKind.RoundedRectangle => RoundedRectangle(
+                rect,
+                PresetShapeAdjustmentMath.RoundedRectangleCornerRadius(
+                    Math.Min(rect.Width, rect.Height),
+                    AuthoredAdjustment(adjustments, "adj"))),
             DrawingShapeKind.Ellipse => Ellipse(rect),
             DrawingShapeKind.Line => LinePath(rect),
             DrawingShapeKind.ElbowConnector => ElbowPath(rect),
@@ -156,18 +160,6 @@ public static class ShapeGeometryBuilder
 
     private static LayoutRect Normalize(LayoutRect bounds) =>
         LayoutRect.FromCorners(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
-
-    private static double CornerRadius(
-        LayoutRect rect,
-        IReadOnlyDictionary<string, double>? adjustments = null)
-    {
-        // Keep the established fallback for newly-created and legacy shapes. An authored
-        // DrawingML roundRect guide is a 0..50000 fraction of the smaller dimension.
-        if (adjustments is null || !adjustments.TryGetValue("adj", out var adjustment))
-            return Math.Clamp(Math.Min(rect.Width, rect.Height) * 0.18, 2, 18);
-
-        return Math.Min(rect.Width, rect.Height) * Math.Clamp(adjustment, 0, 50000) / 100000.0;
-    }
 
     private static LayoutPoint P(LayoutRect rect, double x, double y) =>
         new(rect.Left + (rect.Width * x), rect.Top + (rect.Height * y));
@@ -501,6 +493,11 @@ public static class ShapeGeometryBuilder
         double fallback) =>
         adjustments is not null && adjustments.TryGetValue(name, out var value) ? value : fallback;
 
+    private static double? AuthoredAdjustment(
+        IReadOnlyDictionary<string, double>? adjustments,
+        string name) =>
+        adjustments is not null && adjustments.TryGetValue(name, out var value) ? value : null;
+
     /// <summary>
     /// Renders a <see cref="DrawingShapeKind.Line"/> shape. The path direction is inferred from
     /// the bounding-box aspect ratio:
@@ -768,9 +765,9 @@ public static class ShapeGeometryBuilder
             return Polygon(rect, [(0.08, 0.22), (0.92, 0.22), (0.92, 0.06), (1, 0.24), (0.92, 0.42), (0.92, 0.78), (0.08, 0.78), (0.08, 0.94), (0, 0.76), (0.08, 0.58)]);
         }
 
-        var fold = Math.Clamp(GetAdjustment(adjustments, "adj1", 16667), 0, 33333) / 100000.0;
+        var fold = Math.Clamp(GetAdjustment(adjustments, "adj1", 16667), 0, 33333);
         var width = Math.Clamp(GetAdjustment(adjustments, "adj2", 50000), 25000, 75000) / 200000.0;
-        var bandTop = Math.Clamp(fold, 0.04, 0.45);
+        var bandTop = PresetShapeAdjustmentMath.RibbonBandTop(fold);
         var bandBottom = 1 - bandTop;
         var tailTop = Math.Max(0.01, bandTop / 2);
         var tailBottom = 1 - tailTop;
@@ -856,7 +853,11 @@ public static class ShapeGeometryBuilder
         var body = new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height * bodyFraction);
         return new ShapeGeometry(
         [
-            RoundedRectangleContour(body, CornerRadius(body)),
+            RoundedRectangleContour(
+                body,
+                PresetShapeAdjustmentMath.RoundedRectangleCornerRadius(
+                    Math.Min(body.Width, body.Height),
+                    adjustment: null)),
             PolygonContour(rect, [(0.38, bodyFraction), (0.52, bodyFraction), (0.45, 1)])
         ]);
     }
