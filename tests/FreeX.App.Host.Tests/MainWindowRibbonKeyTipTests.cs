@@ -1,4 +1,5 @@
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -6,6 +7,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Shell;
 using FluentAssertions;
+using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Ribbon;
@@ -160,6 +162,13 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public bool? NamedButtonIsEnabled(string name) =>
             (_window.FindName(name) as Button)?.IsEnabled;
+
+        public bool RibbonCommandIsEnabled(string commandId)
+        {
+            var field = typeof(MainWindow).GetField("_ribbonState", BindingFlags.Instance | BindingFlags.NonPublic);
+            field.Should().NotBeNull();
+            return ((IRibbonStateStore)field!.GetValue(_window)!).GetState(commandId).IsEnabled;
+        }
 
         public string? StatusZoomText =>
             (_window.FindName("StatusZoomText") as TextBlock)?.Text;

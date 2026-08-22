@@ -426,7 +426,7 @@ public partial class MainWindow
             ["Picture"] = new(static (owner, sender, eventArgs) => owner.PastePictureMenuItem_Click(sender, eventArgs), nameof(PastePictureMenuItem_Click)),
             ["Pictures"] = new(static (owner, sender, eventArgs) => owner.PicturesBtn_Click(sender, eventArgs), nameof(PicturesBtn_Click)),
             ["Pie Chart"] = new(static (owner, sender, eventArgs) => owner.ChartPieMenuItem_Click(sender, eventArgs), nameof(ChartPieMenuItem_Click)),
-            ["PivotChart"] = new(static (owner, sender, eventArgs) => owner.PivotChartBtn_Click(sender, eventArgs), nameof(PivotChartBtn_Click)),
+            [FreeXRibbonCommandIds.PivotChartInsert] = new(static (owner, sender, eventArgs) => owner.PivotChartBtn_Click(sender, eventArgs), nameof(PivotChartBtn_Click)),
             ["PivotChart Options"] = new(static (owner, sender, eventArgs) => owner.PivotChartOptionsBtn_Click(sender, eventArgs), nameof(PivotChartOptionsBtn_Click)),
             ["PivotTable"] = new(static (owner, sender, eventArgs) => owner.PivotTableBtn_Click(sender, eventArgs), nameof(PivotTableBtn_Click)),
             ["PivotTable Name"] = new(static (owner, sender, eventArgs) => owner.PivotTableNameBtn_Click(sender, eventArgs), nameof(PivotTableNameBtn_Click)),

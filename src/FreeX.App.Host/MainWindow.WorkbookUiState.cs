@@ -327,6 +327,7 @@ public partial class MainWindow
     {
         SynchronizeWorkbookSessionSelection();
         RefreshPivotFieldListPaneAfterSelectionChange();
+        RefreshPivotChartInsertCommandState();
 
         // R127-review-delete-enablement-1: keep Review > Delete Comment/Delete Note (and the
         // other selection-dependent Review command states) live on every selection change, not

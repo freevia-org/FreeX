@@ -15,6 +15,7 @@ public static class FreeXRibbonDefinition
             .Group("InsertTablesGroup", "Tables", null, priority: 200,
                 g => g
                 .Large("PivotTable", "PivotTable", Ico.PivotTable, "PT")
+                .Large(FreeXRibbonCommandIds.PivotChartInsert, "PivotChart", Ico.ChartColumn, "PC")
                 .Large("Table", "Table", Ico.Table, "TB"))
             .Group("InsertChartsGroup", "Charts", null, priority: 60,
                 g => g
@@ -454,7 +455,7 @@ public static class FreeXRibbonDefinition
                 .Medium("Calculated Item", "Calculated Item", Ico.Refresh, "CI"))
             .Group("PivotTableAnalyzeToolsGroup", "Tools", null, priority: 110,
                 g => g
-                .Medium("PivotChart", "PivotChart", Ico.ChartColumn, "PC")
+                .Medium(FreeXRibbonCommandIds.PivotChartInsert, "PivotChart", Ico.ChartColumn, "PC")
                 .Medium(FreeXRibbonCommandIds.PivotChartChangeType, "Change Chart Type", Ico.ChartColumn, "CT")
                 .Medium("PivotChart Options", "PivotChart Options", Ico.ChartColumn, "CO"))
             .Group("PivotTableAnalyzeShowGroup", "Show", null, priority: 180,

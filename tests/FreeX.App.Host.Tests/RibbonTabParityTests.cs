@@ -44,7 +44,7 @@ public sealed class RibbonTabParityTests
             "Text",
             "Symbols");
 
-        CommandTitles(Group(insertTab, "Tables")).Should().ContainInOrder("PivotTable", "Table");
+        CommandTitles(Group(insertTab, "Tables")).Should().ContainInOrder("PivotTable", "PivotChart", "Table");
         CommandTitles(Group(insertTab, "Tables")).Should().NotContain("Recommended PivotTables",
             "FreeX does not generate recommended PivotTable layouts, so this excluded command must not appear actionable");
         CommandTitles(Group(insertTab, "Charts")).Should().Contain("Recommended Charts");

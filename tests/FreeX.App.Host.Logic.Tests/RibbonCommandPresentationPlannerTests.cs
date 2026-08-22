@@ -43,6 +43,8 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Treemap Chart", true)]
     [InlineData("Recommended Chart", false)]
     [InlineData("Map Chart", true)]
+    [InlineData("PivotChart", false)]
+    [InlineData("pivot.chart.insert", false)]
     [InlineData("Sparkline", false)]
     [InlineData("Table", false)]
     public void ShouldHideFromInsertRibbon_HidesChartFormattingCommandsOnly(string title, bool expected)
