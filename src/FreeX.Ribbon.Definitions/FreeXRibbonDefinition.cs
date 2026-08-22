@@ -243,6 +243,7 @@ public static class FreeXRibbonDefinition
         .Tab("ViewTab", "View", "W", tab => tab
             .Group("ViewWorkbookViewsGroup", "Workbook Views", null, priority: 200,
                 g => g
+                .Sizing(RibbonGroupSizing.OfficeAdaptive with { CompactPresentationMaximumWidth = 1000 })
                 .Large(FreeXRibbonCommandIds.ViewNormal, "Normal", Ico.View, "L")
                 .Large("Page Break Preview", "Page Break Preview", Ico.PageBreak, "I")
                 .Large("Page Layout", "Page Layout", Ico.Page, "P")
@@ -255,6 +256,7 @@ public static class FreeXRibbonDefinition
                 .CheckBox("Formula Bar", "Formula Bar", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Function), KeyTip = "VF" }))
             .Group("ViewZoomGroup", "Zoom", null, priority: 110,
                 g => g
+                .Sizing(RibbonGroupSizing.OfficeAdaptive with { CompactPresentationMaximumWidth = 1000 })
                 .Large("Zoom", "Zoom", Ico.Zoom, "Q", menu: m => m.Item(FreeXRibbonCommandIds.ViewZoomPreset200, "200%", "2").Item(FreeXRibbonCommandIds.ViewZoomPreset100, "100%", "1").Item(FreeXRibbonCommandIds.ViewZoomPreset75, "75%", "7").Item(FreeXRibbonCommandIds.ViewZoomPreset50, "50%", "5").Item(FreeXRibbonCommandIds.ViewZoomPreset25, "25%", "3").Separator().Item(FreeXRibbonCommandIds.ViewZoomCustom, "Custom...", "C"))
                 .Large(FreeXRibbonCommandIds.ViewZoom100, "100%", Ico.Zoom, "Z1")
                 .Large("Zoom to Selection", "Zoom to Selection", Ico.Zoom, "ZS"))
