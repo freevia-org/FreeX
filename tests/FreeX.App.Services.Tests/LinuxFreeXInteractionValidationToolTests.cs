@@ -408,6 +408,10 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("send_key ctrl+g");
         probe.Should().Contain("the production Go To route");
         probe.Should().Contain("authoritative formula field");
+        probe.Should().Contain("restore_calibrated_window_geometry");
+        probe.Should().Contain("worksheet_base_a1_y - cell_height * 2 + 2");
+        probe.Should().Contain("__FREEX_ADDRESS_FORMULA__");
+        probe.Should().Contain("$copied || return 1");
         probe.Should().Contain("Restore the calibrated A1 viewport");
 
         var rowsStart = probe.IndexOf("probe_outline_nested_rows_physical()", StringComparison.Ordinal);

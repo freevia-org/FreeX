@@ -295,9 +295,44 @@ copy_cell_formula_by_keyboard() {
     printf '%s' "$value"
 }
 
+restore_calibrated_window_geometry() {
+    local geometry="" current_x="" current_y="" current_width="" current_height=""
+
+    wmctrl -ir "$window_id" -b add,maximized_vert,maximized_horz 2>/dev/null || return 1
+    for _ in $(seq 1 20); do
+        geometry="$(xdotool getwindowgeometry --shell "$window_id" 2>/dev/null || true)"
+        current_x="$(printf '%s\n' "$geometry" | awk -F= '$1 == "X" { print $2 }')"
+        current_y="$(printf '%s\n' "$geometry" | awk -F= '$1 == "Y" { print $2 }')"
+        current_width="$(printf '%s\n' "$geometry" | awk -F= '$1 == "WIDTH" { print $2 }')"
+        current_height="$(printf '%s\n' "$geometry" | awk -F= '$1 == "HEIGHT" { print $2 }')"
+        if [[ "$current_x" == "$window_x" && "$current_y" == "$window_y" &&
+              "$current_width" == "$window_width" && "$current_height" == "$window_height" ]]; then
+            focus_app
+            return 0
+        fi
+        sleep 0.1
+    done
+    return 1
+}
+
 copy_cell_formula_by_address() {
     local address="$1" value="" formula_field_x formula_field_y
-    set_clipboard_sentinel
+    local sentinel="__FREEX_ADDRESS_FORMULA__" sentinel_pid="" current="" copied=false
+
+    # Keep a PID-owned sentinel until the application takes clipboard ownership. A missed click
+    # therefore remains distinguishable from a successful copy instead of exposing stale data.
+    printf '%s' "$sentinel" | xclip -selection clipboard -in >/dev/null 2>&1 &
+    sentinel_pid=$!
+    for _ in $(seq 1 10); do
+        current="$(clipboard_text || true)"
+        [[ "$current" == "$sentinel" ]] && break
+        sleep 0.05
+    done
+    if [[ "$current" != "$sentinel" ]]; then
+        kill "$sentinel_pid" 2>/dev/null || true
+        wait "$sentinel_pid" 2>/dev/null || true
+        return 1
+    fi
 
     # Ctrl+G is the production Go To route. Its dialog selects the reference field on open,
     # so the address is entered into the real reference parser rather than inferred from the
@@ -312,19 +347,34 @@ copy_cell_formula_by_address() {
     # A Go To target may be hidden by an outline/filter. Read its authoritative formula field;
     # F2 would instead attach the inline editor to the current visible slot. Go To can also leave
     # the owner unmaximized, so restore the calibrated window geometry before the field click.
-    wmctrl -ir "$window_id" -b add,maximized_vert,maximized_horz 2>/dev/null || true
-    focus_app
-    formula_field_x="$((a1_x + cell_width * 2))"
-    formula_field_y="$((a1_y - cell_height * 2 + 2))"
+    if ! restore_calibrated_window_geometry; then
+        kill "$sentinel_pid" 2>/dev/null || true
+        wait "$sentinel_pid" 2>/dev/null || true
+        send_key Escape
+        send_key ctrl+Home
+        return 1
+    fi
+    formula_field_x="$((worksheet_base_a1_x + cell_width * 2))"
+    formula_field_y="$((worksheet_base_a1_y - cell_height * 2 + 2))"
     xdotool_mousemove_sync "$formula_field_x" "$formula_field_y" click 1
     sleep "$settle_seconds"
     xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+a
     xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+c
-    value="$(clipboard_text || true)"
+    for _ in $(seq 1 10); do
+        value="$(clipboard_text || true)"
+        if [[ "$value" != "$sentinel" ]]; then
+            copied=true
+            break
+        fi
+        sleep 0.12
+    done
+    kill "$sentinel_pid" 2>/dev/null || true
+    wait "$sentinel_pid" 2>/dev/null || true
     xdotool key --clearmodifiers --delay "$input_delay_ms" Escape
     # Go To may scroll a hidden or distant address into view. Restore the calibrated A1 viewport
     # before the caller performs another coordinate-based outline or filter gesture.
     send_key ctrl+Home
+    $copied || return 1
     printf '%s' "$value"
 }
 
