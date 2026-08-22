@@ -470,6 +470,10 @@ public static class FreePRibbon
         });
         tab.Group("charts", FreePRibbonText.ChartsGroupLabel, FreePRibbonText.ChartsGroupKeyTip, 93, group =>
         {
+            // The chart catalog deliberately exposes every modeled chart command. Compact it to
+            // direct icons before overflow so a narrow Insert tab remains scan-friendly while
+            // retaining the complete chart menu behind the collapsed group.
+            group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
             group.Medium("freep.insert-chart-column", FreePRibbonText.InsertChartColumnLabel, RibbonCommandIconKind.ChartColumn, FreePRibbonText.InsertChartColumnKeyTip);
             group.Medium("freep.insert-chart-bar", FreePRibbonText.InsertChartBarLabel, RibbonCommandIconKind.ChartColumn, FreePRibbonText.InsertChartBarKeyTip);
             group.Medium("freep.insert-chart-line", FreePRibbonText.InsertChartLineLabel, RibbonCommandIconKind.ChartLine, FreePRibbonText.InsertChartLineKeyTip);

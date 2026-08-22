@@ -115,6 +115,20 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Insert_charts_group_uses_icon_adaptive_sizing_in_both_profiles()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            RequiredGroup(definition, "insert", "charts")
+                .Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+        }
+    }
+
+    [Fact]
     public void Arrange_change_shape_menu_exposes_all_modeled_common_presets()
     {
         foreach (var definition in new[]
