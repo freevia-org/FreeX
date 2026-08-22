@@ -103,12 +103,23 @@ public static class ChartTypePickerPlanner
         GetSupportedOptions().Select(option => CreateOption(option, text)).ToList();
 
     public static IReadOnlyList<ChartTypePickerOptionPlan> GetRecommendedOptions() =>
-        ChartTypeChangePlanner.GetRecommendedTypes()
-            .Select(CreateOption)
+        GetRecommendedOptions(ChartTypeChangePlanner.GetRecommendedTypes());
+
+    public static IReadOnlyList<ChartTypePickerOptionPlan> GetRecommendedOptions(
+        IEnumerable<ChartType> recommendedTypes) =>
+        recommendedTypes
+            .Where(ChartTypeSupport.IsAuthorable)
+            .Distinct()
+            .Select(type => CreateOption(type) with { IsRecommended = true })
             .ToList();
 
     public static IReadOnlyList<ChartTypePickerOption> GetRecommendedOptions(ResourceKeyTextResolver text) =>
         GetRecommendedOptions().Select(option => CreateOption(option, text)).ToList();
+
+    public static IReadOnlyList<ChartTypePickerOption> GetRecommendedOptions(
+        IEnumerable<ChartType> recommendedTypes,
+        ResourceKeyTextResolver text) =>
+        GetRecommendedOptions(recommendedTypes).Select(option => CreateOption(option, text)).ToList();
 
     public static IReadOnlyList<ChartTypePickerCategoryPlan> GetCategories()
     {
@@ -155,7 +166,11 @@ public static class ChartTypePickerPlanner
     }
 
     public static IReadOnlyList<ChartTypeGalleryChoicePlan> GetRecommendedGalleryChoices() =>
-        GetRecommendedOptions()
+        GetRecommendedGalleryChoices(ChartTypeChangePlanner.GetRecommendedTypes());
+
+    public static IReadOnlyList<ChartTypeGalleryChoicePlan> GetRecommendedGalleryChoices(
+        IEnumerable<ChartType> recommendedTypes) =>
+        GetRecommendedOptions(recommendedTypes)
             .Select(option => new ChartTypeGalleryChoicePlan(
                 option.Type,
                 RecommendedCategoryKey,
@@ -166,6 +181,11 @@ public static class ChartTypePickerPlanner
 
     public static IReadOnlyList<ChartTypeGalleryChoice> GetRecommendedGalleryChoices(ResourceKeyTextResolver text) =>
         GetRecommendedGalleryChoices().Select(choice => CreateGalleryChoice(choice, text)).ToList();
+
+    public static IReadOnlyList<ChartTypeGalleryChoice> GetRecommendedGalleryChoices(
+        IEnumerable<ChartType> recommendedTypes,
+        ResourceKeyTextResolver text) =>
+        GetRecommendedGalleryChoices(recommendedTypes).Select(choice => CreateGalleryChoice(choice, text)).ToList();
 
     public static ChartTypePickerPanelDescriptor GetRecommendedPanel() => RecommendedPanel;
 

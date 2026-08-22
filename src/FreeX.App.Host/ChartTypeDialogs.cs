@@ -17,7 +17,7 @@ public sealed partial class InsertChartDialog : Window
 
     public InsertChartDialogResult Result { get; private set; } = CreateRecommendedResult();
 
-    public InsertChartDialog()
+    public InsertChartDialog(IReadOnlyList<ChartType>? recommendedTypes = null)
     {
         Title = UiText.Get("InsertChart_Title");
         Width = 660;
@@ -28,7 +28,9 @@ public sealed partial class InsertChartDialog : Window
 
         var root = new DockPanel { Margin = new Thickness(16), LastChildFill = false };
         var tabs = new TabControl { Height = 310, Margin = new Thickness(0, 0, 0, 12) };
-        _recommendedGallery.ItemsSource = ChartTypePickerPlanner.GetRecommendedGalleryChoices(WpfResourceKeyTextResolver.Instance);
+        _recommendedGallery.ItemsSource = ChartTypePickerPlanner.GetRecommendedGalleryChoices(
+            recommendedTypes ?? ChartTypePickerPlanner.GetRecommendedOptions(WpfResourceKeyTextResolver.Instance).Select(option => option.Type),
+            WpfResourceKeyTextResolver.Instance);
         _recommendedGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
         _recommendedGallery.SelectedIndex = 0;
         _recommendedGallery.MouseDoubleClick += Gallery_MouseDoubleClick;

@@ -97,7 +97,8 @@ public partial class MainWindow
 
     private void InsertChartPickerBtn_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new InsertChartDialog { Owner = this };
+        var recommendations = RecommendedChartPlanner.Recommend(_workbook.GetSheet(_currentSheetId), SheetGrid.SelectedRange ?? default);
+        var dialog = new InsertChartDialog(recommendations) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 

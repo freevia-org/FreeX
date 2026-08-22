@@ -13,7 +13,8 @@ public sealed class ChartCommandSourceTests
         var workflowSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartCommandWorkflowPlanner.cs");
 
         source.Should().Contain("private void InsertChartPickerBtn_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("new InsertChartDialog { Owner = this }");
+        source.Should().Contain("RecommendedChartPlanner.Recommend(_workbook.GetSheet(_currentSheetId), SheetGrid.SelectedRange ?? default)");
+        source.Should().Contain("new InsertChartDialog(recommendations) { Owner = this }");
         source.Should().Contain("InsertChartOfType(dialog.Result.ChartType)");
         source.Should().Contain("private void InsertChartOfType(ChartType type)");
         source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
