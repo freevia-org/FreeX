@@ -189,7 +189,7 @@ public sealed partial class MainWindow
             // +/- Buttons toggles PivotTableModel.ShowExpandCollapseButtons via ConfigurePivotTableOptionsCommand.
             ["+/- Buttons"] = TogglePivotExpandCollapseButtons,
             // PivotChart inserts a PivotChart over the active pivot (MainWindow.PivotChart).
-            ["PivotChart"] = InsertPivotChart,
+            [FreeXRibbonCommandIds.PivotChartInsert] = InsertPivotChart,
             // Change Chart Type re-types the active pivot's chart (MainWindow.PivotChartCommands).
             [FreeXRibbonCommandIds.PivotChartChangeType] = () => RunGuarded(ChangeActivePivotChartTypeAsync),
             // PivotChart Options opens the field-button / data-table options dialog (MainWindow.PivotChartOptions).

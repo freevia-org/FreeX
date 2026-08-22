@@ -69,6 +69,8 @@ public sealed class R145_RibbonCommandHandlersUseRunGuardedTests
             RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
 
         contextualTabsSource.Should().Contain(
+            "[FreeXRibbonCommandIds.PivotChartInsert] = InsertPivotChart");
+        contextualTabsSource.Should().Contain(
             "[FreeXRibbonCommandIds.PivotChartChangeType] = () => RunGuarded(ChangeActivePivotChartTypeAsync)");
         contextualTabsSource.Should().Contain(
             "[\"PivotChart Options\"] = () => RunGuarded(OpenPivotChartOptionsAsync)");
