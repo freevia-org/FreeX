@@ -64,12 +64,13 @@ public sealed class AppGraphicAssetsTests
     public void Canonical_svg_icons_share_the_FreeX_two_band_format()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
-        foreach (var product in new[] { "FreeX", "FreeW", "FreeP" })
+        foreach (var (product, productX) in new[] { ("FreeX", 128), ("FreeW", 128), ("FreeP", 124) })
         {
             var svg = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell", "Resources", $"{product}.svg"));
             svg.Should().Contain("clip-path=\"url(#brandTile)\"")
-                .And.Contain("<text x=\"128\" y=\"74\" font-size=\"48\">FREE</text>")
-                .And.Contain("<text x=\"128\" y=\"206\" font-size=\"128\">");
+                .And.Contain("<rect width=\"256\" height=\"97\"")
+                .And.Contain("<text x=\"128\" y=\"69\" font-size=\"60\">FREE</text>")
+                .And.Contain($"<text x=\"{productX}\" y=\"183\" font-size=\"154\">");
         }
     }
 

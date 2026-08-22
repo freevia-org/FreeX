@@ -7,10 +7,10 @@
   </defs>
   <g clip-path="url(#brandTile)">
     <rect width="256" height="256" fill="#4E213B"/>
-    <rect width="256" height="92" fill="#A23B72"/>
+    <rect width="256" height="97" fill="#A23B72"/>
   </g>
-  <g fill="#ffffff" font-family="DejaVu Sans, Arial, sans-serif" font-weight="700" text-anchor="middle">
-    <text x="128" y="74" font-size="48">FREE</text>
-    <text x="128" y="206" font-size="128">P</text>
+  <g fill="#ffffff" font-family="Segoe UI, DejaVu Sans, Arial, sans-serif" font-weight="700" text-anchor="middle">
+    <text x="128" y="69" font-size="60">FREE</text>
+    <text x="124" y="183" font-size="154">P</text>
   </g>
 </svg>
