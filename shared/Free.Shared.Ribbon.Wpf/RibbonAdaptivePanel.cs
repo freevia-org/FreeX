@@ -196,9 +196,12 @@ public sealed class RibbonGroupHost : ContentControl
             Text = _group.Header,
             FontSize = 11,
             TextAlignment = TextAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
+            // Collapsed groups have a fixed 58-DIP caption lane. Keep the group button one line tall
+            // and trim longer names rather than letting a second line squeeze the representative icon.
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
             HorizontalAlignment = HorizontalAlignment.Center,
-            MaxWidth = 58,
+            Width = 58,
             Margin = new Thickness(0, 2, 0, 0)
         };
         stack.Children.Add(caption);
