@@ -35,12 +35,13 @@ public sealed class PivotRuntimeEvidenceOwnershipSourceTests
     }
 
     [Fact]
-    public void PhysicalPivotWorkflow_UsesExternalTestSupportHost()
+    public void PhysicalPivotWorkflow_UsesProductionApplication_AndKeepsExternalTestSupportHostPackaged()
     {
         var runner = Read("tools", "Run-FreeXLinuxInteractionValidation.ps1");
         var dockerHarness = Read("tools", "Run-LinuxInteractiveDocker.ps1");
 
-        runner.Should().Contain("Start-ValidationSession -HostMode TestSupport");
+        runner.Should().Contain("Start-ValidationSession -HostMode Application");
+        runner.Should().NotContain("Start-ValidationSession -HostMode TestSupport");
         dockerHarness.Should().Contain("tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj");
         dockerHarness.Should().Contain("Executable = \"FreeX.Validation.Avalonia\"");
     }
