@@ -386,7 +386,9 @@ copy_cell_formula_by_address() {
 
     xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$dialog_id" ctrl+a
     xdotool type --clearmodifiers --delay "$type_delay_ms" --window "$dialog_id" "$address"
-    xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$dialog_id" Return
+    # Enter closes the dialog on key-down. Route it through the active X11 focus so its key-up
+    # cannot target the already-destroyed dialog window and raise BadWindow.
+    xdotool key --clearmodifiers --delay "$input_delay_ms" Return
     for _ in $(seq 1 20); do
         if ! xdotool getwindowname "$dialog_id" >/dev/null 2>&1; then
             dialog_closed=true

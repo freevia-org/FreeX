@@ -410,6 +410,7 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("Require a distinct active dialog before typing");
         probe.Should().Contain("xdotool getactivewindow");
         probe.Should().Contain("--window \"$dialog_id\" \"$address\"");
+        probe.Should().Contain("cannot target the already-destroyed dialog window");
         probe.Should().Contain("if ! $dialog_closed");
         probe.Should().Contain("authoritative formula field");
         probe.Should().Contain("restore_calibrated_window_geometry");
