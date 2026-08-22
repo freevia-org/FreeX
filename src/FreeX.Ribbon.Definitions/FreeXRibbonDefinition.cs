@@ -110,6 +110,9 @@ public static class FreeXRibbonDefinition
         .Tab("FormulasTab", "Formulas", "M", tab => tab
             .Group("FormulasFunctionLibraryGroup", "Function Library", null, priority: 200,
                 g => g
+                .Sizing(new RibbonGroupSizing(
+                    RibbonGroupSizing.Default.SupportedVariants,
+                    Hints: new RibbonWidthHints(522, 522, 522, 64)))
                 .Large(FreeXRibbonCommandIds.FormulasAutoSum, "AutoSum", Ico.Sum, "U", menu: m => m.Item(FreeXRibbonCommandIds.FormulasAutoSumSum, "Sum", "S").Item(FreeXRibbonCommandIds.FormulasAutoSumAverage, "Average", "A").Item(FreeXRibbonCommandIds.FormulasAutoSumCountNumbers, "Count Numbers", "C").Item(FreeXRibbonCommandIds.FormulasAutoSumCountAll, "Count All", "T").Item(FreeXRibbonCommandIds.FormulasAutoSumMax, "Max", "X").Item(FreeXRibbonCommandIds.FormulasAutoSumMin, "Min", "M").Item(FreeXRibbonCommandIds.FormulasAutoSumMoreFunctions, "More Functions...", "F"))
                 .Medium("Recently Used", "Recently Used", Ico.Function, "RU")
                 .Medium("Financial", "Financial", Ico.Financial, "Y")

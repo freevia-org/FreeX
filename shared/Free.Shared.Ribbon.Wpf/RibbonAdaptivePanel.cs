@@ -44,7 +44,7 @@ public sealed class RibbonGroupHost : ContentControl
 
         var presentation = GetPresentation(state);
         presentation.Measure(availableSize);
-        return presentation.DesiredSize.Width;
+        return Math.Max(presentation.DesiredSize.Width, WidthHintFor(state));
     }
 
     private readonly RibbonGroup _group;
@@ -167,6 +167,17 @@ public sealed class RibbonGroupHost : ContentControl
         (_group.Sizing.CompactPresentationMaximumWidth is not { } maximumWidth ||
          adaptiveAvailableWidth <= maximumWidth) &&
         _group.Sizing.SupportedVariants.Contains(state);
+
+    private double WidthHintFor(RibbonAdaptiveGroupState state) =>
+        _group.Sizing.Hints is { } hints
+            ? state switch
+            {
+                RibbonAdaptiveGroupState.Full => hints.FullWidth,
+                RibbonAdaptiveGroupState.SmallWithLabels => hints.SmallWithLabelsWidth,
+                RibbonAdaptiveGroupState.IconOnly => hints.IconOnlyWidth,
+                _ => 0
+            }
+            : 0;
 
     private FrameworkElement BuildCollapsedButton()
     {

@@ -358,12 +358,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 return;
 
             var collapsedGroups = harness.CollapsedActiveRibbonGroupNames;
-            collapsedGroups.Should().NotContain(
-                "Function Library",
-                $"Formulas should spend available 750px row width on its primary Function Library group before collapsing it; {harness.DebugActiveRibbonChildren}");
-            harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["AutoSum", "Recently Used"],
-                $"Function Library commands should remain directly reachable at 750px; {harness.DebugActiveRibbonChildren}");
+            collapsedGroups.Should().Contain(
+                ["Defined Names", "Formula Auditing", "Calculation"],
+                $"Formulas should preserve its primary surface before collapsing the lower-priority groups at 750px; {harness.DebugActiveRibbonChildren}");
             harness.CollapsedActiveRibbonGroupsWithoutOverflowMenu.Should().BeEmpty(
                 $"every collapsed Formulas group must still open its commands from its overflow button; {harness.DebugActiveRibbonChildren}");
             harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
