@@ -129,6 +129,20 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Transition_timing_outranks_the_long_gallery_when_width_is_reclaimed()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            RequiredGroup(definition, "transitions", "transition-timing").Priority
+                .Should().BeGreaterThan(RequiredGroup(definition, "transitions", "transition-gallery").Priority);
+        }
+    }
+
+    [Fact]
     public void Arrange_change_shape_menu_exposes_all_modeled_common_presets()
     {
         foreach (var definition in new[]
