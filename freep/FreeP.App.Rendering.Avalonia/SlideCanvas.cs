@@ -1587,7 +1587,13 @@ public sealed partial class SlideCanvas : Control
     {
         if (string.IsNullOrEmpty(bulletText)) return;
         double emPx = fontSizePt * (96.0 / 72.0);
-        var typeface = new Typeface(fontFamily, FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
+        // Bullet markers keep their authored major-font identity, but use the same
+        // Avalonia host fallback as paragraph text when the Office family is unavailable.
+        var typeface = new Typeface(
+            ResolvePowerPointFontFamily(fontFamily),
+            FontStyle.Normal,
+            FontWeight.Normal,
+            FontStretch.Normal);
         var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
         var ft = new FormattedText(bulletText,
             System.Globalization.CultureInfo.CurrentUICulture,
@@ -1920,7 +1926,8 @@ public sealed partial class SlideCanvas : Control
     // The host does not provide the Office theme's Aptos families. Arial is the
     // installed sans-serif fallback closest to the Office text silhouette.
     internal static string ResolvePowerPointFontFamily(string fontFamily) =>
-        string.Equals(fontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+        (string.Equals(fontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(fontFamily, "Aptos Display", StringComparison.OrdinalIgnoreCase))
             ? "Arial"
             : fontFamily;
 

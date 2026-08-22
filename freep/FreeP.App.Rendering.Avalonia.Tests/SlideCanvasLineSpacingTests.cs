@@ -41,7 +41,8 @@ public sealed class SlideCanvasLineSpacingTests
     [Theory]
     [InlineData("Aptos", "Arial")]
     [InlineData("aptos", "Arial")]
-    [InlineData("Aptos Display", "Aptos Display")]
+    [InlineData("Aptos Display", "Arial")]
+    [InlineData("aptos display", "Arial")]
     [InlineData("Calibri", "Calibri")]
     public void ResolvePowerPointFontFamily_UsesAvaloniaAptosFallback(
         string source,
