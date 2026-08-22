@@ -46,7 +46,7 @@ public sealed class ParagraphDialogVisualParityTests
             var tabItems = tabs.Items.Cast<TabItem>().ToArray();
             tabItems.Should().HaveCount(2);
             dialog.Width.Should().Be(380);
-            tabs.Height.Should().Be(253);
+            tabs.Height.Should().Be(303);
             tabItems[0].Header.Should().Be("Indents and Spacing");
             tabItems[1].Header.Should().Be("Line and Page Breaks");
             tabItems[0].Width.Should().Be(123);
@@ -116,9 +116,9 @@ public sealed class ParagraphDialogVisualParityTests
             ((ISolidColorBrush)left.BorderBrush!).Color.Should().Be(Color.FromRgb(0xAB, 0xAD, 0xB3));
             ((ISolidColorBrush)left.SelectionBrush!).Color.Should().Be(Color.FromRgb(0x56, 0x9D, 0xE5));
             ((ISolidColorBrush)special.Background!).Color.Should().Be(Color.FromRgb(0xF0, 0xF0, 0xF0));
-            left.Height.Should().Be(18);
+            left.Height.Should().Be(24);
             left.FocusAdorner.Should().BeNull();
-            special.Height.Should().Be(22);
+            special.Height.Should().Be(24);
             ((ISolidColorBrush)specialAmount.BorderBrush!).Color
                 .Should().Be(Color.FromRgb(0xD0, 0xD1, 0xD4));
 
@@ -139,7 +139,7 @@ public sealed class ParagraphDialogVisualParityTests
             try
             {
                 dialog.Width = 380;
-                dialog.Height = 345;
+                dialog.Height = 399;
                 dialog.Show();
                 dialog.Measure(new Size(380, 345));
                 dialog.Arrange(new Rect(0, 0, 380, 345));
@@ -153,7 +153,7 @@ public sealed class ParagraphDialogVisualParityTests
                 fields.SelectMany(box => box.GetVisualDescendants().OfType<Border>())
                     .Where(border => border.Name == "PART_BorderElement")
                     .Should().HaveCount(6)
-                    .And.OnlyContain(border => border.Bounds.Height == 18);
+                    .And.OnlyContain(border => border.Bounds.Height == 24);
 
                 var indicators = dialog.GetVisualDescendants()
                     .OfType<CheckBox>()
@@ -177,22 +177,22 @@ public sealed class ParagraphDialogVisualParityTests
             var dialog = new ParagraphDialog(ParagraphFormatting.Default)
             {
                 Width = 366,
-                Height = 308,
+                Height = 358,
                 SizeToContent = SizeToContent.Manual,
             };
             try
             {
                 dialog.Show();
-                dialog.Measure(new Size(366, 308));
-                dialog.Arrange(new Rect(0, 0, 366, 308));
+                dialog.Measure(new Size(366, 358));
+                dialog.Arrange(new Rect(0, 0, 366, 358));
                 dialog.UpdateLayout();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
 
                 var tabs = Field<TabControl>(dialog, "_tabs");
                 tabs.Bounds.X.Should().Be(12);
                 tabs.Bounds.Y.Should().Be(12);
-                tabs.Bounds.Width.Should().Be(343);
-                tabs.Bounds.Height.Should().Be(253);
+                tabs.Bounds.Width.Should().Be(341);
+                tabs.Bounds.Height.Should().Be(303);
             }
             finally
             {

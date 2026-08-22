@@ -26,11 +26,13 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     private static AvaloniaCompactDialogChromeStyle DialogChromeStyle =>
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
-            ControlHeight = 20,
-            TextBoxHeight = 18,
-            ComboBoxHeight = 22,
-            TabHeight = 20,
-            ButtonHeight = 20,
+            // ParagraphBreaksDialog uses WPF's default 24-DIP field and action metrics. Keep this
+            // correction local so the shared compact chrome remains unchanged for other dialogs.
+            ControlHeight = 24,
+            TextBoxHeight = 24,
+            ComboBoxHeight = 24,
+            TabHeight = 23,
+            ButtonHeight = 24,
             ButtonPadding = new Thickness(10, 1),
             ForegroundBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
             ButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),

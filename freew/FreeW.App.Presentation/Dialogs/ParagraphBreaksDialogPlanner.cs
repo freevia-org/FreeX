@@ -102,14 +102,14 @@ public sealed record ParagraphDialogVisualMetrics
     public ParagraphDialogThickness SectionHeadingMargin { get; init; } = new(0, 0, 0, 8);
     public ParagraphDialogThickness SectionSeparatorMargin { get; init; } = new(0, 4, 0, 8);
     public ParagraphDialogThickness WpfActionRowMargin { get; init; } = new(0, 10, 0, 0);
-    public ParagraphDialogThickness AvaloniaTabsMargin { get; init; } = new(12, 12, 11, 0);
+    public ParagraphDialogThickness AvaloniaTabsMargin { get; init; } = new(12, 12, 13, 0);
     public ParagraphDialogThickness AvaloniaIndentsTabContentMargin { get; init; } = new(9, 12, 12, 10);
     public ParagraphDialogThickness AvaloniaContextualSpacingMargin { get; init; } = new(3, 4, 0, 0);
     public ParagraphDialogThickness AvaloniaTabPaneMargin { get; init; } = new(0, -1, 0, 0);
     public ParagraphDialogThickness AvaloniaValidationMargin { get; init; } = new(12, 8, 11, 0);
     public ParagraphDialogThickness AvaloniaActionRowMargin { get; init; } = new(12, 10, 11, 11);
     public double AvaloniaLabelColumnWidth { get; init; } = 104;
-    public double AvaloniaIndentsTabHeight { get; init; } = 253;
+    public double AvaloniaIndentsTabHeight { get; init; } = 303;
     public double AvaloniaBreaksTabHeight { get; init; } = 235;
     public double AvaloniaIndentsTabHeaderWidth { get; init; } = 123;
     public double AvaloniaBreaksTabHeaderWidth { get; init; } = 122;
