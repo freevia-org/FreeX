@@ -39,6 +39,7 @@ public sealed class LegalNoticesDialogPresentationTests
         presentation.CloseButtonContent.Should().Be("Close");
         presentation.CloseIsDefault.Should().BeTrue();
         presentation.CloseIsCancel.Should().BeTrue();
+        presentation.TextRenderingPolicy.Should().Be(LegalNoticesTextRenderingPolicy.Default);
         presentation.SectionLinkHelpText.Should().Be("Section link help");
         presentation.ReadOnlyBodyHelpText.Should().Be("Body help");
     }
@@ -64,6 +65,7 @@ public sealed class LegalNoticesDialogPresentationTests
         presentation.SectionsAutomationName.Should().Be("localized:LegalNotices_LegalNoticeSections");
         presentation.SectionLinkHelpText.Should().Be("localized:LegalNotices_ChooseALegalNoticeSectionToReadAndCopy");
         presentation.ReadOnlyBodyHelpText.Should().Be("localized:LegalNotices_ReadOnlyLegalNoticeTextUseCtrlCToCopySelectedText");
+        presentation.TextRenderingPolicy.Should().Be(LegalNoticesTextRenderingPolicy.Default);
         presentation.Sections.Should().ContainSingle().Which.SourceResourceName.Should().Be(notice.ResourceName);
         resolvedKeys.Should().OnlyHaveUniqueItems().And.HaveCount(8);
     }

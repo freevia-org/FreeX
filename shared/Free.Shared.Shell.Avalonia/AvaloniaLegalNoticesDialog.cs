@@ -40,6 +40,9 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
 
         _acceptsTab = acceptsTab;
 
+        if (presentation.TextRenderingPolicy == LegalNoticesTextRenderingPolicy.GrayscaleAntialias)
+            TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
+
         Title = presentation.WindowTitle;
         Width = LegalNoticesDialogMetrics.Width;
         Height = LegalNoticesDialogMetrics.Height;
@@ -63,6 +66,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
                 ApplyReadOnlyDocumentLayout(textBox);
                 ApplyWpfAuthorityDocumentInset(textBox);
                 ScheduleShortDocumentInset(textBox, LegalNoticesDialogMetrics.TextPadding);
+                ApplyTextRenderingPolicy(textBox, presentation.TextRenderingPolicy);
             }
             AvaloniaCompactDialogChrome.ApplyLegalNoticesDefaultButtonChrome(_closeButton);
             FocusInitialKeyboardTarget();
@@ -289,6 +293,18 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         // Avalonia's Consolas metrics are fractionally narrower than WPF's at the shared
         // 12px size. Compensate the glyph width without imposing a line box absent in WPF.
         textBox.FontSize = TextFontSizeCompensation;
+    }
+
+    private static void ApplyTextRenderingPolicy(
+        TextBox textBox,
+        LegalNoticesTextRenderingPolicy policy)
+    {
+        if (policy != LegalNoticesTextRenderingPolicy.GrayscaleAntialias)
+            return;
+
+        TextOptions.SetTextRenderingMode(textBox, TextRenderingMode.Antialias);
+        foreach (var presenter in textBox.GetVisualDescendants().OfType<TextPresenter>())
+            TextOptions.SetTextRenderingMode(presenter, TextRenderingMode.Antialias);
     }
 
     private static void ApplyWpfAuthorityDocumentInset(TextBox textBox)

@@ -24,7 +24,8 @@ public static class FreeWLegalNoticesPresentation
             SummaryAutomationName,
             SectionsAutomationName,
             SectionLinkHelpText,
-            ReadOnlyBodyHelpText);
+            ReadOnlyBodyHelpText,
+            textRenderingPolicy: LegalNoticesTextRenderingPolicy.GrayscaleAntialias);
 
     public static LegalNoticesDialogPresentation Create(
         IReadOnlyList<(string Title, string Text)> notices)

@@ -23,6 +23,7 @@ public sealed class FreeWLegalNoticesPresentationTests
         presentation.SectionLinkHelpText.Should().Be("Choose a legal notice section to read and copy.");
         presentation.ReadOnlyBodyHelpText.Should().Be(
             "Read-only legal notice text. Use Ctrl+C to copy selected text.");
+        presentation.TextRenderingPolicy.Should().Be(LegalNoticesTextRenderingPolicy.GrayscaleAntialias);
         presentation.Sections.Should().ContainSingle().Which.Should().Be(
             new LegalNoticeSectionPresentation(
                 "Project License",

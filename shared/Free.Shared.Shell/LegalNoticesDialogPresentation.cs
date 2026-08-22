@@ -10,6 +10,12 @@ public sealed record LegalNoticeSectionPresentation(
     string LinkAutomationId,
     string BodyAutomationId);
 
+public enum LegalNoticesTextRenderingPolicy
+{
+    Default,
+    GrayscaleAntialias
+}
+
 /// <summary>Renderer-neutral content and accessibility semantics for a Legal Notices dialog.</summary>
 public sealed class LegalNoticesDialogPresentation
 {
@@ -27,7 +33,8 @@ public sealed class LegalNoticesDialogPresentation
         string sectionLinkHelpText,
         string readOnlyBodyHelpText,
         bool closeIsDefault = true,
-        bool closeIsCancel = true)
+        bool closeIsCancel = true,
+        LegalNoticesTextRenderingPolicy textRenderingPolicy = LegalNoticesTextRenderingPolicy.Default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(windowTitle);
         ArgumentNullException.ThrowIfNull(notices);
@@ -49,6 +56,7 @@ public sealed class LegalNoticesDialogPresentation
         ReadOnlyBodyHelpText = readOnlyBodyHelpText;
         CloseIsDefault = closeIsDefault;
         CloseIsCancel = closeIsCancel;
+        TextRenderingPolicy = textRenderingPolicy;
         Sections = notices.Select(CreateSection).ToArray();
     }
 
@@ -67,6 +75,7 @@ public sealed class LegalNoticesDialogPresentation
     public string ReadOnlyBodyHelpText { get; }
     public bool CloseIsDefault { get; }
     public bool CloseIsCancel { get; }
+    public LegalNoticesTextRenderingPolicy TextRenderingPolicy { get; }
     public IReadOnlyList<LegalNoticeSectionPresentation> Sections { get; }
 
     private static LegalNoticeSectionPresentation CreateSection(LegalNoticeDocument notice)
