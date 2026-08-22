@@ -19,6 +19,33 @@ public sealed class LegalNoticesDialogVisualParityTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
+    [Fact]
+    public async Task Legal_notices_uses_route_local_grayscale_document_text_policy()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new LegalNoticesDialog([("Legal Notices", "legal text")]);
+            try
+            {
+                dialog.Show();
+                dialog.UpdateLayout();
+
+                TextOptions.GetTextRenderingMode(dialog).Should().Be(TextRenderingMode.Antialias);
+                var textBox = dialog.GetLogicalDescendants().OfType<TextBox>()
+                    .First(text => AutomationProperties.GetAutomationId(text) == "LegalNoticesLegalNoticesText");
+                TextOptions.GetTextRenderingMode(textBox).Should().Be(TextRenderingMode.Antialias);
+                textBox.GetVisualDescendants().OfType<TextPresenter>()
+                    .Should().OnlyContain(presenter =>
+                        TextOptions.GetTextRenderingMode(presenter) == TextRenderingMode.Antialias);
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     [Fact(Timeout = 15_000)]
     public async Task Legal_notices_matches_WPF_metrics_for_all_tabs_and_focus_targets()
     {
