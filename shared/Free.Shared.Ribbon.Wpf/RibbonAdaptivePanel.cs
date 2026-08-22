@@ -9,9 +9,9 @@ using Free.Shared.Ribbon;
 namespace Free.Shared.Ribbon.Wpf;
 
 /// <summary>
-/// Hosts one ribbon group and can swap between its full content and a collapsed single-button form
-/// (icon + group label + chevron) that opens the full group in a popup. Collapsing is driven by
-/// <see cref="RibbonAdaptivePanel"/> based on available width.
+/// Hosts one ribbon group and can swap through the shared adaptive presentations before reaching a
+/// collapsed single-button form (icon + group label + chevron) that opens the full group in a popup.
+/// State selection is driven by <see cref="RibbonAdaptivePanel"/> based on available width.
 /// </summary>
 public sealed class RibbonGroupHost : ContentControl
 {
@@ -27,28 +27,38 @@ public sealed class RibbonGroupHost : ContentControl
     public string GroupName => _group.Header;
 
     /// <summary>The full (expanded) group grid this host renders. Always the same instance regardless
-    /// of whether the host is currently showing the collapsed button, so discovery can find the group
-    /// even while collapsed.</summary>
+    /// of whether the host is currently showing a compact or collapsed presentation, so discovery can
+    /// find the group's authored full surface even while responsive layout is active.</summary>
     public FrameworkElement GroupContent => _full;
 
-    public double MeasureFullWidth(Size availableSize)
+    public double MeasureWidth(RibbonAdaptiveGroupState state, Size availableSize)
     {
-        _full.Measure(availableSize);
-        return _full.DesiredSize.Width;
+        if (!Supports(state))
+            state = RibbonAdaptiveGroupState.Full;
+
+        if (state == RibbonAdaptiveGroupState.Collapsed)
+            return CollapsedWidth;
+
+        var presentation = GetPresentation(state);
+        presentation.Measure(availableSize);
+        return presentation.DesiredSize.Width;
     }
 
     private readonly RibbonGroup _group;
     private readonly FrameworkElement _full;
+    private readonly System.Func<RibbonAdaptiveGroupState, FrameworkElement> _presentationFactory;
+    private readonly Dictionary<RibbonAdaptiveGroupState, FrameworkElement> _presentations = new();
     private readonly System.Func<FrameworkElement> _popupContentFactory;
     private readonly FrameworkElement _resourceHost;
     private readonly string? _collapsedKeyTip;
     private readonly System.Func<ContextMenu>? _collapsedMenuFactory;
     private FrameworkElement? _collapsedButton;
-    private bool _collapsed;
+    private RibbonAdaptiveGroupState _layoutState;
 
     public RibbonGroupHost(
         RibbonGroup group,
         FrameworkElement full,
+        System.Func<RibbonAdaptiveGroupState, FrameworkElement> presentationFactory,
         System.Func<FrameworkElement> popupContentFactory,
         FrameworkElement resourceHost,
         string? collapsedKeyTip = null,
@@ -56,6 +66,8 @@ public sealed class RibbonGroupHost : ContentControl
     {
         _group = group;
         _full = full;
+        _presentationFactory = presentationFactory;
+        _presentations[RibbonAdaptiveGroupState.Full] = full;
         _popupContentFactory = popupContentFactory;
         _resourceHost = resourceHost;
         _collapsedKeyTip = collapsedKeyTip;
@@ -65,15 +77,15 @@ public sealed class RibbonGroupHost : ContentControl
         Content = full;
     }
 
-    public bool Collapsed
+    public RibbonAdaptiveGroupState LayoutState
     {
-        get => _collapsed;
+        get => _layoutState;
         set
         {
-            if (_collapsed == value)
+            if (_layoutState == value)
                 return;
-            _collapsed = value;
-            if (value)
+            _layoutState = value;
+            if (value == RibbonAdaptiveGroupState.Collapsed)
             {
                 Width = CollapsedWidth;
                 MinWidth = CollapsedWidth;
@@ -83,9 +95,51 @@ public sealed class RibbonGroupHost : ContentControl
                 ClearValue(WidthProperty);
                 ClearValue(MinWidthProperty);
             }
-            Content = value ? (_collapsedButton ??= BuildCollapsedButton()) : _full;
+            Content = value == RibbonAdaptiveGroupState.Collapsed
+                ? (_collapsedButton ??= BuildCollapsedButton())
+                : GetPresentation(value);
         }
     }
+
+    public bool Collapsed
+    {
+        get => LayoutState == RibbonAdaptiveGroupState.Collapsed;
+        set => LayoutState = value ? RibbonAdaptiveGroupState.Collapsed : RibbonAdaptiveGroupState.Full;
+    }
+
+    private FrameworkElement GetPresentation(RibbonAdaptiveGroupState state)
+    {
+        if (state == RibbonAdaptiveGroupState.Full)
+            return _full;
+
+        if (_presentations.TryGetValue(state, out var presentation))
+            return presentation;
+
+        presentation = _presentationFactory(state);
+        _presentations.Add(state, presentation);
+        return presentation;
+    }
+
+    internal RibbonAdaptiveGroupState NextFallbackState()
+    {
+        foreach (var state in new[]
+                 {
+                     RibbonAdaptiveGroupState.SmallWithLabels,
+                     RibbonAdaptiveGroupState.IconOnly,
+                     RibbonAdaptiveGroupState.Collapsed
+                 })
+        {
+            if ((int)state > (int)LayoutState && Supports(state))
+                return state;
+        }
+
+        return LayoutState;
+    }
+
+    private bool Supports(RibbonAdaptiveGroupState state) =>
+        state is RibbonAdaptiveGroupState.Full or RibbonAdaptiveGroupState.Collapsed ||
+        !ReferenceEquals(_group.Sizing, RibbonGroupSizing.Default) &&
+        _group.Sizing.SupportedVariants.Contains(state);
 
     private FrameworkElement BuildCollapsedButton()
     {
@@ -170,14 +224,13 @@ public sealed class RibbonGroupHost : ContentControl
 }
 
 /// <summary>
-/// Lays ribbon group hosts left-to-right and, when the available width is insufficient, collapses the
-/// lowest-priority groups to popup buttons first (Office behavior). Realtime: WPF re-measures on resize.
+/// Lays ribbon group hosts left-to-right and, when the available width is insufficient, steps their
+/// command presentations down before collapsing the lowest-priority groups to popup buttons. Realtime:
+/// WPF re-measures on resize.
 /// </summary>
 public sealed class RibbonAdaptivePanel : Panel
 {
     private const double GroupSpacing = 6;
-    private const double MinimumUnusedWidthForReclaim = 320;
-    private const double MinimumUnusedWidthRatioForReclaim = 0.35;
 
     // Contextual tabs are shown after the initial ribbon warm-up; refresh their full-width budget from
     // the preserved expanded group so a previously collapsed surface cannot under-plan and clip.
@@ -191,15 +244,14 @@ public sealed class RibbonAdaptivePanel : Panel
         var spacing = GroupSpacing * Math.Max(0, children.Count - 1);
 
         // Measure every child in its current state first so non-host chrome is current, then measure each
-        // group's full content directly. The full-width budget must not depend on whether a previous pass
-        // happened to leave that host collapsed or expanded; otherwise the same tab/width can produce
-        // different collapse sets after different resize sequences.
+        // group's adaptive presentations directly. The budget must not depend on which state a previous
+        // pass selected; otherwise the same tab/width can produce different results after resizing.
         foreach (var child in children)
             child.Measure(infinite);
         foreach (var host in hosts)
         {
-            host.FullWidth = host.MeasureFullWidth(infinite);
-            host.LayoutWidth = host.Collapsed ? RibbonGroupHost.CollapsedWidth : host.DesiredSize.Width;
+            host.FullWidth = host.MeasureWidth(RibbonAdaptiveGroupState.Full, infinite);
+            host.LayoutWidth = host.MeasureWidth(host.LayoutState, infinite);
         }
 
         var nonHostWidth = children
@@ -208,23 +260,30 @@ public sealed class RibbonAdaptivePanel : Panel
         var available = ResolveMeasuredAvailableWidth(this, availableSize.Width);
         var fitAvailable = double.IsInfinity(available) ? available : Math.Max(0, available - 4);
 
-        // Decide the collapse set from the refreshed full widths through the shared renderer-neutral
-        // full/collapsed policy, then apply only the groups whose state flips.
+        // Decide the complete adaptive state set from measured presentation widths through the shared,
+        // renderer-neutral planner, then apply only the groups whose state flips.
         if (!double.IsInfinity(fitAvailable))
         {
-            var decisions = RibbonAdaptiveCollapsePolicy.Plan(
+            var orderedHosts = hosts
+                .Select((host, index) => new { Host = host, Index = index })
+                .OrderByDescending(entry => entry.Host.Priority)
+                .ThenBy(entry => entry.Index)
+                .ToList();
+            var orderedStates = RibbonAdaptiveLayoutPlanner.Plan(
                 fitAvailable,
-                hosts
-                    .Select(host => new RibbonAdaptiveCollapseGroup(
-                        host.GroupName,
-                        host.FullWidth,
+                orderedHosts
+                    .Select(entry => new RibbonAdaptiveGroup(
+                        entry.Host.GroupName,
+                        entry.Host.FullWidth,
+                        entry.Host.MeasureWidth(RibbonAdaptiveGroupState.SmallWithLabels, infinite),
+                        entry.Host.MeasureWidth(RibbonAdaptiveGroupState.IconOnly, infinite),
                         RibbonGroupHost.CollapsedWidth,
-                        host.Priority))
+                        entry.Host.GroupName))
                     .ToList(),
                 fixedChromeWidth: nonHostWidth + spacing);
 
-            for (var index = 0; index < hosts.Count; index++)
-                hosts[index].Collapsed = decisions[index].IsCollapsed;
+            for (var index = 0; index < orderedHosts.Count; index++)
+                orderedHosts[index].Host.LayoutState = orderedStates[index];
         }
 
         // Re-measure the groups whose state just flipped (unchanged ones short-circuit).
@@ -239,7 +298,7 @@ public sealed class RibbonAdaptivePanel : Panel
             {
                 child.Measure(infinite);
                 if (child is RibbonGroupHost expandedHost)
-                    expandedHost.LayoutWidth = expandedHost.DesiredSize.Width;
+                    expandedHost.LayoutWidth = expandedHost.MeasureWidth(expandedHost.LayoutState, infinite);
             }
         }
 
@@ -252,35 +311,12 @@ public sealed class RibbonAdaptivePanel : Panel
                     break;
 
                 var previousWidth = GetChildLayoutWidth(host);
-                host.Collapsed = true;
-                host.Measure(new Size(RibbonGroupHost.CollapsedWidth, availableSize.Height));
-                host.LayoutWidth = RibbonGroupHost.CollapsedWidth;
-                width += RibbonGroupHost.CollapsedWidth - previousWidth;
-            }
-
-            foreach (var host in hosts
-                         .OrderByDescending(h => h.Priority)
-                         .Where(h => h.Collapsed))
-            {
-                if (!HasSevereUnusedWidth(width, fitAvailable))
-                    break;
-
-                var previousWidth = GetChildLayoutWidth(host);
-                var remainingWidth = Math.Max(0, fitAvailable - (width - previousWidth));
-                host.Collapsed = false;
-                host.Measure(new Size(remainingWidth, availableSize.Height));
-                host.LayoutWidth = host.DesiredSize.Width;
-
-                var expandedWidth = GetChildLayoutWidth(host);
-                if (width + expandedWidth - previousWidth <= fitAvailable)
-                {
-                    width += expandedWidth - previousWidth;
-                    continue;
-                }
-
-                host.Collapsed = true;
-                host.Measure(new Size(RibbonGroupHost.CollapsedWidth, availableSize.Height));
-                host.LayoutWidth = RibbonGroupHost.CollapsedWidth;
+                host.LayoutState = host.NextFallbackState();
+                host.Measure(new Size(host.LayoutState == RibbonAdaptiveGroupState.Collapsed
+                    ? RibbonGroupHost.CollapsedWidth
+                    : double.PositiveInfinity, availableSize.Height));
+                host.LayoutWidth = host.MeasureWidth(host.LayoutState, infinite);
+                width += host.LayoutWidth - previousWidth;
             }
         }
 
@@ -330,13 +366,6 @@ public sealed class RibbonAdaptivePanel : Panel
         }
 
         return child.DesiredSize.Width;
-    }
-
-    private static bool HasSevereUnusedWidth(double currentWidth, double fitAvailable)
-    {
-        var unusedWidth = fitAvailable - currentWidth;
-        var threshold = Math.Max(MinimumUnusedWidthForReclaim, fitAvailable * MinimumUnusedWidthRatioForReclaim);
-        return unusedWidth >= threshold;
     }
 
     private static double ResolveMeasuredAvailableWidth(FrameworkElement element, double measuredWidth)
