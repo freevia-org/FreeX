@@ -151,4 +151,24 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 "Excel keeps the primary Formulas Function Library block expanded before collapsing lower-priority groups");
         });
     }
+
+    [Fact]
+    public void FormulasRibbon_CompactsDefinedNamesAndCalculationOnlyAtMediumWidth()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Formulas", 1100);
+            if (!harness.CanUseRequestedRibbonWidth(1100))
+                return;
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
+                ["Defined Names", "Calculation"],
+                "Excel keeps these Formula groups directly reachable through compact command icons at common medium widths");
+            harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                0.5,
+                $"the compact Formula groups must fit without clipping; {harness.DebugActiveRibbonChildren}");
+        });
+    }
 }

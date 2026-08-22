@@ -11,7 +11,9 @@ public sealed record RibbonGroupSizing(
     IReadOnlyList<RibbonAdaptiveGroupState> SupportedVariants,
     RibbonWidthHints? Hints = null,
     bool EnableCompactPresentation = false,
-    bool CompactControlsAsIcons = false)
+    bool CompactControlsAsIcons = false,
+    double? CompactPresentationMaximumWidth = null,
+    double? CompactPresentationMinimumWidth = null)
 {
     /// <summary>Opt-in Office-style command compaction before a group becomes overflow-only.</summary>
     public static readonly RibbonGroupSizing OfficeAdaptive = new(new[]
