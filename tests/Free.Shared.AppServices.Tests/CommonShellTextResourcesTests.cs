@@ -40,4 +40,30 @@ public sealed class CommonShellTextResourcesTests
         CommonShellTextResources.FindReplaceNotFoundFormat.FallbackText.Should().Be("\"{0}\" not found.");
         CommonShellTextResources.FindReplaceMatchFormat.FallbackText.Should().Be("Match {0} of {1}");
     }
+
+    [Fact]
+    public void SisterBackstageResources_ComposeCommonDescriptorsAroundProductHeading()
+    {
+        var heading = new ResourceTextDescriptor("Product_InfoHeading", "Product information");
+
+        var info = SisterBackstagePaneTextResources.CreateInfoDescriptor(heading);
+        var options = SisterBackstagePaneTextResources.ApplicationOptionsSummaryDescriptor;
+
+        info.Heading.Should().BeSameAs(heading);
+        info.LocationLabel.Should().BeSameAs(CommonShellTextResources.Location);
+        info.NotSavedYet.Should().BeSameAs(CommonShellTextResources.NotSavedYet);
+        info.PropertiesHeading.Should().BeSameAs(CommonShellTextResources.Properties);
+        info.StatisticsHeading.Should().BeSameAs(CommonShellTextResources.Statistics);
+        info.DirtySuffix.Should().BeSameAs(CommonShellTextResources.UnsavedChangesSuffix);
+        info.CoreProperties.TitleLabel.Should().BeSameAs(CommonShellTextResources.Title);
+        info.CoreProperties.AuthorLabel.Should().BeSameAs(CommonShellTextResources.Author);
+        info.CoreProperties.SubjectLabel.Should().BeSameAs(CommonShellTextResources.Subject);
+        info.CoreProperties.KeywordsLabel.Should().BeSameAs(CommonShellTextResources.Keywords);
+        info.CoreProperties.EmptyValue.Should().BeSameAs(CommonShellTextResources.EmptyValue);
+        options.RecentFilesKeptLabel.Should().BeSameAs(CommonShellTextResources.RecentFilesKept);
+        options.DefaultSaveFormatLabel.Should().BeSameAs(CommonShellTextResources.DefaultSaveFormat);
+        options.UiLanguageLabel.Should().BeSameAs(CommonShellTextResources.UiLanguage);
+        options.DataFolderLabel.Should().BeSameAs(CommonShellTextResources.DataFolder);
+        options.SystemDefaultLanguageLabel.Should().BeSameAs(CommonShellTextResources.SystemDefault);
+    }
 }

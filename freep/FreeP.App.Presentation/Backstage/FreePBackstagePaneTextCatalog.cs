@@ -35,25 +35,9 @@ public static class FreePBackstagePaneTextCatalog
             Text(FreePBackstagePaneResourceKeys.ExportPdfActionLabel, "Export to PDF..."),
             Text(FreePBackstagePaneResourceKeys.ExportPdfActionDescription, "Publish a fixed-layout copy for sharing or presenting.")),
         Text(FreePBackstagePaneResourceKeys.OptionsEditText, "Edit options…"),
-        Info: new SisterBackstageInfoPaneTextDescriptor(
-            Text(FreePBackstagePaneResourceKeys.InfoHeading, "Info"),
-            CommonShellTextResources.Location,
-            CommonShellTextResources.NotSavedYet,
-            CommonShellTextResources.Properties,
-            CommonShellTextResources.Statistics,
-            CommonShellTextResources.UnsavedChangesSuffix,
-            new SisterBackstageCorePropertiesTextDescriptor(
-                CommonShellTextResources.Title,
-                CommonShellTextResources.Author,
-                CommonShellTextResources.Subject,
-                CommonShellTextResources.Keywords,
-                CommonShellTextResources.EmptyValue)),
-        OptionsSummary: new ApplicationOptionsSummaryTextDescriptor(
-            CommonShellTextResources.RecentFilesKept,
-            CommonShellTextResources.DefaultSaveFormat,
-            CommonShellTextResources.UiLanguage,
-            CommonShellTextResources.DataFolder,
-            CommonShellTextResources.SystemDefault));
+        Info: SisterBackstagePaneTextResources.CreateInfoDescriptor(
+            Text(FreePBackstagePaneResourceKeys.InfoHeading, "Info")),
+        OptionsSummary: SisterBackstagePaneTextResources.ApplicationOptionsSummaryDescriptor);
 
     public static IReadOnlyList<string> RequiredResourceKeys => Descriptor.ResourceKeys;
 

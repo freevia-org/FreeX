@@ -133,6 +133,42 @@ public sealed class CrossAppShellOwnershipSourceTests
         redeclarations.Should().BeEmpty("portable shell contracts belong in shared projects");
     }
 
+    [Theory]
+    [InlineData(
+        "freep",
+        "FreeP.App.Presentation",
+        "FreePBackstagePaneTextCatalog.cs",
+        "Text(FreePBackstagePaneResourceKeys.InfoHeading, \"Info\")",
+        "No recent presentations.",
+        "FreeP application settings.")]
+    [InlineData(
+        "freew",
+        "FreeW.App.Presentation",
+        "FreeWBackstagePaneTextCatalog.cs",
+        "Text(FreeWBackstagePaneResourceKeys.InfoHeading, \"Document information\")",
+        "No recent documents.",
+        "FreeW application settings.")]
+    public void SisterBackstageCatalogs_AdoptSharedCommonDescriptorTail(
+        string appRoot,
+        string project,
+        string fileName,
+        string productHeading,
+        string recentFallback,
+        string optionsFallback)
+    {
+        var source = Read(appRoot, project, "Backstage", fileName);
+
+        source.Should().Contain("Info: SisterBackstagePaneTextResources.CreateInfoDescriptor(");
+        source.Should().Contain("OptionsSummary: SisterBackstagePaneTextResources.ApplicationOptionsSummaryDescriptor");
+        source.Should().Contain(productHeading);
+        source.Should().Contain(recentFallback);
+        source.Should().Contain(optionsFallback);
+        source.Should().NotContain("new SisterBackstageInfoPaneTextDescriptor(");
+        source.Should().NotContain("new SisterBackstageCorePropertiesTextDescriptor(");
+        source.Should().NotContain("new ApplicationOptionsSummaryTextDescriptor(");
+        source.Should().NotContain("CommonShellTextResources.");
+    }
+
     private static IEnumerable<string> ProductSourceFiles(string projectDirectory) =>
         Directory.EnumerateFiles(projectDirectory, "*.cs", SearchOption.AllDirectories)
             .Where(path => !path.Contains(
