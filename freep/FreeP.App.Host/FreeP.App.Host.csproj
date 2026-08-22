@@ -136,4 +136,13 @@
     <ApplicationIcon>$(BrandWindowsIconPath)</ApplicationIcon>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Public distributions carry the legal bundle beside the executable for offline review. -->
+    <Content Include="..\..\LICENSE" Link="Legal\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\legal\legal-notices.md" Link="Legal\legal-notices.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\legal\privacy.md" Link="Legal\privacy.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\THIRD_PARTY_NOTICES.md" Link="Legal\THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\THIRD_PARTY_LICENSES.md" Link="Legal\THIRD_PARTY_LICENSES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

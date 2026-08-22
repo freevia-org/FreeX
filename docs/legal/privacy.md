@@ -1,13 +1,16 @@
 # Privacy Notice
 
-FreeX is a local desktop app (Windows, with macOS and Linux ports). Workbooks are
-opened, edited, and saved on the user's machine unless the user explicitly chooses
-an external sharing path.
+FreeX, FreeW, and FreeP are local desktop apps. Workbooks, documents, and
+presentations are opened, edited, and saved on the user's machine unless the
+user explicitly chooses an external sharing, update, help, feedback, or other
+network-enabled feature.
 
 ## Local Diagnostics
 
-Tester builds write local usage events and crash files under a platform-specific
-diagnostics directory:
+Tester builds can write local usage events and crash files under an app-specific,
+platform-specific diagnostics directory. The examples below are for FreeX;
+FreeW and FreeP use their own product-named directories and corresponding
+`FREEW_DIAGNOSTICS` and `FREEP_DIAGNOSTICS` controls:
 
 - Windows: `%LOCALAPPDATA%\FreeX\Diagnostics`
 - macOS: `~/Library/Logs/FreeX/` (`events.jsonl`, `CrashReports/*.json`)
@@ -24,8 +27,8 @@ user has enabled crash reporting for the tester build. Crash reports include app
 version, runtime, operating system, session ID, exception type, exception
 message, and stack trace.
 
-FreeX does not intentionally collect workbook contents, formulas, filenames, or
-file paths in crash reports. Exception messages and stack traces can sometimes
+The apps do not intentionally collect document contents, formulas, filenames,
+or file paths in crash reports. Exception messages and stack traces can sometimes
 include sensitive values, so users should review local diagnostics before
 sharing them manually.
 
@@ -37,7 +40,7 @@ or private data unless they choose to share them.
 
 ## Network Behavior
 
-FreeX has no Microsoft 365 account integration and no proprietary Microsoft
-cloud-service dependency. Online help, update checks, issue reporting, and crash
-analytics may open external network destinations only through the explicit
-feature paths that describe that behavior in the app.
+The apps do not provide Microsoft 365 account integration and do not depend on
+proprietary Microsoft cloud services. Online help, update checks, issue
+reporting, and opt-in crash analytics may contact external destinations only
+through the feature paths that describe that behavior in the app.

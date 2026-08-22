@@ -5,7 +5,7 @@
 
 FreeX is a free, native Windows desktop spreadsheet application for `.xlsx` files. It reads and writes standard XLSX workbooks and supports formulas, charts, PivotTables, conditional formatting, data tools, and page layout.
 
-FreeX is not affiliated with, endorsed by, or sponsored by Microsoft. Microsoft Excel is a trademark of Microsoft Corporation.
+FreeX is an independent project and is not affiliated with, authorized, sponsored, endorsed, or approved by Microsoft Corporation. Microsoft and Excel are trademarks of the Microsoft group of companies. All other trademarks are the property of their respective owners.
 
 ---
 
@@ -112,7 +112,7 @@ View tab -> Freeze Panes: freeze top row, first column, or a custom split at the
 
 ### Entering a Formula
 
-Type `=` to start a formula. FreeX supports the full Excel formula syntax including:
+Type `=` to start a formula. FreeX supports a broad spreadsheet-formula syntax, including:
 - Arithmetic: `+`, `-`, `*`, `/`, `^`
 - Comparison: `=`, `<>`, `<`, `>`, `<=`, `>=`
 - Text concatenation: `&`

@@ -23,7 +23,7 @@ public static class AppInfo
     public const string PrivacyNotice = AppHelpInfo.PrivacyNotice;
     public const string CompatibilityNotice = AppHelpInfo.CompatibilityNotice;
     public const string ThirdPartyRuntimeNotice =
-        "Third-party runtime notices: Runtime dependencies remain governed by their own licenses. The publishable app dependency set is covered by MIT, Apache-2.0, and BSD-3-Clause style licenses. Runtime packages: ClosedXML, ClosedXML.Parser, DocumentFormat.OpenXml, DocumentFormat.OpenXml.Framework, ExcelDataReader, ExcelNumberFormat, Microsoft.Extensions.DependencyInjection, Microsoft.Extensions.DependencyInjection.Abstractions, Microsoft.Extensions.Logging, Microsoft.Extensions.Logging.Abstractions, Microsoft.Extensions.Options, Microsoft.Extensions.Primitives, OxyPlot.Core, OxyPlot.Wpf, OxyPlot.Wpf.Shared, PDFsharp-WPF, RBush.Signed, Sentry, Serilog, Serilog.Extensions.Logging, Serilog.Sinks.Console, Serilog.Sinks.File, SharpVectors.Wpf, SixLabors.Fonts, and System.IO.Packaging. No package-provided NOTICE files were found in the restored runtime packages.";
+        "Third-party runtime notices: Runtime dependencies remain governed by their own licenses, including permissive and LGPL-licensed components. Package identities, versions, notices, complete bundled license texts, and distribution requirements are available in Help > Legal Notices. Release packaging must preserve those materials.";
     public const string SourceNotice = AppHelpInfo.SourceNotice;
 
     public static string AboutText { get; } =
