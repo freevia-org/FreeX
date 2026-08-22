@@ -11,6 +11,7 @@ internal static class XlsxWorkbookMetadataWriter
 
     public static bool HasPostProcessingMetadata(Workbook workbook) =>
         workbook.Uses1904DateSystem ||
+        !workbook.ShowInkAnnotations ||
         workbook.Properties is not null ||
         workbook.ShowSheetTabs is not null ||
         workbook.SheetTabRatio is not null ||
@@ -53,7 +54,8 @@ internal static class XlsxWorkbookMetadataWriter
     public static void SaveSourcePackageReplayMetadata(Stream xlsxStream, Workbook workbook) =>
         SaveWorkbookXml(xlsxStream, workbook, static (workbookXml, root, model) =>
         {
-            var changed = XlsxWorkbookAdditionalViewMapper.ApplyToWorkbookXml(workbookXml, model);
+            var changed = ApplyWorkbookProperties(root, model);
+            changed |= XlsxWorkbookAdditionalViewMapper.ApplyToWorkbookXml(workbookXml, model);
 
             if (model.FileVersion is not null)
                 changed |= ApplyFileVersion(root, model);
@@ -70,6 +72,8 @@ internal static class XlsxWorkbookMetadataWriter
         });
 
     public static bool HasSourcePackageReplayMetadata(Workbook workbook) =>
+        workbook.Properties is not null ||
+        !workbook.ShowInkAnnotations ||
         workbook.AdditionalViews is not null ||
         workbook.FileVersion is not null ||
         workbook.FunctionGroups is not null ||
@@ -96,7 +100,7 @@ internal static class XlsxWorkbookMetadataWriter
         var workbookProperties = root.Element(WorkbookNs + "workbookPr");
         if (workbookProperties is null)
         {
-            if (!workbook.Uses1904DateSystem && workbook.Properties is null)
+            if (!workbook.Uses1904DateSystem && workbook.ShowInkAnnotations && workbook.Properties is null)
                 return false;
 
             workbookProperties = new XElement(WorkbookNs + "workbookPr");
@@ -105,10 +109,11 @@ internal static class XlsxWorkbookMetadataWriter
 
         if (workbook.Properties is not null)
         {
-            XmlNativeBagSerializer.ApplyToElement(workbookProperties, workbook.Properties.Get("workbookPr"), ["date1904"]);
+            XmlNativeBagSerializer.ApplyToElement(workbookProperties, workbook.Properties.Get("workbookPr"), ["date1904", "showInkAnnotation"]);
         }
 
         workbookProperties.SetAttributeValue("date1904", workbook.Uses1904DateSystem ? "1" : null);
+        workbookProperties.SetAttributeValue("showInkAnnotation", workbook.ShowInkAnnotations ? null : "0");
         XlsxWorkbookLeafElementNormalizer.Normalize(workbookProperties);
         return true;
     }

@@ -41,6 +41,7 @@ internal static class XlsxWorkbookMetadataReader
     private static XlsxWorkbookMetadataSnapshot LoadWorkbookMetadata(XDocument workbookXml) =>
         new(
             ReadOrDefault(() => LoadUses1904DateSystem(workbookXml), false),
+            ReadOrDefault(() => LoadShowInkAnnotations(workbookXml), true),
             ReadOrDefault(() => LoadWorkbookProperties(workbookXml), (NativeXmlPreserveBag?)null),
             ReadOrDefault(() => LoadWorkbookViewProperties(workbookXml), WorkbookViewProperties.Empty),
             ReadOrDefault(() => LoadFileSharing(workbookXml), (WorkbookFileSharingModel?)null),
@@ -463,6 +464,13 @@ internal static class XlsxWorkbookMetadataReader
             workbookXml.Root?.Element(WorkbookNs + "workbookPr"),
             "date1904");
 
+    private static bool LoadShowInkAnnotations(XDocument workbookXml)
+    {
+        var workbookProperties = workbookXml.Root?.Element(WorkbookNs + "workbookPr");
+        return workbookProperties?.Attribute("showInkAnnotation") is null ||
+               XlsxXmlAttributeReader.ReadBoolAttribute(workbookProperties, "showInkAnnotation");
+    }
+
     private static NativeXmlPreserveBag? LoadWorkbookProperties(XDocument workbookXml)
         => ReadNativeBag(
             workbookXml.Root?.Element(WorkbookNs + "workbookPr"),
@@ -649,6 +657,7 @@ internal sealed record WorkbookViewProperties(
 
 internal sealed record XlsxWorkbookMetadataSnapshot(
     bool Uses1904DateSystem,
+    bool ShowInkAnnotations,
     NativeXmlPreserveBag? WorkbookProperties,
     WorkbookViewProperties WorkbookViewProperties,
     WorkbookFileSharingModel? FileSharing,
@@ -664,6 +673,7 @@ internal sealed record XlsxWorkbookMetadataSnapshot(
 {
     public static XlsxWorkbookMetadataSnapshot Default { get; } = new(
         false,
+        true,
         null,
         WorkbookViewProperties.Empty,
         null,

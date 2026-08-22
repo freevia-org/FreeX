@@ -57,6 +57,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         if (dto.Theme is { } theme)
             workbook.Theme = ToWorkbookTheme(theme);
         workbook.Uses1904DateSystem = dto.Uses1904DateSystem;
+        workbook.ShowInkAnnotations = dto.ShowInkAnnotations ?? true;
         workbook.HasVbaProjectPackage = dto.HasVbaProjectPackage;
         workbook.ShowSheetTabs = dto.ShowSheetTabs;
         workbook.SheetTabRatio = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.SheetTabRatio, 1000);

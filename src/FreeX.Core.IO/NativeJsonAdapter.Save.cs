@@ -58,6 +58,7 @@ public sealed partial class NativeJsonAdapter
             Name = workbook.Name,
             Theme = FromWorkbookTheme(workbook.Theme),
             Uses1904DateSystem = workbook.Uses1904DateSystem,
+            ShowInkAnnotations = workbook.ShowInkAnnotations,
             HasVbaProjectPackage = workbook.HasVbaProjectPackage,
             ShowSheetTabs = workbook.ShowSheetTabs,
             SheetTabRatio = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.SheetTabRatio, 1000),

@@ -249,6 +249,13 @@ public sealed class Workbook
     /// <summary>Whether workbook date serials use Excel's 1904 date system.</summary>
     public bool Uses1904DateSystem { get; set; }
 
+    /// <summary>
+    /// Whether ink annotations are visible when Excel opens this workbook. Corresponds to XLSX
+    /// <c>workbookPr/@showInkAnnotation</c>; the attribute is workbook-scoped, even though the
+    /// InkML drawing anchors themselves belong to individual worksheets.
+    /// </summary>
+    public bool ShowInkAnnotations { get; set; } = true;
+
     /// <summary>Whether the workbook sheet-tab strip is visible in Excel.</summary>
     public bool? ShowSheetTabs { get; set; }
 
