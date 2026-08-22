@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -185,8 +186,15 @@ public sealed class AvaloniaRibbonKeyTipBadgeTests
             var window = Show(ribbon);
             try
             {
+                var toggles = ribbon.GetLogicalDescendants().OfType<ToggleButton>()
+                    .Where(candidate => candidate.Tag?.ToString() == "toggle")
+                    .ToArray();
+                toggles.Should().NotBeEmpty();
+                toggles.Should().OnlyContain(candidate => candidate.IsChecked != true);
                 Assert.True(AvaloniaRibbonRenderer.TryActivateKeyTip(ribbon, "WSP"));
                 Assert.Equal(1, executed);
+                toggles.Should().OnlyContain(candidate => candidate.IsChecked == true,
+                    "all live replicas of the command should reflect the key-tip toggle state");
             }
             finally
             {

@@ -911,9 +911,11 @@ public static class AvaloniaRibbonRenderer
             if (controlRemainder.Length != 0)
                 return false;
 
-            // Route key-tip activation through the same click event as pointer/keyboard input.
-            // Assigning IsChecked directly updates only the visual toggle state and bypasses the
-            // host command handler (notably View > Split).
+            // ToggleButton changes IsChecked before Click for pointer/keyboard input. Mirror both
+            // parts of that sequence so the state store and host command handler observe the same
+            // transition (notably View > Split).
+            if (button is ToggleButton toggle)
+                toggle.IsChecked = toggle.IsChecked != true;
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
             return true;
         }
