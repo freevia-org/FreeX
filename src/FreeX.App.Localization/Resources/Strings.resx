@@ -20846,4 +20846,13 @@ and {0} more.</value>
   <data name="WorksheetContextMiniToolbar_AutomationName" xml:space="preserve">
     <value>Mini toolbar</value>
   </data>
+  <data name="WorkbookPerformance_Title" xml:space="preserve">
+    <value>Check Performance</value>
+  </data>
+  <data name="WorkbookPerformance_ReportAutomationName" xml:space="preserve">
+    <value>Performance check results</value>
+  </data>
+  <data name="WorkbookPerformance_ReportHelpText" xml:space="preserve">
+    <value>Reports formatting-only cells that extend worksheet used ranges. This report does not change the workbook.</value>
+  </data>
 </root>

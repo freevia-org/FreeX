@@ -16,7 +16,7 @@ public sealed class WorkbookPerformanceDialog : Window
     {
         ArgumentNullException.ThrowIfNull(report);
 
-        Title = "Check Performance";
+        Title = UiText.Get("WorkbookPerformance_Title");
         Width = 560;
         Height = 460;
         MinWidth = 420;
@@ -49,9 +49,9 @@ public sealed class WorkbookPerformanceDialog : Window
             Padding = new Thickness(8),
             MinHeight = 220,
         };
-        AutomationProperties.SetName(reportBlock, "Performance check results");
+        AutomationProperties.SetName(reportBlock, UiText.Get("WorkbookPerformance_ReportAutomationName"));
         AutomationProperties.SetAutomationId(reportBlock, "WorkbookPerformanceReport");
-        AutomationProperties.SetHelpText(reportBlock, "Reports formatting-only cells that extend worksheet used ranges. This report does not change the workbook.");
+        AutomationProperties.SetHelpText(reportBlock, UiText.Get("WorkbookPerformance_ReportHelpText"));
         root.Children.Add(reportBlock);
 
         var close = new Button

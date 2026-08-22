@@ -1,6 +1,7 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Host.Tests;
 
@@ -30,10 +31,10 @@ public sealed class WorkbookPerformanceDialogTests
     [Fact]
     public void ReviewRibbon_MapsCheckPerformanceToReadOnlyReportHandler()
     {
-        FreeXRibbonHandlerMap.Handlers.Should().Contain("Check Performance", "CheckPerformanceBtn_Click");
+        FreeXRibbonHandlerMap.Handlers.Should().Contain(FreeXRibbonCommandIds.ReviewCheckPerformance, "CheckPerformanceBtn_Click");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs", "WorkbookPerformanceDialog.cs");
         source.Should().Contain("WorkbookPerformanceService.Analyze(_workbook)");
         source.Should().NotContain("ClearStyleOnlyEntries");
-        source.Should().Contain("This report does not change the workbook.");
+        source.Should().Contain("UiText.Get(\"WorkbookPerformance_ReportHelpText\")");
     }
 }

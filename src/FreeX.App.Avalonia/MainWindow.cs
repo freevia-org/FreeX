@@ -1386,7 +1386,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
                     // Review ▸ Proofing / Comments / Notes / Share.
                     ["Workbook Statistics"] = () => RunGuarded(ShowWorkbookStatisticsDialogAsync),
-                    ["Check Performance"] = () => RunGuarded(ShowWorkbookPerformanceDialogAsync),
+                    [FreeXRibbonCommandIds.ReviewTranslate] = () => RunGuarded(ShowTranslateDialogAsync),
+                    [FreeXRibbonCommandIds.ReviewCheckPerformance] = () => RunGuarded(ShowWorkbookPerformanceDialogAsync),
                     ["Next Comment"] = () => NavigateReviewThreadedComment(previous: false),
                     ["Previous Comment"] = () => NavigateReviewThreadedComment(previous: true),
                     ["Show Comments"] = () => RunGuarded(ShowCommentsListAsync),
@@ -15777,7 +15778,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var report = WorkbookPerformanceService.Analyze(_session.Workbook);
         var dialog = new Window
         {
-            Title = "Check Performance",
+            Title = UiText.Get("WorkbookPerformance_Title"),
             Width = 560,
             Height = 460,
             MinWidth = 420,
@@ -15799,9 +15800,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Padding = new Thickness(6, 4),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
-        AutomationProperties.SetName(reportBlock, "Performance check results");
+        AutomationProperties.SetName(reportBlock, UiText.Get("WorkbookPerformance_ReportAutomationName"));
         AutomationProperties.SetAutomationId(reportBlock, "WorkbookPerformanceReport");
-        AutomationProperties.SetHelpText(reportBlock, "Reports formatting-only cells that extend worksheet used ranges. This report does not change the workbook.");
+        AutomationProperties.SetHelpText(reportBlock, UiText.Get("WorkbookPerformance_ReportHelpText"));
 
         var okButton = new Button
         {

@@ -65,18 +65,18 @@ public sealed class AvaloniaInteractionCoverageTests
         var definition = AvaloniaRibbonComposition.BuildDefinition();
         var rows = AvaloniaRibbonComposition.EnumerateSurfaceRows(definition).ToArray();
 
-        // 599 canonical shared placements plus the 42 runtime shape-gallery leaves. The canonical
+        // 602 canonical shared placements plus the 42 runtime shape-gallery leaves. The canonical
         // count rose by 10 in r143 when the Cell Styles gallery gained the built-in styles Excel
         // ships that FreeX was missing (Heading 3/4, Title, Currency, Currency [0], Comma,
         // Comma [0], Percent, Hyperlink, Followed Hyperlink).
-        Assert.Equal(641, rows.Length);
-        Assert.Equal(309, rows.Count(row => row.Kind != nameof(RibbonMenuItem)));
+        Assert.Equal(644, rows.Length);
+        Assert.Equal(312, rows.Count(row => row.Kind != nameof(RibbonMenuItem)));
         Assert.Equal(332, rows.Count(row => row.Kind == nameof(RibbonMenuItem)));
-        Assert.Equal(605, rows.Select(row => row.CommandId).Distinct().Count());
+        Assert.Equal(607, rows.Select(row => row.CommandId).Distinct().Count());
         Assert.Equal(74, definition.Tabs.Sum(tab => tab.Groups.Count));
 
         var runner = File.ReadAllText(RepoFile("tools", "Run-FreeXLinuxInteractionValidation.ps1"));
-        Assert.Contains("$authoritativeRibbonBindingRowCount = 641", runner, StringComparison.Ordinal);
+        Assert.Contains("$authoritativeRibbonBindingRowCount = 644", runner, StringComparison.Ordinal);
         Assert.Contains("$authoritativeCollapsedRibbonGroupRowCount = 74", runner, StringComparison.Ordinal);
     }
 
@@ -118,9 +118,9 @@ public sealed class AvaloniaInteractionCoverageTests
                     ribbonOnly: false,
                     coreSection: "ribbon-bindings");
 
-                Assert.Equal(641, results.Count(result => result.Category == "ribbon-command"));
+                Assert.Equal(644, results.Count(result => result.Category == "ribbon-command"));
                 Assert.Equal(74, results.Count(result => result.Category == "ribbon-collapsed-group"));
-                Assert.Equal(715, results.Count);
+                Assert.Equal(718, results.Count);
                 Assert.All(results, result => Assert.Equal("passed", result.Status));
                 Assert.DoesNotContain(results, result => result.Category == "ribbon-command-behavior");
             }

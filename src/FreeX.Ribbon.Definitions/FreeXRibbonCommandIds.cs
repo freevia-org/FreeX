@@ -95,6 +95,8 @@ public static class FreeXRibbonCommandIds
     public const string DataOutlineClear = "data.outline.clear";
 
     public const string ReviewProtectSheet = "review.protectSheet";
+    public const string ReviewTranslate = "Translate";
+    public const string ReviewCheckPerformance = "Check Performance";
 
     public const string ViewNormal = "view.normal";
     public const string ViewZoom100 = "view.zoom.100";
