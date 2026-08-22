@@ -122,6 +122,18 @@ public sealed class VisualEvidenceOrchestrationSourceTests
     }
 
     [Fact]
+    public void Wpf_whole_window_capture_normalizes_to_the_requested_responsive_width()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "freep", "TestSupport", "VisualEvidence.Wpf", "WpfWholeWindowVisualEvidenceCapture.cs");
+
+        source.Should().Contain("NormalizeContentSize(owner, hostPolicy.LogicalWidth);")
+            .And.Contain("private static void NormalizeContentSize(Window owner, double logicalWidth)")
+            .And.Contain("owner.Width += logicalWidth - content.ActualWidth;")
+            .And.NotContain("owner.Width += WholeWindowVisualEvidenceCatalog.LogicalClientWidth - content.ActualWidth;");
+    }
+
+    [Fact]
     public void RenderCompare_uses_one_paired_collector_for_routes_manifests_processes_and_artifacts()
     {
         var collector = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(

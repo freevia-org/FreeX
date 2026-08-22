@@ -92,7 +92,7 @@ internal static class WpfWholeWindowVisualEvidenceCapture
                 try
                 {
                     owner.Show();
-                    NormalizeContentSize(owner);
+                    NormalizeContentSize(owner, hostPolicy.LogicalWidth);
                     owner.Activate();
                     var coordinator = new WpfWholeWindowVisualEvidenceCoordinator(owner.CreateVisualCaptureAdapter());
                     var assertions = coordinator.Prepare(scenario, fixture);
@@ -210,12 +210,13 @@ internal static class WpfWholeWindowVisualEvidenceCapture
             sourceDpiY);
     }
 
-    private static void NormalizeContentSize(Window owner)
+    private static void NormalizeContentSize(Window owner, double logicalWidth)
     {
         owner.UpdateLayout();
         if (owner.Content is not FrameworkElement content)
             return;
-        owner.Width += WholeWindowVisualEvidenceCatalog.LogicalClientWidth - content.ActualWidth;
+
+        owner.Width += logicalWidth - content.ActualWidth;
         owner.Height += WholeWindowVisualEvidenceCatalog.LogicalClientHeight - content.ActualHeight;
         owner.UpdateLayout();
     }
