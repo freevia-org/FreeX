@@ -383,6 +383,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetCellPhoneticGuideWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (!hasSourcePackage && featurePlan.HasFormControls)
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetFormControlWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (!hasSourcePackage)
         {
             SaveSourcePackageIndependentPostProcessingMetadata();
@@ -427,6 +433,15 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxX14DataValidationWriter.Save(packageStream, workbook);
+        }
+
+        // Source-package preservation reattaches controls that were already in the file. Run the
+        // authoring writer afterwards so controls added to the in-memory model receive their own
+        // independent ctrlProp/VML package graph without disturbing the preserved controls.
+        if (featurePlan.HasFormControls)
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetFormControlWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         // Re-apply after source-part preservation: PreserveSourcePackageParts restores Excel's
@@ -2111,6 +2126,7 @@ public sealed partial class XlsxFileAdapter
         public bool HasCustomViews;
         public bool HasCellFormulas;
         public bool HasLegacyNotes;
+        public bool HasFormControls;
         /// <summary>
         /// True when any sheet has a rich-text run with <see cref="CellRunColorKind.Auto"/> color.
         /// The full-save (ClosedXML) path cannot emit <c>&lt;color auto="1"/&gt;</c> directly;
@@ -2196,6 +2212,7 @@ public sealed partial class XlsxFileAdapter
             HasReplayMetadata |= XlsxWorksheetPostProcessingMetadataBatchWriter.HasReplayMetadata(sheet);
             HasSourceIndependentMetadata |= XlsxWorksheetSourceIndependentMetadataBatchWriter.HasMetadata(sheet);
             HasLegacyNotes |= sheet.Comments.Count > 0;
+            HasFormControls |= XlsxWorksheetFormControlWriter.HasPersistableControls(sheet.FormControls);
             HasStyleOnlyCells |= sheet.HasStyleOnlyCells;
             if (!HasRichAutoColorRuns)
                 HasRichAutoColorRuns = HasRichTextAutoColorRuns(sheet);
