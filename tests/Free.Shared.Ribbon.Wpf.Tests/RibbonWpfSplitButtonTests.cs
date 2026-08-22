@@ -113,6 +113,39 @@ public sealed class RibbonWpfSplitButtonTests
     }
 
     [Fact]
+    public void CollapsedGroup_UsesFixedSingleLineEllipsisCaption()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const string groupHeader = "Very Long Caption Group";
+            var registry = new RibbonCommandRegistry();
+            registry.Register("paste", new RecordingCommand());
+            var root = BuildRibbon(registry, groupHeader: groupHeader);
+            var group = Descendants(root).OfType<RibbonGroupHost>().Single();
+
+            // Materialize the normal presentation before forcing the collapsed state. The panel is the
+            // adaptive-state owner, so laying out the root again would select the expanded state at this
+            // wide test viewport; arrange the forced host itself instead.
+            Layout(root, 420, 130);
+            group.Collapsed = true;
+            group.Measure(new Size(RibbonGroupHost.CollapsedWidth, 130));
+            group.Arrange(new Rect(0, 0, RibbonGroupHost.CollapsedWidth, 130));
+
+            var collapsedGrid = Assert.IsType<Grid>(group.Content);
+            var button = collapsedGrid.Children.OfType<Button>().Single();
+            var content = Assert.IsType<StackPanel>(button.Content);
+            var caption = content.Children.OfType<TextBlock>().Single(text => text.Text == groupHeader);
+
+            collapsedGrid.Width.Should().Be(RibbonGroupHost.CollapsedWidth);
+            button.Width.Should().Be(58);
+            caption.Width.Should().Be(58);
+            caption.TextWrapping.Should().Be(TextWrapping.NoWrap);
+            caption.TextTrimming.Should().Be(TextTrimming.CharacterEllipsis);
+            RibbonTooltip.GetTitle(button).Should().Be(groupHeader);
+        });
+    }
+
+    [Fact]
     public void CollapsedGroupPopup_UsesPlacementAndEscapeDismissalContract()
     {
         StaTestRunner.Run(() =>
@@ -612,11 +645,12 @@ public sealed class RibbonWpfSplitButtonTests
         IRibbonCommandRegistry registry,
         RibbonMenu? menu = null,
         RibbonCommandLayoutKind layout = RibbonCommandLayoutKind.Medium,
-        IRibbonStateStore? stateStore = null) =>
+        IRibbonStateStore? stateStore = null,
+        string groupHeader = "Clipboard") =>
         RibbonWpfRenderer.BuildTabContent(
             new RibbonDefinitionBuilder()
                 .Tab("home", "Home", "H", tab => tab
-                    .Group("clipboard", "Clipboard", "C", 1, group => group
+                    .Group("clipboard", groupHeader, "C", 1, group => group
                         .SplitButton("paste", "Paste", menu ?? new RibbonMenu(new[]
                         {
                             new RibbonMenuItem("Paste", "paste"),
