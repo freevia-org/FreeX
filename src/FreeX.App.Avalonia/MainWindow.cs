@@ -1000,6 +1000,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 InsertPicture = () => RunGuarded(InsertPictureFromFileAsync),
                 InsertShape = InsertShapeAtActiveCell,
                 InsertTextBox = InsertTextBoxAtActiveCell,
+                InsertFormControl = InsertFormControlAtActiveCell,
                 FormatPainter = () => CaptureFormatPainterSource(persistent: false),
                 SetFontSize = ApplyRibbonFontSize,
                 SetFontName = ApplyRibbonFontName,

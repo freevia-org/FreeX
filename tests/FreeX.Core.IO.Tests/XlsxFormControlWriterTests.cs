@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Xml.Linq;
 using FluentAssertions;
+using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -183,6 +184,41 @@ public sealed class XlsxFormControlWriterTests
 
         var reloaded = new XlsxFileAdapter().Load(saved);
         reloaded.Sheets.Single().FormControls.Select(control => control.Kind).Should().BeEquivalentTo(supportedKinds);
+    }
+
+    [Fact]
+    public void Save_ControlsInsertedThroughCommand_RoundTripAsSupportedLegacyControls()
+    {
+        var workbook = new Workbook("Inserted controls");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+        var kinds = new[]
+        {
+            FormControlKind.CheckBox,
+            FormControlKind.OptionButton,
+            FormControlKind.Button,
+            FormControlKind.DropDown,
+            FormControlKind.ListBox,
+            FormControlKind.Spinner,
+            FormControlKind.ScrollBar,
+        };
+
+        for (var index = 0; index < kinds.Length; index++)
+        {
+            new AddFormControlCommand(sheet.Id, new CellAddress(sheet.Id, (uint)(index + 1), 2), kinds[index])
+                .Apply(context).Success.Should().BeTrue();
+        }
+
+        using var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        var controls = reloaded.Sheets.Single().FormControls;
+        controls.Select(control => control.Kind).Should().BeEquivalentTo(kinds);
+        controls.All(control => control.Anchor is not null && control.ShapeId is not null).Should().BeTrue();
+        controls.Single(control => control.Kind == FormControlKind.Spinner).Max.Should().Be(100);
+        controls.Single(control => control.Kind == FormControlKind.ScrollBar).PageChange.Should().Be(10);
     }
 
     private static GridRange Anchor(Sheet sheet, uint startRow, uint startColumn, uint endRow, uint endColumn) =>

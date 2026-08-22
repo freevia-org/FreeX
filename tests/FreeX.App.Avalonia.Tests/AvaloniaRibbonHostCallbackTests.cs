@@ -103,6 +103,22 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void FormControlRibbonCommands_ExecuteTheSelectedSupportedKind()
+    {
+        var inserted = new List<FormControlKind>();
+        var registry = AvaloniaRibbonComposition.BuildRegistry(
+            () => null,
+            _ => { },
+            new AvaloniaRibbonHostCallbacks { InsertFormControl = inserted.Add });
+
+        Execute(registry, FreeXRibbonCommandIds.InsertFormControls);
+        Execute(registry, FreeXRibbonCommandIds.InsertFormControlListBox);
+        Execute(registry, FreeXRibbonCommandIds.InsertFormControlScrollBar);
+
+        inserted.Should().Equal(FormControlKind.CheckBox, FormControlKind.ListBox, FormControlKind.ScrollBar);
+    }
+
+    [Fact]
     public void ExtraCommands_BindCanonicalMenuItems_AndExecute()
     {
         // ExtraCommands accepts only canonical ids emitted by the shared definition.

@@ -43,6 +43,17 @@ public static class FreeXRibbonDefinition
             .Group("InsertFiltersGroup", "Filters", null, priority: 110,
                 g => g
                 .Large("Insert Timeline", "Insert Timeline", Ico.Date, "IT"))
+            .Group("InsertControlsGroup", "Controls", null, priority: 105,
+                g => g
+                .Large(FreeXRibbonCommandIds.InsertFormControls, "Form Controls", Ico.Insert, "FC", menu: m => m
+                    .Item(FreeXRibbonCommandIds.InsertFormControlCheckBox, "Check Box", "C")
+                    .Item(FreeXRibbonCommandIds.InsertFormControlOptionButton, "Option Button", "O")
+                    .Item(FreeXRibbonCommandIds.InsertFormControlButton, "Button", "B")
+                    .Separator()
+                    .Item(FreeXRibbonCommandIds.InsertFormControlDropDown, "Drop-Down", "D")
+                    .Item(FreeXRibbonCommandIds.InsertFormControlListBox, "List Box", "L")
+                    .Item(FreeXRibbonCommandIds.InsertFormControlSpinner, "Spin Button", "S")
+                    .Item(FreeXRibbonCommandIds.InsertFormControlScrollBar, "Scroll Bar", "R")))
             .Group("InsertLinksGroup", "Links", null, priority: 100,
                 g => g
                 .Large("Insert Link", "Insert Link", Ico.Link, "K"))
