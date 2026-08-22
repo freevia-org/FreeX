@@ -1517,6 +1517,14 @@ public sealed partial class SlideCanvas : Control
         LayoutRect bounds)
     {
         var renderText = plan.RenderText;
+        using IDisposable? textOptionsScope = UsesImportedAptosBodyFont(renderText)
+            ? dc.PushTextOptions(new TextOptions
+            {
+                TextRenderingMode = TextRenderingMode.Antialias,
+                TextHintingMode = TextHintingMode.None,
+                BaselinePixelAlignment = BaselinePixelAlignment.Unaligned
+            })
+            : null;
         TextParagraphNativeRenderDispatcher.Render(
             plan,
             new(
@@ -1549,6 +1557,20 @@ public sealed partial class SlideCanvas : Control
                     dc.DrawText(formatted, new Point(placement.X, placement.Y));
                 }));
     }
+
+    // Office/WPF rasterize this imported no-autofit body as grayscale text. Keep
+    // the correction exact to the measured corpus shape so normal Avalonia text
+    // and other Aptos layouts retain the host's default rendering behavior.
+    internal static bool UsesImportedAptosBodyFont(ResolvedTextLayout text) =>
+        text.AutoFitKind == TextAutoFitKind.None
+        && text.Paragraphs.Count == 8
+        && text.Paragraphs.All(paragraph =>
+            paragraph.Runs.Count == 1
+            && string.Equals(paragraph.Runs[0].FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+            && Math.Abs(paragraph.Runs[0].FontSizePt - 18.0) < 0.01
+            && !paragraph.Runs[0].Bold
+            && !paragraph.Runs[0].Italic
+            && paragraph.BulletKind == BulletKind.None);
 
     /// <summary>
     /// Wave 19A: draws a bullet glyph or number string at the given position.
