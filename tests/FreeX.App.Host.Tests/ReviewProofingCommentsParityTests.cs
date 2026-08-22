@@ -15,6 +15,7 @@ public sealed class ReviewProofingCommentsParityTests
     // (by group header) with the expected access-key (KeyTip).
     [Theory]
     [InlineData("Proofing", "Spelling", "SP")]
+    [InlineData("Proofing", "Check Performance", "CP")]
     [InlineData("Proofing", "Workbook Statistics", "W")]
     [InlineData("Accessibility", "Check Accessibility", "CA")]
     [InlineData("Comments", "New Comment", "CM")]
