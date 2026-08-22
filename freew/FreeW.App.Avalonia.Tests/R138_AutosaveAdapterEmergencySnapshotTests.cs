@@ -157,10 +157,9 @@ public sealed class R138_AutosaveAdapterEmergencySnapshotTests
 
     /// <summary>
     /// R138 REMEDIATION regression test. Unlike <see cref="TryEmergencySnapshots_WritesASnapshotForADirtyWindow"/>
-    /// above (which deliberately substitutes a synchronous <c>ExecuteWithDocument</c> stub because the
-    /// real one was known to hang the headless dispatcher), this test drives the REAL production
-    /// <c>FreeWAutosavePorts.ExecuteWithDocument</c> marshal -- only the <see cref="AutosaveSnapshotStore"/>
-    /// is swapped out, exactly like <see cref="TryEmergencySnapshots_SkipsACleanWindow"/> does.
+    /// above (which deliberately substitutes a synchronous <c>ExecuteWithDocument</c> stub), this
+    /// test keeps the real production model-projection port and drives the adapter's shared bounded
+    /// dispatcher transaction. Only the <see cref="AutosaveSnapshotStore"/> is swapped out.
     ///
     /// <para>
     /// This reproduces the auditor's exact deadlock shape: <c>AppDomain.UnhandledException</c> fires
@@ -168,7 +167,7 @@ public sealed class R138_AutosaveAdapterEmergencySnapshotTests
     /// partway through whatever it was doing (not inside an active dispatcher-loop iteration that
     /// could later come back around and service a queued continuation). Calling
     /// <see cref="AutosaveAdapter.TryEmergencySnapshot"/> from *inside* the UI-thread-dispatched action
-    /// below reproduces exactly that reentrancy. Before this fix, the port's
+    /// below reproduces exactly that reentrancy. Before this fix, the adapter's port-level
     /// <c>Dispatcher.UIThread.InvokeAsync(...).GetAwaiter().GetResult()</c> would queue a continuation
     /// that could only run once this very call returned, then block on it -- a permanent deadlock, not
     /// merely a slow path. The <c>[Fact(Timeout=...)]</c> backstop guarantees this test fails (rather
@@ -191,9 +190,8 @@ public sealed class R138_AutosaveAdapterEmergencySnapshotTests
             var ran = await OnUiThread(() =>
             {
                 var (editor, wf) = NewWindowParts();
-                // REAL ports: only the store is overridden (sessionFactory receives the production
-                // `ports`, unmodified), so ExecuteWithDocument is the fixed
-                // Dispatcher.UIThread.CheckAccess()-then-bounded-marshal lambda under test.
+                // Real production model projection: only the store is overridden. The adapter
+                // wraps the complete session snapshot in AvaloniaBoundedDispatcherTransaction.
                 adapter = new AutosaveAdapter(editor, wf, ports => new FreeWAutosaveSession(ports, store));
                 wf.MarkDirty();
 
@@ -221,14 +219,8 @@ public sealed class R138_AutosaveAdapterEmergencySnapshotTests
         }
     }
 
-    // NOTE: the fix's OTHER branch -- Dispatcher.UIThread.CheckAccess() == false, bounding the wait
-    // when a genuinely different thread posts to a wedged UI-thread pump -- is not covered by an
-    // automated test here. Avalonia.Headless's Dispatcher.UIThread.CheckAccess() was confirmed (by
-    // instrumenting ExecuteOnUiThreadBounded during development of this fix) to return true
-    // regardless of which OS thread calls it in this test harness -- including a bare, freshly
-    // started System.Threading.Thread with no flowed ExecutionContext -- so that branch cannot be
-    // reached through HeadlessUnitTestSession. The branch is still exercised in real desktop use
-    // (Avalonia's non-headless Dispatcher does enforce real thread affinity) and mirrors the WPF
-    // sibling's already-covered dispatcher.CheckAccess() shape 1:1; it is implemented defensively
-    // for a case this harness happens not to be able to simulate, not left unverified by choice.
+    // The off-thread timeout branch is covered deterministically by
+    // Free.Shared.Shell.Avalonia.Tests.AvaloniaAutosaveRuntimeTests, which injects a controllable
+    // dispatcher and verifies that a callback posted before but started after the deadline is
+    // suppressed without touching disposed completion state.
 }

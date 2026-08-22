@@ -48,10 +48,10 @@ public interface IAutosaveSnapshotSource
 /// writes the snapshot atomically (temp + move) followed by the sidecar, supports a never-throw
 /// emergency snapshot for crash handlers, and deletes the snapshot on clean save/close.
 ///
-/// This type is timer-agnostic: the host owns the periodic timer (FreeX uses a background-priority
-/// DispatcherTimer at 5 min, FreeW uses 30 s, and FreeP uses 60 s) and calls
-/// <see cref="Snapshot"/> on each tick. Keeping the timer in the host preserves each app's exact
-/// threading and interval behavior.
+/// This type is timer-agnostic. WPF hosts and FreeX Avalonia retain their dispatcher timers, while
+/// the FreeW and FreeP Avalonia hosts use <see cref="AutosavePeriodicTaskLoop"/> with product-specific
+/// intervals. Each host calls <see cref="Snapshot"/> from its renderer-appropriate dispatcher
+/// transaction, preserving the existing threading behavior.
 ///
 /// Thread note: serialization runs synchronously on the calling (dispatcher) thread, matching the
 /// prior per-app behavior.

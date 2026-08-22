@@ -2,6 +2,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed partial class AutosaveAdapter
 {
+    internal static int ActiveAdapterCountForTests => EmergencySnapshots.ActiveCount;
     internal string SnapshotIdForTests => _session.SnapshotId;
     internal void SnapshotNowForTests() => _session.Snapshot();
     internal void SimulateCrashForTests() => _session.Dispose();

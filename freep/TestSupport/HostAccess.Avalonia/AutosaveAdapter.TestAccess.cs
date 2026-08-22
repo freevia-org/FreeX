@@ -8,6 +8,7 @@ namespace FreeP.App.Avalonia;
 /// </summary>
 internal sealed partial class AutosaveAdapter
 {
+    internal static int ActiveAdapterCountForTests => EmergencySnapshots.ActiveCount;
     internal string SnapshotIdForTests => _session.SnapshotId;
     internal void SnapshotNowForTests() => _session.Snapshot();
 

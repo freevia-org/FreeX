@@ -302,9 +302,10 @@ public sealed class App : Application
 /// </summary>
 internal sealed class AvaloniaAutosaveCoordinator
 {
-    private static readonly object ActiveCoordinatorsGate = new();
-    private static readonly List<AvaloniaAutosaveCoordinator> ActiveCoordinators = [];
+    private static readonly EmergencySnapshotFanOut<AvaloniaAutosaveCoordinator> EmergencySnapshots =
+        new(static coordinator => coordinator._service.TryEmergencySnapshot());
 
+    private readonly IDisposable _emergencySnapshotRegistration;
     private readonly AutosaveService _service;
     private DispatcherTimer? _timer;
     private bool _closed;
@@ -316,9 +317,7 @@ internal sealed class AvaloniaAutosaveCoordinator
 
         _service = new AutosaveService(store);
         _service.Attach(mainWindow, Guid.NewGuid());
-
-        lock (ActiveCoordinatorsGate)
-            ActiveCoordinators.Add(this);
+        _emergencySnapshotRegistration = EmergencySnapshots.Register(this);
     }
 
     /// <summary>Starts the periodic autosave timer. Safe to call once, on the UI thread.</summary>
@@ -336,15 +335,7 @@ internal sealed class AvaloniaAutosaveCoordinator
     }
 
     /// <summary>Attempts an emergency snapshot for every live workbook view.</summary>
-    public static void TryEmergencySnapshots()
-    {
-        AvaloniaAutosaveCoordinator[] coordinators;
-        lock (ActiveCoordinatorsGate)
-            coordinators = ActiveCoordinators.ToArray();
-
-        foreach (var coordinator in coordinators)
-            coordinator._service.TryEmergencySnapshot();
-    }
+    public static void TryEmergencySnapshots() => EmergencySnapshots.TrySnapshotAll();
 
     /// <summary>
     /// Called on a normal window close. Stops the timer and deletes the session's snapshot —
@@ -358,10 +349,9 @@ internal sealed class AvaloniaAutosaveCoordinator
         _closed = true;
         _timer?.Stop();
         _timer = null;
+        _emergencySnapshotRegistration.Dispose();
         _service.DeleteSnapshot();
         _service.Dispose();
-        lock (ActiveCoordinatorsGate)
-            ActiveCoordinators.Remove(this);
     }
 
     /// <summary>
