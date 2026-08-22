@@ -561,6 +561,7 @@ public partial class MainWindow
             ["Trace Dependents"] = new(static (owner, sender, eventArgs) => owner.TraceDependentsBtn_Click(sender, eventArgs), nameof(TraceDependentsBtn_Click)),
             ["Trace Precedents"] = new(static (owner, sender, eventArgs) => owner.TracePrecedentsBtn_Click(sender, eventArgs), nameof(TracePrecedentsBtn_Click)),
             ["Transpose Paste"] = new(static (owner, sender, eventArgs) => owner.PasteTransposeMenuItem_Click(sender, eventArgs), nameof(PasteTransposeMenuItem_Click)),
+            ["Translate"] = new(static (owner, sender, eventArgs) => owner.ReviewTranslateBtn_Click(sender, eventArgs), nameof(ReviewTranslateBtn_Click)),
             ["Treemap Chart"] = new(static (owner, sender, eventArgs) => owner.ChartTreemapMenuItem_Click(sender, eventArgs), nameof(ChartTreemapMenuItem_Click)),
             ["Trendline"] = new(static (owner, sender, eventArgs) => owner.ChartTrendlineBtn_Click(sender, eventArgs), nameof(ChartTrendlineBtn_Click)),
             ["Trendline Color"] = new(static (owner, sender, eventArgs) => owner.ChartTrendlineColorBtn_Click(sender, eventArgs), nameof(ChartTrendlineColorBtn_Click)),

@@ -100,6 +100,68 @@ public partial class MainWindow
         dialog.ShowDialog();
     }
 
+    /// <summary>
+    /// Review ▸ Translate is deliberately a manual helper. The dialog is only the WPF surface;
+    /// the portable planner owns range validation and the normal workbook command path supplies
+    /// undo/redo plus protected-sheet enforcement.
+    /// </summary>
+    private void ReviewTranslateBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isOpeningFile || _isSavingFile)
+            return;
+
+        var source = SheetGrid.SelectedRange?.Start ?? _session.ActiveCell;
+        var sheet = _workbook.GetSheet(source.Sheet);
+        if (sheet is null)
+            return;
+
+        var dialog = new TranslateDialog(source, FormatFormulaBarText(sheet.GetCell(source), source))
+        {
+            Owner = this,
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        CommitManualTranslation(source, dialog.Result);
+    }
+
+    private bool CommitManualTranslation(CellAddress source, TranslateDialogResult input)
+    {
+        if (_isOpeningFile || _isSavingFile)
+            return false;
+
+        if (!TranslateDialogPlanner.TryPlan(
+                _currentSheetId,
+                source,
+                input.Translation,
+                input.TargetReference,
+                input.FromLanguageCode,
+                input.ToLanguageCode,
+                out var plan,
+                out var error))
+        {
+            _messageService.ShowWarning(
+                error switch
+                {
+                    TranslateDialogValidationError.EmptyTranslation => UiText.Get("WfTranslate_ErrorEmptyTranslation"),
+                    TranslateDialogValidationError.MissingTargetReference => UiText.Get("WfTranslate_ErrorMissingTarget"),
+                    TranslateDialogValidationError.InvalidTargetReference => UiText.Get("WfTranslate_ErrorInvalidTarget"),
+                    TranslateDialogValidationError.SameSourceAndTarget => UiText.Get("WfTranslate_ErrorSameTarget"),
+                    _ => UiText.Get("WfTranslate_ErrorGeneric"),
+                },
+                UiText.Get("WfTranslate_Title"));
+            return false;
+        }
+
+        if (!TryExecuteCommand(TranslateDialogPlanner.BuildCommand(plan), UiText.Get("WfTranslate_Title")))
+            return false;
+
+        SetActiveCell(plan.TargetRange.Start);
+        EnsureCellVisible(plan.TargetRange.Start);
+        SetStatusBarModeText(UiText.Format("WfTranslate_StatusInserted", plan.TargetRange));
+        return true;
+    }
+
     private void AccessibilityCheckerBtn_Click(object sender, RoutedEventArgs e)
     {
         var issues = AccessibilityCheckerService.FindIssues(_workbook);
