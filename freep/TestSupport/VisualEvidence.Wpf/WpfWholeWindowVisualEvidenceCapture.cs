@@ -80,7 +80,7 @@ internal static class WpfWholeWindowVisualEvidenceCapture
             scenario =>
             {
                 var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
-                var owner = new MainWindow
+                var owner = new MainWindow(new FreePOptions(), suppressStartupRecoveryOffer: true)
                 {
                     Width = hostPolicy.LogicalWidth,
                     Height = WholeWindowVisualEvidenceCatalog.LogicalClientHeight,

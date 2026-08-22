@@ -84,10 +84,11 @@ internal static class WpfDialogPaneVisualEvidenceCapture
             scenario =>
             {
                 var preparation = DialogPaneVisualEvidencePreparationSession.Create(scenario);
-                var owner = new MainWindow
+                var owner = new MainWindow(new FreePOptions(), suppressStartupRecoveryOffer: true)
                 {
                     Width = DialogPaneVisualEvidenceCatalog.LogicalShellWidth,
                     Height = DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
+                    WindowState = WindowState.Normal,
                     WindowStartupLocation = WindowStartupLocation.Manual,
                     Left = 40,
                     Top = 40,

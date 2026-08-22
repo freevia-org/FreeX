@@ -93,6 +93,35 @@ public sealed class VisualEvidenceOrchestrationSourceTests
     }
 
     [Fact]
+    public void Wpf_capture_hosts_suppress_interactive_startup_recovery()
+    {
+        var sources = new[]
+        {
+            TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+                "freep", "TestSupport", "VisualEvidence.Wpf", "WpfDialogPaneVisualEvidenceCapture.cs"),
+            TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+                "freep", "TestSupport", "VisualEvidence.Wpf", "WpfWholeWindowVisualEvidenceCapture.cs"),
+        };
+
+        sources.Should().AllSatisfy(source =>
+            source.Should().Contain(
+                "new MainWindow(new FreePOptions(), suppressStartupRecoveryOffer: true)"));
+    }
+
+    [Fact]
+    public void Wpf_dialog_capture_forces_normal_window_state_before_showing_the_owner()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "freep", "TestSupport", "VisualEvidence.Wpf", "WpfDialogPaneVisualEvidenceCapture.cs");
+
+        var normalState = source.IndexOf("WindowState = WindowState.Normal", StringComparison.Ordinal);
+        var showOwner = source.IndexOf("owner.Show();", StringComparison.Ordinal);
+
+        normalState.Should().BeGreaterThanOrEqualTo(0);
+        showOwner.Should().BeGreaterThan(normalState);
+    }
+
+    [Fact]
     public void RenderCompare_uses_one_paired_collector_for_routes_manifests_processes_and_artifacts()
     {
         var collector = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
