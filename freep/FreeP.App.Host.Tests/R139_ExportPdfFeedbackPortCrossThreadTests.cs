@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
@@ -43,80 +44,89 @@ public sealed class R139_ExportPdfFeedbackPortCrossThreadTests
     [StaFact]
     public void ExportPdfAsync_WithRealFeedbackPort_ReportsImageDiagnosticsWithoutCrossThreadCrash()
     {
-        // Never shown, so there is nothing that needs an explicit Close() -- and importantly,
-        // avoiding one sidesteps an unrelated hazard: this test's own body legitimately calls
-        // ExportPdfAsync from a background thread, so anything past that point in THIS method must
-        // not assume it is still running on the thread that constructed the window (see the sibling
-        // async test below, which discovered this the hard way).
-        var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
+        var previousMessageBoxHandler = HeadlessMessageBox.Handler;
+        HeadlessMessageBox.Handler = static (_, _) => UserMessageResult.Ok;
+        try
         {
-            // Real production wiring: the same SisterWpfFileCommandWorkflow + WpfUserMessageService
-            // + Window combination WpfPresentationFileCommandSessionFactory.Create builds for a real
-            // host -- not a test double that would skip the WPF-touching code the bug lives in.
-            var workflow = new SisterWpfFileCommandWorkflow(
-                "FreeP",
-                maxRecentEntries: () => 10,
-                onChanged: () => { },
-                save: () => true,
-                messageService: new WpfUserMessageService(window));
-            var feedback = new WpfPresentationFileFeedbackPort(workflow);
-
-            var target = Path.Combine(TempDirectory, "export.pdf");
-            var picker = new FakePickerPort { SaveResult = PresentationFilePickerResult.Selected(target) };
-            // reportUndecodableImage: true forces the SUCCESSFUL-export-with-diagnostics shape the
-            // gap called out -- BuildFileFeedback only touches WPF for a bare success when
-            // ImageDiagnostics is non-empty (ShowExportImageWarnings); an empty-diagnostics success
-            // never reaches WPF at all and would not exercise the regression.
-            var render = new FakeRenderPort(reportUndecodableImage: true);
-            var session = new PresentationFileCommandSession(
-                Presentation.CreateEmpty,
-                _ => { },
-                new FakeLifecyclePort(),
-                picker,
-                render,
-                new FakePrintPort(),
-                new FakeVideoPort(),
-                feedback: feedback,
-                atomicExportExecutor: CreateDeferredWriteAtomicExportExecutor());
-
-            PresentationFileCommandResult? result = null;
-            Exception? threadException = null;
-            var uiThread = new Thread(() =>
+            // Never shown, so there is nothing that needs an explicit Close() -- and importantly,
+            // avoiding one sidesteps an unrelated hazard: this test's own body legitimately calls
+            // ExportPdfAsync from a background thread, so anything past that point in THIS method must
+            // not assume it is still running on the thread that constructed the window (see the sibling
+            // ordinary-await test below, which discovered this the hard way).
+            var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
             {
-                // Stands in for the WPF Dispatcher thread: continuations posted here queue up and
-                // are never run -- exactly like a real Dispatcher thread that is itself parked in
-                // GetResult() and so never pumps its own message queue. If the fix under test ever
-                // regresses back to running WPF-touching feedback synchronously on the calling
-                // thread, this is what reproduces the crash: this thread is deliberately NOT the
-                // thread that constructed WpfPresentationFileFeedbackPort (that was the test
-                // method's own STA thread), so it stands in for "some thread-pool thread" either way.
-                SynchronizationContext.SetSynchronizationContext(new NeverPumpedSynchronizationContext());
-                try
-                {
-                    result = session.ExportPdfAsync().GetAwaiter().GetResult();
-                }
-                catch (Exception ex)
-                {
-                    threadException = ex;
-                }
-            })
-            {
-                IsBackground = true,
-            };
-            uiThread.Start();
-            var completedWithoutHanging = uiThread.Join(TimeSpan.FromSeconds(10));
+                // Real production wiring: the same SisterWpfFileCommandWorkflow + WpfUserMessageService
+                // + Window combination WpfPresentationFileCommandSessionFactory.Create builds for a real
+                // host -- not a test double that would skip the WPF-touching code the bug lives in.
+                var workflow = new SisterWpfFileCommandWorkflow(
+                    "FreeP",
+                    maxRecentEntries: () => 10,
+                    onChanged: () => { },
+                    save: () => true,
+                    messageService: new WpfUserMessageService(window));
+                var feedback = new WpfPresentationFileFeedbackPort(workflow);
 
-            completedWithoutHanging.Should().BeTrue(
-                "ExportPdfAsync must complete promptly even though its feedback report is " +
-                "deferred to a Dispatcher nobody is pumping during this test");
-            threadException.Should().BeNull(
-                "reporting successful-export image diagnostics through the real feedback port " +
-                "from a thread other than the one that constructed it must not throw a " +
-                "cross-thread WPF exception -- see r139-remediation");
-            result.Should().NotBeNull();
-            result!.Succeeded.Should().BeTrue();
-            result.ImageDiagnostics.Should().ContainSingle();
-            File.Exists(target).Should().BeTrue();
+                var target = Path.Combine(TempDirectory, "export.pdf");
+                var picker = new FakePickerPort { SaveResult = PresentationFilePickerResult.Selected(target) };
+                // reportUndecodableImage: true forces the SUCCESSFUL-export-with-diagnostics shape the
+                // gap called out -- BuildFileFeedback only touches WPF for a bare success when
+                // ImageDiagnostics is non-empty (ShowExportImageWarnings); an empty-diagnostics success
+                // never reaches WPF at all and would not exercise the regression.
+                var render = new FakeRenderPort(reportUndecodableImage: true);
+                var session = new PresentationFileCommandSession(
+                    Presentation.CreateEmpty,
+                    _ => { },
+                    new FakeLifecyclePort(),
+                    picker,
+                    render,
+                    new FakePrintPort(),
+                    new FakeVideoPort(),
+                    feedback: feedback,
+                    atomicExportExecutor: CreateDeferredWriteAtomicExportExecutor());
+
+                PresentationFileCommandResult? result = null;
+                Exception? threadException = null;
+                var uiThread = new Thread(() =>
+                {
+                    // Stands in for the WPF Dispatcher thread: continuations posted here queue up and
+                    // are never run -- exactly like a real Dispatcher thread that is itself parked in
+                    // GetResult() and so never pumps its own message queue. If the fix under test ever
+                    // regresses back to running WPF-touching feedback synchronously on the calling
+                    // thread, this is what reproduces the crash: this thread is deliberately NOT the
+                    // thread that constructed WpfPresentationFileFeedbackPort (that was the test
+                    // method's own STA thread), so it stands in for "some thread-pool thread" either way.
+                    SynchronizationContext.SetSynchronizationContext(new NeverPumpedSynchronizationContext());
+                    try
+                    {
+                        result = session.ExportPdfAsync().GetAwaiter().GetResult();
+                    }
+                    catch (Exception ex)
+                    {
+                        threadException = ex;
+                    }
+                })
+                {
+                    IsBackground = true,
+                };
+                uiThread.Start();
+                var completedWithoutHanging = uiThread.Join(TimeSpan.FromSeconds(10));
+
+                completedWithoutHanging.Should().BeTrue(
+                    "ExportPdfAsync must complete promptly even though its feedback report is " +
+                    "deferred to a Dispatcher nobody is pumping during this test");
+                threadException.Should().BeNull(
+                    "reporting successful-export image diagnostics through the real feedback port " +
+                    "from a thread other than the one that constructed it must not throw a " +
+                    "cross-thread WPF exception -- see r139-remediation");
+                result.Should().NotBeNull();
+                result!.Succeeded.Should().BeTrue();
+                result.ImageDiagnostics.Should().ContainSingle();
+                File.Exists(target).Should().BeTrue();
+            }
+        }
+        finally
+        {
+            HeadlessMessageBox.Handler = previousMessageBoxHandler;
         }
     }
 
@@ -130,41 +140,91 @@ public sealed class R139_ExportPdfFeedbackPortCrossThreadTests
     /// <para>
     /// Deliberately does not assert -- or depend on -- which thread ReportOnUiThread ends up
     /// running on: PresentationFileCommandSession's ConfigureAwait(false) chain (sweep78-1) means
-    /// even this ordinary `await` is not guaranteed to resume on the thread that started it, so this
-    /// test (unlike the one above) must not touch the WPF <see cref="Window"/> again after the
-    /// `await` -- doing so is exactly the kind of thread assumption production code no longer gets
-    /// to make either, which is the whole point of the fix.
+    /// even this ordinary `await` is not guaranteed to resume on the thread that started it. The
+    /// test installs an explicit dispatcher synchronization context and pumps it only until the
+    /// await completes, so it can assert that the queued warning is delivered without touching the
+    /// WPF <see cref="Window"/> from an arbitrary continuation thread.
     /// </para>
     /// </summary>
     [StaFact]
-    public async Task ExportPdfAsync_WithRealFeedbackPort_StillReportsOnTheOrdinaryAwaitPath()
+    public void ExportPdfAsync_WithRealFeedbackPort_StillReportsOnTheOrdinaryAwaitPath()
     {
-        var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
-        var workflow = new SisterWpfFileCommandWorkflow(
-            "FreeP",
-            maxRecentEntries: () => 10,
-            onChanged: () => { },
-            save: () => true,
-            messageService: new WpfUserMessageService(window));
-        var feedback = new WpfPresentationFileFeedbackPort(workflow);
+        string? reportedWarning = null;
+        var previousMessageBoxHandler = HeadlessMessageBox.Handler;
+        HeadlessMessageBox.Handler = (message, buttons) =>
+        {
+            buttons.Should().Be(UserMessageButtons.Ok);
+            reportedWarning = message;
+            return UserMessageResult.Ok;
+        };
 
-        var target = Path.Combine(TempDirectory, "export-ordinary-await.pdf");
-        var picker = new FakePickerPort { SaveResult = PresentationFilePickerResult.Selected(target) };
-        var render = new FakeRenderPort(reportUndecodableImage: true);
-        var session = new PresentationFileCommandSession(
-            Presentation.CreateEmpty,
-            _ => { },
-            new FakeLifecyclePort(),
-            picker,
-            render,
-            new FakePrintPort(),
-            new FakeVideoPort(),
-            feedback: feedback);
+        try
+        {
+            var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
+            var workflow = new SisterWpfFileCommandWorkflow(
+                "FreeP",
+                maxRecentEntries: () => 10,
+                onChanged: () => { },
+                save: () => true,
+                messageService: new WpfUserMessageService(window));
+            var feedback = new WpfPresentationFileFeedbackPort(workflow);
 
-        var result = await session.ExportPdfAsync();
+            var target = Path.Combine(TempDirectory, "export-ordinary-await.pdf");
+            var picker = new FakePickerPort { SaveResult = PresentationFilePickerResult.Selected(target) };
+            var render = new FakeRenderPort(reportUndecodableImage: true);
+            var session = new PresentationFileCommandSession(
+                Presentation.CreateEmpty,
+                _ => { },
+                new FakeLifecyclePort(),
+                picker,
+                render,
+                new FakePrintPort(),
+                new FakeVideoPort(),
+                feedback: feedback);
 
-        result.Succeeded.Should().BeTrue();
-        result.ImageDiagnostics.Should().ContainSingle();
+            var dispatcher = Dispatcher.CurrentDispatcher;
+            var previousSynchronizationContext = SynchronizationContext.Current;
+            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
+            try
+            {
+                var exportTask = AwaitExportAsync(session);
+                PumpDispatcherUntilCompleted(exportTask, dispatcher);
+                var result = exportTask.GetAwaiter().GetResult();
+
+                result.Succeeded.Should().BeTrue();
+                result.ImageDiagnostics.Should().ContainSingle();
+                reportedWarning.Should().Contain("image warning(s) occurred");
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previousSynchronizationContext);
+            }
+        }
+        finally
+        {
+            HeadlessMessageBox.Handler = previousMessageBoxHandler;
+        }
+    }
+
+    private static async Task<PresentationFileCommandResult> AwaitExportAsync(
+        PresentationFileCommandSession session)
+    {
+        return await session.ExportPdfAsync();
+    }
+
+    private static void PumpDispatcherUntilCompleted(
+        Task operation,
+        Dispatcher dispatcher)
+    {
+        var frame = new DispatcherFrame();
+        operation.ContinueWith(
+            _ => dispatcher.BeginInvoke(
+                DispatcherPriority.ApplicationIdle,
+                new Action(() => frame.Continue = false)),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        Dispatcher.PushFrame(frame);
     }
 
     private static AtomicExportExecutor CreateDeferredWriteAtomicExportExecutor() =>
