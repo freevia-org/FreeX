@@ -9,4 +9,8 @@ public sealed record Theme(
     ThemeColors Colors,
     ThemeTypography Typography,
     ThemeMetrics Metrics,
-    string IconSetId);
+    ThemeVisualAssets VisualAssets)
+{
+    /// <summary>Compatibility projection for existing command-icon consumers.</summary>
+    public string IconSetId => VisualAssets.IconSetId;
+}

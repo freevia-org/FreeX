@@ -26,12 +26,12 @@ public sealed record SisterBackstagePalette(
         tileWidth: 190,
         tileHeight: 150);
 
-    private static SisterBackstagePalette FromTheme(global::Free.Shared.Theme.Theme theme, double tileWidth, double tileHeight) => new(
-        ToRgb(theme.Colors.TitleBar),
-        ToRgb(theme.Colors.TitleBarHover),
-        ToRgb(theme.Colors.TitleBarPressed),
-        ToRgb(theme.Colors.AccentDark),
-        ToRgb(theme.Colors.Accent),
+    public static SisterBackstagePalette FromTheme(global::Free.Shared.Theme.Theme theme, double tileWidth, double tileHeight) => new(
+        ToRgb(theme.Colors.BackstageSidebar),
+        ToRgb(theme.Colors.BackstageHover),
+        ToRgb(theme.Colors.BackstageSelected),
+        ToRgb(theme.Colors.BackstageSeparator),
+        ToRgb(theme.Colors.BackstageLink),
         tileWidth,
         tileHeight);
 

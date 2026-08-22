@@ -28,12 +28,12 @@ public sealed partial class MainWindow
     private Control BuildBackstageOverlay()
     {
         var entries = LiveBackstageFramePlan.Entries.Select(MapLiveBackstageEntry).ToArray();
+        var backstageTheme = AvaloniaSisterBackstageTheme.FromTheme(
+            App.ActiveTheme,
+            tileWidth: 150,
+            tileHeight: 190);
         _backstageOverlay = new AvaloniaBackstageFrame(
-            new AvaloniaBackstageAccent(
-                Color.FromRgb(0x10, 0x25, 0x3A),
-                Color.FromRgb(0x1D, 0x3B, 0x54),
-                Color.FromRgb(0x24, 0x44, 0x5E),
-                Color.FromRgb(0x24, 0x44, 0x5E)),
+            backstageTheme.Accent,
             entries,
             AvaloniaBackstageRibbonChrome.Create(
                 Free.Shared.Ribbon.RibbonCommandIconKind.WindowClose))

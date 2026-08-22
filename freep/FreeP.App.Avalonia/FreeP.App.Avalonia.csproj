@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup><FreeBrand Condition="'$(FreeBrand)' == ''">FreeP</FreeBrand></PropertyGroup>
+  <Import Project="..\..\shared\Free.Shared.Shell\BrandAssets.props" />
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <FreePWindowsBuild Condition="'$(OS)' == 'Windows_NT' Or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win'))">true</FreePWindowsBuild>
@@ -114,16 +117,16 @@
 
   <ItemGroup>
     <!-- Runtime and package assets derive from one FreeP identity source in the shared shell. -->
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico"
-             Link="Resources\FreeP.ico"
+    <Content Include="$(BrandWindowsIconPath)"
+             Link="Resources\$(BrandWindowsIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.svg"
-             Link="Resources\FreeP.svg"
+    <Content Include="$(BrandScalableIconPath)"
+             Link="Resources\$(BrandScalableIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.icns"
-             Link="FreeP.icns"
+    <Content Include="$(BrandMacOsIconPath)"
+             Link="$(BrandMacOsIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />

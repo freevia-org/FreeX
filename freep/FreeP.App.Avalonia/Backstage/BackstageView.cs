@@ -23,16 +23,13 @@ internal sealed partial class BackstageView : UserControl
 {
     private static readonly IBrush PrimaryInk = new ImmutableSolidColorBrush(Color.FromRgb(0x19, 0x1F, 0x28));
     private static readonly IBrush SecondaryInk = new ImmutableSolidColorBrush(Color.FromRgb(0x5E, 0x67, 0x74));
-    private static readonly AvaloniaSisterBackstageTheme BackstageTheme = AvaloniaSisterBackstageTheme.FreeP;
-    private static readonly IBrush LinkInk = new ImmutableSolidColorBrush(BackstageTheme.LinkColor);
-    private static readonly AvaloniaBackstageChromeStyle PaneStyle = new(PrimaryInk, SecondaryInk)
-    {
-        DetailLabelVerticalAlignment = VerticalAlignment.Top,
-    };
+    private readonly AvaloniaSisterBackstageTheme BackstageTheme;
+    private readonly IBrush LinkInk;
+    private readonly AvaloniaBackstageChromeStyle PaneStyle;
 
     private static readonly PresentationBackstagePanePlanner PanePlans = new(
         usePresentationExportPlannerText: true);
-    private static readonly AvaloniaBackstagePaneComposer Panes = new(PaneStyle);
+    private readonly AvaloniaBackstagePaneComposer Panes;
 
     private readonly PresentationBackstageEndpoints _endpoints;
     private readonly BackstageActionBinder _dismissBeforeDispatch;
@@ -44,6 +41,13 @@ internal sealed partial class BackstageView : UserControl
 
     public BackstageView(PresentationBackstageEndpoints endpoints)
     {
+        BackstageTheme = AvaloniaSisterBackstageTheme.FromTheme(App.ActiveTheme, tileWidth: 190, tileHeight: 150);
+        LinkInk = new ImmutableSolidColorBrush(BackstageTheme.LinkColor);
+        PaneStyle = new AvaloniaBackstageChromeStyle(PrimaryInk, SecondaryInk)
+        {
+            DetailLabelVerticalAlignment = VerticalAlignment.Top,
+        };
+        Panes = new AvaloniaBackstagePaneComposer(PaneStyle);
         _endpoints = endpoints ?? throw new ArgumentNullException(nameof(endpoints));
         _dismissBeforeDispatch = BackstageActionBinder.DismissBefore(Hide);
         _printSession = new PresentationBackstagePrintSession(
@@ -247,7 +251,7 @@ internal sealed partial class BackstageView : UserControl
             _frame.ShowPane("Options")));
     }
 
-    private static void AddPrintChoices(
+    private void AddPrintChoices(
         Panel panel,
         PresentationBackstagePrintChoiceGroup group)
     {
@@ -268,7 +272,7 @@ internal sealed partial class BackstageView : UserControl
         Spacing = 10,
     };
 
-    private static void AddFields(Panel panel, IReadOnlyList<BackstageFieldRow> fields, string automationPrefix)
+    private void AddFields(Panel panel, IReadOnlyList<BackstageFieldRow> fields, string automationPrefix)
     {
         var grid = AvaloniaBackstageChrome.CreateDetailGrid();
         foreach (var field in fields)
@@ -283,10 +287,10 @@ internal sealed partial class BackstageView : UserControl
         panel.Children.Add(grid);
     }
 
-    private static void AddField(Panel panel, string label, string value) =>
+    private void AddField(Panel panel, string label, string value) =>
         AddFields(panel, [new BackstageFieldRow(label, value)], "BackstageField");
 
-    private static Control BuildTemplateTile(string caption, Action action)
+    private Control BuildTemplateTile(string caption, Action action)
     {
         var preview = new Border
         {

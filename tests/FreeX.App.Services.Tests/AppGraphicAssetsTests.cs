@@ -54,10 +54,8 @@ public sealed class AppGraphicAssetsTests
 
         var wpfProject = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj"));
         var avaloniaProject = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"));
-        wpfProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeP.ico");
-        avaloniaProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeP.ico")
-            .And.Contain(@"shared\Free.Shared.Shell\Resources\FreeP.svg")
-            .And.Contain(@"shared\Free.Shared.Shell\Resources\FreeP.icns");
+        AssertProjectUsesBrandAssets(wpfProject, "FreeP", isWpf: true);
+        AssertProjectUsesBrandAssets(avaloniaProject, "FreeP", isWpf: false);
     }
 
     [Fact]
@@ -83,20 +81,7 @@ public sealed class AppGraphicAssetsTests
         AssertIcoFile(iconPath);
 
         var project = File.ReadAllText(RepoFile(app.WpfProjectPath));
-        var iconFileName = Path.GetFileName(app.WindowsIconPath);
-        if (app.WindowsIconPath.StartsWith("shared/", StringComparison.Ordinal))
-        {
-            var relativeSharedIcon = $"..\\..\\shared\\Free.Shared.Shell\\Resources\\{iconFileName}";
-            project.Should().Contain($"<Resource Include=\"{relativeSharedIcon}\"");
-            project.Should().Contain($"<Content Include=\"{relativeSharedIcon}\"");
-            project.Should().Contain($"<ApplicationIcon>{relativeSharedIcon}</ApplicationIcon>");
-        }
-        else
-        {
-            project.Should().Contain($"<Resource Include=\"Resources\\{iconFileName}\"");
-            project.Should().Contain($"<Content Include=\"Resources\\{iconFileName}\"");
-            project.Should().Contain($"<ApplicationIcon>Resources\\{iconFileName}</ApplicationIcon>");
-        }
+        AssertProjectUsesBrandAssets(project, app.Name, isWpf: true);
     }
 
     [Fact]
@@ -112,8 +97,8 @@ public sealed class AppGraphicAssetsTests
         File.Exists(canonical).Should().BeTrue();
         File.Exists(oldWpf).Should().BeFalse();
         File.Exists(oldAvalonia).Should().BeFalse();
-        wpfProject.Should().Contain("Link=\"Resources\\FreeX.ico\"");
-        avaloniaProject.Should().Contain("Link=\"Resources\\FreeX.ico\"");
+        AssertProjectUsesBrandAssets(wpfProject, "FreeX", isWpf: true);
+        AssertProjectUsesBrandAssets(avaloniaProject, "FreeX", isWpf: false);
         avaloniaProject.Should().Contain("CopyToPublishDirectory=\"PreserveNewest\"");
         File.ReadAllBytes(canonical).Should().NotBeEmpty();
     }
@@ -136,10 +121,7 @@ public sealed class AppGraphicAssetsTests
         PlistArray(rootDict, "CFBundleDocumentTypes")!.Elements("dict").Should().NotBeEmpty();
 
         var project = File.ReadAllText(RepoFile(app.AvaloniaProjectPath));
-        var expectedInclude = app.MacOsIconPath.StartsWith("shared/", StringComparison.Ordinal)
-            ? $"..\\..\\shared\\Free.Shared.Shell\\Resources\\{Path.GetFileName(app.MacOsIconPath)}"
-            : $"Packaging\\macos\\{Path.GetFileName(app.MacOsIconPath)}";
-        project.Should().Contain($"<Content Include=\"{expectedInclude}\"");
+        project.Should().Contain("<Content Include=\"$(BrandMacOsIconPath)\"");
         project.Should().Contain("CopyToPublishDirectory=\"PreserveNewest\"");
     }
 
@@ -163,6 +145,25 @@ public sealed class AppGraphicAssetsTests
 
     private static string RepoFile(string relativePath) =>
         RepositoryFileLocator.Find(relativePath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries));
+
+    private static void AssertProjectUsesBrandAssets(string project, string product, bool isWpf)
+    {
+        project.Should().Contain($">{product}</FreeBrand>");
+        project.Should().Contain(@"shared\Free.Shared.Shell\BrandAssets.props");
+        project.Should().Contain("$(BrandWindowsIconPath)");
+        project.Should().Contain("Resources\\$(BrandWindowsIconFileName)");
+
+        if (isWpf)
+        {
+            project.Should().Contain("<ApplicationIcon>$(BrandWindowsIconPath)</ApplicationIcon>");
+            project.Should().Contain("<Resource Include=\"$(BrandWindowsIconPath)\"");
+        }
+        else
+        {
+            project.Should().Contain("$(BrandScalableIconPath)");
+            project.Should().Contain("$(BrandMacOsIconPath)");
+        }
+    }
 
     private static void AssertIcoFile(string path)
     {

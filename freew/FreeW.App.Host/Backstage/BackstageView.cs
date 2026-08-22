@@ -27,18 +27,13 @@ namespace FreeW.App.Host.Backstage;
 /// </summary>
 internal sealed partial class BackstageView : UserControl
 {
-    private static readonly SisterBackstageTheme Theme = SisterBackstageTheme.FreeW;
+    private readonly SisterBackstageTheme Theme;
 
     // Link accent sourced from the canonical shared theme.
-    private static readonly SisterBackstagePaneResources BackstageResources = new(
-        WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.Accent),
-        Theme.TileWidth,
-        Theme.TileHeight,
-        FreeWBackstagePaneTextCatalog.BuildTextSpec(BackstageStrings.Current.Get),
-        BackstagePaneSurfacePlanner.ComposerProfile);
-    private static BackstageVisualKit Kit => BackstageResources.Kit;
-    private static BackstagePaneComposer Panes => BackstageResources.Panes;
-    private static SisterBackstagePaneSpecPlanner PaneSpecs => BackstageResources.PaneSpecs;
+    private readonly SisterBackstagePaneResources BackstageResources;
+    private BackstageVisualKit Kit => BackstageResources.Kit;
+    private BackstagePaneComposer Panes => BackstageResources.Panes;
+    private SisterBackstagePaneSpecPlanner PaneSpecs => BackstageResources.PaneSpecs;
 
     private readonly BackstageCallbacks _callbacks;
     private readonly FreeWBackstageSession _session;
@@ -46,6 +41,13 @@ internal sealed partial class BackstageView : UserControl
 
     public BackstageView(BackstageCallbacks callbacks)
     {
+        Theme = SisterBackstageTheme.FromTheme(Program.ActiveTheme, tileWidth: 150, tileHeight: 190);
+        BackstageResources = new SisterBackstagePaneResources(
+            WpfThemeApplier.ToColor(Program.ActiveTheme.Colors.Accent),
+            Theme.TileWidth,
+            Theme.TileHeight,
+            FreeWBackstagePaneTextCatalog.BuildTextSpec(BackstageStrings.Current.Get),
+            BackstagePaneSurfacePlanner.ComposerProfile);
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
         SetCurrentValue(System.Windows.Automation.AutomationProperties.AutomationIdProperty,
             BackstagePaneSurfacePlanner.WindowAutomationId);
@@ -156,7 +158,7 @@ internal sealed partial class BackstageView : UserControl
         return Kit.Scroll(panel);
     }
 
-    private static UIElement BuildPrintEvidenceSection(IReadOnlyList<BackstagePrintEvidenceRow> evidence)
+    private UIElement BuildPrintEvidenceSection(IReadOnlyList<BackstagePrintEvidenceRow> evidence)
     {
         var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         panel.Children.Add(Kit.SubHeading(BackstageViewTextResources.EvidenceSection));

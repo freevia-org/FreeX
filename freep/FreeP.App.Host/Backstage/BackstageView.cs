@@ -21,15 +21,11 @@ namespace FreeP.App.Host.Backstage;
 /// </summary>
 internal sealed partial class BackstageView : UserControl
 {
-    private static readonly SisterBackstageTheme Theme = SisterBackstageTheme.FreeP;
+    private readonly SisterBackstageTheme Theme;
 
-    private static readonly SisterBackstagePaneResources BackstageResources = new(
-        WpfThemeApplier.ToColor(BrandThemes.FreeP.Colors.Accent),
-        Theme.TileWidth,
-        Theme.TileHeight,
-        FreePBackstagePaneTextCatalog.BuildTextSpec(BackstageStrings.Current.Get));
-    private static BackstageVisualKit Kit => BackstageResources.Kit;
-    private static BackstagePaneComposer Panes => BackstageResources.Panes;
+    private readonly SisterBackstagePaneResources BackstageResources;
+    private BackstageVisualKit Kit => BackstageResources.Kit;
+    private BackstagePaneComposer Panes => BackstageResources.Panes;
     private static readonly PresentationBackstagePanePlanner PanePlans = new(BackstageStrings.Current.Get);
 
     private readonly PresentationBackstageEndpoints _endpoints;
@@ -41,6 +37,12 @@ internal sealed partial class BackstageView : UserControl
 
     public BackstageView(PresentationBackstageEndpoints endpoints, Action? onClosed = null)
     {
+        Theme = SisterBackstageTheme.FromTheme(Program.ActiveTheme, tileWidth: 190, tileHeight: 150);
+        BackstageResources = new SisterBackstagePaneResources(
+            WpfThemeApplier.ToColor(Program.ActiveTheme.Colors.Accent),
+            Theme.TileWidth,
+            Theme.TileHeight,
+            FreePBackstagePaneTextCatalog.BuildTextSpec(BackstageStrings.Current.Get));
         _endpoints = endpoints ?? throw new ArgumentNullException(nameof(endpoints));
         _printSession = new PresentationBackstagePrintSession(
             endpoints.GetPrintPlan,
@@ -198,7 +200,7 @@ internal sealed partial class BackstageView : UserControl
         return Kit.Scroll(panel);
     }
 
-    private static UIElement PrintChoiceRow(PresentationBackstagePrintChoiceRow choice)
+    private UIElement PrintChoiceRow(PresentationBackstagePrintChoiceRow choice)
     {
         return new TextBlock
         {

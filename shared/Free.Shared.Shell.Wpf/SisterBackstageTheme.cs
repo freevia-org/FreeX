@@ -1,5 +1,6 @@
 using System.Windows.Media;
 using Free.Shared.Shell;
+using BrandTheme = Free.Shared.Theme.Theme;
 
 namespace Free.Shared.Shell.Wpf;
 
@@ -15,6 +16,9 @@ public sealed record SisterBackstageTheme(
     public static SisterBackstageTheme FreeW { get; } = FromPalette(SisterBackstagePalette.FreeW);
 
     public static SisterBackstageTheme FreeP { get; } = FromPalette(SisterBackstagePalette.FreeP);
+
+    public static SisterBackstageTheme FromTheme(BrandTheme theme, double tileWidth, double tileHeight) =>
+        FromPalette(SisterBackstagePalette.FromTheme(theme, tileWidth, tileHeight));
 
     private static SisterBackstageTheme FromPalette(SisterBackstagePalette palette) => new(
         new BackstageAccent(

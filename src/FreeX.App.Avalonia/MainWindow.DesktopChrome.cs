@@ -14,7 +14,7 @@ public sealed partial class MainWindow
     private bool _ribbonKeyTipsVisible;
 
     private void ApplyWindowIcon() =>
-        AvaloniaWindowIconLoader.TryApply(this, "FreeX.ico");
+        AvaloniaWindowIconLoader.TryApply(this, App.ActiveTheme);
 
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)
     {

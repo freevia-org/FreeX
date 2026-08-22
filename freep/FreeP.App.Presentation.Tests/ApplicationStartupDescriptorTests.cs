@@ -18,7 +18,7 @@ public sealed class ApplicationStartupDescriptorTests
         theme.EnvironmentVariableName.Should().Be("FREEP_THEME");
         theme.AlternateThemeValue.Should().Be("midnight");
         theme.DefaultTheme.Should().BeSameAs(BrandThemes.FreeP);
-        theme.AlternateTheme.Should().BeSameAs(BrandThemes.FreeXMidnight);
+        theme.AlternateTheme.Should().BeSameAs(BrandThemes.FreePMidnight);
         theme.ResourceKeyPrefix.Should().Be("FreeP");
     }
 

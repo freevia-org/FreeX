@@ -20,4 +20,18 @@ Each product letter has a two-pixel keyline in its app's dark surface color. The
 
 Application chrome must consume `Free.Shared.Theme.BrandThemes`; it must not introduce independent brand-color literals. Packaging must consume the canonical files in `shared/Free.Shared.Shell/Resources`.
 
-These marks are project-owned geometric word/letter marks. They do not use Microsoft logos, Office tiles, Windows flags, Microsoft type treatments, or Microsoft product names. This is an engineering/design safeguard, not a legal opinion.
+## Theme configuration
+
+Branding has one platform-neutral runtime owner. Each `Theme` contains:
+
+- semantic chrome colors, including title bar, ribbon, status bar, Backstage rail, hover, selection, separator, and link roles;
+- typography and layout metrics;
+- `ThemeVisualAssets`, which identifies the product glyph and the canonical Windows ICO, scalable SVG, and macOS ICNS files.
+
+WPF and Avalonia both materialize those same tokens. Window icons, title-bar badges, taskbar icons, and Backstage colors are selected from the active theme rather than from product-specific literals in views. `FREEX_THEME`, `FREEW_THEME`, and `FREEP_THEME` select the optional `midnight` variants at startup. Each midnight variant retains its product's accent and icon family.
+
+The build-time counterpart is `shared/Free.Shared.Shell/BrandAssets.props`. Every WPF and Avalonia application declares only its `FreeBrand` identity (`FreeX`, `FreeW`, or `FreeP`); the shared props file resolves and validates the ICO, SVG, and ICNS paths used by Windows builds and cross-platform publish/package outputs. Changing a product identity requires updating that app's startup theme and platform bundle metadata together, so the runtime and packaged artwork cannot drift.
+
+To add a theme, define its semantic roles and `ThemeVisualAssets` in `BrandThemes`, then route it through the product's startup descriptor. To add a new export, update the canonical generator and the shared build mapping instead of adding a local copy to an app project.
+
+These marks are project-owned geometric word/letter marks. They do not use Microsoft logos, Office tiles, Windows flags, Microsoft product names, or a copied Microsoft application-icon silhouette. This is an engineering/design safeguard, not a legal opinion.

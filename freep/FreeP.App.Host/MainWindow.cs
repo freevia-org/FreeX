@@ -49,11 +49,11 @@ public sealed partial class MainWindow : Window,
 
     private static ShellChromeOptions BuildChromeOptions() => new()
     {
-        BadgeLetter = "P",
+        BadgeLetter = Program.ActiveTheme.VisualAssets.ProductGlyph,
         TitleBarColor = FreePBrushes.AccentColor,
         BadgeColor = FreePBrushes.AccentDarkColor,
         CaptionHeight = FreePShellVisualMetrics.TitleBarHeight,
-        IconUri = "pack://application:,,,/FreeP.App.Host;component/Resources/FreeP.ico"
+        IconUri = Program.ActiveTheme.VisualAssets.GetWpfPackUri("FreeP.App.Host")
     };
 
     private readonly FreePOptions _options;

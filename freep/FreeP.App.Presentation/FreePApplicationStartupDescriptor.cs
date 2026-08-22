@@ -11,7 +11,7 @@ public static class FreePApplicationStartupDescriptor
             productName: "FreeP",
             environmentVariablePrefix: "FREEP",
             defaultTheme: BrandThemes.FreeP,
-            alternateTheme: BrandThemes.FreeXMidnight);
+            alternateTheme: BrandThemes.FreePMidnight);
 
     public static AppProductIdentity ProductIdentity => Descriptor.ProductIdentity;
 

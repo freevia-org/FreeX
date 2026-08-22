@@ -1,0 +1,36 @@
+<Project>
+  <!--
+    Build-time counterpart to Theme.VisualAssets. App projects set FreeBrand once and consume the
+    resulting canonical paths for WPF resources, executable icons, Avalonia runtime content,
+    macOS ICNS bundles, and Linux SVG packaging.
+  -->
+  <PropertyGroup Condition="'$(FreeBrand)' == 'FreeX'">
+    <BrandAssetBaseName>FreeX</BrandAssetBaseName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(FreeBrand)' == 'FreeW'">
+    <BrandAssetBaseName>FreeW</BrandAssetBaseName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(FreeBrand)' == 'FreeP'">
+    <BrandAssetBaseName>FreeP</BrandAssetBaseName>
+  </PropertyGroup>
+  <PropertyGroup>
+    <BrandAssetsDirectory>$(MSBuildThisFileDirectory)Resources\</BrandAssetsDirectory>
+    <BrandWindowsIconFileName>$(BrandAssetBaseName).ico</BrandWindowsIconFileName>
+    <BrandScalableIconFileName>$(BrandAssetBaseName).svg</BrandScalableIconFileName>
+    <BrandMacOsIconFileName>$(BrandAssetBaseName).icns</BrandMacOsIconFileName>
+    <BrandWindowsIconPath>$(BrandAssetsDirectory)$(BrandWindowsIconFileName)</BrandWindowsIconPath>
+    <BrandScalableIconPath>$(BrandAssetsDirectory)$(BrandScalableIconFileName)</BrandScalableIconPath>
+    <BrandMacOsIconPath>$(BrandAssetsDirectory)$(BrandMacOsIconFileName)</BrandMacOsIconPath>
+  </PropertyGroup>
+
+  <Target Name="ValidateConfiguredBrandAssets" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(BrandAssetBaseName)' == ''"
+           Text="FreeBrand must be FreeX, FreeW, or FreeP." />
+    <Error Condition="!Exists('$(BrandWindowsIconPath)')"
+           Text="Configured Windows brand icon not found: $(BrandWindowsIconPath)" />
+    <Error Condition="!Exists('$(BrandScalableIconPath)')"
+           Text="Configured scalable brand icon not found: $(BrandScalableIconPath)" />
+    <Error Condition="!Exists('$(BrandMacOsIconPath)')"
+           Text="Configured macOS brand icon not found: $(BrandMacOsIconPath)" />
+  </Target>
+</Project>

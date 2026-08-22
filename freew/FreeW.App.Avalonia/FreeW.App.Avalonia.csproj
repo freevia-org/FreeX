@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup><FreeBrand Condition="'$(FreeBrand)' == ''">FreeW</FreeBrand></PropertyGroup>
+  <Import Project="..\..\shared\Free.Shared.Shell\BrandAssets.props" />
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -127,16 +130,16 @@
 
   <ItemGroup>
     <!-- Runtime and package assets derive from one owned FreeW identity source in the shared shell. -->
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeW.ico"
-             Link="Resources\FreeW.ico"
+    <Content Include="$(BrandWindowsIconPath)"
+             Link="Resources\$(BrandWindowsIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeW.svg"
-             Link="Resources\FreeW.svg"
+    <Content Include="$(BrandScalableIconPath)"
+             Link="Resources\$(BrandScalableIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeW.icns"
-             Link="FreeW.icns"
+    <Content Include="$(BrandMacOsIconPath)"
+             Link="$(BrandMacOsIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

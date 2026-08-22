@@ -486,7 +486,7 @@ public sealed partial class MainWindow : Window
     }
 
     private void ApplyWindowIcon() =>
-        AvaloniaWindowIconLoader.TryApply(this, "FreeW.ico");
+        AvaloniaWindowIconLoader.TryApply(this, App.ActiveTheme);
 
     public DocumentView Editor => _editor;
 
