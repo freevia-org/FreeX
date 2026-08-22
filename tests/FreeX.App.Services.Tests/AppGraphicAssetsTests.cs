@@ -70,7 +70,8 @@ public sealed class AppGraphicAssetsTests
             svg.Should().Contain("clip-path=\"url(#brandTile)\"")
                 .And.Contain("<rect width=\"256\" height=\"97\"")
                 .And.Contain("<text x=\"128\" y=\"69\" font-size=\"60\">FREE</text>")
-                .And.Contain($"<text x=\"{productX}\" y=\"183\" font-size=\"154\">");
+                .And.Contain($"<text x=\"{productX}\" y=\"183\" font-size=\"154\" stroke=")
+                .And.Contain("stroke-width=\"2\" paint-order=\"stroke fill\">");
         }
     }
 

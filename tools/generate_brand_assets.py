@@ -23,6 +23,7 @@ HEADER_CENTER = (128, 48.5)
 HEADER_FONT_SIZE = 60
 PRODUCT_CENTER = (128, 129)
 PRODUCT_FONT_SIZE = 154
+PRODUCT_OUTLINE_WIDTH = 2
 BAND_HEIGHT = 97
 
 
@@ -103,7 +104,16 @@ def find_font(size: int) -> ImageFont.FreeTypeFont:
     raise RuntimeError("Segoe UI Bold, DejaVu Sans Bold, or Arial Bold is required to generate brand assets.")
 
 
-def draw_centered_text(draw: ImageDraw.ImageDraw, text: str, center_x: int, center_y: int, font: ImageFont.FreeTypeFont) -> None:
+def draw_centered_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    center_x: int,
+    center_y: int,
+    font: ImageFont.FreeTypeFont,
+    *,
+    stroke_width: int = 0,
+    stroke_fill: str | None = None,
+) -> None:
     box = draw.textbbox((0, 0), text, font=font, stroke_width=0)
     width = box[2] - box[0]
     height = box[3] - box[1]
@@ -112,6 +122,8 @@ def draw_centered_text(draw: ImageDraw.ImageDraw, text: str, center_x: int, cent
         text,
         font=font,
         fill="#FFFFFF",
+        stroke_width=stroke_width,
+        stroke_fill=stroke_fill,
     )
 
 
@@ -145,6 +157,8 @@ def render_master(brand: BrandIcon, size: int = 1024) -> Image.Image:
         round((PRODUCT_CENTER[0] + brand.optical_x_offset) * scale),
         round(PRODUCT_CENTER[1] * scale),
         find_font(round(PRODUCT_FONT_SIZE * scale)),
+        stroke_width=round(PRODUCT_OUTLINE_WIDTH * scale),
+        stroke_fill=brand.dark,
     )
     return canvas
 
@@ -163,7 +177,7 @@ def svg_text(brand: BrandIcon) -> str:
   </g>
   <g fill="#ffffff" font-family="Segoe UI, DejaVu Sans, Arial, sans-serif" font-weight="700" text-anchor="middle">
     <text x="128" y="69" font-size="60">FREE</text>
-    <text x="{PRODUCT_CENTER[0] + brand.optical_x_offset}" y="183" font-size="154">{brand.letter}</text>
+    <text x="{PRODUCT_CENTER[0] + brand.optical_x_offset}" y="183" font-size="154" stroke="{brand.dark}" stroke-width="{PRODUCT_OUTLINE_WIDTH}" paint-order="stroke fill">{brand.letter}</text>
   </g>
 </svg>
 '''

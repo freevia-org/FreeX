@@ -16,6 +16,8 @@ The Windows FreeX icon is the canonical original and is intentionally immutable.
 
 The locked icon also defines the shared layout: the `FREE` header is centered at `(128, 48.5)` at 60 px, while each 154 px product letter is centered vertically at 129 px. Sister-app exports use those exact typographic sizes; the P receives a four-pixel optical correction for its asymmetric side bearing so its visible glyph, rather than its font advance box, is horizontally centered.
 
+Each product letter has a two-pixel keyline in its app's dark surface color. The keyline is visible where the letter overlaps the accent header and blends into the lower field, matching the readability treatment of the preserved FreeX icon.
+
 Application chrome must consume `Free.Shared.Theme.BrandThemes`; it must not introduce independent brand-color literals. Packaging must consume the canonical files in `shared/Free.Shared.Shell/Resources`.
 
 These marks are project-owned geometric word/letter marks. They do not use Microsoft logos, Office tiles, Windows flags, Microsoft type treatments, or Microsoft product names. This is an engineering/design safeguard, not a legal opinion.

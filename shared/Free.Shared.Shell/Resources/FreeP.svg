@@ -11,6 +11,6 @@
   </g>
   <g fill="#ffffff" font-family="Segoe UI, DejaVu Sans, Arial, sans-serif" font-weight="700" text-anchor="middle">
     <text x="128" y="69" font-size="60">FREE</text>
-    <text x="124" y="183" font-size="154">P</text>
+    <text x="124" y="183" font-size="154" stroke="#4E213B" stroke-width="2" paint-order="stroke fill">P</text>
   </g>
 </svg>
