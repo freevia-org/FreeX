@@ -1,8 +1,8 @@
 # FreeW
 
-FreeW is a Word-class word processor for Windows. It opens and saves WordprocessingML documents
+FreeW is a DOCX word processor for Windows. It opens and saves WordprocessingML documents
 and uses a catalog-backed adapter layer for additional document formats, with rich editing,
-a Word-style ribbon, file lifecycle, and print - keeping the project, branding, and release
+a familiar ribbon, file lifecycle, and print workflow—keeping the project, branding, and release
 artifacts independent from Microsoft.
 
 - **Platform:** native Windows desktop app, WPF, `net10.0-windows`, with an Avalonia shell for Linux/macOS-oriented work.
@@ -181,11 +181,11 @@ docx reader/writer; unsupported renderings are noted under [Known limitations](#
 - Insert Field (DATE/TIME/FILENAME/AUTHOR/NUMPAGES as `w:fldSimple` with the right `w:instr`).
 
 ### View & reading
-- **Real Word-style ribbon** rendered by the shared `Free.Shared.Ribbon.Wpf.RibbonWpfRenderer` (Large/Medium/Small
+- **Adaptive ribbon** rendered by the shared `Free.Shared.Ribbon.Wpf.RibbonWpfRenderer` (Large/Medium/Small
   controls, group dividers/labels, vector glyphs) with **live-preview Styles & Theme galleries** and an **Alt KeyTips** overlay.
 - **Backstage / File menu** — full-window New/Open/Save/Save As/Print/Export/Info/Recent/Options.
 - **Paginated Print-Layout view** (discrete pages, margins, page shadow) plus **horizontal/vertical rulers** and a
-  Word-style status bar (Page X of Y, Section X of N, word count, zoom, view switches).
+  document status bar (Page X of Y, Section X of N, word count, zoom, view switches).
 - **Zoom** 50–200% (slider / ± / Ctrl+wheel).
 - **Read mode** (hides chrome, centered reading column) + live selection word/char count.
 - **Outline view** (View &gt; Outline) — the document as an indented heading/body outline with an Outlining

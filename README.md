@@ -61,6 +61,8 @@ The full solution remains the build target; do not use `dotnet test FreeX.slnx` 
 
 ## Trademark Notice
 
-FreeX is not affiliated with, endorsed by, or sponsored by Microsoft. Microsoft Excel is a trademark of Microsoft Corporation.
+FreeX, FreeW, and FreeP are independent projects. They are not affiliated with, authorized, sponsored, endorsed, or approved by Microsoft Corporation.
 
-Microsoft's trademark guidance allows truthful plain-text compatibility references, but Microsoft logos, app icons, product icons, and branding may not be used without permission. See the [Microsoft Trademark and Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks) and [Windows app trademark guidance](https://learn.microsoft.com/windows/apps/publish/partner-center/trademark-and-copyright-protection).
+Microsoft, Excel, Microsoft 365, Microsoft Office, OneDrive, PowerPoint, SharePoint, Visual Basic, Windows, and Word are trademarks of the Microsoft group of companies. All other trademarks are the property of their respective owners.
+
+Microsoft's published guidelines permit truthful plain-text compatibility references subject to their conditions; they do not permit use of Microsoft logos, product icons, trade dress, or other brand assets as project branding without authorization. See the project [legal and trademark notice](docs/legal/legal-notices.md), the [Microsoft Trademark and Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks), and [Windows app trademark guidance](https://learn.microsoft.com/windows/apps/publish/partner-center/trademark-and-copyright-protection).

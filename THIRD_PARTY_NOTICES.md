@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 This file summarizes third-party NuGet packages referenced by the FreeX
-solution after restore on 2026-06-24. Each package remains governed by its own
+solution after restore on 2026-08-22. Each package remains governed by its own
 license. This notice does not change those license terms.
 
 See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for bundled common
@@ -10,12 +10,12 @@ license text and package-provided license text found in the restored packages.
 ## Audit Status
 
 - Audit command: `dotnet restore FreeX.slnx --disable-parallel -v:minimal`.
-- Restored package inventory: 92 unique NuGet packages across 29
-  `project.assets.json` files.
+- Restored package inventory: 97 unique package names (99 name/version
+  identities) across 119 `project.assets.json` files.
 - Coverage: every restored package is listed below.
 - Runtime package posture: the publishable app dependency set is covered by
   MIT, Apache-2.0, BSD-3-Clause, BSD-style package licenses, package license
-  files, and explicit LGPL-3.0-only package metadata where listed below.
+  files, LGPL-2.1-or-later, and LGPL-3.0-only where listed below.
 - Package-provided `NOTICE` files found in the local NuGet cache:
   Microsoft.NET.ILLink.Tasks `THIRD-PARTY-NOTICES.TXT`,
   System.Security.Cryptography.Pkcs `THIRD-PARTY-NOTICES.TXT`, and
@@ -28,10 +28,11 @@ license text and package-provided license text found in the restored packages.
 ## Commercial-Use Note
 
 FluentAssertions 8.9.0 is a test/development dependency only; it is not part of
-the FreeX runtime publish output. Its package metadata points to the Xceed
-Community License, which is limited to non-commercial use unless a commercial
-license is obtained. If FreeX source/tests are distributed for commercial use,
-replace this dependency or confirm the project has the required Xceed license.
+the application runtime publish output. Versions 8 and later require a paid
+license for commercial use. Before using the test suite in a commercial
+organization or distributing it for commercial use, replace this dependency,
+use a suitably licensed version, or confirm the required license has been
+obtained.
 
 ## Runtime Packages
 
@@ -69,6 +70,8 @@ replace this dependency or confirm the project has the required Xceed license.
 | HarfBuzzSharp.NativeAssets.macOS | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | HarfBuzzSharp.NativeAssets.WebAssembly | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | HarfBuzzSharp.NativeAssets.Win32 | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
+| LibVLCSharp | 3.10.0 | LGPL-2.1-or-later | https://code.videolan.org/videolan/LibVLCSharp |
+| LibVLCSharp.Avalonia | 3.10.0 | LGPL-2.1-or-later | https://code.videolan.org/videolan/LibVLCSharp |
 | MathNet.Numerics.Signed | 5.0.0 | MIT | https://numerics.mathdotnet.com/ |
 | Microsoft.Extensions.DependencyInjection | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.7 | MIT | https://dot.net/ |
@@ -77,6 +80,7 @@ replace this dependency or confirm the project has the required Xceed license.
 | Microsoft.Extensions.Options | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Primitives | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.IO.RecyclableMemoryStream | 3.0.1 | MIT | https://github.com/Microsoft/Microsoft.IO.RecyclableMemoryStream |
+| Microsoft.Win32.SystemEvents | 10.0.0 | MIT | https://dot.net/ |
 | MicroCom.Runtime | 0.11.4 | MIT |  |
 | MimeKit | 4.17.0 | MIT | https://github.com/jstedfast/MimeKit |
 | NPOI | 2.7.6 | Apache-2.0 | https://github.com/nissl-lab/npoi |
@@ -93,7 +97,6 @@ replace this dependency or confirm the project has the required Xceed license.
 | Serilog.Sinks.File | 7.0.0 | Apache-2.0 | https://github.com/serilog/serilog-sinks-file |
 | SharpVectors.Wpf | 1.8.5 | BSD-3-Clause | https://github.com/ElinamLLC/SharpVectors |
 | SharpZipLib | 1.4.2 | MIT | https://github.com/icsharpcode/SharpZipLib |
-| SixLabors.Fonts | 1.0.0 | Apache-2.0 | https://github.com/SixLabors/Fonts |
 | SixLabors.Fonts | 1.0.1 | Apache-2.0 | https://github.com/SixLabors/Fonts |
 | SixLabors.ImageSharp | 2.1.11 | Apache-2.0 | https://github.com/SixLabors/ImageSharp |
 | SkiaSharp | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
@@ -102,8 +105,10 @@ replace this dependency or confirm the project has the required Xceed license.
 | SkiaSharp.NativeAssets.WebAssembly | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.Win32 | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | System.IO.Packaging | 8.0.1 | MIT | https://dot.net/ |
+| System.Drawing.Common | 10.0.0 | MIT | https://dot.net/ |
 | System.Security.Cryptography.Pkcs | 10.0.10 | MIT | https://dot.net/ |
 | System.Security.Cryptography.Xml | 10.0.10 | MIT | https://dot.net/ |
+| System.Speech | 10.0.0 | MIT | https://dot.net/ |
 | Tmds.DBus.Protocol | 0.92.0 | MIT |  |
 | UglyToad.PdfPig | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
 | UglyToad.PdfPig.Core | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
@@ -112,6 +117,7 @@ replace this dependency or confirm the project has the required Xceed license.
 | UglyToad.PdfPig.Tokenization | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
 | UglyToad.PdfPig.Tokens | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
 | Velopack | 1.2.0 | MIT | https://github.com/velopack/velopack |
+| VideoLAN.LibVLC.Windows | 3.0.23.1 | LGPL-2.1-or-later | https://www.videolan.org/vlc/libvlc.html |
 | ZString | 2.6.0 | MIT | https://github.com/Cysharp/ZString |
 
 ## Test And Development Packages
@@ -134,13 +140,26 @@ replace this dependency or confirm the project has the required Xceed license.
 | xunit.extensibility.core | 2.9.3 | Apache-2.0 |  |
 | xunit.extensibility.execution | 2.9.3 | Apache-2.0 |  |
 | xunit.runner.visualstudio | 3.1.4 | Apache-2.0 |  |
+| Xunit.StaFact | 1.2.69 | MS-PL | https://github.com/AArnott/Xunit.StaFact |
 
 ## Common License Texts
 
 - MIT, Apache License 2.0, package-provided BSD/additional license text, and
   package-provided third-party notice text are bundled in
   [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
-- LGPL-3.0-only package metadata is listed explicitly above where restored.
+- LGPL-2.1-or-later, LGPL-3.0-only, GPL-3.0-only (incorporated by LGPL 3.0),
+  and MS-PL texts are bundled under [docs/legal/licenses](docs/legal/licenses).
+
+## LGPL Runtime Distribution Requirements
+
+FreeP includes LibVLCSharp and the VideoLAN LibVLC Windows runtime under
+LGPL-2.1-or-later. FreeX's legacy import dependency graph includes NSax under
+LGPL-3.0-only. Binary distributions must preserve the applicable notices and
+license texts, permit replacement/relinking as required by the applicable
+LGPL, and provide the corresponding-source or written-offer materials required
+for any LGPL-covered binaries that are distributed. Release engineering must
+verify the exact native LibVLC bundle and source-offer obligations for every
+target platform; listing the packages here is not by itself sufficient.
 
 Some package licenses are provided as files or legacy license URLs inside the
 NuGet package metadata. Preserve those package-provided notices when

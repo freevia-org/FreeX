@@ -1,16 +1,25 @@
-# Legal Notices
+# Legal and Trademark Notices
 
-FreeX is not affiliated with, endorsed by, or sponsored by Microsoft. Microsoft Excel is a trademark of Microsoft Corporation.
+FreeX, FreeW, and FreeP are independent projects. They are not affiliated with, authorized, sponsored, endorsed, or approved by Microsoft Corporation.
 
-FreeX uses Microsoft product names only in plain text when describing file compatibility, interoperability, excluded Microsoft services, or test/reference behavior. FreeX does not use Microsoft logos, product icons, trade dress, or Microsoft-style app branding.
+Microsoft, Excel, Microsoft 365, Microsoft Office, OneDrive, PowerPoint, SharePoint, Visual Basic, Windows, and Word are trademarks of the Microsoft group of companies. All other trademarks are the property of their respective owners.
 
-FreeX file-format labels prefer neutral format names such as "XLSX Workbook" in the app UI. References to Microsoft Excel remain only where they are needed for trademark notices, compatibility context, or test/reference documentation.
+Microsoft product names are used only in plain text to identify compatible file formats, interoperability, unsupported services, or reference behavior. Statements such as “compatible with,” “opens,” or “exports” describe supported behavior; they do not claim certification, official status, or complete feature equivalence.
 
-Third-party dependency notices are maintained in [../../THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md). FreeX privacy and diagnostics behavior is documented in [privacy.md](privacy.md).
+The Free-family names, icons, and color themes are independent branding. They do not use Microsoft logos, product icons, sounds, or trade dress. Branding source files may name operating-system font fallbacks, but the project does not redistribute Microsoft font files.
 
-The packaged FreeX app exposes the project license, this legal notice, privacy notice, third-party notices, and bundled third-party license texts from Help > Legal Notices.
+Application UI should prefer neutral format labels such as “XLSX Workbook,” “DOCX Document,” and “PPTX Presentation.” A Microsoft product name should appear only where it is materially useful for compatibility, interoperability, unsupported-service, or test/reference context.
 
-For reference, see Microsoft's own guidance:
+Third-party dependency notices are maintained in [../../THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md). Privacy and diagnostics behavior is documented in [privacy.md](privacy.md).
+
+FreeX and FreeW expose the project license, this notice, the privacy notice, third-party notices, and bundled license texts through their Legal Notices dialogs. FreeP distributions must include the same files alongside the application; an in-app legal-notice surface should be treated as a release requirement before public distribution.
+
+Project maintainers should review names, artwork, screenshots, sample files, fonts, audio, and dependencies before each release. Test/reference captures of third-party applications are engineering evidence, are not application branding, and must not be included in public application packages unless distribution rights have been confirmed.
+
+Reference guidance:
 
 - [Microsoft Trademark and Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks)
 - [Trademark and copyright protection for Windows apps](https://learn.microsoft.com/windows/apps/publish/partner-center/trademark-and-copyright-protection)
+- [Microsoft trademark guidelines for publications](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/publications)
+
+This notice records the project’s branding and referential-use policy. It is not a legal opinion or a substitute for release-specific review by qualified intellectual-property counsel.
