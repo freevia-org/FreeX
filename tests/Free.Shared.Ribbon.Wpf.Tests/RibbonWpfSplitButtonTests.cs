@@ -138,6 +138,7 @@ public sealed class RibbonWpfSplitButtonTests
 
             collapsedGrid.Width.Should().Be(RibbonGroupHost.CollapsedWidth);
             button.Width.Should().Be(58);
+            button.Padding.Should().Be(new Thickness(0));
             caption.Width.Should().Be(58);
             caption.TextWrapping.Should().Be(TextWrapping.NoWrap);
             caption.TextTrimming.Should().Be(TextTrimming.CharacterEllipsis);

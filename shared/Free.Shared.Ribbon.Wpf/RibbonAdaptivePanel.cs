@@ -216,7 +216,10 @@ public sealed class RibbonGroupHost : ContentControl
 
         // Keep the rendered width just under RibbonGroupHost.CollapsedWidth (the value the fit decision
         // budgets per collapsed group) so the strip never edges over the viewport.
-        var button = new Button { Width = 58, Content = stack };
+        // RibbonBtn's default 4-DIP horizontal padding leaves only 50 DIPs for this fixed 58-DIP
+        // caption. Give collapsed groups the complete lane so centered text is never clipped at its
+        // leading edge.
+        var button = new Button { Width = 58, Padding = new Thickness(0), Content = stack };
         if (_resourceHost.TryFindResource("RibbonBtn") is Style style)
             button.Style = style;
 
