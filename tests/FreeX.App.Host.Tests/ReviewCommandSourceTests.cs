@@ -42,6 +42,7 @@ public sealed class ReviewCommandSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
         var controllerSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewSessionController.cs");
+        var handlerSource = DialogSourceTestSupport.ReadHostSources("Ribbon\\FreeXRibbonHandlerMap.g.cs");
 
         source.Should().Contain("new SpellCheckSessionController(new SpellCheckSessionAdapter(");
         source.Should().Contain("transition = controller.Apply(dialog.Result);");
@@ -59,6 +60,7 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("_session.GetUndoHistory(SessionChangesPlanner.MaxEntries)");
         source.Should().Contain("_session.GetRedoHistory(SessionChangesPlanner.MaxEntries)");
         source.Should().Contain("new SessionChangesWindow(plan) { Owner = this }");
+        handlerSource.Should().Contain("[FreeXRibbonCommandIds.ReviewShowChanges]");
         source.Should().Contain("AccessibilityCheckerService.FindIssues(_workbook)");
         source.Should().Contain("DrawingTargetResolver.GetTargetAltTextObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind)");
         source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildAltTextCommand(");

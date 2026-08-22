@@ -1388,6 +1388,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Workbook Statistics"] = () => RunGuarded(ShowWorkbookStatisticsDialogAsync),
                     [FreeXRibbonCommandIds.ReviewTranslate] = () => RunGuarded(ShowTranslateDialogAsync),
                     [FreeXRibbonCommandIds.ReviewCheckPerformance] = () => RunGuarded(ShowWorkbookPerformanceDialogAsync),
+                    [FreeXRibbonCommandIds.ReviewShowChanges] = () => RunGuarded(ShowSessionChangesWindowAsync),
                     ["Next Comment"] = () => NavigateReviewThreadedComment(previous: false),
                     ["Previous Comment"] = () => NavigateReviewThreadedComment(previous: true),
                     ["Show Comments"] = () => RunGuarded(ShowCommentsListAsync),

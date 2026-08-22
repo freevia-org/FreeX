@@ -99,6 +99,7 @@ public sealed partial class MainWindow : Window
         // swap -- otherwise it silently reports zero matches forever against the new document's
         // (always-fresh) SheetIds. See CloseFindReplaceDialogIfOpen for the full rationale.
         CloseFindReplaceDialogIfOpen();
+        CloseSessionChangesWindowIfOpen();
 
         _autosaveCoordinator?.NotifyAutosaveSaved();
         var previousSession = _session;
