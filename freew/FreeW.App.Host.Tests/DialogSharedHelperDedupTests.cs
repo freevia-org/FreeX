@@ -76,13 +76,17 @@ public sealed class DialogSharedHelperDedupTests
     public void AutosaveCoordinator_RoutesRecoveryMessagesThroughDialogMessageHelper()
     {
         var source = ReadDialogSource("AutosaveCoordinator.cs");
+        var sharedSource = File.ReadAllText(TestWorkspaceFileLocator.Find(
+            "shared", "Free.Shared.Shell.Wpf", "WpfAutosaveRecoveryHost.cs"));
 
-        source.Should().Contain("DialogMessageHelper.AskYesNo(");
-        source.Should().Contain("DialogMessageHelper.ShowInfo(");
-        source.Should().Contain("DialogMessageHelper.ShowMessage(");
-        source.Should().Contain("UserMessageButtons.OkCancel");
-        source.Should().Contain("UserMessageIcon.Question");
-        source.Should().Contain("DialogMessageHelper.ShowError(");
+        source.Should().Contain("WpfAutosaveRecoveryHost.OfferStartup(");
+        source.Should().Contain("WpfAutosaveRecoveryHost.RecoverManually(");
+        sharedSource.Should().Contain("DialogMessageHelper.AskYesNo(");
+        sharedSource.Should().Contain("DialogMessageHelper.ShowInfo(");
+        sharedSource.Should().Contain("DialogMessageHelper.ShowMessage(");
+        sharedSource.Should().Contain("UserMessageButtons.OkCancel");
+        sharedSource.Should().Contain("UserMessageIcon.Question");
+        sharedSource.Should().Contain("DialogMessageHelper.ShowError(");
         source.Should().NotContain("MessageBox.Show(");
     }
 

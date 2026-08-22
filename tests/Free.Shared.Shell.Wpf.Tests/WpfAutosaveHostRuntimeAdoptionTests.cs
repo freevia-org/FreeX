@@ -20,6 +20,21 @@ public sealed class WpfAutosaveHostRuntimeAdoptionTests
     [Theory]
     [InlineData("freep", "FreeP.App.Host")]
     [InlineData("freew", "FreeW.App.Host")]
+    public void AutosaveCoordinator_UsesSharedWpfRecoveryHostPolicy(
+        string productDirectory,
+        string hostProject)
+    {
+        var source = ReadHostSource(productDirectory, hostProject, "AutosaveCoordinator.cs");
+
+        source.Should().Contain("WpfAutosaveRecoveryHost.OfferStartup(");
+        source.Should().Contain("WpfAutosaveRecoveryHost.RecoverManually(");
+        source.Should().NotContain("DialogMessageHelper.");
+        source.Should().NotContain("catch (Exception ex)");
+    }
+
+    [Theory]
+    [InlineData("freep", "FreeP.App.Host")]
+    [InlineData("freew", "FreeW.App.Host")]
     public void EmergencyCrashHandler_UsesSharedBoundedFanOutAndKeepsProductFilter(
         string productDirectory,
         string hostProject)

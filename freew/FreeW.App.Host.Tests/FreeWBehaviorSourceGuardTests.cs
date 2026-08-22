@@ -98,14 +98,14 @@ public sealed class FreeWBehaviorSourceGuardTests
             "shared", "Free.Shared.AppServices", "AutosaveRecoveryPlannerCore.cs");
         var sharedWorkflow = ReadSource(
             "shared", "Free.Shared.AppServices", "AutosaveRecoveryWorkflow.cs");
+        var sharedWpfHost = ReadSource(
+            "shared", "Free.Shared.Shell.Wpf", "WpfAutosaveRecoveryHost.cs");
         var wpf = ReadSource("freew", "FreeW.App.Host", "AutosaveCoordinator.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("new FreeWAutosaveSession(");
-            source.Should().Contain("_session.PlanRecoveries()");
-            source.Should().Contain("FreeWRecoveryWorkflow.RunAsync(");
             source.Should().Contain("FreeWAutosaveSession.DefaultInterval");
             source.Should().NotContain("AutosaveSnapshotCoordinator");
             source.Should().NotContain("AutosaveRecoveryPlanner");
@@ -149,12 +149,18 @@ public sealed class FreeWBehaviorSourceGuardTests
         sharedWorkflow.Should().Contain("var useCurrentWindow = !anyAccepted;");
         sharedWorkflow.Should().Contain("AutosaveRecoveryPromptMode.Manual");
 
-        wpf.Should().Contain("DialogMessageHelper.AskYesNo(");
+        wpf.Should().Contain("_session.PlanRecoveries");
+        wpf.Should().Contain("WpfAutosaveRecoveryHost.OfferStartup(");
+        wpf.Should().Contain("WpfAutosaveRecoveryHost.RecoverManually(");
         wpf.Should().Contain("_session.CompleteRecovery(");
         wpf.Should().Contain("_file.OpenSnapshot");
         wpf.Should().Contain("editor.CommitToModel()");
+        sharedWpfHost.Should().Contain("AutosaveRecoveryWorkflow.RunAsync(");
+        sharedWpfHost.Should().Contain("DialogMessageHelper.AskYesNo(");
+        avalonia.Should().Contain("_session.PlanRecoveries()");
+        avalonia.Should().Contain("FreeWRecoveryWorkflow.RunAsync(");
         avalonia.Should().Contain("RecoveryPromptDialog.ShowAsync(");
-        avalonia.Should().Contain("Dispatcher.UIThread.InvokeAsync(");
+        avalonia.Should().Contain("AvaloniaBoundedDispatcherTransaction.TryExecute(");
         avalonia.Should().Contain("_session.CompleteDocumentRecovery(");
         avalonia.Should().Contain("_editor.LoadDocument(document)");
         avalonia.Should().NotContain("DocxReader");
