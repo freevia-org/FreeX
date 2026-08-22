@@ -1,4 +1,5 @@
 using FreeP.App.Compositor;
+using System.Text.Json;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -17,6 +18,41 @@ public sealed class DialogPaneVisualEvidenceTests
         summary.PassCount.Should().Be(28);
         summary.MismatchCount.Should().Be(0);
         summary.LimitationCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void Canonical_comments_pane_evidence_is_a_fresh_same_authority_pass()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var summaryPath = Path.Combine(
+            root,
+            "docs",
+            "parity",
+            "freep-dialog-pane-visual-evidence",
+            "summary.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(summaryPath));
+        var comparison = document.RootElement
+            .GetProperty("comparisons")
+            .EnumerateArray()
+            .Single(item => item.GetProperty("scenarioId").GetString() == "review.comments-pane.seeded");
+
+        comparison.GetProperty("classification").GetString().Should().Be("pass");
+        comparison.GetProperty("dimensionsMatch").GetBoolean().Should().BeTrue();
+        comparison.GetProperty("focusMatches").GetBoolean().Should().BeTrue();
+        comparison.GetProperty("buttonOrderMatches").GetBoolean().Should().BeTrue();
+        comparison.GetProperty("enabledStateMatches").GetBoolean().Should().BeTrue();
+
+        var target = comparison.GetProperty("pixelMetrics");
+        target.GetProperty("normalizedWidth").GetInt32().Should().Be(1100);
+        target.GetProperty("normalizedHeight").GetInt32().Should().Be(100);
+        target.GetProperty("changedPixelRatio").GetDouble().Should().BeLessThan(0.20);
+        target.GetProperty("meanChannelDelta").GetDouble().Should().BeLessThan(18.0);
+        target.GetProperty("thresholdPassed").GetBoolean().Should().BeTrue();
+
+        var shell = comparison.GetProperty("shellContextPixelMetrics");
+        shell.GetProperty("normalizedWidth").GetInt32().Should().Be(1280);
+        shell.GetProperty("normalizedHeight").GetInt32().Should().Be(760);
+        shell.GetProperty("thresholdPassed").GetBoolean().Should().BeTrue();
     }
 
     [Fact]
