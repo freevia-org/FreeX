@@ -2239,7 +2239,8 @@ public sealed class SlideShowMediaControllerTests
                             ForegroundColorHex = "FFCC00",
                             BackgroundColorHex = "000000",
                             FontFamily = "Aptos",
-                            FontSizePx = 24
+                            FontSizePx = 24,
+                            Opacity = 0.5
                         },
                         new(" italic", Italic: true),
                         new(" underline", Underline: true)
@@ -2256,9 +2257,9 @@ public sealed class SlideShowMediaControllerTests
         runs.Should().HaveCount(3);
         runs[0].FontWeight.Should().Be(System.Windows.FontWeights.Bold);
         runs[0].Foreground.Should().BeOfType<System.Windows.Media.SolidColorBrush>()
-            .Which.Color.Should().Be(System.Windows.Media.Color.FromRgb(0xFF, 0xCC, 0x00));
+            .Which.Color.Should().Be(System.Windows.Media.Color.FromArgb(0x80, 0xFF, 0xCC, 0x00));
         runs[0].Background.Should().BeOfType<System.Windows.Media.SolidColorBrush>()
-            .Which.Color.Should().Be(System.Windows.Media.Colors.Black);
+            .Which.Color.Should().Be(System.Windows.Media.Color.FromArgb(0x80, 0x00, 0x00, 0x00));
         runs[0].FontFamily.Source.Should().Be("Aptos");
         runs[0].FontSize.Should().Be(24);
         runs[1].FontStyle.Should().Be(System.Windows.FontStyles.Italic);

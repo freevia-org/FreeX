@@ -88,6 +88,9 @@ public sealed record PresentationMediaTranscriptCueSpan(
 
     /// <summary>Absolute CSS caption size normalized to device-independent pixels.</summary>
     public double? FontSizePx { get; init; }
+
+    /// <summary>Authored TTML span opacity normalized to the inclusive range 0..1.</summary>
+    public double? Opacity { get; init; }
 }
 
 public sealed record PresentationMediaTranscriptCueDescriptor(
@@ -320,6 +323,7 @@ public static class PresentationMediaTranscriptPlanner
         string? BackgroundColorHex = null,
         string? FontFamily = null,
         double? FontSizePx = null,
+        double? Opacity = null,
         string? Voice = null,
         string? Language = null,
         PresentationMediaTranscriptCueAlignment Alignment = PresentationMediaTranscriptCueAlignment.Center,
@@ -1371,6 +1375,13 @@ public static class PresentationMediaTranscriptPlanner
                 string.Create(CultureInfo.InvariantCulture, $"{fontSize:0.###}px"));
         }
 
+        if (span.Opacity is { } opacity)
+        {
+            yield return new XAttribute(
+                tts + "opacity",
+                opacity.ToString("0.###", CultureInfo.InvariantCulture));
+        }
+
         if (span.Voice is { Length: > 0 } voice)
         {
             yield return new XAttribute(ttm + "agent", voice);
@@ -2173,6 +2184,13 @@ public static class PresentationMediaTranscriptPlanner
             hasExplicitStyle = true;
         }
 
+        if (GetTtmlAttribute(element, "opacity") is { } opacity
+            && ParseTtmlOpacity(opacity) is { } parsedOpacity)
+        {
+            result = result with { Opacity = parsedOpacity, HasExplicitStyle = true };
+            hasExplicitStyle = true;
+        }
+
         var voiceToken = GetTtmlAttribute(element, "agent")
             ?? GetTtmlAttribute(element, "voice");
         if (voiceToken is not null)
@@ -2258,6 +2276,30 @@ public static class PresentationMediaTranscriptPlanner
             "after" => 100,
             _ => null
         };
+
+    private static double? ParseTtmlOpacity(string value)
+    {
+        var normalized = value.Trim();
+        if (normalized.EndsWith('%')
+            && double.TryParse(
+                normalized[..^1],
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var percentage)
+            && percentage is >= 0 and <= 100)
+        {
+            return percentage / 100;
+        }
+
+        return double.TryParse(
+                normalized,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var opacity)
+            && opacity is >= 0 and <= 1
+                ? opacity
+                : null;
+    }
 
     private static PresentationMediaTranscriptCueWritingMode? ParseTtmlWritingMode(string value)
         => value.Trim().ToLowerInvariant() switch
@@ -2385,7 +2427,8 @@ public static class PresentationMediaTranscriptPlanner
                 ForegroundColorHex = inheritedStyle.ForegroundColorHex,
                 BackgroundColorHex = inheritedStyle.BackgroundColorHex,
                 FontFamily = inheritedStyle.FontFamily,
-                FontSizePx = inheritedStyle.FontSizePx
+                FontSizePx = inheritedStyle.FontSizePx,
+                Opacity = inheritedStyle.Opacity
             });
             return;
         }

@@ -433,8 +433,8 @@ internal sealed partial class AvaloniaSlideShowMediaController
                 FontWeight = span.Bold ? FontWeight.Bold : FontWeight.Normal,
                 FontStyle = span.Italic ? FontStyle.Italic : FontStyle.Normal,
                 TextDecorations = span.Underline ? TextDecorations.Underline : null,
-                Foreground = CaptionBrush(span.ForegroundColorHex),
-                Background = CaptionBrush(span.BackgroundColorHex)
+                Foreground = CaptionBrush(span.ForegroundColorHex, span.Opacity, fallbackToWhite: true),
+                Background = CaptionBrush(span.BackgroundColorHex, span.Opacity, fallbackToWhite: false)
             };
             if (!string.IsNullOrWhiteSpace(span.FontFamily))
             {
@@ -448,16 +448,32 @@ internal sealed partial class AvaloniaSlideShowMediaController
         }
     }
 
-    private static IBrush? CaptionBrush(string? colorHex)
+    private static IBrush? CaptionBrush(string? colorHex, double? opacity, bool fallbackToWhite)
     {
+        if (string.IsNullOrWhiteSpace(colorHex))
+        {
+            if (opacity is null || !fallbackToWhite)
+                return null;
+
+            return new SolidColorBrush(Color.FromArgb(CaptionAlpha(opacity), 0xFF, 0xFF, 0xFF));
+        }
+
         if (!RgbColorTextCodec.TryParse(
                 colorHex,
                 RgbColorTextProfile.CaptionPayload,
                 out var color))
             return null;
 
-        return new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+        return new SolidColorBrush(Color.FromArgb(
+            CaptionAlpha(opacity),
+            color.R,
+            color.G,
+            color.B));
     }
+
+    private static byte CaptionAlpha(double? opacity) => opacity is { } value
+        ? (byte)Math.Round(Math.Clamp(value, 0, 1) * byte.MaxValue)
+        : byte.MaxValue;
 
     private void TeardownPlayback()
     {

@@ -371,7 +371,8 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
                             ForegroundColorHex = "FFCC00",
                             BackgroundColorHex = "000000",
                             FontFamily = "Aptos",
-                            FontSizePx = 24
+                            FontSizePx = 24,
+                            Opacity = 0.5
                         }
                     ]
                 }
@@ -387,9 +388,9 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         var captionRun = captionText.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Single();
         captionRun.Text.Should().Be("Hello from the video");
         captionRun.Foreground.Should().BeOfType<global::Avalonia.Media.SolidColorBrush>()
-            .Which.Color.Should().Be(global::Avalonia.Media.Color.FromRgb(0xFF, 0xCC, 0x00));
+            .Which.Color.Should().Be(global::Avalonia.Media.Color.FromArgb(0x80, 0xFF, 0xCC, 0x00));
         captionRun.Background.Should().BeOfType<global::Avalonia.Media.SolidColorBrush>()
-            .Which.Color.Should().Be(global::Avalonia.Media.Colors.Black);
+            .Which.Color.Should().Be(global::Avalonia.Media.Color.FromArgb(0x80, 0x00, 0x00, 0x00));
         captionRun.FontFamily.ToString().Should().Contain("Aptos");
         captionRun.FontSize.Should().Be(24);
 

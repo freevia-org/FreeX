@@ -1458,10 +1458,13 @@ public sealed class MediaFieldsTests
         const string captionContentType = "application/ttml+xml";
         const string ttmlText = """
             <?xml version="1.0" encoding="UTF-8"?>
-            <tt xmlns="http://www.w3.org/ns/ttml">
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:tts="http://www.w3.org/ns/ttml#styling">
               <body>
                 <div>
-                  <p begin="00:00:00.000" end="00:00:01.000">TTML caption text</p>
+                  <p begin="00:00:00.000" end="00:00:01.000">
+                    <span tts:opacity="0.4">TTML caption text</span>
+                  </p>
                 </div>
               </body>
             </tt>
@@ -1502,7 +1505,9 @@ public sealed class MediaFieldsTests
                 descriptor.CueCount == 1 &&
                 descriptor.Cues[0].Text == "TTML caption text" &&
                 descriptor.Cues[0].StartTime == TimeSpan.Zero &&
-                descriptor.Cues[0].EndTime == TimeSpan.FromSeconds(1));
+                descriptor.Cues[0].EndTime == TimeSpan.FromSeconds(1) &&
+                descriptor.Cues[0].Spans.Count == 1 &&
+                descriptor.Cues[0].Spans[0].Opacity == 0.4);
 
         loaded.Slides[0].Shapes.Add(new SlideShape
         {
@@ -1569,7 +1574,9 @@ public sealed class MediaFieldsTests
                 descriptor.CueCount == 1 &&
                 descriptor.Cues[0].Text == "TTML caption text" &&
                 descriptor.Cues[0].StartTime == TimeSpan.Zero &&
-                descriptor.Cues[0].EndTime == TimeSpan.FromSeconds(1));
+                descriptor.Cues[0].EndTime == TimeSpan.FromSeconds(1) &&
+                descriptor.Cues[0].Spans.Count == 1 &&
+                descriptor.Cues[0].Spans[0].Opacity == 0.4);
     }
 
     [Fact]

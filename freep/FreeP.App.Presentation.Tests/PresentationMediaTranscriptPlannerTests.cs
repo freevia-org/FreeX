@@ -744,12 +744,12 @@ public sealed class PresentationMediaTranscriptPlannerTests
                             <tt xmlns="http://www.w3.org/ns/ttml"
                                 xmlns:tts="http://www.w3.org/ns/ttml#styling"
                                 xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
-                              <body tts:fontFamily="Aptos" tts:fontSize="18px"
+                              <body tts:fontFamily="Aptos" tts:fontSize="18px" tts:opacity="60%"
                                     tts:color="#112233" ttm:agent="Narrator" xml:lang="en-GB">
                                 <div><p begin="0s" dur="2s">
                                   <span tts:fontWeight="bold">Hello </span>
                                   <span tts:fontStyle="italic" tts:textDecoration="underline"
-                                        tts:backgroundColor="yellow">styled</span>
+                                        tts:backgroundColor="yellow" tts:opacity="0.25">styled</span>
                                   <span tts:fontWeight="normal"> end</span>
                                 </p></div>
                               </body>
@@ -771,13 +771,15 @@ public sealed class PresentationMediaTranscriptPlannerTests
             && span.ForegroundColorHex == "112233"
             && span.FontFamily == "Aptos"
             && span.FontSizePx == 18
+            && span.Opacity == 0.6
             && span.Voice == "Narrator"
             && span.Language == "en-GB");
         cue.Spans[1].Should().Match<PresentationMediaTranscriptCueSpan>(span =>
             !span.Bold
             && span.Italic
             && span.Underline
-            && span.BackgroundColorHex == "FFFF00");
+            && span.BackgroundColorHex == "FFFF00"
+            && span.Opacity == 0.25);
         cue.Spans[2].Bold.Should().BeFalse();
     }
 
@@ -874,6 +876,7 @@ public sealed class PresentationMediaTranscriptPlannerTests
                                 ForegroundColorHex = "112233",
                                 FontFamily = "Aptos",
                                 FontSizePx = 18,
+                                Opacity = 0.4,
                                 Voice = "Narrator",
                                 Language = "en-GB"
                             },
@@ -894,6 +897,7 @@ public sealed class PresentationMediaTranscriptPlannerTests
         text.Should().Contain("color=\"#112233\"");
         text.Should().Contain("fontFamily=\"Aptos\"");
         text.Should().Contain("fontSize=\"18px\"");
+        text.Should().Contain("opacity=\"0.4\"");
         text.Should().Contain("agent=\"Narrator\"");
         text.Should().Contain("xml:lang=\"en-GB\"");
         text.Should().Contain("textAlign=\"end\"");
@@ -914,6 +918,7 @@ public sealed class PresentationMediaTranscriptPlannerTests
             .Tracks.Should().ContainSingle().Subject.Cues.Should().ContainSingle().Subject;
         cue.Spans.Select(span => span.Text).Should().Equal("Hello ", "styled");
         cue.Spans[0].Bold.Should().BeTrue();
+        cue.Spans[0].Opacity.Should().Be(0.4);
         cue.Spans[1].Italic.Should().BeTrue();
         cue.PositionPercent.Should().Be(10);
         cue.LinePercent.Should().Be(70);
