@@ -911,10 +911,10 @@ public static class AvaloniaRibbonRenderer
             if (controlRemainder.Length != 0)
                 return false;
 
-            if (button is ToggleButton toggle)
-                toggle.IsChecked = toggle.IsChecked != true;
-            else
-                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+            // Route key-tip activation through the same click event as pointer/keyboard input.
+            // Assigning IsChecked directly updates only the visual toggle state and bypasses the
+            // host command handler (notably View > Split).
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
             return true;
         }
 

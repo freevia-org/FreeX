@@ -169,6 +169,32 @@ public sealed class AvaloniaRibbonKeyTipBadgeTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task ToggleKeyTip_RaisesTheCommandClickRoute()
+    {
+        await Session.Dispatch(() =>
+        {
+            var executed = 0;
+            var registry = new RibbonCommandRegistry();
+            registry.Register("toggle", new RecordingCommand(() => executed++));
+            var definition = new RibbonDefinitionBuilder()
+                .Tab("view", "View", "W", tab => tab.Group("window", "Window", "N", 1, group =>
+                    group.IconToggle("toggle", "Split", RibbonCommandIconKind.Window, "SP")))
+                .Build();
+            var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
+            var window = Show(ribbon);
+            try
+            {
+                Assert.True(AvaloniaRibbonRenderer.TryActivateKeyTip(ribbon, "WSP"));
+                Assert.Equal(1, executed);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static RibbonDefinition BuildDefinition() => new RibbonDefinitionBuilder()
         .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group =>
             group.Dropdown("menu", "Menu", new RibbonMenu(new[]
@@ -211,5 +237,10 @@ public sealed class AvaloniaRibbonKeyTipBadgeTests
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: false);
+    }
+
+    private sealed class RecordingCommand(Action execute) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) => execute();
     }
 }

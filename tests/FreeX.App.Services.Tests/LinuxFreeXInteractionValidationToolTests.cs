@@ -166,9 +166,10 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         runner.Should().Contain("split-pane-bottom-left-wheel-physical");
         runner.Should().Contain("split-pane-mini-scrollbar-physical");
         probe.Should().Contain("probe_split_pane_pointer()");
-        probe.Should().Contain("enter_view_keytip");
-        probe.Should().Contain("split_button_x");
-        probe.Should().Contain("split-command-gesture=view-tab-physical-click");
+        probe.Should().Contain("local split_keytip_route=\"WSP\"");
+        probe.Should().Contain("--window \"$window_id\" w s p");
+        probe.Should().Contain("split-command-gesture=keytip-route-$split_keytip_route");
+        probe.Should().NotContain("split_button_x");
         probe.Should().Contain("split-pane-before-grid.png");
         probe.Should().Contain("split-pane-open-grid.png");
         probe.Should().Contain("xdotool mousedown 1");
@@ -376,8 +377,8 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("[[ ! \"$target_x\" =~ ^[0-9]+$ || ! \"$target_y\" =~ ^[0-9]+$ ]]");
         probe.Should().Contain("row-gutter-width=$row_gutter_width");
         probe.Should().Contain("column-gutter-height=$column_gutter_height");
-        probe.Should().Contain("inner-collapsed-visible-slot=$inner_collapsed_slot");
-        probe.Should().Contain("outer-expanded-visible-slot=$outer_expanded_slot");
+        probe.Should().Contain("inner-collapsed-address-value=$inner_collapsed_slot");
+        probe.Should().Contain("outer-expanded-address-value=$outer_expanded_slot");
         probe.Should().Contain("inner-collapse-structural=$inner_collapsed");
         probe.Should().Contain("outer-expand-structural=$outer_expanded");
         probe.Should().Contain("inner_collapsed_y=\"$(cell_center_y 10)\"");
@@ -395,5 +396,43 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("outline-nested-group\" ]]; then");
         runner.Split("\"outline-nested-rows-group-physical\"").Should().HaveCountGreaterThanOrEqualTo(4,
             "the focused selector and default all lane must both require nested row evidence");
+    }
+
+    [Fact]
+    public void NestedOutlinePhysicalReadbackUsesExactGoToAddressesAfterHiddenRanges()
+    {
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+
+        probe.Should().Contain("copy_cell_formula_by_address()");
+        probe.Should().Contain("send_key ctrl+g");
+        probe.Should().Contain("the production Go To route");
+
+        var rowsStart = probe.IndexOf("probe_outline_nested_rows_physical()", StringComparison.Ordinal);
+        var columnsStart = probe.IndexOf("probe_outline_nested_columns_physical()", rowsStart, StringComparison.Ordinal);
+        var saveStart = probe.IndexOf("probe_outline_nested_save_reopen_physical()", columnsStart, StringComparison.Ordinal);
+        var filterStart = probe.IndexOf("probe_outline_nested_filter_save_reopen_physical()", saveStart, StringComparison.Ordinal);
+
+        rowsStart.Should().BeGreaterThanOrEqualTo(0);
+        columnsStart.Should().BeGreaterThan(rowsStart);
+        saveStart.Should().BeGreaterThan(columnsStart);
+        filterStart.Should().BeGreaterThan(saveStart);
+
+        var rows = probe[rowsStart..columnsStart];
+        var columns = probe[columnsStart..saveStart];
+        var save = probe[saveStart..filterStart];
+        var filter = probe[filterStart..];
+
+        rows.Should().Contain("copy_cell_formula_by_address B13");
+        rows.Should().Contain("copy_cell_formula_by_address B15");
+        rows.Should().NotContain("copy_cell_formula 1 10");
+        rows.Should().NotContain("copy_cell_formula 1 9");
+        columns.Should().Contain("copy_cell_formula_by_address L2");
+        columns.Should().Contain("copy_cell_formula_by_address M2");
+        columns.Should().NotContain("copy_cell_formula 8 1");
+        columns.Should().NotContain("copy_cell_formula 7 1");
+        save.Should().Contain("copy_cell_formula_by_address B10");
+        filter.Should().Contain("copy_cell_formula_by_address B3");
+        filter.Should().Contain("copy_cell_formula_by_address B7");
     }
 }

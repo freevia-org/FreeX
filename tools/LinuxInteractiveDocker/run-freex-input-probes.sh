@@ -295,6 +295,28 @@ copy_cell_formula_by_keyboard() {
     printf '%s' "$value"
 }
 
+copy_cell_formula_by_address() {
+    local address="$1" value=""
+    set_clipboard_sentinel
+
+    # Ctrl+G is the production Go To route. Its dialog selects the reference field on open,
+    # so the address is entered into the real reference parser rather than inferred from the
+    # currently visible row/column slots. This remains meaningful when outline or filter state
+    # hides the addressed row or column.
+    send_key ctrl+g
+    xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+a
+    xdotool type --clearmodifiers --delay "$type_delay_ms" "$address"
+    xdotool key --clearmodifiers --delay "$input_delay_ms" Return
+    sleep "$settle_seconds"
+    xdotool key --clearmodifiers --delay "$input_delay_ms" F2
+    sleep "$settle_seconds"
+    xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+a
+    xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+c
+    value="$(clipboard_text || true)"
+    xdotool key --clearmodifiers --delay "$input_delay_ms" Escape
+    printf '%s' "$value"
+}
+
 copy_cell_formula_allow_empty() {
     local column_offset="$1" row_offset="$2" address="$3" selection_mode="${4:-pointer}"
     local sentinel="__FREEX_NO_FORMULA__" sentinel_pid="" current="" value=""
@@ -2513,14 +2535,7 @@ probe_split_pane_pointer() {
     local split_open=false divider_passed=false wheel_passed=false bottom_wheel_passed=false scrollbar_passed=false
     local split_row_y split_column_x divider_drag_x drag_y top_right_left top_right_width top_right_top top_right_height
     local bottom_left_left bottom_left_width bottom_left_top bottom_left_height scrollbar_x scrollbar_y
-    local split_button_x split_button_y
-
-    # The focused lane runs at the harness's fixed 1280x820 viewport. Resolve the visible Split
-    # toggle from that measured View-tab position, normalized to the actual X11 owner width.
-    split_button_x="$((window_x + window_width * 925 / 1280))"
-    # XGetWindowAttributes reports the client origin below the Xfce decoration; in the
-    # fixed harness the rendered command center is 60 px below that origin (98 root px).
-    split_button_y="$((window_y + 60))"
+    local split_keytip_route="WSP"
 
     # C5 gives the real View > Split command a deterministic two-axis anchor. The coordinates
     # below deliberately come from the calibrated cell pitch, so the probe remains bounded and
@@ -2528,9 +2543,11 @@ probe_split_pane_pointer() {
     if select_cell 2 4 C5; then
         capture "$split_before"
         crop_region "$split_before" "split-pane-before-grid.png" "$a1_x" "$a1_y" "$((window_x + window_width - a1_x))" "$((window_y + window_height - a1_y - 40))"
-        enter_view_keytip
-        xdotool_mousemove_sync "$split_button_x" "$split_button_y"
-        xdotool click 1
+        # WSP is the canonical Alt key-tip route for View > Split (W=View, SP=Split).
+        # It is independent of ribbon width, font metrics, DPI rounding, and tab placement.
+        enter_keytip_mode
+        xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$window_id" w s p
+        sleep "$settle_seconds"
         sleep "$settle_seconds"
         capture "$split_after"
         crop_region "$split_after" "split-pane-open-grid.png" "$a1_x" "$a1_y" "$((window_x + window_width - a1_x))" "$((window_y + window_height - a1_y - 40))"
@@ -2649,7 +2666,7 @@ probe_split_pane_pointer() {
     fi
 
     write_artifact "$postcondition" \
-        "schema-version=1\nselector=split-pane-pointer\nsplit-command-gesture=view-tab-physical-click\nsplit-button-coordinate=$split_button_x,$split_button_y\nsplit-open=$split_open\ndivider-gesture=horizontal-divider-drag\ndivider-coordinate=$divider_drag_x,$split_row_y\ndivider-target-y=$drag_y\ndivider-postcondition=$divider_passed\nactive-pane-gesture=top-right-shift-wheel-down\nactive-pane-crop=$top_right_left,$top_right_top,${top_right_width}x${top_right_height}\nactive-pane-shared-column-band-postcondition=$wheel_passed\nbottom-left-gesture=bottom-left-wheel-down-three-notches\nbottom-left-crop=$bottom_left_left,$bottom_left_top,${bottom_left_width}x${bottom_left_height}\nbottom-left-shared-row-band-postcondition=$bottom_wheel_passed\nmini-scrollbar-gesture=top-right-horizontal-track-click\nmini-scrollbar-coordinate=$scrollbar_x,$scrollbar_y\nmini-scrollbar-shared-column-band-postcondition=$scrollbar_passed\n"
+        "schema-version=1\nselector=split-pane-pointer\nsplit-command-gesture=keytip-route-$split_keytip_route\nsplit-open=$split_open\ndivider-gesture=horizontal-divider-drag\ndivider-coordinate=$divider_drag_x,$split_row_y\ndivider-target-y=$drag_y\ndivider-postcondition=$divider_passed\nactive-pane-gesture=top-right-shift-wheel-down\nactive-pane-crop=$top_right_left,$top_right_top,${top_right_width}x${top_right_height}\nactive-pane-shared-column-band-postcondition=$wheel_passed\nbottom-left-gesture=bottom-left-wheel-down-three-notches\nbottom-left-crop=$bottom_left_left,$bottom_left_top,${bottom_left_width}x${bottom_left_height}\nbottom-left-shared-row-band-postcondition=$bottom_wheel_passed\nmini-scrollbar-gesture=top-right-horizontal-track-click\nmini-scrollbar-coordinate=$scrollbar_x,$scrollbar_y\nmini-scrollbar-shared-column-band-postcondition=$scrollbar_passed\n"
 
     if $divider_passed; then
         record "split-pane-divider-drag-physical" "passed" \
@@ -2696,9 +2713,10 @@ probe_split_pane_pointer() {
             "$artifacts"
     fi
     if $split_open; then
-        enter_view_keytip
-        xdotool_mousemove_sync "$split_button_x" "$split_button_y"
-        xdotool click 1
+        enter_keytip_mode
+        keytip_key w
+        keytip_key s
+        keytip_key p
     fi
     send_key Escape || true
 }
@@ -2999,13 +3017,13 @@ probe_outline_nested_rows_physical() {
        outline_toggle_visible "$output/outline-nested-rows-grouped.png" "$outer_toggle_x" "$outer_toggle_y"; then
         controls_visible=true
 
-        # Level 2: collapse rows 11:12. Summary row 13 then occupies visible row slot 11,
-        # whose zero-based calibrated offset is 10.
+        # Level 2: collapse rows 11:12. Read the visible summary by its worksheet address so
+        # the assertion cannot accidentally pass from a different visible row slot.
         focus_app
         xdotool_mousemove_sync "$inner_toggle_x" "$inner_toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-rows-inner-collapsed.png"
-        inner_collapsed_slot="$(copy_cell_formula 1 10 outline-nested-row-inner-collapsed-visible-slot || true)"
+        inner_collapsed_slot="$(copy_cell_formula_by_address B13 || true)"
         [[ "$inner_collapsed_slot" == "NestedRow13" ]] && inner_collapsed=true
 
         inner_collapsed_y="$(cell_center_y 10)"
@@ -3013,16 +3031,15 @@ probe_outline_nested_rows_physical() {
         xdotool_mousemove_sync "$inner_toggle_x" "$inner_collapsed_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-rows-inner-expanded.png"
-        inner_expanded_slot="$(copy_cell_formula 1 10 outline-nested-row-inner-expanded-visible-slot || true)"
+        inner_expanded_slot="$(copy_cell_formula_by_address B11 || true)"
         [[ "$inner_expanded_slot" == "NestedRow11" ]] && inner_expanded=true
 
-        # Level 1: collapse rows 10:14. Summary row 15 then occupies visible row slot 10,
-        # whose zero-based calibrated offset is 9.
+        # Level 1: collapse rows 10:14. Read the outer summary by its exact address.
         focus_app
         xdotool_mousemove_sync "$outer_toggle_x" "$outer_toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-rows-outer-collapsed.png"
-        outer_collapsed_slot="$(copy_cell_formula 1 9 outline-nested-row-outer-collapsed-visible-slot || true)"
+        outer_collapsed_slot="$(copy_cell_formula_by_address B15 || true)"
         [[ "$outer_collapsed_slot" == "NestedRowOuterSummary" ]] && outer_collapsed=true
 
         outer_collapsed_y="$(cell_center_y 9)"
@@ -3030,7 +3047,7 @@ probe_outline_nested_rows_physical() {
         xdotool_mousemove_sync "$outer_toggle_x" "$outer_collapsed_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-rows-outer-expanded.png"
-        outer_expanded_slot="$(copy_cell_formula 1 9 outline-nested-row-outer-expanded-visible-slot || true)"
+        outer_expanded_slot="$(copy_cell_formula_by_address B10 || true)"
         [[ "$outer_expanded_slot" == "NestedRow10" ]] && outer_expanded=true
         if outline_toggle_visible "$output/outline-nested-rows-outer-expanded.png" "$inner_toggle_x" "$inner_toggle_y" &&
            outline_toggle_visible "$output/outline-nested-rows-outer-expanded.png" "$outer_toggle_x" "$outer_toggle_y"; then
@@ -3038,11 +3055,11 @@ probe_outline_nested_rows_physical() {
         fi
     fi
 
-    row2_value="$(copy_cell_formula 1 9 B10 || true)"
-    row3_value="$(copy_cell_formula 1 10 B11 || true)"
-    row4_value="$(copy_cell_formula 1 11 B12 || true)"
-    row5_value="$(copy_cell_formula 1 12 B13 || true)"
-    row6_value="$(copy_cell_formula 1 13 B14 || true)"
+    row2_value="$(copy_cell_formula_by_address B10 || true)"
+    row3_value="$(copy_cell_formula_by_address B11 || true)"
+    row4_value="$(copy_cell_formula_by_address B12 || true)"
+    row5_value="$(copy_cell_formula_by_address B13 || true)"
+    row6_value="$(copy_cell_formula_by_address B14 || true)"
     if [[ "$row2_value" == "NestedRow10" && "$row3_value" == "NestedRow11" &&
           "$row4_value" == "NestedRow12" && "$row5_value" == "NestedRow13" &&
           "$row6_value" == "NestedRow14" ]]; then
@@ -3051,11 +3068,11 @@ probe_outline_nested_rows_physical() {
 
     row_gutter_width=$((a1_x - worksheet_base_a1_x))
     write_artifact "outline-nested-rows-postcondition.txt" \
-        "seeded=true\nouter-selection=row-header-drag-10:14\ninner-selection=row-header-drag-11:12\ngroup-gesture=row-header-right-click,End,Up,Up,Up,Enter\nouter-group-command=$outer_command\ninner-group-command=$inner_command\nrow-gutter-width=$row_gutter_width\noutline-controls-visible=$controls_visible\ninner-collapsed-visible-slot=$inner_collapsed_slot\ninner-collapse-structural=$inner_collapsed\ninner-expanded-visible-slot=$inner_expanded_slot\ninner-expand-structural=$inner_expanded\nouter-collapsed-visible-slot=$outer_collapsed_slot\nouter-collapse-structural=$outer_collapsed\nouter-expanded-visible-slot=$outer_expanded_slot\nouter-expand-structural=$outer_expanded\nexpanded-outline-controls-visible=$expanded_controls_visible\nrestored-values=$row2_value,$row3_value,$row4_value,$row5_value,$row6_value\nvalues-restored=$values_restored\n"
+        "seeded=true\nouter-selection=row-header-drag-10:14\ninner-selection=row-header-drag-11:12\ngroup-gesture=row-header-right-click,End,Up,Up,Up,Enter\nouter-group-command=$outer_command\ninner-group-command=$inner_command\nrow-gutter-width=$row_gutter_width\noutline-controls-visible=$controls_visible\ninner-collapsed-address-value=$inner_collapsed_slot\ninner-collapse-structural=$inner_collapsed\ninner-expanded-address-value=$inner_expanded_slot\ninner-expand-structural=$inner_expanded\nouter-collapsed-address-value=$outer_collapsed_slot\nouter-collapse-structural=$outer_collapsed\nouter-expanded-address-value=$outer_expanded_slot\nouter-expand-structural=$outer_expanded\nexpanded-outline-controls-visible=$expanded_controls_visible\nrestored-values=$row2_value,$row3_value,$row4_value,$row5_value,$row6_value\nvalues-restored=$values_restored\n"
     if $outer_command && $inner_command && $controls_visible && $inner_collapsed && $inner_expanded && $outer_collapsed && $outer_expanded && $expanded_controls_visible && $values_restored; then
         record "outline-nested-rows-group-physical" "passed" \
             "outline-nested-rows-grouped.png; outline-nested-rows-inner-collapsed.png; outline-nested-rows-inner-expanded.png; outline-nested-rows-outer-collapsed.png; outline-nested-rows-outer-expanded.png; rows=10:14/inner=11:12; values=NestedRow10,NestedRow11,NestedRow12,NestedRow13,NestedRow14" \
-            "Real row-header drags and shared context-menu Group commands created two rendered levels; exact visible-slot values proved both collapse/expand cycles, and all five detail values read back exactly." "$artifacts"
+            "Real row-header drags and shared context-menu Group commands created two rendered levels; exact B13/B11/B15/B10 address readback proved both collapse/expand cycles, and all five detail values read back exactly." "$artifacts"
     else
         record "outline-nested-rows-group-physical" "failed" \
             "outline-nested-rows-grouped.png; outline-nested-rows-inner-collapsed.png; outline-nested-rows-inner-expanded.png; outline-nested-rows-outer-collapsed.png; outline-nested-rows-outer-expanded.png; outline-nested-rows-postcondition.txt" \
@@ -3153,13 +3170,13 @@ probe_outline_nested_columns_physical() {
        outline_toggle_visible "$output/outline-nested-columns-grouped.png" "$outer_toggle_x" "$outer_toggle_y"; then
         controls_visible=true
 
-        # Inner I:K: the level-2 toggle is over its L summary column, which moves to the ninth
-        # visible column slot after I:K are hidden.
+        # Inner I:K: the level-2 toggle is over its L summary column. Read L2 directly because
+        # its visible slot changes when I:K are hidden.
         focus_app
         xdotool_mousemove_sync "$inner_toggle_x" "$inner_toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-columns-inner-collapsed.png"
-        inner_collapsed_slot="$(copy_cell_formula 8 1 outline-nested-column-inner-collapsed-visible-slot || true)"
+        inner_collapsed_slot="$(copy_cell_formula_by_address L2 || true)"
         [[ "$inner_collapsed_slot" == "NestedColumnL" ]] && inner_collapsed=true
 
         inner_collapsed_x="$(cell_center_x 8)"
@@ -3167,16 +3184,15 @@ probe_outline_nested_columns_physical() {
         xdotool_mousemove_sync "$inner_collapsed_x" "$inner_toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-columns-inner-expanded.png"
-        inner_expanded_slot="$(copy_cell_formula 8 1 outline-nested-column-inner-expanded-visible-slot || true)"
+        inner_expanded_slot="$(copy_cell_formula_by_address I2 || true)"
         [[ "$inner_expanded_slot" == "NestedColumnI" ]] && inner_expanded=true
 
-        # Outer H:L: the level-1 toggle is over M, which moves to the eighth visible data slot after
-        # H:L are hidden.
+        # Outer H:L: the level-1 toggle is over M. Read M2 directly after the group hides H:L.
         focus_app
         xdotool_mousemove_sync "$outer_toggle_x" "$outer_toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-columns-outer-collapsed.png"
-        outer_collapsed_slot="$(copy_cell_formula 7 1 outline-nested-column-outer-collapsed-visible-slot || true)"
+        outer_collapsed_slot="$(copy_cell_formula_by_address M2 || true)"
         [[ "$outer_collapsed_slot" == "NestedColumnOuterSummary" ]] && outer_collapsed=true
 
         outer_collapsed_x="$(cell_center_x 7)"
@@ -3184,7 +3200,7 @@ probe_outline_nested_columns_physical() {
         xdotool_mousemove_sync "$outer_collapsed_x" "$outer_toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-columns-outer-expanded.png"
-        outer_expanded_slot="$(copy_cell_formula 7 1 outline-nested-column-outer-expanded-visible-slot || true)"
+        outer_expanded_slot="$(copy_cell_formula_by_address H2 || true)"
         [[ "$outer_expanded_slot" == "NestedColumnH" ]] && outer_expanded=true
         if outline_toggle_visible "$output/outline-nested-columns-outer-expanded.png" "$inner_toggle_x" "$inner_toggle_y" &&
            outline_toggle_visible "$output/outline-nested-columns-outer-expanded.png" "$outer_toggle_x" "$outer_toggle_y"; then
@@ -3192,11 +3208,11 @@ probe_outline_nested_columns_physical() {
         fi
     fi
 
-    column2_value="$(copy_cell_formula 7 1 H2 || true)"
-    column3_value="$(copy_cell_formula 8 1 I2 || true)"
-    column4_value="$(copy_cell_formula 9 1 J2 || true)"
-    column5_value="$(copy_cell_formula 10 1 K2 || true)"
-    column6_value="$(copy_cell_formula 11 1 L2 || true)"
+    column2_value="$(copy_cell_formula_by_address H2 || true)"
+    column3_value="$(copy_cell_formula_by_address I2 || true)"
+    column4_value="$(copy_cell_formula_by_address J2 || true)"
+    column5_value="$(copy_cell_formula_by_address K2 || true)"
+    column6_value="$(copy_cell_formula_by_address L2 || true)"
     if [[ "$column2_value" == "NestedColumnH" && "$column3_value" == "NestedColumnI" &&
           "$column4_value" == "NestedColumnJ" && "$column5_value" == "NestedColumnK" &&
           "$column6_value" == "NestedColumnL" ]]; then
@@ -3205,11 +3221,11 @@ probe_outline_nested_columns_physical() {
 
     column_gutter_height=$((a1_y - worksheet_base_a1_y))
     write_artifact "outline-nested-columns-postcondition.txt" \
-        "seeded=true\nouter-selection=column-header-drag-H:L\ninner-selection=column-header-drag-I:K\ngroup-gesture=column-header-right-click,End,Up,Up,Up,Enter\nouter-group-command=$outer_command\ninner-group-command=$inner_command\ncolumn-gutter-height=$column_gutter_height\noutline-controls-visible=$controls_visible\ninner-collapsed-visible-slot=$inner_collapsed_slot\ninner-collapse-structural=$inner_collapsed\ninner-expanded-visible-slot=$inner_expanded_slot\ninner-expand-structural=$inner_expanded\nouter-collapsed-visible-slot=$outer_collapsed_slot\nouter-collapse-structural=$outer_collapsed\nouter-expanded-visible-slot=$outer_expanded_slot\nouter-expand-structural=$outer_expanded\nexpanded-outline-controls-visible=$expanded_controls_visible\nrestored-values=$column2_value,$column3_value,$column4_value,$column5_value,$column6_value\nvalues-restored=$values_restored\n"
+        "seeded=true\nouter-selection=column-header-drag-H:L\ninner-selection=column-header-drag-I:K\ngroup-gesture=column-header-right-click,End,Up,Up,Up,Enter\nouter-group-command=$outer_command\ninner-group-command=$inner_command\ncolumn-gutter-height=$column_gutter_height\noutline-controls-visible=$controls_visible\ninner-collapsed-address-value=$inner_collapsed_slot\ninner-collapse-structural=$inner_collapsed\ninner-expanded-address-value=$inner_expanded_slot\ninner-expand-structural=$inner_expanded\nouter-collapsed-address-value=$outer_collapsed_slot\nouter-collapse-structural=$outer_collapsed\nouter-expanded-address-value=$outer_expanded_slot\nouter-expand-structural=$outer_expanded\nexpanded-outline-controls-visible=$expanded_controls_visible\nrestored-values=$column2_value,$column3_value,$column4_value,$column5_value,$column6_value\nvalues-restored=$values_restored\n"
     if $outer_command && $inner_command && $controls_visible && $inner_collapsed && $inner_expanded && $outer_collapsed && $outer_expanded && $expanded_controls_visible && $values_restored; then
         record "outline-nested-columns-group-physical" "passed" \
             "outline-nested-columns-grouped.png; outline-nested-columns-inner-collapsed.png; outline-nested-columns-inner-expanded.png; outline-nested-columns-outer-collapsed.png; outline-nested-columns-outer-expanded.png; columns=H:L/inner=I:K; values=NestedColumnH,NestedColumnI,NestedColumnJ,NestedColumnK,NestedColumnL" \
-            "Real column-header drags and shared context-menu Group commands created two rendered levels; exact visible-slot values proved both collapse/expand cycles, and all five detail values read back exactly." "$artifacts"
+            "Real column-header drags and shared context-menu Group commands created two rendered levels; exact L2/I2/M2/H2 address readback proved both collapse/expand cycles, and all five detail values read back exactly." "$artifacts"
     else
         record "outline-nested-columns-group-physical" "failed" \
             "outline-nested-columns-grouped.png; outline-nested-columns-inner-collapsed.png; outline-nested-columns-inner-expanded.png; outline-nested-columns-outer-collapsed.png; outline-nested-columns-outer-expanded.png; outline-nested-columns-postcondition.txt" \
@@ -3274,7 +3290,8 @@ PY
     fi
 
     # Reopen through the production GTK picker, then read the seeded row values from the live
-    # reopened sheet through the same clipboard-backed formula path used by the nested probe.
+    # reopened sheet by exact worksheet address. This remains meaningful if the persisted outline
+    # state reopens with any detail rows collapsed.
     before_windows="$(visible_window_count)"
     send_key ctrl+F12
     for _ in $(seq 1 12); do
@@ -3302,7 +3319,7 @@ PY
     fi
     if $dialog_closed; then
         capture "outline-nested-save-reopen-after.png"
-        reopened_values="$(copy_cell_formula 1 9 B10 || true),$(copy_cell_formula 1 10 B11 || true),$(copy_cell_formula 1 11 B12 || true),$(copy_cell_formula 1 12 B13 || true),$(copy_cell_formula 1 13 B14 || true)"
+        reopened_values="$(copy_cell_formula_by_address B10 || true),$(copy_cell_formula_by_address B11 || true),$(copy_cell_formula_by_address B12 || true),$(copy_cell_formula_by_address B13 || true),$(copy_cell_formula_by_address B14 || true)"
         if [[ "$reopened_values" == "NestedRow10,NestedRow11,NestedRow12,NestedRow13,NestedRow14" ]]; then
             values_restored=true
         fi
@@ -3414,7 +3431,7 @@ PY
     fi
 
     capture "outline-nested-filter-initial.png"
-    initial_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B4 || true),$(copy_cell_formula 1 3 B5 || true),$(copy_cell_formula 1 4 B7 || true)"
+    initial_values="$(copy_cell_formula_by_address B2 || true),$(copy_cell_formula_by_address B4 || true),$(copy_cell_formula_by_address B5 || true),$(copy_cell_formula_by_address B7 || true)"
 
     # The fixture starts with Keep selected. Include Drop through the production flyout, then
     # reopen that same flyout and remove Drop again before exercising the outline gestures.
@@ -3426,7 +3443,7 @@ PY
         click_autofilter_control 29 348
         click_autofilter_control 246 395
         sleep "$settle_seconds"
-        all_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B3 || true),$(copy_cell_formula 1 3 B4 || true),$(copy_cell_formula 1 4 B5 || true),$(copy_cell_formula 1 5 B6 || true),$(copy_cell_formula 1 6 B7 || true)"
+        all_values="$(copy_cell_formula_by_address B2 || true),$(copy_cell_formula_by_address B3 || true),$(copy_cell_formula_by_address B4 || true),$(copy_cell_formula_by_address B5 || true),$(copy_cell_formula_by_address B6 || true),$(copy_cell_formula_by_address B7 || true)"
         capture "outline-nested-filter-all-values.png"
 
         open_autofilter_menu 0
@@ -3436,7 +3453,7 @@ PY
             click_autofilter_control 29 348
             click_autofilter_control 246 395
             sleep "$settle_seconds"
-            filtered_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B4 || true),$(copy_cell_formula 1 3 B5 || true),$(copy_cell_formula 1 4 B7 || true)"
+            filtered_values="$(copy_cell_formula_by_address B2 || true),$(copy_cell_formula_by_address B4 || true),$(copy_cell_formula_by_address B5 || true),$(copy_cell_formula_by_address B7 || true)"
             capture "outline-nested-filter-applied.png"
         fi
     fi
@@ -3459,7 +3476,7 @@ PY
         xdotool_mousemove_sync "$inner_toggle_x" "$inner_toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-filter-inner-collapsed.png"
-        inner_collapsed_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B5 || true),$(copy_cell_formula 1 3 B7 || true)"
+        inner_collapsed_values="$(copy_cell_formula_by_address B2 || true),$(copy_cell_formula_by_address B5 || true),$(copy_cell_formula_by_address B7 || true)"
         [[ "$inner_collapsed_values" == "Outer2,InnerAnchor5,OuterSummary7" ]] && inner_collapsed=true
 
         inner_collapsed_y="$(cell_center_y 2)"
@@ -3467,14 +3484,14 @@ PY
         xdotool_mousemove_sync "$inner_toggle_x" "$inner_collapsed_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-filter-inner-expanded.png"
-        inner_expanded_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B4 || true),$(copy_cell_formula 1 3 B5 || true),$(copy_cell_formula 1 4 B7 || true)"
+        inner_expanded_values="$(copy_cell_formula_by_address B2 || true),$(copy_cell_formula_by_address B4 || true),$(copy_cell_formula_by_address B5 || true),$(copy_cell_formula_by_address B7 || true)"
         [[ "$inner_expanded_values" == "Outer2,InnerKeep4,InnerAnchor5,OuterSummary7" ]] && inner_expanded=true
 
         focus_app
         xdotool_mousemove_sync "$outer_toggle_x" "$outer_toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-filter-outer-collapsed.png"
-        outer_collapsed_values="$(copy_cell_formula 1 1 B7 || true)"
+        outer_collapsed_values="$(copy_cell_formula_by_address B7 || true)"
         [[ "$outer_collapsed_values" == "OuterSummary7" ]] && outer_collapsed=true
 
         outer_collapsed_y="$(cell_center_y 1)"
@@ -3482,7 +3499,7 @@ PY
         xdotool_mousemove_sync "$outer_toggle_x" "$outer_collapsed_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-filter-outer-expanded.png"
-        outer_expanded_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B4 || true),$(copy_cell_formula 1 3 B5 || true),$(copy_cell_formula 1 4 B7 || true)"
+        outer_expanded_values="$(copy_cell_formula_by_address B2 || true),$(copy_cell_formula_by_address B4 || true),$(copy_cell_formula_by_address B5 || true),$(copy_cell_formula_by_address B7 || true)"
         [[ "$outer_expanded_values" == "Outer2,InnerKeep4,InnerAnchor5,OuterSummary7" ]] && outer_expanded=true
     fi
 
@@ -3517,7 +3534,7 @@ PY
     fi
     if $dialog_closed; then
         capture "outline-nested-filter-reopened.png"
-        reopened_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B4 || true),$(copy_cell_formula 1 3 B5 || true),$(copy_cell_formula 1 4 B7 || true)"
+        reopened_values="$(copy_cell_formula_by_address B2 || true),$(copy_cell_formula_by_address B4 || true),$(copy_cell_formula_by_address B5 || true),$(copy_cell_formula_by_address B7 || true)"
         [[ "$reopened_values" == "Outer2,InnerKeep4,InnerAnchor5,OuterSummary7" ]] && reopen_values_passed=true
         send_key ctrl+s
         wait_for_document_clean && save_clean_after_reopen=true
