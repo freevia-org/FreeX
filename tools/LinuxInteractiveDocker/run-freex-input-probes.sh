@@ -397,7 +397,7 @@ copy_cell_formula_by_address() {
         sleep 0.1
     done
     if ! $dialog_closed; then
-        xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$dialog_id" Escape 2>/dev/null || true
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Escape 2>/dev/null || true
         stop_clipboard_sentinel
         restore_calibrated_window_geometry || true
         send_key ctrl+Home
