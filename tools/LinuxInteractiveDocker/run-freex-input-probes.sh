@@ -11,6 +11,7 @@ dialog_settle_seconds="${FREEX_X11_DIALOG_SETTLE_SECONDS:-3.0}"
 mousemove_timeout_seconds="${FREEX_X11_MOUSEMOVE_TIMEOUT_SECONDS:-5}"
 mousemove_timeout_count=0
 clipboard_timeout_seconds="${FREEX_X11_CLIPBOARD_TIMEOUT_SECONDS:-5}"
+clipboard_sentinel_pid=""
 image_tool_timeout_seconds="${FREEX_X11_IMAGE_TOOL_TIMEOUT_SECONDS:-5}"
 selection_color="${FREEX_X11_SELECTION_COLOR:-#217346}"
 document_path="${FREEX_X11_DOCUMENT_PATH:-/documents/linux-interactive-demo.csv}"
@@ -95,9 +96,27 @@ write_manifest() {
     manifest_written=true
 }
 
+stop_clipboard_sentinel() {
+    local pid="${clipboard_sentinel_pid:-}"
+    clipboard_sentinel_pid=""
+    [[ -n "$pid" ]] || return 0
+
+    kill "$pid" 2>/dev/null || true
+    for _ in $(seq 1 20); do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid" 2>/dev/null || true
+            return 0
+        fi
+        sleep 0.05
+    done
+    kill -KILL "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+}
+
 on_error() {
     local exit_code=$?
     trap - ERR
+    stop_clipboard_sentinel
     xdotool mouseup 1 >/dev/null 2>&1 || true
     if ! $manifest_written; then
         local runtime_reason="Probe aborted unexpectedly at line ${BASH_LINENO[0]} (exit $exit_code)."
@@ -110,6 +129,7 @@ on_error() {
     exit "$exit_code"
 }
 trap on_error ERR
+trap stop_clipboard_sentinel EXIT
 
 window_id="$(xdotool search --onlyvisible --name '^.+ - FreeX$' 2>/dev/null | tail -1 || true)"
 if [[ -z "$window_id" ]]; then
@@ -316,21 +336,21 @@ restore_calibrated_window_geometry() {
 }
 
 copy_cell_formula_by_address() {
-    local address="$1" value="" formula_field_x formula_field_y
+    local address="$1" value=""
     local sentinel="__FREEX_ADDRESS_FORMULA__" sentinel_pid="" current="" copied=false
 
     # Keep a PID-owned sentinel until the application takes clipboard ownership. A missed click
     # therefore remains distinguishable from a successful copy instead of exposing stale data.
     printf '%s' "$sentinel" | xclip -selection clipboard -in >/dev/null 2>&1 &
     sentinel_pid=$!
+    clipboard_sentinel_pid="$sentinel_pid"
     for _ in $(seq 1 10); do
         current="$(clipboard_text || true)"
         [[ "$current" == "$sentinel" ]] && break
         sleep 0.05
     done
     if [[ "$current" != "$sentinel" ]]; then
-        kill "$sentinel_pid" 2>/dev/null || true
-        wait "$sentinel_pid" 2>/dev/null || true
+        stop_clipboard_sentinel
         return 1
     fi
 
@@ -346,30 +366,28 @@ copy_cell_formula_by_address() {
 
     # A Go To target may be hidden by an outline/filter. Read its authoritative formula field;
     # F2 would instead attach the inline editor to the current visible slot. Go To can also leave
-    # the owner unmaximized, so restore the calibrated window geometry before the field click.
+    # the owner unmaximized, so restore the calibrated window geometry first. Ctrl+F2 is the
+    # production keyboard contract for focusing the formula field and avoids outline-dependent
+    # pointer coordinates.
     if ! restore_calibrated_window_geometry; then
-        kill "$sentinel_pid" 2>/dev/null || true
-        wait "$sentinel_pid" 2>/dev/null || true
+        stop_clipboard_sentinel
         send_key Escape
         send_key ctrl+Home
         return 1
     fi
-    formula_field_x="$((worksheet_base_a1_x + cell_width * 2))"
-    formula_field_y="$((worksheet_base_a1_y - cell_height * 2 + 2))"
-    xdotool_mousemove_sync "$formula_field_x" "$formula_field_y" click 1
-    sleep "$settle_seconds"
+    send_key ctrl+F2
     xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+a
     xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+c
     for _ in $(seq 1 10); do
-        value="$(clipboard_text || true)"
-        if [[ "$value" != "$sentinel" ]]; then
+        if value="$(clipboard_text)" &&
+           [[ "$value" != "$sentinel" ]] &&
+           ! kill -0 "$sentinel_pid" 2>/dev/null; then
             copied=true
             break
         fi
         sleep 0.12
     done
-    kill "$sentinel_pid" 2>/dev/null || true
-    wait "$sentinel_pid" 2>/dev/null || true
+    stop_clipboard_sentinel
     xdotool key --clearmodifiers --delay "$input_delay_ms" Escape
     # Go To may scroll a hidden or distant address into view. Restore the calibrated A1 viewport
     # before the caller performs another coordinate-based outline or filter gesture.

@@ -409,8 +409,12 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("the production Go To route");
         probe.Should().Contain("authoritative formula field");
         probe.Should().Contain("restore_calibrated_window_geometry");
-        probe.Should().Contain("worksheet_base_a1_y - cell_height * 2 + 2");
+        probe.Should().Contain("send_key ctrl+F2");
         probe.Should().Contain("__FREEX_ADDRESS_FORMULA__");
+        probe.Should().Contain("stop_clipboard_sentinel");
+        probe.Should().Contain("trap stop_clipboard_sentinel EXIT");
+        probe.Should().Contain("kill -KILL");
+        probe.Should().Contain("! kill -0 \"$sentinel_pid\"");
         probe.Should().Contain("$copied || return 1");
         probe.Should().Contain("Restore the calibrated A1 viewport");
 
