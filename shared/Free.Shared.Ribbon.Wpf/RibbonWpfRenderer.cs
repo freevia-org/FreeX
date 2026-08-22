@@ -82,6 +82,7 @@ public static class RibbonWpfRenderer
             panel.Children.Add(new RibbonGroupHost(
                 group,
                 full,
+                state => (FrameworkElement)BuildGroup(captured, resourceHost, registry, stateStore, options, state),
                 () => (FrameworkElement)BuildGroup(captured, resourceHost, registry, stateStore, options),
                 resourceHost,
                 collapsedKeyTip,
@@ -201,7 +202,8 @@ public static class RibbonWpfRenderer
         FrameworkElement resourceHost,
         IRibbonCommandRegistry? registry,
         IRibbonStateStore? stateStore,
-        RibbonWpfRendererOptions options)
+        RibbonWpfRendererOptions options,
+        RibbonAdaptiveGroupState state = RibbonAdaptiveGroupState.Full)
     {
         var grid = new Grid();
         ApplyStyle(grid, resourceHost, "RibbonGroupPanel");
@@ -212,7 +214,7 @@ public static class RibbonWpfRenderer
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(RibbonVisualMetrics.GroupLabelHeight) });
 
-        var content = BuildGroupContent(group, resourceHost, registry, stateStore, options);
+        var content = BuildGroupContent(group, resourceHost, registry, stateStore, options, state);
         Grid.SetRow(content, 0);
         grid.Children.Add(content);
 
@@ -255,7 +257,8 @@ public static class RibbonWpfRenderer
         FrameworkElement resourceHost,
         IRibbonCommandRegistry? registry,
         IRibbonStateStore? stateStore,
-        RibbonWpfRendererOptions options)
+        RibbonWpfRendererOptions options,
+        RibbonAdaptiveGroupState state)
     {
         var lane = new StackPanel
         {
@@ -264,7 +267,9 @@ public static class RibbonWpfRenderer
             Margin = new Thickness(2, 2, 2, 0)
         };
 
-        var controls = group.Controls;
+        var controls = group.Controls
+            .Select(control => AdaptControlForGroupState(control, state))
+            .ToList();
         var index = 0;
 
         // Leading large "hero" buttons each occupy their own full-height column.
@@ -284,6 +289,34 @@ public static class RibbonWpfRenderer
             BuildAutoColumns(rest, lane, resourceHost, registry, stateStore, options);
 
         return lane;
+    }
+
+    // Office ribbons reduce the presentation of individual commands before they replace the whole
+    // group with an overflow button. Keep the semantic controls (and their command IDs/keytips)
+    // intact; only change the renderer's layout hint for the intermediate presentations.
+    private static RibbonControl AdaptControlForGroupState(
+        RibbonControl control,
+        RibbonAdaptiveGroupState state)
+    {
+        if (control is RibbonSeparator or RibbonRowBreak or RibbonComboBox or RibbonCheckBox)
+            return control;
+
+        return state switch
+        {
+            RibbonAdaptiveGroupState.SmallWithLabels => control with
+            {
+                PreferredLayout = control.PreferredLayout switch
+                {
+                    RibbonCommandLayoutKind.Large => RibbonCommandLayoutKind.Medium,
+                    _ => control.PreferredLayout
+                }
+            },
+            RibbonAdaptiveGroupState.IconOnly => control with
+            {
+                PreferredLayout = RibbonCommandLayoutKind.Small
+            },
+            _ => control
+        };
     }
 
     // Groups that declare RowBreaks lay out as stacked horizontal rows (e.g. Font: combos row, then B/I/U row).

@@ -22,6 +22,7 @@ public static class HomeRibbonDefinition
                 .Medium("Format Painter", "Format Painter", Ico.FormatPainter, "FP"))
 
             .Group("HomeFontGroup", "Font", "F", priority: 90, g => g
+                .Sizing(RibbonGroupSizing.OfficeAdaptive)
                 .DialogLauncher("Format Cells Font", "Font dialog", "Open Format Cells on the Font tab.")
                 .ComboBox("Font", "Font", c => c with
                 {
@@ -46,6 +47,7 @@ public static class HomeRibbonDefinition
                 .Icon("Font Color", "Font Color", Ico.Color, "FC", dropdown: true))
 
             .Group("HomeAlignmentGroup", "Alignment", "A", priority: 80, g => g
+                .Sizing(RibbonGroupSizing.OfficeAdaptive)
                 .DialogLauncher("Format Cells Alignment", "Alignment dialog", "Open Format Cells on the Alignment tab.")
                 .IconToggle("Top Align", "Top Align", Ico.Align, "AT")
                 .IconToggle("Middle Align", "Middle Align", Ico.Align, "AM")
@@ -63,6 +65,7 @@ public static class HomeRibbonDefinition
                 .Medium("Merge & Center", "Merge & Center", Ico.Merge, "M", menu: HomeRibbonMenus.MergeCenter))
 
             .Group("HomeNumberGroup", "Number", "N", priority: 70, g => g
+                .Sizing(RibbonGroupSizing.OfficeAdaptive)
                 .DialogLauncher("Format Cells Number", "Number dialog", "Open Format Cells on the Number tab.")
                 .ComboBox("Number Format", "Number Format", c => c with
                 {
@@ -80,16 +83,19 @@ public static class HomeRibbonDefinition
                 .Icon("Decrease Decimal Places", "Decrease Decimal", Ico.Decimal, "QD"))
 
             .Group("HomeStylesGroup", "Styles", "Y", priority: 60, g => g
+                .Sizing(RibbonGroupSizing.OfficeAdaptive)
                 .Large("Conditional Formatting", "Conditional Formatting", Ico.Effects, "L", menu: HomeRibbonMenus.ConditionalFormatting)
                 .Large("Format as Table", "Format as Table", Ico.Table, "T", dropdown: true)
                 .Large("Cell Styles", "Cell Styles", Ico.Theme, "J", menu: HomeRibbonMenus.CellStyles))
 
             .Group("HomeCellsGroup", "Cells", "E", priority: 65, g => g
+                .Sizing(RibbonGroupSizing.OfficeAdaptive)
                 .Medium("Insert", "Insert", Ico.Insert, "I", menu: HomeRibbonMenus.Insert)
                 .Medium("Delete", "Delete", Ico.Delete, "D", menu: HomeRibbonMenus.Delete)
                 .Medium("Format", "Format", Ico.Size, "O", menu: HomeRibbonMenus.Format))
 
             .Group("HomeEditingGroup", "Editing", "G", priority: 40, g => g
+                .Sizing(RibbonGroupSizing.OfficeAdaptive)
                 .Icon("AutoSum", "AutoSum", Ico.Sum, "U", menu: HomeRibbonMenus.AutoSum)
                 .Icon("Fill", "Fill", Ico.Fill, "FI", menu: HomeRibbonMenus.Fill)
                 .Icon("Clear", "Clear", Ico.Clear, "E", menu: HomeRibbonMenus.Clear)

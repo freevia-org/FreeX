@@ -24,6 +24,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             harness.SetRibbonWidth(220);
 
+            harness.CollapsedRibbonGroupNames.Should().NotBeEmpty(harness.DebugRibbonChildren);
             harness.CollapsedRibbonGroupNames.Should().Contain("Editing", harness.DebugRibbonChildren);
             harness.CollapsedRibbonGroupMenus.Should().NotBeEmpty();
             harness.CollapsedMenuHeaders("Editing").Should().Contain(["AutoSum", "Fill", "Clear", "Sort & Filter", "Find & Select"]);
@@ -57,9 +58,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (!harness.CanUseRequestedRibbonWidth(1465))
                 return;
 
-            // 2-state live ribbon: at this wide width the higher-priority Home groups stay fully expanded
-            // with their real commands visible; Editing is the lowest-priority group, so it is the one that
-            // folds into a single overflow button rather than clipping or pushing out a higher group.
+            // At this wide width the higher-priority Home groups stay fully expanded with their real
+            // commands visible; lower-priority groups can compact before any group has to overflow.
             harness.CollapsedRibbonGroupNames.Should().NotContain(
                 ["Clipboard", "Font", "Alignment", "Number", "Styles", "Cells"],
                 harness.DebugRibbonChildren);
@@ -107,10 +107,12 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 return;
 
             harness.CollapsedRibbonGroupNames.Should().NotContain("Cells", harness.DebugRibbonChildren);
-            harness.CollapsedRibbonGroupNames.Should().Contain("Editing", harness.DebugRibbonChildren);
+            harness.CollapsedRibbonGroupNames.Should().NotContain(
+                "Editing",
+                "compact command presentations keep the already-icon-only Editing commands directly reachable");
             harness.VisibleRibbonCommandLabels.Should().Contain(
                 ["Insert", "Delete", "Format"],
-                "Excel keeps the Cells group visible at common wide widths and folds the compact Editing group before clipping");
+                "Excel keeps the Cells group visible at common wide widths while compact Home groups fit without clipping");
             harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                 0.5,
                 $"the compact Home groups must fit rather than clip; {harness.DebugActiveRibbonChildren}");

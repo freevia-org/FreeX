@@ -247,6 +247,20 @@ public class RibbonWpfRendererTests
     }
 
     [Fact]
+    public void HomeDefinition_OptInGroupsUseOfficeAdaptiveSizing()
+    {
+        var groups = HomeRibbonDefinition.Build().FindTab("HomeTab")!.Groups;
+
+        groups.Where(group => group.Id != "HomeClipboardGroup")
+            .Should()
+            .OnlyContain(group => ReferenceEquals(group.Sizing, RibbonGroupSizing.OfficeAdaptive));
+        groups.Single(group => group.Id == "HomeClipboardGroup").Sizing
+            .Should()
+            .BeSameAs(RibbonGroupSizing.Default,
+                "Clipboard preserves its labeled primary commands before lower-priority groups compact");
+    }
+
+    [Fact]
     public void RenderedHomeTab_HasFontAlignmentAndNumberDialogLaunchers()
     {
         StaTestRunner.Run(() =>

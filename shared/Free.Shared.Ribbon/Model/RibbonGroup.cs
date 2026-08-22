@@ -11,6 +11,16 @@ public sealed record RibbonGroupSizing(
     IReadOnlyList<RibbonAdaptiveGroupState> SupportedVariants,
     RibbonWidthHints? Hints = null)
 {
+    /// <summary>Opt-in Office-style command compaction before a group becomes overflow-only.</summary>
+    public static readonly RibbonGroupSizing OfficeAdaptive = new(new[]
+    {
+        RibbonAdaptiveGroupState.Full,
+        RibbonAdaptiveGroupState.SmallWithLabels,
+        RibbonAdaptiveGroupState.Collapsed
+    });
+
+    // Keep this model default broad for renderer-neutral planning. Renderers that historically exposed
+    // only a full and collapsed group preserve that behavior until a definition opts in explicitly.
     public static readonly RibbonGroupSizing Default = new(new[]
     {
         RibbonAdaptiveGroupState.Full,
