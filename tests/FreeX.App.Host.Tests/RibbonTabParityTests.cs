@@ -251,6 +251,7 @@ public sealed class RibbonTabParityTests
         GroupNames(reviewTab).Should().Equal(
             "Proofing",
             "Accessibility",
+            "Changes",
             "Comments",
             "Notes",
             "Protect");
@@ -264,9 +265,9 @@ public sealed class RibbonTabParityTests
             "Next Comment",
             "Show Comments"]);
         CommandTitles(Group(reviewTab, "Notes")).Should().Contain(["New Note", "Show Notes"]);
-        GroupNames(reviewTab).Should().NotContain("Changes");
+        CommandTitles(Group(reviewTab, "Changes")).Should().ContainSingle("Show Changes");
         reviewTab.Groups.SelectMany(group => group.Commands).Select(command => command.Title)
-            .Should().NotContain(["Show Changes", "Track Changes"]);
+            .Should().NotContain("Track Changes");
     }
 
     [Fact]
