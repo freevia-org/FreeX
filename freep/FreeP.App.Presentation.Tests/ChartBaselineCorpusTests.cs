@@ -518,7 +518,7 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 4).Should().Be(2);
         surfaceGeometry.RenderFacets.Should().HaveCount(15,
             "imported PowerPoint Surface3D cells render a continuous triangulated surface and projected boundary faces");
-        surfaceGeometry.WpfRenderFacets.Should().HaveCount(20,
+        surfaceGeometry.AlternateRenderFacets.Should().HaveCount(20,
             "WPF applies five measured green-face registration overlays only to the imported default camera");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
         var firstSurfaceCellFacets = surfaceGeometry.RenderFacets
@@ -774,7 +774,7 @@ public sealed class ChartBaselineCorpusTests
             new ChartPlanRect(0, 0, 360, 189));
         geometry.RenderFacets.Should().HaveCount(8,
             "the renderer-neutral camera retains the eight triangulated top facets");
-        geometry.WpfRenderFacets.Should().HaveCount(10,
+        geometry.AlternateRenderFacets.Should().HaveCount(10,
             "WPF uses eight top facets plus two measured side-material faces for this authored camera");
         geometry.WireframeSegments.Should().BeEmpty(
             "an explicit c:wireframe=0 camera must not receive the default mesh overlay");
@@ -783,10 +783,10 @@ public sealed class ChartBaselineCorpusTests
         geometry.FrameSegments.Select(segment => segment.Stroke.Thickness)
             .Should().OnlyContain(thickness => thickness == 0.7);
         geometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
-        geometry.WpfRenderFacets.Should().OnlyContain(facet =>
+        geometry.AlternateRenderFacets.Should().OnlyContain(facet =>
             facet.Points.Count == 3 || facet.Points.Count == 4 || facet.Points.Count == 5 ||
             facet.Points.Count == 11 || facet.Points.Count == 16);
-        geometry.WpfRenderFacets
+        geometry.AlternateRenderFacets
             .Single(facet => facet.Fill.Color == new SrgbColor(0x34, 0x56, 0x95))
             .Points
             .Should()
@@ -806,7 +806,7 @@ public sealed class ChartBaselineCorpusTests
             new SrgbColor(0x91, 0xB5, 0x7C),
             new SrgbColor(0xEB, 0xB1, 0x00));
 
-        geometry.WpfRenderFacets.Single(facet =>
+        geometry.AlternateRenderFacets.Single(facet =>
                 facet.Fill.Color == new SrgbColor(0xB3, 0x5E, 0x24))
             .Points.Should().Equal(
                 new ChartPlanPoint(154, 108),
@@ -825,7 +825,7 @@ public sealed class ChartBaselineCorpusTests
                 new ChartPlanPoint(165, 150),
                 new ChartPlanPoint(163, 143),
                 new ChartPlanPoint(157, 120));
-        geometry.WpfRenderFacets.Single(facet =>
+        geometry.AlternateRenderFacets.Single(facet =>
                 facet.Fill.Color == new SrgbColor(0xDB, 0x74, 0x2C))
             .Points.Should().Equal(
                 new ChartPlanPoint(32, 104),
@@ -833,7 +833,7 @@ public sealed class ChartBaselineCorpusTests
                 new ChartPlanPoint(200, 58),
                 new ChartPlanPoint(283, 133),
                 new ChartPlanPoint(263, 154));
-        geometry.WpfRenderFacets.Single(facet =>
+        geometry.AlternateRenderFacets.Single(facet =>
                 facet.Fill.Color == new SrgbColor(0xEB, 0x7C, 0x30))
             .Points.Should().Equal(
                 new ChartPlanPoint(34, 100),
@@ -847,7 +847,7 @@ public sealed class ChartBaselineCorpusTests
                 new ChartPlanPoint(131, 106),
                 new ChartPlanPoint(83, 104),
                 new ChartPlanPoint(60, 103));
-        geometry.WpfRenderFacets.Single(facet =>
+        geometry.AlternateRenderFacets.Single(facet =>
                 facet.Fill.Color == new SrgbColor(0x91, 0xB5, 0x7C))
             .Points.Should().Equal(
                 new ChartPlanPoint(200, 61),
@@ -1098,7 +1098,7 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
-    public void ChartBaselineDepthCorpus_UsesWpfOnlyBlueFacetForCanonicalImportedFrame()
+    public void ChartBaselineDepthCorpus_UsesAlternateBlueFacetForCanonicalImportedFrame()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
         var surfaceChart = PptxPackageReader.Read(deckPath).Slides[0].Shapes
@@ -1107,7 +1107,7 @@ public sealed class ChartBaselineCorpusTests
             surfaceChart,
             new ChartPlanRect(596, 105, 360, 189));
 
-        var blue = plan.WpfRenderFacets.Single(facet =>
+        var blue = plan.AlternateRenderFacets.Single(facet =>
             facet.SeriesIndex == 0 &&
             facet.CategoryIndex == 0 &&
             facet.Fill.Color == new SrgbColor(0x44, 0x74, 0xC7));
@@ -1123,7 +1123,7 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
-    public void ChartBaselineDepthCorpus_UsesScaledCanonicalWpfFacetForTallImportedFrame()
+    public void ChartBaselineDepthCorpus_UsesScaledCanonicalAlternateFacetForTallImportedFrame()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
         var surfaceChart = PptxPackageReader.Read(deckPath).Slides[0].Shapes
@@ -1133,7 +1133,7 @@ public sealed class ChartBaselineCorpusTests
             surfaceChart,
             new ChartPlanRect(596, 105, 360, 240));
 
-        var blue = plan.WpfRenderFacets.Single(facet =>
+        var blue = plan.AlternateRenderFacets.Single(facet =>
             facet.SeriesIndex == 0 &&
             facet.CategoryIndex == 0 &&
             facet.Fill.Color == new SrgbColor(0x44, 0x74, 0xC7));
@@ -1141,7 +1141,7 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
-    public void ChartBaselineDepthCorpus_UsesMeasuredWpfOrangeFacetWithoutChangingSharedMesh()
+    public void ChartBaselineDepthCorpus_UsesMeasuredAlternateOrangeFacetWithoutChangingSharedMesh()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
         var surfaceChart = PptxPackageReader.Read(deckPath).Slides[0].Shapes
@@ -1150,7 +1150,7 @@ public sealed class ChartBaselineCorpusTests
             surfaceChart,
             new ChartPlanRect(596, 105, 360, 189));
 
-        plan.WpfRenderFacets.Single(facet =>
+        plan.AlternateRenderFacets.Single(facet =>
                 facet.SeriesIndex == 0 &&
                 facet.CategoryIndex == 0 &&
                 facet.Fill.Color == new SrgbColor(0xF1, 0x80, 0x32))

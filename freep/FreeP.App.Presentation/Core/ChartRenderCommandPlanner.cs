@@ -24,7 +24,7 @@ public readonly record struct ChartRenderExecutionProfile(
 
     public static ChartRenderExecutionProfile Avalonia { get; } = new(
         PixelSnapImportedHorizontalGridLines: false,
-        PreferAlternateSurfaceFacets: false,
+        PreferAlternateSurfaceFacets: true,
         DrawStandalonePlotAreaOutline: true,
         StockFallbackTitleOffset: new ChartPlanPoint(0, 0),
         StockFallbackValueLabelOffset: new ChartPlanPoint(0, 0),
@@ -443,8 +443,8 @@ public static class ChartRenderCommandPlanner
         AddLines(commands, surface.FrameSegments);
         AddLines(commands, surface.WireframeSegments);
 
-        var facets = preferAlternateFacets && surface.WpfRenderFacets.Count > 0
-            ? surface.WpfRenderFacets
+        var facets = preferAlternateFacets && surface.AlternateRenderFacets.Count > 0
+            ? surface.AlternateRenderFacets
             : surface.RenderFacets.Count > 0
                 ? surface.RenderFacets
                 : surface.Facets;

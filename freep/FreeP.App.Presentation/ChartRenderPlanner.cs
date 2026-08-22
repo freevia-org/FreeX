@@ -346,10 +346,10 @@ public readonly record struct ChartSurfaceGeometryPlan(
     public IReadOnlyList<ChartSurfaceFacetPrimitive> RenderFacets { get; init; } =
         Array.Empty<ChartSurfaceFacetPrimitive>();
 
-    // WPF's detached DrawingContext raster path needs a narrowly measured
-    // authored mesh for one imported camera. Avalonia continues to consume
-    // the renderer-neutral RenderFacets collection.
-    public IReadOnlyList<ChartSurfaceFacetPrimitive> WpfRenderFacets { get; init; } =
+    // Some imported PowerPoint surfaces expose a measured alternate facet
+    // projection. Both platform consumers use this shared collection so the
+    // same mesh ownership and paint ordering apply across renderers.
+    public IReadOnlyList<ChartSurfaceFacetPrimitive> AlternateRenderFacets { get; init; } =
         Array.Empty<ChartSurfaceFacetPrimitive>();
 
     public IReadOnlyList<ChartLineSegmentPrimitive> FrameSegments { get; init; } =
@@ -4891,7 +4891,7 @@ public static partial class ChartRenderPlanner
                     (UsesImportedSurfaceGeometry(chart) || UsesExplicitSurface3DFacetRendering(chart)))
                 .ToArray()
             : facets;
-        IReadOnlyList<ChartSurfaceFacetPrimitive> wpfRenderFacets =
+        IReadOnlyList<ChartSurfaceFacetPrimitive> alternateRenderFacets =
             Array.Empty<ChartSurfaceFacetPrimitive>();
         if (chart.ChartType == ChartType.Surface3D && UsesImportedSurfaceGeometry(chart))
         {
@@ -4909,11 +4909,11 @@ public static partial class ChartRenderPlanner
                 .ToArray();
 
             if (UsesImportedSurfaceDepthBaseline(chart))
-                wpfRenderFacets = BuildImportedSurfaceDepthWpfFacets(renderFacets, plot);
+                alternateRenderFacets = BuildImportedSurfaceDepthAlternateFacets(renderFacets, plot);
         }
         else if (UsesExplicitSurface3DFacetRendering(chart))
         {
-            wpfRenderFacets = BuildExplicitSurfaceRenderFacets(plot);
+            alternateRenderFacets = BuildExplicitSurfaceRenderFacets(plot);
         }
         var contours = chart.ChartType == ChartType.Surface3D && UsesImportedSurfaceGeometry(chart)
             ? Array.Empty<ChartLineSegmentPrimitive>()
@@ -4928,12 +4928,12 @@ public static partial class ChartRenderPlanner
         return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours)
         {
             RenderFacets = renderFacets,
-            WpfRenderFacets = wpfRenderFacets,
+            AlternateRenderFacets = alternateRenderFacets,
             FrameSegments = frameSegments
         };
     }
 
-    private static IReadOnlyList<ChartSurfaceFacetPrimitive> BuildImportedSurfaceDepthWpfFacets(
+    private static IReadOnlyList<ChartSurfaceFacetPrimitive> BuildImportedSurfaceDepthAlternateFacets(
         IReadOnlyList<ChartSurfaceFacetPrimitive> renderFacets,
         ChartPlanRect plot)
     {
@@ -4997,14 +4997,14 @@ public static partial class ChartRenderPlanner
             facets[orangeIndex] = orangeReplacement;
         else
             facets.Add(orangeReplacement);
-        AddImportedSurfaceGreenWpfOverlays(facets, plot);
+        AddImportedSurfaceGreenAlternateOverlays(facets, plot);
         // The imported blue face owns the shared fold pixels in PowerPoint;
-        // draw it after the adjacent orange face in the WPF-only surface pass.
+        // draw it after the adjacent orange face in the shared surface pass.
         facets.Add(replacement);
         return facets;
     }
 
-    private static void AddImportedSurfaceGreenWpfOverlays(
+    private static void AddImportedSurfaceGreenAlternateOverlays(
         List<ChartSurfaceFacetPrimitive> facets,
         ChartPlanRect plot)
     {
@@ -5015,7 +5015,7 @@ public static partial class ChartRenderPlanner
 
         // Keep the shared mesh as underpaint so its shared edges remain
         // closed; these measured interiors correct only the imported default
-        // camera's green face registration in the WPF compositor.
+        // camera's green face registration in the shared compositor.
         var overlays = new (int Series, int Category, SrgbColor Color, (double X, double Y)[] Points)[]
         {
             (1, 0, new SrgbColor(0x99, 0xBD, 0x80),

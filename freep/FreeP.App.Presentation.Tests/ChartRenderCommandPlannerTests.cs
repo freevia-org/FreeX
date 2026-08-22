@@ -43,6 +43,58 @@ public sealed class ChartRenderCommandPlannerTests
     }
 
     [Fact]
+    public void Plan_UsesSharedAlternateSurfaceFacetsForBothRenderers()
+    {
+        var defaultFacet = new ChartSurfaceFacetPrimitive(
+            SeriesIndex: 0,
+            CategoryIndex: 0,
+            Points:
+            [
+                new ChartPlanPoint(10, 20),
+                new ChartPlanPoint(30, 20),
+                new ChartPlanPoint(30, 40),
+            ],
+            Fill: new ChartFillPlan(new SrgbColor(10, 20, 30), 255),
+            Stroke: Stroke(),
+            AverageValue: 10,
+            AverageNormalizedValue: 0.25);
+        var alternateFacet = defaultFacet with
+        {
+            Fill = new ChartFillPlan(new SrgbColor(200, 100, 50), 255),
+        };
+        var surface = new ChartSurfaceGeometryPlan(
+            Cells: [],
+            Points: [],
+            Facets: [defaultFacet],
+            WireframeSegments: [],
+            ContourSegments: [])
+        {
+            RenderFacets = [defaultFacet],
+            AlternateRenderFacets = [alternateFacet],
+        };
+        var scene = new ChartScenePlan
+        {
+            Frame = Frame(),
+            GeometryKind = ChartSceneGeometryKind.Surface,
+            Surface = surface,
+        };
+
+        foreach (var profile in new[]
+        {
+            ChartRenderExecutionProfile.Wpf,
+            ChartRenderExecutionProfile.Avalonia,
+        })
+        {
+            var facet = ChartRenderCommandPlanner.Plan(scene, profile)
+                .OfType<ChartRenderCommand.SurfaceFacet>()
+                .Single();
+
+            facet.Primitive.Should().Be(alternateFacet,
+                "both platform consumers must use the shared alternate facet projection");
+        }
+    }
+
+    [Fact]
     public void Plan_ExpandsThreeDColumnBeforeBodyAndKeepsConnectorOrder()
     {
         var fill = new ChartFillPlan(new SrgbColor(100, 80, 40), 255);
