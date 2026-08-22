@@ -21,7 +21,7 @@ public class RibbonNativeRegistryTests
     {
         MainWindow.FreeXRibbonHandlers.Keys.Should().Contain(new[]
         {
-            "Paste", "Cut", "Copy", "Bold", "Italic", "Underline"
+            "Paste", "Cut", "Copy", "Bold", "Italic", "Underline", "Translate"
         });
     }
 

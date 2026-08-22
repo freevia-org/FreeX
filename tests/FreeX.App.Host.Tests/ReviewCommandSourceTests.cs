@@ -45,6 +45,12 @@ public sealed class ReviewCommandSourceTests
 
         source.Should().Contain("new SpellCheckSessionController(new SpellCheckSessionAdapter(");
         source.Should().Contain("transition = controller.Apply(dialog.Result);");
+        source.Should().Contain("new TranslateDialog(source, FormatFormulaBarText(sheet.GetCell(source), source))");
+        source.Should().Contain("CommitManualTranslation(source, dialog.Result);");
+        source.Should().Contain("TranslateDialogPlanner.TryPlan(");
+        source.Should().Contain("TranslateDialogPlanner.BuildCommand(plan)");
+        source.Should().Contain("TryExecuteCommand(TranslateDialogPlanner.BuildCommand(plan), UiText.Get(\"WfTranslate_Title\"))");
+        source.Should().Contain("SetActiveCell(plan.TargetRange.Start);");
         source.Should().NotContain("SpellCheckWorkflowPlanner.ScanWorksheet(");
         source.Should().NotContain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(");
         source.Should().NotContain("SpellCheckWorkflowPlanner.BuildReplacementCommand(");
