@@ -220,6 +220,47 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
+    public void ManagedInteractionPhasesUseTheValidationHostAndItsProvenanceImage()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var harness = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-LinuxInteractiveDocker.ps1"));
+
+        runner.Should().Contain("$provenanceHostMode = if ($PhysicalOnly) { \"Application\" } else { \"Validation\" }");
+        runner.Should().Contain("$provenancePublishKey = if ($provenanceHostMode -eq \"Validation\") { \"freex-validation\" } else { \"freex\" }");
+        runner.Should().Contain("$appImageReference = \"freex-linux-interactive-app-$provenancePublishKey-$workspaceKey\" + \":current\"");
+        runner.Should().Contain("$publishDirectory = Join-Path $env:TEMP \"FreeX-LinuxInteractive/$workspaceKey/$provenancePublishKey/publish/linux-x64\"");
+        runner.Should().Contain("[string]$HostMode = \"Validation\"");
+        harness.Should().Contain("Project = \"tools/FreeX.ParityCapture.Avalonia/FreeX.ParityCapture.Avalonia.csproj\"");
+        harness.Should().Contain("Executable = \"FreeX.ParityCapture.Avalonia\"");
+
+        var managedStart = runner.IndexOf("$coreSections =", StringComparison.Ordinal);
+        var managedEnd = runner.IndexOf("$combinedResults = @(Merge-ContextMenuAggregateResults", managedStart, StringComparison.Ordinal);
+        managedStart.Should().BeGreaterThanOrEqualTo(0);
+        managedEnd.Should().BeGreaterThan(managedStart);
+
+        var managed = runner[managedStart..managedEnd];
+        CountOccurrences(managed, "Start-ValidationSession -HostMode Validation")
+            .Should().Be(4, "each managed core/context/dialog/ribbon route must select the manifest-producing host");
+        managed.Should().NotContain("Start-ValidationSession -HostMode Application");
+        managed.Should().Contain("$coreSection");
+        managed.Should().Contain("\"ribbon-bindings\"");
+    }
+
+    private static int CountOccurrences(string source, string value)
+    {
+        var count = 0;
+        var offset = 0;
+        while ((offset = source.IndexOf(value, offset, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            offset += value.Length;
+        }
+        return count;
+    }
+
+    [Fact]
     public void WindowManagementRestoresCalibratedGeometryBeforeDownstreamPhysicalProbes()
     {
         var probe = File.ReadAllText(RepositoryFileLocator.Find(

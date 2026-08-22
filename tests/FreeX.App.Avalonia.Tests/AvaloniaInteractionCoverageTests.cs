@@ -99,6 +99,41 @@ public sealed class AvaloniaInteractionCoverageTests
     }
 
     [Fact]
+    public async Task RibbonBindingsSection_EmitsAllAuthoritativeRows()
+    {
+        await Session.Dispatch(async () =>
+        {
+            using var temporaryDirectory = new TestTemporaryDirectory("freex-ribbon-bindings-validation-");
+            var window = new MainWindow([]);
+            window.Show();
+            try
+            {
+                var results = await window.RunInteractionValidationAsync(
+                    temporaryDirectory.Path,
+                    dialogStart: 0,
+                    dialogCount: 0,
+                    includeCoreResults: true,
+                    ribbonCommandStart: 0,
+                    ribbonCommandCount: 0,
+                    ribbonOnly: false,
+                    coreSection: "ribbon-bindings");
+
+                Assert.Equal(641, results.Count(result => result.Category == "ribbon-command"));
+                Assert.Equal(74, results.Count(result => result.Category == "ribbon-collapsed-group"));
+                Assert.Equal(715, results.Count);
+                Assert.All(results, result => Assert.Equal("passed", result.Status));
+                Assert.DoesNotContain(results, result => result.Category == "ribbon-command-behavior");
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public void LinuxRunner_ValidatesResumeProvenanceAndBatchIdentity()
     {
         var script = File.ReadAllText(RepoFile("tools", "Run-FreeXLinuxInteractionValidation.ps1"));

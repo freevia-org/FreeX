@@ -84,8 +84,10 @@ try {
 } finally {
     $workspaceHasher.Dispose()
 }
-$appImageReference = "freex-linux-interactive-app-freex-$workspaceKey" + ":current"
-$publishDirectory = Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/freex/publish/linux-x64"
+$provenanceHostMode = if ($PhysicalOnly) { "Application" } else { "Validation" }
+$provenancePublishKey = if ($provenanceHostMode -eq "Validation") { "freex-validation" } else { "freex" }
+$appImageReference = "freex-linux-interactive-app-$provenancePublishKey-$workspaceKey" + ":current"
+$publishDirectory = Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/$provenancePublishKey/publish/linux-x64"
 $sessionBindingDirectory = Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/freex/session-bindings/$reportStamp-$PID"
 New-Item -ItemType Directory -Path $sessionBindingDirectory -Force | Out-Null
 
@@ -638,7 +640,7 @@ function Start-ValidationSession {
         [string]$MemoryLimit = "",
         [switch]$ReusePublishedPayload,
         [ValidateSet("Application", "Validation", "TestSupport")]
-        [string]$HostMode = "Application"
+        [string]$HostMode = "Validation"
     )
 
     $metadataPath = Join-Path $sessionBindingDirectory ("session-$([guid]::NewGuid().ToString('N')).json")
@@ -1231,7 +1233,7 @@ try {
         # Bounded validation batches always reuse the published payload. A resumed run that skips
         # physical X11 probes still needs to refresh that payload once unless explicitly told not to.
         if (-not $SkipPublish) {
-            Start-ValidationSession -AppArgument @() | Out-Null
+            Start-ValidationSession -HostMode Validation -AppArgument @() | Out-Null
             Ensure-ReportProvenance
             & $harness -Action Stop -App FreeX -Port $Port
         }
@@ -1282,9 +1284,9 @@ try {
 
         & $harness -Action Stop -App FreeX -Port $Port
         if (-not $PhysicalOnly) {
-            # The pivot probe uses the external test-support executable. Refresh the canonical
-            # application payload before the managed interaction batches reuse that image.
-            Start-ValidationSession -AppArgument @() | Out-Null
+            # Managed interaction validation uses the external parity-capture executable. Refresh
+            # its published payload before the bounded batches reuse that validation image.
+            Start-ValidationSession -HostMode Validation -AppArgument @() | Out-Null
             Ensure-ReportProvenance
             & $harness -Action Stop -App FreeX -Port $Port
         }
@@ -1686,7 +1688,7 @@ try {
             "--interaction-validation-core-section", $coreSection
         )
         Write-Host "Running core interaction section '$coreSection'..."
-        $session = Start-ValidationSession -ReusePublishedPayload -AppArgument $appArguments
+        $session = Start-ValidationSession -HostMode Validation -ReusePublishedPayload -AppArgument $appArguments
         $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
         $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
         $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline `
@@ -1749,7 +1751,7 @@ try {
             "--interaction-validation-context-count", [string]$contextCount
         )
         Write-Host "Running context-menu dispatch batch $contextStart..$($contextStart + $contextCount - 1)..."
-        $session = Start-ValidationSession -MemoryLimit "6g" -ReusePublishedPayload -AppArgument $appArguments
+        $session = Start-ValidationSession -HostMode Validation -MemoryLimit "6g" -ReusePublishedPayload -AppArgument $appArguments
         $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
         $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
         $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline `
@@ -1808,7 +1810,7 @@ try {
         )
 
         Write-Host "Running dialog interaction batch $dialogStart..$($dialogStart + $dialogCount - 1)..."
-        $session = Start-ValidationSession -ReusePublishedPayload -AppArgument $appArguments
+        $session = Start-ValidationSession -HostMode Validation -ReusePublishedPayload -AppArgument $appArguments
         $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
         $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
         $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline `
@@ -1878,7 +1880,7 @@ try {
             "--interaction-validation-ribbon-only"
         )
         Write-Host "Running ribbon interaction batch $ribbonStart..$($ribbonStart + $ribbonCount - 1)..."
-        $session = Start-ValidationSession -ReusePublishedPayload -AppArgument $appArguments
+        $session = Start-ValidationSession -HostMode Validation -ReusePublishedPayload -AppArgument $appArguments
         $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
         $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
         $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline `
