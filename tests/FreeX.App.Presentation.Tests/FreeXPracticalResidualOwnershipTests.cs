@@ -101,7 +101,8 @@ public sealed class FreeXPracticalResidualOwnershipTests
         avalonia.Should().Contain("AvaloniaSynchronousDialogHost.Show(this, dialog, () => done);");
         avalonia.Should().NotContain("Dispatcher.UIThread.RunJobs(DispatcherPriority.Input)");
         avalonia.Should().NotContain("private UserMessageResult ShowDataValidationPromptDialog");
-        synchronousHost.Should().Contain("Dispatcher.UIThread.RunJobs(DispatcherPriority.Input)");
+        synchronousHost.Should().Contain("Dispatcher.UIThread.PushFrame(frame)");
+        synchronousHost.Should().NotContain("Dispatcher.UIThread.RunJobs(DispatcherPriority.Input)");
 
         wpfEditing.Should().Contain("FreeXSynchronousPromptCatalog.ForDataValidation(");
         wpfBackstage.Should().Contain("FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(");

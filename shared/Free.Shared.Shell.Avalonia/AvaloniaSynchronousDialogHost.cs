@@ -17,18 +17,47 @@ public static class AvaloniaSynchronousDialogHost
 
         var wasEnabled = owner.IsEnabled;
         owner.IsEnabled = false;
+        var frame = new DispatcherFrame();
+        DispatcherTimer? completionTimer = null;
+        EventHandler? completionTickHandler = null;
+        EventHandler closedHandler = (_, _) => frame.Continue = false;
         try
         {
+            dialog.Closed += closedHandler;
             dialog.Show(owner);
-            while (!isCompleted())
+            if (!isCompleted() && dialog.IsVisible)
             {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!isCompleted())
-                    Thread.Sleep(1);
+                completionTimer = new DispatcherTimer(DispatcherPriority.Background)
+                {
+                    Interval = TimeSpan.FromMilliseconds(25),
+                };
+                completionTickHandler = (_, _) =>
+                {
+                    if (isCompleted() || !dialog.IsVisible)
+                    {
+                        completionTimer.Stop();
+                        frame.Continue = false;
+                    }
+                };
+                completionTimer.Tick += completionTickHandler;
+                completionTimer.Start();
+
+                // PushFrame runs Avalonia's real platform loop, including pending OS input.
+                // RunJobs must not be used here because it explicitly ignores those events.
+                Dispatcher.UIThread.PushFrame(frame);
             }
         }
         finally
         {
+            if (completionTimer is not null)
+            {
+                completionTimer.Stop();
+                if (completionTickHandler is not null)
+                    completionTimer.Tick -= completionTickHandler;
+                completionTimer = null;
+            }
+            if (closedHandler is not null)
+                dialog.Closed -= closedHandler;
             if (dialog.IsVisible)
                 dialog.Close();
             owner.IsEnabled = wasEnabled;

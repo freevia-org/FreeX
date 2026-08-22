@@ -3921,7 +3921,7 @@ probe_formula_bar_point_mode_multi_area_edit() {
 probe_formula_reference_grip_multi_area() {
     local committed_formula="" committed_result="" expected_formula="=SUM('Sheet2'!B2:C3,'Sheet2'!D4:F6)"
     local formula_passed=false result_passed=false save_passed=false setup_passed=false
-    local artifacts="formula-reference-grip-setup.png;formula-reference-grip-source.png;formula-reference-grip-target.png;formula-reference-grip-before.png;formula-reference-grip-dragging.png;formula-reference-grip-committed.png;formula-reference-grip-save-confirm.png;formula-reference-grip-postcondition.txt"
+    local artifacts="formula-reference-grip-setup.png;formula-reference-grip-source.png;formula-reference-grip-target.png;formula-reference-grip-before.png;formula-reference-grip-dragging.png;formula-reference-grip-committed.png;formula-reference-grip-postcondition.txt"
 
     # Keep the formula source on the first worksheet and create a real second worksheet. The
     # reference is explicitly quoted and qualified, so the production tab switch must preserve
@@ -4009,6 +4009,9 @@ probe_formula_reference_grip_multi_area() {
     if confirm_lossy_format_save_if_shown "formula-reference-grip-save-confirm.png" &&
        wait_for_document_clean; then
         save_passed=true
+    fi
+    if [[ -f "$output/formula-reference-grip-save-confirm.png" ]]; then
+        artifacts="${artifacts};formula-reference-grip-save-confirm.png"
     fi
     [[ "$committed_formula" == "$expected_formula" ]] && formula_passed=true
     [[ "$committed_result" =~ ^15([.]0+)?$ ]] && result_passed=true

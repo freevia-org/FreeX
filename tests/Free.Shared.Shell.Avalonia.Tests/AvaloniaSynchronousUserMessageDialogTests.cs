@@ -53,6 +53,38 @@ public sealed class AvaloniaSynchronousUserMessageDialogTests
     }
 
     [Fact]
+    public async Task SynchronousHost_PumpsPostedCompletionThroughNestedDispatcherFrame()
+    {
+        await Session.Dispatch(() =>
+        {
+            var owner = new Window();
+            var dialog = new Window();
+            var completed = false;
+            dialog.Opened += (_, _) => Dispatcher.UIThread.Post(() =>
+            {
+                completed = true;
+                dialog.Close();
+            }, DispatcherPriority.Input);
+
+            try
+            {
+                owner.Show();
+                AvaloniaSynchronousDialogHost.Show(owner, dialog, () => completed);
+
+                completed.Should().BeTrue();
+                dialog.IsVisible.Should().BeFalse();
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+                if (owner.IsVisible)
+                    owner.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task YesNo_PreservesExistingOwnedWindowLayoutFocusAndDismissalPolicy()
     {
         await Session.Dispatch(() =>
