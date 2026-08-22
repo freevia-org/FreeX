@@ -217,6 +217,7 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Large("Spelling", "Spelling", Ico.Spelling, "SP")
                 .Large("Translate", "Translate", Ico.Translate, "TR")
+                .Large("Check Performance", "Check Performance", Ico.Warning, "CP")
                 .Large("Workbook Statistics", "Workbook Statistics", Ico.Info, "W"))
             .Group("ReviewAccessibilityGroup", "Accessibility", null, priority: 120,
                 g => g

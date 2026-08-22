@@ -149,6 +149,7 @@ public partial class MainWindow
             ["Chart Titles"] = new(static (owner, sender, eventArgs) => owner.ChartTitlesBtn_Click(sender, eventArgs), nameof(ChartTitlesBtn_Click)),
             ["Check Accessibility"] = new(static (owner, sender, eventArgs) => owner.AccessibilityCheckerBtn_Click(sender, eventArgs), nameof(AccessibilityCheckerBtn_Click)),
             ["Check Cell"] = new(static (owner, sender, eventArgs) => owner.CellStyleCheckCellMenuItem_Click(sender, eventArgs), nameof(CellStyleCheckCellMenuItem_Click)),
+            ["Check Performance"] = new(static (owner, sender, eventArgs) => owner.CheckPerformanceBtn_Click(sender, eventArgs), nameof(CheckPerformanceBtn_Click)),
             [FreeXRibbonCommandIds.HelpCheckForUpdates] = new(static (owner, sender, eventArgs) => owner.CheckForUpdatesBtn_Click(sender, eventArgs), nameof(CheckForUpdatesBtn_Click)),
             [FreeXRibbonCommandIds.PageLayoutBackgroundChoose] = new(static (owner, sender, eventArgs) => owner.BackgroundChooseMenuItem_Click(sender, eventArgs), nameof(BackgroundChooseMenuItem_Click)),
             [FreeXRibbonCommandIds.DataValidationCircleInvalid] = new(static (owner, sender, eventArgs) => owner.CircleInvalidDataMenuItem_Click(sender, eventArgs), nameof(CircleInvalidDataMenuItem_Click)),

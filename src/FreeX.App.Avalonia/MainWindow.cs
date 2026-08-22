@@ -1386,6 +1386,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
                     // Review ▸ Proofing / Comments / Notes / Share.
                     ["Workbook Statistics"] = () => RunGuarded(ShowWorkbookStatisticsDialogAsync),
+                    ["Check Performance"] = () => RunGuarded(ShowWorkbookPerformanceDialogAsync),
                     ["Next Comment"] = () => NavigateReviewThreadedComment(previous: false),
                     ["Previous Comment"] = () => NavigateReviewThreadedComment(previous: true),
                     ["Show Comments"] = () => RunGuarded(ShowCommentsListAsync),
@@ -15767,6 +15768,66 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static string FormatWorkbookStatistics(WorkbookStatistics statistics) =>
         WorkbookStatisticsFormatter.Format(statistics);
+
+    private async Task ShowWorkbookPerformanceDialogAsync()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var report = WorkbookPerformanceService.Analyze(_session.Workbook);
+        var dialog = new Window
+        {
+            Title = "Check Performance",
+            Width = 560,
+            Height = 460,
+            MinWidth = 420,
+            MinHeight = 300,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "WorkbookPerformanceDialog");
+
+        var reportBlock = new TextBox
+        {
+            Text = WorkbookPerformanceFormatter.Format(report),
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Background = Brushes.White,
+            BorderBrush = Brush(171, 171, 171),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(6, 4),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
+        };
+        AutomationProperties.SetName(reportBlock, "Performance check results");
+        AutomationProperties.SetAutomationId(reportBlock, "WorkbookPerformanceReport");
+        AutomationProperties.SetHelpText(reportBlock, "Reports formatting-only cells that extend worksheet used ranges. This report does not change the workbook.");
+
+        var okButton = new Button
+        {
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+        };
+        okButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Enter or Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
+
+        var root = new DockPanel { Margin = new Thickness(16) };
+        DockPanel.SetDock(okButton, Dock.Bottom);
+        root.Children.Add(okButton);
+        root.Children.Add(reportBlock);
+        dialog.Content = root;
+        dialog.Opened += (_, _) => okButton.Focus();
+        await dialog.ShowDialog(this);
+    }
 
     private async Task ShowReviewSummaryDialogAsync(bool focusAccessibility = false)
     {

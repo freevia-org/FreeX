@@ -100,6 +100,13 @@ public partial class MainWindow
         dialog.ShowDialog();
     }
 
+    private void CheckPerformanceBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var report = WorkbookPerformanceService.Analyze(_workbook);
+        var dialog = new WorkbookPerformanceDialog(report) { Owner = this };
+        dialog.ShowDialog();
+    }
+
     /// <summary>
     /// Review ▸ Translate is deliberately a manual helper. The dialog is only the WPF surface;
     /// the portable planner owns range validation and the normal workbook command path supplies

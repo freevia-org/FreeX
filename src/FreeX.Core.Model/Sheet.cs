@@ -1549,6 +1549,22 @@ public sealed partial class Sheet
         return MergeStyleOnlyIntoUsedRange(_usedRangeCache);
     }
 
+    /// <summary>
+    /// Gets the bounding range of cells with stored values, formulas, or spill values, excluding
+    /// formatting-only cells. Unlike <see cref="GetUsedRange"/>, this is suitable for diagnostics
+    /// that need to identify formatting extending beyond workbook content.
+    /// </summary>
+    public GridRange? GetContentUsedRange()
+    {
+        if (_usedRangeCacheDirty)
+        {
+            _usedRangeCache = ComputeValueUsedRange();
+            _usedRangeCacheDirty = false;
+        }
+
+        return _usedRangeCache;
+    }
+
     private GridRange? ComputeValueUsedRange()
     {
         if (_cells.Count == 0 && _spillValues.Count == 0)
