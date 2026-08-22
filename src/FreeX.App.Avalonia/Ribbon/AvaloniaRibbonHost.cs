@@ -148,6 +148,9 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Insert ▸ Text Box — insert a text box at the active cell.</summary>
     public Action? InsertTextBox { get; init; }
 
+    /// <summary>Insert ▸ Form Controls — insert the selected supported legacy control at the active cell.</summary>
+    public Action<FormControlKind>? InsertFormControl { get; init; }
+
     /// <summary>Home ▸ Clipboard ▸ Format Painter — capture the selection's format for a one-shot apply.</summary>
     public Action? FormatPainter { get; init; }
 
@@ -418,6 +421,17 @@ internal static class AvaloniaRibbonComposition
             }
         }
         Bind("Text Box", callbacks.InsertTextBox);
+        if (callbacks.InsertFormControl is { } insertFormControl)
+        {
+            Bind(FreeXRibbonCommandIds.InsertFormControls, () => insertFormControl(FormControlKind.CheckBox));
+            Bind(FreeXRibbonCommandIds.InsertFormControlCheckBox, () => insertFormControl(FormControlKind.CheckBox));
+            Bind(FreeXRibbonCommandIds.InsertFormControlOptionButton, () => insertFormControl(FormControlKind.OptionButton));
+            Bind(FreeXRibbonCommandIds.InsertFormControlButton, () => insertFormControl(FormControlKind.Button));
+            Bind(FreeXRibbonCommandIds.InsertFormControlDropDown, () => insertFormControl(FormControlKind.DropDown));
+            Bind(FreeXRibbonCommandIds.InsertFormControlListBox, () => insertFormControl(FormControlKind.ListBox));
+            Bind(FreeXRibbonCommandIds.InsertFormControlSpinner, () => insertFormControl(FormControlKind.Spinner));
+            Bind(FreeXRibbonCommandIds.InsertFormControlScrollBar, () => insertFormControl(FormControlKind.ScrollBar));
+        }
         Bind("Format Painter", callbacks.FormatPainter);
 
         if (callbacks.SetFontSize is { } setFontSize)

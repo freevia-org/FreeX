@@ -18,6 +18,14 @@ public partial class MainWindow
     internal static IReadOnlyDictionary<string, FreeXRibbonHandlerBinding> FreeXRibbonHandlers { get; } =
         new Dictionary<string, FreeXRibbonHandlerBinding>(StringComparer.Ordinal)
         {
+            [FreeXRibbonCommandIds.InsertFormControls] = new(static (owner, sender, eventArgs) => owner.InsertFormControlsBtn_Click(sender, eventArgs), nameof(InsertFormControlsBtn_Click)),
+            [FreeXRibbonCommandIds.InsertFormControlCheckBox] = new(static (owner, sender, eventArgs) => owner.InsertCheckBoxFormControlMenuItem_Click(sender, eventArgs), nameof(InsertCheckBoxFormControlMenuItem_Click)),
+            [FreeXRibbonCommandIds.InsertFormControlOptionButton] = new(static (owner, sender, eventArgs) => owner.InsertOptionButtonFormControlMenuItem_Click(sender, eventArgs), nameof(InsertOptionButtonFormControlMenuItem_Click)),
+            [FreeXRibbonCommandIds.InsertFormControlButton] = new(static (owner, sender, eventArgs) => owner.InsertButtonFormControlMenuItem_Click(sender, eventArgs), nameof(InsertButtonFormControlMenuItem_Click)),
+            [FreeXRibbonCommandIds.InsertFormControlDropDown] = new(static (owner, sender, eventArgs) => owner.InsertDropDownFormControlMenuItem_Click(sender, eventArgs), nameof(InsertDropDownFormControlMenuItem_Click)),
+            [FreeXRibbonCommandIds.InsertFormControlListBox] = new(static (owner, sender, eventArgs) => owner.InsertListBoxFormControlMenuItem_Click(sender, eventArgs), nameof(InsertListBoxFormControlMenuItem_Click)),
+            [FreeXRibbonCommandIds.InsertFormControlSpinner] = new(static (owner, sender, eventArgs) => owner.InsertSpinnerFormControlMenuItem_Click(sender, eventArgs), nameof(InsertSpinnerFormControlMenuItem_Click)),
+            [FreeXRibbonCommandIds.InsertFormControlScrollBar] = new(static (owner, sender, eventArgs) => owner.InsertScrollBarFormControlMenuItem_Click(sender, eventArgs), nameof(InsertScrollBarFormControlMenuItem_Click)),
             ["+/- Buttons"] = new(static (owner, sender, eventArgs) => owner.PivotExpandCollapseButtonsBtn_Click(sender, eventArgs), nameof(PivotExpandCollapseButtonsBtn_Click)),
             ["100% Stacked Bar Chart"] = new(static (owner, sender, eventArgs) => owner.ChartPercentStackedBarMenuItem_Click(sender, eventArgs), nameof(ChartPercentStackedBarMenuItem_Click)),
             ["100% Stacked Column Chart"] = new(static (owner, sender, eventArgs) => owner.ChartPercentStackedColumnMenuItem_Click(sender, eventArgs), nameof(ChartPercentStackedColumnMenuItem_Click)),

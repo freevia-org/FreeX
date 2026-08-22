@@ -15,6 +15,7 @@ using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
+using FreeX.Core.Commands;
 
 namespace FreeX.App.Avalonia;
 
@@ -182,6 +183,36 @@ public sealed partial class MainWindow
         RefreshShell(FormatDrawingObjectResourceText(
             DrawingObjectActionPlanner.InsertTextBoxSuccess(FormatCellReference(anchor))));
     }
+
+    /// <summary>Inserts a supported legacy Form Control at the active cell through the shared undoable command path.</summary>
+    private void InsertFormControlAtActiveCell(FreeX.Core.Model.FormControlKind kind)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var anchor = _session.ActiveCell;
+        var command = new AddFormControlCommand(_session.ActiveSheet.Id, anchor, kind);
+        var result = _session.ExecuteReviewCommand(command);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Could not insert form control.");
+            return;
+        }
+
+        ClearSelectedDrawingObject();
+        RefreshShell("Insert " + FormControlDisplayName(kind));
+    }
+
+    private static string FormControlDisplayName(FreeX.Core.Model.FormControlKind kind) => kind switch
+    {
+        FreeX.Core.Model.FormControlKind.CheckBox => "Check Box",
+        FreeX.Core.Model.FormControlKind.OptionButton => "Option Button",
+        FreeX.Core.Model.FormControlKind.DropDown => "Drop-Down",
+        FreeX.Core.Model.FormControlKind.ListBox => "List Box",
+        FreeX.Core.Model.FormControlKind.Spinner => "Spin Button",
+        FreeX.Core.Model.FormControlKind.ScrollBar => "Scroll Bar",
+        _ => "Button",
+    };
 
     private const double PictureDecodeDefaultDpi = 96d;
 

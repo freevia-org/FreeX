@@ -6,6 +6,15 @@ namespace FreeX.Ribbon.Definitions;
 /// </summary>
 public static class FreeXRibbonCommandIds
 {
+    public const string InsertFormControls = "insert.formControls";
+    public const string InsertFormControlCheckBox = "insert.formControl.checkBox";
+    public const string InsertFormControlOptionButton = "insert.formControl.optionButton";
+    public const string InsertFormControlButton = "insert.formControl.button";
+    public const string InsertFormControlDropDown = "insert.formControl.dropDown";
+    public const string InsertFormControlListBox = "insert.formControl.listBox";
+    public const string InsertFormControlSpinner = "insert.formControl.spinner";
+    public const string InsertFormControlScrollBar = "insert.formControl.scrollBar";
+
     public const string DrawingSelectionPane = "drawing.selectionPane";
     public const string DrawingCrop = "drawing.crop";
     public const string DrawingResetCrop = "drawing.crop.reset";
