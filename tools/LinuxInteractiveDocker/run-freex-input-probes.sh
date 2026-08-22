@@ -314,6 +314,9 @@ copy_cell_formula_by_address() {
     xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+c
     value="$(clipboard_text || true)"
     xdotool key --clearmodifiers --delay "$input_delay_ms" Escape
+    # Go To may scroll a hidden or distant address into view. Restore the calibrated A1 viewport
+    # before the caller performs another coordinate-based outline or filter gesture.
+    send_key ctrl+Home
     printf '%s' "$value"
 }
 
