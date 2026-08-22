@@ -379,7 +379,7 @@ internal sealed partial class MarkIndexEntryDialog : FreeWDialogWindow
         Content = MarkIndexEntryDialogPlanner.PageRangeLabel,
         GroupName = "IndexEntryOption"
     };
-    private readonly ComboBox _bookmark = new() { MinWidth = 300 };
+    private readonly ComboBox _bookmark = new() { MinWidth = 220 };
     private readonly RadioButton _crossReferenceOption = new()
     {
         Content = MarkIndexEntryDialogPlanner.CrossReferenceLabel,
@@ -461,12 +461,16 @@ internal sealed partial class MarkIndexEntryDialog : FreeWDialogWindow
             Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.LabelBottomMargin)
         });
         _currentPage.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin);
-        _pageRange.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin);
+        _pageRange.Margin = new Thickness(0, 0, 8, 0);
+        _pageRange.VerticalAlignment = VerticalAlignment.Center;
         _crossReferenceOption.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin);
         fields.Children.Add(_currentPage);
-        fields.Children.Add(_pageRange);
-        _bookmark.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.FieldBottomMargin);
-        fields.Children.Add(_bookmark);
+        _bookmark.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin);
+        fields.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { _pageRange, _bookmark }
+        });
         fields.Children.Add(_crossReferenceOption);
         _crossReference.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.FieldBottomMargin);
         fields.Children.Add(_crossReference);

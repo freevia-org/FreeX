@@ -2,8 +2,10 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
@@ -1246,6 +1248,23 @@ public sealed class ReferencesTabTests
         dialog.PageNumberFormattingEnabledForTests.Should().BeFalse();
         dialog.AcceptForTests().Should().BeTrue();
         dialog.Mark.Should().Be(new IndexMark("Animals", "Cats", "See Pet care"));
+    });
+
+    [Fact]
+    public Task MarkIndexEntry_dialog_places_page_range_bookmark_in_authority_row() => RunOnUiThread(() =>
+    {
+        var dialog = new MarkIndexEntryDialog("Animals", ["chapter"]);
+        var pageRange = dialog.GetLogicalDescendants().OfType<RadioButton>()
+            .Single(button => Equals(button.Content, MarkIndexEntryDialogPlanner.PageRangeLabel));
+        var bookmark = dialog.GetLogicalDescendants().OfType<ComboBox>().Single();
+
+        pageRange.Parent.Should().BeSameAs(bookmark.Parent);
+        pageRange.Parent.Should().BeOfType<StackPanel>()
+            .Which.Orientation.Should().Be(Orientation.Horizontal);
+        pageRange.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+        pageRange.Margin.Should().Be(new Thickness(0, 0, 8, 0));
+        bookmark.MinWidth.Should().Be(220);
+        bookmark.Margin.Should().Be(new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin));
     });
 
     [Fact]
