@@ -106,6 +106,29 @@ public sealed class RibbonShellBuilderTests
         selected.Should().Be("Slate");
     }
 
+    [StaFact]
+    public void HomeFont_WpfRendererUsesThreeExplicitRowsToLimitExpandedWidth()
+    {
+        var home = FreeW.Ribbon.Definitions.FreeWRibbon
+            .Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf)
+            .FindTab("home")!;
+        var content = RibbonWpfRenderer.BuildTabContent(home, new Button());
+        var panel = FindLogicalChild<RibbonAdaptivePanel>(content)!;
+        var font = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Font");
+
+        var rows = FindLogicalChild<StackPanel>(font.GroupContent)!
+            .Children
+            .OfType<StackPanel>()
+            .Single(stack => stack.Orientation == Orientation.Vertical);
+
+        rows.Children
+            .OfType<StackPanel>()
+            .Should()
+            .HaveCount(3, "the WPF Font group keeps its command set expanded across compact rows before adaptive collapse");
+    }
+
     private sealed class CaptureValueCommand(Action<string?> capture) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => capture(context.SelectedValue);
