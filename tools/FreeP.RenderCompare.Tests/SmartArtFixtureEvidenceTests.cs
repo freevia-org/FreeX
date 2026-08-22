@@ -72,6 +72,51 @@ public sealed class SmartArtFixtureEvidenceTests
         }
     }
 
+    [Fact]
+    public void GroupedListOutlierSlidesKeepTheirAuthoritativeSmartArtRoutes()
+    {
+        var presentation = FreeP.Core.IO.PptxPackageReader.Read(Path.Combine(
+            RepositoryRoot,
+            "tools",
+            "FreeP.RenderCompare",
+            "corpus",
+            "15-smartart-grouped-list.pptx"));
+
+        var slide09 = presentation.Slides[8].Shapes
+            .Single(shape => shape.SmartArt is not null)
+            .SmartArt!;
+        slide09.Data.Should().NotBeNull();
+        slide09.Data!.LayoutUniqueId.Should().EndWith("/IncreasingCircleProcess");
+        slide09.Data.Family.Should().Be(FreeP.Core.Model.SmartArtFamily.Process);
+        slide09.Data.IsLiveLayoutSupported.Should().BeFalse();
+        slide09.FallbackShapes.Should().HaveCount(12);
+        slide09.Data.Nodes.SelectMany(Flatten).Select(node => node.Text)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Should().BeEquivalentTo("Phase A", "Phase B", "Phase C", "Phase D");
+
+        var slide10 = presentation.Slides[9].Shapes
+            .Single(shape => shape.SmartArt is not null)
+            .SmartArt!;
+        slide10.Data.Should().NotBeNull();
+        slide10.Data!.LayoutUniqueId.Should().EndWith("/vList6");
+        slide10.Data.Family.Should().Be(FreeP.Core.Model.SmartArtFamily.List);
+        slide10.Data.IsLiveLayoutSupported.Should().BeFalse();
+        slide10.FallbackShapes.Should().HaveCount(4);
+        slide10.FallbackShapes.SelectMany(shape => shape.TextBody?.Paragraphs ?? [])
+            .Count(paragraph => paragraph.BulletKind != FreeP.Core.Model.BulletKind.None)
+            .Should().Be(4);
+
+        static IEnumerable<FreeP.Core.Model.SmartArtNode> Flatten(FreeP.Core.Model.SmartArtNode node)
+        {
+            yield return node;
+            foreach (var child in node.Children)
+            {
+                foreach (var descendant in Flatten(child))
+                    yield return descendant;
+            }
+        }
+    }
+
     private static XDocument ReadXml(ZipArchive archive, string path)
     {
         var entry = archive.GetEntry(path);
