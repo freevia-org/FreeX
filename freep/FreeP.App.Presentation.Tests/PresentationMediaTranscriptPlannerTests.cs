@@ -784,6 +784,71 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
+    public void BuildTranscriptPlan_ResolvesTtmlStyleReferencesAndInheritedChainsWithInlineOverrides()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 50,
+            Name = "Referenced-style TTML video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/referenced-styles.ttml",
+                        ContentType = "application/ttml+xml",
+                        Bytes = Encoding.UTF8.GetBytes("""
+                            <tt xmlns="http://www.w3.org/ns/ttml"
+                                xmlns:tts="http://www.w3.org/ns/ttml#styling">
+                              <head><styling>
+                                <style xml:id="base" tts:fontFamily="Aptos" tts:fontSize="18px"
+                                       tts:color="#112233" tts:backgroundColor="black"
+                                       tts:fontWeight="bold" tts:opacity="60%" />
+                                <style xml:id="emphasis" style="base"
+                                       tts:fontStyle="italic" tts:textDecoration="underline" />
+                                <style xml:id="cycle-a" style="cycle-b" tts:color="#445566" />
+                                <style xml:id="cycle-b" style="cycle-a" tts:fontWeight="bold" />
+                              </styling></head>
+                              <body><div><p begin="0s" dur="2s" style="base">
+                                <span style="emphasis">Inherited chain</span>
+                                <span style="cycle-a" tts:fontWeight="normal" tts:color="yellow"> inline override</span>
+                              </p></div></body>
+                            </tt>
+                            """)
+                    }
+                }
+            }
+        });
+
+        var cue = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject.Cues.Should().ContainSingle().Subject;
+
+        cue.Spans.Select(span => span.Text).Should().Equal("Inherited chain", " inline override");
+        cue.Spans[0].Should().Match<PresentationMediaTranscriptCueSpan>(span =>
+            span.Bold
+            && span.Italic
+            && span.Underline
+            && span.ForegroundColorHex == "112233"
+            && span.BackgroundColorHex == "000000"
+            && span.FontFamily == "Aptos"
+            && span.FontSizePx == 18
+            && span.Opacity == 0.6);
+        cue.Spans[1].Should().Match<PresentationMediaTranscriptCueSpan>(span =>
+            !span.Bold
+            && !span.Italic
+            && !span.Underline
+            && span.ForegroundColorHex == "FFFF00"
+            && span.BackgroundColorHex == "000000"
+            && span.FontFamily == "Aptos"
+            && span.FontSizePx == 18
+            && span.Opacity == 0.6);
+    }
+
+    [Fact]
     public void BuildTranscriptPlan_ParsesTtmlRegionLayoutAndWritingMode()
     {
         var presentation = Presentation.CreateEmpty();

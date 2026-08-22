@@ -1460,9 +1460,16 @@ public sealed class MediaFieldsTests
             <?xml version="1.0" encoding="UTF-8"?>
             <tt xmlns="http://www.w3.org/ns/ttml"
                 xmlns:tts="http://www.w3.org/ns/ttml#styling">
+              <head><styling>
+                <style xml:id="base" tts:fontFamily="Aptos" tts:fontSize="18px"
+                       tts:color="#112233" tts:backgroundColor="black"
+                       tts:fontWeight="bold" tts:opacity="60%" />
+                <style xml:id="emphasis" style="base"
+                       tts:fontStyle="italic" tts:textDecoration="underline" />
+              </styling></head>
               <body>
                 <div>
-                  <p begin="00:00:00.000" end="00:00:01.000">
+                  <p begin="00:00:00.000" end="00:00:01.000" style="emphasis">
                     <span tts:opacity="0.4">TTML caption text</span>
                   </p>
                 </div>
@@ -1507,6 +1514,13 @@ public sealed class MediaFieldsTests
                 descriptor.Cues[0].StartTime == TimeSpan.Zero &&
                 descriptor.Cues[0].EndTime == TimeSpan.FromSeconds(1) &&
                 descriptor.Cues[0].Spans.Count == 1 &&
+                descriptor.Cues[0].Spans[0].Bold &&
+                descriptor.Cues[0].Spans[0].Italic &&
+                descriptor.Cues[0].Spans[0].Underline &&
+                descriptor.Cues[0].Spans[0].ForegroundColorHex == "112233" &&
+                descriptor.Cues[0].Spans[0].BackgroundColorHex == "000000" &&
+                descriptor.Cues[0].Spans[0].FontFamily == "Aptos" &&
+                descriptor.Cues[0].Spans[0].FontSizePx == 18 &&
                 descriptor.Cues[0].Spans[0].Opacity == 0.4);
 
         loaded.Slides[0].Shapes.Add(new SlideShape
@@ -1576,6 +1590,13 @@ public sealed class MediaFieldsTests
                 descriptor.Cues[0].StartTime == TimeSpan.Zero &&
                 descriptor.Cues[0].EndTime == TimeSpan.FromSeconds(1) &&
                 descriptor.Cues[0].Spans.Count == 1 &&
+                descriptor.Cues[0].Spans[0].Bold &&
+                descriptor.Cues[0].Spans[0].Italic &&
+                descriptor.Cues[0].Spans[0].Underline &&
+                descriptor.Cues[0].Spans[0].ForegroundColorHex == "112233" &&
+                descriptor.Cues[0].Spans[0].BackgroundColorHex == "000000" &&
+                descriptor.Cues[0].Spans[0].FontFamily == "Aptos" &&
+                descriptor.Cues[0].Spans[0].FontSizePx == 18 &&
                 descriptor.Cues[0].Spans[0].Opacity == 0.4);
     }
 

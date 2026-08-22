@@ -2269,6 +2269,60 @@ public sealed class SlideShowMediaControllerTests
     }
 
     [StaFact]
+    public void ActiveTtmlCue_RendersResolvedStyleProperties()
+    {
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, new FakeFileWriter());
+        var slide = SlideWithMedia(MakeMediaShape());
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 1,
+            ShapeName: "Video1",
+            TrackIndex: 0,
+            Label: "English",
+            Language: "en-US",
+            Source: "captions.ttml",
+            ContentType: "application/ttml+xml",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues:
+            [
+                new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Resolved")
+                {
+                    Spans =
+                    [
+                        new("Resolved", Bold: true, Italic: true, Underline: true)
+                        {
+                            ForegroundColorHex = "112233",
+                            BackgroundColorHex = "000000",
+                            FontFamily = "Aptos",
+                            FontSizePx = 18,
+                            Opacity = 0.4
+                        }
+                    ]
+                }
+            ]);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720, [track]);
+        ctrl.RefreshCaptionsForTest(TimeSpan.FromMilliseconds(500));
+
+        var run = overlay.Children.OfType<System.Windows.Controls.Border>().Single().Child
+            .Should().BeOfType<System.Windows.Controls.TextBlock>().Subject
+            .Inlines.OfType<System.Windows.Documents.Run>().Single();
+        run.FontWeight.Should().Be(System.Windows.FontWeights.Bold);
+        run.FontStyle.Should().Be(System.Windows.FontStyles.Italic);
+        run.TextDecorations.Should().ContainSingle()
+            .Which.Should().Be(System.Windows.TextDecorations.Underline[0]);
+        run.Foreground.Should().BeOfType<System.Windows.Media.SolidColorBrush>()
+            .Which.Color.Should().Be(System.Windows.Media.Color.FromArgb(0x66, 0x11, 0x22, 0x33));
+        run.Background.Should().BeOfType<System.Windows.Media.SolidColorBrush>()
+            .Which.Color.Should().Be(System.Windows.Media.Color.FromArgb(0x66, 0x00, 0x00, 0x00));
+        run.FontFamily.Source.Should().Be("Aptos");
+        run.FontSize.Should().Be(18);
+        ctrl.Teardown();
+    }
+
+    [StaFact]
     public void ActiveWebVttCue_UsesAuthoredCaptionPlacement()
     {
         var overlay = new System.Windows.Controls.Canvas();

@@ -1957,6 +1957,7 @@ public static class PresentationMediaTranscriptPlanner
         }
 
         var tickRate = ReadTtmlRate(root, "tickRate") ?? 1.0;
+        var styles = ReadTtmlStyles(root);
         var regions = ReadTtmlRegions(root);
 
         var cues = new List<PresentationMediaTranscriptCueDescriptor>();
@@ -1970,6 +1971,7 @@ public static class PresentationMediaTranscriptPlanner
                 frameRate,
                 tickRate,
                 inheritedStyle: new TtmlSpanStyle(),
+                styles,
                 regions,
                 cues);
         }
@@ -1984,14 +1986,15 @@ public static class PresentationMediaTranscriptPlanner
         double frameRate,
         double tickRate,
         TtmlSpanStyle inheritedStyle,
+        IReadOnlyDictionary<string, XElement> styles,
         IReadOnlyDictionary<string, XElement> regions,
         List<PresentationMediaTranscriptCueDescriptor> cues)
     {
         var regionStyle = GetTtmlAttribute(element, "region") is { } regionId
             && regions.TryGetValue(regionId, out var resolvedRegion)
-                ? ApplyTtmlStyle(inheritedStyle, resolvedRegion)
+                ? ApplyTtmlStyle(inheritedStyle, resolvedRegion, styles)
                 : inheritedStyle;
-        var effectiveStyle = ApplyTtmlStyle(regionStyle, element);
+        var effectiveStyle = ApplyTtmlStyle(regionStyle, element, styles);
         var elementEnd = inheritedEnd;
         if (TryParseTtmlTime(
                 GetTtmlAttribute(element, "end"),
@@ -2037,7 +2040,7 @@ public static class PresentationMediaTranscriptPlanner
                         end,
                         cueText)
                     {
-                        Spans = ParseTtmlSpans(element, effectiveStyle),
+                        Spans = ParseTtmlSpans(element, effectiveStyle, styles),
                         PositionPercent = effectiveStyle.PositionPercent,
                         LinePercent = effectiveStyle.LinePercent,
                         SizePercent = effectiveStyle.SizePercent,
@@ -2077,6 +2080,7 @@ public static class PresentationMediaTranscriptPlanner
                 frameRate,
                 tickRate,
                 effectiveStyle,
+                styles,
                 regions,
                 cues);
             if (childEnd is TimeSpan resolvedEnd)
@@ -2117,10 +2121,51 @@ public static class PresentationMediaTranscriptPlanner
         return regions;
     }
 
-    private static TtmlSpanStyle ApplyTtmlStyle(TtmlSpanStyle inherited, XElement element)
+    private static IReadOnlyDictionary<string, XElement> ReadTtmlStyles(XElement? root)
+    {
+        var styles = new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+        if (root is null)
+        {
+            return styles;
+        }
+
+        foreach (var style in root.Descendants().Where(element =>
+                     string.Equals(element.Name.LocalName, "style", StringComparison.OrdinalIgnoreCase)))
+        {
+            var id = GetTtmlAttribute(style, "id")?.Trim();
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                styles[id] = style;
+            }
+        }
+
+        return styles;
+    }
+
+    private static TtmlSpanStyle ApplyTtmlStyle(
+        TtmlSpanStyle inherited,
+        XElement element,
+        IReadOnlyDictionary<string, XElement> styles,
+        HashSet<string>? resolvingStyles = null)
     {
         var result = inherited;
-        var hasExplicitStyle = inherited.HasExplicitStyle;
+        if (GetTtmlAttribute(element, "style") is { } styleAttribute)
+        {
+            var activeStyles = resolvingStyles ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var styleId in styleAttribute.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!styles.TryGetValue(styleId, out var styleDefinition)
+                    || !activeStyles.Add(styleId))
+                {
+                    continue;
+                }
+
+                result = ApplyTtmlStyle(result, styleDefinition, styles, activeStyles);
+                activeStyles.Remove(styleId);
+            }
+        }
+
+        var hasExplicitStyle = result.HasExplicitStyle;
 
         if (GetTtmlAttribute(element, "fontWeight") is { } fontWeight)
         {
@@ -2360,7 +2405,8 @@ public static class PresentationMediaTranscriptPlanner
 
     private static IReadOnlyList<PresentationMediaTranscriptCueSpan> ParseTtmlSpans(
         XElement paragraph,
-        TtmlSpanStyle inheritedStyle)
+        TtmlSpanStyle inheritedStyle,
+        IReadOnlyDictionary<string, XElement> styles)
     {
         var spans = new List<PresentationMediaTranscriptCueSpan>();
         var hasExplicitStyle = inheritedStyle.HasExplicitStyle;
@@ -2370,6 +2416,7 @@ public static class PresentationMediaTranscriptPlanner
             CollectTtmlTextSpans(
                 node,
                 inheritedStyle,
+                styles,
                 spans,
                 ref hasExplicitStyle,
                 ref pendingWhitespace);
@@ -2388,6 +2435,7 @@ public static class PresentationMediaTranscriptPlanner
     private static void CollectTtmlTextSpans(
         XNode node,
         TtmlSpanStyle inheritedStyle,
+        IReadOnlyDictionary<string, XElement> styles,
         List<PresentationMediaTranscriptCueSpan> spans,
         ref bool hasExplicitStyle,
         ref bool pendingWhitespace)
@@ -2438,13 +2486,14 @@ public static class PresentationMediaTranscriptPlanner
             return;
         }
 
-        var effectiveStyle = ApplyTtmlStyle(inheritedStyle, element);
+        var effectiveStyle = ApplyTtmlStyle(inheritedStyle, element, styles);
         hasExplicitStyle |= effectiveStyle.HasExplicitStyle;
         foreach (var child in element.Nodes())
         {
             CollectTtmlTextSpans(
                 child,
                 effectiveStyle,
+                styles,
                 spans,
                 ref hasExplicitStyle,
                 ref pendingWhitespace);

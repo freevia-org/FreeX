@@ -403,6 +403,76 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
     }
 
     [Fact]
+    public void Controller_RendersResolvedTtmlStyleProperties()
+    {
+        var factory = new FakeBackendFactory();
+        var overlay = new Canvas();
+        var controller = new AvaloniaSlideShowMediaController(overlay, factory);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                PlaybackStartMode = MediaPlaybackStartMode.Automatically,
+                Bytes = [1, 2, 3],
+                ContentType = "video/mp4",
+            },
+        });
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 42,
+            ShapeName: "Video",
+            TrackIndex: 0,
+            Label: "English",
+            Language: "en-US",
+            Source: "captions.ttml",
+            ContentType: "application/ttml+xml",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues:
+            [
+                new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Resolved")
+                {
+                    Spans =
+                    [
+                        new("Resolved", Bold: true, Italic: true, Underline: true)
+                        {
+                            ForegroundColorHex = "112233",
+                            BackgroundColorHex = "000000",
+                            FontFamily = "Aptos",
+                            FontSizePx = 18,
+                            Opacity = 0.4
+                        }
+                    ]
+                }
+            ]);
+
+        controller.EnterSlide(slide, 960, 720, 960, 720, [track]);
+        factory.Backend.Sessions.Single().Seek(TimeSpan.FromMilliseconds(500));
+        controller.RefreshCaptionsForTest();
+
+        var run = overlay.Children.OfType<Border>().Single().Child
+            .Should().BeOfType<TextBlock>().Subject
+            .Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Single();
+        run.FontWeight.Should().Be(global::Avalonia.Media.FontWeight.Bold);
+        run.FontStyle.Should().Be(global::Avalonia.Media.FontStyle.Italic);
+        run.TextDecorations.Should().ContainSingle()
+            .Which.Should().Be(global::Avalonia.Media.TextDecorations.Underline[0]);
+        run.Foreground.Should().BeOfType<global::Avalonia.Media.SolidColorBrush>()
+            .Which.Color.Should().Be(global::Avalonia.Media.Color.FromArgb(0x66, 0x11, 0x22, 0x33));
+        run.Background.Should().BeOfType<global::Avalonia.Media.SolidColorBrush>()
+            .Which.Color.Should().Be(global::Avalonia.Media.Color.FromArgb(0x66, 0x00, 0x00, 0x00));
+        run.FontFamily.ToString().Should().Contain("Aptos");
+        run.FontSize.Should().Be(18);
+        controller.Teardown();
+    }
+
+    [Fact]
     public void Controller_UsesPreferredCaptionTrackAndRetainsFallback()
     {
         var factory = new FakeBackendFactory();
