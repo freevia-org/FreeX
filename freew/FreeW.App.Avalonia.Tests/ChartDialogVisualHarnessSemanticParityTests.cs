@@ -27,6 +27,7 @@ public sealed class ChartDialogVisualHarnessSemanticParityTests
             await AssertContract(
                 CreatePrivate<ChartSizeDialog>([typeof(double), typeof(double)], [360d, 240d]),
                 "ChartSizeWidthTextBox");
+            return true;
         }, CancellationToken.None);
     }
 
