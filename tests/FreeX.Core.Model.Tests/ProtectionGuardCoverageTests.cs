@@ -492,6 +492,12 @@ public class ProtectionGuardCoverageTests
                     transpose: false);
             },
 
+            ["AddFormControlCommand"] = (wb, sheet) =>
+                new AddFormControlCommand(
+                    sheet.Id,
+                    new CellAddress(sheet.Id, 1, 1),
+                    FormControlKind.CheckBox),
+
             // R91-io-clipboard-image-formats-5-2: pasting a floating picture anchored inside the
             // copied range is EditObjects-gated, mirroring InsertPictureCommand/PasteMergedRegionsCommand.
             ["PastePicturesCommand"] = (wb, sheet) =>

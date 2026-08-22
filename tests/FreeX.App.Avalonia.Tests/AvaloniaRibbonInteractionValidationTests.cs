@@ -38,7 +38,7 @@ public sealed class AvaloniaRibbonInteractionValidationTests
                 .OrderBy(id => id, StringComparer.Ordinal)
                 .ToArray();
 
-            Assert.Equal(608, allCommandIds.Length);
+            Assert.Equal(616, allCommandIds.Length);
             Assert.Equal(expectedCommandIds, actualCommandIds);
             Assert.Equal(ValidationBatchSize, commands.Length);
             Assert.Equal(ValidationBatchSize, commands.Select(result => result.Id).Distinct(StringComparer.Ordinal).Count());
