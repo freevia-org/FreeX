@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><FreeBrand Condition="'$(FreeBrand)' == ''">FreeX</FreeBrand></PropertyGroup>
+  <Import Project="..\..\shared\Free.Shared.Shell\BrandAssets.props" />
   <ItemDefinitionGroup Condition="'$(FreeXValidationHost)' == 'true'">
     <ProjectReference>
       <GlobalPropertiesToRemove>FreeXValidationHost</GlobalPropertiesToRemove>
@@ -40,16 +42,16 @@
 
   <ItemGroup>
     <!-- Every host and package format consumes the shared canonical brand family. -->
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.icns"
-             Link="FreeX.icns"
+    <Content Include="$(BrandMacOsIconPath)"
+             Link="$(BrandMacOsIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
-             Link="Resources\FreeX.ico"
+    <Content Include="$(BrandWindowsIconPath)"
+             Link="Resources\$(BrandWindowsIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.svg"
-             Link="Resources\FreeX.svg"
+    <Content Include="$(BrandScalableIconPath)"
+             Link="Resources\$(BrandScalableIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

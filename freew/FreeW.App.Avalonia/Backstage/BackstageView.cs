@@ -37,8 +37,8 @@ internal sealed partial class BackstageView : Window
     internal static readonly IBrush PrimaryInk = new ImmutableSolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33));
     internal static readonly IBrush SecondaryInk = new ImmutableSolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70));
     private static readonly FontFamily BackstageFontFamily = new("Segoe UI");
-    private static readonly AvaloniaSisterBackstageTheme BackstageTheme = AvaloniaSisterBackstageTheme.FreeW;
-    private static readonly IBrush LinkBrush = new ImmutableSolidColorBrush(BackstageTheme.LinkColor);
+    private readonly AvaloniaSisterBackstageTheme BackstageTheme;
+    private readonly IBrush LinkBrush;
     private static readonly IBrush TileBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xE5));
     private static readonly IBrush TileInnerBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xE2, 0xE6, 0xEF));
     private static readonly IBrush SeparatorBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
@@ -46,19 +46,10 @@ internal sealed partial class BackstageView : Window
     private static readonly IBrush WpfScrollThumbBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xCD, 0xCD, 0xCD));
     // Fluent's Home action footprint is one DIP taller than the WPF link row.
     private const double HomeActionRowBottomCompensation = 1;
-    private static readonly AvaloniaBackstageChromeStyle BackstageChromeStyle = new(PrimaryInk, SecondaryInk)
-    {
-        ActionInk = LinkBrush,
-        ScrollTrackBrush = WpfScrollTrackBrush,
-        ScrollThumbBrush = WpfScrollThumbBrush,
-        SeparatorBrush = SeparatorBrush,
-        DetailLabelVerticalAlignment = VerticalAlignment.Top,
-    };
+    private readonly AvaloniaBackstageChromeStyle BackstageChromeStyle;
     private static readonly SisterBackstagePaneSpecPlanner PaneSpecs = new(
         FreeWBackstagePaneTextCatalog.BuildTextSpec(BackstageStrings.Current.Get));
-    private static readonly AvaloniaBackstagePaneComposer Panes = new(
-        BackstageChromeStyle,
-        BackstagePaneSurfacePlanner.ComposerProfile);
+    private readonly AvaloniaBackstagePaneComposer Panes;
 
     private readonly BackstageCallbacks _callbacks;
     private readonly FreeWBackstageSession _session;
@@ -92,6 +83,19 @@ internal sealed partial class BackstageView : Window
 
     internal BackstageView(BackstageCallbacks callbacks, BackstagePane initialPane = BackstagePane.Home)
     {
+        BackstageTheme = AvaloniaSisterBackstageTheme.FromTheme(App.ActiveTheme, tileWidth: 150, tileHeight: 190);
+        LinkBrush = new ImmutableSolidColorBrush(BackstageTheme.LinkColor);
+        BackstageChromeStyle = new AvaloniaBackstageChromeStyle(PrimaryInk, SecondaryInk)
+        {
+            ActionInk = LinkBrush,
+            ScrollTrackBrush = WpfScrollTrackBrush,
+            ScrollThumbBrush = WpfScrollThumbBrush,
+            SeparatorBrush = SeparatorBrush,
+            DetailLabelVerticalAlignment = VerticalAlignment.Top,
+        };
+        Panes = new AvaloniaBackstagePaneComposer(
+            BackstageChromeStyle,
+            BackstagePaneSurfacePlanner.ComposerProfile);
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
         _session = new FreeWBackstageSession(
             callbacks,
@@ -396,7 +400,7 @@ internal sealed partial class BackstageView : Window
 
     // ── Share pane ────────────────────────────────────────────────────────────
 
-    private static Control BuildPrintEvidenceSection(IReadOnlyList<BackstagePrintEvidenceRow> evidence)
+    private Control BuildPrintEvidenceSection(IReadOnlyList<BackstagePrintEvidenceRow> evidence)
     {
         var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         panel.Children.Add(BuildSectionHeader(BackstageViewTextResources.EvidenceSection));
@@ -491,7 +495,7 @@ internal sealed partial class BackstageView : Window
         return stack;
     }
 
-    private static Control BuildActionRow(BackstageActionRow action, BackstageHomePaneVisualMetrics metrics)
+    private Control BuildActionRow(BackstageActionRow action, BackstageHomePaneVisualMetrics metrics)
     {
         var button = CreateLinkButton(
             action.Label,
@@ -528,7 +532,7 @@ internal sealed partial class BackstageView : Window
         return button;
     }
 
-    private static Control BuildOpenActionRow(BackstageActionRow action)
+    private Control BuildOpenActionRow(BackstageActionRow action)
     {
         var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
         var stack = new StackPanel { Margin = ToThickness(metrics.ActionRowMargin) };
@@ -558,7 +562,7 @@ internal sealed partial class BackstageView : Window
     private BackstageOpenPaneSurfaceSpec BuildOpenSurface(string? filter) =>
         _session.BuildOpenPane(filter);
 
-    private static void PopulateOpenGroup(
+    private void PopulateOpenGroup(
         Panel panel,
         string heading,
         IReadOnlyList<BackstageActionRow> rows)
@@ -570,7 +574,7 @@ internal sealed partial class BackstageView : Window
             panel.Children.Add(BuildOpenActionRow(row));
     }
 
-    private static void PopulateOpenRows(
+    private void PopulateOpenRows(
         Panel panel,
         IReadOnlyList<BackstageActionRow> rows,
         string emptyText)
@@ -590,7 +594,7 @@ internal sealed partial class BackstageView : Window
             panel.Children.Add(BuildOpenActionRow(row));
     }
 
-    private static Control BuildSurfaceActionRow(BackstageSurfaceActionRow action)
+    private Control BuildSurfaceActionRow(BackstageSurfaceActionRow action)
     {
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         var button = CreateLinkButton(
@@ -614,7 +618,7 @@ internal sealed partial class BackstageView : Window
         return stack;
     }
 
-    private static Control BuildPaneHeader(
+    private Control BuildPaneHeader(
         string title,
         string description,
         BackstageHomePaneVisualMetrics metrics)
@@ -642,10 +646,10 @@ internal sealed partial class BackstageView : Window
         return panel;
     }
 
-    private static Control BuildPaneHeader(string title, string description) =>
+    private Control BuildPaneHeader(string title, string description) =>
         BuildPaneHeader(title, description, BackstagePaneSurfacePlanner.HomePaneVisualMetrics);
 
-    private static Control BuildOpenPaneHeader(
+    private Control BuildOpenPaneHeader(
         string title,
         string description,
         BackstageOpenPaneVisualMetrics metrics)
@@ -685,7 +689,7 @@ internal sealed partial class BackstageView : Window
     internal static void AddDetailRow(AvaloniaGrid grid, string label, string value, string automationId) =>
         AddWpfDetailRow(grid, label, value, automationId);
 
-    private static TextBlock CreateHeading(string text) => new()
+    private TextBlock CreateHeading(string text) => new()
     {
         Text = text,
         FontSize = 26,
@@ -703,7 +707,7 @@ internal sealed partial class BackstageView : Window
         Margin = new Thickness(0, 16, 0, 6),
     };
 
-    private static TextBlock CreateSectionHeader(string text, BackstageHomePaneVisualMetrics metrics) => new()
+    private TextBlock CreateSectionHeader(string text, BackstageHomePaneVisualMetrics metrics) => new()
     {
         Text = text,
         FontSize = metrics.SectionHeaderFontSize,
@@ -712,7 +716,7 @@ internal sealed partial class BackstageView : Window
         Margin = ToThickness(metrics.SectionHeaderMargin),
     };
 
-    private static TextBlock BuildSectionHeader(string text, BackstageOpenPaneVisualMetrics metrics) => new()
+    private TextBlock BuildSectionHeader(string text, BackstageOpenPaneVisualMetrics metrics) => new()
     {
         Text = text,
         FontSize = metrics.SectionHeaderFontSize,
@@ -721,7 +725,7 @@ internal sealed partial class BackstageView : Window
         Margin = ToThickness(metrics.SectionHeaderMargin),
     };
 
-    private static Button CreateLinkButton(
+    private Button CreateLinkButton(
         string text,
         Action? action,
         double fontSize = 13,
@@ -840,7 +844,7 @@ internal sealed partial class BackstageView : Window
         return scroll;
     }
 
-    private static Control CreateTemplateTile(string caption, Action action)
+    private Control CreateTemplateTile(string caption, Action action)
     {
         var preview = new Border
         {
@@ -968,7 +972,7 @@ internal sealed partial class BackstageView : Window
 
     // WPF Save As uses the compact link-button row rather than the full-width
     // stacked action row used by Home and the other action panes.
-    private static Control BuildSaveAsActionRow(BackstageActionRow action)
+    private Control BuildSaveAsActionRow(BackstageActionRow action)
     {
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         stack.Children.Add(CreateLinkButton(

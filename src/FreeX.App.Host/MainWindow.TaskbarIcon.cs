@@ -50,7 +50,10 @@ public partial class MainWindow
         if (hwnd == IntPtr.Zero)
             return;
 
-        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "FreeX.ico");
+        var iconPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Resources",
+            App.ActiveTheme.VisualAssets.WindowsIconFileName);
         if (!File.Exists(iconPath))
             return;
 

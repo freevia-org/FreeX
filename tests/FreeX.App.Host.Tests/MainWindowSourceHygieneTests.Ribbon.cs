@@ -932,19 +932,21 @@ public sealed partial class MainWindowSourceHygieneTests
         var iconPath = WorkspaceFileLocator.Find("shared", "Free.Shared.Shell", "Resources", "FreeX.ico");
         var theme = DialogSourceTestSupport.ReadHostSources("Resources\\ThemeResources.xaml");
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var codeBehind = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var project = DialogSourceTestSupport.ReadHostSources("FreeX.App.Host.csproj");
 
         File.Exists(iconPath).Should().BeTrue();
-        xaml.Should().Contain("Icon=\"Resources/FreeX.ico\"");
+        xaml.Should().NotContain("Icon=\"Resources/FreeX.ico\"");
         xaml.Should().Contain("x:Name=\"TitleBarAppIcon\"");
-        xaml.Should().Contain("Source=\"Resources/FreeX.ico\"");
+        xaml.Should().NotContain("Source=\"Resources/FreeX.ico\"");
+        codeBehind.Should().Contain("WpfWindowIconLoader.TryApply(this, App.ActiveTheme");
         xaml.Should().NotContain("x:Name=\"TitleBarAppFreeBand\"");
         xaml.Should().NotContain("x:Name=\"TitleBarAppXOutlineTop\"");
         theme.Should().Contain("x:Key=\"FreeXTitleBarBrush\"");
         // WS-G round 2 made the title bar token-driven and runtime-swappable, so the brand
         // background now binds via DynamicResource rather than StaticResource.
         xaml.Should().Contain("Background=\"{DynamicResource FreeXTitleBarBrush}\"");
-        project.Should().Contain("<ApplicationIcon>..\\..\\shared\\Free.Shared.Shell\\Resources\\FreeX.ico</ApplicationIcon>");
+        project.Should().Contain("<ApplicationIcon>$(BrandWindowsIconPath)</ApplicationIcon>");
     }
 
     [Fact]

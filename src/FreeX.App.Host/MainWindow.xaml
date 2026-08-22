@@ -10,7 +10,6 @@
         xmlns:model="clr-namespace:FreeX.Core.Model;assembly=FreeX.Core.Model"
         mc:Ignorable="d"
         Title="FreeX"
-        Icon="Resources/FreeX.ico"
         Height="720" Width="1280"
         WindowState="Maximized"
         Background="{DynamicResource FreeXSheetSurfaceBrush}"
@@ -58,7 +57,6 @@
                 <!-- Canonical app icon shared with the executable, taskbar, and Avalonia host. -->
                 <Image x:Name="TitleBarAppIcon"
                        DockPanel.Dock="Left"
-                       Source="Resources/FreeX.ico"
                        Width="22" Height="22"
                        Margin="0,0,8,0"
                        VerticalAlignment="Center"
@@ -1311,7 +1309,7 @@
                                        FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"/>
                             <Button DockPanel.Dock="Right" Content="{local:Loc Key=MainWindow_Content_MoreTemplatesExcluded}"
                                     Background="Transparent" BorderThickness="0" Padding="0"
-                                    FontSize="12" Foreground="#0F6D8C"
+                                    FontSize="12" Foreground="{DynamicResource FreeXAccentBrush}"
                                     VerticalAlignment="Center" Cursor="Hand"
                                     AutomationProperties.AutomationId="MoreTemplatesExcludedButton"
                                     AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_MoreTemplatesUnavailable}"
@@ -1364,7 +1362,7 @@
                                                                    Fill="#E6F6FA"/>
                                                         <Rectangle Canvas.Left="18" Canvas.Top="14"
                                                                    Width="24" Height="13"
-                                                                   Stroke="#0F6D8C" StrokeThickness="1.5"
+                                                                   Stroke="{DynamicResource FreeXAccentBrush}" StrokeThickness="1.5"
                                                                    Fill="Transparent"/>
                                                     </Canvas>
                                                 </Border>
@@ -1403,9 +1401,9 @@
                                     Cursor="Hand" Click="SsRecentTab_Click"
                                     AutomationProperties.Name="{Binding ElementName=SsRecentTabText, Path=Text}">
                                 <Border x:Name="SsRecentTab" Padding="0,8,22,8"
-                                        BorderThickness="0,0,0,2" BorderBrush="#0F6D8C">
+                                        BorderThickness="0,0,0,2" BorderBrush="{DynamicResource FreeXAccentBrush}">
                                 <TextBlock x:Name="SsRecentTabText" FontSize="13"
-                                           FontWeight="SemiBold" Foreground="#0F6D8C"/>
+                                           FontWeight="SemiBold" Foreground="{DynamicResource FreeXAccentBrush}"/>
                                 </Border>
                             </Button>
                             <Button x:Name="SsPinnedTabButton"
@@ -1475,7 +1473,7 @@
                                                 <ColumnDefinition Width="36"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                                <Border Width="26" Height="30" Background="#0F6D8C"
+                                                <Border Width="26" Height="30" Background="{DynamicResource FreeXAccentBrush}"
                                                         CornerRadius="2" Margin="0,0,10,0"
                                                         VerticalAlignment="Center">
                                                     <TextBlock Text="X" Foreground="White"
@@ -1545,7 +1543,7 @@
                                                 <ColumnDefinition Width="36"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                                <Border Width="26" Height="30" Background="#0F6D8C"
+                                                <Border Width="26" Height="30" Background="{DynamicResource FreeXAccentBrush}"
                                                         CornerRadius="2" Margin="0,0,10,0"
                                                         VerticalAlignment="Center">
                                                     <TextBlock Text="X" Foreground="White"

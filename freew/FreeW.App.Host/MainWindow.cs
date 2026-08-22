@@ -139,7 +139,7 @@ public sealed partial class MainWindow : Window
 
     private static ShellChromeOptions BuildChromeOptions() => new()
     {
-        BadgeLetter = "W",
+        BadgeLetter = Program.ActiveTheme.VisualAssets.ProductGlyph,
         TitleBarColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
             ThemeResources.TitleBarBrush,
             brush => brush.Color,
@@ -149,7 +149,7 @@ public sealed partial class MainWindow : Window
             brush => brush.Color,
             WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.Accent)),
         CaptionHeight = 34,
-        IconUri = "pack://application:,,,/FreeW.App.Host;component/Resources/FreeW.ico"
+        IconUri = Program.ActiveTheme.VisualAssets.GetWpfPackUri("FreeW.App.Host")
     };
 
     // The grey "desk" the Print-Layout page floats on. Frozen so it can back the editor cheaply.

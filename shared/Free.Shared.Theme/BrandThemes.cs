@@ -6,7 +6,7 @@ namespace Free.Shared.Theme;
 /// </summary>
 public static class BrandThemes
 {
-    // ── Shared neutral surfaces/text/borders (reused by FreeW + FreeP provisional themes) ──
+    // ── Shared neutral surfaces/text/borders ──
     private static readonly ThemeColor s_text         = ThemeColor.FromHex("#1F1F1F");
     private static readonly ThemeColor s_mutedText    = ThemeColor.FromHex("#5F6368");
     private static readonly ThemeColor s_subtleText   = ThemeColor.FromHex("#767676");
@@ -17,6 +17,27 @@ public static class BrandThemes
     private static readonly ThemeColor s_borderStrong = ThemeColor.FromHex("#C8CCD0");
     private static readonly ThemeColor s_danger       = ThemeColor.FromHex("#C42B1C");
     private static readonly ThemeColor s_white        = ThemeColor.FromHex("#FFFFFF");
+
+    private static readonly ThemeVisualAssets s_freeXVisualAssets = new(
+        IconSetId: "freex",
+        ProductGlyph: "X",
+        WindowsIconFileName: "FreeX.ico",
+        ScalableIconFileName: "FreeX.svg",
+        MacOsIconFileName: "FreeX.icns");
+
+    private static readonly ThemeVisualAssets s_freeWVisualAssets = new(
+        IconSetId: "freew",
+        ProductGlyph: "W",
+        WindowsIconFileName: "FreeW.ico",
+        ScalableIconFileName: "FreeW.svg",
+        MacOsIconFileName: "FreeW.icns");
+
+    private static readonly ThemeVisualAssets s_freePVisualAssets = new(
+        IconSetId: "freep",
+        ProductGlyph: "P",
+        WindowsIconFileName: "FreeP.ico",
+        ScalableIconFileName: "FreeP.svg",
+        MacOsIconFileName: "FreeP.icns");
 
     // ── Default typography ──
     // StatusBarText: FontSize=12, no FontFamily (inherits system default on both WPF and Avalonia —
@@ -71,13 +92,18 @@ public static class BrandThemes
             SheetSurface:         ThemeColor.FromHex("#F3F3F3"),
             StatusSurface:        ThemeColor.FromHex("#F3F4F6"),
             StatusForeground:     ThemeColor.FromHex("#1F1F1F"),
+            BackstageSidebar:     ThemeColor.FromHex("#10253A"),
+            BackstageHover:       ThemeColor.FromHex("#1C3A55"),
+            BackstageSelected:    ThemeColor.FromHex("#24445E"),
+            BackstageSeparator:   ThemeColor.FromHex("#24445E"),
+            BackstageLink:        ThemeColor.FromHex("#0F6D8C"),
             Border:               ThemeColor.FromHex("#DADCE0"),
             BorderStrong:         ThemeColor.FromHex("#C8CCD0"),
             Danger:               ThemeColor.FromHex("#C42B1C"),
             White:                ThemeColor.FromHex("#FFFFFF")),
         Typography: s_defaultTypography,
         Metrics:    s_defaultMetrics,
-        IconSetId:  "freex");
+        VisualAssets: s_freeXVisualAssets);
 
     /// <summary>
     /// FreeW (word processor) brand theme. The owned amber/umber palette is shared by WPF,
@@ -106,13 +132,18 @@ public static class BrandThemes
             SheetSurface:         s_sheetSurf,
             StatusSurface:        ThemeColor.FromHex("#4B2F12"),
             StatusForeground:     s_white,
+            BackstageSidebar:     ThemeColor.FromHex("#4B2F12"),
+            BackstageHover:       ThemeColor.FromHex("#A26714"),
+            BackstageSelected:    ThemeColor.FromHex("#36200C"),
+            BackstageSeparator:   ThemeColor.FromHex("#4B2F12"),
+            BackstageLink:        ThemeColor.FromHex("#A26714"),
             Border:               s_border,
             BorderStrong:         s_borderStrong,
             Danger:               s_danger,
             White:                s_white),
         Typography: s_defaultTypography,
         Metrics:    s_defaultMetrics,
-        IconSetId:  "freew");
+        VisualAssets: s_freeWVisualAssets);
 
     /// <summary>
     /// FreeP (presentation) brand theme. The owned berry/plum palette is shared by WPF,
@@ -141,13 +172,18 @@ public static class BrandThemes
             SheetSurface:         s_sheetSurf,
             StatusSurface:        ThemeColor.FromHex("#4E213B"),
             StatusForeground:     s_white,
+            BackstageSidebar:     ThemeColor.FromHex("#4E213B"),
+            BackstageHover:       ThemeColor.FromHex("#A23B72"),
+            BackstageSelected:    ThemeColor.FromHex("#351426"),
+            BackstageSeparator:   ThemeColor.FromHex("#4E213B"),
+            BackstageLink:        ThemeColor.FromHex("#A23B72"),
             Border:               s_border,
             BorderStrong:         s_borderStrong,
             Danger:               s_danger,
             White:                s_white),
         Typography: s_defaultTypography,
         Metrics:    s_defaultMetrics,
-        IconSetId:  "freep");
+        VisualAssets: s_freePVisualAssets);
 
     /// <summary>
     /// FreeXMidnight — demo alternate for FreeX with orange accent and near-black title bar.
@@ -177,11 +213,50 @@ public static class BrandThemes
             SheetSurface:         s_sheetSurf,
             StatusSurface:        ThemeColor.FromHex("#202124"),
             StatusForeground:     s_white,
+            BackstageSidebar:     ThemeColor.FromHex("#202124"),
+            BackstageHover:       ThemeColor.FromHex("#C8651B"),
+            BackstageSelected:    ThemeColor.FromHex("#161719"),
+            BackstageSeparator:   ThemeColor.FromHex("#202124"),
+            BackstageLink:        ThemeColor.FromHex("#C8651B"),
             Border:               s_border,
             BorderStrong:         s_borderStrong,
             Danger:               s_danger,
             White:                s_white),
         Typography: s_defaultTypography,
         Metrics:    s_defaultMetrics,
-        IconSetId:  "freex");
+        VisualAssets: s_freeXVisualAssets);
+
+    /// <summary>Dark FreeW chrome that preserves FreeW's amber identity and artwork.</summary>
+    public static readonly Theme FreeWMidnight = FreeXMidnight with
+    {
+        Name = "FreeWMidnight",
+        Colors = FreeXMidnight.Colors with
+        {
+            Accent = FreeW.Colors.Accent,
+            AccentSoft = FreeW.Colors.AccentSoft,
+            AccentPressed = FreeW.Colors.AccentPressed,
+            TitleBarHover = FreeW.Colors.TitleBarHover,
+            RibbonButtonHover = FreeW.Colors.RibbonButtonHover,
+            BackstageHover = FreeW.Colors.BackstageHover,
+            BackstageLink = FreeW.Colors.BackstageLink,
+        },
+        VisualAssets = s_freeWVisualAssets,
+    };
+
+    /// <summary>Dark FreeP chrome that preserves FreeP's berry identity and artwork.</summary>
+    public static readonly Theme FreePMidnight = FreeXMidnight with
+    {
+        Name = "FreePMidnight",
+        Colors = FreeXMidnight.Colors with
+        {
+            Accent = FreeP.Colors.Accent,
+            AccentSoft = FreeP.Colors.AccentSoft,
+            AccentPressed = FreeP.Colors.AccentPressed,
+            TitleBarHover = FreeP.Colors.TitleBarHover,
+            RibbonButtonHover = FreeP.Colors.RibbonButtonHover,
+            BackstageHover = FreeP.Colors.BackstageHover,
+            BackstageLink = FreeP.Colors.BackstageLink,
+        },
+        VisualAssets = s_freePVisualAssets,
+    };
 }

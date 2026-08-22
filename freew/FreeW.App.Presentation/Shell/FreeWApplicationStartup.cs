@@ -14,7 +14,7 @@ public static class FreeWApplicationStartup
             productName: "FreeW",
             environmentVariablePrefix: "FREEW",
             defaultTheme: BrandThemes.FreeW,
-            alternateTheme: BrandThemes.FreeXMidnight);
+            alternateTheme: BrandThemes.FreeWMidnight);
 
     public static AppProductIdentity ProductIdentity => Descriptor.ProductIdentity;
 

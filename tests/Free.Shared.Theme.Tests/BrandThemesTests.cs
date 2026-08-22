@@ -28,7 +28,7 @@ public sealed class BrandThemesTests
             match.Groups["hex"].Value.Should().Be(pair.Value);
         }
 
-        foreach (var theme in new[] { BrandThemes.FreeX, BrandThemes.FreeW, BrandThemes.FreeP, BrandThemes.FreeXMidnight })
+        foreach (var theme in AllThemes())
         {
             theme.Colors.White.ToHex().Should().Be(colors.White.ToHex());
             theme.Colors.Text.ToHex().Should().Be(colors.Text.ToHex());
@@ -52,6 +52,50 @@ public sealed class BrandThemesTests
         palette.TabHover.Should().Be(BrandThemes.FreeP.Colors.AccentSoft);
         palette.TabStrip.Should().Be(BrandThemes.FreeP.Colors.ChromeSurface);
         palette.TabText.Should().Be(BrandThemes.FreeP.Colors.Text);
+    }
+
+    [Fact]
+    public void Every_product_theme_owns_its_cross_platform_visual_assets()
+    {
+        var expected = new[]
+        {
+            (Theme: BrandThemes.FreeX, Id: "freex", Glyph: "X", BaseName: "FreeX"),
+            (Theme: BrandThemes.FreeW, Id: "freew", Glyph: "W", BaseName: "FreeW"),
+            (Theme: BrandThemes.FreeP, Id: "freep", Glyph: "P", BaseName: "FreeP"),
+        };
+
+        foreach (var item in expected)
+        {
+            item.Theme.VisualAssets.IconSetId.Should().Be(item.Id);
+            item.Theme.VisualAssets.ProductGlyph.Should().Be(item.Glyph);
+            item.Theme.VisualAssets.WindowsIconFileName.Should().Be($"{item.BaseName}.ico");
+            item.Theme.VisualAssets.ScalableIconFileName.Should().Be($"{item.BaseName}.svg");
+            item.Theme.VisualAssets.MacOsIconFileName.Should().Be($"{item.BaseName}.icns");
+            item.Theme.VisualAssets.GetWpfPackUri($"{item.BaseName}.App.Host")
+                .Should().Be($"pack://application:,,,/{item.BaseName}.App.Host;component/Resources/{item.BaseName}.ico");
+        }
+
+        BrandThemes.FreeXMidnight.VisualAssets.Should().BeSameAs(BrandThemes.FreeX.VisualAssets);
+        BrandThemes.FreeWMidnight.VisualAssets.Should().BeSameAs(BrandThemes.FreeW.VisualAssets);
+        BrandThemes.FreePMidnight.VisualAssets.Should().BeSameAs(BrandThemes.FreeP.VisualAssets);
+        BrandThemes.FreeWMidnight.Colors.Accent.Should().Be(BrandThemes.FreeW.Colors.Accent);
+        BrandThemes.FreePMidnight.Colors.Accent.Should().Be(BrandThemes.FreeP.Colors.Accent);
+    }
+
+    [Fact]
+    public void Backstage_palette_is_owned_by_each_theme()
+    {
+        BrandThemes.FreeX.Colors.BackstageSidebar.ToHex().Should().Be("#10253A");
+        BrandThemes.FreeW.Colors.BackstageSidebar.ToHex().Should().Be("#4B2F12");
+        BrandThemes.FreeP.Colors.BackstageSidebar.ToHex().Should().Be("#4E213B");
+
+        foreach (var theme in AllThemes())
+        {
+            theme.Colors.BackstageHover.Should().NotBe(default);
+            theme.Colors.BackstageSelected.Should().NotBe(default);
+            theme.Colors.BackstageSeparator.Should().NotBe(default);
+            theme.Colors.BackstageLink.Should().NotBe(default);
+        }
     }
 
     // ── Byte-identical check against ThemeResources.xaml ─────────────────────────────────
@@ -196,7 +240,7 @@ public sealed class BrandThemesTests
     [Fact]
     public void AllThemes_HaveNonEmptyName()
     {
-        foreach (var t in new[] { BrandThemes.FreeX, BrandThemes.FreeW, BrandThemes.FreeP, BrandThemes.FreeXMidnight })
+        foreach (var t in AllThemes())
         {
             t.Name.Should().NotBeNullOrWhiteSpace();
         }
@@ -204,4 +248,14 @@ public sealed class BrandThemesTests
 
     private static string FindRepositoryRoot() =>
         TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+
+    private static Theme[] AllThemes() =>
+    [
+        BrandThemes.FreeX,
+        BrandThemes.FreeW,
+        BrandThemes.FreeP,
+        BrandThemes.FreeXMidnight,
+        BrandThemes.FreeWMidnight,
+        BrandThemes.FreePMidnight,
+    ];
 }

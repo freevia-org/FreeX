@@ -29,12 +29,9 @@ public partial class MainWindow
 
     private void InitializeBackstageFrame()
     {
+        var backstageTheme = SisterBackstageTheme.FromTheme(App.ActiveTheme, tileWidth: 150, tileHeight: 190);
         var frame = BackstageFrameComposer.Build(new BackstageFrameComposerSpec(
-            new BackstageAccent(
-                System.Windows.Media.Color.FromRgb(0x10, 0x25, 0x3A),
-                System.Windows.Media.Color.FromRgb(0x1C, 0x3A, 0x55),
-                System.Windows.Media.Color.FromRgb(0x24, 0x44, 0x5E),
-                System.Windows.Media.Color.FromRgb(0x24, 0x44, 0x5E)),
+            backstageTheme.Accent,
             BuildBackstageEntries())
         {
             // FreeX's panes (SsHomeView/SsInfoView/SsPrintView) carry their own internal padding, so drop

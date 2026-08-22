@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup><FreeBrand Condition="'$(FreeBrand)' == ''">FreeX</FreeBrand></PropertyGroup>
+  <Import Project="..\..\shared\Free.Shared.Shell\BrandAssets.props" />
+
   <ItemGroup>
     <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
     <ProjectReference Include="..\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
@@ -38,7 +41,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico" Link="Resources\FreeX.ico" />
+    <Resource Include="$(BrandWindowsIconPath)" Link="Resources\$(BrandWindowsIconFileName)" />
   </ItemGroup>
 
   <!-- Compile App.xaml as a Page so the WPF SDK does not generate its own Main; the explicit
@@ -69,8 +72,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
-             Link="Resources\FreeX.ico"
+    <Content Include="$(BrandWindowsIconPath)"
+             Link="Resources\$(BrandWindowsIconFileName)"
              CopyToOutputDirectory="PreserveNewest" />
     <!-- CommandIconsSvg now live in FreeX.Ribbon.Definitions (shared with the Avalonia app) and are
          copied to this app's output transitively at Resources\CommandIconsSvg\ — the same path
@@ -86,7 +89,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
-    <ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeX.ico</ApplicationIcon>
+    <ApplicationIcon>$(BrandWindowsIconPath)</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- ReachFramework provides System.Windows.Xps.* and System.Printing -->
     <UseReachFramework>true</UseReachFramework>

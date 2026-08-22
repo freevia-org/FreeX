@@ -2,10 +2,11 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <SolidColorBrush x:Key="ChromeWhiteBrush" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="ChromeBackstageSidebarBrush" Color="#10253A"/>
-    <SolidColorBrush x:Key="ChromeBackstageSidebarHoverBrush" Color="#17324D"/>
-    <SolidColorBrush x:Key="ChromeBackstageSidebarSelectedBrush" Color="#0F6D8C"/>
-    <SolidColorBrush x:Key="ChromeBackstageSidebarSeparatorBrush" Color="#24445E"/>
+    <!-- Neutral construction fallbacks; every app replaces these from its active Theme before display. -->
+    <SolidColorBrush x:Key="ChromeBackstageSidebarBrush" Color="#2F343A"/>
+    <SolidColorBrush x:Key="ChromeBackstageSidebarHoverBrush" Color="#3A4149"/>
+    <SolidColorBrush x:Key="ChromeBackstageSidebarSelectedBrush" Color="#46505A"/>
+    <SolidColorBrush x:Key="ChromeBackstageSidebarSeparatorBrush" Color="#59636E"/>
 
     <Style x:Key="BackstageSidebarNavButton" TargetType="Button">
         <Setter Property="Foreground" Value="{DynamicResource ChromeWhiteBrush}"/>

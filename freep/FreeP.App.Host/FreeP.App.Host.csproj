@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup><FreeBrand Condition="'$(FreeBrand)' == ''">FreeP</FreeBrand></PropertyGroup>
+  <Import Project="..\..\shared\Free.Shared.Shell\BrandAssets.props" />
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
@@ -69,7 +72,7 @@
              Link="MainWindow.RibbonActionProfile.cs" />
     <Compile Include="..\RendererShared\MainWindow.ChartDialogEndpoints.cs"
              Link="MainWindow.ChartDialogEndpoints.cs" />
-    <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico" Link="Resources\FreeP.ico" />
+    <Resource Include="$(BrandWindowsIconPath)" Link="Resources\$(BrandWindowsIconFileName)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
@@ -119,8 +122,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico"
-             Link="Resources\FreeP.ico"
+    <Content Include="$(BrandWindowsIconPath)"
+             Link="Resources\$(BrandWindowsIconFileName)"
              CopyToOutputDirectory="PreserveNewest" />
     <!-- Reuse FreeX's Office-quality command icons (single source of truth) so any FreeP command sharing a
          FreeX equivalent draws the identical glyph. Linked, not copied — mirrors FreeW. -->
@@ -130,7 +133,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeP.ico</ApplicationIcon>
+    <ApplicationIcon>$(BrandWindowsIconPath)</ApplicationIcon>
   </PropertyGroup>
 
 </Project>

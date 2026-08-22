@@ -51,14 +51,14 @@ public sealed class AvaloniaWindowIconLoaderTests
         var root = FindRepositoryRoot();
         var hosts = new[]
         {
-            (Read(root, "src", "FreeX.App.Avalonia", "MainWindow.DesktopChrome.cs"), "FreeX.ico"),
-            (Read(root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"), "FreeW.ico"),
-            (Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"), "FreeP.ico"),
+            Read(root, "src", "FreeX.App.Avalonia", "MainWindow.DesktopChrome.cs"),
+            Read(root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"),
+            Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"),
         };
 
-        foreach (var (source, iconFileName) in hosts)
+        foreach (var source in hosts)
         {
-            source.Should().Contain($"AvaloniaWindowIconLoader.TryApply(this, \"{iconFileName}\")")
+            source.Should().Contain("AvaloniaWindowIconLoader.TryApply(this, App.ActiveTheme)")
                 .And.NotContain("new WindowIcon(")
                 .And.NotContain("File.OpenRead(iconPath)");
         }

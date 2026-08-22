@@ -416,6 +416,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         // byte-identical to ThemeResources.xaml, so the visual result is unchanged.
         if (App.TryGetServices(out _))
             WpfThemeApplier.Apply(Resources, App.ActiveTheme, "FreeX");
+        WpfWindowIconLoader.TryApply(this, App.ActiveTheme, "FreeX.App.Host", TitleBarAppIcon);
         InitializeInsertShapeGalleryContextMenu();
         _documentContext.CommandStackChanged += CommandStackChangeNotifier_StackChanged;
 

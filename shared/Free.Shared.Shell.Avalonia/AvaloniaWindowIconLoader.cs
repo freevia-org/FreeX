@@ -1,9 +1,16 @@
 using Avalonia.Controls;
+using BrandTheme = Free.Shared.Theme.Theme;
 
 namespace Free.Shared.Shell.Avalonia;
 
 public static class AvaloniaWindowIconLoader
 {
+    public static bool TryApply(Window window, BrandTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        return TryApply(window, theme.VisualAssets.WindowsIconFileName);
+    }
+
     public static bool TryApply(Window window, string resourceFileName)
     {
         ArgumentNullException.ThrowIfNull(window);

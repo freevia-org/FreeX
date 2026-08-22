@@ -939,7 +939,7 @@ public sealed partial class MainWindow : Window,
     }
 
     private void ApplyWindowIcon() =>
-        AvaloniaWindowIconLoader.TryApply(this, "FreeP.ico");
+        AvaloniaWindowIconLoader.TryApply(this, App.ActiveTheme);
 
     private void StartNativeOutputCapabilityDetection()
     {
