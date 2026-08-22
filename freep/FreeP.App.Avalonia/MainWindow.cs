@@ -2338,9 +2338,9 @@ public sealed partial class MainWindow : Window,
             afterExecute: null,
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
             onFileTabSelected: ShowBackstage,
-            stateStore: _ribbonStateStore,
             options: new AvaloniaRibbonRendererOptions(
-                EnableIntermediateGroupPresentations: true));
+                EnableIntermediateGroupPresentations: true),
+            stateStore: _ribbonStateStore);
 
         return new Border
         {
@@ -7137,6 +7137,9 @@ public sealed partial class MainWindow : Window,
             .GetVisualDescendants()
             .OfType<Button>()
             .FirstOrDefault(button =>
+                button.IsVisible &&
+                button.Bounds.Width > 0 &&
+                button.Bounds.Height > 0 &&
                 string.Equals(button.Tag as string, $"collapsed:{group.Id}", StringComparison.Ordinal));
 
     private string? GetVisibleRibbonGroupKeyTip(RibbonTab tab, RibbonGroup group)
