@@ -1,5 +1,3 @@
-using System.Globalization;
-
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.SlicerTimeline;
@@ -87,7 +85,7 @@ public static class SlicerItemResolver
                 return;
 
             var kind = kinds is not null && index < kinds.Count ? kinds[index] : (char?)null;
-            var caption = NormalizeSharedItemCaption(raw, kind, field);
+            var caption = PivotSharedItemCaptionResolver.Resolve(raw, kind, field);
             if (string.IsNullOrEmpty(caption))
                 return;
 
@@ -96,33 +94,6 @@ public static class SlicerItemResolver
             if (isSelected && selectedSeen.Add(caption))
                 selectedFromCache.Add(caption);
         }
-    }
-
-    private static string NormalizeSharedItemCaption(string raw, char? kind, PivotCacheFieldModel field)
-    {
-        if (kind == 'd' || (kind is null && field.ContainsDate && !field.ContainsString && !field.ContainsNumber))
-        {
-            if (!DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-                return raw;
-
-            return field.Grouping switch
-            {
-                PivotFieldGrouping.Year => date.Year.ToString(CultureInfo.InvariantCulture),
-                PivotFieldGrouping.Quarter => $"{date.Year}-Q{((date.Month - 1) / 3) + 1}",
-                PivotFieldGrouping.Month => date.ToString("yyyy-MM", CultureInfo.InvariantCulture),
-                PivotFieldGrouping.Day => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                _ => date.ToShortDateString()
-            };
-        }
-
-        if (kind == 'n' || (kind is null && field.ContainsNumber && !field.ContainsString && !field.ContainsDate))
-        {
-            return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
-                ? number.ToString(CultureInfo.CurrentCulture)
-                : raw;
-        }
-
-        return raw;
     }
 
     private static PivotCacheFieldModel? ResolveSharedItemsField(

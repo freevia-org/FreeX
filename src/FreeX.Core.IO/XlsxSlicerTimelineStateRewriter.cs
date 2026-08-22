@@ -1167,53 +1167,7 @@ internal static class XlsxSlicerTimelineStateRewriter
             return null;
 
         var kind = item.Name.LocalName.Length > 0 ? item.Name.LocalName[0] : (char?)null;
-        return NormalizeSharedItemCaption(raw, kind, field);
-    }
-
-    /// <summary>
-    /// Reformats a raw pivot-cache shared-item attribute string into the same caption
-    /// FreeX.Core.Commands.SlicerItemResolver would resolve for that value (its own
-    /// NormalizeSharedItemCaption), so the caption compared here against
-    /// <see cref="SlicerModel.SelectedItems"/> matches what the UI/refresh path uses. Text items pass
-    /// through unchanged; numbers/dates are reformatted using current-culture formatting.
-    /// <para>
-    /// R17-slicer-timeline-cache-1: keys off the per-item <paramref name="kind"/> char ('d'/'n'/'s'/...,
-    /// from <see cref="PivotCacheFieldModel.SharedItemKinds"/>) exactly like the resolver does, falling
-    /// back to the field-level Contains* flags only when no per-item kind was preserved. A MIXED-type
-    /// field (both dates and text/numbers) fails the field-level "exclusively one kind" gate for every
-    /// item, so keying only on those flags left every item's raw ISO/invariant string un-formatted —
-    /// mismatching the resolver's per-item-kind caption and silently dropping a selected date/number
-    /// tile's <c>s="1"</c> flag on save.
-    /// </para>
-    /// </summary>
-    private static string NormalizeSharedItemCaption(string raw, char? kind, PivotCacheFieldModel? field)
-    {
-        if (field is null || string.IsNullOrEmpty(raw))
-            return raw;
-
-        if (kind == 'd' || (kind is null && field.ContainsDate && !field.ContainsString && !field.ContainsNumber))
-        {
-            if (!DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-                return raw;
-
-            return field.Grouping switch
-            {
-                PivotFieldGrouping.Year => date.Year.ToString(CultureInfo.InvariantCulture),
-                PivotFieldGrouping.Quarter => $"{date.Year}-Q{((date.Month - 1) / 3) + 1}",
-                PivotFieldGrouping.Month => date.ToString("yyyy-MM", CultureInfo.InvariantCulture),
-                PivotFieldGrouping.Day => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                _ => date.ToShortDateString()
-            };
-        }
-
-        if (kind == 'n' || (kind is null && field.ContainsNumber && !field.ContainsString && !field.ContainsDate))
-        {
-            return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
-                ? number.ToString(CultureInfo.CurrentCulture)
-                : raw;
-        }
-
-        return raw;
+        return PivotSharedItemCaptionResolver.Resolve(raw, kind, field);
     }
 
     private static void RewriteTimelineState(ZipArchive archive, Workbook workbook)
