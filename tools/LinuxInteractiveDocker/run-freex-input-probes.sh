@@ -242,6 +242,87 @@ wait_for_document_clean() {
     return 1
 }
 
+lossy_save_confirmation="not-required"
+
+confirm_lossy_format_save_if_shown() {
+    local evidence_name="$1" dialog_id="" dialog_closed=false dialog_x=0 dialog_y=0 dialog_width=0 dialog_height=0
+    lossy_save_confirmation="not-required"
+
+    # A multi-sheet workbook saved back to CSV now follows the production feature-loss guard.
+    # The formula-reference probe deliberately creates a second sheet, so accept the real owned
+    # warning through its focused default Yes button before checking the exact clean-save state.
+    for _ in $(seq 1 20); do
+        dialog_id="$(xdotool search --onlyvisible --name '^Possible Data Loss$' 2>/dev/null | tail -1 || true)"
+        if [[ -n "$dialog_id" && "$dialog_id" != "$window_id" ]]; then
+            break
+        fi
+        dialog_id=""
+        sleep 0.15
+    done
+
+    if [[ -z "$dialog_id" ]]; then
+        return 0
+    fi
+
+    lossy_save_confirmation="shown"
+    capture "$evidence_name"
+    # Direct --window key delivery does not reliably enter Avalonia's nested dialog input root.
+    # Activate the real dialog and click the rendered default Yes button instead. The button row
+    # is stable for this Yes/No production prompt; derive the point from the live window geometry.
+    eval "$(xdotool getwindowgeometry --shell "$dialog_id" 2>/dev/null || true)"
+    dialog_x="${X:-0}"
+    dialog_y="${Y:-0}"
+    dialog_width="${WIDTH:-0}"
+    dialog_height="${HEIGHT:-0}"
+    if (( dialog_x < 0 || dialog_y < 0 || dialog_width <= 0 || dialog_height <= 0 )); then
+        lossy_save_confirmation="invalid-geometry"
+        return 1
+    fi
+    xdotool windowraise "$dialog_id"
+    xdotool windowactivate --sync "$dialog_id"
+    xdotool windowfocus --sync "$dialog_id"
+    xdotool key --clearmodifiers --window "$dialog_id" Return
+    # Avalonia's owned synchronous dialog runs a nested dispatcher and can ignore a
+    # synthetic event addressed only to the top-level X11 window. Repeat the same
+    # default-button gesture through the active X11 focus, which is how a physical
+    # keyboard event reaches the nested input root.
+    xdotool key --clearmodifiers Return
+    sleep 0.25
+    if [[ -z "$(xdotool search --onlyvisible --name '^Possible Data Loss$' 2>/dev/null | tail -1 || true)" ]]; then
+        lossy_save_confirmation="accepted"
+        return 0
+    fi
+    xdotool mousemove --sync \
+        "$((dialog_x + dialog_width - 146))" "$((dialog_y + dialog_height - 29))"
+    xdotool mousedown 1
+    sleep 0.12
+    xdotool mouseup 1
+    xdotool click --clearmodifiers 1
+    sleep 0.25
+    if [[ -n "$(xdotool search --onlyvisible --name '^Possible Data Loss$' 2>/dev/null | tail -1 || true)" ]]; then
+        # Some X11/Avalonia combinations ignore a synthetic pointer release while the nested
+        # dispatcher is handing focus to the default button. Space is the button activation
+        # gesture delivered to that already-active, production-rendered control.
+        xdotool key --clearmodifiers --window "$dialog_id" space
+        xdotool key --clearmodifiers space
+        xdotool key --clearmodifiers KP_Enter
+    fi
+    for _ in $(seq 1 20); do
+        if [[ -z "$(xdotool search --onlyvisible --name '^Possible Data Loss$' 2>/dev/null | tail -1 || true)" ]]; then
+            dialog_closed=true
+            break
+        fi
+        sleep 0.15
+    done
+    if $dialog_closed; then
+        lossy_save_confirmation="accepted"
+        return 0
+    fi
+
+    lossy_save_confirmation="not-closed"
+    return 1
+}
+
 seed_cell_text() {
     local column_offset="$1" row_offset="$2" address="$3" value="$4" committed=""
     set_cell_text "$column_offset" "$row_offset" "$address" "$value" || return 1
@@ -3840,7 +3921,7 @@ probe_formula_bar_point_mode_multi_area_edit() {
 probe_formula_reference_grip_multi_area() {
     local committed_formula="" committed_result="" expected_formula="=SUM('Sheet2'!B2:C3,'Sheet2'!D4:F6)"
     local formula_passed=false result_passed=false save_passed=false setup_passed=false
-    local artifacts="formula-reference-grip-setup.png;formula-reference-grip-source.png;formula-reference-grip-target.png;formula-reference-grip-before.png;formula-reference-grip-dragging.png;formula-reference-grip-committed.png;formula-reference-grip-postcondition.txt"
+    local artifacts="formula-reference-grip-setup.png;formula-reference-grip-source.png;formula-reference-grip-target.png;formula-reference-grip-before.png;formula-reference-grip-dragging.png;formula-reference-grip-committed.png;formula-reference-grip-save-confirm.png;formula-reference-grip-postcondition.txt"
 
     # Keep the formula source on the first worksheet and create a real second worksheet. The
     # reference is explicitly quoted and qualified, so the production tab switch must preserve
@@ -3925,15 +4006,18 @@ probe_formula_reference_grip_multi_area() {
     committed_formula="$(copy_cell_formula 6 7 G8 || true)"
     committed_result="$(copy_cell_display 6 7 G8 || true)"
     send_key ctrl+s
-    if wait_for_document_clean; then save_passed=true; fi
+    if confirm_lossy_format_save_if_shown "formula-reference-grip-save-confirm.png" &&
+       wait_for_document_clean; then
+        save_passed=true
+    fi
     [[ "$committed_formula" == "$expected_formula" ]] && formula_passed=true
     [[ "$committed_result" =~ ^15([.]0+)?$ ]] && result_passed=true
 
     write_artifact "formula-reference-grip-postcondition.txt" \
-        "setup=$setup_passed\nexpected-formula=$expected_formula\ncommitted-formula=$committed_formula\ncommitted-result=$committed_result\nsave-clean=$save_passed\nformula-passed=$formula_passed\nresult-passed=$result_passed\n"
+        "setup=$setup_passed\nexpected-formula=$expected_formula\ncommitted-formula=$committed_formula\ncommitted-result=$committed_result\nsave-confirmation=$lossy_save_confirmation\nsave-clean=$save_passed\nformula-passed=$formula_passed\nresult-passed=$result_passed\n"
     if $formula_passed && $result_passed && $save_passed && $setup_passed; then
         record "formula-reference-grip-multi-area-physical" "passed" \
-            "formula-reference-grip-setup.png; formula-reference-grip-source.png; formula-reference-grip-target.png; formula-reference-grip-before.png; formula-reference-grip-dragging.png; formula-reference-grip-committed.png; formula=$committed_formula; result=$committed_result; save-clean=$save_passed" \
+            "formula-reference-grip-setup.png; formula-reference-grip-source.png; formula-reference-grip-target.png; formula-reference-grip-before.png; formula-reference-grip-dragging.png; formula-reference-grip-committed.png; formula-reference-grip-save-confirm.png; formula=$committed_formula; result=$committed_result; save-confirmation=$lossy_save_confirmation; save-clean=$save_passed" \
             "Physical X11 input kept an existing quoted cross-sheet formula open while switching from Revenue Data to Sheet2, moved the reference overlay to Sheet2, dragged only the second reference grip from D4:E5 to D4:F6, preserved both qualifiers and B2:C3, committed the exact formula, calculated 15, and reached a clean saved document." "$artifacts"
     else
         record "formula-reference-grip-multi-area-physical" "failed" "$artifacts" "Expected formula '$expected_formula', result 15, and a clean save; observed formula '$committed_formula', result '$committed_result', save-clean=$save_passed." "$artifacts"
