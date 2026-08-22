@@ -117,6 +117,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.Icon("freew.subscript", subscriptCommand.Label, RibbonCommandIconKind.Subscript);
                         g.Icon("freew.superscript", superscriptCommand.Label, RibbonCommandIconKind.Superscript);
                         g.Icon("freew.change-case", changeCaseCommand.Label, RibbonCommandIconKind.ChangeCase);
+                        g.RowBreak();
                         g.Icon("freew.smallcaps", smallCapsCommand.Label, RibbonCommandIconKind.Font);
                         g.Icon("freew.allcaps", allCapsCommand.Label, RibbonCommandIconKind.Font);
                         g.Icon("freew.highlight", textHighlightColorCommand.Label, RibbonCommandIconKind.Highlight);

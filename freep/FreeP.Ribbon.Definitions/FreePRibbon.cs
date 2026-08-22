@@ -42,34 +42,62 @@ public static class FreePRibbon
             {
                 case FreePRibbonHomeGroupId.Slides:
                     tab.Group("slides", FreePRibbonText.SlidesGroupLabel, FreePRibbonText.SlidesGroupKeyTip, priority,
-                        AddSlidesControls);
+                        group =>
+                        {
+                            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                            AddSlidesControls(group);
+                        });
                     break;
                 case FreePRibbonHomeGroupId.Clipboard:
                     tab.Group("clipboard", FreePRibbonText.ClipboardGroupLabel, FreePRibbonText.ClipboardGroupKeyTip,
-                        priority, AddClipboardControls);
+                        priority, group =>
+                        {
+                            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                            AddClipboardControls(group);
+                        });
                     break;
                 case FreePRibbonHomeGroupId.Font:
                     tab.Group("font", FreePRibbonText.FontGroupLabel, FreePRibbonText.FontGroupKeyTip, priority,
-                        AddFontControls);
+                        group =>
+                        {
+                            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                            AddFontControls(group);
+                        });
                     break;
                 case FreePRibbonHomeGroupId.Paragraph:
                     tab.Group("paragraph", FreePRibbonText.ParagraphGroup.Label, FreePRibbonText.ParagraphGroup.KeyTip,
-                        priority, AddParagraphControls);
+                        priority, group =>
+                        {
+                            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                            AddParagraphControls(group);
+                        });
                     break;
                 case FreePRibbonHomeGroupId.Arrange:
                     tab.Group("arrange", FreePRibbonText.ArrangeGroup.Label, FreePRibbonText.ArrangeGroup.KeyTip,
-                        priority, AddArrangeControls);
+                        priority, group =>
+                        {
+                            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                            AddArrangeControls(group);
+                        });
                     break;
                 case FreePRibbonHomeGroupId.Edit:
                     tab.Group("edit", FreePRibbonText.EditGroupLabel, FreePRibbonText.EditGroupKeyTip, priority,
-                        AddEditControls);
+                        group =>
+                        {
+                            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                            AddEditControls(group);
+                        });
                     break;
                 case FreePRibbonHomeGroupId.Editing:
                     tab.Group("editing", FreePRibbonText.EditingGroupLabel,
                         profile.HomeGroups.Contains(FreePRibbonHomeGroupId.Edit)
                             ? FreePRibbonText.EditingGroupAvaloniaKeyTip
                             : FreePRibbonText.EditingGroupKeyTip,
-                        priority, AddEditingControls);
+                        priority, group =>
+                        {
+                            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                            AddEditingControls(group);
+                        });
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(groupId), groupId, "Unknown FreeP ribbon group.");
