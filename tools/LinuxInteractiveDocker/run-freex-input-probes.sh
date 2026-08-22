@@ -11,6 +11,7 @@ dialog_settle_seconds="${FREEX_X11_DIALOG_SETTLE_SECONDS:-3.0}"
 mousemove_timeout_seconds="${FREEX_X11_MOUSEMOVE_TIMEOUT_SECONDS:-5}"
 mousemove_timeout_count=0
 clipboard_timeout_seconds="${FREEX_X11_CLIPBOARD_TIMEOUT_SECONDS:-5}"
+image_tool_timeout_seconds="${FREEX_X11_IMAGE_TOOL_TIMEOUT_SECONDS:-5}"
 selection_color="${FREEX_X11_SELECTION_COLOR:-#217346}"
 document_path="${FREEX_X11_DOCUMENT_PATH:-/documents/linux-interactive-demo.csv}"
 probe_selector="${FREEX_X11_PROBE_SELECTOR:-all}"
@@ -1024,12 +1025,15 @@ regions_match() {
 
 selection_box() {
     local screenshot="$1" components box
-    components="$(convert "$screenshot" \
+    # ImageMagick's connected-components analysis is diagnostic only. Bound it so a
+    # malformed or unusually large capture records a normal evidence failure instead
+    # of leaving the physical lane and its X11 session blocked indefinitely.
+    components="$(timeout --foreground --kill-after=1s "${image_tool_timeout_seconds}s" convert "$screenshot" \
         -alpha off \
         -fill black +opaque "$selection_color" \
         -fill white -opaque "$selection_color" \
         -define connected-components:verbose=true \
-        -connected-components 8 null: 2>&1)"
+        -connected-components 8 null: 2>&1 || true)"
     box="$(printf '%s\n' "$components" | awk '
         /srgb\(255,255,255\)/ && $4 + 0 > largest { largest = $4 + 0; box = $2 }
         END { print box }

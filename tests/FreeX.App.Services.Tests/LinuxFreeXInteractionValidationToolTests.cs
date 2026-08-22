@@ -114,6 +114,23 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
+    public void SelectionDiagnosticsBoundImageMagickConnectedComponents()
+    {
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+        var selectionStart = probe.IndexOf("selection_box()", StringComparison.Ordinal);
+        var selectionEnd = probe.IndexOf("capture_selection()", selectionStart, StringComparison.Ordinal);
+
+        selectionStart.Should().BeGreaterThanOrEqualTo(0);
+        selectionEnd.Should().BeGreaterThan(selectionStart);
+        probe[selectionStart..selectionEnd]
+            .Should().Contain("image_tool_timeout_seconds")
+            .And.Contain("timeout --foreground --kill-after=1s")
+            .And.Contain("-connected-components 8 null:")
+            .And.Contain("|| true");
+    }
+
+    [Fact]
     public void GridDragSeedHelper_UsesKeyboardReadbackAndEmptyAwareClipboardVerification()
     {
         var probe = File.ReadAllText(RepositoryFileLocator.Find(
