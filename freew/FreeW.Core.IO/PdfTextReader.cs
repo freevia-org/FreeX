@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Text;
+using Free.Shared.Pdf.Import;
 using FreeW.Core.Model;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
@@ -167,14 +168,9 @@ public static class PdfTextReader
             return [];
 
         // 2. Group letters into lines by baseline Y (PdfPig Y grows upward, so higher Y = higher on page).
-        //    Tolerance: half the modal font point size on the page, or 3pt minimum.
-        var dominantSize = ModalSize(letters) ?? 12.0;
-        var yTolerance = Math.Max(dominantSize * 0.5, 3.0);
-
-        var lines = GroupLettersIntoLines(letters, yTolerance);
-
-        // Sort lines top-to-bottom (descending Y).
-        lines.Sort((a, b) => b.BaselineY.CompareTo(a.BaselineY));
+        var clustering = PdfTextLineClusterer.Cluster(letters, GetGlyphMetrics);
+        var dominantSize = clustering.ModalFontSize ?? PdfTextLineClusterer.DefaultFontSize;
+        var lines = clustering.Lines.Select(ProjectTextLine).ToList();
 
         if (lines.Count == 0)
             return [];
@@ -234,7 +230,7 @@ public static class PdfTextReader
         var allLetters = paraLines.SelectMany(l => l.Letters).ToList();
 
         var bold = IsDominantlyBold(allLetters);
-        var fontSize = ModalSize(allLetters);
+        var fontSize = PdfTextLineClusterer.CalculateModalFontSize(allLetters, GetGlyphMetrics);
 
         RunFormatting formatting;
         if (bold || fontSize.HasValue)
@@ -268,67 +264,19 @@ public static class PdfTextReader
         return boldCount > letters.Count / 2.0;
     }
 
-    /// <summary>
-    /// Returns the modal (most frequent) point size among <paramref name="letters"/>, or null when the
-    /// collection is empty or all point sizes are zero/absent. Sizes are rounded to the nearest 0.5pt
-    /// to collapse minor floating-point differences.
-    /// </summary>
-    private static double? ModalSize(IReadOnlyList<Letter> letters)
+    private static TextLine ProjectTextLine(PdfTextLine<Letter> line)
     {
-        if (letters == null || letters.Count == 0)
-            return null;
-
-        var sizeGroups = letters
-            .Where(l => l.PointSize > 0)
-            .GroupBy(l => Math.Round(l.PointSize * 2) / 2) // round to nearest 0.5
-            .OrderByDescending(g => g.Count())
-            .FirstOrDefault();
-
-        return sizeGroups?.Key;
+        var projected = new TextLine(line.BaselineY, line.ModalFontSize ?? 0, line.Glyphs);
+        projected.FinalizeText();
+        return projected;
     }
 
-    /// <summary>
-    /// Groups <paramref name="letters"/> into <see cref="TextLine"/> buckets by baseline Y, merging
-    /// letters whose baseline Y values are within <paramref name="yTolerance"/> of each other.
-    /// </summary>
-    private static List<TextLine> GroupLettersIntoLines(IReadOnlyList<Letter> letters, double yTolerance)
-    {
-        // Sort by Y descending (top to bottom) then X ascending (left to right) for reading order.
-        var sorted = letters
-            .Where(l => !string.IsNullOrEmpty(l.Value))
-            .OrderByDescending(l => l.GlyphRectangle.BottomLeft.Y)
-            .ThenBy(l => l.GlyphRectangle.BottomLeft.X)
-            .ToList();
-
-        var lines = new List<TextLine>();
-
-        foreach (var letter in sorted)
-        {
-            var y = letter.GlyphRectangle.BottomLeft.Y;
-            // Find an existing line whose baseline Y is within tolerance.
-            var matched = lines.FirstOrDefault(ln => Math.Abs(ln.BaselineY - y) <= yTolerance);
-            if (matched != null)
-            {
-                matched.Letters.Add(letter);
-            }
-            else
-            {
-                var line = new TextLine(y);
-                line.Letters.Add(letter);
-                lines.Add(line);
-            }
-        }
-
-        // After grouping, sort each line's letters left-to-right and build the text string.
-        foreach (var line in lines)
-        {
-            line.Letters.Sort((a, b) =>
-                a.GlyphRectangle.BottomLeft.X.CompareTo(b.GlyphRectangle.BottomLeft.X));
-            line.FinalizeText();
-        }
-
-        return lines;
-    }
+    private static PdfTextGlyphMetrics GetGlyphMetrics(Letter letter) =>
+        new(
+            letter.Value,
+            letter.GlyphRectangle.BottomLeft.Y,
+            letter.GlyphRectangle.BottomLeft.X,
+            letter.PointSize);
 
     private static double Median(List<double> values)
     {
@@ -344,29 +292,15 @@ public static class PdfTextReader
     /// <summary>
     /// Working representation of a single visual text line during extraction.
     /// </summary>
-    private sealed class TextLine(double baselineY)
+    private sealed class TextLine(
+        double baselineY,
+        double dominantSize,
+        IReadOnlyList<Letter> letters)
     {
         public double BaselineY { get; } = baselineY;
-        public List<Letter> Letters { get; } = [];
+        public double DominantSize { get; } = dominantSize;
+        public List<Letter> Letters { get; } = [.. letters];
         public string Text { get; private set; } = string.Empty;
-
-        /// <summary>
-        /// The modal point size of letters in this line, used for paragraph-gap heuristics.
-        /// </summary>
-        public double DominantSize
-        {
-            get
-            {
-                if (Letters.Count == 0)
-                    return 0;
-                var groups = Letters
-                    .Where(l => l.PointSize > 0)
-                    .GroupBy(l => Math.Round(l.PointSize))
-                    .OrderByDescending(g => g.Count())
-                    .FirstOrDefault();
-                return groups?.Key ?? 0;
-            }
-        }
 
         /// <summary>
         /// Builds <see cref="Text"/> from the sorted <see cref="Letters"/> list, inserting a space

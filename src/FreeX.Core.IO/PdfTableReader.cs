@@ -155,25 +155,21 @@ internal static class PdfTableReader
         if (letters == null || letters.Count == 0)
             return; // image-only page — empty sheet, no crash
 
-        // 1. Compute dominant font size for row-grouping tolerance.
-        var dominantSize = ModalSize(letters) ?? 12.0;
-        var yTolerance = Math.Max(dominantSize * 0.5, 3.0);
-
-        // 2. Group letters into visual rows by baseline Y.
-        var rows = GroupLettersIntoRows(letters, yTolerance);
+        // 1. Group letters into visual rows by baseline Y.
+        var clustering = PdfTextLineClusterer.Cluster(letters, GetGlyphMetrics);
+        var rows = clustering.Lines
+            .Select(line => new TextRow(line.BaselineY, line.Glyphs))
+            .ToList();
         if (rows.Count == 0)
             return;
 
-        // Sort rows top-to-bottom (higher Y = higher on page in PdfPig coords).
-        rows.Sort((a, b) => b.BaselineY.CompareTo(a.BaselineY));
-
-        // 3. Split each row into tokens using the word-gap heuristic (reused from FreeW's PdfTextReader).
+        // 2. Split each row into tokens using the word-gap heuristic (reused from FreeW's PdfTextReader).
         //    Word-gap threshold: 0.25× font size — same constant as FreeW.
         const double wordGapFactor = 0.25;
         foreach (var row in rows)
             row.BuildTokens(wordGapFactor);
 
-        // 4. Detect column boundaries from the X coverage histogram.
+        // 3. Detect column boundaries from the X coverage histogram.
         var (pageMinX, pageMaxX) = PageXBounds(rows);
         if (pageMaxX <= pageMinX)
         {
@@ -184,7 +180,7 @@ internal static class PdfTableReader
 
         var columnBands = DetectColumnBands(rows, pageMinX, pageMaxX);
 
-        // 5. Assign tokens to (rowIndex, columnIndex) cells and write to sheet.
+        // 4. Assign tokens to (rowIndex, columnIndex) cells and write to sheet.
         uint sheetRow = 1;
         foreach (var row in rows)
         {
@@ -488,75 +484,14 @@ internal static class PdfTableReader
         return best;
     }
 
-    // ── Row grouping ─────────────────────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Groups <paramref name="letters"/> into <see cref="TextRow"/> buckets by baseline Y, merging letters
-    /// whose baseline Y is within <paramref name="yTolerance"/> of each other. Mirrors FreeW PdfTextReader.
-    /// </summary>
-    private static List<TextRow> GroupLettersIntoRows(IReadOnlyList<Letter> letters, double yTolerance)
-    {
-        var sorted = letters
-            .Where(l => !string.IsNullOrEmpty(l.Value))
-            .OrderByDescending(l => l.GlyphRectangle.BottomLeft.Y)
-            .ThenBy(l => l.GlyphRectangle.BottomLeft.X)
-            .ToList();
-
-        var rows = new List<TextRow>();
-
-        foreach (var letter in sorted)
-        {
-            var y = letter.GlyphRectangle.BottomLeft.Y;
-            // Match the NEAREST existing row whose running-mean baseline is within tolerance, not just the
-            // first one found: when two rows are both in range, FirstOrDefault would pick an arbitrary
-            // (earlier-Y) row and mis-assign the glyph.
-            TextRow? matched = null;
-            var bestDelta = double.MaxValue;
-            foreach (var row in rows)
-            {
-                var delta = Math.Abs(row.BaselineY - y);
-                if (delta <= yTolerance && delta < bestDelta)
-                {
-                    bestDelta = delta;
-                    matched = row;
-                }
-            }
-
-            if (matched != null)
-            {
-                matched.AddLetter(letter);
-            }
-            else
-            {
-                var row = new TextRow();
-                row.AddLetter(letter);
-                rows.Add(row);
-            }
-        }
-
-        // Sort each row's letters left-to-right.
-        foreach (var row in rows)
-            row.Letters.Sort((a, b) => a.GlyphRectangle.BottomLeft.X.CompareTo(b.GlyphRectangle.BottomLeft.X));
-
-        return rows;
-    }
-
     // ── Geometry helpers ─────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Returns the modal (most frequent, rounded to nearest 0.5 pt) point size, or null.</summary>
-    private static double? ModalSize(IReadOnlyList<Letter> letters)
-    {
-        if (letters == null || letters.Count == 0)
-            return null;
-
-        var group = letters
-            .Where(l => l.PointSize > 0)
-            .GroupBy(l => Math.Round(l.PointSize * 2) / 2)
-            .OrderByDescending(g => g.Count())
-            .FirstOrDefault();
-
-        return group?.Key;
-    }
+    private static PdfTextGlyphMetrics GetGlyphMetrics(Letter letter) =>
+        new(
+            letter.Value,
+            letter.GlyphRectangle.BottomLeft.Y,
+            letter.GlyphRectangle.BottomLeft.X,
+            letter.PointSize);
 
     private static (double MinX, double MaxX) PageXBounds(List<TextRow> rows)
     {
@@ -859,22 +794,11 @@ internal static class PdfTableReader
     // ── Internal model ───────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Working representation of a single visual row of glyphs during extraction.</summary>
-    private sealed class TextRow
+    private sealed class TextRow(double baselineY, IReadOnlyList<Letter> letters)
     {
-        private double _baselineSum;
-
-        /// <summary>Running mean baseline Y of the glyphs in this row — a stable cluster anchor as the row
-        /// grows, so a row whose glyph baselines drift slightly is not split or mis-matched.</summary>
-        public double BaselineY => Letters.Count == 0 ? 0 : _baselineSum / Letters.Count;
-        public List<Letter> Letters { get; } = [];
+        public double BaselineY { get; } = baselineY;
+        public List<Letter> Letters { get; } = [.. letters];
         public List<Token> Tokens { get; } = [];
-
-        /// <summary>Adds a glyph to the row and updates the running-mean baseline.</summary>
-        public void AddLetter(Letter letter)
-        {
-            Letters.Add(letter);
-            _baselineSum += letter.GlyphRectangle.BottomLeft.Y;
-        }
 
         /// <summary>
         /// Splits <see cref="Letters"/> (already sorted left-to-right) into <see cref="Token"/> objects.
