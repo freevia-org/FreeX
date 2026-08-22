@@ -6,15 +6,13 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host.Tests;
 
 /// <summary>
-/// Round 152 remediation gap H3: the ten existing OLE in-place commit tests
-/// (<see cref="WpfOleInPlaceHostTests"/> and the Avalonia sibling) call
-/// <c>WpfOleInPlaceHost.BuildCommitCallback</c> directly, so they verify the helper composes two
-/// delegates correctly but say nothing about whether <see cref="MainWindow.TryOpenOleInPlace"/>
+/// Round 152 remediation gap H3: the callback-policy and renderer-adoption tests verify payload
+/// assignment and host wiring, but say nothing about whether <see cref="MainWindow.TryOpenOleInPlace"/>
 /// actually passes <c>onPayloadUpdated: _ =&gt; _fileSession.MarkDirty()</c> at its call site into
 /// <c>WpfOleInPlaceHost.TryShow</c>. Deleting that argument leaves all ten tests green.
 ///
 /// Real native in-place activation cannot run headless (no OLE server is available in a test
-/// process -- see the comment on <see cref="WpfOleInPlaceHostTests.CommitCallback_UpdatesModelAndNotifiesCaller_ForNativeInPlaceRoute"/>),
+/// process),
 /// so <see cref="WindowsOleInPlaceEngine.PayloadCreatedObserver"/> is used to simulate a native
 /// server having rewritten the payload on disk. From there the real, unmodified production path
 /// runs: <c>TryStart</c> fails (no live window handle in this headless host), the host is

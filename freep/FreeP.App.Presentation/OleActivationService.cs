@@ -61,7 +61,7 @@ public static class OleActivationService
     /// launch through the public <see cref="TryActivate(OleObjectInfo?, Action{byte[]}?)"/> entry
     /// point (that overload always uses the real launcher/temp-file store).
     /// </summary>
-    internal static Action<byte[]> BuildOleObjectUpdateCallback(OleObjectInfo? oleObject, Action<byte[]>? onPayloadUpdated) =>
+    public static Action<byte[]> BuildOleObjectUpdateCallback(OleObjectInfo? oleObject, Action<byte[]>? onPayloadUpdated = null) =>
         bytes =>
         {
             if (oleObject is null) return;
@@ -76,9 +76,10 @@ public static class OleActivationService
 
     /// <summary>
     /// Builds the payload-commit callback for an inline embedded object. Mirrors
-    /// <see cref="BuildOleObjectUpdateCallback"/> -- see that method for why this is extracted.
+    /// <see cref="BuildOleObjectUpdateCallback"/> and is shared by external activation and the
+    /// native renderer hosts so payload assignment and notification ordering cannot drift.
     /// </summary>
-    internal static Action<byte[]> BuildInlineOleObjectUpdateCallback(InlineOleObjectInfo? inlineObject, Action<byte[]>? onPayloadUpdated) =>
+    public static Action<byte[]> BuildInlineOleObjectUpdateCallback(InlineOleObjectInfo? inlineObject, Action<byte[]>? onPayloadUpdated = null) =>
         bytes =>
         {
             if (inlineObject is null) return;
