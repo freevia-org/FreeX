@@ -467,6 +467,47 @@ public sealed class KeyboardContextParityTests
     }
 
     [Fact]
+    public async Task FreePInsertRibbon_UsesIconCommandsBeforeOverflowAtNarrowWidths()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([])
+            {
+                MinWidth = 0,
+                Height = 600,
+            };
+            try
+            {
+                window.Show();
+                var ribbon = window.RibbonControlForTests!;
+                var tabs = Assert.IsType<TabControl>(ribbon);
+                tabs.SelectedItem = tabs.Items.OfType<TabItem>().Single(item => Equals(item.Tag, "insert"));
+                Dispatcher.UIThread.RunJobs();
+                Button? compactCommand = null;
+
+                foreach (var width in new[] { 1600d, 1400d, 1200d, 1000d, 900d, 800d })
+                {
+                    window.Width = width;
+                    Dispatcher.UIThread.RunJobs();
+                    compactCommand = ribbon
+                        .GetVisualDescendants()
+                        .OfType<Button>()
+                        .FirstOrDefault(button => Equals(button.Tag, "freep.insert-chart-column") && button.Width == 30);
+                    if (compactCommand is not null)
+                        break;
+                }
+
+                compactCommand.Should().NotBeNull(
+                    "FreeP opts into the Office-style icon presentation before groups overflow");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task RendererBackedNestedKeyTipTraversalOpensVisibleChildSubmenu()
     {
         await Session.Dispatch(() =>
