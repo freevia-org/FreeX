@@ -23,6 +23,13 @@ using System.Runtime.CompilerServices;
 namespace Free.Shared.Ribbon.Avalonia;
 
 /// <summary>
+/// Renderer-specific opt-ins that let a host adopt richer responsive ribbon presentations without
+/// changing the established full-or-collapsed behavior of other Avalonia products.
+/// </summary>
+public sealed record AvaloniaRibbonRendererOptions(
+    bool EnableIntermediateGroupPresentations = false);
+
+/// <summary>
 /// Avalonia (cross-platform) realization of a declarative <see cref="RibbonTab"/>.
 /// Visually replicates the WPF ribbon (RibbonWpfRenderer + the WPF style resources): a flat white
 /// surface with a horizontal strip of groups, each a content row over a header label, controls laid out
@@ -400,21 +407,30 @@ public static class AvaloniaRibbonRenderer
         IRibbonCommandRegistry? registry = null,
         Action? afterExecute = null,
         RibbonVisualPalette? palette = null,
-        IRibbonStateStore? stateStore = null)
-        => BuildTabContent(tab, registry, afterExecute, ResolvePalette(palette), stateStore);
+        IRibbonStateStore? stateStore = null,
+        AvaloniaRibbonRendererOptions? options = null)
+        => BuildTabContent(
+            tab,
+            registry,
+            afterExecute,
+            ResolvePalette(palette),
+            stateStore,
+            options ?? new AvaloniaRibbonRendererOptions());
 
     private static Control BuildTabContent(
         RibbonTab tab,
         IRibbonCommandRegistry? registry,
         Action? afterExecute,
         AvaloniaRibbonPalette resolvedPalette,
-        IRibbonStateStore? stateStore)
+        IRibbonStateStore? stateStore,
+        AvaloniaRibbonRendererOptions options)
     {
         ArgumentNullException.ThrowIfNull(tab);
 
         var panel = new AvaloniaRibbonAdaptivePanel
         {
             MinHeight = RibbonVisualMetrics.TabContentMinHeight,
+            EnableIntermediateGroupPresentations = options.EnableIntermediateGroupPresentations,
         };
 
         var first = true;
@@ -429,10 +445,12 @@ public static class AvaloniaRibbonRenderer
             panel.Children.Add(new AvaloniaRibbonGroupHost(
                 group,
                 BuildGroup(group, registry, afterExecute, resolvedPalette),
+                state => BuildGroup(group, registry, afterExecute, resolvedPalette, state),
                 registry,
                 afterExecute,
                 resolvedPalette,
-                collapsedKeyTip));
+                collapsedKeyTip,
+                options.EnableIntermediateGroupPresentations));
             first = false;
         }
 
@@ -568,10 +586,11 @@ public static class AvaloniaRibbonRenderer
         IRibbonCommandRegistry? registry,
         Action? afterExecute,
         AvaloniaRibbonPalette palette,
-        IRibbonStateStore? stateStore) => new()
+        IRibbonStateStore? stateStore,
+        AvaloniaRibbonRendererOptions options) => new()
     {
         Header = BuildTabHeader(tab.Header, tab.KeyTip, palette),
-        Content = BuildTabContent(tab, registry, afterExecute, palette, stateStore),
+        Content = BuildTabContent(tab, registry, afterExecute, palette, stateStore, options),
         Tag = tab.Id,
     };
 
@@ -602,10 +621,12 @@ public static class AvaloniaRibbonRenderer
         Action? afterExecute = null,
         RibbonVisualPalette? palette = null,
         Action? onFileTabSelected = null,
-        IRibbonStateStore? stateStore = null)
+        IRibbonStateStore? stateStore = null,
+        AvaloniaRibbonRendererOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         var resolvedPalette = ResolvePalette(palette);
+        var resolvedOptions = options ?? new AvaloniaRibbonRendererOptions();
 
         // WPF: white ribbon surface; no extra TabControl bottom border — the selected tab's 3px accent
         // underline is the only visual divider between the tab strip and the content area below.
@@ -625,7 +646,7 @@ public static class AvaloniaRibbonRenderer
             : ResolveTabStripTabs(definition, contextSource.Current);
 
         foreach (var tab in initialTabs)
-            tabControl.Items.Add(BuildTabItem(tab, registry, afterExecute, resolvedPalette, stateStore));
+            tabControl.Items.Add(BuildTabItem(tab, registry, afterExecute, resolvedPalette, stateStore, resolvedOptions));
 
         if (tabControl.Items.Count > 0)
             tabControl.SelectedIndex = tabControl.Items.Count > 1 ? 1 : 0;
@@ -670,7 +691,7 @@ public static class AvaloniaRibbonRenderer
                 try
                 {
                     SyncContextualTabs(
-                        tabControl, definition, registry, contextSource, afterExecute, resolvedPalette, stateStore);
+                        tabControl, definition, registry, contextSource, afterExecute, resolvedPalette, stateStore, resolvedOptions);
 
                     if ((tabControl.SelectedItem as TabItem)?.Tag is string syncedId &&
                         string.Equals(syncedId, FileRibbonTabId, StringComparison.Ordinal))
@@ -1070,7 +1091,8 @@ public static class AvaloniaRibbonRenderer
         IRibbonContextSource contextSource,
         Action? afterExecute,
         AvaloniaRibbonPalette palette,
-        IRibbonStateStore? stateStore)
+        IRibbonStateStore? stateStore,
+        AvaloniaRibbonRendererOptions options)
     {
         var desired = ResolveTabStripTabs(definition, contextSource.Current);
         var selectedId = (tabControl.SelectedItem as TabItem)?.Tag as string;
@@ -1105,7 +1127,7 @@ public static class AvaloniaRibbonRenderer
                     tabControl.Items.RemoveAt(existingIndex);
                     tabControl.Items.Insert(
                         existingIndex,
-                        BuildTabItem(tab, registry, afterExecute, palette, stateStore));
+                        BuildTabItem(tab, registry, afterExecute, palette, stateStore, options));
                 }
                 continue;
             }
@@ -1124,7 +1146,7 @@ public static class AvaloniaRibbonRenderer
 
             tabControl.Items.Insert(
                 Math.Min(insertAfter + 1, tabControl.Items.Count),
-                BuildTabItem(tab, registry, afterExecute, palette, stateStore));
+                BuildTabItem(tab, registry, afterExecute, palette, stateStore, options));
         }
 
         // Preserve selection if still visible; otherwise select the first tab.
@@ -1489,7 +1511,12 @@ public static class AvaloniaRibbonRenderer
         tabControl.Styles.Add(popupBorder);
     }
 
-    private static Control BuildGroup(RibbonGroup group, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
+    private static Control BuildGroup(
+        RibbonGroup group,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute,
+        AvaloniaRibbonPalette palette,
+        RibbonAdaptiveGroupState state = RibbonAdaptiveGroupState.Full)
     {
         var grid = new Grid
         {
@@ -1501,7 +1528,7 @@ public static class AvaloniaRibbonRenderer
             },
         };
 
-        var content = BuildGroupContent(group, registry, afterExecute, palette);
+        var content = BuildGroupContent(group, registry, afterExecute, palette, state);
         Grid.SetRow(content, 0);
         grid.Children.Add(content);
 
@@ -1528,7 +1555,12 @@ public static class AvaloniaRibbonRenderer
         return grid;
     }
 
-    private static Control BuildGroupContent(RibbonGroup group, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
+    private static Control BuildGroupContent(
+        RibbonGroup group,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute,
+        AvaloniaRibbonPalette palette,
+        RibbonAdaptiveGroupState state)
     {
         var lane = new StackPanel
         {
@@ -1537,7 +1569,9 @@ public static class AvaloniaRibbonRenderer
             Margin = new Thickness(2, 2, 2, 0),
         };
 
-        var controls = group.Controls;
+        var controls = group.Controls
+            .Select(control => AdaptControlForGroupState(group, control, state))
+            .ToList();
         var index = 0;
 
         // Leading large "hero" buttons each occupy their own full-height column (mirrors WPF).
@@ -1560,6 +1594,38 @@ public static class AvaloniaRibbonRenderer
             BuildAutoColumns(rest, lane, registry, afterExecute, palette);
 
         return lane;
+    }
+
+    // Preserve the command model/keytips while applying the same compact command forms as the WPF
+    // renderer. Hosts opt in to these presentations at the renderer boundary.
+    private static RibbonControl AdaptControlForGroupState(
+        RibbonGroup group,
+        RibbonControl control,
+        RibbonAdaptiveGroupState state)
+    {
+        if (control is RibbonSeparator or RibbonRowBreak or RibbonComboBox or RibbonCheckBox)
+            return control;
+
+        return state switch
+        {
+            RibbonAdaptiveGroupState.SmallWithLabels when group.Sizing.CompactControlsAsIcons => control with
+            {
+                PreferredLayout = RibbonCommandLayoutKind.Small,
+            },
+            RibbonAdaptiveGroupState.SmallWithLabels => control with
+            {
+                PreferredLayout = control.PreferredLayout switch
+                {
+                    RibbonCommandLayoutKind.Large => RibbonCommandLayoutKind.Medium,
+                    _ => control.PreferredLayout,
+                },
+            },
+            RibbonAdaptiveGroupState.IconOnly => control with
+            {
+                PreferredLayout = RibbonCommandLayoutKind.Small,
+            },
+            _ => control,
+        };
     }
 
     // Groups that declare RowBreaks lay out as stacked horizontal rows (e.g. Font: combos row, then B/I/U row).
@@ -2764,27 +2830,33 @@ public static class AvaloniaRibbonRenderer
 
         private readonly RibbonGroup _group;
         private readonly Control _full;
+        private readonly Func<RibbonAdaptiveGroupState, Control> _presentationFactory;
         private readonly IRibbonCommandRegistry? _registry;
         private readonly Action? _afterExecute;
         private readonly AvaloniaRibbonPalette _palette;
         private readonly string _collapsedKeyTip;
+        private readonly bool _enableIntermediatePresentations;
         private Control? _collapsedButton;
-        private bool _collapsed;
+        private RibbonAdaptiveGroupState _layoutState;
 
         public AvaloniaRibbonGroupHost(
             RibbonGroup group,
             Control full,
+            Func<RibbonAdaptiveGroupState, Control> presentationFactory,
             IRibbonCommandRegistry? registry,
             Action? afterExecute,
             AvaloniaRibbonPalette palette,
-            string collapsedKeyTip)
+            string collapsedKeyTip,
+            bool enableIntermediatePresentations)
         {
             _group = group;
             _full = full;
+            _presentationFactory = presentationFactory;
             _registry = registry;
             _afterExecute = afterExecute;
             _palette = palette;
             _collapsedKeyTip = collapsedKeyTip;
+            _enableIntermediatePresentations = enableIntermediatePresentations;
             Priority = group.Priority;
             VerticalAlignment = VerticalAlignment.Stretch;
             Content = full;
@@ -2793,18 +2865,74 @@ public static class AvaloniaRibbonRenderer
         public int Priority { get; }
         public string GroupId => _group.Id;
         public double FullWidth { get; set; }
+        public RibbonAdaptiveGroupState LayoutState
+        {
+            get => _layoutState;
+            set
+            {
+                if (_layoutState == value)
+                    return;
+
+                _layoutState = value;
+                Content = value == RibbonAdaptiveGroupState.Collapsed
+                    ? (_collapsedButton ??= BuildCollapsedButton())
+                    : GetPresentation(value);
+            }
+        }
 
         public bool Collapsed
         {
-            get => _collapsed;
-            set
-            {
-                if (_collapsed == value)
-                    return;
+            get => LayoutState == RibbonAdaptiveGroupState.Collapsed;
+            set => LayoutState = value ? RibbonAdaptiveGroupState.Collapsed : RibbonAdaptiveGroupState.Full;
+        }
 
-                _collapsed = value;
-                Content = value ? (_collapsedButton ??= BuildCollapsedButton()) : _full;
-            }
+        public double MeasureWidth(
+            RibbonAdaptiveGroupState state,
+            Size availableSize,
+            double adaptiveAvailableWidth)
+        {
+            if (!Supports(state, adaptiveAvailableWidth))
+                state = RibbonAdaptiveGroupState.Full;
+
+            if (state == RibbonAdaptiveGroupState.Collapsed)
+                return CollapsedWidth;
+
+            var presentation = GetPresentation(state);
+            presentation.Measure(availableSize);
+            return Math.Max(presentation.DesiredSize.Width, WidthHintFor(state));
+        }
+
+        private bool Supports(RibbonAdaptiveGroupState state, double adaptiveAvailableWidth) =>
+            state is RibbonAdaptiveGroupState.Full or RibbonAdaptiveGroupState.Collapsed ||
+            _enableIntermediatePresentations &&
+            _group.Sizing.EnableCompactPresentation &&
+            (_group.Sizing.CompactPresentationMinimumWidth is not { } minimumWidth ||
+             adaptiveAvailableWidth >= minimumWidth) &&
+            (_group.Sizing.CompactPresentationMaximumWidth is not { } maximumWidth ||
+             adaptiveAvailableWidth <= maximumWidth) &&
+            _group.Sizing.SupportedVariants.Contains(state);
+
+        private double WidthHintFor(RibbonAdaptiveGroupState state) =>
+            _group.Sizing.Hints is { } hints
+                ? state switch
+                {
+                    RibbonAdaptiveGroupState.Full => hints.FullWidth,
+                    RibbonAdaptiveGroupState.SmallWithLabels => hints.SmallWithLabelsWidth,
+                    RibbonAdaptiveGroupState.IconOnly => hints.IconOnlyWidth,
+                    _ => 0,
+                }
+                : 0;
+
+        private Control GetPresentation(RibbonAdaptiveGroupState state)
+        {
+            if (!_enableIntermediatePresentations)
+                return _full;
+
+            // Avalonia may defer detaching a replaced ContentControl child until its pending layout
+            // work runs. Reusing an intermediate tree during a rapid resize can therefore attempt to
+            // attach one visual to two presenters. Every declarative group form is inexpensive, so
+            // create a fresh tree for each presentation transition rather than retaining visual state.
+            return _presentationFactory(state);
         }
 
         private Control BuildCollapsedButton()
@@ -3098,12 +3226,17 @@ public static class AvaloniaRibbonRenderer
     {
         private const double GroupSpacing = 6;
 
+        public bool EnableIntermediateGroupPresentations { get; init; }
+
         protected override Size MeasureOverride(Size availableSize)
         {
             var children = Children.ToList();
             var hosts = children.OfType<AvaloniaRibbonGroupHost>().ToList();
             var infinite = new Size(double.PositiveInfinity, availableSize.Height);
             var spacing = GroupSpacing * Math.Max(0, children.Count - 1);
+
+            if (EnableIntermediateGroupPresentations)
+                return MeasureWithIntermediatePresentations(children, hosts, infinite, availableSize, spacing);
 
             foreach (var child in children)
                 child.Measure(infinite);
@@ -3133,6 +3266,52 @@ public static class AvaloniaRibbonRenderer
 
             for (var index = 0; index < hosts.Count; index++)
                 hosts[index].Collapsed = decisions[index].IsCollapsed;
+
+            foreach (var child in children)
+                child.Measure(infinite);
+
+            var width = children.Sum(child => child.DesiredSize.Width) + spacing;
+            var height = children.Count > 0 ? children.Max(child => child.DesiredSize.Height) : 0;
+            return new Size(double.IsInfinity(availableSize.Width) ? width : Math.Min(width, available), height);
+        }
+
+        private static Size MeasureWithIntermediatePresentations(
+            IReadOnlyList<Control> children,
+            IReadOnlyList<AvaloniaRibbonGroupHost> hosts,
+            Size infinite,
+            Size availableSize,
+            double spacing)
+        {
+            var available = double.IsInfinity(availableSize.Width) ? double.MaxValue : availableSize.Width;
+            foreach (var host in hosts)
+                host.FullWidth = host.MeasureWidth(RibbonAdaptiveGroupState.Full, infinite, available);
+
+            var nonHostWidth = children
+                .Where(child => child is not AvaloniaRibbonGroupHost)
+                .Sum(child =>
+                {
+                    child.Measure(infinite);
+                    return child.DesiredSize.Width;
+                });
+            var orderedHosts = hosts
+                .Select((host, index) => new { Host = host, Index = index })
+                .OrderByDescending(entry => entry.Host.Priority)
+                .ThenBy(entry => entry.Index)
+                .ToList();
+            var states = RibbonAdaptiveLayoutPlanner.Plan(
+                available,
+                orderedHosts
+                    .Select(entry => new RibbonAdaptiveGroup(
+                        entry.Host.GroupId,
+                        entry.Host.FullWidth,
+                        entry.Host.MeasureWidth(RibbonAdaptiveGroupState.SmallWithLabels, infinite, available),
+                        entry.Host.MeasureWidth(RibbonAdaptiveGroupState.IconOnly, infinite, available),
+                        AvaloniaRibbonGroupHost.CollapsedWidth,
+                        entry.Host.GroupId))
+                    .ToList(),
+                fixedChromeWidth: nonHostWidth + spacing);
+            for (var index = 0; index < orderedHosts.Count; index++)
+                orderedHosts[index].Host.LayoutState = states[index];
 
             foreach (var child in children)
                 child.Measure(infinite);

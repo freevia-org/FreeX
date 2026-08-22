@@ -137,6 +137,56 @@ public sealed class AvaloniaRibbonSplitButtonTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task OptInIntermediateGroupPresentation_CompactsBeforeCollapsing()
+    {
+        await Session.Dispatch(() =>
+        {
+            var content = AvaloniaRibbonRenderer.BuildTabContent(
+                BuildOfficeAdaptiveTab(),
+                options: new AvaloniaRibbonRendererOptions(EnableIntermediateGroupPresentations: true));
+            var window = Show(content, width: 125);
+            try
+            {
+                var compactButton = Assert.Single(
+                    content.GetVisualDescendants().OfType<Button>(),
+                    button => Equals(button.Tag, "one"));
+
+                compactButton.MinWidth.Should().Be(88,
+                    "the opt-in host should keep command buttons visible in their compact presentation");
+                content.GetVisualDescendants().OfType<Button>()
+                    .Any(button => (button.Tag as string ?? string.Empty).StartsWith("collapsed:"))
+                    .Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task DefaultGroupPresentation_PreservesFullOrCollapsedBehavior()
+    {
+        await Session.Dispatch(() =>
+        {
+            var content = AvaloniaRibbonRenderer.BuildTabContent(BuildOfficeAdaptiveTab());
+            var window = Show(content, width: 125);
+            try
+            {
+                content.GetVisualDescendants().OfType<Button>()
+                    .Any(button => (button.Tag as string ?? string.Empty).StartsWith("collapsed:"))
+                    .Should().BeTrue();
+                content.GetVisualDescendants().OfType<Button>()
+                    .Should().NotContain(button => Equals(button.Tag, "one"));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     [Theory]
     [InlineData(RibbonCommandLayoutKind.Medium)]
     [InlineData(RibbonCommandLayoutKind.Small)]
@@ -472,6 +522,17 @@ public sealed class AvaloniaRibbonSplitButtonTests
                     KeyTip = "P"
                 })))
             .Build();
+
+    private static RibbonTab BuildOfficeAdaptiveTab() =>
+        new RibbonDefinitionBuilder()
+            .Tab("home", "Home", "H", tab => tab.Group("commands", "Commands", "C", 1, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Large("one", "One", RibbonCommandIconKind.Copy, "O");
+                group.Large("two", "Two", RibbonCommandIconKind.Paste, "T");
+            }))
+            .Build()
+            .FindTab("home")!;
 
     private static Window Show(Control content, double width = 420)
     {

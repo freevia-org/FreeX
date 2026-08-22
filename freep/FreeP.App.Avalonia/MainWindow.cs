@@ -2338,7 +2338,9 @@ public sealed partial class MainWindow : Window,
             afterExecute: null,
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
             onFileTabSelected: ShowBackstage,
-            stateStore: _ribbonStateStore);
+            stateStore: _ribbonStateStore,
+            options: new AvaloniaRibbonRendererOptions(
+                EnableIntermediateGroupPresentations: true));
 
         return new Border
         {
