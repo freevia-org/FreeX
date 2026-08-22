@@ -1835,33 +1835,15 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
         var packageStream = remainingLength is > 0 and <= int.MaxValue
             ? new MemoryStream((int)remainingLength)
             : new MemoryStream();
-        CopyToMemoryStreamWithLimit(stream, packageStream, maxFileBytes);
+        WorkbookOpenSizeGuard.CopyToWithLimit(
+            stream,
+            packageStream,
+            maxFileBytes,
+            limit => new WorkbookTooLargeException(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"The file exceeds the {WorkbookOpenSizeGuard.FormatBytes(limit)} open limit.")));
         return new LoadPackageStream(packageStream, CanReuseBufferForSnapshot: true);
-    }
-
-    private static void CopyToMemoryStreamWithLimit(Stream source, MemoryStream destination, long maxFileBytes)
-    {
-        var buffer = new byte[81920];
-        while (true)
-        {
-            var remainingAllowance = maxFileBytes - destination.Length;
-            var maxRead = remainingAllowance >= buffer.Length
-                ? buffer.Length
-                : (int)Math.Max(1, remainingAllowance + 1);
-            var read = source.Read(buffer, 0, maxRead);
-            if (read == 0)
-                return;
-
-            if (read > remainingAllowance)
-            {
-                throw new WorkbookTooLargeException(
-                    string.Create(
-                        CultureInfo.InvariantCulture,
-                        $"The file exceeds the {WorkbookOpenSizeGuard.FormatBytes(maxFileBytes)} open limit."));
-            }
-
-            destination.Write(buffer, 0, read);
-        }
     }
 
     // OLE/CFB compound-file signature ("Encrypt with Password" wraps the real OOXML zip in an

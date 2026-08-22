@@ -93,7 +93,14 @@ public static class PptxPackageReader
 
         // Copy to MemoryStream so ZipArchive can seek.
         var ms = new MemoryStream();
-        CopyToMemoryStreamWithLimit(stream, ms, WorkbookOpenSizeGuard.DefaultMaxFileBytes);
+        WorkbookOpenSizeGuard.CopyToWithLimit(
+            stream,
+            ms,
+            WorkbookOpenSizeGuard.DefaultMaxFileBytes,
+            limit => new WorkbookTooLargeException(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"The file exceeds the {limit:N0} byte open limit.")));
         ms.Position = 0;
 
         // Sniff before handing the buffer to ZipArchive, which otherwise throws an opaque
@@ -151,37 +158,6 @@ public static class PptxPackageReader
         throw new InvalidDataException(
             "The file doesn't look like a valid .pptx presentation. It may have been renamed from a " +
             "different file type, or it may be corrupt.");
-    }
-
-    /// <summary>
-    /// Copies <paramref name="source"/> into <paramref name="destination"/> in bounded chunks, throwing
-    /// <see cref="WorkbookTooLargeException"/> the moment the copy would exceed <paramref name="maxFileBytes"/>
-    /// instead of first buffering the whole (possibly multi-gigabyte or unbounded) input. This is the same
-    /// bound-during-copy shape as <c>XlsxFileAdapter.CopyToMemoryStreamWithLimit</c>.
-    /// </summary>
-    private static void CopyToMemoryStreamWithLimit(Stream source, MemoryStream destination, long maxFileBytes)
-    {
-        var buffer = new byte[81920];
-        while (true)
-        {
-            var remainingAllowance = maxFileBytes - destination.Length;
-            var maxRead = remainingAllowance >= buffer.Length
-                ? buffer.Length
-                : (int)Math.Max(1, remainingAllowance + 1);
-            var read = source.Read(buffer, 0, maxRead);
-            if (read == 0)
-                return;
-
-            if (read > remainingAllowance)
-            {
-                throw new WorkbookTooLargeException(
-                    string.Create(
-                        CultureInfo.InvariantCulture,
-                        $"The file exceeds the {maxFileBytes:N0} byte open limit."));
-            }
-
-            destination.Write(buffer, 0, read);
-        }
     }
 
     private static PresentationPackageKind DetectPackageKind(PptxPackageSnapshot snapshot)
@@ -628,7 +604,7 @@ public static class PptxPackageReader
             }
 
             var packagePath = element.Attribute("packagePath")?.Value ?? string.Empty;
-            var normalizedPackagePath = NormalizeZipPath(packagePath);
+            var normalizedPackagePath = ToZipEntryPath(packagePath);
             var payloadBytes = string.IsNullOrWhiteSpace(normalizedPackagePath)
                 ? null
                 : ReadEntryBytes(archive, normalizedPackagePath);
@@ -647,9 +623,6 @@ public static class PptxPackageReader
                 payloadBytes));
         }
     }
-
-    private static string NormalizeZipPath(string packagePath) =>
-        packagePath.Replace('\\', '/').TrimStart('/');
 
     private static PptxPackageSnapshot CapturePackageSnapshot(ZipArchive archive)
     {

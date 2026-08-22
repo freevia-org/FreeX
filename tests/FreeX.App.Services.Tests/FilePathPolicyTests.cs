@@ -42,6 +42,25 @@ public sealed class FilePathPolicyTests
         extension.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(".XLSX", "xlsx")]
+    [InlineData("  ..DoCx  ", "docx")]
+    [InlineData("payload", "payload")]
+    [InlineData("../../payload", "bin")]
+    [InlineData("bad-name", "bin")]
+    [InlineData("", "bin")]
+    [InlineData(null, "bin")]
+    public void NormalizeSafeExtension_PreservesOleSafeExtensionPolicy(string? extension, string expected)
+    {
+        FilePathPolicy.NormalizeSafeExtension(extension).Should().Be(expected);
+    }
+
+    [Fact]
+    public void NormalizeSafeExtension_AllowsCallerSelectedFallback()
+    {
+        FilePathPolicy.NormalizeSafeExtension("bad-name", "dat").Should().Be("dat");
+    }
+
     [Fact]
     public void TryChangeExtension_IsExceptionFreeAndPreservesMalformedInput()
     {

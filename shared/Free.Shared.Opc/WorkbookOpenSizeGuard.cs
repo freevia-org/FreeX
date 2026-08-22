@@ -57,6 +57,34 @@ public static class WorkbookOpenSizeGuard
         }
     }
 
+    public static void CopyToWithLimit(
+        Stream source,
+        Stream destination,
+        long maxFileBytes,
+        Func<long, Exception> createOverflowException)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(destination);
+        ArgumentNullException.ThrowIfNull(createOverflowException);
+
+        var buffer = new byte[81920];
+        while (true)
+        {
+            var remainingAllowance = maxFileBytes - destination.Length;
+            var maxRead = remainingAllowance >= buffer.Length
+                ? buffer.Length
+                : (int)Math.Max(1, remainingAllowance + 1);
+            var read = source.Read(buffer, 0, maxRead);
+            if (read == 0)
+                return;
+
+            if (read > remainingAllowance)
+                throw createOverflowException(maxFileBytes);
+
+            destination.Write(buffer, 0, read);
+        }
+    }
+
     public static void EnsureArchiveWithinLimits(
         Stream packageStream,
         long maxTotalUncompressedBytes = DefaultMaxTotalUncompressedBytes,

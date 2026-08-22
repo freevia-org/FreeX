@@ -1154,7 +1154,7 @@ public static class PptxPackageWriter
 
     private static string GetPackagePathExtension(string packagePath)
     {
-        var normalized = NormalizeZipPath(packagePath);
+        var normalized = ToZipEntryPath(packagePath);
         var fileName = normalized.Contains('/')
             ? normalized[(normalized.LastIndexOf('/') + 1)..]
             : normalized;
@@ -1164,12 +1164,9 @@ public static class PptxPackageWriter
             : string.Empty;
     }
 
-    private static string NormalizeZipPath(string packagePath) =>
-        packagePath.Replace('\\', '/').TrimStart('/');
-
     private static bool TryNormalizeRecordingMediaPackagePath(string packagePath, out string normalizedPath)
     {
-        normalizedPath = NormalizeZipPath(packagePath);
+        normalizedPath = ToZipEntryPath(packagePath);
         if (string.IsNullOrWhiteSpace(normalizedPath) ||
             !normalizedPath.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase) ||
             normalizedPath.EndsWith("/", StringComparison.Ordinal) ||
