@@ -407,6 +407,7 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("copy_cell_formula_by_address()");
         probe.Should().Contain("send_key ctrl+g");
         probe.Should().Contain("the production Go To route");
+        probe.Should().Contain("authoritative formula field");
         probe.Should().Contain("Restore the calibrated A1 viewport");
 
         var rowsStart = probe.IndexOf("probe_outline_nested_rows_physical()", StringComparison.Ordinal);

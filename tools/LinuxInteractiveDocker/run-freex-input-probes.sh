@@ -296,7 +296,7 @@ copy_cell_formula_by_keyboard() {
 }
 
 copy_cell_formula_by_address() {
-    local address="$1" value=""
+    local address="$1" value="" formula_field_x formula_field_y
     set_clipboard_sentinel
 
     # Ctrl+G is the production Go To route. Its dialog selects the reference field on open,
@@ -308,7 +308,15 @@ copy_cell_formula_by_address() {
     xdotool type --clearmodifiers --delay "$type_delay_ms" "$address"
     xdotool key --clearmodifiers --delay "$input_delay_ms" Return
     sleep "$settle_seconds"
-    xdotool key --clearmodifiers --delay "$input_delay_ms" F2
+
+    # A Go To target may be hidden by an outline/filter. Read its authoritative formula field;
+    # F2 would instead attach the inline editor to the current visible slot. Go To can also leave
+    # the owner unmaximized, so restore the calibrated window geometry before the field click.
+    wmctrl -ir "$window_id" -b add,maximized_vert,maximized_horz 2>/dev/null || true
+    focus_app
+    formula_field_x="$((a1_x + cell_width * 2))"
+    formula_field_y="$((a1_y - cell_height * 2 + 2))"
+    xdotool_mousemove_sync "$formula_field_x" "$formula_field_y" click 1
     sleep "$settle_seconds"
     xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+a
     xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+c
