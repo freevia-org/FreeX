@@ -428,8 +428,17 @@ function Test-AvaloniaProject {
         Assert-True -Condition ($packageReferences -contains $package) -Message "Avalonia app project must reference package '$package'."
     }
 
-    $contentItems = @(Get-ProjectItems -Project $project -Name "Content" | ForEach-Object { [string]$_.Include })
-    Assert-True -Condition ($contentItems -contains "..\..\shared\Free.Shared.Shell\Resources\FreeX.icns") -Message "Avalonia app project must include the shared macOS app icon as content."
+    $brandAssetImports = @($project.Project.Import | Where-Object {
+        [string]$_.Project -eq "..\..\shared\Free.Shared.Shell\BrandAssets.props"
+    })
+    Assert-True -Condition ($brandAssetImports.Count -eq 1) -Message "Avalonia app project must import the shared brand asset definitions."
+    Assert-True -Condition ((Get-ProjectProperty -Project $project -Name "FreeBrand") -eq "FreeX") -Message "Avalonia app project must select the FreeX brand assets."
+
+    $macOsIconItems = @(Get-ProjectItemNodes -Project $project -Name "Content" | Where-Object {
+        $_.GetAttribute("Include") -eq "`$(BrandMacOsIconPath)"
+    })
+    Assert-True -Condition ($macOsIconItems.Count -eq 1) -Message "Avalonia app project must include the configured shared macOS app icon as content."
+    Assert-True -Condition ($macOsIconItems[0].GetAttribute("Link") -eq "`$(BrandMacOsIconFileName)") -Message "Avalonia app macOS icon content must retain the configured brand file name."
 
     $macOsSourceRemoves = @(Get-ProjectItemNodes -Project $project -Name "Compile" | Where-Object { $_.GetAttribute("Remove") -eq "MacOs\**\*.cs" })
     Assert-True -Condition ($macOsSourceRemoves.Count -eq 1) -Message "Avalonia app project must exclude MacOs source from non-macOS target frameworks."
