@@ -200,7 +200,7 @@ public sealed partial class MainWindow
     /// </summary>
     internal IReadOnlyList<string> CellAddressAutocompleteNamesForTest() => BuildCellAddressAutocompleteNames();
 
-    internal bool CellAddressAutocompleteOpenForTest => _cellAddressAutocompletePopup?.IsOpen == true;
+    internal bool CellAddressAutocompleteOpenForTest => _cellAddressAutocompleteOverlay?.IsVisible == true;
 
     internal IReadOnlyList<string> CellAddressAutocompleteRenderedNamesForTest()
     {

@@ -2372,8 +2372,8 @@ public sealed partial class MainWindow
             ShowCellAddressAutocompletePopup();
             LayoutWindow();
 
-            if (_cellAddressAutocompletePopup?.Child is not Visual)
-                throw new InvalidOperationException("The Avalonia Name Box popup did not expose its production child.");
+            if (_cellAddressAutocompleteSurface is not Visual surface || !surface.IsVisible)
+                throw new InvalidOperationException("The Avalonia Name Box overlay did not expose its production surface.");
 
             return new ParitySurfaceResult(
                 surfaceId,
@@ -2395,8 +2395,7 @@ public sealed partial class MainWindow
         }
         finally
         {
-            if (_cellAddressAutocompletePopup is { } popup)
-                popup.IsOpen = false;
+            HideCellAddressAutocompletePopup();
             LayoutWindow();
         }
     }

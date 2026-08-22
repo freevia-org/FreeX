@@ -37,6 +37,29 @@ public sealed partial class MainWindow
         }
     }
 
+    partial void CompleteOptionalStartupFileOpen()
+    {
+        var startupArguments = App.StartupArguments;
+        var fixtureSeeded = false;
+        if (HasStartupArgument(startupArguments, NameBoxDropdownPhysicalFixtureArgument))
+        {
+            SeedNameBoxDropdownPhysicalFixture();
+            fixtureSeeded = true;
+        }
+
+        if (HasStartupArgument(startupArguments, NameBoxDropdownParityPhysicalFixtureArgument))
+        {
+            SeedNameBoxDropdownParityFixture();
+            fixtureSeeded = true;
+        }
+
+        if (!fixtureSeeded)
+            return;
+
+        RefreshShell(_statusText.Text ?? "Ready");
+        InitializeNameBoxDropdownPhysicalEvidence();
+    }
+
     partial void RecordOptionalNeutralCellSelection() =>
         RecordNameBoxDropdownPhysicalEvidence(item: null, stage: "neutral-cell-selected");
 

@@ -1,7 +1,11 @@
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Automation;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using FluentAssertions;
 
 using FreeX.App.Presentation.FormulaBar;
@@ -82,6 +86,42 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
 
             window.AllowCloseWithoutDirtyPromptForParityCapture();
 
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ProductionDropdown_UsesAttachedClientOverlayAndFocusesItsList()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(
+                [InteractionValidationOptions.NameBoxDropdownParityPhysicalFixtureArgument]);
+
+            window.Show();
+            window.Measure(new global::Avalonia.Size(1120, 720));
+            window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+            window.UpdateLayout();
+            window.CellAddressAutocompleteRenderedNamesForTest().Should().HaveCount(5);
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+
+            var overlay = window.GetVisualDescendants()
+                .OfType<Border>()
+                .Single(control =>
+                    AutomationProperties.GetAutomationId(control) == "CellAddressAutocompleteOverlay");
+            var list = window.GetVisualDescendants()
+                .OfType<ListBox>()
+                .Single(control =>
+                    AutomationProperties.GetAutomationId(control) == "CellAddressAutocompleteList");
+
+            overlay.IsAttachedToVisualTree().Should().BeTrue();
+            overlay.Bounds.Width.Should().Be(NameBoxDropdownWidthForTest);
+            overlay.Bounds.Height.Should().Be(NameBoxDropdownHeightForTest);
+            overlay.IsHitTestVisible.Should().BeTrue();
+            list.IsAttachedToVisualTree().Should().BeTrue();
+            list.IsFocused.Should().BeTrue();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -527,4 +567,7 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             window.Close();
         }, CancellationToken.None);
     }
+
+    private const double NameBoxDropdownWidthForTest = 208;
+    private const double NameBoxDropdownHeightForTest = 136;
 }

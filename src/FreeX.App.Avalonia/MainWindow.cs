@@ -448,7 +448,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Popup? _functionAutocompletePopup;
     private ListBox? _functionAutocompleteListBox;
     private bool FunctionAutocompleteIsOpen => _functionAutocompletePopup?.IsOpen == true;
-    private Popup? _cellAddressAutocompletePopup;
+    private Canvas? _cellAddressAutocompleteOverlay;
+    private Border? _cellAddressAutocompleteSurface;
     private ListBox? _cellAddressAutocompleteListBox;
 
     // R93-formula-editing-assist-5-2: the live argument-signature tooltip driven by
@@ -1600,6 +1601,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var root = new AvaloniaGrid();
         root.Children.Add(frame.Root);
         root.Children.Add(BuildBackstageOverlay());
+        // Keep the Name Box list in the same client render tree as the workbook. Avalonia's
+        // Linux PopupRoot/overlay path is a separate compositor surface, so it is absent from
+        // root captures and does not provide a stable input target for this shell-owned control.
+        if (_cellAddressAutocompleteOverlay is not null)
+            root.Children.Add(_cellAddressAutocompleteOverlay);
 
         var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
             Window: this,
@@ -3376,8 +3382,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellAddressDropDownButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Center;
         _cellAddressDropDownButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         CreateCellAddressAutocompletePopup();
-        cellAddressChrome.Children.Add(_cellAddressAutocompletePopup!);
-        // Use an explicit Popup rather than relying on the DropDownButton template's
+        // Use an explicit pointer route rather than relying on the DropDownButton template's
         // MenuFlyout hookup, which is not reliable on the Linux X11 backend.
         _cellAddressDropDownButton.AddHandler(
             InputElement.PointerPressedEvent,
@@ -18685,7 +18690,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MaxHeight = 220,
             MinWidth = 180,
             Focusable = true,
-            Background = Brushes.White,
+            // The shell-owned surface supplies the popup background and border; the standard
+            // ListBox remains the single renderer, focus owner, and selection target.
+            Background = Brushes.Transparent,
             ItemsPanel = new FuncTemplate<Panel?>(() => new StackPanel()),
             ItemTemplate = new FuncDataTemplate<NameBoxNavigationItem>(
                 (item, _) => BuildCellAddressAutocompleteText(item),
@@ -18708,7 +18715,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 }
                 else if (args.Key == Key.Escape)
                 {
-                    _cellAddressAutocompletePopup!.IsOpen = false;
+                    HideCellAddressAutocompletePopup();
                     FocusShellRegion(ShellFocusTarget.Worksheet);
                     args.Handled = true;
                 }
@@ -18720,39 +18727,111 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (args.GetCurrentPoint(_cellAddressAutocompleteListBox).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonReleased)
                 CommitCellAddressAutocompleteSelection();
         };
-        _cellAddressAutocompletePopup = new Popup
+        _cellAddressAutocompleteSurface = new Border
         {
-            Child = new Border
-            {
-                Width = NameBoxDropdownWidth,
-                Height = NameBoxDropdownHeight,
-                Background = Brushes.White,
-                BorderBrush = FormulaBarControlBorder,
-                BorderThickness = new Thickness(1),
-                Child = _cellAddressAutocompleteListBox,
-            },
-            IsLightDismissEnabled = true,
-            // Keep this shell-owned transient surface inside the workbook on Linux. The X11
-            // windowed popup exposes both a PopupRoot and a GL render child as visible windows,
-            // which splits physical identity and focus for this control.
-            ShouldUseOverlayLayer = OperatingSystem.IsLinux(),
+            Width = NameBoxDropdownWidth,
+            Height = NameBoxDropdownHeight,
+            Background = Brushes.White,
+            BorderBrush = FormulaBarControlBorder,
+            BorderThickness = new Thickness(1),
+            Child = _cellAddressAutocompleteListBox,
+            IsVisible = false,
         };
-        _cellAddressAutocompletePopup.Opened += (_, _) =>
+        AutomationProperties.SetAutomationId(_cellAddressAutocompleteSurface, "CellAddressAutocompleteOverlay");
+        _cellAddressAutocompleteOverlay = new Canvas
+        {
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
+            IsVisible = false,
+            IsHitTestVisible = false,
+            ClipToBounds = false,
+        };
+        _cellAddressAutocompleteOverlay.Children.Add(_cellAddressAutocompleteSurface);
+        _cellAddressAutocompleteOverlay.PointerPressed += (_, args) =>
+        {
+            if (args.GetCurrentPoint(_cellAddressAutocompleteOverlay).Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed)
+                return;
+
+            if (!IsCellAddressAutocompleteDescendant(args.Source as Visual))
+                HideCellAddressAutocompletePopup();
+        };
+        _cellAddressAutocompleteOverlay.PointerReleased += (_, args) =>
+        {
+            if (!IsCellAddressAutocompleteDescendant(args.Source as Visual))
+                args.Handled = true;
+        };
+    }
+
+    private bool IsCellAddressAutocompleteDescendant(Visual? visual)
+    {
+        for (var current = visual; current is not null; current = current.GetVisualParent())
+        {
+            if (ReferenceEquals(current, _cellAddressAutocompleteSurface))
+                return true;
+        }
+
+        return false;
+    }
+
+    private void PositionCellAddressAutocompleteSurface()
+    {
+        if (_cellAddressAutocompleteOverlay is not { } overlay ||
+            _cellAddressAutocompleteSurface is not { } surface)
+        {
+            return;
+        }
+
+        var topLeft = _cellAddressDropDownButton.TranslatePoint(
+            new Point(0, _cellAddressDropDownButton.Bounds.Height),
+            overlay);
+        if (topLeft is not { } origin)
+            return;
+
+        Canvas.SetLeft(surface, origin.X);
+        Canvas.SetTop(surface, origin.Y);
+    }
+
+    private void ShowCellAddressAutocompletePopup()
+    {
+        var items = BuildCellAddressAutocompleteItems();
+        _cellAddressAutocompleteListBox!.IsEnabled = items.Count > 0;
+        _cellAddressAutocompleteListBox.ItemsSource = items.ToArray();
+        _cellAddressAutocompleteListBox.SelectedIndex = -1;
+        PositionCellAddressAutocompleteSurface();
+        _cellAddressAutocompleteSurface!.IsVisible = true;
+        _cellAddressAutocompleteOverlay!.IsVisible = true;
+        _cellAddressAutocompleteOverlay.IsHitTestVisible = true;
+        _cellAddressAutocompleteOverlay.UpdateLayout();
+
+        if (_cellAddressDropDownButton.IsAttachedToVisualTree())
         {
             var popupPosition = _cellAddressDropDownButton.PointToScreen(
                 new Point(0, _cellAddressDropDownButton.Bounds.Height));
             RecordOptionalNameBoxPopupOpened(
-                _cellAddressAutocompletePopup.IsUsingOverlayLayer
-                    ? "overlay-layer"
-                    : "native-x11-popup-root",
+                "overlay-layer",
                 popupPosition.X,
                 popupPosition.Y,
                 NameBoxDropdownWidth,
                 NameBoxDropdownHeight);
-            Dispatcher.UIThread.Post(
-                () => _cellAddressAutocompleteListBox?.Focus(),
-                DispatcherPriority.Input);
-        };
+        }
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (_cellAddressAutocompleteOverlay?.IsVisible == true)
+                    _cellAddressAutocompleteListBox?.Focus();
+            },
+            DispatcherPriority.Input);
+    }
+
+    private void HideCellAddressAutocompletePopup()
+    {
+        if (_cellAddressAutocompleteOverlay is not { } overlay)
+            return;
+
+        overlay.IsHitTestVisible = false;
+        overlay.IsVisible = false;
+        if (_cellAddressAutocompleteSurface is not null)
+            _cellAddressAutocompleteSurface.IsVisible = false;
     }
 
     private static TextBlock BuildCellAddressAutocompleteText(NameBoxNavigationItem item)
@@ -18786,7 +18865,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        _cellAddressAutocompletePopup!.IsOpen = false;
+        HideCellAddressAutocompletePopup();
         SelectCellAddressBoxItem(item);
         FocusShellRegion(ShellFocusTarget.Worksheet);
     }
@@ -18804,18 +18883,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Key.Up => Math.Max(0, list.SelectedIndex - 1),
             _ => list.SelectedIndex,
         };
-    }
-
-    private void ShowCellAddressAutocompletePopup()
-    {
-        var items = BuildCellAddressAutocompleteItems();
-        _cellAddressAutocompleteListBox!.IsEnabled = items.Count > 0;
-        _cellAddressAutocompleteListBox.ItemsSource = items.ToArray();
-        _cellAddressAutocompleteListBox.SelectedIndex = -1;
-        _cellAddressAutocompletePopup!.PlacementTarget = _cellAddressDropDownButton;
-        _cellAddressAutocompletePopup.Placement = PlacementMode.BottomEdgeAlignedLeft;
-        _cellAddressAutocompletePopup.IsOpen = true;
-        // The Opened handler focuses after the popup host has attached and laid out the ListBox.
     }
 
     private bool SelectCellAddressBoxItem(NameBoxNavigationItem item)
@@ -25580,7 +25647,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         await OpenWorkbookPathAsync(path!, fileAccessIdentity);
     }
 
-    internal Task OpenStartupFileAsync(string path) => OpenWorkbookPathAsync(path);
+    internal async Task OpenStartupFileAsync(string path)
+    {
+        var sessionBeforeOpen = _session;
+        await OpenWorkbookPathAsync(path);
+        if (!ReferenceEquals(_session, sessionBeforeOpen))
+            CompleteOptionalStartupFileOpen();
+    }
 
     internal void ReportStartupFileNotFound(string path) =>
         ShowOpenIssue(UiText.Format("Startup_FileArgumentNotFoundMessage", path));

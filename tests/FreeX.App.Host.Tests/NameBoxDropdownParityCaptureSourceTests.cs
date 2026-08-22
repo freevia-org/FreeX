@@ -50,9 +50,15 @@ public sealed class NameBoxDropdownParityCaptureSourceTests
         physicalEvidence.Should().Contain("SeedNameBoxDropdownPhysicalFixture");
         physicalEvidence.Should().Contain("67000000-0000-0000-0000-000000000001");
         physicalEvidence.Should().Contain("67000000-0000-0000-0000-000000000004");
+        physicalEvidence.Should().Contain("partial void CompleteOptionalStartupFileOpen()");
+        physicalEvidence.Should().Contain("RefreshShell(_statusText.Text ?? \"Ready\")");
         avaloniaSource.Should().Contain("Width = NameBoxDropdownWidth");
         avaloniaSource.Should().Contain("Height = NameBoxDropdownHeight");
-        avaloniaSource.Should().Contain("ShouldUseOverlayLayer = OperatingSystem.IsLinux()");
+        avaloniaSource.Should().Contain("CellAddressAutocompleteOverlay");
+        avaloniaSource.Should().Contain("if (!ReferenceEquals(_session, sessionBeforeOpen))");
+        avaloniaSource.Should().Contain("CompleteOptionalStartupFileOpen()");
+        avaloniaSource.Should().Contain("TranslatePoint(");
+        avaloniaSource.Should().Contain("IsHitTestVisible = true");
         avaloniaSource.Should().Contain("RecordOptionalNameBoxPopupOpened");
         rendererAccess.Should().Contain("NameBoxDropdownWidth = 208");
         rendererAccess.Should().Contain("NameBoxDropdownHeight = 136");

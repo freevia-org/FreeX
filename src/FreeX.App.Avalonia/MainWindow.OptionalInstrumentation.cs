@@ -9,6 +9,8 @@ public sealed partial class MainWindow
 
     partial void CompleteOptionalStartupState(IReadOnlyList<string> startupArguments);
 
+    partial void CompleteOptionalStartupFileOpen();
+
     partial void RecordOptionalNeutralCellSelection();
 
     partial void RecordOptionalNameBoxSelection(NameBoxNavigationItem item);
