@@ -121,6 +121,11 @@ public static class FreeXRibbonDefinition
                 .Medium(FreeXRibbonCommandIds.FormulasMoreFunctions, "More Functions", Ico.Function, "MF"))
             .Group("FormulasDefinedNamesGroup", "Defined Names", null, priority: 130,
                 g => g
+                .Sizing(RibbonGroupSizing.OfficeIconAdaptive with
+                {
+                    CompactPresentationMinimumWidth = 900,
+                    CompactPresentationMaximumWidth = 1150
+                })
                 .Large("Name Manager", "Name Manager", Ico.Label, "N")
                 .Large("Define Name", "Define Name", Ico.Label, "DN")
                 .Large("Use in Formula", "Use in Formula", Ico.Function, "I")
@@ -136,6 +141,11 @@ public static class FreeXRibbonDefinition
                 .Medium("Watch Window", "Watch Window", Ico.Watch, "W"))
             .Group("FormulasCalculationGroup", "Calculation", null, priority: 120,
                 g => g
+                .Sizing(RibbonGroupSizing.OfficeIconAdaptive with
+                {
+                    CompactPresentationMinimumWidth = 900,
+                    CompactPresentationMaximumWidth = 1150
+                })
                 .Large("Calculate Now", "Calculate Now", Ico.Refresh, "CN")
                 .Large("Calculate Sheet", "Calculate Sheet", Ico.Refresh, "SC")
                 .Large("Calculation Options", "Calculation Options", Ico.Refresh, "O", menu: m => m.Item(FreeXRibbonCommandIds.FormulasCalculationAutomatic, "Automatic", "A", isChecked: false).Item(FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables, "Automatic Except Data Tables", "E", isChecked: false).Item(FreeXRibbonCommandIds.FormulasCalculationManual, "Manual", "M", isChecked: false)))

@@ -31,9 +31,12 @@ public sealed class RibbonGroupHost : ContentControl
     /// find the group's authored full surface even while responsive layout is active.</summary>
     public FrameworkElement GroupContent => _full;
 
-    public double MeasureWidth(RibbonAdaptiveGroupState state, Size availableSize)
+    public double MeasureWidth(
+        RibbonAdaptiveGroupState state,
+        Size availableSize,
+        double adaptiveAvailableWidth)
     {
-        if (!Supports(state))
+        if (!Supports(state, adaptiveAvailableWidth))
             state = RibbonAdaptiveGroupState.Full;
 
         if (state == RibbonAdaptiveGroupState.Collapsed)
@@ -120,7 +123,7 @@ public sealed class RibbonGroupHost : ContentControl
         return presentation;
     }
 
-    internal RibbonAdaptiveGroupState NextFallbackState()
+    internal RibbonAdaptiveGroupState NextFallbackState(double adaptiveAvailableWidth)
     {
         foreach (var state in new[]
                  {
@@ -129,16 +132,40 @@ public sealed class RibbonGroupHost : ContentControl
                      RibbonAdaptiveGroupState.Collapsed
                  })
         {
-            if ((int)state > (int)LayoutState && Supports(state))
+            if ((int)state > (int)LayoutState && Supports(state, adaptiveAvailableWidth))
                 return state;
         }
 
         return LayoutState;
     }
 
-    private bool Supports(RibbonAdaptiveGroupState state) =>
+    internal bool TryGetNextExpandedState(
+        double adaptiveAvailableWidth,
+        out RibbonAdaptiveGroupState expandedState)
+    {
+        for (var stateValue = (int)LayoutState - 1;
+             stateValue >= (int)RibbonAdaptiveGroupState.Full;
+             stateValue--)
+        {
+            var candidate = (RibbonAdaptiveGroupState)stateValue;
+            if (Supports(candidate, adaptiveAvailableWidth))
+            {
+                expandedState = candidate;
+                return true;
+            }
+        }
+
+        expandedState = LayoutState;
+        return false;
+    }
+
+    private bool Supports(RibbonAdaptiveGroupState state, double adaptiveAvailableWidth) =>
         state is RibbonAdaptiveGroupState.Full or RibbonAdaptiveGroupState.Collapsed ||
         _group.Sizing.EnableCompactPresentation &&
+        (_group.Sizing.CompactPresentationMinimumWidth is not { } minimumWidth ||
+         adaptiveAvailableWidth >= minimumWidth) &&
+        (_group.Sizing.CompactPresentationMaximumWidth is not { } maximumWidth ||
+         adaptiveAvailableWidth <= maximumWidth) &&
         _group.Sizing.SupportedVariants.Contains(state);
 
     private FrameworkElement BuildCollapsedButton()
@@ -231,6 +258,8 @@ public sealed class RibbonGroupHost : ContentControl
 public sealed class RibbonAdaptivePanel : Panel
 {
     private const double GroupSpacing = 6;
+    private const double MinimumUnusedWidthForReclaim = 320;
+    private const double MinimumUnusedWidthRatioForReclaim = 0.35;
 
     // Contextual tabs are shown after the initial ribbon warm-up; refresh their full-width budget from
     // the preserved expanded group so a previously collapsed surface cannot under-plan and clip.
@@ -248,17 +277,18 @@ public sealed class RibbonAdaptivePanel : Panel
         // pass selected; otherwise the same tab/width can produce different results after resizing.
         foreach (var child in children)
             child.Measure(infinite);
+        var available = ResolveMeasuredAvailableWidth(this, availableSize.Width);
+        var fitAvailable = double.IsInfinity(available) ? available : Math.Max(0, available - 4);
+
         foreach (var host in hosts)
         {
-            host.FullWidth = host.MeasureWidth(RibbonAdaptiveGroupState.Full, infinite);
-            host.LayoutWidth = host.MeasureWidth(host.LayoutState, infinite);
+            host.FullWidth = host.MeasureWidth(RibbonAdaptiveGroupState.Full, infinite, fitAvailable);
+            host.LayoutWidth = host.MeasureWidth(host.LayoutState, infinite, fitAvailable);
         }
 
         var nonHostWidth = children
             .Where(c => c is not RibbonGroupHost)
             .Sum(c => c.DesiredSize.Width);
-        var available = ResolveMeasuredAvailableWidth(this, availableSize.Width);
-        var fitAvailable = double.IsInfinity(available) ? available : Math.Max(0, available - 4);
 
         // Decide the complete adaptive state set from measured presentation widths through the shared,
         // renderer-neutral planner, then apply only the groups whose state flips.
@@ -275,8 +305,8 @@ public sealed class RibbonAdaptivePanel : Panel
                     .Select(entry => new RibbonAdaptiveGroup(
                         entry.Host.GroupName,
                         entry.Host.FullWidth,
-                        entry.Host.MeasureWidth(RibbonAdaptiveGroupState.SmallWithLabels, infinite),
-                        entry.Host.MeasureWidth(RibbonAdaptiveGroupState.IconOnly, infinite),
+                        entry.Host.MeasureWidth(RibbonAdaptiveGroupState.SmallWithLabels, infinite, fitAvailable),
+                        entry.Host.MeasureWidth(RibbonAdaptiveGroupState.IconOnly, infinite, fitAvailable),
                         RibbonGroupHost.CollapsedWidth,
                         entry.Host.GroupName))
                     .ToList(),
@@ -298,7 +328,7 @@ public sealed class RibbonAdaptivePanel : Panel
             {
                 child.Measure(infinite);
                 if (child is RibbonGroupHost expandedHost)
-                    expandedHost.LayoutWidth = expandedHost.MeasureWidth(expandedHost.LayoutState, infinite);
+                    expandedHost.LayoutWidth = expandedHost.MeasureWidth(expandedHost.LayoutState, infinite, fitAvailable);
             }
         }
 
@@ -311,12 +341,42 @@ public sealed class RibbonAdaptivePanel : Panel
                     break;
 
                 var previousWidth = GetChildLayoutWidth(host);
-                host.LayoutState = host.NextFallbackState();
+                host.LayoutState = host.NextFallbackState(fitAvailable);
                 host.Measure(new Size(host.LayoutState == RibbonAdaptiveGroupState.Collapsed
                     ? RibbonGroupHost.CollapsedWidth
                     : double.PositiveInfinity, availableSize.Height));
-                host.LayoutWidth = host.MeasureWidth(host.LayoutState, infinite);
+                host.LayoutWidth = host.MeasureWidth(host.LayoutState, infinite, fitAvailable);
                 width += host.LayoutWidth - previousWidth;
+            }
+
+            // A pure fallback plan can leave a large unused strip after lower-priority groups fold.
+            // Spend that space back on the highest-priority group one supported presentation at a time,
+            // matching Office's preference for a useful primary group over a row of overflow buttons.
+            foreach (var host in hosts.OrderByDescending(h => h.Priority))
+            {
+                if (!HasSevereUnusedWidth(width, fitAvailable) ||
+                    !host.TryGetNextExpandedState(fitAvailable, out var expandedState))
+                {
+                    continue;
+                }
+
+                var previousState = host.LayoutState;
+                var previousWidth = GetChildLayoutWidth(host);
+                var remainingWidth = Math.Max(0, fitAvailable - (width - previousWidth));
+                host.LayoutState = expandedState;
+                host.Measure(new Size(remainingWidth, availableSize.Height));
+                host.LayoutWidth = host.DesiredSize.Width;
+
+                var expandedWidth = GetChildLayoutWidth(host);
+                if (width + expandedWidth - previousWidth <= fitAvailable)
+                {
+                    width += expandedWidth - previousWidth;
+                    continue;
+                }
+
+                host.LayoutState = previousState;
+                host.Measure(new Size(previousWidth, availableSize.Height));
+                host.LayoutWidth = previousWidth;
             }
         }
 
@@ -366,6 +426,13 @@ public sealed class RibbonAdaptivePanel : Panel
         }
 
         return child.DesiredSize.Width;
+    }
+
+    private static bool HasSevereUnusedWidth(double currentWidth, double fitAvailable)
+    {
+        var unusedWidth = fitAvailable - currentWidth;
+        var threshold = Math.Max(MinimumUnusedWidthForReclaim, fitAvailable * MinimumUnusedWidthRatioForReclaim);
+        return unusedWidth >= threshold;
     }
 
     private static double ResolveMeasuredAvailableWidth(FrameworkElement element, double measuredWidth)
