@@ -1136,7 +1136,9 @@ public static class FreePRibbon
 
     private static void AddTransitionGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
     {
-        tab.Group("transition-gallery", FreePRibbonText.TransitionGalleryGroup.Label, FreePRibbonText.TransitionGalleryGroup.KeyTip, 100, group =>
+        // At narrow widths PowerPoint preserves the timing controls. Let the adaptive
+        // panel reclaim this broad gallery before it collapses the concise timing surface.
+        tab.Group("transition-gallery", FreePRibbonText.TransitionGalleryGroup.Label, FreePRibbonText.TransitionGalleryGroup.KeyTip, 85, group =>
         {
             group.Medium("freep.transition.none", FreePRibbonText.TransitionNoneCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.TransitionNoneCommand.KeyTip);
             group.Medium("freep.transition.fade", FreePRibbonText.TransitionFadeCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.TransitionFadeCommand.KeyTip);
@@ -1174,7 +1176,7 @@ public static class FreePRibbon
                 dropdown: true,
                 menu: BuildExtendedTransitionMenu);
         });
-        tab.Group("transition-timing", FreePRibbonText.TransitionTimingGroup.Label, FreePRibbonText.TransitionTimingGroup.KeyTip, 90, group =>
+        tab.Group("transition-timing", FreePRibbonText.TransitionTimingGroup.Label, FreePRibbonText.TransitionTimingGroup.KeyTip, 100, group =>
         {
             group.ComboBox("freep.transition.duration", FreePRibbonText.TransitionDurationCommand.Label, control => control with
             {
