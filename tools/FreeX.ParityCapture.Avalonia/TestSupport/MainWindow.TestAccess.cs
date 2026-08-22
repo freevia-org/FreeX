@@ -202,6 +202,15 @@ public sealed partial class MainWindow
 
     internal bool CellAddressAutocompleteOpenForTest => _cellAddressAutocompletePopup?.IsOpen == true;
 
+    internal IReadOnlyList<string> CellAddressAutocompleteRenderedNamesForTest()
+    {
+        ShowCellAddressAutocompletePopup();
+        return _cellAddressAutocompleteListBox!.Items
+            .OfType<NameBoxNavigationItem>()
+            .Select(item => item.Name)
+            .ToArray();
+    }
+
     internal bool CellAddressBoxHasPendingEditForTest => _cellAddressBoxHasPendingEdit;
 
     internal SelectionPaneObjectKind? SelectedDrawingObjectKindForTest => _selectedDrawingObjectKind;

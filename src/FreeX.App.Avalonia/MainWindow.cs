@@ -18678,9 +18678,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         _cellAddressAutocompleteListBox = new ListBox
         {
+            Height = NameBoxDropdownHeight - 2,
             MaxHeight = 220,
             MinWidth = 180,
             Focusable = true,
+            Background = Brushes.White,
+            ItemsPanel = new FuncTemplate<Panel?>(() => new StackPanel()),
+            ItemTemplate = new FuncDataTemplate<NameBoxNavigationItem>(
+                (item, _) => BuildCellAddressAutocompleteText(item),
+                supportsRecycling: true),
         };
         AutomationProperties.SetAutomationId(_cellAddressAutocompleteListBox, "CellAddressAutocompleteList");
         _cellAddressAutocompleteListBox.AddHandler(
@@ -18726,25 +18732,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
     }
 
-    private static ListBoxItem BuildCellAddressAutocompleteRow(NameBoxNavigationItem item)
+    private static TextBlock BuildCellAddressAutocompleteText(NameBoxNavigationItem item)
     {
-        var row = new ListBoxItem
+        var text = new TextBlock
         {
-            Height = 26.8,
-            Padding = new Thickness(0),
-            Tag = item,
-            Content = new TextBlock
-            {
-                Text = item.Name,
-                FontFamily = new FontFamily("Consolas, DejaVu Sans Mono, Liberation Mono, monospace"),
-                FontSize = 15,
-                Foreground = Brush(28, 38, 48),
-                Padding = new Thickness(8, 3),
-                TextWrapping = TextWrapping.NoWrap,
-            },
+            Text = item.Name,
+            FontFamily = new FontFamily("Consolas, DejaVu Sans Mono, Liberation Mono, monospace"),
+            FontSize = 15,
+            Foreground = Brush(28, 38, 48),
+            Padding = new Thickness(8, 3),
+            TextWrapping = TextWrapping.NoWrap,
         };
-        AutomationProperties.SetName(row, item.AccessibleDescription);
-        return row;
+        AutomationProperties.SetName(text, item.AccessibleDescription);
+        return text;
     }
 
     private NameBoxNavigationItem? GetSelectedCellAddressAutocompleteItem() =>
@@ -18787,9 +18787,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var items = BuildCellAddressAutocompleteItems();
         _cellAddressAutocompleteListBox!.IsEnabled = items.Count > 0;
-        _cellAddressAutocompleteListBox.ItemsSource = items
-            .Select(BuildCellAddressAutocompleteRow)
-            .ToArray();
+        _cellAddressAutocompleteListBox.ItemsSource = items.ToArray();
         _cellAddressAutocompleteListBox.SelectedIndex = -1;
         _cellAddressAutocompletePopup!.PlacementTarget = _cellAddressDropDownButton;
         _cellAddressAutocompletePopup.Placement = PlacementMode.BottomEdgeAlignedLeft;

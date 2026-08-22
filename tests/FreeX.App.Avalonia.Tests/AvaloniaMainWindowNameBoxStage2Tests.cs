@@ -59,6 +59,28 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task ProductionDropdown_RendersNavigationLabelsInItsPopupRows()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow(
+                [InteractionValidationOptions.NameBoxDropdownParityPhysicalFixtureArgument]);
+
+            window.CellAddressAutocompleteRenderedNamesForTest().Should().Equal(
+                "Sales",
+                "Tour Name Box Chart",
+                "Tour Name Box Picture",
+                "Tour Name Box Shape",
+                "Tour Name Box Text Box");
+            window.CellAddressAutocompleteOpenForTest.Should().BeTrue();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     // ── Enter-to-navigate: plain cell reference ───────────────────────────────────────────────
 
     [Fact]
