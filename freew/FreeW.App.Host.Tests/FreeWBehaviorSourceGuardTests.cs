@@ -87,11 +87,17 @@ public sealed class FreeWBehaviorSourceGuardTests
     }
 
     [Fact]
-    public void AutosaveHosts_DelegateNeutralRecoveryWorkflowToPresentation()
+    public void AutosaveFacades_DelegateNeutralLifecyclePlanningAndWorkflowToSharedServices()
     {
         var session = ReadSource("freew", "FreeW.App.Presentation", "Shell", "FreeWAutosaveSession.cs");
         var planner = ReadSource("freew", "FreeW.App.Presentation", "Shell", "AutosaveRecoveryPlanner.cs");
         var workflow = ReadSource("freew", "FreeW.App.Presentation", "Shell", "FreeWRecoveryWorkflow.cs");
+        var sharedSession = ReadSource(
+            "shared", "Free.Shared.AppServices", "AutosaveDocumentSession.cs");
+        var sharedPlanner = ReadSource(
+            "shared", "Free.Shared.AppServices", "AutosaveRecoveryPlannerCore.cs");
+        var sharedWorkflow = ReadSource(
+            "shared", "Free.Shared.AppServices", "AutosaveRecoveryWorkflow.cs");
         var wpf = ReadSource("freew", "FreeW.App.Host", "AutosaveCoordinator.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs");
 
@@ -118,18 +124,30 @@ public sealed class FreeWBehaviorSourceGuardTests
             nativeOffer.Should().NotContain("unsaved documents found");
         }
 
-        session.Should().Contain("new AutosaveSnapshotCoordinator(");
+        session.Should().Contain("new AutosaveDocumentSession<TextDocument>(");
         session.Should().Contain("AutosaveRecoveryPlanner.PlanAll(_store)");
         session.Should().Contain("AutosaveRecoveryPlanner.Complete(");
-        planner.Should().Contain("AutosaveRecoveryPolicy");
-        planner.Should().NotContain("OrderByDescending");
-        workflow.Should().Contain("for (var index = 0; index < recoveries.Count; index++)");
-        workflow.Should().Contain("var useCurrentWindow = !anyAccepted;");
-        workflow.Should().Contain("FreeWRecoveryPromptMode.Manual");
-        workflow.Should().Contain("unsaved documents found");
-        session.Should().Contain("class SnapshotSource : IAutosaveSnapshotSource");
-        session.Should().Contain("ExecuteWithDocument(document => DocxWriter.Write(document, snapshotPath))");
-        session.Should().Contain("DocxReader.Read(snapshotPath)");
+        session.Should().Contain("DocxWriter.Write(document, path)");
+        session.Should().Contain("ReadSnapshot: DocxReader.Read");
+        session.Should().NotContain("new AutosaveSnapshotCoordinator(");
+        session.Should().NotContain("class SnapshotSource : IAutosaveSnapshotSource");
+
+        planner.Should().Contain("AutosaveRecoveryPlannerCore.PlanAll(");
+        planner.Should().Contain(": IAutosaveRecoveryPlan");
+        planner.Should().NotContain("AutosaveRecoveryPolicy");
+
+        workflow.Should().Contain("AutosaveRecoveryWorkflow.RunAsync(");
+        workflow.Should().Contain("AutosaveRecoveryPromptFormatter.Format(");
+        workflow.Should().Contain("new(\"FreeW\", \"documents\")");
+        workflow.Should().NotContain("for (var index = 0; index < recoveries.Count; index++)");
+
+        sharedSession.Should().Contain("new AutosaveSnapshotCoordinator(store, snapshotId)");
+        sharedSession.Should().Contain("class SnapshotSource : IAutosaveSnapshotSource");
+        sharedPlanner.Should().Contain(".OrderNewestFirst(PrepareCandidates(store))");
+        sharedPlanner.Should().Contain("AutosaveRecoveryCandidateProcessor.PrepareForRecovery(");
+        sharedWorkflow.Should().Contain("for (var index = 0; index < recoveries.Count; index++)");
+        sharedWorkflow.Should().Contain("var useCurrentWindow = !anyAccepted;");
+        sharedWorkflow.Should().Contain("AutosaveRecoveryPromptMode.Manual");
 
         wpf.Should().Contain("DialogMessageHelper.AskYesNo(");
         wpf.Should().Contain("_session.CompleteRecovery(");
