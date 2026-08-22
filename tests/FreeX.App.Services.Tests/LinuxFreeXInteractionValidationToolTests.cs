@@ -407,6 +407,10 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("copy_cell_formula_by_address()");
         probe.Should().Contain("send_key ctrl+g");
         probe.Should().Contain("the production Go To route");
+        probe.Should().Contain("Require a distinct active dialog before typing");
+        probe.Should().Contain("xdotool getactivewindow");
+        probe.Should().Contain("--window \"$dialog_id\" \"$address\"");
+        probe.Should().Contain("if ! $dialog_closed");
         probe.Should().Contain("authoritative formula field");
         probe.Should().Contain("restore_calibrated_window_geometry");
         probe.Should().Contain("send_key ctrl+F2");

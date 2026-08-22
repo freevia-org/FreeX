@@ -338,6 +338,7 @@ restore_calibrated_window_geometry() {
 copy_cell_formula_by_address() {
     local address="$1" value=""
     local sentinel="__FREEX_ADDRESS_FORMULA__" sentinel_pid="" current="" copied=false
+    local dialog_id="" dialog_open=false dialog_closed=false candidate=""
 
     # Keep a PID-owned sentinel until the application takes clipboard ownership. A missed click
     # therefore remains distinguishable from a successful copy instead of exposing stale data.
@@ -354,14 +355,52 @@ copy_cell_formula_by_address() {
         return 1
     fi
 
-    # Ctrl+G is the production Go To route. Its dialog selects the reference field on open,
-    # so the address is entered into the real reference parser rather than inferred from the
-    # currently visible row/column slots. This remains meaningful when outline or filter state
-    # hides the addressed row or column.
-    send_key ctrl+g
-    xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+a
-    xdotool type --clearmodifiers --delay "$type_delay_ms" "$address"
-    xdotool key --clearmodifiers --delay "$input_delay_ms" Return
+    # Establish worksheet focus before Ctrl+G. Formula-bar and outline-button focus can consume
+    # the shortcut; typing an address after a missed dialog would otherwise edit the worksheet.
+    xdotool_mousemove_sync "$((a1_x + cell_width / 2))" "$((a1_y + cell_height / 2))" click 1
+    sleep "$settle_seconds"
+
+    # Ctrl+G is the production Go To route. Require a distinct active dialog before typing so a
+    # missed shortcut cannot masquerade as a successful address readback.
+    for _ in $(seq 1 2); do
+        send_key ctrl+g
+        for _ in $(seq 1 20); do
+            candidate="$(xdotool getactivewindow 2>/dev/null || true)"
+            if [[ -n "$candidate" && "$candidate" != "$window_id" ]] &&
+               xdotool getwindowname "$candidate" >/dev/null 2>&1; then
+                dialog_id="$candidate"
+                dialog_open=true
+                break 2
+            fi
+            sleep 0.1
+        done
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Escape 2>/dev/null || true
+        xdotool_mousemove_sync "$((a1_x + cell_width / 2))" "$((a1_y + cell_height / 2))" click 1
+    done
+    if ! $dialog_open; then
+        stop_clipboard_sentinel
+        restore_calibrated_window_geometry || true
+        send_key ctrl+Home
+        return 1
+    fi
+
+    xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$dialog_id" ctrl+a
+    xdotool type --clearmodifiers --delay "$type_delay_ms" --window "$dialog_id" "$address"
+    xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$dialog_id" Return
+    for _ in $(seq 1 20); do
+        if ! xdotool getwindowname "$dialog_id" >/dev/null 2>&1; then
+            dialog_closed=true
+            break
+        fi
+        sleep 0.1
+    done
+    if ! $dialog_closed; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$dialog_id" Escape 2>/dev/null || true
+        stop_clipboard_sentinel
+        restore_calibrated_window_geometry || true
+        send_key ctrl+Home
+        return 1
+    fi
     sleep "$settle_seconds"
 
     # A Go To target may be hidden by an outline/filter. Read its authoritative formula field;
