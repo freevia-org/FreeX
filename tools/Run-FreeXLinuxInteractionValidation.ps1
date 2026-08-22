@@ -1255,7 +1255,10 @@ try {
         } elseif ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
             $x11AppArguments += "--freex-name-box-dropdown-parity-physical"
         }
-        $x11Session = Start-ValidationSession -HostMode TestSupport -AppArgument $x11AppArguments -DocumentPath $PhysicalDocumentPath
+        # Physical X11 evidence must exercise the packaged FreeX application executable. The
+        # TestSupport host is a managed-validation executable and cannot provide this lane's
+        # production input authority.
+        $x11Session = Start-ValidationSession -HostMode Application -AppArgument $x11AppArguments -DocumentPath $PhysicalDocumentPath
         if ($PhysicalOnly) {
             Ensure-ReportProvenance
         }

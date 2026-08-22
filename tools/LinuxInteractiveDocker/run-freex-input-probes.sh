@@ -2747,10 +2747,11 @@ probe_split_pane_pointer() {
     local bottom_wheel_before="split-pane-bottom-left-wheel-before.png" bottom_wheel_after="split-pane-bottom-left-wheel-after.png"
     local scrollbar_before="split-pane-scrollbar-before.png" scrollbar_after="split-pane-scrollbar-after.png"
     local postcondition="split-pane-pointer-postcondition.txt"
-    local artifacts="$split_before;$split_after;split-pane-before-grid.png;split-pane-open-grid.png;$divider_before;$divider_after;$wheel_before;$wheel_after;$bottom_wheel_before;$bottom_wheel_after;$scrollbar_before;$scrollbar_after;$postcondition"
-    local split_open=false divider_passed=false wheel_passed=false bottom_wheel_passed=false scrollbar_passed=false
+    local artifacts="$split_before;$split_after;split-pane-before-grid.png;split-pane-open-grid.png;$divider_before;$divider_after;$wheel_before;$wheel_after;$bottom_wheel_before;$bottom_wheel_after;$scrollbar_before;$scrollbar_after;split-pane-restored.png;split-pane-restored-grid.png;$postcondition"
+    local split_open=false divider_passed=false wheel_passed=false bottom_wheel_passed=false scrollbar_passed=false split_cleanup_restored=false
     local split_row_y split_column_x divider_drag_x drag_y top_right_left top_right_width top_right_top top_right_height
     local bottom_left_left bottom_left_width bottom_left_top bottom_left_height scrollbar_x scrollbar_y
+    local scrollbar_changed_pixels=0 scrollbar_change_threshold=50
     local split_keytip_route="WSP"
 
     # C5 gives the real View > Split command a deterministic two-axis anchor. The coordinates
@@ -2863,17 +2864,26 @@ probe_split_pane_pointer() {
     # The top-right mini-scrollbar is the horizontal track immediately above the horizontal
     # divider. A track click must move the shared main horizontal position and visibly change
     # that quadrant.
-    scrollbar_x="$((split_column_x + top_right_width * 3 / 4))"
+    # Shift+wheel above has already moved the shared horizontal position right. Click the
+    # opposite, left track region so the physical track action cannot land on the moved thumb
+    # and no-op; the before/after crop still credits only a real rendered change.
+    scrollbar_x="$((split_column_x + top_right_width / 4))"
     scrollbar_y="$((split_row_y - 5))"
     if $split_open && (( top_right_width > 40 )); then
         capture "$scrollbar_before"
-        crop_region "$scrollbar_before" "split-pane-scrollbar-before-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
+        # The upper part of this pane is an intentionally empty grid. Keep the content/scrollbar
+        # band containing the moved column labels and scrollbar; the physical proof remains
+        # narrow and records the exact ImageMagick AE count rather than using a whole-screen diff.
+        local scrollbar_crop_top="$((top_right_top + 40))"
+        local scrollbar_crop_height="$((top_right_height - 40))"
+        crop_region "$scrollbar_before" "split-pane-scrollbar-before-crop.png" "$top_right_left" "$scrollbar_crop_top" "$top_right_width" "$scrollbar_crop_height"
         focus_app
         xdotool_mousemove_sync "$scrollbar_x" "$scrollbar_y" click 1
         sleep "$settle_seconds"
         capture "$scrollbar_after"
-        crop_region "$scrollbar_after" "split-pane-scrollbar-after-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
-        if region_changed "$output/split-pane-scrollbar-before-crop.png" "$output/split-pane-scrollbar-after-crop.png" 80; then
+        crop_region "$scrollbar_after" "split-pane-scrollbar-after-crop.png" "$top_right_left" "$scrollbar_crop_top" "$top_right_width" "$scrollbar_crop_height"
+        scrollbar_changed_pixels="$(compare -metric AE "$output/split-pane-scrollbar-before-crop.png" "$output/split-pane-scrollbar-after-crop.png" null: 2>&1 || true)"
+        if [[ "$scrollbar_changed_pixels" =~ ^[0-9]+$ ]] && (( scrollbar_changed_pixels >= scrollbar_change_threshold )); then
             scrollbar_passed=true
         fi
     else
@@ -2881,8 +2891,29 @@ probe_split_pane_pointer() {
         capture "$scrollbar_after"
     fi
 
+    # Leave the production workbook in the same unsplit, calibrated state expected by the
+    # following outline probes. The focused selector still reports only its four split rows;
+    # this cleanup is additionally proven in the retained postcondition and restored crop.
+    if $split_open; then
+        focus_app
+        enter_keytip_mode
+        keytip_key w
+        keytip_key s
+        keytip_key p
+        sleep "$settle_seconds"
+        send_key ctrl+Home
+        sleep "$settle_seconds"
+        select_cell 2 4 C5 || true
+        capture "split-pane-restored.png"
+        crop_region "split-pane-restored.png" "split-pane-restored-grid.png" "$a1_x" "$a1_y" "$((window_x + window_width - a1_x))" "$((window_y + window_height - a1_y - 40))"
+        if regions_match "$output/split-pane-before-grid.png" "$output/split-pane-restored-grid.png" 300 &&
+           restore_calibrated_window_geometry; then
+            split_cleanup_restored=true
+        fi
+    fi
+
     write_artifact "$postcondition" \
-        "schema-version=1\nselector=split-pane-pointer\nsplit-command-gesture=keytip-route-$split_keytip_route\nsplit-open=$split_open\ndivider-gesture=horizontal-divider-drag\ndivider-coordinate=$divider_drag_x,$split_row_y\ndivider-target-y=$drag_y\ndivider-postcondition=$divider_passed\nactive-pane-gesture=top-right-shift-wheel-down\nactive-pane-crop=$top_right_left,$top_right_top,${top_right_width}x${top_right_height}\nactive-pane-shared-column-band-postcondition=$wheel_passed\nbottom-left-gesture=bottom-left-wheel-down-three-notches\nbottom-left-crop=$bottom_left_left,$bottom_left_top,${bottom_left_width}x${bottom_left_height}\nbottom-left-shared-row-band-postcondition=$bottom_wheel_passed\nmini-scrollbar-gesture=top-right-horizontal-track-click\nmini-scrollbar-coordinate=$scrollbar_x,$scrollbar_y\nmini-scrollbar-shared-column-band-postcondition=$scrollbar_passed\n"
+        "schema-version=1\nselector=split-pane-pointer\nsplit-command-gesture=keytip-route-$split_keytip_route\nsplit-open=$split_open\ndivider-gesture=horizontal-divider-drag\ndivider-coordinate=$divider_drag_x,$split_row_y\ndivider-target-y=$drag_y\ndivider-postcondition=$divider_passed\nactive-pane-gesture=top-right-shift-wheel-down\nactive-pane-crop=$top_right_left,$top_right_top,${top_right_width}x${top_right_height}\nactive-pane-shared-column-band-postcondition=$wheel_passed\nbottom-left-gesture=bottom-left-wheel-down-three-notches\nbottom-left-crop=$bottom_left_left,$bottom_left_top,${bottom_left_width}x${bottom_left_height}\nbottom-left-shared-row-band-postcondition=$bottom_wheel_passed\nmini-scrollbar-gesture=top-right-horizontal-track-click\nmini-scrollbar-coordinate=$scrollbar_x,$scrollbar_y\nmini-scrollbar-crop=top-right-content-scrollbar-band\nmini-scrollbar-changed-pixels=$scrollbar_changed_pixels\nmini-scrollbar-change-threshold=$scrollbar_change_threshold\nmini-scrollbar-shared-column-band-postcondition=$scrollbar_passed\nsplit-cleanup-gesture=keytip-route-$split_keytip_route\nsplit-cleanup-restored=$split_cleanup_restored\n"
 
     if $divider_passed; then
         record "split-pane-divider-drag-physical" "passed" \
@@ -2917,7 +2948,7 @@ probe_split_pane_pointer() {
             "The physical BottomLeft vertical wheel route did not prove shared row-band movement." \
             "$artifacts"
     fi
-    if $scrollbar_passed; then
+    if $scrollbar_passed && $split_cleanup_restored; then
         record "split-pane-mini-scrollbar-physical" "passed" \
             "$scrollbar_before; $scrollbar_after; split-pane-scrollbar-before-crop.png; split-pane-scrollbar-after-crop.png; $postcondition" \
             "A real X11 track click on the top-right mini-scrollbar changed the rendered split-pane content." \
@@ -2925,14 +2956,8 @@ probe_split_pane_pointer() {
     else
         record "split-pane-mini-scrollbar-physical" "failed" \
             "$scrollbar_before; $scrollbar_after; $postcondition" \
-            "The mini-scrollbar interaction did not produce an observable postcondition." \
+            "The mini-scrollbar interaction and split cleanup did not both produce their required physical postconditions (scrollbar=$scrollbar_passed, cleanup=$split_cleanup_restored)." \
             "$artifacts"
-    fi
-    if $split_open; then
-        enter_keytip_mode
-        keytip_key w
-        keytip_key s
-        keytip_key p
     fi
     send_key Escape || true
 }
@@ -3108,7 +3133,9 @@ probe_outline_column_group_physical() {
         xdotool_mousemove_sync "$toggle_x" "$toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-columns-collapsed.png"
-        collapsed_slot="$(copy_cell_formula 1 1 outline-column-collapsed-visible-slot || true)"
+        # Read the exact visible summary address; a whole-column selection leaves the keyboard
+        # copy route focused on the multi-column range and returns tab-separated row text.
+        collapsed_slot="$(copy_cell_formula_by_address E2 || true)"
         [[ "$collapsed_slot" == "OutlineColumnSummary" ]] && collapsed_structurally=true
 
         # Once B:D are hidden, the summary column E moves into the first visible data slot.
@@ -3118,14 +3145,14 @@ probe_outline_column_group_physical() {
         sleep "$settle_seconds"
         capture "outline-columns-expanded.png"
         artifacts="outline-columns-selected.png;outline-columns-grouped.png;outline-columns-collapsed.png;outline-columns-expanded.png;outline-columns-group-postcondition.txt"
-        expanded_slot="$(copy_cell_formula 1 1 outline-column-expanded-visible-slot || true)"
+        expanded_slot="$(copy_cell_formula_by_address B2 || true)"
         [[ "$expanded_slot" == "OutlineColumn2" ]] && expanded_structurally=true
         outline_toggle_visible "$output/outline-columns-expanded.png" "$toggle_x" "$toggle_y" || controls_visible=false
     fi
 
-    column2_value="$(copy_cell_formula_by_keyboard 1 1 || true)"
-    column3_value="$(copy_cell_formula_by_keyboard 2 1 || true)"
-    column4_value="$(copy_cell_formula_by_keyboard 3 1 || true)"
+    column2_value="$(copy_cell_formula_by_address B2 || true)"
+    column3_value="$(copy_cell_formula_by_address C2 || true)"
+    column4_value="$(copy_cell_formula_by_address D2 || true)"
     if [[ "$column2_value" == "OutlineColumn2" && "$column3_value" == "OutlineColumn3" && "$column4_value" == "OutlineColumn4" ]]; then
         values_restored=true
     fi
@@ -4455,7 +4482,7 @@ probe_clipboard_roundtrips() {
 
 probe_window_management() {
     local before_count after_count active_before active_after candidate existing known
-    local pre_arrange_bounds after_bounds active_after_is_created=false
+    local pre_arrange_bounds after_bounds active_after_is_created=false cleanup_geometry_restored=false
     local artifacts="window-new-before.png;window-new-after.png;window-arrange-after.png;window-switch-after.png;window-bounds-before.txt;window-bounds-after-arrange.txt;window-management-postcondition.txt"
     local -a baseline_window_ids=() current_window_ids=() created_window_ids=()
     mapfile -t baseline_window_ids < <(freex_window_ids)
@@ -4493,6 +4520,7 @@ probe_window_management() {
             [[ -z "$candidate" || "$candidate" == "$window_id" ]] && continue
             xdotool windowclose "$candidate" 2>/dev/null || true
         done
+        restore_calibrated_window_geometry && cleanup_geometry_restored=true
         dismiss_overlays
         return
     fi
@@ -4525,17 +4553,9 @@ probe_window_management() {
             break
         fi
     done
-    write_artifact "window-management-postcondition.txt" "before-count=$before_count\nafter-new-count=$after_count\ncreated-ids=${created_window_ids[*]}\nactive-before-switch=$active_before\nactive-after-switch=$active_after\nactive-after-is-created=$active_after_is_created\nbounds-before-arrange=$pre_arrange_bounds\nbounds-after-arrange=$after_bounds"
-
-    if window_bounds_are_valid "$after_bounds" && [[ "$after_bounds" != "$pre_arrange_bounds" ]] &&
-       [[ -n "$active_after" && "$active_after" != "$active_before" && "$active_after_is_created" == true ]]; then
-        record "window-new-arrange-switch-physical" "passed" "window-new-before.png; window-new-after.png; window-arrange-after.png; window-switch-after.png; window-management-postcondition.txt; visible-count=$after_count; active-window-switched=true; shared-workbook-parity=managed-behavior-tested" "Physical View key-tip New Window created one additional top-level workbook window, Arrange All changed valid bounds, and Ctrl+F6 switched to the created window. Shared-workbook model, view-state, detach, title, and close lifecycle semantics are covered by AvaloniaSharedWorkbookWindowTests." "$artifacts"
-    else
-        record "window-new-arrange-switch-physical" "failed" "window-new-before.png; window-new-after.png; window-arrange-after.png; window-switch-after.png; window-management-postcondition.txt; visible-count=$after_count; active-before=$active_before; active-after=$active_after" "Window management did not satisfy exact count, bounds, and active-window postconditions." "$artifacts"
-    fi
-
-    # Close only windows observed after New Window that were absent from the
-    # baseline; unrelated workbook windows are never touched by this probe.
+    # Arrange All deliberately changes the original window's bounds. Close only the created
+    # window, then restore the calibrated maximized geometry before downstream probes reuse the
+    # calibration coordinates (especially the split-pane pointer lane).
     for candidate in "${created_window_ids[@]}"; do
         [[ -z "$candidate" || "$candidate" == "$window_id" ]] && continue
         xdotool windowclose "$candidate" 2>/dev/null || true
@@ -4544,8 +4564,19 @@ probe_window_management() {
         (( $(freex_window_count) <= before_count )) && break
         sleep 0.25
     done
-    focus_app
+    restore_calibrated_window_geometry && cleanup_geometry_restored=true
     dismiss_overlays
+
+    write_artifact "window-management-postcondition.txt" "before-count=$before_count\nafter-new-count=$after_count\ncreated-ids=${created_window_ids[*]}\nactive-before-switch=$active_before\nactive-after-switch=$active_after\nactive-after-is-created=$active_after_is_created\nbounds-before-arrange=$pre_arrange_bounds\nbounds-after-arrange=$after_bounds\ncleanup-geometry-restored=$cleanup_geometry_restored"
+
+    if window_bounds_are_valid "$after_bounds" && [[ "$after_bounds" != "$pre_arrange_bounds" ]] &&
+       [[ -n "$active_after" && "$active_after" != "$active_before" && "$active_after_is_created" == true ]] &&
+       [[ "$cleanup_geometry_restored" == true ]]; then
+        record "window-new-arrange-switch-physical" "passed" "window-new-before.png; window-new-after.png; window-arrange-after.png; window-switch-after.png; window-management-postcondition.txt; visible-count=$after_count; active-window-switched=true; shared-workbook-parity=managed-behavior-tested" "Physical View key-tip New Window created one additional top-level workbook window, Arrange All changed valid bounds, and Ctrl+F6 switched to the created window. Shared-workbook model, view-state, detach, title, and close lifecycle semantics are covered by AvaloniaSharedWorkbookWindowTests." "$artifacts"
+    else
+        record "window-new-arrange-switch-physical" "failed" "window-new-before.png; window-new-after.png; window-arrange-after.png; window-switch-after.png; window-management-postcondition.txt; visible-count=$after_count; active-before=$active_before; active-after=$active_after" "Window management did not satisfy exact count, bounds, and active-window postconditions." "$artifacts"
+    fi
+
 }
 
 probe_cancelable_window() {

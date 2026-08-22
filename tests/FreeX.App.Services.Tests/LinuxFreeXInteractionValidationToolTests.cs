@@ -180,6 +180,61 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("active-pane-shared-column-band-postcondition=$wheel_passed");
         probe.Should().Contain("bottom-left-shared-row-band-postcondition=$bottom_wheel_passed");
         probe.Should().Contain("mini-scrollbar-shared-column-band-postcondition=$scrollbar_passed");
+        probe.Should().Contain("split-cleanup-gesture=keytip-route-$split_keytip_route");
+        probe.Should().Contain("send_key ctrl+Home");
+        probe.Should().Contain("split-cleanup-restored=$split_cleanup_restored");
+        probe.Should().Contain("regions_match \"$output/split-pane-before-grid.png\" \"$output/split-pane-restored-grid.png\" 300");
+        probe.Should().Contain("scrollbar_x=\"$((split_column_x + top_right_width / 4))\"");
+        probe.Should().Contain("local scrollbar_changed_pixels=0 scrollbar_change_threshold=50");
+        probe.Should().Contain("scrollbar_crop_top=\"$((top_right_top + 40))\"");
+        probe.Should().Contain("mini-scrollbar-crop=top-right-content-scrollbar-band");
+        probe.Should().Contain("mini-scrollbar-changed-pixels=$scrollbar_changed_pixels");
+        probe.Should().Contain("mini-scrollbar-change-threshold=$scrollbar_change_threshold");
+        probe.Should().Contain("if $scrollbar_passed && $split_cleanup_restored; then");
+        probe.Should().Contain("cleanup=$split_cleanup_restored");
+        probe.Should().Contain("copy_cell_formula_by_address E2");
+        probe.Should().Contain("copy_cell_formula_by_address B2");
+        probe.Should().Contain("copy_cell_formula_by_address C2");
+        probe.Should().Contain("copy_cell_formula_by_address D2");
+    }
+
+    [Fact]
+    public void PhysicalX11PhaseUsesPackagedApplicationWhileManagedSupportHostRemainsSeparate()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var harness = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-LinuxInteractiveDocker.ps1"));
+
+        var physicalStart = runner.IndexOf("$x11Session = Start-ValidationSession", StringComparison.Ordinal);
+        var physicalEnd = runner.IndexOf("if ($PhysicalOnly)", physicalStart, StringComparison.Ordinal);
+
+        physicalStart.Should().BeGreaterThanOrEqualTo(0);
+        physicalEnd.Should().BeGreaterThan(physicalStart);
+        runner[physicalStart..physicalEnd]
+            .Should().Contain("Start-ValidationSession -HostMode Application")
+            .And.NotContain("-HostMode TestSupport");
+
+        harness.Should().Contain("elseif ($HostMode -eq \"TestSupport\")");
+        harness.Should().Contain("Executable = \"FreeX.Validation.Avalonia\"");
+    }
+
+    [Fact]
+    public void WindowManagementRestoresCalibratedGeometryBeforeDownstreamPhysicalProbes()
+    {
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+        var helperStart = probe.IndexOf("probe_window_management()", StringComparison.Ordinal);
+        var helperEnd = probe.IndexOf("probe_cancelable_window()", helperStart, StringComparison.Ordinal);
+
+        helperStart.Should().BeGreaterThanOrEqualTo(0);
+        helperEnd.Should().BeGreaterThan(helperStart);
+        var helper = probe[helperStart..helperEnd];
+
+        helper.Should().Contain("cleanup_geometry_restored=false");
+        helper.Should().Contain("restore_calibrated_window_geometry && cleanup_geometry_restored=true");
+        helper.Should().Contain("cleanup-geometry-restored=$cleanup_geometry_restored");
+        helper.Should().Contain("[[ \"$cleanup_geometry_restored\" == true ]]", "the window-management row must not pass if downstream calibration geometry was not restored");
     }
 
     [Fact]
