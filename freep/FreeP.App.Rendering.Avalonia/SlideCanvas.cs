@@ -1296,18 +1296,19 @@ public sealed partial class SlideCanvas : Control
         if (fillBrush is not null)
             dc.FillRectangle(fillBrush, rect);
 
-        DrawCellBorder(dc, cell.BorderTop,
-            new Point(rect.Left,  rect.Top),    new Point(rect.Right, rect.Top));
-        DrawCellBorder(dc, cell.BorderBottom,
-            new Point(rect.Left,  rect.Bottom),  new Point(rect.Right, rect.Bottom));
-        DrawCellBorder(dc, cell.BorderLeft,
-            new Point(rect.Left,  rect.Top),    new Point(rect.Left,  rect.Bottom));
-        DrawCellBorder(dc, cell.BorderRight,
-            new Point(rect.Right, rect.Top),    new Point(rect.Right, rect.Bottom));
-        DrawCellBorder(dc, cell.BorderDiagonalDown,
-            new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom));
-        DrawCellBorder(dc, cell.BorderDiagonalUp,
-            new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top));
+        var borderSink = new TableCellBorderRenderSink(dc);
+        TableCellBorderRenderSequence.Dispatch(cell, ref borderSink);
+    }
+
+    private readonly struct TableCellBorderRenderSink(DrawingContext drawingContext) :
+        ITableCellBorderRenderSink
+    {
+        public void Render(ResolvedOutline outline, LayoutPoint start, LayoutPoint end) =>
+            DrawCellBorder(
+                drawingContext,
+                outline,
+                new Point(start.X, start.Y),
+                new Point(end.X, end.Y));
     }
 
     private static void DrawCellBorder(DrawingContext dc, ResolvedOutline outline, Point p1, Point p2)

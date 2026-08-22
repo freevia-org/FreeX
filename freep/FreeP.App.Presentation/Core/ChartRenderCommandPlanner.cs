@@ -118,7 +118,7 @@ public abstract record ChartRenderCommand
         ChartPlanRect Bounds,
         ChartFillPlan Fill,
         ChartStrokePlan? Stroke,
-        bool RoundedCorners) : ChartRenderCommand;
+        double CornerRadius) : ChartRenderCommand;
 
     public sealed record Rectangle(
         ChartPlanRect Bounds,
@@ -143,6 +143,7 @@ public abstract record ChartRenderCommand
     public sealed record PieSlice(
         ChartPieSlicePrimitive Primitive,
         ChartFillPlan Fill,
+        ChartStrokePlan? Stroke,
         ChartPieSliceRenderPass Pass,
         double StartAngle = 0,
         double EndAngle = 0,
@@ -216,7 +217,7 @@ public static class ChartRenderCommandPlanner
             scene.Frame.Bounds,
             scene.ChartAreaFill ?? new ChartFillPlan(SrgbColor.White, 255),
             scene.ChartAreaOutline,
-            scene.RoundedCorners));
+            ResolveFrameCornerRadius(scene)));
 
         if (scene.PlotAreaFill is { } plotFill)
         {
@@ -509,6 +510,7 @@ public static class ChartRenderCommandPlanner
                         commands.Add(new ChartRenderCommand.PieSlice(
                             primitive,
                             ShadePieSidewall(depthFill, interval.Start, interval.End, primitive.PointIndex),
+                            null,
                             ChartPieSliceRenderPass.DepthSidewall,
                             interval.Start,
                             interval.End,
@@ -520,6 +522,7 @@ public static class ChartRenderCommandPlanner
                     commands.Add(new ChartRenderCommand.PieSlice(
                         primitive,
                         depthFill,
+                        null,
                         ChartPieSliceRenderPass.Depth));
                 }
             }
@@ -527,12 +530,20 @@ public static class ChartRenderCommandPlanner
             commands.Add(new ChartRenderCommand.PieSlice(
                 primitive,
                 primitive.Fill!.Value,
+                new ChartStrokePlan(SrgbColor.White, 255, 0.8),
                 ChartPieSliceRenderPass.Body));
         }
 
         if (scene.OfPieSecondaryType == OfPieType.Bar)
             AddColumn(commands, scene);
     }
+
+    private static double ResolveFrameCornerRadius(ChartScenePlan scene) =>
+        scene.RoundedCorners
+            ? Math.Min(
+                ChartRenderPlanner.RoundedChartCornerRadius,
+                Math.Min(scene.Frame.Bounds.Width, scene.Frame.Bounds.Height) / 2.0)
+            : 0;
 
     private static void AddArea(
         List<ChartRenderCommand> commands,

@@ -450,30 +450,16 @@ internal sealed partial class AvaloniaSlideShowMediaController
 
     private static IBrush? CaptionBrush(string? colorHex, double? opacity, bool fallbackToWhite)
     {
-        if (string.IsNullOrWhiteSpace(colorHex))
-        {
-            if (opacity is null || !fallbackToWhite)
-                return null;
-
-            return new SolidColorBrush(Color.FromArgb(CaptionAlpha(opacity), 0xFF, 0xFF, 0xFF));
-        }
-
-        if (!RgbColorTextCodec.TryParse(
-                colorHex,
-                RgbColorTextProfile.CaptionPayload,
-                out var color))
+        var paint = PresentationCaptionPaintPlanner.Resolve(colorHex, opacity, fallbackToWhite);
+        if (paint is not { } value)
             return null;
 
         return new SolidColorBrush(Color.FromArgb(
-            CaptionAlpha(opacity),
-            color.R,
-            color.G,
-            color.B));
+            value.Alpha,
+            value.Red,
+            value.Green,
+            value.Blue));
     }
-
-    private static byte CaptionAlpha(double? opacity) => opacity is { } value
-        ? (byte)Math.Round(Math.Clamp(value, 0, 1) * byte.MaxValue)
-        : byte.MaxValue;
 
     private void TeardownPlayback()
     {
