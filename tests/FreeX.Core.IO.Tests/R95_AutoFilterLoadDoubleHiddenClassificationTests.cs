@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -72,6 +74,28 @@ public sealed class R95_AutoFilterLoadDoubleHiddenClassificationTests
         reloadedSheet.FilterHiddenRows.Should().Contain(3u);
         // ...but must NOT also land in HiddenRows, or Clear Filter can never surface it again.
         reloadedSheet.HiddenRows.Should().NotContain(3u);
+    }
+
+    [Fact]
+    public void WorksheetAutoFilter_Save_DoesNotSerializeFilterOwnedRowsAsRawHidden()
+    {
+        var wb = BuildFilteredWorksheetWorkbook(out _);
+
+        var adapter = new XlsxFileAdapter();
+        using var package = new MemoryStream();
+        adapter.Save(wb, package);
+        package.Position = 0;
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        using var reader = new StreamReader(
+            archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+        var worksheet = XDocument.Parse(reader.ReadToEnd());
+        var main = XNamespace.Get("http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+        var filteredRow = worksheet
+            .Descendants(main + "row")
+            .Single(row => (string?)row.Attribute("r") == "3");
+
+        filteredRow.Attribute("hidden").Should().BeNull();
     }
 
     [Fact]

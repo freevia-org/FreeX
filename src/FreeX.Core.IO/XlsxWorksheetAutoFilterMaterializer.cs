@@ -4,6 +4,40 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetAutoFilterMaterializer
 {
+    internal static HashSet<uint> FindNativeFilterHiddenRows(Sheet sheet)
+    {
+        var autoFilter = sheet.AutoFilter;
+        if (autoFilter is null || autoFilter.FilterColumns.Count == 0 || string.IsNullOrWhiteSpace(autoFilter.Reference))
+            return [];
+
+        GridRange range;
+        try
+        {
+            range = GridRange.Parse(autoFilter.Reference, sheet.Id);
+        }
+        catch
+        {
+            return [];
+        }
+
+        var filters = BuildFilters(sheet, autoFilter, range, out var unsupportedColumnCount, out _);
+        if (unsupportedColumnCount == 0)
+            return [];
+
+        // Rows that still fail the materializable filters are explained by those filters and must
+        // remain filter-owned only. The residual FilterHiddenRows are the rows Excel hid for a
+        // native-only criterion that FreeX cannot re-evaluate on a later load, so the writer must
+        // retain their raw row-hidden bit for save-load-save fidelity.
+        var nativeRows = new HashSet<uint>();
+        for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
+        {
+            if (sheet.FilterHiddenRows.Contains(row) && RowMatchesAllFilters(sheet, row, filters))
+                nativeRows.Add(row);
+        }
+
+        return nativeRows;
+    }
+
     public static void MaterializeFilters(Sheet sheet)
     {
         var autoFilter = sheet.AutoFilter;

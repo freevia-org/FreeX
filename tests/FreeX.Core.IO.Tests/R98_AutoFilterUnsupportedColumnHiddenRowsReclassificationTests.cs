@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -36,6 +38,34 @@ public sealed class R98_AutoFilterUnsupportedColumnHiddenRowsReclassificationTes
         adapter.Save(workbook, ms);
         ms.Position = 0;
         return adapter.Load(ms);
+    }
+
+    private static byte[] SaveToBytes(Workbook workbook)
+    {
+        var adapter = new XlsxFileAdapter();
+        using var ms = new MemoryStream();
+        adapter.Save(workbook, ms);
+        return ms.ToArray();
+    }
+
+    private static Workbook LoadFromBytes(byte[] package)
+    {
+        var adapter = new XlsxFileAdapter();
+        using var ms = new MemoryStream(package);
+        return adapter.Load(ms);
+    }
+
+    private static bool PackageHasHiddenRow(byte[] package, uint rowNumber)
+    {
+        using var ms = new MemoryStream(package);
+        using var archive = new ZipArchive(ms, ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+        var worksheet = XDocument.Parse(reader.ReadToEnd());
+        var main = XNamespace.Get("http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+        return worksheet
+            .Descendants(main + "row")
+            .Any(row => (string?)row.Attribute("r") == rowNumber.ToString() &&
+                       (string?)row.Attribute("hidden") == "1");
     }
 
     /// <summary>
@@ -98,6 +128,43 @@ public sealed class R98_AutoFilterUnsupportedColumnHiddenRowsReclassificationTes
         reloadedSheet.FilterHiddenRows.Should().BeEmpty();
         reloadedSheet.HiddenRows.Should().BeEmpty();
         reloadedSheet.IsRowEffectivelyHidden(3).Should().BeFalse();
+    }
+
+    [Fact]
+    public void WorksheetAutoFilter_SaveLoadSave_UnsupportedFilterRetainsRawHiddenRow()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(50));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(200));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(75));
+
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 1));
+        sheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [new WorksheetAutoFilterCustomFilterModel("greaterThan", "100")],
+            CustomFiltersAnd: false,
+            NativeCustomFiltersAttributes: null,
+            NativeFilterXmls: []));
+        sheet.HiddenRows.Add(3u);
+
+        var firstPackage = SaveToBytes(wb);
+        var firstReload = LoadFromBytes(firstPackage);
+        firstReload.Sheets[0].FilterHiddenRows.Should().Contain(3u);
+        firstReload.Sheets[0].HiddenRows.Should().NotContain(3u);
+
+        var secondPackage = SaveToBytes(firstReload);
+        PackageHasHiddenRow(secondPackage, 3u).Should().BeTrue(
+            "a native-only worksheet filter still needs Excel's raw hidden visibility after the second save");
+
+        var secondReload = LoadFromBytes(secondPackage);
+        secondReload.Sheets[0].IsRowEffectivelyHidden(3).Should().BeTrue();
+        secondReload.Sheets[0].FilterHiddenRows.Should().Contain(3u);
+        secondReload.Sheets[0].HiddenRows.Should().NotContain(3u);
     }
 
     /// <summary>

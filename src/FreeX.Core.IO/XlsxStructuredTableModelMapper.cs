@@ -4,6 +4,31 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxStructuredTableModelMapper
 {
+    internal static HashSet<uint> FindNativeFilterHiddenRows(Sheet sheet, StructuredTableModel table)
+    {
+        if (table.FilterColumns.Count == 0)
+            return [];
+
+        var lastDataRow = table.TotalsRowShown && table.Range.End.Row > table.Range.Start.Row
+            ? table.Range.End.Row - 1
+            : table.Range.End.Row;
+        var rowCount = checked((int)table.Range.RowCount);
+        var headerRows = Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
+        var firstDataRow = table.Range.Start.Row + (uint)headerRows;
+        var filters = BuildFilters(table, out _);
+        if (filters.Count == table.FilterColumns.Count)
+            return [];
+
+        var nativeRows = new HashSet<uint>();
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+        {
+            if (sheet.FilterHiddenRows.Contains(row) && RowMatchesAllFilters(sheet, row, filters))
+                nativeRows.Add(row);
+        }
+
+        return nativeRows;
+    }
+
     public static StructuredTableModel ToModel(PendingStructuredTableModel pending, SheetId sheetId)
     {
         var table = new StructuredTableModel

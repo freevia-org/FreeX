@@ -160,6 +160,11 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("set_clipboard_sentinel", probe, StringComparison.Ordinal);
         Assert.Contains("xclip -selection clipboard -out", probe, StringComparison.Ordinal);
         Assert.Contains("X11 clipboard formula='=B2'", probe, StringComparison.Ordinal);
+        Assert.Contains("active_window=\"$(xdotool getactivewindow", probe, StringComparison.Ordinal);
+        Assert.Contains("pointer_location=\"$(xdotool getmouselocation --shell", probe, StringComparison.Ordinal);
+        Assert.Contains("analysis_path=\"/tmp/freex-selection-$BASHPID.png\"", probe, StringComparison.Ordinal);
+        Assert.Contains("cp -- \"$screenshot\" \"$analysis_path\"", probe, StringComparison.Ordinal);
+        Assert.Contains("The first post-apply clipboard read can race", probe, StringComparison.Ordinal);
 
         string[] requiredPhysicalRows =
         [

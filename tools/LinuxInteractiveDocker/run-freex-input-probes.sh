@@ -140,7 +140,12 @@ if [[ -z "$window_id" ]]; then
 fi
 
 focus_app() {
-    xdotool windowactivate --sync "$window_id" 2>/dev/null || true
+    local active_window=""
+    active_window="$(xdotool getactivewindow 2>/dev/null || true)"
+    if [[ "$active_window" != "$window_id" ]]; then
+        timeout --foreground --kill-after=1s "${mousemove_timeout_seconds}s" \
+            xdotool windowactivate --sync "$window_id" 2>/dev/null || true
+    fi
     xdotool windowfocus "$window_id" 2>/dev/null || true
     sleep 0.12
 }
@@ -156,9 +161,15 @@ xdotool_mousemove_sync() {
         mousemove_timeout_count=$((mousemove_timeout_count + 1))
         return 0
     fi
-    if ! timeout --foreground --kill-after=1s "${mousemove_timeout_seconds}s" xdotool mousemove --sync "$target_x" "$target_y"; then
-        mousemove_timeout_count=$((mousemove_timeout_count + 1))
-        return 0
+    local pointer_location="" pointer_x="" pointer_y=""
+    pointer_location="$(xdotool getmouselocation --shell 2>/dev/null || true)"
+    pointer_x="$(printf '%s\n' "$pointer_location" | awk -F= '$1 == "X" { print $2 }')"
+    pointer_y="$(printf '%s\n' "$pointer_location" | awk -F= '$1 == "Y" { print $2 }')"
+    if [[ "$pointer_x" != "$target_x" || "$pointer_y" != "$target_y" ]]; then
+        if ! timeout --foreground --kill-after=1s "${mousemove_timeout_seconds}s" xdotool mousemove --sync "$target_x" "$target_y"; then
+            mousemove_timeout_count=$((mousemove_timeout_count + 1))
+            return 0
+        fi
     fi
     sleep 0.12
     if (( $# > 0 )); then
@@ -1166,16 +1177,20 @@ regions_match() {
 }
 
 selection_box() {
-    local screenshot="$1" components box
+    local screenshot="$1" components box analysis_path="/tmp/freex-selection-$BASHPID.png"
     # ImageMagick's connected-components analysis is diagnostic only. Bound it so a
     # malformed or unusually large capture records a normal evidence failure instead
     # of leaving the physical lane and its X11 session blocked indefinitely.
-    components="$(timeout --foreground --kill-after=1s "${image_tool_timeout_seconds}s" convert "$screenshot" \
+    if ! cp -- "$screenshot" "$analysis_path" 2>/dev/null; then
+        return 1
+    fi
+    components="$(timeout --foreground --kill-after=1s "${image_tool_timeout_seconds}s" convert "$analysis_path" \
         -alpha off \
         -fill black +opaque "$selection_color" \
         -fill white -opaque "$selection_color" \
         -define connected-components:verbose=true \
         -connected-components 8 null: 2>&1 || true)"
+    rm -f -- "$analysis_path"
     box="$(printf '%s\n' "$components" | awk '
         /srgb\(255,255,255\)/ && $4 + 0 > largest { largest = $4 + 0; box = $2 }
         END { print box }
@@ -2843,14 +2858,19 @@ probe_split_pane_pointer() {
 
 outline_toggle_visible() {
     local screenshot="$1" center_x="$2" center_y="$3" left top metrics white_score border_score
+    local analysis_path="/tmp/freex-outline-toggle-$BASHPID.png"
     left=$((center_x - 7))
     top=$((center_y - 7))
     (( left >= window_x && top >= window_y && left + 15 <= window_x + window_width && top + 15 <= window_y + window_height )) || return 1
-    metrics="$(convert "$screenshot" \
+    if ! cp -- "$screenshot" "$analysis_path" 2>/dev/null; then
+        return 1
+    fi
+    metrics="$(convert "$analysis_path" \
         -crop "15x15+${left}+${top}" \
         -alpha off \
         -format '%[fx:mean((r>0.82)&&(g>0.82)&&(b>0.82))] %[fx:mean((abs(r-g)<0.08)&&(abs(g-b)<0.08)&&(r>0.25)&&(r<0.82))]' \
         info: 2>/dev/null || true)"
+    rm -f -- "$analysis_path"
     read -r white_score border_score <<< "$metrics"
     white_score="${white_score:-0}"
     border_score="${border_score:-0}"
@@ -3563,7 +3583,15 @@ PY
         click_autofilter_control 29 348
         click_autofilter_control 246 395
         sleep "$settle_seconds"
-        all_values="$(copy_cell_formula_by_address B2 || true),$(copy_cell_formula_by_address B3 || true),$(copy_cell_formula_by_address B4 || true),$(copy_cell_formula_by_address B5 || true),$(copy_cell_formula_by_address B6 || true),$(copy_cell_formula_by_address B7 || true)"
+        # The first post-apply clipboard read can race the flyout's final focus handoff even
+        # after the worksheet has visibly repainted. Retry the exact readback without relaxing
+        # the expected values, so an eventually observable production state is not discarded.
+        all_values=""
+        for _ in $(seq 1 8); do
+            all_values="$(copy_cell_formula_by_address B2 || true),$(copy_cell_formula_by_address B3 || true),$(copy_cell_formula_by_address B4 || true),$(copy_cell_formula_by_address B5 || true),$(copy_cell_formula_by_address B6 || true),$(copy_cell_formula_by_address B7 || true)"
+            [[ "$all_values" == "Outer2,InnerDrop3,InnerKeep4,InnerAnchor5,OuterDrop6,OuterSummary7" ]] && break
+            sleep 0.25
+        done
         capture "outline-nested-filter-all-values.png"
 
         open_autofilter_menu 0
