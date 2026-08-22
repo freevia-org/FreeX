@@ -1,7 +1,7 @@
 using System.IO.Compression;
-using System.Text;
 using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -40,8 +40,19 @@ public sealed partial class OdsFileAdapter : IFileAdapter
     internal static readonly XNamespace StyleNs = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
     internal static readonly XNamespace FoNs = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0";
     internal static readonly XNamespace NumberNs = "urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0";
-    internal static readonly XNamespace ManifestNs = "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0";
     internal static readonly XNamespace SvgNs = "urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0";
+
+    private static readonly OpenDocumentXmlEntryOptions XmlEntryOptions = new(
+        OmitXmlDeclaration: false,
+        Indent: false,
+        NewLineChars: "\n",
+        NewLineHandling: NewLineHandling.Entitize,
+        CloseOutput: false);
+
+    private static readonly OpenDocumentManifestOptions ManifestOptions = new(
+        Version: "1.2",
+        RootEntryVersion: "1.2",
+        IncludeXmlDeclaration: false);
 
     public string Extension => ".ods";
     public string FormatName => "OpenDocument Spreadsheet";
@@ -92,62 +103,23 @@ public sealed partial class OdsFileAdapter : IFileAdapter
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
 
         // The mimetype part MUST be the first entry and stored uncompressed per the ODF packaging spec.
-        WriteMimeType(archive);
+        OpenDocumentPackageWriter.WriteMimeType(archive, MimeType);
 
         var contentDoc = WriteContent(workbook);
-        WriteXmlEntry(archive, "content.xml", contentDoc);
-        WriteXmlEntry(archive, "styles.xml", BuildMinimalStyles());
-        WriteXmlEntry(archive, "META-INF/manifest.xml", BuildManifest());
-    }
-
-    // ---- package helpers -------------------------------------------------------------------------
-
-    private static void WriteMimeType(ZipArchive archive)
-    {
-        // CompressionLevel.NoCompression => "stored", which ODF requires for the mimetype entry so the
-        // media type is readable at a fixed offset without inflation.
-        var entry = archive.CreateEntry("mimetype", CompressionLevel.NoCompression);
-        using var s = entry.Open();
-        var bytes = Encoding.ASCII.GetBytes(MimeType);
-        s.Write(bytes, 0, bytes.Length);
-    }
-
-    private static void WriteXmlEntry(ZipArchive archive, string name, XDocument doc)
-    {
-        var entry = archive.CreateEntry(name, CompressionLevel.Optimal);
-        using var s = entry.Open();
-        var settings = new XmlWriterSettings
-        {
-            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-            Indent = false,
-            OmitXmlDeclaration = false,
-            NewLineChars = "\n",
-            NewLineHandling = NewLineHandling.Entitize,
-        };
-        using var writer = XmlWriter.Create(s, settings);
-        doc.Save(writer);
-    }
-
-    private XDocument BuildManifest()
-    {
-        var root = new XElement(ManifestNs + "manifest",
-            new XAttribute(XNamespace.Xmlns + "manifest", ManifestNs.NamespaceName),
-            new XAttribute(ManifestNs + "version", "1.2"),
-            ManifestEntry("/", MimeType),
-            ManifestEntry("content.xml", "text/xml"),
-            ManifestEntry("styles.xml", "text/xml"),
-            ManifestEntry("META-INF/manifest.xml", "text/xml"));
-        return new XDocument(root);
-    }
-
-    private XElement ManifestEntry(string path, string mediaType)
-    {
-        var e = new XElement(ManifestNs + "file-entry",
-            new XAttribute(ManifestNs + "full-path", path),
-            new XAttribute(ManifestNs + "media-type", mediaType));
-        if (path == "/")
-            e.SetAttributeValue(ManifestNs + "version", "1.2");
-        return e;
+        OpenDocumentPackageWriter.WriteXmlEntry(archive, "content.xml", contentDoc, XmlEntryOptions);
+        OpenDocumentPackageWriter.WriteXmlEntry(archive, "styles.xml", BuildMinimalStyles(), XmlEntryOptions);
+        OpenDocumentPackageWriter.WriteXmlEntry(
+            archive,
+            "META-INF/manifest.xml",
+            OpenDocumentPackageWriter.BuildManifest(
+                MimeType,
+                [
+                    new OpenDocumentManifestEntry("content.xml", "text/xml"),
+                    new OpenDocumentManifestEntry("styles.xml", "text/xml"),
+                    new OpenDocumentManifestEntry("META-INF/manifest.xml", "text/xml"),
+                ],
+                ManifestOptions),
+            XmlEntryOptions);
     }
 
     private XDocument BuildMinimalStyles()

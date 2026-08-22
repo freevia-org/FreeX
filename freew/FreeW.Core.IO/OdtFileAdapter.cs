@@ -2,7 +2,6 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Opc;
@@ -50,7 +49,18 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
     private static readonly XNamespace Xlink = "http://www.w3.org/1999/xlink";
     private static readonly XNamespace Meta = "urn:oasis:names:tc:opendocument:xmlns:meta:1.0";
     private static readonly XNamespace Dc = "http://purl.org/dc/elements/1.1/";
-    private static readonly XNamespace Manifest = "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0";
+
+    private static readonly OpenDocumentXmlEntryOptions XmlEntryOptions = new(
+        OmitXmlDeclaration: false,
+        Indent: false,
+        NewLineChars: null,
+        NewLineHandling: NewLineHandling.Replace,
+        CloseOutput: false);
+
+    private static readonly OpenDocumentManifestOptions ManifestOptions = new(
+        Version: "1.3",
+        RootEntryVersion: null,
+        IncludeXmlDeclaration: true);
 
     private readonly bool _opensAsTemplate;
 
@@ -577,11 +587,11 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
 
         // CRITICAL: mimetype must be the FIRST entry and stored UNCOMPRESSED.
-        WriteMimeType(archive);
+        OpenDocumentPackageWriter.WriteMimeType(archive, MimeType);
 
-        WriteXmlEntry(archive, "content.xml", contentDoc);
-        WriteXmlEntry(archive, "styles.xml", stylesDoc);
-        WriteXmlEntry(archive, "meta.xml", metaDoc);
+        OpenDocumentPackageWriter.WriteXmlEntry(archive, "content.xml", contentDoc, XmlEntryOptions);
+        OpenDocumentPackageWriter.WriteXmlEntry(archive, "styles.xml", stylesDoc, XmlEntryOptions);
+        OpenDocumentPackageWriter.WriteXmlEntry(archive, "meta.xml", metaDoc, XmlEntryOptions);
 
         foreach (var (name, bytes) in pictureWriter.Pictures)
         {
@@ -590,15 +600,20 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
             es.Write(bytes, 0, bytes.Length);
         }
 
-        WriteXmlEntry(archive, "META-INF/manifest.xml", BuildManifest(pictureWriter));
-    }
-
-    private static void WriteMimeType(ZipArchive archive)
-    {
-        var entry = archive.CreateEntry("mimetype", CompressionLevel.NoCompression);
-        using var es = entry.Open();
-        var bytes = Encoding.ASCII.GetBytes(MimeType);
-        es.Write(bytes, 0, bytes.Length);
+        OpenDocumentPackageWriter.WriteXmlEntry(
+            archive,
+            "META-INF/manifest.xml",
+            OpenDocumentPackageWriter.BuildManifest(
+                MimeType,
+                [
+                    new OpenDocumentManifestEntry("content.xml", "text/xml"),
+                    new OpenDocumentManifestEntry("styles.xml", "text/xml"),
+                    new OpenDocumentManifestEntry("meta.xml", "text/xml"),
+                    .. pictureWriter.MediaTypes.Select(
+                        static picture => new OpenDocumentManifestEntry(picture.Name, picture.MediaType)),
+                ],
+                ManifestOptions),
+            XmlEntryOptions);
     }
 
     /// <summary>
@@ -1065,38 +1080,6 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
             new XAttribute(Office + "version", "1.3"),
             meta);
         return new XDocument(new XDeclaration("1.0", "UTF-8", null), root);
-    }
-
-    private XDocument BuildManifest(OdtPictureWriter pictures)
-    {
-        var root = new XElement(Manifest + "manifest",
-            new XAttribute(XNamespace.Xmlns + "manifest", Manifest.NamespaceName),
-            new XAttribute(Manifest + "version", "1.3"),
-            ManifestEntry("/", MimeType),
-            ManifestEntry("content.xml", "text/xml"),
-            ManifestEntry("styles.xml", "text/xml"),
-            ManifestEntry("meta.xml", "text/xml"));
-        foreach (var (name, mediaType) in pictures.MediaTypes)
-            root.Add(ManifestEntry(name, mediaType));
-        return new XDocument(new XDeclaration("1.0", "UTF-8", null), root);
-    }
-
-    private XElement ManifestEntry(string path, string mediaType) =>
-        new(Manifest + "file-entry",
-            new XAttribute(Manifest + "full-path", path),
-            new XAttribute(Manifest + "media-type", mediaType));
-
-    private static void WriteXmlEntry(ZipArchive archive, string name, XDocument doc)
-    {
-        var entry = archive.CreateEntry(name, CompressionLevel.Optimal);
-        using var es = entry.Open();
-        using var xw = XmlWriter.Create(es, new XmlWriterSettings
-        {
-            Encoding = new UTF8Encoding(false),
-            CloseOutput = false,
-            Indent = false
-        });
-        doc.Save(xw);
     }
 
     private static ParagraphFormatting ResolveParagraphFormatting(Paragraph p, TextDocument document)

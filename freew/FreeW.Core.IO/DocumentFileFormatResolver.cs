@@ -13,13 +13,23 @@ public static class DocumentFileFormatResolver
         IEnumerable<IDocumentFileAdapter> adapters,
         string extension,
         out FileFormatDescriptor? format) =>
-        FindAdapter(adapters, extension, static candidate => candidate.CanOpen, out format);
+        FileFormatAdapterResolver.Find(
+            adapters,
+            static adapter => adapter.Formats,
+            extension,
+            static candidate => candidate.CanOpen,
+            out format);
 
     public static IDocumentFileAdapter? FindSaveAdapter(
         IEnumerable<IDocumentFileAdapter> adapters,
         string extension,
         out FileFormatDescriptor? format) =>
-        FindAdapter(adapters, extension, static candidate => candidate.CanSave, out format);
+        FileFormatAdapterResolver.Find(
+            adapters,
+            static adapter => adapter.Formats,
+            extension,
+            static candidate => candidate.CanSave,
+            out format);
 
     /// <summary>
     /// Normalizes a user/path extension to a leading-dot form (<c>docx</c> / <c>*.docx</c> → <c>.docx</c>),
@@ -27,31 +37,4 @@ public static class DocumentFileFormatResolver
     /// </summary>
     public static string NormalizeExtension(string extension) =>
         SharedFileDialogFilterBuilder.NormalizeExtension(extension);
-
-    private static IDocumentFileAdapter? FindAdapter(
-        IEnumerable<IDocumentFileAdapter> adapters,
-        string extension,
-        Func<FileFormatDescriptor, bool> predicate,
-        out FileFormatDescriptor? format)
-    {
-        var normalizedExtension = NormalizeExtension(extension);
-        if (normalizedExtension.Length != 0)
-        {
-            foreach (var adapter in adapters)
-            {
-                foreach (var candidate in adapter.Formats)
-                {
-                    if (predicate(candidate) &&
-                        string.Equals(NormalizeExtension(candidate.Extension), normalizedExtension, StringComparison.OrdinalIgnoreCase))
-                    {
-                        format = candidate;
-                        return adapter;
-                    }
-                }
-            }
-        }
-
-        format = null;
-        return null;
-    }
 }
