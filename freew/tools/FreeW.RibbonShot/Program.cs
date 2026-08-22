@@ -60,6 +60,11 @@ static int Run(string outDir, string tabArg, double w, double h)
         {
             Width = w,
             Height = h,
+            // MainWindow opens maximized for normal interactive startup. RibbonShot, however, promises
+            // to render at the caller's requested dimensions, so undo that startup preference before WPF
+            // measures the ribbon. Otherwise the PNG crops a wide maximized ribbon instead of exercising
+            // the 900px adaptive layout it reports in its manifest.
+            WindowState = WindowState.Normal,
             WindowStartupLocation = WindowStartupLocation.Manual,
             Left = backstageMode ? 0 : -10000,
             Top = backstageMode ? 0 : -10000,
