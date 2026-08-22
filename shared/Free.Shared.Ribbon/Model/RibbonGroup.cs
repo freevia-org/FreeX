@@ -10,6 +10,7 @@ public sealed record RibbonWidthHints(
 public sealed record RibbonGroupSizing(
     IReadOnlyList<RibbonAdaptiveGroupState> SupportedVariants,
     RibbonWidthHints? Hints = null,
+    bool EnableCompactPresentation = false,
     bool CompactControlsAsIcons = false)
 {
     /// <summary>Opt-in Office-style command compaction before a group becomes overflow-only.</summary>
@@ -18,7 +19,7 @@ public sealed record RibbonGroupSizing(
         RibbonAdaptiveGroupState.Full,
         RibbonAdaptiveGroupState.SmallWithLabels,
         RibbonAdaptiveGroupState.Collapsed
-    });
+    }, EnableCompactPresentation: true);
 
     /// <summary>Opt-in adaptive form that uses direct command icons where long compact captions would crop.</summary>
     public static readonly RibbonGroupSizing OfficeIconAdaptive = new(new[]
@@ -26,7 +27,7 @@ public sealed record RibbonGroupSizing(
         RibbonAdaptiveGroupState.Full,
         RibbonAdaptiveGroupState.SmallWithLabels,
         RibbonAdaptiveGroupState.Collapsed
-    }, CompactControlsAsIcons: true);
+    }, EnableCompactPresentation: true, CompactControlsAsIcons: true);
 
     // Keep this model default broad for renderer-neutral planning. Renderers that historically exposed
     // only a full and collapsed group preserve that behavior until a definition opts in explicitly.

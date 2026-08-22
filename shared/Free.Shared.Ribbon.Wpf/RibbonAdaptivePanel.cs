@@ -138,7 +138,7 @@ public sealed class RibbonGroupHost : ContentControl
 
     private bool Supports(RibbonAdaptiveGroupState state) =>
         state is RibbonAdaptiveGroupState.Full or RibbonAdaptiveGroupState.Collapsed ||
-        !ReferenceEquals(_group.Sizing, RibbonGroupSizing.Default) &&
+        _group.Sizing.EnableCompactPresentation &&
         _group.Sizing.SupportedVariants.Contains(state);
 
     private FrameworkElement BuildCollapsedButton()
