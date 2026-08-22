@@ -259,6 +259,16 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void TypePicker_ProjectsSuppliedRecommendationsIntoTheGallery()
+    {
+        var choices = ChartTypePickerPlanner.GetRecommendedGalleryChoices(
+            [ChartType.Line, ChartType.Pie, ChartType.Map]);
+
+        choices.Select(choice => choice.Type).Should().Equal(ChartType.Line, ChartType.Pie);
+        choices.Should().OnlyContain(choice => choice.IsRecommended);
+    }
+
+    [Fact]
     public void TypeChange_Plan_ReturnsRequestedType_WhenDifferentAndAuthorable()
     {
         var plan = ChartTypeChangePlanner.Plan(ChartType.Column, ChartType.Line);
