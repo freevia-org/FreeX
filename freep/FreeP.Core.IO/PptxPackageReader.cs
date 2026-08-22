@@ -3585,7 +3585,7 @@ public static class PptxPackageReader
         if (data is null || !IsPictureNodeLayout(data.LayoutUniqueId))
             return;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         if (nodes.Count == 0)
         {
             data.IsLiveLayoutSupported = false;
@@ -3657,21 +3657,6 @@ public static class PptxPackageReader
         data.IsLiveLayoutSupported = true;
     }
 
-    private static List<SmartArtNode> FlattenSmartArtNodes(SmartArtData data)
-    {
-        var nodes = new List<SmartArtNode>();
-        foreach (var root in data.Nodes)
-            Collect(root);
-        return nodes;
-
-        void Collect(SmartArtNode node)
-        {
-            nodes.Add(node);
-            foreach (var child in node.Children)
-                Collect(child);
-        }
-    }
-
     private static bool IsGroupedListLayout(string uniqueId)
     {
         if (string.IsNullOrWhiteSpace(uniqueId))
@@ -3737,7 +3722,7 @@ public static class PptxPackageReader
 
     private static bool CanUseSimpleNodeCache(SmartArtShape smart, SmartArtData data)
     {
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         if (nodes.Count == 0 || smart.FallbackShapes.Count != nodes.Count)
             return false;
 
@@ -3761,7 +3746,7 @@ public static class PptxPackageReader
             || data.Nodes.Count < 2)
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var visibleNodes = nodes.Where(node => !string.IsNullOrWhiteSpace(node.Text)).ToList();
         var groups = data.Nodes
             .Where(node => !string.IsNullOrWhiteSpace(node.Text))
@@ -3839,7 +3824,7 @@ public static class PptxPackageReader
         if (!IsHierarchy3Layout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         if (nodes.Count == 0)
             return false;
 
@@ -3903,7 +3888,7 @@ public static class PptxPackageReader
         if (!IsCycle2Layout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         if (nodes.Count is < 2 or > 7)
             return false;
 
@@ -3944,7 +3929,7 @@ public static class PptxPackageReader
         if (!IsBasicRelationshipLayout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         if (nodes.Count is < 2 or > 3 || smart.FallbackShapes.Count != nodes.Count)
             return false;
 
@@ -4006,7 +3991,7 @@ public static class PptxPackageReader
         if (!IsGridMatrixLayout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (nodes.Count is < 1 or > 4 || shapes.Count != nodes.Count)
             return false;
@@ -4075,7 +4060,7 @@ public static class PptxPackageReader
         if (!IsIncreasingCircleProcessLayout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (nodes.Count != 4 || shapes.Count != 7)
             return false;
@@ -4257,7 +4242,7 @@ public static class PptxPackageReader
             || data.Nodes.Count != 4)
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (nodes.Count != 4
             || data.Nodes.Any(node => node.Level != 0 || node.Children.Count != 0)
@@ -4296,7 +4281,7 @@ public static class PptxPackageReader
         if (!IsProcess1Layout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (data.Nodes.Count != 1
             || nodes.Count != 5
@@ -4358,7 +4343,7 @@ public static class PptxPackageReader
         if (!IsDefaultListLayout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (nodes.Count != 5 || shapes.Count != 5)
             return false;
@@ -4439,7 +4424,7 @@ public static class PptxPackageReader
         if (!IsList1Layout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (data.Nodes.Count != 4
             || nodes.Count != 4
