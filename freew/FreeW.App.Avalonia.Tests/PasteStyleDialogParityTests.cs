@@ -96,6 +96,38 @@ public sealed class PasteStyleDialogParityTests
     }
 
     [Fact]
+    public async Task Style_realized_controls_match_WPF_vertical_metrics()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = CreateNewStyleDialog();
+            try
+            {
+                dialog.Show();
+                dialog.UpdateLayout();
+                var labels = dialog.GetLogicalDescendants()
+                    .OfType<TextBlock>()
+                    .Where(label => label.Text?.EndsWith(':') == true)
+                    .ToArray();
+                var buttons = Buttons(dialog);
+
+                labels.Should().HaveCount(7);
+                labels.Should().OnlyContain(label => label.Bounds.Height == StyleDialogMetrics.LabelHeight);
+                dialog.GetLogicalDescendants()
+                    .OfType<Control>()
+                    .Where(control => control is TextBox or ComboBox)
+                    .Should().OnlyContain(control => control.Margin.Bottom == StyleDialogMetrics.AvaloniaFieldBottomMargin);
+                buttons.Should().HaveCount(2);
+                buttons.Should().OnlyContain(button => button.Bounds.Height == StyleDialogMetrics.ButtonHeight);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ManageStyles_uses_WPF_action_order_glyphs_and_metrics()
     {
         await Session.Dispatch(() =>

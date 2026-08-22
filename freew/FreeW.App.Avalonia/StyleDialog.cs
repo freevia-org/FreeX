@@ -192,9 +192,10 @@ internal sealed partial class StyleDialog : FreeWDialogWindow
             Foreground = Brushes.Black,
             FontFamily = DialogChromeStyle.FontFamily,
             FontSize = DialogChromeStyle.FontSize,
+            MinHeight = StyleDialogMetrics.LabelHeight,
             Margin = new Thickness(0, 0, 0, 2),
         });
-        field.Margin = new Thickness(0, 0, 0, StyleDialogMetrics.FieldBottomMargin);
+        field.Margin = new Thickness(0, 0, 0, StyleDialogMetrics.AvaloniaFieldBottomMargin);
         panel.Children.Add(field);
     }
 

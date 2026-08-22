@@ -53,11 +53,11 @@ public sealed class DesignDialogParityTests
     public void StyleDialog_UsesWpfCompactControlHeight()
     {
         StyleDialog.ControlHeightForTests.Should().Be(22);
-        StyleDialog.ButtonHeightForTests.Should().Be(20);
+        StyleDialog.ButtonHeightForTests.Should().Be(26);
         StyleDialogMetrics.ComboBoxHeight.Should().Be(22);
         StyleDialog.CheckBoxHeightForTests.Should().Be(15);
         StyleDialogMetrics.CheckBoxHeight.Should().Be(15);
-        StyleDialogMetrics.ButtonHeight.Should().Be(20);
+        StyleDialogMetrics.ButtonHeight.Should().Be(26);
     }
 
     [Fact]
