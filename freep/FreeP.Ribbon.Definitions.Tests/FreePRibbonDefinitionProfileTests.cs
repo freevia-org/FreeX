@@ -95,6 +95,26 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Home_groups_opt_into_office_adaptive_sizing_in_both_profiles()
+    {
+        var expectedGroupIds = new[]
+        {
+            "slides", "clipboard", "font", "paragraph", "arrange", "edit", "editing",
+        };
+
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var home = definition.FindTab("home")!;
+            home.Groups.Select(group => group.Id).Should().Equal(expectedGroupIds);
+            home.Groups.Should().OnlyContain(group => group.Sizing == RibbonGroupSizing.OfficeAdaptive);
+        }
+    }
+
+    [Fact]
     public void Arrange_change_shape_menu_exposes_all_modeled_common_presets()
     {
         foreach (var definition in new[]
