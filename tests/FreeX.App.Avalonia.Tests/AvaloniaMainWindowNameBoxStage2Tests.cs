@@ -67,6 +67,11 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             var window = new MainWindow(
                 [InteractionValidationOptions.NameBoxDropdownParityPhysicalFixtureArgument]);
 
+            window.Show();
+            window.Measure(new global::Avalonia.Size(1120, 720));
+            window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+            window.UpdateLayout();
+
             window.CellAddressAutocompleteRenderedNamesForTest().Should().Equal(
                 "Sales",
                 "Tour Name Box Chart",

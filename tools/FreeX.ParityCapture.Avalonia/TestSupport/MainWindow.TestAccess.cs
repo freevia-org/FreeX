@@ -205,9 +205,12 @@ public sealed partial class MainWindow
     internal IReadOnlyList<string> CellAddressAutocompleteRenderedNamesForTest()
     {
         ShowCellAddressAutocompletePopup();
-        return _cellAddressAutocompleteListBox!.Items
-            .OfType<NameBoxNavigationItem>()
-            .Select(item => item.Name)
+        return _cellAddressAutocompleteListBox!
+            .GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Select(text => text.Text)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Cast<string>()
             .ToArray();
     }
 
