@@ -20,6 +20,17 @@ public sealed class RibbonShotManifestSourceTests
     }
 
     [Fact]
+    public void RibbonShot_HonorsTheRequestedWindowSizeInsteadOfStartupMaximize()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.RibbonShot", "Program.cs"));
+
+        source.Should().Contain("Width = w,");
+        source.Should().Contain("Height = h,");
+        source.Should().Contain("WindowState = WindowState.Normal,");
+        source.Should().Contain("new RenderTargetBitmap((int)w, (int)h");
+    }
+
+    [Fact]
     public void WordParityPlanningDocs_DocumentRibbonShotManifestContract()
     {
         var source = File.ReadAllText(RepositoryFile(
