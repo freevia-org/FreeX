@@ -1,5 +1,7 @@
 using System.Text;
+using Free.Shared.AppServices;
 using Free.Shared.IO;
+using Free.Shared.Opc;
 using Free.Shared.Shell;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -114,59 +116,20 @@ public static class PresentationFilePersistenceWorkflow
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(presentation);
 
-        // r137-remediation2: port of FreeX's WorkbookSaveService.SaveAsync / FreeW's
-        // DocumentPersistenceWorkflow.Save check. Best-effort check-then-act (not a held file lock,
-        // same caveat as those two) -- but it catches the common "someone else saved while I was
-        // still editing" case instead of silently discarding their write. Callers that don't pass
-        // expectedLastWriteTimeUtc (the default) get the pre-existing unchecked behavior.
-        if (expectedLastWriteTimeUtc is { } expectedWriteTimeUtc &&
-            File.Exists(path) &&
-            File.GetLastWriteTimeUtc(path) != expectedWriteTimeUtc)
-        {
-            throw new PresentationExternallyModifiedException(path);
-        }
+        ExternalFileWriteConflictPolicy.ThrowIfChangedSince(
+            path,
+            expectedLastWriteTimeUtc,
+            static conflictingPath => new PresentationExternallyModifiedException(conflictingPath));
 
-        // r138-freep-persistence-modified-metadata: sibling of FreeW's DocumentPersistenceWorkflow.Save
-        // fix. PowerPoint refreshes docProps/core.xml's dcterms:modified and cp:lastModifiedBy on every
-        // save; PptxPackageWriter just serializes whatever Presentation.Properties already holds, so
-        // without a stamp here they stay frozen at creation/open time forever, and the Document
-        // Properties dialog / SAVEDATE-style consumers of this same model read the wrong value.
-        // Rolled back on any serialize/write failure so a failed save never leaves the in-memory model
-        // claiming a save that never reached disk.
-        var previousModified = presentation.Properties.Modified;
-        var previousLastModifiedBy = presentation.Properties.LastModifiedBy;
-        presentation.Properties.Modified = DateTimeOffset.Now;
-        presentation.Properties.LastModifiedBy = ResolveLastModifiedByAuthor(presentation.Properties.Author);
-
-        try
-        {
-            AtomicFileWriter.WriteAllBytes(path, SerializePresentation(path, presentation));
-        }
-        catch
-        {
-            presentation.Properties.Modified = previousModified;
-            presentation.Properties.LastModifiedBy = previousLastModifiedBy;
-            throw;
-        }
+        using var saveStamp = DocumentPropertiesSaveStampTransaction.Begin(
+            presentation.Properties,
+            "FreeP User");
+        AtomicFileWriter.WriteAllBytes(path, SerializePresentation(path, presentation));
+        saveStamp.Commit();
 
         return new PresentationFileSaveResult(
             SavedPath: path,
             SuppressRecentFiles: false);
-    }
-
-    // Mirrors FreeW's ReviewAuthorIdentityPlanner.ResolveAuthor fallback chain (the same "who is this"
-    // identity precedent used elsewhere for authorship in the sister apps): prefer the document's own
-    // recorded author, then the OS account name, then a generic default.
-    private static string ResolveLastModifiedByAuthor(string? documentAuthor)
-    {
-        if (!string.IsNullOrWhiteSpace(documentAuthor))
-            return documentAuthor.Trim();
-
-        var operatingSystemAuthor = Environment.UserName;
-        if (!string.IsNullOrWhiteSpace(operatingSystemAuthor))
-            return operatingSystemAuthor.Trim();
-
-        return "FreeP User";
     }
 
     private static byte[] SerializePresentation(string path, Presentation presentation)

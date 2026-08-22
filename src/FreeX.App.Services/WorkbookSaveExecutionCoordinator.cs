@@ -34,33 +34,24 @@ public static class WorkbookSaveExecutionCoordinator
 
         var fileExists = request.FileExists ?? File.Exists;
         var getLastWriteTimeUtc = request.GetLastWriteTimeUtc ?? File.GetLastWriteTimeUtc;
-        var savingOverOpenedPath = PlatformPathIdentityComparer.Current.Equals(
+        var expectedLastWriteTimeUtc = ExternalFileWriteConflictPolicy.SelectExpectedLastWriteTimeUtc(
             request.CurrentFilePath,
-            request.Target.Path);
-        DateTime? expectedLastWriteTimeUtc = null;
-
-        if (savingOverOpenedPath && request.ExpectedLastWriteTimeUtc is { } expectedWriteTimeUtc)
+            request.Target.Path,
+            request.ExpectedLastWriteTimeUtc);
+        var conflictPreparation = ExternalFileWriteConflictPolicy.Prepare(
+            request.Target.Path,
+            expectedLastWriteTimeUtc,
+            request.ConfirmExternallyModifiedOverwrite,
+            fileExists,
+            getLastWriteTimeUtc);
+        if (!conflictPreparation.CanWrite)
         {
-            expectedLastWriteTimeUtc = expectedWriteTimeUtc;
-            if (fileExists(request.Target.Path))
-            {
-                var observedWriteTimeUtc = getLastWriteTimeUtc(request.Target.Path);
-                if (observedWriteTimeUtc != expectedWriteTimeUtc)
-                {
-                    if (!request.ConfirmExternallyModifiedOverwrite(request.Target.Path))
-                    {
-                        return new WorkbookSaveExecutionStartResult(
-                            WorkbookSaveExecutionStartOutcome.ExternalWriteDeclined,
-                            Execution: null);
-                    }
-
-                    // The user accepted the write visible at the prompt. Preserve the service's
-                    // check-then-act guard by advancing its baseline to that accepted version, so
-                    // a second external write after the prompt is still rejected.
-                    expectedLastWriteTimeUtc = observedWriteTimeUtc;
-                }
-            }
+            return new WorkbookSaveExecutionStartResult(
+                WorkbookSaveExecutionStartOutcome.ExternalWriteDeclined,
+                Execution: null);
         }
+
+        expectedLastWriteTimeUtc = conflictPreparation.ExpectedLastWriteTimeUtc;
 
         var execution = new WorkbookSaveExecution(
             request.Target,

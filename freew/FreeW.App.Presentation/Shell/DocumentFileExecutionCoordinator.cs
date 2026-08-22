@@ -118,32 +118,23 @@ public sealed class DocumentFileExecutionCoordinator
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var expectedLastWriteTimeUtc = request.ExpectedLastWriteTimeUtc;
-            if (expectedLastWriteTimeUtc is { } expectedWriteTimeUtc &&
-                File.Exists(request.Target.Path) &&
-                File.GetLastWriteTimeUtc(request.Target.Path) != expectedWriteTimeUtc)
+            var conflictPreparation = await ExternalFileWriteConflictPolicy.PrepareAsync(
+                request.Target.Path,
+                request.ExpectedLastWriteTimeUtc,
+                request.ConfirmExternallyModifiedOverwriteAsync,
+                cancellationToken);
+            if (!conflictPreparation.CanWrite)
             {
-                // Someone else wrote request.Target.Path since the caller last observed it (another
-                // instance, a sync client, a colleague on a shared path). Ask before clobbering their
-                // write; a null callback (host wired nothing) or a declined prompt both refuse the
-                // overwrite so we never silently discard someone else's changes.
-                var observedWriteTimeUtc = File.GetLastWriteTimeUtc(request.Target.Path);
-                var confirmed = request.ConfirmExternallyModifiedOverwriteAsync is not null &&
-                    await request.ConfirmExternallyModifiedOverwriteAsync(request.Target.Path, cancellationToken);
-                if (!confirmed)
-                    return DocumentSaveExecutionResult.ExternalWriteConflict(request.Target.Path);
-
-                // The user accepted the write visible at the prompt. Advance the baseline to that
-                // accepted version so _persistence.Save's own check-then-act guard (last line of
-                // defense against a race between the prompt and the write below) compares against
-                // what was just approved rather than the stale value that triggered this prompt.
-                expectedLastWriteTimeUtc = observedWriteTimeUtc;
+                return DocumentSaveExecutionResult.ExternalWriteConflict(request.Target.Path);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                _persistence.Save(request.Document, request.Target, expectedLastWriteTimeUtc);
+                _persistence.Save(
+                    request.Document,
+                    request.Target,
+                    conflictPreparation.ExpectedLastWriteTimeUtc);
             }
             catch (DocumentExternallyModifiedException)
             {
