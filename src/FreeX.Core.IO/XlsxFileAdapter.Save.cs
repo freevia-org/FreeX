@@ -387,16 +387,22 @@ public sealed partial class XlsxFileAdapter
                     xlSheet.Row((int)rowNum).Hide();
             }
 
-            // Supported/materializable filter-owned visibility is represented by filter criteria,
-            // not raw hidden bits. Native-only criteria are different: load reclassifies their raw
-            // rows into FilterHiddenRows because FreeX cannot re-evaluate them, so retain only the
-            // residual rows identified by the same materializer classifiers for save-load-save
-            // fidelity. Manual/group visibility remains sourced from HiddenRows/GroupHiddenRows.
+            // Runtime-owned filter visibility is represented by filter criteria, not raw hidden
+            // bits. FilterHiddenRows can also contain explicit fresh-save/imported state with no
+            // runtime ownership, so preserve that legacy contract while excluding rows owned by
+            // materializable filters. Native-only criteria are different: FreeX cannot re-evaluate
+            // them, so add their residual rows back for save-load-save fidelity.
+            var serializedFilterHiddenRows = new HashSet<uint>(sheet.FilterHiddenRows);
+            serializedFilterHiddenRows.ExceptWith(sheet.ValueFilterHiddenRows);
+            foreach (var ownedRows in sheet.ColumnFilterOwnedRows.Values)
+                serializedFilterHiddenRows.ExceptWith(ownedRows);
+
             var nativeFilterHiddenRows = XlsxWorksheetAutoFilterMaterializer.FindNativeFilterHiddenRows(sheet);
             foreach (var table in sheet.StructuredTables)
                 nativeFilterHiddenRows.UnionWith(XlsxStructuredTableModelMapper.FindNativeFilterHiddenRows(sheet, table));
+            serializedFilterHiddenRows.UnionWith(nativeFilterHiddenRows);
 
-            foreach (var rowNum in nativeFilterHiddenRows)
+            foreach (var rowNum in serializedFilterHiddenRows)
             {
                 if (IsValidWorksheetRow(rowNum))
                     xlSheet.Row((int)rowNum).Hide();
