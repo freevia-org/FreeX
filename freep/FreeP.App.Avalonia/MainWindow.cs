@@ -6951,7 +6951,8 @@ public sealed partial class MainWindow : Window,
             var groupResolution = RibbonKeyTipResolutionPlanner.Resolve(
                 tab.Groups,
                 _ribbonKeyTipSequence,
-                group => GetVisibleRibbonGroupKeyTip(tab, group));
+                group => GetVisibleRibbonGroupKeyTip(tab, group),
+                longerPrefixSelector: static _ => false);
             if (groupResolution.Kind == RibbonKeyTipResolutionKind.Exact)
             {
                 var exactGroup = tab.Groups[groupResolution.ExactIndex];
@@ -6994,13 +6995,13 @@ public sealed partial class MainWindow : Window,
     {
         // Office keeps an exact leaf pending only when the longer candidate opens a
         // nested scope. A longer leaf by itself must not make a short access key
-        // ambiguous; a dropdown or split button must remain reachable by its prefix.
+        // ambiguous; a dropdown, split button, or combo box must remain reachable by its prefix.
         return RibbonKeyTipResolutionPlanner.Resolve(
             controls,
             sequence,
             control => control.KeyTip,
             control => IsRibbonCommandEnabled(control.CommandId),
-            control => control is RibbonDropdown or RibbonSplitButton);
+            control => control is RibbonDropdown or RibbonSplitButton or RibbonComboBox);
     }
 
     private bool TryHandleRibbonMenuKeyTip(string token)

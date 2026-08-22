@@ -65,6 +65,26 @@ public sealed class RibbonKeyTipResolutionPlannerTests
         result.ExactIndex.Should().Be(0);
     }
 
+    [Fact]
+    public void Resolve_DefersExactLeafForLongerComboBoxAccessKey()
+    {
+        RibbonControl[] controls =
+        [
+            new RibbonButton(new RibbonCommandId("exact-leaf"), "Exact leaf") { KeyTip = "FO" },
+            new RibbonComboBox(new RibbonCommandId("font-family"), "Font family") { KeyTip = "FON" },
+        ];
+
+        var result = RibbonKeyTipResolutionPlanner.Resolve(
+            controls,
+            "FO",
+            control => control.KeyTip,
+            longerPrefixSelector: control =>
+                control is RibbonDropdown or RibbonSplitButton or RibbonComboBox);
+
+        result.Kind.Should().Be(RibbonKeyTipResolutionKind.Prefix);
+        result.ExactIndex.Should().Be(-1);
+    }
+
     private static RibbonKeyTipResolution Resolve(string sequence, params Candidate[] candidates) =>
         RibbonKeyTipResolutionPlanner.Resolve(
             candidates,
