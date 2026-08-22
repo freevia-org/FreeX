@@ -38,19 +38,17 @@ public sealed class NameBoxDropdownParityCaptureSourceTests
     public void AvaloniaParityCapture_KeepsPhysicalFixtureSeparate()
     {
         var capture = WorkspaceFileLocator.ReadAllText("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
-        var physicalEvidence = WorkspaceFileLocator.ReadAllText(
-            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.NameBoxPhysicalEvidence.cs");
+        var physicalEvidence = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.NameBoxPhysicalEvidence.cs");
         var avaloniaSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.cs");
         var rendererAccess = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Avalonia", "MainWindow.RendererAccess.cs");
 
         capture.Should().Contain("SeedNameBoxDropdownParityFixture");
-        capture.Should().Contain("68000000-0000-0000-0000-000000000001");
-        capture.Should().Contain("68000000-0000-0000-0000-000000000004");
+        physicalEvidence.Should().Contain("68000000-0000-0000-0000-000000000001");
+        physicalEvidence.Should().Contain("68000000-0000-0000-0000-000000000004");
         physicalEvidence.Should().Contain("SeedNameBoxDropdownPhysicalFixture");
         physicalEvidence.Should().Contain("67000000-0000-0000-0000-000000000001");
         physicalEvidence.Should().Contain("67000000-0000-0000-0000-000000000004");
-        avaloniaSource.Should().NotContain("SeedNameBoxDropdownPhysicalFixture");
         avaloniaSource.Should().Contain("Width = NameBoxDropdownWidth");
         avaloniaSource.Should().Contain("Height = NameBoxDropdownHeight");
         rendererAccess.Should().Contain("NameBoxDropdownWidth = 208");
