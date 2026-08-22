@@ -106,6 +106,15 @@ public sealed class SmartArtFixtureEvidenceTests
             .Count(paragraph => paragraph.BulletKind != FreeP.Core.Model.BulletKind.None)
             .Should().Be(4);
 
+        var arrowShapes = slide10.FallbackShapes
+            .Where(shape => shape.AutoShapeKind == Free.Shared.Drawing.DrawingShapeKind.RightArrow)
+            .ToArray();
+        arrowShapes.Should().HaveCount(2);
+        arrowShapes.Select(shape => shape.TextBody!.InsetTopPt!.Value)
+            .Should().AllSatisfy(inset => inset.Should().BeApproximately(25.3135, 0.01));
+        arrowShapes.Select(shape => shape.TextBody!.InsetRightPt!.Value)
+            .Should().AllSatisfy(inset => inset.Should().BeApproximately(70.5406, 0.01));
+
         static IEnumerable<FreeP.Core.Model.SmartArtNode> Flatten(FreeP.Core.Model.SmartArtNode node)
         {
             yield return node;

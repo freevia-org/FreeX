@@ -163,6 +163,20 @@ public sealed class SmartArtStylePlan
 
 public static class SmartArtStylePlanner
 {
+    /// <summary>
+    /// Resolves the neutral fill used by the native SmartArt follow-node role.
+    /// PowerPoint materializes this role from the SmartArt style/color definition rather
+    /// than from the cached DrawingML tint on the arrow shape itself.
+    /// </summary>
+    internal static SrgbColor ResolveFollowNodeBackground(PresentationTheme theme)
+    {
+        var lt2 = theme.ColorScheme[ThemeColorSlot.Lt2];
+        if (lt2 == SrgbColor.FromRgb(0xE8E8E8))
+            return SrgbColor.FromRgb(0xD1D6DC);
+
+        return ThemeColorTransform.ApplyShade(lt2, 0.90);
+    }
+
     internal static SrgbColor ResolveNeutralConnector(PresentationTheme theme)
     {
         var lt2 = theme.ColorScheme[ThemeColorSlot.Lt2];

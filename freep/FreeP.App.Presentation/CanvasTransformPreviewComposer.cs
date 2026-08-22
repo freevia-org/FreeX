@@ -74,6 +74,7 @@ public static class CanvasTransformPreviewComposer
             FlipV = source.FlipV,
             BoundsDip = bounds,
             Text = source.Text,
+            SmartArtRole = source.SmartArtRole,
             Effects = source.Effects,
             ElbowRouteDip = source.ElbowRouteDip is null
                 ? null

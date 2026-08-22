@@ -161,7 +161,8 @@ public static class SlideCompositor
         List<DrawOp> ops,
         int slideIndex = 0,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null,
-        int groupDepth = 0)
+        int groupDepth = 0,
+        SmartArtShape? cachedSmartArtContext = null)
     {
         if (shape.IsHidden)
             return;
@@ -194,7 +195,16 @@ public static class SlideCompositor
                 // apply that mapping here so descendants land where PowerPoint actually renders
                 // them: absolute = groupOff + (childRaw - chOff) * (groupExt / chExt).
                 foreach (var child in shape.Children)
-                    ComposeShape(TransformGroupChild(shape, child), slide, presentation, theme, ops, slideIndex, effectiveClrMap, groupDepth + 1);
+                    ComposeShape(
+                        TransformGroupChild(shape, child),
+                        slide,
+                        presentation,
+                        theme,
+                        ops,
+                        slideIndex,
+                        effectiveClrMap,
+                        groupDepth + 1,
+                        cachedSmartArtContext);
                 break;
 
             case SlideShapeKind.Table:
@@ -231,7 +241,19 @@ public static class SlideCompositor
                 break;
 
             default:
-                ComposeAutoShape(shape, slide, presentation, theme, ops, slideIndex, effectiveClrMap);
+                var smartArtRole = cachedSmartArtContext is not null
+                    && IsSmartArtFollowNodeRole(shape, cachedSmartArtContext)
+                    ? SmartArtSemanticRole.FollowNode
+                    : SmartArtSemanticRole.None;
+                ComposeAutoShape(
+                    shape,
+                    slide,
+                    presentation,
+                    theme,
+                    ops,
+                    slideIndex,
+                    effectiveClrMap,
+                    smartArtRole);
                 break;
         }
     }
@@ -277,7 +299,8 @@ public static class SlideCompositor
         PresentationTheme theme,
         List<DrawOp> ops,
         int slideIndex = 0,
-        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null,
+        SmartArtSemanticRole smartArtRole = SmartArtSemanticRole.None)
     {
         // An explicit zero-sized slide placeholder is hidden in PowerPoint. Do not let normal
         // placeholder inheritance turn its authored zero transform into visible layout geometry.
@@ -397,6 +420,7 @@ public static class SlideCompositor
             FlipV = anchor.FlipV,
             BoundsDip = boundsDip,
             Text = text,
+            SmartArtRole = smartArtRole,
             Effects = ResolveEffects(effectiveEffects),
             ElbowRouteDip = elbowRouteDip,
         });
@@ -1872,7 +1896,14 @@ public static class SlideCompositor
                 var translated = SlideCloner.CloneShape(fallback);
                 TranslateCachedSmartArtShape(translated, shape.OffsetXEmu, shape.OffsetYEmu);
                 ApplyCachedSmartArtStyle(translated, smart, theme);
-                ComposeShape(translated, slide, presentation, theme, ops, effectiveClrMap: effectiveClrMap);
+                ComposeShape(
+                    translated,
+                    slide,
+                    presentation,
+                    theme,
+                    ops,
+                    effectiveClrMap: effectiveClrMap,
+                    cachedSmartArtContext: smart);
             }
         }
         else
@@ -1940,6 +1971,24 @@ public static class SlideCompositor
         {
             shape.Fill = new ShapeFill.Solid(new ThemeAwareColor(ResolveSmartArtNeutralBackground(theme)));
         }
+        else if (IsSmartArtFollowNodeRole(shape, smart))
+        {
+            // The imported cache carries the accent1 tint used by the diagram authoring
+            // grammar. Office re-materializes bgAccFollowNode1 as a neutral follow-node
+            // background for simple1/accent1_2, so preserve the semantic role at the cache
+            // boundary instead of painting the raw cache tint.
+            var followNodeBackground = SmartArtStylePlanner.ResolveFollowNodeBackground(theme);
+            shape.Fill = new ShapeFill.Solid(new ThemeAwareColor(followNodeBackground));
+            if (shape.Outline is ShapeOutline.Visible outline)
+            {
+                shape.Outline = new ShapeOutline.Visible(
+                    new ThemeAwareColor(followNodeBackground),
+                    outline.WidthPt,
+                    outline.Dash,
+                    outline.BeginLineEnd,
+                    outline.EndLineEnd);
+            }
+        }
         else if (data?.LayoutUniqueId.EndsWith("cycle2", StringComparison.OrdinalIgnoreCase) == true
             && shape.AutoShapeKind == DrawingShapeKind.RightArrow
             && shape.TextBody is not null
@@ -1952,6 +2001,17 @@ public static class SlideCompositor
 
         foreach (var child in shape.Children)
             ApplyCachedSmartArtStyle(child, smart, theme);
+    }
+
+    private static bool IsSmartArtFollowNodeRole(SlideShape shape, SmartArtShape smart)
+    {
+        if (shape.AutoShapeKind != DrawingShapeKind.RightArrow
+            || shape.TextBody is null
+            || !shape.TextBody.Paragraphs.Any(paragraph => paragraph.BulletKind != BulletKind.None))
+            return false;
+
+        return smart.QuickStyle?.UniqueId.EndsWith("/quickstyle/simple1", StringComparison.OrdinalIgnoreCase) == true
+            && smart.Colors?.UniqueId.EndsWith("/colors/accent1_2", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private static bool IsSimpleAccentHierarchy(SmartArtShape smart) =>

@@ -530,6 +530,13 @@ public sealed class ResolvedShapeEffects
 
 // ─── Draw operations ──────────────────────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Semantic SmartArt role retained by cached drawing operations.</summary>
+public enum SmartArtSemanticRole
+{
+    None,
+    FollowNode
+}
+
 /// <summary>
 /// Base class for a single resolved draw operation emitted by the compositor.
 /// Operations are ordered back-to-front (painter's algorithm = z-order).
@@ -582,6 +589,9 @@ public abstract class DrawOp
 
         /// <summary>Text to render over the shape, or null if the shape has no text.</summary>
         public ResolvedTextLayout? Text { get; init; }
+
+        /// <summary>Semantic role assigned while composing an authoritative SmartArt cache.</summary>
+        public SmartArtSemanticRole SmartArtRole { get; init; }
 
         /// <summary>Resolved shape effects (shadow, glow, soft-edge), or null if none.</summary>
         public ResolvedShapeEffects? Effects { get; init; }

@@ -146,6 +146,16 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void FollowNodeBackgroundUsesNeutralOfficeMaterialization()
+    {
+        var theme = DefaultTheme();
+        theme.ColorScheme[ThemeColorSlot.Lt2] = SrgbColor.FromRgb(0xE8E8E8);
+
+        SmartArtStylePlanner.ResolveFollowNodeBackground(theme)
+            .Should().Be(SrgbColor.FromRgb(0xD1D6DC));
+    }
+
+    [Fact]
     public void NativeSceneQuickStylesUseDistinctLiveProfiles()
     {
         var baseColor = SrgbColor.FromRgb(0x4472C4);
@@ -3378,6 +3388,102 @@ public sealed class SmartArtLayoutTests
             .Single(op => op.Outline is ResolvedOutline.Visible);
 
         ((ResolvedOutline.Visible)line.Outline).Color.Should().Be(SrgbColor.FromRgb(0x0E4B66));
+    }
+
+    [Fact]
+    public void Compositor_CachedSimpleAccentFollowNode_AssignsSemanticRole()
+    {
+        var smart = new SmartArtShape
+        {
+            Data = new SmartArtData { Family = SmartArtFamily.Unknown },
+            QuickStyle = new SmartArtQuickStyleMetadata
+            {
+                UniqueId = "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple1"
+            },
+            Colors = new SmartArtColorMetadata
+            {
+                UniqueId = "urn:microsoft.com/office/officeart/2005/8/colors/accent1_2"
+            }
+        };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 72,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RightArrow,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        BulletKind = BulletKind.Char,
+                        BulletChar = "\u2022",
+                        Runs = { new Run { Text = "Cached follow node" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 73,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(container);
+
+        var shape = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .Single();
+
+        shape.SmartArtRole.Should().Be(SmartArtSemanticRole.FollowNode);
+    }
+
+    [Fact]
+    public void Compositor_OrdinaryRightArrowBullet_HasNoSmartArtSemanticRole()
+    {
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 74,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RightArrow,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        BulletKind = BulletKind.Char,
+                        BulletChar = "\u2022",
+                        Runs = { new Run { Text = "Ordinary arrow" } }
+                    }
+                }
+            }
+        });
+
+        var shape = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .Single();
+
+        shape.SmartArtRole.Should().Be(
+            SmartArtSemanticRole.None,
+            "ordinary right-arrow bullets must retain the generic text path");
     }
 
     [Fact]

@@ -563,7 +563,11 @@ public sealed partial class SlideCanvas : FrameworkElement
             if (hasTextTransform)
                 dc.PushTransform(ToWpfTransform(autoFitPlan.TextRenderTransform));
 
-            RenderText(dc, shape.Text, bounds);
+            RenderText(
+                dc,
+                shape.Text,
+                bounds,
+                shape.SmartArtRole == SmartArtSemanticRole.FollowNode);
 
             if (hasTextTransform)
                 dc.Pop();
@@ -1283,7 +1287,11 @@ public sealed partial class SlideCanvas : FrameworkElement
 
     // ── Text ────────────────────────────────────────────────────────────────────
 
-    private static void RenderText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
+    private static void RenderText(
+        DrawingContext dc,
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        bool useNativeBulletMarkerFallback = false)
     {
         // Wave 18B: vertical text — rotate the text block around the shape center and swap
         // the effective text-area dimensions so layout uses the rotated extent.
@@ -1300,12 +1308,12 @@ public sealed partial class SlideCanvas : FrameworkElement
                 orientation.RotationAngleDegrees,
                 orientation.RotationCenterX,
                 orientation.RotationCenterY));
-            RenderTextCore(dc, text, orientation.TextBounds);
+            RenderTextCore(dc, text, orientation.TextBounds, useNativeBulletMarkerFallback);
             dc.Pop();
             return;
         }
 
-        RenderTextCore(dc, text, orientation.TextBounds);
+        RenderTextCore(dc, text, orientation.TextBounds, useNativeBulletMarkerFallback);
     }
 
     private static void RenderStackedVerticalText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
@@ -1404,7 +1412,11 @@ public sealed partial class SlideCanvas : FrameworkElement
         return true;
     }
 
-    private static void RenderTextCore(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
+    private static void RenderTextCore(
+        DrawingContext dc,
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        bool useNativeBulletMarkerFallback = false)
     {
         // Wave 22B: multi-column layout
         if (text.ColumnCount > 1)
@@ -1428,14 +1440,20 @@ public sealed partial class SlideCanvas : FrameworkElement
                     formattedText.Height,
                     formattedText.WidthIncludingTrailingWhitespace);
             });
-        RenderMeasuredParagraphsWpf(dc, plan, bounds, applyImportedAptosRasterPolicy: true);
+        RenderMeasuredParagraphsWpf(
+            dc,
+            plan,
+            bounds,
+            applyImportedAptosRasterPolicy: true,
+            useNativeBulletMarkerFallback);
     }
 
     private static void RenderMeasuredParagraphsWpf(
         DrawingContext dc,
         TextMeasuredBlockLayoutPlan<FormattedText> plan,
         LayoutRect bounds,
-        bool applyImportedAptosRasterPolicy)
+        bool applyImportedAptosRasterPolicy,
+        bool useNativeBulletMarkerFallback = false)
     {
         var renderText = plan.RenderText;
         bool useImportedAptosRasterScale =
@@ -1445,7 +1463,7 @@ public sealed partial class SlideCanvas : FrameworkElement
         TextParagraphNativeRenderDispatcher.Render(
             plan,
             new(
-                bullet => DrawBulletPlacementWpf(dc, bullet),
+                bullet => DrawBulletPlacementWpf(dc, bullet, useNativeBulletMarkerFallback),
                 (paragraph, placement) =>
                     RenderParaWithMath(dc, paragraph, placement.X, placement.Y),
                 (paragraph, placement) => RenderParaWithEffects(
@@ -1541,7 +1559,10 @@ public sealed partial class SlideCanvas : FrameworkElement
     /// <summary>
     /// Wave 19A: draws a bullet glyph or number string at the given position.
     /// </summary>
-    private static void DrawBulletPlacementWpf(DrawingContext dc, TextBulletPlacement bullet)
+    private static void DrawBulletPlacementWpf(
+        DrawingContext dc,
+        TextBulletPlacement bullet,
+        bool useNativeBulletMarkerFallback)
     {
         if (bullet.Image is { Bytes.Length: > 0 } image)
         {
@@ -1567,7 +1588,7 @@ public sealed partial class SlideCanvas : FrameworkElement
         }
 
         DrawBulletWpf(dc, bullet.Text, bullet.FontFamily, bullet.FontSizePt,
-            bullet.Color, bullet.X, bullet.Y);
+            bullet.Color, bullet.X, bullet.Y, useNativeBulletMarkerFallback);
     }
 
     private static void DrawBulletWpf(
@@ -1577,14 +1598,38 @@ public sealed partial class SlideCanvas : FrameworkElement
         double fontSizePt,
         SrgbColor color,
         double x,
-        double y)
+        double y,
+        bool useNativeBulletMarkerFallback)
     {
         if (string.IsNullOrEmpty(bulletText)) return;
-        var typeface = new Typeface(new FontFamily(fontFamily),
+        // WPF can draw the imported Aptos paragraph text through its fallback chain, but
+        // the standalone bullet glyph is dropped when the unavailable Office face is used
+        // directly. Keep the bullet host policy aligned with Avalonia's Arial fallback.
+        var typeface = new Typeface(new FontFamily(
+                useNativeBulletMarkerFallback
+                    ? ResolvePowerPointFontFamily(fontFamily)
+                    : fontFamily),
             FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
         double emPx = fontSizePt * (96.0 / 72.0);
         var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
         if (brush.CanFreeze) brush.Freeze();
+
+        // WPF's fallback chain can measure the Office bullet family but drops the
+        // standalone U+2022 glyph during DrawingContext rasterization. PowerPoint
+        // renders this marker as a filled disc, so preserve that semantic shape on
+        // this host while leaving other marker strings on the text path.
+        if (useNativeBulletMarkerFallback && bulletText == "\u2022")
+        {
+            double radius = emPx * 0.12;
+            dc.DrawEllipse(
+                brush,
+                null,
+                new Point(x + emPx * 0.175, y + emPx * 0.57),
+                radius,
+                radius);
+            return;
+        }
+
         var ft = new FormattedText(
             bulletText,
             System.Globalization.CultureInfo.CurrentUICulture,
@@ -1595,6 +1640,12 @@ public sealed partial class SlideCanvas : FrameworkElement
             pixelsPerDip: 1.0);
         dc.DrawText(ft, new Point(x, y));
     }
+
+    private static string ResolvePowerPointFontFamily(string fontFamily) =>
+        string.Equals(fontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(fontFamily, "Aptos Display", StringComparison.OrdinalIgnoreCase)
+            ? "Arial"
+            : fontFamily;
 
     /// <summary>
     /// Renders a paragraph run-by-run, expanding tab characters to the next tab stop position.

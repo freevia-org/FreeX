@@ -4773,6 +4773,55 @@ public static class PptxPackageReader
             var aTxBody = new XElement(A + "txBody", txBodyEl.Attributes(), txBodyEl.Elements());
             shape.TextBody = ReadTxBody(aTxBody, scheme);
 
+            // SmartArt follow-node caches keep the text frame transform beside txBody
+            // rather than expressing its offset through bodyPr insets. Fold that authored
+            // frame into the neutral text body for this semantic right-arrow/bullet role;
+            // unrelated cached SmartArt shapes retain their existing reader geometry.
+            if (shape.AutoShapeKind == DrawingShapeKind.RightArrow
+                && shape.TextBody.Paragraphs.Any(paragraph => paragraph.BulletKind != BulletKind.None))
+            {
+                var txXfrm = sp.Elements().FirstOrDefault(e => e.Name.LocalName == "txXfrm");
+                var txOff = txXfrm?.Elements().FirstOrDefault(e => e.Name.LocalName == "off");
+                var txExt = txXfrm?.Elements().FirstOrDefault(e => e.Name.LocalName == "ext");
+                var txX = ParseLongNullable(txOff?.Attribute("x")?.Value);
+                var txY = ParseLongNullable(txOff?.Attribute("y")?.Value);
+                var txCx = ParseLongNullable(txExt?.Attribute("cx")?.Value);
+                var txCy = ParseLongNullable(txExt?.Attribute("cy")?.Value);
+                if (txX is { } textX
+                    && shape.OffsetXEmu >= 0
+                    && textX >= shape.OffsetXEmu)
+                {
+                    var leftDeltaPt = DrawingMlCoordinateUnits.EmuToPoints(textX - shape.OffsetXEmu);
+                    shape.TextBody.InsetLeftPt = (shape.TextBody.InsetLeftPt ?? 0) + leftDeltaPt;
+                }
+
+                if (txY is { } textY
+                    && shape.OffsetYEmu >= 0
+                    && textY >= shape.OffsetYEmu)
+                {
+                    var topDeltaPt = DrawingMlCoordinateUnits.EmuToPoints(textY - shape.OffsetYEmu);
+                    shape.TextBody.InsetTopPt = (shape.TextBody.InsetTopPt ?? 0) + topDeltaPt;
+                }
+
+                if (txCx is { } textWidth
+                    && txX is { } textXForWidth
+                    && shape.OffsetXEmu + shape.ExtentCxEmu >= textXForWidth + textWidth)
+                {
+                    var rightDeltaPt = DrawingMlCoordinateUnits.EmuToPoints(
+                        shape.OffsetXEmu + shape.ExtentCxEmu - (textXForWidth + textWidth));
+                    shape.TextBody.InsetRightPt = (shape.TextBody.InsetRightPt ?? 0) + rightDeltaPt;
+                }
+
+                if (txCy is { } textHeight
+                    && txY is { } textYForHeight
+                    && shape.OffsetYEmu + shape.ExtentCyEmu >= textYForHeight + textHeight)
+                {
+                    var bottomDeltaPt = DrawingMlCoordinateUnits.EmuToPoints(
+                        shape.OffsetYEmu + shape.ExtentCyEmu - (textYForHeight + textHeight));
+                    shape.TextBody.InsetBottomPt = (shape.TextBody.InsetBottomPt ?? 0) + bottomDeltaPt;
+                }
+            }
+
             // SmartArt's cached drawing can carry its default foreground through
             // dsp:style/a:fontRef instead of individual a:rPr elements.
             var fontRef = sp.Elements().FirstOrDefault(e => e.Name.LocalName == "style")
