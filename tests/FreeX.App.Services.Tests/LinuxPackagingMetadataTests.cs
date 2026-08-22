@@ -7,12 +7,19 @@ public sealed class LinuxPackagingMetadataTests
 {
     private const string AppId = "io.github.tony-xmelon.freex";
     private const string NativeWorkbookMimeType = "application/vnd.freex.workbook+json";
+    private const string CanonicalIconRelativePath = "shared/Free.Shared.Shell/Resources/FreeX.svg";
 
     private static string PackagingFile(string name) =>
         RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Packaging", "linux", name);
 
+    private static string PackagingDirectory() =>
+        Path.GetDirectoryName(PackagingFile("README.md"))!;
+
     private static string SharedPackagingFile() =>
         RepositoryFileLocator.Find("tools", "packaging", "linux", "package-linux.sh");
+
+    private static string CanonicalIconFile() =>
+        RepositoryFileLocator.Find("shared", "Free.Shared.Shell", "Resources", "FreeX.svg");
 
     private static Dictionary<string, string> ParseDesktopEntry(string path)
     {
@@ -80,11 +87,22 @@ public sealed class LinuxPackagingMetadataTests
     }
 
     [Fact]
-    public void Icon_IsScalableSvg()
+    public void Icon_IsCanonicalScalableSvg_AndPackagingEntrypointsLinkToIt()
     {
-        var iconPath = PackagingFile($"{AppId}.svg");
+        var iconPath = CanonicalIconFile();
         File.Exists(iconPath).Should().BeTrue();
-        File.ReadAllText(iconPath).Should().Contain("<svg");
+
+        var svg = XDocument.Load(iconPath).Root!;
+        svg.Name.LocalName.Should().Be("svg");
+        svg.Attribute("viewBox")!.Value.Should().Be("0 0 256 256");
+
+        foreach (var script in new[] { "package-linux-app.sh", "build-appimage.sh", "build-deb.sh" })
+        {
+            File.ReadAllText(PackagingFile(script))
+                .Should().Contain($"--icon-file \"$repo_root/{CanonicalIconRelativePath}\"");
+        }
+
+        File.Exists(Path.Combine(PackagingDirectory(), $"{AppId}.svg")).Should().BeFalse();
     }
 
     [Fact]
