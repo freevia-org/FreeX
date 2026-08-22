@@ -158,6 +158,7 @@ public static class FreeXRibbonDefinition
                 .Medium("Reapply", "Reapply", Ico.Refresh, "R"))
             .Group("DataToolsGroup", "Tools", null, priority: 150,
                 g => g
+                .Sizing(RibbonGroupSizing.OfficeIconAdaptive)
                 .Large("Text to Columns", "Text to Columns", Ico.TextColumns, "E")
                 .Large("Flash Fill", "Flash Fill", Ico.Flash, "FF")
                 .Large(FreeXRibbonCommandIds.DataRemoveDuplicates, "Remove Duplicates", Ico.Delete, "M")

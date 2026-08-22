@@ -220,6 +220,26 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void DataRibbon_KeepsToolsDirectlyReachableAtCommonWideWidth()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Data", 1100);
+            if (!harness.CanUseRequestedRibbonWidth(1100))
+                return;
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
+                "Tools",
+                "Excel keeps the Data Tools commands available as compact direct icons before using a group overflow button");
+            harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                0.5,
+                $"the compact Data Tools group must fit without clipping; {harness.DebugActiveRibbonChildren}");
+        });
+    }
+
+    [Fact]
     public void DataRibbon_DataToolsCommandsUseIconLabelRows()
     {
         StaTestRunner.Run(() =>
