@@ -28,12 +28,12 @@ public sealed class FontDialogVisualParityTests
                 .Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton)
                 .ToArray();
 
-            family.Height.Should().Be(18);
+            family.Height.Should().Be(25);
             family.FocusAdorner.Should().BeNull();
-            size.Height.Should().Be(22);
-            color.Height.Should().Be(22);
+            size.Height.Should().Be(24);
+            color.Height.Should().Be(24);
             buttons.Should().HaveCount(2);
-            buttons.Should().OnlyContain(button => button.Height == 20);
+            buttons.Should().OnlyContain(button => button.Height == 24);
             ((ISolidColorBrush)buttons.Single(button => button.IsCancel).BorderBrush!).Color
                 .Should().Be(Color.FromRgb(0x70, 0x70, 0x70));
         }, CancellationToken.None);
@@ -95,14 +95,14 @@ public sealed class FontDialogVisualParityTests
                     .Where(box => box.Name != "PART_EditableTextBox")
                     .ToArray();
                 textBoxes.Should().NotBeEmpty();
-                textBoxes.Should().OnlyContain(box => box.Bounds.Height == 18);
+                textBoxes.Should().OnlyContain(box => box.Bounds.Height == 25);
 
                 var wideBorders = dialog.GetVisualDescendants()
                     .OfType<Border>()
                     .Where(border => border.Name == "PART_BorderElement" && border.Bounds.Width > 300)
                     .ToArray();
                 wideBorders.Should().NotBeEmpty();
-                wideBorders.Should().OnlyContain(border => border.Bounds.Height == 18);
+                wideBorders.Should().OnlyContain(border => border.Bounds.Height == 25);
                 ((ISolidColorBrush)wideBorders.First().BorderBrush!).Color
                     .Should().Be(Color.FromRgb(0x56, 0x9D, 0xE5));
 

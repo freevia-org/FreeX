@@ -25,11 +25,12 @@ public sealed class FontDialog : FreeWDialogWindow
     private static AvaloniaCompactDialogChromeStyle DialogChromeStyle =>
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
+            // Match the WPF authority's native field and action heights in the captured route.
             ControlHeight = 20,
-            TextBoxHeight = 18,
-            ComboBoxHeight = 22,
+            TextBoxHeight = 25,
+            ComboBoxHeight = 24,
             TabHeight = 20,
-            ButtonHeight = 20,
+            ButtonHeight = 24,
             ForegroundBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
             FocusedInputBorderBrush = new SolidColorBrush(Color.FromRgb(0x56, 0x9D, 0xE5)),
             ButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
