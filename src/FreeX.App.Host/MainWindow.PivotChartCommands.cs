@@ -13,6 +13,14 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private void RefreshPivotChartInsertCommandState()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var canInsert = sheet is not null && SheetGrid.SelectedRange is { } selection &&
+            PivotUiPlanner.FindPivotTableContainingSelection(sheet, selection) is not null;
+        _ribbonState.SetEnabled(FreeXRibbonCommandIds.PivotChartInsert, canInsert);
+    }
+
     private void PivotChartBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);

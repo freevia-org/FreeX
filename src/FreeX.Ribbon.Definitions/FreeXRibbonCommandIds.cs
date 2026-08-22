@@ -127,6 +127,7 @@ public static class FreeXRibbonCommandIds
     public const string TableBandedColumns = "Banded Columns";
     public const string PivotUngroup = "pivot.ungroup";
     public const string PivotClear = "pivot.clear";
+    public const string PivotChartInsert = "pivot.chart.insert";
     public const string PivotChartChangeType = "pivot.chart.changeType";
     public const string PivotBandedRows = "pivot.bandedRows";
     public const string PivotBandedColumns = "pivot.bandedColumns";

@@ -1,10 +1,27 @@
 using System.Windows.Input;
 using FluentAssertions;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed partial class MainWindowRibbonKeyTipTests
 {
+    [Fact]
+    public void InsertPivotChart_IsReachableOnlyForTheSelectedPivotTable()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create(ConfigureWorkbookWithPivotTable);
+            harness.SelectRibbonTab("Insert", 2400);
+
+            harness.SetActiveCell(1, 1);
+            harness.RibbonCommandIsEnabled(FreeXRibbonCommandIds.PivotChartInsert).Should().BeFalse();
+
+            harness.SetActiveCell(6, 5);
+            harness.RibbonCommandIsEnabled(FreeXRibbonCommandIds.PivotChartInsert).Should().BeTrue();
+        });
+    }
+
     [Fact]
     public void PivotContextualTabs_AppearDisappearWithPivotSelectionAndExposeJaJdKeyTips()
     {

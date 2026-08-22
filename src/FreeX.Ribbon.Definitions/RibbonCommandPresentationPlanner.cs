@@ -25,6 +25,9 @@ public static partial class RibbonCommandPresentationPlanner
             return false;
 
         var name = NormalizeCommandText(title);
+        if (name is "pivotchart" or FreeXRibbonCommandIds.PivotChartInsert)
+            return false;
+
         if (!name.Contains("chart") &&
             !name.Contains("axis") &&
             !name.Contains("legend") &&
