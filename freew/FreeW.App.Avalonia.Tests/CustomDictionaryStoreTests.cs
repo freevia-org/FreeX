@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeW.App.Avalonia;
 using FreeW.App.Presentation.Proofing;
 using Xunit;
@@ -106,10 +107,24 @@ public sealed class CustomDictionaryStoreTests
         new CustomDictionaryStore(Path, fs).Words.Should().Equal("existing");
     }
 
+    [Fact]
+    public void File_system_failures_never_escape_or_block_in_memory_dictionary_changes()
+    {
+        var fs = new FakeFileSystem { ThrowOnAccess = true };
+
+        var action = () => new CustomDictionaryStore(Path, fs);
+
+        action.Should().NotThrow();
+        var store = action();
+        store.Add("teh").Should().BeTrue();
+        store.Contains("TEH").Should().BeTrue();
+        store.EnsurePersisted().Should().BeNull();
+    }
+
     // ── Real-disk round trip (temp dir — never the real user data folder) ──────────────────────────
 
     /// <summary>
-    /// End-to-end with the real <see cref="RealCustomDictionaryFileSystem"/>: a word added by one store instance is
+    /// End-to-end with the real <see cref="PhysicalAtomicLineSetFileSystem"/>: a word added by one store instance is
     /// readable by a fresh instance over the same path (simulating an app restart), and the file on disk
     /// is UTF-8 without a BOM, word-per-line — the same .lex format the WPF host's spell checker consumes,
     /// so the two shells can share a dictionary file.
@@ -120,7 +135,7 @@ public sealed class CustomDictionaryStoreTests
         using var temporaryDirectory = new TestTemporaryDirectory("FreeW.CustomDictionaryStoreTests-");
         var path = System.IO.Path.Combine(temporaryDirectory.Path, "customdictionary.lex");
         {
-            var first = new CustomDictionaryStore(path, RealCustomDictionaryFileSystem.Instance);
+            var first = new CustomDictionaryStore(path, PhysicalAtomicLineSetFileSystem.Instance);
             first.Add("gonna").Should().BeTrue();
 
             File.Exists(path).Should().BeTrue();
@@ -129,41 +144,61 @@ public sealed class CustomDictionaryStoreTests
                 .Should().BeFalse("the .lex file must have no BOM, matching the WPF host's format");
 
             // Simulate restart: a fresh store instance over the same on-disk file.
-            var second = new CustomDictionaryStore(path, RealCustomDictionaryFileSystem.Instance);
+            var second = new CustomDictionaryStore(path, PhysicalAtomicLineSetFileSystem.Instance);
             second.Words.Should().Contain("gonna");
         }
     }
 
-    /// <summary>In-memory fake for <see cref="ICustomDictionaryFileSystem"/> — a dictionary of path → lines, so tests can
+    /// <summary>In-memory fake for <see cref="IAtomicLineSetFileSystem"/> — a dictionary of path → lines, so tests can
     /// assert exactly what would have been written to disk and simulate a fresh process reading it back.</summary>
-    private sealed class FakeFileSystem : ICustomDictionaryFileSystem
+    private sealed class FakeFileSystem : IAtomicLineSetFileSystem
     {
         public Dictionary<string, List<string>> Files { get; } = new();
         public int WriteCount { get; private set; }
         public bool FailNextAtomicWrite { get; set; }
+        public bool ThrowOnAccess { get; init; }
 
         public void Seed(string path, params string[] lines) => Files[path] = new List<string>(lines);
 
-        public bool Exists(string path) => Files.ContainsKey(path);
-
-        public string[] ReadAllLines(string path) => Files.TryGetValue(path, out var lines) ? lines.ToArray() : [];
-
-        public void WriteAllLinesAtomically(string path, IEnumerable<string> lines)
+        public bool FileExists(string path)
         {
-            var replacement = new List<string>(lines);
+            ThrowIfRequested();
+            return Files.ContainsKey(path);
+        }
+
+        public string[] ReadAllLines(string path)
+        {
+            ThrowIfRequested();
+            return Files.TryGetValue(path, out var lines) ? lines.ToArray() : [];
+        }
+
+        public void WriteAllTextAtomically(string path, string content)
+        {
+            ThrowIfRequested();
             if (FailNextAtomicWrite)
             {
                 FailNextAtomicWrite = false;
                 throw new IOException("simulated atomic write failure");
             }
 
-            Files[path] = replacement;
+            Files[path] = content.Length == 0
+                ? []
+                : content[..^Environment.NewLine.Length]
+                    .Split(Environment.NewLine, StringSplitOptions.None)
+                    .ToList();
             WriteCount++;
         }
 
         public void CreateDirectory(string path)
         {
+            ThrowIfRequested();
             // No directory structure to simulate — the fake keys files by full path directly.
+        }
+
+        private void ThrowIfRequested()
+        {
+            if (ThrowOnAccess)
+                throw new IOException("simulated dictionary file-system failure");
         }
     }
 }
