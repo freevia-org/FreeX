@@ -129,6 +129,20 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Animation_effects_group_uses_icon_adaptive_sizing_in_both_profiles()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            RequiredGroup(definition, "animations", "animation-effects")
+                .Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+        }
+    }
+
+    [Fact]
     public void Transition_timing_outranks_the_long_gallery_when_width_is_reclaimed()
     {
         foreach (var definition in new[]
