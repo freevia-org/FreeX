@@ -46,14 +46,14 @@ public sealed class ParagraphPageLayoutDialogSurfaceSpecTests
         metrics.SectionHeadingMargin.Should().Be(new ParagraphDialogThickness(0, 0, 0, 8));
         metrics.SectionSeparatorMargin.Should().Be(new ParagraphDialogThickness(0, 4, 0, 8));
         metrics.WpfActionRowMargin.Should().Be(new ParagraphDialogThickness(0, 10, 0, 0));
-        metrics.AvaloniaTabsMargin.Should().Be(new ParagraphDialogThickness(12, 12, 11, 0));
+        metrics.AvaloniaTabsMargin.Should().Be(new ParagraphDialogThickness(12, 12, 13, 0));
         metrics.AvaloniaIndentsTabContentMargin.Should().Be(new ParagraphDialogThickness(9, 12, 12, 10));
         metrics.AvaloniaContextualSpacingMargin.Should().Be(new ParagraphDialogThickness(3, 4, 0, 0));
         metrics.AvaloniaTabPaneMargin.Should().Be(new ParagraphDialogThickness(0, -1, 0, 0));
         metrics.AvaloniaValidationMargin.Should().Be(new ParagraphDialogThickness(12, 8, 11, 0));
         metrics.AvaloniaActionRowMargin.Should().Be(new ParagraphDialogThickness(12, 10, 11, 11));
         metrics.AvaloniaLabelColumnWidth.Should().Be(104);
-        metrics.AvaloniaIndentsTabHeight.Should().Be(253);
+        metrics.AvaloniaIndentsTabHeight.Should().Be(303);
         metrics.AvaloniaBreaksTabHeight.Should().Be(235);
         metrics.AvaloniaIndentsTabHeaderWidth.Should().Be(123);
         metrics.AvaloniaBreaksTabHeaderWidth.Should().Be(122);
