@@ -76,6 +76,7 @@ public static class XlsxPackagePath
             var value when value.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) =>
                 IsInXlFolder(targetPath, "media") ||
                 IsInXlFolder(targetPath, "drawings") ||
+                IsInXlFolder(targetPath, "ctrlProps") ||
                 IsInXlFolder(targetPath, "tables") ||
                 IsInXlFolder(targetPath, "threadedComments") ||
                 IsInXlFolder(targetPath, "pivotTables") ||
