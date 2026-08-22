@@ -17,6 +17,7 @@ public sealed partial class NativeJsonAdapter
         public string Name { get; set; } = "";
         public WorkbookThemeDto? Theme { get; set; }
         public bool Uses1904DateSystem { get; set; }
+        public bool? ShowInkAnnotations { get; set; }
         // R82-services-autosave-recovery-5-2: carries Workbook.HasVbaProjectPackage across a .fxl
         // round-trip (autosave/crash-recovery snapshots go through this adapter exclusively) so a
         // recovered macro-enabled workbook still reports itself as macro-enabled. The actual

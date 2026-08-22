@@ -264,6 +264,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
         workbook.Theme = workbookTheme;
         workbook.HasVbaProjectPackage = packageParts.HasVbaProjectPackage;
         workbook.Uses1904DateSystem = workbookMetadata.Uses1904DateSystem;
+        workbook.ShowInkAnnotations = workbookMetadata.ShowInkAnnotations;
         workbook.Properties = workbookMetadata.WorkbookProperties;
         var workbookViewProperties = workbookMetadata.WorkbookViewProperties;
         workbook.ShowSheetTabs = workbookViewProperties.ShowSheetTabs;
