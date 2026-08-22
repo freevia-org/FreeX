@@ -13,6 +13,8 @@ public sealed partial class MainWindow
 
     partial void RecordOptionalNameBoxSelection(NameBoxNavigationItem item);
 
+    partial void RecordOptionalNameBoxPopupOpened(string host, int x, int y, int width, int height);
+
     partial void AttachOptionalTextBoxInlineObservation();
 
     partial void RequestOptionalTextBoxInlineLayoutObservation();

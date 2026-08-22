@@ -751,7 +751,8 @@ probe_name_box_dropdown() {
     sleep "$settle_seconds"
     capture "name-box-dropdown-keyboard-open.png"
     window_count_open="$(x11_visible_window_count)"
-    if (( window_count_open > window_count_before )); then
+    if name_box_popup_open "$output/name-box-dropdown-object-state.jsonl" ||
+       (( window_count_open > window_count_before )); then
         keyboard_open=true
         xdotool key --clearmodifiers --delay "$input_delay_ms" Home Down Down Down Down Return
         sleep "$settle_seconds"
@@ -774,7 +775,8 @@ probe_name_box_dropdown() {
     sleep "$settle_seconds"
     capture "name-box-dropdown-mouse-open.png"
     window_count_open="$(x11_visible_window_count)"
-    if (( window_count_open > window_count_before )); then
+    if name_box_popup_open "$output/name-box-dropdown-object-state.jsonl" ||
+       (( window_count_open > window_count_before )); then
         mouse_open=true
     fi
     # The popup is immediately below the 16px Name Box button; row centers are 27px apart.
@@ -826,7 +828,8 @@ probe_name_box_dropdown() {
     x11_window_snapshot "$output/name-box-dropdown-defined-open-x11.txt"
     wmctrl -lG > "$output/name-box-dropdown-defined-windows.txt"
     window_count_open="$(x11_visible_window_count)"
-    if (( window_count_open > window_count_before )); then
+    if name_box_popup_open "$output/name-box-dropdown-object-state.jsonl" ||
+       (( window_count_open > window_count_before )); then
         popup_open=true
     fi
     defined_popup_open="$popup_open"
@@ -863,7 +866,8 @@ probe_name_box_dropdown() {
     wmctrl -lG > "$output/name-box-dropdown-table-windows.txt"
     window_count_open="$(x11_visible_window_count)"
     popup_open=false
-    if (( window_count_open > window_count_before )); then
+    if name_box_popup_open "$output/name-box-dropdown-object-state.jsonl" ||
+       (( window_count_open > window_count_before )); then
         popup_open=true
     fi
     table_popup_open="$popup_open"
@@ -951,6 +955,41 @@ print("\x1f".join(value(key) for key in (
 PY
 }
 
+read_name_box_popup() {
+    python3 - "$1" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as stream:
+    lines = [line.strip() for line in stream if line.strip()]
+for raw in reversed(lines):
+    payload = json.loads(raw)
+    if payload.get("stage") != "popup-opened":
+        continue
+    def value(key):
+        item = payload.get(key)
+        return "" if item is None else str(item)
+    print("|".join(value(key) for key in (
+        "popupHost", "popupX", "popupY", "popupWidth", "popupHeight")))
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+name_box_popup_open() {
+    python3 - "$1" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    lines = [line.strip() for line in stream if line.strip()]
+if lines and json.loads(lines[-1]).get("stage") == "popup-opened":
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
 probe_name_box_dropdown_parity() {
     local dropdown_x dropdown_y popup_count=0 popup_id="" popup_x=0 popup_y=0 popup_width=0 popup_height=0
     local before_root="name-box-dropdown-parity-before-root.png"
@@ -977,33 +1016,13 @@ probe_name_box_dropdown_parity() {
     scrot "$output/$open_root"
     x11_window_snapshot "$output/$open_x11"
 
-    IFS='|' read -r popup_count popup_id popup_x popup_y popup_width popup_height < <(
-        python3 - "$output/$before_x11" "$output/$open_x11" <<'PY'
-import re
-import sys
-
-def windows(path):
-    result = {}
-    with open(path, encoding="utf-8") as stream:
-        for raw in stream:
-            parts = raw.rstrip("\n").split("|", 2)
-            if len(parts) != 3:
-                continue
-            geometry = dict(re.findall(r"([A-Z]+)=(-?\d+)", parts[2]))
-            required = ("X", "Y", "WIDTH", "HEIGHT")
-            if all(key in geometry for key in required):
-                result[parts[0]] = tuple(int(geometry[key]) for key in required)
-    return result
-
-before = windows(sys.argv[1])
-after = windows(sys.argv[2])
-candidates = [(window_id, *bounds) for window_id, bounds in after.items() if window_id not in before]
-if len(candidates) == 1:
-    print("|".join(str(value) for value in (1, *candidates[0])))
-else:
-    print(f"{len(candidates)}|||||")
-PY
-    )
+    local popup_host=""
+    IFS='|' read -r popup_host popup_x popup_y popup_width popup_height < <(
+        read_name_box_popup "$output/name-box-dropdown-parity-state.jsonl" || true)
+    if [[ -n "$popup_host" ]]; then
+        popup_count=1
+        popup_id="$popup_host"
+    fi
 
     if [[ "$popup_count" == "1" &&
           "$popup_x" =~ ^[0-9]+$ && "$popup_y" =~ ^[0-9]+$ &&
@@ -1018,26 +1037,30 @@ PY
               "$color_count" =~ ^[0-9]+$ && "$color_count" -gt 1 &&
               "$content_color_count" =~ ^[0-9]+$ && "$content_color_count" -gt 1 ]]; then
             captured=true
-            reason="The 208x136 frame was cropped without scaling from the newly visible native X11 popup window."
+            reason="The 208x136 frame was cropped without scaling from the production Avalonia $popup_host Name Box popup bounds reported at open time."
         else
-            reason="The native popup crop was missing, blank inside its border, or not exactly 208x136."
+            reason="The production Name Box popup crop was missing, blank inside its border, or not exactly 208x136."
         fi
     elif [[ "$popup_count" != "1" ]]; then
-        reason="Expected exactly one newly visible X11 popup window, found $popup_count."
+        reason="The production Name Box popup did not emit exactly one popup-opened identity event."
     else
-        reason="The native popup window geometry ${popup_width}x${popup_height} cannot contain the required 208x136 frame."
+        reason="The production Name Box popup geometry ${popup_width}x${popup_height} cannot contain the required 208x136 frame."
     fi
 
+    local provenance="native-x11-root-crop"
+    if [[ "$popup_host" == "overlay-layer" ]]; then
+        provenance="x11-root-crop-overlay-layer"
+    fi
     python3 - \
         "$output/$geometry_json" "$output/$parity_manifest" "$captured" "$reason" \
-        "$popup_id" "$popup_x" "$popup_y" "$popup_width" "$popup_height" \
+        "$popup_id" "$popup_host" "$provenance" "$popup_x" "$popup_y" "$popup_width" "$popup_height" \
         "$open_root" "$crop_png" "$geometry_json" "$before_x11" "$open_x11" <<'PY'
 import json
 import sys
 
 (
     geometry_path, manifest_path, captured_text, reason,
-    window_id, source_x, source_y, source_width, source_height,
+    window_id, popup_host, provenance, source_x, source_y, source_width, source_height,
     source_png, crop_png, geometry_name, before_inventory, open_inventory,
 ) = sys.argv[1:]
 captured = captured_text == "true"
@@ -1060,7 +1083,7 @@ geometry = {
     "platform": "linux",
     "shell": "avalonia",
     "surfaceId": "popup.nameBoxDropdown",
-    "evidenceProvenance": "native-x11-root-crop",
+    "evidenceProvenance": provenance,
     "captured": captured,
     "sourcePng": source_png,
     "windowInventoryBefore": before_inventory,
@@ -1090,7 +1113,7 @@ surface = {
     "note": reason,
     "width": 208,
     "height": 136,
-    "evidenceProvenance": "native-x11-root-crop",
+    "evidenceProvenance": provenance,
     "sourcePng": source_png,
     "geometryEvidence": geometry_name,
     "sourceX": source_window["x"],
@@ -1115,7 +1138,7 @@ PY
     if $captured; then
         cp "$output/$crop_png" "$parity_directory/$crop_png"
         record "name-box-dropdown-parity-native-crop" "passed" \
-            "$open_root; $open_x11; popup-window=$popup_id; popup-geometry=${popup_width}x${popup_height}+${popup_x}+${popup_y}; crop=208x136; provenance=native-x11-root-crop" \
+            "$open_root; $open_x11; popup-window=$popup_id; popup-host=$popup_host; popup-geometry=${popup_width}x${popup_height}+${popup_x}+${popup_y}; crop=208x136; provenance=$provenance" \
             "$reason" "$artifacts"
     else
         record "name-box-dropdown-parity-native-crop" "failed" \
@@ -1178,7 +1201,8 @@ probe_name_box_object() {
     x11_window_snapshot "$probe_output/$open_x11"
     wmctrl -lG > "$probe_output/$windows_file"
     window_count_open="$(x11_visible_window_count)"
-    if (( window_count_open > window_count_before )); then
+    if name_box_popup_open "$probe_output/name-box-dropdown-object-state.jsonl" ||
+       (( window_count_open > window_count_before )); then
         popup_open=true
     fi
 

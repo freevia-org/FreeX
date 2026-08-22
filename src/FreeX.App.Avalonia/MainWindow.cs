@@ -18732,6 +18732,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Child = _cellAddressAutocompleteListBox,
             },
             IsLightDismissEnabled = true,
+            // Keep this shell-owned transient surface inside the workbook on Linux. The X11
+            // windowed popup exposes both a PopupRoot and a GL render child as visible windows,
+            // which splits physical identity and focus for this control.
+            ShouldUseOverlayLayer = OperatingSystem.IsLinux(),
+        };
+        _cellAddressAutocompletePopup.Opened += (_, _) =>
+        {
+            var popupPosition = _cellAddressDropDownButton.PointToScreen(
+                new Point(0, _cellAddressDropDownButton.Bounds.Height));
+            RecordOptionalNameBoxPopupOpened(
+                _cellAddressAutocompletePopup.IsUsingOverlayLayer
+                    ? "overlay-layer"
+                    : "native-x11-popup-root",
+                popupPosition.X,
+                popupPosition.Y,
+                NameBoxDropdownWidth,
+                NameBoxDropdownHeight);
+            Dispatcher.UIThread.Post(
+                () => _cellAddressAutocompleteListBox?.Focus(),
+                DispatcherPriority.Input);
         };
     }
 
@@ -18795,7 +18815,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellAddressAutocompletePopup!.PlacementTarget = _cellAddressDropDownButton;
         _cellAddressAutocompletePopup.Placement = PlacementMode.BottomEdgeAlignedLeft;
         _cellAddressAutocompletePopup.IsOpen = true;
-        _cellAddressAutocompleteListBox.Focus();
+        // The Opened handler focuses after the popup host has attached and laid out the ListBox.
     }
 
     private bool SelectCellAddressBoxItem(NameBoxNavigationItem item)

@@ -51,6 +51,8 @@ public sealed class NameBoxDropdownParityCaptureSourceTests
         physicalEvidence.Should().Contain("67000000-0000-0000-0000-000000000004");
         avaloniaSource.Should().Contain("Width = NameBoxDropdownWidth");
         avaloniaSource.Should().Contain("Height = NameBoxDropdownHeight");
+        avaloniaSource.Should().Contain("ShouldUseOverlayLayer = OperatingSystem.IsLinux()");
+        avaloniaSource.Should().Contain("RecordOptionalNameBoxPopupOpened");
         rendererAccess.Should().Contain("NameBoxDropdownWidth = 208");
         rendererAccess.Should().Contain("NameBoxDropdownHeight = 136");
     }
@@ -70,7 +72,9 @@ public sealed class NameBoxDropdownParityCaptureSourceTests
         capture.Should().Contain("Captured: false");
         parityManifest.Should().Contain("evidenceProvenance");
         probe.Should().Contain("probe_name_box_dropdown_parity");
+        probe.Should().Contain("read_name_box_popup");
         probe.Should().Contain("\"native-x11-root-crop\"");
+        probe.Should().Contain("x11-root-crop-overlay-layer");
         probe.Should().Contain("-crop \"208x136+${popup_x}+${popup_y}\" +repage");
         probe.Should().NotContain("-resize 208x136");
     }

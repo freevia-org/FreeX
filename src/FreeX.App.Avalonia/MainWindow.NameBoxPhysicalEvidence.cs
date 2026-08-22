@@ -30,9 +30,8 @@ public sealed partial class MainWindow
 
     partial void CompleteOptionalStartupState(IReadOnlyList<string> startupArguments)
     {
-        if (HasStartupArgument(
-                startupArguments,
-                NameBoxDropdownPhysicalFixtureArgument))
+        if (HasStartupArgument(startupArguments, NameBoxDropdownPhysicalFixtureArgument) ||
+            HasStartupArgument(startupArguments, NameBoxDropdownParityPhysicalFixtureArgument))
         {
             InitializeNameBoxDropdownPhysicalEvidence();
         }
@@ -43,6 +42,16 @@ public sealed partial class MainWindow
 
     partial void RecordOptionalNameBoxSelection(NameBoxNavigationItem item) =>
         RecordNameBoxDropdownPhysicalEvidence(item, "object-selected");
+
+    partial void RecordOptionalNameBoxPopupOpened(string host, int x, int y, int width, int height) =>
+        RecordNameBoxDropdownPhysicalEvidence(
+            item: null,
+            stage: "popup-opened",
+            popupHost: host,
+            popupX: x,
+            popupY: y,
+            popupWidth: width,
+            popupHeight: height);
 
     private static bool HasStartupArgument(IReadOnlyList<string> arguments, string expected) =>
         arguments.Any(argument => string.Equals(
@@ -181,7 +190,14 @@ public sealed partial class MainWindow
         RecordNameBoxDropdownPhysicalEvidence(item: null, stage: "fixture-seeded");
     }
 
-    private void RecordNameBoxDropdownPhysicalEvidence(NameBoxNavigationItem? item, string stage)
+    private void RecordNameBoxDropdownPhysicalEvidence(
+        NameBoxNavigationItem? item,
+        string stage,
+        string? popupHost = null,
+        int? popupX = null,
+        int? popupY = null,
+        int? popupWidth = null,
+        int? popupHeight = null)
     {
         var path = FindNameBoxDropdownPhysicalEvidencePath(App.StartupArguments);
         if (string.IsNullOrWhiteSpace(path))
@@ -204,6 +220,11 @@ public sealed partial class MainWindow
                 activeSheetId = _session.ActiveSheet.Id.ToString(),
                 activeCell = _session.ActiveCell.ToA1(),
                 contextualState = selectedKind ?? "None",
+                popupHost,
+                popupX,
+                popupY,
+                popupWidth,
+                popupHeight,
             };
             var directory = Path.GetDirectoryName(path);
             if (!string.IsNullOrWhiteSpace(directory))

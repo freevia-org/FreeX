@@ -483,13 +483,15 @@ function Assert-NameBoxDropdownParityNativeContract {
     $sourcePath = Join-Path $EvidenceDirectory "name-box-dropdown-parity-open-root.png"
     $beforeInventoryPath = Join-Path $EvidenceDirectory "name-box-dropdown-parity-before-x11.txt"
     $openInventoryPath = Join-Path $EvidenceDirectory "name-box-dropdown-parity-open-x11.txt"
+    $popupStatePath = Join-Path $EvidenceDirectory "name-box-dropdown-parity-state.jsonl"
     foreach ($requiredPath in @(
             $manifestPath,
             $geometryPath,
             $cropPath,
             $sourcePath,
             $beforeInventoryPath,
-            $openInventoryPath)) {
+            $openInventoryPath,
+            $popupStatePath)) {
         if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
             throw "Name Box parity native evidence is missing: $requiredPath"
         }
@@ -517,7 +519,7 @@ function Assert-NameBoxDropdownParityNativeContract {
         $surface.captured -ne $true -or
         [int]$surface.width -ne 208 -or
         [int]$surface.height -ne 136 -or
-        [string]$surface.evidenceProvenance -ne "native-x11-root-crop" -or
+        [string]$surface.evidenceProvenance -notin @("native-x11-root-crop", "x11-root-crop-overlay-layer") -or
         [string]$surface.png -ne "popup.nameBoxDropdown.png" -or
         [string]$surface.sourcePng -ne "name-box-dropdown-parity-open-root.png" -or
         [string]$surface.geometryEvidence -ne "name-box-dropdown-parity-native.json" -or
@@ -531,7 +533,7 @@ function Assert-NameBoxDropdownParityNativeContract {
         [string]$geometry.platform -ne "linux" -or
         [string]$geometry.shell -ne "avalonia" -or
         [string]$geometry.surfaceId -ne "popup.nameBoxDropdown" -or
-        [string]$geometry.evidenceProvenance -ne "native-x11-root-crop" -or
+        [string]$geometry.evidenceProvenance -ne [string]$surface.evidenceProvenance -or
         $geometry.captured -ne $true -or
         [string]$geometry.sourcePng -ne [string]$surface.sourcePng -or
         [string]$geometry.windowInventoryBefore -ne "name-box-dropdown-parity-before-x11.txt" -or
@@ -548,18 +550,31 @@ function Assert-NameBoxDropdownParityNativeContract {
         $geometry.crop.resized -ne $false) {
         throw "Name Box parity native geometry does not match the surface manifest."
     }
-    $popupWindowPrefix = "$([string]$geometry.sourceWindow.id)|"
-    $beforeInventory = @(Get-Content -LiteralPath $beforeInventoryPath)
-    $openInventory = @(Get-Content -LiteralPath $openInventoryPath)
-    if (@($beforeInventory | Where-Object { $_.StartsWith($popupWindowPrefix, [StringComparison]::Ordinal) }).Count -ne 0 -or
-        @($openInventory | Where-Object {
-            $_.StartsWith($popupWindowPrefix, [StringComparison]::Ordinal) -and
-            $_.IndexOf("X=$([int]$surface.sourceX) ", [StringComparison]::Ordinal) -ge 0 -and
-            $_.IndexOf("Y=$([int]$surface.sourceY) ", [StringComparison]::Ordinal) -ge 0 -and
-            $_.IndexOf("WIDTH=$([int]$surface.sourceWidth) ", [StringComparison]::Ordinal) -ge 0 -and
-            $_.IndexOf("HEIGHT=$([int]$surface.sourceHeight) ", [StringComparison]::Ordinal) -ge 0
-        }).Count -ne 1) {
-        throw "Name Box parity popup is not a newly visible X11 window with the declared geometry."
+    $popupState = @(Get-Content -LiteralPath $popupStatePath | ForEach-Object {
+        try { $_ | ConvertFrom-Json } catch { $null }
+    } | Where-Object { $null -ne $_ -and [string]$_.stage -eq "popup-opened" })
+    if ($popupState.Count -ne 1 -or
+        [string]$popupState[0].popupHost -notin @("native-x11-popup-root", "overlay-layer") -or
+        [int]$popupState[0].popupX -ne [int]$surface.sourceX -or
+        [int]$popupState[0].popupY -ne [int]$surface.sourceY -or
+        [int]$popupState[0].popupWidth -ne [int]$surface.sourceWidth -or
+        [int]$popupState[0].popupHeight -ne [int]$surface.sourceHeight) {
+        throw "Name Box parity popup identity event does not match the declared production geometry."
+    }
+    if ([string]$surface.evidenceProvenance -eq "native-x11-root-crop") {
+        $popupWindowPrefix = "$([string]$geometry.sourceWindow.id)|"
+        $beforeInventory = @(Get-Content -LiteralPath $beforeInventoryPath)
+        $openInventory = @(Get-Content -LiteralPath $openInventoryPath)
+        if (@($beforeInventory | Where-Object { $_.StartsWith($popupWindowPrefix, [StringComparison]::Ordinal) }).Count -ne 0 -or
+            @($openInventory | Where-Object {
+                $_.StartsWith($popupWindowPrefix, [StringComparison]::Ordinal) -and
+                $_.IndexOf("X=$([int]$surface.sourceX) ", [StringComparison]::Ordinal) -ge 0 -and
+                $_.IndexOf("Y=$([int]$surface.sourceY) ", [StringComparison]::Ordinal) -ge 0 -and
+                $_.IndexOf("WIDTH=$([int]$surface.sourceWidth) ", [StringComparison]::Ordinal) -ge 0 -and
+                $_.IndexOf("HEIGHT=$([int]$surface.sourceHeight) ", [StringComparison]::Ordinal) -ge 0
+            }).Count -ne 1) {
+            throw "Name Box parity popup is not a newly visible X11 window with the declared geometry."
+        }
     }
 
     $png = [IO.File]::ReadAllBytes($cropPath)
@@ -1255,7 +1270,11 @@ try {
                 "/work/x11-validation/name-box-dropdown-object-state.jsonl"
             )
         } elseif ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
-            $x11AppArguments += "--freex-name-box-dropdown-parity-physical"
+            $x11AppArguments += @(
+                "--freex-name-box-dropdown-parity-physical",
+                "--freex-name-box-dropdown-physical-evidence",
+                "/work/x11-validation/name-box-dropdown-parity-state.jsonl"
+            )
         }
         # Physical X11 evidence must exercise the packaged FreeX application executable. The
         # TestSupport host is a managed-validation executable and cannot provide this lane's
