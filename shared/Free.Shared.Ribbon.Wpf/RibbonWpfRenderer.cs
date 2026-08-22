@@ -268,7 +268,7 @@ public static class RibbonWpfRenderer
         };
 
         var controls = group.Controls
-            .Select(control => AdaptControlForGroupState(control, state))
+            .Select(control => AdaptControlForGroupState(group, control, state))
             .ToList();
         var index = 0;
 
@@ -295,6 +295,7 @@ public static class RibbonWpfRenderer
     // group with an overflow button. Keep the semantic controls (and their command IDs/keytips)
     // intact; only change the renderer's layout hint for the intermediate presentations.
     private static RibbonControl AdaptControlForGroupState(
+        RibbonGroup group,
         RibbonControl control,
         RibbonAdaptiveGroupState state)
     {
@@ -303,6 +304,10 @@ public static class RibbonWpfRenderer
 
         return state switch
         {
+            RibbonAdaptiveGroupState.SmallWithLabels when group.Sizing.CompactControlsAsIcons => control with
+            {
+                PreferredLayout = RibbonCommandLayoutKind.Small
+            },
             RibbonAdaptiveGroupState.SmallWithLabels => control with
             {
                 PreferredLayout = control.PreferredLayout switch
