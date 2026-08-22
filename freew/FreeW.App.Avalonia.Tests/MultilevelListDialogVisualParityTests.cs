@@ -32,6 +32,7 @@ public sealed class MultilevelListDialogVisualParityTests
                 .Single(panel => panel.Children.OfType<Button>().Count() == 2);
 
             dialog.Width.Should().Be(380);
+            ((StackPanel)dialog.Content!).Margin.Should().Be(new Thickness(14, 14, 15, 14));
             combos.Should().HaveCount(4);
             combos[0].MinWidth.Should().Be(80);
             combos.Skip(1).Should().OnlyContain(combo => combo.MinWidth == 130);
@@ -42,7 +43,7 @@ public sealed class MultilevelListDialogVisualParityTests
             combos.Should().OnlyContain(combo => combo.HorizontalAlignment == HorizontalAlignment.Stretch);
             textBoxes.Should().OnlyContain(textBox => textBox.HorizontalAlignment == HorizontalAlignment.Stretch);
             combos.Should().OnlyContain(combo => combo.Height == CompactDialogVisualTokens.ControlHeight);
-            textBoxes.Should().OnlyContain(textBox => textBox.Height == CompactDialogVisualTokens.ControlHeight);
+            textBoxes.Should().OnlyContain(textBox => textBox.Height == 25);
             buttons.Select(UserFacingButtonText).Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
             UserFacingButtonText(buttons.Single(button => button.IsDefault)).Should().Be(ShellStrings.Current.Ok);
             UserFacingButtonText(buttons.Single(button => button.IsCancel)).Should().Be(ShellStrings.Current.Cancel);
@@ -50,16 +51,16 @@ public sealed class MultilevelListDialogVisualParityTests
                 .Should().Equal(
                     ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Ok),
                     ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Cancel));
-            actionRow.Spacing.Should().Be(8);
-            actionRow.Margin.Should().Be(new Thickness(0, 9, 0, 0));
+            actionRow.Spacing.Should().Be(14);
+            actionRow.Margin.Should().Be(new Thickness(0, 12, 0, 0));
             combos.Select(combo => combo.Bounds.Height).Should().Equal(
                 CompactDialogVisualTokens.ControlHeight,
                 CompactDialogVisualTokens.ControlHeight,
                 CompactDialogVisualTokens.ControlHeight,
                 CompactDialogVisualTokens.ControlHeight);
             textBoxes.Select(textBox => textBox.Bounds.Height).Should().Equal(
-                CompactDialogVisualTokens.ControlHeight,
-                CompactDialogVisualTokens.ControlHeight);
+                25,
+                25);
             buttons.Select(button => button.Bounds.Height).Should().Equal(
                 CompactDialogVisualTokens.ButtonHeight,
                 CompactDialogVisualTokens.ButtonHeight);
@@ -101,6 +102,12 @@ public sealed class MultilevelListDialogVisualParityTests
             root,
             "freew",
             "tools",
+            "FreeW.DialogVisualHarness.Wpf",
+            "Program.cs"));
+        var avaloniaSource = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "tools",
             "FreeW.DialogVisualHarness.Avalonia",
             "Program.cs"));
         var dialogSource = File.ReadAllText(Path.Combine(
@@ -115,10 +122,15 @@ public sealed class MultilevelListDialogVisualParityTests
             "FreeW.DialogVisualHarness",
             "FreeWDialogEvidenceCatalog.cs"));
 
-        source.Should().Contain("plan.UseWpfAuthoritySize");
-        source.Should().Contain("plan.ClientWidthAdjustment");
-        source.Should().Contain("clientWidth += plan.ClientWidthAdjustment");
+        source.Should().Contain("scenario.RouteId == \"multilevel-list\"");
+        avaloniaSource.Should().Contain("plan.UseWpfAuthoritySize");
+        avaloniaSource.Should().Contain("plan.ClientWidthAdjustment");
+        avaloniaSource.Should().Contain("clientWidth += plan.ClientWidthAdjustment");
         dialogSource.Should().Contain("AvaloniaCompactDialogChrome.WindowsStyle with");
+        dialogSource.Should().Contain("TextBoxHeight = 25");
+        dialogSource.Should().Contain("ActionSpacing = 14");
+        dialogSource.Should().Contain("selection.Margin = new Thickness(1)");
+        dialogSource.Should().NotContain("Foreground = Brushes.Black");
         dialogSource.Should().NotContain("ControlHeight = 20");
         dialogSource.Should().NotContain("TextBoxHeight = 18");
         dialogSource.Should().NotContain("ComboBoxHeight = 22");

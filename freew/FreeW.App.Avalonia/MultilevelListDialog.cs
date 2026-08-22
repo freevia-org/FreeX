@@ -1,9 +1,11 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -14,6 +16,14 @@ internal sealed partial class MultilevelListDialog : FreeWDialogWindow
 {
     private static AvaloniaCompactDialogChromeStyle Chrome => AvaloniaCompactDialogChrome.WindowsStyle with
     {
+        // WPF's native TextBox layout realizes a 25-DIP border at this prompt's
+        // 96-DPI size. Keep that route-local authority metric without changing
+        // the shared compact-dialog token used by other dialogs.
+        TextBoxHeight = 25,
+        // DialogResources.xaml contributes a six-DIP effective gap here: the
+        // WPF OK button carries an 8-DIP trailing margin and Cancel retains its
+        // six-DIP implicit leading margin.
+        ActionSpacing = 14,
         ComboBoxBackgroundBrush = new LinearGradientBrush
         {
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
@@ -63,22 +73,30 @@ internal sealed partial class MultilevelListDialog : FreeWDialogWindow
         _level1Format.SelectionChanged += (_, _) => _session.UpdateLevel1Format(_level1Format.SelectedIndex);
         _level2Format.SelectionChanged += (_, _) => _session.UpdateLevel2Format(_level2Format.SelectedIndex);
 
-        var panel = new StackPanel { Margin = new Thickness(MultilevelListDialogPlanner.OuterMargin) };
+        // The WPF client surface is one DIP narrower than Avalonia's client
+        // arrangement at the same 380-DIP outer authority size.
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(
+                MultilevelListDialogPlanner.OuterMargin,
+                MultilevelListDialogPlanner.OuterMargin,
+                MultilevelListDialogPlanner.OuterMargin + 1,
+                MultilevelListDialogPlanner.OuterMargin),
+        };
         panel.Children.Add(new TextBlock
         {
             Text = MultilevelListDialogPlanner.Description,
-            Foreground = Brushes.Black,
             FontFamily = Chrome.FontFamily,
             FontSize = Chrome.FontSize,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10),
         });
-        AddField(panel, MultilevelListDialogPlanner.LevelsLabel, _levels);
-        AddField(panel, MultilevelListDialogPlanner.Level0StartAtLabel, _level0Start);
-        AddField(panel, MultilevelListDialogPlanner.Level1StartAtLabel, _level1Start);
-        AddField(panel, MultilevelListDialogPlanner.Level0NumberStyleLabel, _level0Format);
-        AddField(panel, MultilevelListDialogPlanner.Level1NumberStyleLabel, _level1Format);
-        AddField(panel, MultilevelListDialogPlanner.Level2NumberStyleLabel, _level2Format);
+        AddField(panel, MultilevelListDialogPlanner.LevelsLabel, _levels, 0);
+        AddField(panel, MultilevelListDialogPlanner.Level0StartAtLabel, _level0Start, 1);
+        AddField(panel, MultilevelListDialogPlanner.Level1StartAtLabel, _level1Start, 2);
+        AddField(panel, MultilevelListDialogPlanner.Level0NumberStyleLabel, _level0Format, 3);
+        AddField(panel, MultilevelListDialogPlanner.Level1NumberStyleLabel, _level1Format, 4);
+        AddField(panel, MultilevelListDialogPlanner.Level2NumberStyleLabel, _level2Format, 5);
         var actionRow = AvaloniaCompactDialogChrome.CreateOkCancelRow(
             Accept,
             () => Close(null),
@@ -86,7 +104,7 @@ internal sealed partial class MultilevelListDialog : FreeWDialogWindow
             // The shared 24/26-DIP controls render two DIPs taller than the WPF
             // prompt's rounded 96-DPI content stack. Keep the authority's terminal
             // button edge aligned without changing the shared control contract.
-            margin: new Thickness(0, 9, 0, 0),
+            margin: new Thickness(0, 12, 0, 0),
             style: Chrome);
         panel.Children.Add(actionRow);
         Content = panel;
@@ -146,15 +164,17 @@ internal sealed partial class MultilevelListDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.FocusAndSelect(target);
     }
 
-    private static void AddField(StackPanel panel, string label, Control control)
+    private static void AddField(StackPanel panel, string label, Control control, int fieldIndex)
     {
         panel.Children.Add(new TextBlock
         {
             Text = label,
-            Foreground = Brushes.Black,
             FontFamily = Chrome.FontFamily,
             FontSize = Chrome.FontSize,
-            Margin = new Thickness(0, 0, 0, 2),
+            // Avalonia's label line box is one DIP shorter than WPF's for the
+            // first four rows in this fixed prompt. The final two labels already
+            // land on the authority baseline and retain the shared two-DIP gap.
+            Margin = new Thickness(0, 0, 0, fieldIndex == 5 ? 2 : 3),
         });
         control.HorizontalAlignment = HorizontalAlignment.Stretch;
         // Avalonia's text line metrics are taller than WPF's default TextBlock line box;
@@ -180,6 +200,19 @@ internal sealed partial class MultilevelListDialog : FreeWDialogWindow
     {
         AvaloniaCompactDialogChrome.ApplyComboBox(combo, Chrome);
         combo.BorderBrush = ComboBorderBrush;
+
+        // The shared compact template layers its selection presenter over the
+        // field border. Expose that one-DIP WPF border on this route while
+        // keeping the selected text at the same left inset.
+        combo.ApplyTemplate();
+        var selection = combo.GetVisualDescendants()
+            .OfType<ContentPresenter>()
+            .FirstOrDefault(presenter => presenter.Name == "PART_ContentPresenter");
+        if (selection is not null)
+        {
+            selection.Margin = new Thickness(1);
+            selection.Padding = new Thickness(4, 2, 5, 2);
+        }
     }
 
     private static TextBox TextBox(string text, double minWidth)

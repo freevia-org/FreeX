@@ -136,7 +136,8 @@ static bool TryCaptureStaticPrompt(Scenario scenario, string output, Window owne
         var dialog = Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window != owner && window.IsVisible);
         if (dialog is null) return;
         dialog.UpdateLayout();
-        if (FreeWDialogEvidenceCatalog.GetRequired(scenario.RouteId).Fixture is
+        if (scenario.RouteId == "multilevel-list" ||
+            FreeWDialogEvidenceCatalog.GetRequired(scenario.RouteId).Fixture is
             FreeWDialogFixtureKind.DefaultRunFormatting or
             FreeWDialogFixtureKind.DefaultParagraphFormatting or
             FreeWDialogFixtureKind.StyleCatalog)
