@@ -110,6 +110,9 @@ public static class FreeXRibbonDefinition
         .Tab("FormulasTab", "Formulas", "M", tab => tab
             .Group("FormulasFunctionLibraryGroup", "Function Library", null, priority: 200,
                 g => g
+                .Sizing(new RibbonGroupSizing(
+                    RibbonGroupSizing.Default.SupportedVariants,
+                    Hints: new RibbonWidthHints(522, 522, 522, 64)))
                 .Large(FreeXRibbonCommandIds.FormulasAutoSum, "AutoSum", Ico.Sum, "U", menu: m => m.Item(FreeXRibbonCommandIds.FormulasAutoSumSum, "Sum", "S").Item(FreeXRibbonCommandIds.FormulasAutoSumAverage, "Average", "A").Item(FreeXRibbonCommandIds.FormulasAutoSumCountNumbers, "Count Numbers", "C").Item(FreeXRibbonCommandIds.FormulasAutoSumCountAll, "Count All", "T").Item(FreeXRibbonCommandIds.FormulasAutoSumMax, "Max", "X").Item(FreeXRibbonCommandIds.FormulasAutoSumMin, "Min", "M").Item(FreeXRibbonCommandIds.FormulasAutoSumMoreFunctions, "More Functions...", "F"))
                 .Medium("Recently Used", "Recently Used", Ico.Function, "RU")
                 .Medium("Financial", "Financial", Ico.Financial, "Y")
@@ -243,6 +246,7 @@ public static class FreeXRibbonDefinition
         .Tab("ViewTab", "View", "W", tab => tab
             .Group("ViewWorkbookViewsGroup", "Workbook Views", null, priority: 200,
                 g => g
+                .Sizing(RibbonGroupSizing.OfficeAdaptive with { CompactPresentationMaximumWidth = 1000 })
                 .Large(FreeXRibbonCommandIds.ViewNormal, "Normal", Ico.View, "L")
                 .Large("Page Break Preview", "Page Break Preview", Ico.PageBreak, "I")
                 .Large("Page Layout", "Page Layout", Ico.Page, "P")
@@ -255,6 +259,7 @@ public static class FreeXRibbonDefinition
                 .CheckBox("Formula Bar", "Formula Bar", b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Function), KeyTip = "VF" }))
             .Group("ViewZoomGroup", "Zoom", null, priority: 110,
                 g => g
+                .Sizing(RibbonGroupSizing.OfficeAdaptive with { CompactPresentationMaximumWidth = 1000 })
                 .Large("Zoom", "Zoom", Ico.Zoom, "Q", menu: m => m.Item(FreeXRibbonCommandIds.ViewZoomPreset200, "200%", "2").Item(FreeXRibbonCommandIds.ViewZoomPreset100, "100%", "1").Item(FreeXRibbonCommandIds.ViewZoomPreset75, "75%", "7").Item(FreeXRibbonCommandIds.ViewZoomPreset50, "50%", "5").Item(FreeXRibbonCommandIds.ViewZoomPreset25, "25%", "3").Separator().Item(FreeXRibbonCommandIds.ViewZoomCustom, "Custom...", "C"))
                 .Large(FreeXRibbonCommandIds.ViewZoom100, "100%", Ico.Zoom, "Z1")
                 .Large("Zoom to Selection", "Zoom to Selection", Ico.Zoom, "ZS"))

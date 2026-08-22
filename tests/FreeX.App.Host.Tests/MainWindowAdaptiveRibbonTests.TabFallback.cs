@@ -356,6 +356,29 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Fact]
+    public void ViewRibbon_KeepsWorkbookViewsAndZoomDirectlyReachableAtNarrowWidth()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("View", 750);
+            if (!harness.CanUseRequestedRibbonWidth(750))
+                return;
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
+                ["Workbook Views", "Show", "Zoom"],
+                $"View should preserve the primary view and zoom commands at 750px; {harness.DebugActiveRibbonChildren}");
+            harness.ActiveRibbonGroupVisibleCommandLabels("Workbook Views").Should().Contain(
+                ["Normal", "Page Break Preview", "Page Layout", "Custom Views"],
+                $"Workbook Views should use labeled compact commands at 750px; {harness.DebugActiveRibbonChildren}");
+            harness.ActiveRibbonGroupVisibleCommandLabels("Zoom").Should().Contain(
+                ["Zoom", "100%", "Zoom to Selection"],
+                $"Zoom should remain directly reachable at 750px; {harness.DebugActiveRibbonChildren}");
+        });
+    }
+
     // NOTE (flagged deviation): at medium widths the primary Workbook Views group stays expanded, but its
     // longest command caption ("Page Break Preview") is rendered ellipsized rather than wrapped onto a
     // second line as Excel does, so it reports as visually clipped. This asserts the live 2-state truth --
