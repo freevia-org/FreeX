@@ -179,6 +179,11 @@ internal sealed class DrawTableDimensionDialog : FreeWDialogWindow
         QuickPartNameDialog.CloseOnEscape(this);
     }
 
+    internal static DrawTableDimensionDialog CreateForVisualHarness() =>
+        new(DrawTableCommandPlanner.BuildDialog(
+            DrawTableDimensionDialogKind.DrawTable,
+            UiText.Get));
+
     public static Task<(int Rows, int Columns)?> AskAsync(Window owner) =>
         new DrawTableDimensionDialog(DrawTableCommandPlanner.BuildDialog(
             DrawTableDimensionDialogKind.DrawTable,

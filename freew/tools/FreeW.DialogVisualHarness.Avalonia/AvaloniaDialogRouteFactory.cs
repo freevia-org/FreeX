@@ -30,6 +30,9 @@ internal static class AvaloniaDialogRouteFactory
         if (!FreeWDialogEvidenceCatalog.TryGet(routeId, out var route))
             return null;
 
+        if (routeId.Equals("draw-table-dimension", StringComparison.OrdinalIgnoreCase))
+            return DrawTableDimensionDialog.CreateForVisualHarness();
+
         if (routeId.Equals("save-compatibility-warning", StringComparison.OrdinalIgnoreCase))
             return CreatePrivateWindow("SaveCompatibilityWarningDialog", CreateCompatibilityPlan());
 
