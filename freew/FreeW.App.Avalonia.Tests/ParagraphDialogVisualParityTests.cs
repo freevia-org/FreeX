@@ -141,8 +141,8 @@ public sealed class ParagraphDialogVisualParityTests
                 dialog.Width = 380;
                 dialog.Height = 399;
                 dialog.Show();
-                dialog.Measure(new Size(380, 345));
-                dialog.Arrange(new Rect(0, 0, 380, 345));
+                dialog.Measure(new Size(380, 399));
+                dialog.Arrange(new Rect(0, 0, 380, 399));
                 dialog.UpdateLayout();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
