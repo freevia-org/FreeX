@@ -6493,6 +6493,19 @@ PY
         return 1
     }
 
+    mixed_type_target_region_changed() {
+        local first="$1" second="$2" minimum="$3"
+        local left=$((a1_x + 68)) top=$((a1_y + 353)) width=260 height=18
+        local geometry="${width}x${height}+${left}+${top}"
+        local first_crop="$output/${prefix}-target-change-first.png"
+        local second_crop="$output/${prefix}-target-change-second.png"
+        local delta=""
+        convert "$first" -crop "$geometry" +repage "$first_crop"
+        convert "$second" -crop "$geometry" +repage "$second_crop"
+        delta="$(compare -metric AE "$first_crop" "$second_crop" null: 2>&1 || true)"
+        [[ "$delta" =~ ^[0-9]+$ ]] && (( delta >= minimum ))
+    }
+
     save_mixed_type_document() {
         select_cell 0 0 A1 || return 1
         send_key ctrl+s
@@ -6572,6 +6585,11 @@ PY
     if [[ "$popup_route" != "none" ]]; then
         click_autofilter_control 74 319
         capture "${prefix}-menu-cleared.png"
+        if ! mixed_type_target_region_changed \
+            "$output/${prefix}-menu-open.png" "$output/${prefix}-menu-cleared.png" 20; then
+            click_autofilter_control 74 319
+            capture "${prefix}-menu-cleared.png"
+        fi
         click_autofilter_control 74 362
         capture "${prefix}-target-checked.png"
         click_autofilter_control 292 433

@@ -37,6 +37,8 @@ public sealed class Wave194AutoFilterMixedTypePhysicalSourceTests
         probe.Should().Contain("wait_for_mixed_type_popup_target");
         probe.Should().Contain("xdotool_mousemove_sync \"$((a1_x + 55))\" \"$((a1_y + 14))\" click 1");
         probe.Should().Contain("popup_route=\"header-arrow\"");
+        probe.Should().Contain("mixed_type_target_region_changed");
+        probe.Should().Contain("$output/${prefix}-menu-open.png\" \"$output/${prefix}-menu-cleared.png\" 20");
         probe.Should().Contain("target-selected=${target_selected}");
         probe.Should().Contain("popup-dismissed=${popup_dismissed}");
         probe.Should().Contain("$visible\" == \"42,42,\"");
