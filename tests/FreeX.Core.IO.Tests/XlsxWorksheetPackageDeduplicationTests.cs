@@ -20,6 +20,10 @@ public sealed class XlsxWorksheetPackageDeduplicationTests
     [InlineData("cellWatches", "customProperties", "ignoredErrors")]
     [InlineData("ignoredErrors", "cellWatches", "singleXmlCells")]
     [InlineData("smartTags", "singleXmlCells", "drawing")]
+    [InlineData("legacyDrawing", "drawing", "legacyDrawingHF")]
+    [InlineData("legacyDrawingHF", "legacyDrawing", "drawingHF")]
+    [InlineData("drawingHF", "legacyDrawingHF", "picture")]
+    [InlineData("picture", "drawingHF", "oleObjects")]
     public void ElementOrder_Insert_PreservesSchemaAndNonSchemaBoundaries(
         string targetName,
         string earlierName,
@@ -106,6 +110,63 @@ public sealed class XlsxWorksheetPackageDeduplicationTests
             .Which.Attribute("id")!.Value.Should().Be("first");
         parent.Elements(WorksheetNs + "extLst").Should().ContainSingle().Which.Should().BeSameAs(firstExtensionList);
         keptExtensionList.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExtensionLists_NormalizeChildren_IgnoresForeignNamespaceLists()
+    {
+        XNamespace foreignNs = "urn:foreign";
+        var first = new XElement(
+            WorksheetNs + "extLst",
+            new XElement(WorksheetNs + "ext", new XAttribute("uri", "urn:first")));
+        var foreign = new XElement(
+            foreignNs + "extLst",
+            new XElement(foreignNs + "ext", new XAttribute("uri", "urn:foreign")));
+        var later = new XElement(
+            WorksheetNs + "extLst",
+            new XElement(WorksheetNs + "ext", new XAttribute("uri", "urn:later")));
+        var parent = new XElement(WorksheetNs + "sortState", first, foreign, later);
+
+        XlsxWorksheetExtensionListNormalizer.NormalizeChildren(parent).Should().BeTrue();
+
+        parent.Elements().Should().Equal(first, foreign);
+        foreign.Element(foreignNs + "ext")!.Attribute("uri")!.Value.Should().Be("urn:foreign");
+        later.Parent.Should().BeNull();
+    }
+
+    [Fact]
+    public void ExtensionLists_NormalizeChildren_UsesOrdinalCaseSensitiveUris()
+    {
+        var upperCase = new XElement(WorksheetNs + "ext", new XAttribute("uri", "urn:Feature"));
+        var lowerCase = new XElement(WorksheetNs + "ext", new XAttribute("uri", "urn:feature"));
+        var extensionList = new XElement(WorksheetNs + "extLst", upperCase, lowerCase);
+        var parent = new XElement(WorksheetNs + "sortState", extensionList);
+
+        XlsxWorksheetExtensionListNormalizer.NormalizeChildren(parent).Should().BeFalse();
+
+        extensionList.Elements(WorksheetNs + "ext").Should().Equal(upperCase, lowerCase);
+    }
+
+    [Fact]
+    public void ExtensionLists_NormalizeChildren_DoesNotMergeLaterPartiallyOverlappingList()
+    {
+        var first = new XElement(
+            WorksheetNs + "extLst",
+            new XElement(WorksheetNs + "ext", new XAttribute("uri", "urn:shared")),
+            new XElement(WorksheetNs + "ext", new XAttribute("uri", "urn:first-only")));
+        var later = new XElement(
+            WorksheetNs + "extLst",
+            new XElement(WorksheetNs + "ext", new XAttribute("uri", "urn:shared")),
+            new XElement(WorksheetNs + "ext", new XAttribute("uri", "urn:later-only")));
+        var parent = new XElement(WorksheetNs + "sortState", first, later);
+
+        XlsxWorksheetExtensionListNormalizer.NormalizeChildren(parent).Should().BeTrue();
+
+        parent.Elements(WorksheetNs + "extLst").Should().ContainSingle().Which.Should().BeSameAs(first);
+        first.Elements(WorksheetNs + "ext")
+            .Select(extension => extension.Attribute("uri")!.Value)
+            .Should().Equal("urn:shared", "urn:first-only");
+        later.Parent.Should().BeNull();
     }
 
     [Fact]

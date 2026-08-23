@@ -41,6 +41,7 @@ internal static class XlsxWorksheetElementOrder
         "drawing",
         "legacyDrawing",
         "legacyDrawingHF",
+        "drawingHF",
         "picture",
         "oleObjects",
         "controls",
