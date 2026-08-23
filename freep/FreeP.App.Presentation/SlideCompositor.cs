@@ -1945,7 +1945,21 @@ public static class SlideCompositor
         // connector color from the generic accent1 shade. Keep this correction
         // on the cached-drawing path; the bounded hierarchy3 and grouped-list
         // imports normally take the shared live plan before reaching here.
-        if (IsSimpleAccentHierarchy(smart)
+        if (data?.LayoutUniqueId.EndsWith("/lProcess2", StringComparison.OrdinalIgnoreCase) == true
+            && shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle
+            && shape.ExtentCyEmu > 2_000_000)
+        {
+            // PowerPoint materializes the lProcess2 group containers as the
+            // neutral SmartArt background role, not the raw accent1 tint in the
+            // cached drawing. Keep this correction on the cached route only.
+            shape.Fill = new ShapeFill.Solid(new ThemeAwareColor(ResolveSmartArtNeutralBackground(theme)));
+        }
+        else if (data?.LayoutUniqueId.EndsWith("/matrix2", StringComparison.OrdinalIgnoreCase) == true
+            && shape.AutoShapeKind == DrawingShapeKind.QuadArrow)
+        {
+            shape.Fill = new ShapeFill.Solid(new ThemeAwareColor(ResolveSmartArtNeutralBackground(theme)));
+        }
+        else if (IsSimpleAccentHierarchy(smart)
             && shape.AutoShapeKind is DrawingShapeKind.Line or DrawingShapeKind.Rectangle
             && shape.Outline is ShapeOutline.Visible line)
         {

@@ -56,7 +56,8 @@ public static class DrawingShapeKindSupport
             DrawingShapeKind.HomePlate or
             DrawingShapeKind.Cylinder or
             DrawingShapeKind.Chord or
-            DrawingShapeKind.Heart => true,
+            DrawingShapeKind.Heart or
+            DrawingShapeKind.QuadArrow => true,
             _ => false
         };
 

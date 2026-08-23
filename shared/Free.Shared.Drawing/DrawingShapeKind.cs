@@ -52,7 +52,8 @@ public enum DrawingShapeKind
     HomePlate = 43,
     Cylinder = 44,
     Chord = 45,
-    Heart = 46
+    Heart = 46,
+    QuadArrow = 47
 }
 
 /// <summary>

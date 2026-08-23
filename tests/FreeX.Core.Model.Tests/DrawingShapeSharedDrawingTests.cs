@@ -53,6 +53,7 @@ public sealed class DrawingShapeSharedDrawingTests
             { DrawingShapeKind.Chevron, "chevron" },
             { DrawingShapeKind.HomePlate, "homePlate" },
             { DrawingShapeKind.Cylinder, "can" },
+            { DrawingShapeKind.QuadArrow, "quadArrow" },
         };
 
     public static TheoryData<string, DrawingShapeKind, string> AliasPresetCases =>
@@ -113,6 +114,7 @@ public sealed class DrawingShapeSharedDrawingTests
         DrawingShapeKindSupport.IsLineLike(DrawingShapeKind.Line).Should().BeTrue();
         DrawingShapeKindSupport.IsLineLike(DrawingShapeKind.Cylinder).Should().BeFalse();
         ((int)DrawingShapeKind.Cylinder).Should().Be(44);
+        DrawingShapeKindSupport.IsRenderable(DrawingShapeKind.QuadArrow).Should().BeTrue();
     }
 
     [Theory]

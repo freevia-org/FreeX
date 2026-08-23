@@ -367,6 +367,18 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void QuadArrowGeometry_IsAvailableToTheSharedSmartArtRenderPath()
+    {
+        var geometry = Free.Shared.Drawing.ShapeGeometryBuilder.Build(
+            DrawingShapeKind.QuadArrow,
+            new Free.Shared.Drawing.LayoutRect(0, 0, 200, 200));
+
+        geometry.Contours.Should().ContainSingle();
+        geometry.Contours[0].Closed.Should().BeTrue();
+        geometry.Contours[0].Segments.Should().HaveCount(17);
+    }
+
+    [Fact]
     public void Process_BoxesAreLeftToRight_Increasing_X()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");

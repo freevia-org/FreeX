@@ -126,6 +126,36 @@ public sealed class SmartArtFixtureEvidenceTests
         }
     }
 
+    [Fact]
+    public void NativeCachedSmartArtRolesUseBoundedReaderCorrections()
+    {
+        var presentation = FreeP.Core.IO.PptxPackageReader.Read(Path.Combine(
+            RepositoryRoot,
+            "tools",
+            "FreeP.RenderCompare",
+            "corpus",
+            "15-smartart-grouped-list.pptx"));
+
+        var process = presentation.Slides[5].Shapes
+            .Single(shape => shape.SmartArt is not null)
+            .SmartArt!;
+        process.Data!.LayoutUniqueId.Should().EndWith("/lProcess2");
+        process.Data.IsLiveLayoutSupported.Should().BeFalse();
+        process.FallbackShapes[0].TextBody!.InsetBottomPt.Should().BeLessThan(20);
+        process.FallbackShapes[1].TextBody!.InsetTopPt.Should().BeLessThan(20);
+
+        var matrix = presentation.Slides[7].Shapes
+            .Single(shape => shape.SmartArt is not null)
+            .SmartArt!;
+        matrix.Data!.LayoutUniqueId.Should().EndWith("/matrix2");
+        matrix.Data.IsLiveLayoutSupported.Should().BeFalse();
+        matrix.FallbackShapes[0].AutoShapeKind.Should().Be(
+            Free.Shared.Drawing.DrawingShapeKind.QuadArrow);
+        matrix.FallbackShapes[1].AutoShapeKind.Should().Be(
+            Free.Shared.Drawing.DrawingShapeKind.RoundedRectangle);
+        matrix.FallbackShapes[1].TextBody!.InsetTopPt.Should().BeLessThan(20);
+    }
+
     private static XDocument ReadXml(ZipArchive archive, string path)
     {
         var entry = archive.GetEntry(path);

@@ -106,6 +106,7 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.Cylinder => CylinderShape(rect, adjustments),
             DrawingShapeKind.Chord => Chord(rect, adjustments),
             DrawingShapeKind.Heart => Heart(rect),
+            DrawingShapeKind.QuadArrow => QuadArrow(rect, adjustments),
             _ => Rectangle(rect)
         };
     }
@@ -123,6 +124,34 @@ public static class ShapeGeometryBuilder
             ShapeSegment.BezierTo(P(rect, 0.20, 0.02), P(rect, 0.42, 0.04), start)
         ];
         return Single(new ShapeContour(start, segments, Closed: true, Filled: true));
+    }
+
+    private static ShapeGeometry QuadArrow(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments)
+    {
+        // The cached SmartArt matrix2 axis is the native quadArrow preset. Its
+        // authored guides are intentionally bounded to the standard axis grammar;
+        // preserve the same four-way silhouette for both desktop renderers.
+        // quadArrow's native guides are angular proportions, not the direct
+        // shaft/head fractions used by the directional-arrow presets.
+        const double shaft = 0.12;
+        const double head = 0.22;
+        var center = 0.5;
+        var shaftStart = center - shaft / 2;
+        var shaftEnd = center + shaft / 2;
+        var headStart = center - head;
+        var headEnd = center + head;
+
+        return Polygon(rect,
+        [
+            (center, 0), (headEnd, headStart), (shaftEnd, headStart),
+            (shaftEnd, shaftStart), (headEnd, shaftStart), (1, center),
+            (headEnd, shaftEnd), (shaftEnd, shaftEnd), (shaftEnd, headEnd),
+            (center, 1), (headStart, headEnd), (shaftStart, headEnd),
+            (shaftStart, shaftEnd), (headStart, shaftEnd), (0, center),
+            (headStart, shaftStart), (shaftStart, shaftStart), (shaftStart, headStart)
+        ]);
     }
 
     private static LayoutRect Normalize(LayoutRect bounds) =>
