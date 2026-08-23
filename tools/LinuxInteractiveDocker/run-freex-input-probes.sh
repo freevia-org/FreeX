@@ -6373,6 +6373,7 @@ probe_autofilter_mixed_type_persistence_physical() {
     local artifacts="${prefix}-before.png;${prefix}-menu-open.png;${prefix}-menu-cleared.png;${prefix}-target-checked.png;${prefix}-applied.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt;${prefix}-reopen-diagnostics.txt;${prefix}-target-before.png;${prefix}-target-menu-open.png;${prefix}-target-cleared.png;${prefix}-target-selected.png;${prefix}-target-dismissed.png"
     local menu_open=false target_cleared=false target_selected=false popup_dismissed=false
     local save_clean=false dialog_open=false dialog_closed=false
+    local popup_route="none"
     local initial_total="" applied_total="" reopened_total=""
     local visible="" reopened_visible="" semantic="" reopened_semantic="" package=""
 
@@ -6471,6 +6472,27 @@ PY
         [[ "$gate" == "passed" ]]
     }
 
+    wait_for_mixed_type_popup_target() {
+        local before="$1" destination="$2"
+        local left=$((a1_x + 68)) top=$((a1_y + 353)) width=260 height=18
+        local geometry="${width}x${height}+${left}+${top}"
+        local before_crop="$output/${prefix}-popup-wait-before.png"
+        local candidate_crop="$output/${prefix}-popup-wait-candidate.png"
+        local delta=""
+
+        convert "$before" -crop "$geometry" +repage "$before_crop"
+        for _ in $(seq 1 10); do
+            capture "$(basename "$destination")"
+            convert "$destination" -crop "$geometry" +repage "$candidate_crop"
+            delta="$(compare -metric AE "$before_crop" "$candidate_crop" null: 2>&1 || true)"
+            if [[ "$delta" =~ ^[0-9]+$ ]] && (( delta >= 1000 )); then
+                return 0
+            fi
+            sleep 0.2
+        done
+        return 1
+    }
+
     save_mixed_type_document() {
         select_cell 0 0 A1 || return 1
         send_key ctrl+s
@@ -6531,17 +6553,35 @@ PY
     }
 
     initial_total="$(copy_cell_display 2 0 C1-initial-total || true)"
-    capture "${prefix}-before.png"
     select_cell 0 0 A1
+    capture "${prefix}-before.png"
     open_autofilter_menu 0
-    capture "${prefix}-menu-open.png"
-    click_autofilter_control 74 319
-    capture "${prefix}-menu-cleared.png"
-    click_autofilter_control 74 362
-    capture "${prefix}-target-checked.png"
-    click_autofilter_control 292 433
-    sleep "$settle_seconds"
-    capture "${prefix}-applied.png"
+    if wait_for_mixed_type_popup_target \
+        "$output/${prefix}-before.png" "$output/${prefix}-menu-open.png"; then
+        popup_route="alt-down"
+    else
+        send_key Escape
+        focus_app
+        xdotool_mousemove_sync "$((a1_x + 55))" "$((a1_y + 14))" click 1
+        sleep "$settle_seconds"
+        if wait_for_mixed_type_popup_target \
+            "$output/${prefix}-before.png" "$output/${prefix}-menu-open.png"; then
+            popup_route="header-arrow"
+        fi
+    fi
+    if [[ "$popup_route" != "none" ]]; then
+        click_autofilter_control 74 319
+        capture "${prefix}-menu-cleared.png"
+        click_autofilter_control 74 362
+        capture "${prefix}-target-checked.png"
+        click_autofilter_control 292 433
+        sleep "$settle_seconds"
+        capture "${prefix}-applied.png"
+    else
+        capture "${prefix}-menu-cleared.png"
+        capture "${prefix}-target-checked.png"
+        capture "${prefix}-applied.png"
+    fi
 
     if verify_mixed_type_popup_gate \
         "$output/${prefix}-before.png" "$output/${prefix}-menu-open.png" \
@@ -6570,7 +6610,7 @@ PY
     fi
 
     write_artifact "${prefix}-postcondition.txt" \
-        "document-path=$document_path\nmenu-open=$menu_open\ntarget-cleared=$target_cleared\ntarget-selected=$target_selected\npopup-dismissed=$popup_dismissed\ninitial-total=$initial_total\napplied-total=$applied_total\nvisible=$visible\nsemantic=$semantic\nsave-clean=$save_clean\npackage=$package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-total=$reopened_total\nreopened-visible=$reopened_visible\nreopened-semantic=$reopened_semantic"
+        "document-path=$document_path\npopup-route=$popup_route\nmenu-open=$menu_open\ntarget-cleared=$target_cleared\ntarget-selected=$target_selected\npopup-dismissed=$popup_dismissed\ninitial-total=$initial_total\napplied-total=$applied_total\nvisible=$visible\nsemantic=$semantic\nsave-clean=$save_clean\npackage=$package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-total=$reopened_total\nreopened-visible=$reopened_visible\nreopened-semantic=$reopened_semantic"
 
     if $menu_open && $target_cleared && $target_selected && $popup_dismissed &&
        [[ "$initial_total" == "5" && "$applied_total" == "2" && "$visible" == "42,42," &&
