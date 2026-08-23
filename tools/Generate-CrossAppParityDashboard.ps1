@@ -156,6 +156,34 @@ try {
     $freeXAvaloniaRibbonManifest = Read-ToolJson -Path "tools\screenshots_avalonia_ribbon\screenshot_manifest.json" -RepoRoot $repoRoot -MissingMessage "Required FreeX Avalonia ribbon capture manifest is missing"
     $freeXWave193PhysicalResult = Read-ToolJson -Path "docs\parity\evidence\wave193-freex-autofilter-no-fill-20260823\physical-result.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeX physical result is missing"
     $freeXWave193Manifest = Read-ToolJson -Path "docs\parity\evidence\wave193-freex-autofilter-no-fill-20260823\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeX evidence manifest is missing"
+    $wave193PhysicalRun = $freeXWave193Manifest.physicalRun
+    $wave193ExpectedArtifactCount = 18
+    $wave193PopupOpenChangeThreshold = 300
+    $wave193PopupRestoredChangeMaximum = 100
+    if ($null -eq $wave193PhysicalRun) {
+        throw "Wave193 FreeX evidence manifest is missing physicalRun transition metrics."
+    }
+    $requiredWave193PhysicalRunProperties = @(
+        "popupOpenChangedPixels",
+        "popupDismissedChangedPixels",
+        "popupRestoredChangedPixels",
+        "clickAcknowledged"
+    )
+    foreach ($propertyName in $requiredWave193PhysicalRunProperties) {
+        if ($null -eq $wave193PhysicalRun.PSObject.Properties[$propertyName]) {
+            throw "Wave193 FreeX evidence manifest is missing physicalRun.$propertyName."
+        }
+    }
+    $wave193ArtifactCount = @($freeXWave193Manifest.files).Count
+    if ($wave193ArtifactCount -ne $wave193ExpectedArtifactCount) {
+        throw "Wave193 FreeX evidence manifest must contain $wave193ExpectedArtifactCount artifacts; found $wave193ArtifactCount."
+    }
+    if ([int]$wave193PhysicalRun.popupOpenChangedPixels -lt $wave193PopupOpenChangeThreshold -or
+        [int]$wave193PhysicalRun.popupDismissedChangedPixels -lt $wave193PopupOpenChangeThreshold -or
+        [int]$wave193PhysicalRun.popupRestoredChangedPixels -gt $wave193PopupRestoredChangeMaximum -or
+        -not [bool]$wave193PhysicalRun.clickAcknowledged) {
+        throw "Wave193 FreeX popup transition metrics did not satisfy open/dismiss/restoration thresholds."
+    }
     $freew = Read-ToolJson -Path "docs\parity\freew-command-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
     $freeWRouteInventory = Read-ToolJson -Path "docs\parity\freew-dialog-harness\freew_dialog_route_inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
     $freeWVisualComparison = Read-ToolJson -Path "docs\parity\freew-dialog-harness\freew_dialog_visual_comparison.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
@@ -339,8 +367,28 @@ try {
             linuxAutoFilterNoFillStatus = "passed-production-x11"
             wave193FocusedAvaloniaGuardPassed = 3
             wave193FocusedCoreIoGuardPassed = 8
-            wave193EvidenceArtifactCount = @($freeXWave193Manifest.files).Count
+            wave193EvidenceArtifactCount = $wave193ArtifactCount
+            wave193EvidenceArtifactExpectedCount = $wave193ExpectedArtifactCount
             wave193EvidenceProvenanceFileCount = @($freeXWave193Manifest.provenanceFiles).Count
+            wave193PopupTransitions = [ordered]@{
+                popupOpen = [ordered]@{
+                    changedPixels = [int]$wave193PhysicalRun.popupOpenChangedPixels
+                    minimumChangedPixels = $wave193PopupOpenChangeThreshold
+                    passed = [int]$wave193PhysicalRun.popupOpenChangedPixels -ge $wave193PopupOpenChangeThreshold
+                }
+                popupDismissed = [ordered]@{
+                    changedPixels = [int]$wave193PhysicalRun.popupDismissedChangedPixels
+                    minimumChangedPixels = $wave193PopupOpenChangeThreshold
+                    passed = [int]$wave193PhysicalRun.popupDismissedChangedPixels -ge $wave193PopupOpenChangeThreshold
+                }
+                restoration = [ordered]@{
+                    changedPixels = [int]$wave193PhysicalRun.popupRestoredChangedPixels
+                    maximumChangedPixels = $wave193PopupRestoredChangeMaximum
+                    passed = [int]$wave193PhysicalRun.popupRestoredChangedPixels -le $wave193PopupRestoredChangeMaximum
+                }
+                clickAcknowledged = [bool]$wave193PhysicalRun.clickAcknowledged
+                summary = "popup-open $([int]$wave193PhysicalRun.popupOpenChangedPixels) changed pixels (minimum $wave193PopupOpenChangeThreshold); popup-dismissed $([int]$wave193PhysicalRun.popupDismissedChangedPixels) changed pixels (minimum $wave193PopupOpenChangeThreshold); restoration $([int]$wave193PhysicalRun.popupRestoredChangedPixels) changed pixels (maximum $wave193PopupRestoredChangeMaximum); click acknowledged"
+            }
             wave193PackageSemantics = "SourcePatch retained for the no-row-delta criterion-only case; package colorFilter/DXF semantics are verified after save and reopen."
             limitations = @(
                 "The 2026-08-16 interactive run captured 36 foreground ribbon states for each of Excel, WPF, and Avalonia, including Draw at all four widths, plus six guarded Excel popup/dialog surfaces. The 27 fixed-viewport triage rows average 13.937% RGB delta for WPF and 15.639% for Avalonia versus Excel; nine maximized rows are coverage-only, not an acceptance threshold.",
@@ -353,7 +401,7 @@ try {
                 "The production Linux X11 date AutoFilter lane passes 2/2 end to end. Before February 1 retains Jan01/Jan15 and saves lessThan=45323; After February 1 retains Mar15 and saves greaterThan=45323. Both use identity-checked Open Workbook dialogs and reopen with matching rendered-grid and semantic state, with a compact committed evidence bundle.",
                 "The production Linux X11 fill-color AutoFilter save/reopen lane passes 1/1. It selects the rendered #00B050 swatch, retains North/East, reopens through the identity-checked production picker, reads semantic A4=East, and saves explicit Excel-compatible cellColor=1 with fill FF00B050. Four rendered captures, the saved package, and hash-verified source/image provenance are committed.",
                 "The production Linux X11 font-color AutoFilter save/reopen lane passes 1/1. It pixel-gates and selects the rendered #00B050 font swatch, retains North/East, reopens through the identity-checked production picker, reads semantic A4=East, and independently verifies cellColor=0 with DXF font FF00B050. Four rendered captures, the saved package, and hash-verified source/image provenance are committed.",
-                "The production Linux X11 No Fill AutoFilter save/reopen lane passes $($freeXWave193PhysicalResult.summary.passed)/$($freeXWave193PhysicalResult.summary.total). It selects the rendered No Fill swatch, retains South/West, verifies the empty-DXF colorFilter package semantics, and reopens with matching rendered and semantic state. The committed Wave193 manifest contains $(@($freeXWave193Manifest.files).Count)/$(@($freeXWave193Manifest.provenanceFiles).Count) artifacts/provenance files.",
+                "The production Linux X11 No Fill AutoFilter save/reopen lane passes $($freeXWave193PhysicalResult.summary.passed)/$($freeXWave193PhysicalResult.summary.total). It selects the rendered No Fill swatch, proves popup-open and popup-dismissed transitions at $([int]$wave193PhysicalRun.popupOpenChangedPixels)/$([int]$wave193PhysicalRun.popupDismissedChangedPixels) changed pixels, restores the pre-popup target at $([int]$wave193PhysicalRun.popupRestoredChangedPixels) changed pixels, retains South/West, verifies the empty-DXF colorFilter package semantics, and reopens with matching rendered and semantic state. The committed Wave193 manifest contains $wave193ArtifactCount/$wave193ExpectedArtifactCount artifacts and $(@($freeXWave193Manifest.provenanceFiles).Count)/9 provenance files.",
                 "Wave193 focused source/evidence coverage is 3/3 Avalonia guards and 8/8 Core.IO guards; the package tests retain SourcePatch semantics when a criterion-only change produces no row-visibility delta.",
                 "The current-source range corpus retains 35 Avalonia grid captures: eight charts, seven cell styles, and 20 native PivotTable surfaces. These are renderer coverage evidence, not raw-pixel Office acceptance rows.",
                 [string]$freeXOfficeBaseline.limitation
@@ -388,7 +436,7 @@ try {
             -DialogRoutes $freeXDialogRoutes `
             -DialogVisualEvidence $freeXDialogVisualEvidence
     }
-    $freeX.nextSlice = "$($freeX.nextSlice) Production Linux evidence now covers Name Box (1/1 visual, 8/8 interaction), AutoFilter apply/change/clear recalculation (1/1), sort/save/reopen persistence (1/1), text-criteria save/reopen persistence (2/2), numeric Greater Than/Equals persistence (2/2), date criteria (2/2), fill-color save/reopen (1/1), font-color save/reopen (1/1), and No Fill save/reopen persistence ($($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillPassed)/$($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillTotal)). Extend physical verification to mixed-type, multi-column, and color criteria change/clear workflows."
+    $freeX.nextSlice = "$($freeX.nextSlice) Production Linux evidence now covers Name Box (1/1 visual, 8/8 interaction), AutoFilter apply/change/clear recalculation (1/1), sort/save/reopen persistence (1/1), text-criteria save/reopen persistence (2/2), numeric Greater Than/Equals persistence (2/2), date criteria (2/2), fill-color save/reopen (1/1), font-color save/reopen (1/1), and No Fill save/reopen persistence ($($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillPassed)/$($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillTotal)) with popup-open/popup-dismissed/restoration transition evidence and $wave193ArtifactCount/$wave193ExpectedArtifactCount retained artifacts. Extend physical verification to mixed-type, multi-column, and color criteria change/clear workflows."
 
     $freeWComparisonRows = @($freeWVisualComparison.rows)
     $freeWPairedComparisonRows = @($freeWComparisonRows | Where-Object { $_.captureStatus -eq "captured/captured" })
@@ -838,6 +886,8 @@ try {
         "Route inventory, rendered/comparison rows, and committed PNG/file artifacts are separate measures. Office baseline availability is an artifact-availability statement, not a visual-parity claim.",
         "",
         "FreeW canonical comparison scope: **$($freeW.renderedEvidence.canonicalComparison.kind)**. $($freeW.renderedEvidence.canonicalComparison.description) $($freeW.renderedEvidence.canonicalComparison.refreshInstruction)",
+        "",
+        "FreeX Wave193 No Fill transition evidence: **$($freeX.renderedEvidence.physicalEvidence.wave193PopupTransitions.summary)**. Retained evidence includes **$($freeX.renderedEvidence.physicalEvidence.wave193EvidenceArtifactCount)/$($freeX.renderedEvidence.physicalEvidence.wave193EvidenceArtifactExpectedCount) artifacts** and **$($freeX.renderedEvidence.physicalEvidence.wave193EvidenceProvenanceFileCount)/9 provenance files**.",
         "",
         "| App | Route coverage | Artifact coverage | Paired WPF/Avalonia evidence | Physical/no-COM limitation | Authoritative Microsoft Office baseline |",
         "|---|---|---|---|---|---|",
