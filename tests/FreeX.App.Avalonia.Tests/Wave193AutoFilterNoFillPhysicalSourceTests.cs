@@ -34,6 +34,13 @@ public sealed class Wave193AutoFilterNoFillPhysicalSourceTests
         runner.Should().Contain("Assert-AutoFilterNoFillPostcondition");
         probe.Should().Contain("probe_autofilter_color_persistence_physical nofill");
         probe.Should().Contain("mode=${swatch_mode}");
+        probe.Should().Contain("open-changed-pixels=${open_changed}");
+        probe.Should().Contain("dismissed-changed-pixels=${dismissed_changed}");
+        probe.Should().Contain("restored-change-maximum=${restored_change_maximum}");
+        probe.Should().Contain("popup-open-transition=${popup_open_transition}");
+        probe.Should().Contain("popup-dismissed-transition=${popup_dismissed_transition}");
+        probe.Should().Contain("click-acknowledged=${click_acknowledged}");
+        probe.Should().Contain("capture \"${prefix}-applied.png\"");
         probe.Should().Contain("dxf=empty");
         probe.Should().Contain("expected_visible=\"South,West,\"");
         fixture.Should().Contain("<fgColor rgb=\"FF00B050\"/>");

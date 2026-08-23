@@ -760,15 +760,25 @@ function Assert-AutoFilterNoFillPostcondition {
 
     $gateLines = @(Get-Content -LiteralPath $gatePath)
     $expectedGate = @(
-        "schema-version=1",
+        "schema-version=2",
         "before=autofilter-no-fill-before.png",
         "source=autofilter-no-fill-menu-open.png",
+        "dismissed=autofilter-no-fill-applied.png",
         "mode=nofill",
         "button-bounds=177,439,75,27",
         "click=219,456",
         "sample=193,452",
-        "before-rgb=#FFFFFF",
         "sample-rgb=#FFFFFF",
+        "before-region=autofilter-no-fill-target-before.png",
+        "open-region=autofilter-no-fill-target-menu-open.png",
+        "dismissed-region=autofilter-no-fill-target-dismissed.png",
+        "open-change-threshold=300",
+        "dismissed-change-threshold=300",
+        "restored-change-maximum=100",
+        "signature-gate=true",
+        "popup-open-transition=true",
+        "popup-dismissed-transition=true",
+        "click-acknowledged=true",
         "gate=passed"
     )
     $missingGate = @($expectedGate | Where-Object { $_ -notin $gateLines })
@@ -776,9 +786,33 @@ function Assert-AutoFilterNoFillPostcondition {
         throw "AutoFilter No Fill rendered-swatch gate failed: $($missingGate -join '; ')."
     }
 
+    $gateValues = @{}
+    foreach ($line in $gateLines) {
+        $separator = $line.IndexOf('=')
+        if ($separator -gt 0) {
+            $gateValues[$line.Substring(0, $separator)] = $line.Substring($separator + 1)
+        }
+    }
+    $openChanged = 0
+    $dismissedChanged = 0
+    $restoredChanged = 0
+    if (-not [int]::TryParse($gateValues["open-changed-pixels"], [ref]$openChanged) -or $openChanged -lt 300 -or
+        -not [int]::TryParse($gateValues["dismissed-changed-pixels"], [ref]$dismissedChanged) -or $dismissedChanged -lt 300 -or
+        -not [int]::TryParse($gateValues["restored-changed-pixels"], [ref]$restoredChanged) -or $restoredChanged -gt 100 -or
+        [string]::IsNullOrWhiteSpace($gateValues["before-region-sha256"]) -or
+        [string]::IsNullOrWhiteSpace($gateValues["open-region-sha256"]) -or
+        [string]::IsNullOrWhiteSpace($gateValues["dismissed-region-sha256"]) -or
+        $gateValues["before-region-sha256"] -eq $gateValues["open-region-sha256"] -or
+        $gateValues["open-region-sha256"] -eq $gateValues["dismissed-region-sha256"]) {
+        throw "AutoFilter No Fill popup transition metrics/signatures did not prove open and post-click dismissal."
+    }
+
     $postconditionLines = @(Get-Content -LiteralPath $postconditionPath)
     $expectedPostconditions = @(
         "menu-open=true",
+        "popup-open-transition=true",
+        "popup-dismissed-transition=true",
+        "click-acknowledged=true",
         "swatch-gate=true",
         "criteria=nofill:#FFFFFF",
         "visible=South,West,",

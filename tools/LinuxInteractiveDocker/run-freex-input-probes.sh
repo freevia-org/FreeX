@@ -6073,7 +6073,11 @@ probe_autofilter_color_persistence_physical() {
         expected_package_color="dxf=empty"
     fi
     local artifacts="${prefix}-before.png;${prefix}-menu-open.png;${prefix}-swatch-gate.txt;${prefix}-applied.png;${prefix}-reopened.png;${prefix}-reopen-diagnostics.txt;${prefix}-postcondition.txt"
+    if [[ "$mode" == "nofill" ]]; then
+        artifacts+=";${prefix}-target-before.png;${prefix}-target-menu-open.png;${prefix}-target-dismissed.png"
+    fi
     local menu_open=false swatch_gate=false save_clean=false dialog_open=false dialog_closed=false
+    local popup_open_transition=false popup_dismissed_transition=false click_acknowledged=false
     local criteria="" visible="" reopened_visible="" reopened_semantic="" package=""
 
     if [[ "${document_path,,}" != *.xlsx ]]; then
@@ -6155,9 +6159,9 @@ PY
 
         local gate=failed
         if [[ "$swatch_mode" == "nofill" ]]; then
-            if [[ "$before_pixel" == "FFFFFF" && "$pixel" == "FFFFFF" ]]; then
-                gate=passed
-            fi
+            [[ "$pixel" == "FFFFFF" ]] || return 1
+            printf '%s:#%s' "$swatch_mode" "$pixel"
+            return 0
         elif [[ "$before_pixel" != "00B050" && "$pixel" == "00B050" ]]; then
             gate=passed
         fi
@@ -6165,6 +6169,58 @@ PY
             "schema-version=1\nbefore=${prefix}-before.png\nsource=${prefix}-menu-open.png\nmode=${swatch_mode}\nbutton-bounds=${button_left},${button_top},${button_width},${button_height}\nclick=${click_x},${click_y}\nsample=${sample_x},${sample_y}\nbefore-rgb=#${before_pixel}\nsample-rgb=#${pixel}\ngate=${gate}\n"
         [[ "$gate" == "passed" ]] || return 1
         printf '%s:#%s' "$swatch_mode" "$pixel"
+    }
+
+    verify_no_fill_popup_transition() {
+        local before_screenshot="$1" open_screenshot="$2" dismissed_screenshot="$3"
+        local button_left=$((a1_x + 148)) button_top=$((a1_y + 203)) button_width=75 button_height=27
+        local button_right=$((button_left + button_width - 1)) button_bottom=$((button_top + button_height - 1))
+        local sample_x=$((a1_x + 164)) sample_y=$((a1_y + 216))
+        local click_x=$((a1_x + 190)) click_y=$((a1_y + 220))
+        local before_crop="$output/${prefix}-target-before.png"
+        local open_crop="$output/${prefix}-target-menu-open.png"
+        local dismissed_crop="$output/${prefix}-target-dismissed.png"
+        local geometry="${button_width}x${button_height}+${button_left}+${button_top}"
+        local before_pixel open_pixel dismissed_pixel open_changed dismissed_changed restored_changed
+        local before_signature open_signature dismissed_signature signature_gate=false gate=failed
+        local open_change_threshold=300 dismissed_change_threshold=300 restored_change_maximum=100
+
+        convert "$before_screenshot" -crop "$geometry" +repage "$before_crop"
+        convert "$open_screenshot" -crop "$geometry" +repage "$open_crop"
+        convert "$dismissed_screenshot" -crop "$geometry" +repage "$dismissed_crop"
+        before_pixel="$(convert "$before_screenshot" -format "%[hex:p{${sample_x},${sample_y}}]" info: 2>/dev/null || true)"
+        open_pixel="$(convert "$open_screenshot" -format "%[hex:p{${sample_x},${sample_y}}]" info: 2>/dev/null || true)"
+        dismissed_pixel="$(convert "$dismissed_screenshot" -format "%[hex:p{${sample_x},${sample_y}}]" info: 2>/dev/null || true)"
+        before_pixel="${before_pixel^^}"
+        open_pixel="${open_pixel^^}"
+        dismissed_pixel="${dismissed_pixel^^}"
+        open_changed="$(compare -metric AE "$before_crop" "$open_crop" null: 2>&1 || true)"
+        dismissed_changed="$(compare -metric AE "$open_crop" "$dismissed_crop" null: 2>&1 || true)"
+        restored_changed="$(compare -metric AE "$before_crop" "$dismissed_crop" null: 2>&1 || true)"
+        before_signature="$(sha256sum "$before_crop" | awk '{print $1}')"
+        open_signature="$(sha256sum "$open_crop" | awk '{print $1}')"
+        dismissed_signature="$(sha256sum "$dismissed_crop" | awk '{print $1}')"
+
+        if [[ "$before_signature" != "$open_signature" && "$open_signature" != "$dismissed_signature" ]]; then
+            signature_gate=true
+        fi
+        if [[ "$open_changed" =~ ^[0-9]+$ ]] && (( open_changed >= open_change_threshold )); then
+            popup_open_transition=true
+        fi
+        if [[ "$dismissed_changed" =~ ^[0-9]+$ ]] && (( dismissed_changed >= dismissed_change_threshold )) &&
+           [[ "$restored_changed" =~ ^[0-9]+$ ]] && (( restored_changed <= restored_change_maximum )); then
+            popup_dismissed_transition=true
+        fi
+        if (( click_x >= button_left && click_x <= button_right && click_y >= button_top && click_y <= button_bottom )) &&
+           [[ "$open_pixel" == "FFFFFF" && "$signature_gate" == true ]] &&
+           $popup_open_transition && $popup_dismissed_transition; then
+            click_acknowledged=true
+            gate=passed
+        fi
+
+        write_artifact "${prefix}-swatch-gate.txt" \
+            "schema-version=2\nbefore=${prefix}-before.png\nsource=${prefix}-menu-open.png\ndismissed=${prefix}-applied.png\nmode=nofill\nbutton-bounds=${button_left},${button_top},${button_width},${button_height}\nclick=${click_x},${click_y}\nsample=${sample_x},${sample_y}\nbefore-rgb=#${before_pixel}\nsample-rgb=#${open_pixel}\ndismissed-rgb=#${dismissed_pixel}\nbefore-region=${prefix}-target-before.png\nopen-region=${prefix}-target-menu-open.png\ndismissed-region=${prefix}-target-dismissed.png\nopen-changed-pixels=${open_changed}\nopen-change-threshold=${open_change_threshold}\ndismissed-changed-pixels=${dismissed_changed}\ndismissed-change-threshold=${dismissed_change_threshold}\nrestored-changed-pixels=${restored_changed}\nrestored-change-maximum=${restored_change_maximum}\nbefore-region-sha256=${before_signature}\nopen-region-sha256=${open_signature}\ndismissed-region-sha256=${dismissed_signature}\nsignature-gate=${signature_gate}\npopup-open-transition=${popup_open_transition}\npopup-dismissed-transition=${popup_dismissed_transition}\nclick-acknowledged=${click_acknowledged}\ngate=${gate}"
+        [[ "$gate" == "passed" ]]
     }
 
     verify_rendered_fill_swatch() {
@@ -6189,6 +6245,7 @@ PY
         before_windows="$(visible_window_count)"
         main_pid="$(xdotool getwindowpid "$window_id" 2>/dev/null || true)"
         baseline_ids="$(xdotool search --onlyvisible --name '.*' 2>/dev/null | sort -n | tr '\n' ' ')"
+        baseline_ids="${baseline_ids% }"
         [[ -n "$main_pid" ]] || return 1
         printf 'before-windows=%s\nmain-window-id=%s\nmain-window-pid=%s\nbaseline-window-ids=%s\n' \
             "$before_windows" "$window_id" "$main_pid" "$baseline_ids" >> "$diagnostics_path"
@@ -6254,10 +6311,21 @@ PY
             criteria="$(verify_rendered_fill_swatch "$output/${prefix}-before.png" "$output/${prefix}-menu-open.png" || true)"
         fi
         if [[ "$criteria" == "$expected_criteria" ]]; then
-            swatch_gate=true
             click_autofilter_control "$click_x_offset" 220
-            visible="$(read_visible_color_values)"
-            capture "${prefix}-applied.png"
+            if [[ "$mode" == "nofill" ]]; then
+                capture "${prefix}-applied.png"
+                if verify_no_fill_popup_transition \
+                    "$output/${prefix}-before.png" \
+                    "$output/${prefix}-menu-open.png" \
+                    "$output/${prefix}-applied.png"; then
+                    swatch_gate=true
+                    visible="$(read_visible_color_values)"
+                fi
+            else
+                swatch_gate=true
+                visible="$(read_visible_color_values)"
+                capture "${prefix}-applied.png"
+            fi
         fi
     fi
 
@@ -6283,9 +6351,10 @@ PY
         fi
     done
     write_artifact "${prefix}-postcondition.txt" \
-        "document-path=$document_path\nmenu-open=$menu_open\nswatch-gate=$swatch_gate\ncriteria=$criteria\nvisible=$visible\nsave-clean=$save_clean\npackage=$package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-visible=$reopened_visible\nreopened-semantic-a4=$reopened_semantic\n"
+        "document-path=$document_path\nmenu-open=$menu_open\npopup-open-transition=$popup_open_transition\npopup-dismissed-transition=$popup_dismissed_transition\nclick-acknowledged=$click_acknowledged\nswatch-gate=$swatch_gate\ncriteria=$criteria\nvisible=$visible\nsave-clean=$save_clean\npackage=$package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-visible=$reopened_visible\nreopened-semantic-a4=$reopened_semantic"
 
-    if $menu_open && $swatch_gate && [[ "$criteria" == "$expected_criteria" && "$visible" == "$expected_visible" && $save_clean &&
+    if $menu_open && $swatch_gate && { [[ "$mode" != "nofill" ]] || { $popup_open_transition && $popup_dismissed_transition && $click_acknowledged; }; } &&
+        [[ "$criteria" == "$expected_criteria" && "$visible" == "$expected_visible" && $save_clean &&
         "$package" == *"ref=A1:B5|colId=0|cellColor=${expected_package_mode}"* && "$package" == *"|${expected_package_color}"* && $dialog_open && $dialog_closed &&
         "$reopened_visible" == "$expected_visible" && "$reopened_semantic" == "East" ]]; then
         record "$result_id" "passed" \
