@@ -63,7 +63,7 @@ internal static class XlsxWorksheetScenarioNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(scenarios, ScenarioContainerAttributes);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "current", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "show", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "sqref", NormalizeSqref);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "sqref", XlsxSqrefParser.NormalizeCellRangeList);
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(scenarios, WorksheetNs + "scenario");
 
         foreach (var scenario in scenarios.Elements(WorksheetNs + "scenario").ToList())
@@ -86,8 +86,8 @@ internal static class XlsxWorksheetScenarioNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "name", NormalizeRequiredText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "locked", XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "hidden", XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "user", NormalizeOptionalText);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "comment", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "user", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "comment", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(scenario, WorksheetNs + "inputCells");
 
         foreach (var inputCell in scenario.Elements(WorksheetNs + "inputCells").ToList())
@@ -134,61 +134,12 @@ internal static class XlsxWorksheetScenarioNormalizer
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
-    private static string? NormalizeOptionalText(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
     private static string? NormalizeCellReference(string? value)
     {
         var trimmed = value?.Trim();
         return trimmed is not null && CellAddress.TryParse(trimmed, SheetId.New(), out var address)
             ? address.ToA1()
             : null;
-    }
-
-    private static string? NormalizeSqref(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        var seenTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var normalizedTokens = new List<string>();
-        foreach (var token in value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var normalized = NormalizeSqrefToken(token);
-            if (normalized is null || !seenTokens.Add(normalized))
-                continue;
-
-            normalizedTokens.Add(normalized);
-        }
-
-        return normalizedTokens.Count == 0 ? null : string.Join(' ', normalizedTokens);
-    }
-
-    private static string? NormalizeSqrefToken(string token)
-    {
-        var parts = token.Split(':');
-        var sheet = SheetId.New();
-        if (parts.Length == 1)
-        {
-            return CellAddress.TryParse(parts[0], sheet, out var address)
-                ? address.ToA1()
-                : null;
-        }
-
-        if (parts.Length == 2 &&
-            CellAddress.TryParse(parts[0], sheet, out var start) &&
-            CellAddress.TryParse(parts[1], sheet, out var end))
-        {
-            var range = new GridRange(start, end);
-            return range.Start == range.End
-                ? range.Start.ToA1()
-                : $"{range.Start.ToA1()}:{range.End.ToA1()}";
-        }
-
-        return null;
     }
 
 }

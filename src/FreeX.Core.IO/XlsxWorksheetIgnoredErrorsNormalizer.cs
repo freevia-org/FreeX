@@ -56,7 +56,7 @@ internal static class XlsxWorksheetIgnoredErrorsNormalizer
         var seenSqrefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var ignoredError in ignoredErrors.Elements(WorksheetNs + "ignoredError").ToList())
         {
-            var normalizedSqref = NormalizeSqref(ignoredError.Attribute("sqref")?.Value);
+            var normalizedSqref = XlsxSqrefParser.NormalizeCellRangeList(ignoredError.Attribute("sqref")?.Value);
             if (normalizedSqref is null)
             {
                 ignoredError.Remove();
@@ -128,50 +128,5 @@ internal static class XlsxWorksheetIgnoredErrorsNormalizer
         IgnoredErrorAttributes
             .Where(attributeName => !string.Equals(attributeName, "sqref", StringComparison.Ordinal))
             .Any(attributeName => string.Equals(ignoredError.Attribute(attributeName)?.Value, "1", StringComparison.Ordinal));
-
-    private static string? NormalizeSqref(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        var seenTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var normalizedTokens = new List<string>();
-        foreach (var token in value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var normalized = NormalizeSqrefToken(token);
-            if (normalized is null || !seenTokens.Add(normalized))
-                continue;
-
-            normalizedTokens.Add(normalized);
-        }
-
-        return normalizedTokens.Count == 0
-            ? null
-            : string.Join(' ', normalizedTokens);
-    }
-
-    private static string? NormalizeSqrefToken(string token)
-    {
-        var parts = token.Split(':');
-        var sheet = SheetId.New();
-        if (parts.Length == 1)
-        {
-            return CellAddress.TryParse(parts[0], sheet, out var address)
-                ? address.ToA1()
-                : null;
-        }
-
-        if (parts.Length == 2 &&
-            CellAddress.TryParse(parts[0], sheet, out var start) &&
-            CellAddress.TryParse(parts[1], sheet, out var end))
-        {
-            var range = new GridRange(start, end);
-            return range.Start == range.End
-                ? range.Start.ToA1()
-                : $"{range.Start.ToA1()}:{range.End.ToA1()}";
-        }
-
-        return null;
-    }
 
 }

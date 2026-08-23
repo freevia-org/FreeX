@@ -110,7 +110,7 @@ internal static class XlsxWorkbookCustomViewNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(customWorkbookView, CustomWorkbookViewAttributes);
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(customWorkbookView, WorkbookNs + "extLst");
         changed |= NormalizeExtensionLists(customWorkbookView);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "name", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "name", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "guid", NormalizeGuid);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "showComments", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ShowCommentsValues));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "showObjects", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ShowObjectsValues));
@@ -171,12 +171,6 @@ internal static class XlsxWorkbookCustomViewNormalizer
         return int.TryParse(trimmed, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
             ? parsed.ToString(CultureInfo.InvariantCulture)
             : null;
-    }
-
-    private static string? NormalizeOptionalText(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
     private static string NormalizeUnsignedIntOrDefault(string? value, string defaultValue)

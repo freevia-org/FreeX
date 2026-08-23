@@ -21,38 +21,6 @@ internal static class XlsxWorkbookLeafElementSchemas
         @"^[A-Z]{1,3}[1-9][0-9]{0,6}(:[A-Z]{1,3}[1-9][0-9]{0,6})?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    private static string? NormalizeOptionalText(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private static string? NormalizeBase64BinaryOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return null;
-
-        try
-        {
-            _ = Convert.FromBase64String(trimmed);
-            return trimmed;
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
-    }
-
-    private static string? NormalizeLegacyPasswordHashOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (trimmed is not { Length: 4 } || !trimmed.All(static c => char.IsAsciiHexDigit(c)))
-            return null;
-
-        return trimmed.ToUpperInvariant();
-    }
-
     private static string? NormalizeDouble(string? value)
     {
         var trimmed = value?.Trim();
@@ -134,9 +102,9 @@ internal static class XlsxWorkbookLeafElementSchemas
             AttributeRules = new Dictionary<string, Func<string?, string?>>
             {
                 ["readOnlyRecommended"] = XlsxXmlNormalizationHelpers.NormalizeBoolean,
-                ["reservationPassword"] = NormalizeLegacyPasswordHashOrNull,
-                ["hashValue"]           = NormalizeBase64BinaryOrNull,
-                ["saltValue"]           = NormalizeBase64BinaryOrNull,
+                ["reservationPassword"] = XlsxXmlNormalizationHelpers.NormalizeLegacyPasswordHashOrNull,
+                ["hashValue"]           = XlsxXmlNormalizationHelpers.NormalizeBase64BinaryOrNull,
+                ["saltValue"]           = XlsxXmlNormalizationHelpers.NormalizeBase64BinaryOrNull,
                 ["spinCount"]           = XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull
             }
         },
@@ -155,16 +123,16 @@ internal static class XlsxWorkbookLeafElementSchemas
             },
             AttributeRules = new Dictionary<string, Func<string?, string?>>
             {
-                ["workbookPassword"]    = NormalizeLegacyPasswordHashOrNull,
-                ["revisionsPassword"]   = NormalizeLegacyPasswordHashOrNull,
+                ["workbookPassword"]    = XlsxXmlNormalizationHelpers.NormalizeLegacyPasswordHashOrNull,
+                ["revisionsPassword"]   = XlsxXmlNormalizationHelpers.NormalizeLegacyPasswordHashOrNull,
                 ["lockStructure"]       = XlsxXmlNormalizationHelpers.NormalizeBoolean,
                 ["lockWindows"]         = XlsxXmlNormalizationHelpers.NormalizeBoolean,
                 ["lockRevision"]        = XlsxXmlNormalizationHelpers.NormalizeBoolean,
-                ["revisionsHashValue"]  = NormalizeBase64BinaryOrNull,
-                ["revisionsSaltValue"]  = NormalizeBase64BinaryOrNull,
+                ["revisionsHashValue"]  = XlsxXmlNormalizationHelpers.NormalizeBase64BinaryOrNull,
+                ["revisionsSaltValue"]  = XlsxXmlNormalizationHelpers.NormalizeBase64BinaryOrNull,
                 ["revisionsSpinCount"]  = XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull,
-                ["workbookHashValue"]   = NormalizeBase64BinaryOrNull,
-                ["workbookSaltValue"]   = NormalizeBase64BinaryOrNull,
+                ["workbookHashValue"]   = XlsxXmlNormalizationHelpers.NormalizeBase64BinaryOrNull,
+                ["workbookSaltValue"]   = XlsxXmlNormalizationHelpers.NormalizeBase64BinaryOrNull,
                 ["workbookSpinCount"]   = XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull
             }
         },
@@ -201,7 +169,7 @@ internal static class XlsxWorkbookLeafElementSchemas
                 ["showObjects"]         = v => XlsxXmlNormalizationHelpers.NormalizeToken(v, ValidShowObjectsValues),
                 ["updateLinks"]         = v => XlsxXmlNormalizationHelpers.NormalizeToken(v, ValidUpdateLinksValues),
                 ["defaultThemeVersion"] = XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull,
-                ["codeName"]            = NormalizeOptionalText
+                ["codeName"]            = XlsxXmlNormalizationHelpers.NormalizeOptionalText
             }
         },
 
@@ -254,7 +222,7 @@ internal static class XlsxWorkbookLeafElementSchemas
                 ["dpi"]             = XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull,
                 ["codePage"]        = XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull,
                 ["targetScreenSize"]= v => XlsxXmlNormalizationHelpers.NormalizeToken(v, ValidTargetScreenSizes),
-                ["characterSet"]    = NormalizeOptionalText
+                ["characterSet"]    = XlsxXmlNormalizationHelpers.NormalizeOptionalText
             }
         },
 

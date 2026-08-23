@@ -78,7 +78,7 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
         foreach (var attributeName in SheetPropertiesBooleanAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetProperties, attributeName, XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetProperties, "syncRef", NormalizeReference);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetProperties, "codeName", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetProperties, "codeName", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
 
         changed |= RemoveUnexpectedChildren(sheetProperties);
         changed |= RemoveDuplicateAllowedChildren(sheetProperties);
@@ -204,12 +204,6 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
         foreach (var node in nodes)
             node.Remove();
         return true;
-    }
-
-    private static string? NormalizeOptionalText(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
     private static string? NormalizeReference(string? value)

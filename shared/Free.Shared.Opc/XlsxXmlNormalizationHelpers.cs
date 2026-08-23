@@ -238,4 +238,39 @@ internal static class XlsxXmlNormalizationHelpers
         var trimmed = value?.Trim();
         return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
     }
+
+    public static string? NormalizeOptionalText(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    public static string? NormalizeBase64BinaryOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return null;
+
+        try
+        {
+            _ = Convert.FromBase64String(trimmed);
+            return trimmed;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    public static string? NormalizeLegacyPasswordHashOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (trimmed is not { Length: 4 } ||
+            !trimmed.All(static c => char.IsAsciiHexDigit(c)))
+        {
+            return null;
+        }
+
+        return trimmed.ToUpperInvariant();
+    }
 }

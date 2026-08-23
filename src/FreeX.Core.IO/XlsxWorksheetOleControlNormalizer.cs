@@ -289,9 +289,9 @@ internal static class XlsxWorksheetOleControlNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "shapeId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "autoLoad", XlsxXmlNormalizationHelpers.NormalizeBoolean);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "oleUpdate", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, OleUpdateValues));
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "progId", NormalizeOptionalText);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "dvAspect", NormalizeOptionalText);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "link", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "progId", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "dvAspect", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "link", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
         return changed;
     }
 
@@ -319,8 +319,8 @@ internal static class XlsxWorksheetOleControlNormalizer
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "autoLine", XlsxXmlNormalizationHelpers.NormalizeBoolean);
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "autoPict", XlsxXmlNormalizationHelpers.NormalizeBoolean);
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "dde", XlsxXmlNormalizationHelpers.NormalizeBoolean);
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "macro", NormalizeOptionalText);
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "altText", NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "macro", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "altText", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
 
             if (objectProperties.Attribute(RelNs + "id") is null && !objectProperties.HasAttributes && !objectProperties.HasElements)
             {
@@ -342,7 +342,7 @@ internal static class XlsxWorksheetOleControlNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(control, WorksheetNs + "controlPr");
         changed |= NormalizeControlProperties(control);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "shapeId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "name", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "name", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
         return changed;
     }
 
@@ -370,11 +370,11 @@ internal static class XlsxWorksheetOleControlNormalizer
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "autoFill", XlsxXmlNormalizationHelpers.NormalizeBoolean);
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "autoLine", XlsxXmlNormalizationHelpers.NormalizeBoolean);
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "autoPict", XlsxXmlNormalizationHelpers.NormalizeBoolean);
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "macro", NormalizeOptionalText);
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "altText", NormalizeOptionalText);
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "linkedCell", NormalizeOptionalText);
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "listFillRange", NormalizeOptionalText);
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "cf", NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "macro", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "altText", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "linkedCell", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "listFillRange", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "cf", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
 
             if (controlProperties.Attribute(RelNs + "id") is null && !controlProperties.HasAttributes && !controlProperties.HasElements)
             {
@@ -1010,12 +1010,6 @@ internal static class XlsxWorksheetOleControlNormalizer
         var targetPart = ResolveRelationshipTarget(worksheetPath, relationship);
         if (!string.IsNullOrWhiteSpace(targetPart))
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, targetPart, DrawingContentType);
-    }
-
-    private static string? NormalizeOptionalText(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
 }

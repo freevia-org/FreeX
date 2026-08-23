@@ -166,7 +166,7 @@ internal static class XlsxWorksheetSheetViewNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "pane", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidPaneValues));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "activeCell", NormalizeCellReference);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "activeCellId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "sqref", NormalizeSqref);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "sqref", XlsxSqrefParser.NormalizeSelectionReferenceList);
         return changed;
     }
 
@@ -190,72 +190,4 @@ internal static class XlsxWorksheetSheetViewNormalizer
         return XlsxNumberFormatting.ToXmlString(parsed);
     }
 
-    private static string? NormalizeSqref(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return null;
-
-        var tokens = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return tokens.Length > 0 && tokens.All(IsCellOrRangeReference)
-            ? string.Join(' ', tokens)
-            : null;
-    }
-
-    private static bool IsCellOrRangeReference(string token)
-    {
-        var parts = token.Split(':');
-        if (parts.Length == 1)
-            return CellAddress.TryParse(parts[0], SheetId.New(), out _);
-
-        if (parts.Length != 2)
-            return false;
-
-        if (CellAddress.TryParse(parts[0], SheetId.New(), out _) &&
-            CellAddress.TryParse(parts[1], SheetId.New(), out _))
-        {
-            return true;
-        }
-
-        // Whole-column ("A:A", "C:E") and whole-row ("3:3", "3:5") selection sqrefs are valid
-        // Excel selection references even though neither side parses as a full cell address.
-        if (IsColumnOnlyReference(parts[0]) && IsColumnOnlyReference(parts[1]))
-            return true;
-
-        return IsRowOnlyReference(parts[0]) && IsRowOnlyReference(parts[1]);
-    }
-
-    private static bool IsColumnOnlyReference(string value)
-    {
-        if (value.Length is 0 or > 3)
-            return false;
-
-        foreach (var c in value)
-        {
-            if (c is (< 'A' or > 'Z') and (< 'a' or > 'z'))
-                return false;
-        }
-
-        var column = CellAddress.ColumnNameToNumber(value);
-        return column is > 0 and <= CellAddress.MaxCol;
-    }
-
-    private static bool IsRowOnlyReference(string value)
-    {
-        if (value.Length is 0 or > 7)
-            return false;
-
-        uint row = 0;
-        foreach (var c in value)
-        {
-            if (c is < '0' or > '9')
-                return false;
-
-            row = row * 10 + (uint)(c - '0');
-            if (row > CellAddress.MaxRow)
-                return false;
-        }
-
-        return row > 0;
-    }
 }

@@ -91,11 +91,11 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
 
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(protectedRange, ProtectedRangeAttributes);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "password", NormalizeLegacyPasswordHashOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "sqref", NormalizeSqref);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "name", NormalizeOptionalText);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "hashValue", NormalizeBase64BinaryOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "saltValue", NormalizeBase64BinaryOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "password", XlsxXmlNormalizationHelpers.NormalizeLegacyPasswordHashOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "sqref", XlsxSqrefParser.NormalizeWhitespaceSeparatedTokens);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "name", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "hashValue", XlsxXmlNormalizationHelpers.NormalizeBase64BinaryOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "saltValue", XlsxXmlNormalizationHelpers.NormalizeBase64BinaryOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "spinCount", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= NormalizeProtectedRangeChildren(protectedRange);
         return changed;
@@ -127,50 +127,6 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
             changed |= XlsxWorksheetExtensionListNormalizer.NormalizeChild(extensionList, ref keptExtensionList);
 
         return changed;
-    }
-
-    private static string? NormalizeOptionalText(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private static string? NormalizeSqref(string? value)
-    {
-        var tokens = value?
-            .Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return tokens is { Length: > 0 }
-            ? string.Join(' ', tokens)
-            : null;
-    }
-
-    private static string? NormalizeBase64BinaryOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return null;
-
-        try
-        {
-            _ = Convert.FromBase64String(trimmed);
-            return trimmed;
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
-    }
-
-    private static string? NormalizeLegacyPasswordHashOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (trimmed is not { Length: 4 } ||
-            !trimmed.All(static c => char.IsAsciiHexDigit(c)))
-        {
-            return null;
-        }
-
-        return trimmed.ToUpperInvariant();
     }
 
 }

@@ -77,10 +77,10 @@ internal static class XlsxWorksheetProtectionNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(protection, ProtectionAttributes);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "password", NormalizeLegacyPasswordHashOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "algorithmName", NormalizeOptionalText);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "hashValue", NormalizeBase64BinaryOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "saltValue", NormalizeBase64BinaryOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "password", XlsxXmlNormalizationHelpers.NormalizeLegacyPasswordHashOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "algorithmName", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "hashValue", XlsxXmlNormalizationHelpers.NormalizeBase64BinaryOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "saltValue", XlsxXmlNormalizationHelpers.NormalizeBase64BinaryOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "spinCount", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         foreach (var attributeName in BooleanAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, attributeName, XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
@@ -126,41 +126,6 @@ internal static class XlsxWorksheetProtectionNormalizer
 
         password.Remove();
         return true;
-    }
-
-    private static string? NormalizeOptionalText(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private static string? NormalizeBase64BinaryOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return null;
-
-        try
-        {
-            _ = Convert.FromBase64String(trimmed);
-            return trimmed;
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
-    }
-
-    private static string? NormalizeLegacyPasswordHashOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (trimmed is not { Length: 4 } ||
-            !trimmed.All(static c => char.IsAsciiHexDigit(c)))
-        {
-            return null;
-        }
-
-        return trimmed.ToUpperInvariant();
     }
 
 }
