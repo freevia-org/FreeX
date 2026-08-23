@@ -33,7 +33,12 @@ public sealed class Wave193AutoFilterNoFillPhysicalSourceTests
         runner.Should().Contain("New-FreeXWave193AutoFilterNoFillFixture.ps1");
         runner.Should().Contain("Assert-AutoFilterNoFillPostcondition");
         probe.Should().Contain("probe_autofilter_color_persistence_physical nofill");
+        probe.Should().Contain("verify_rendered_color_swatch");
         probe.Should().Contain("mode=${swatch_mode}");
+        probe.Should().Contain("local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27");
+        probe.Should().Contain("button_left_offset=148");
+        probe.Should().Contain("click_x_offset=190");
+        probe.Should().Contain("click_autofilter_control \"$click_x_offset\" 220");
         probe.Should().Contain("open-changed-pixels=${open_changed}");
         probe.Should().Contain("dismissed-changed-pixels=${dismissed_changed}");
         probe.Should().Contain("restored-change-maximum=${restored_change_maximum}");
@@ -67,8 +72,8 @@ public sealed class Wave193AutoFilterNoFillPhysicalSourceTests
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 5, 2));
-        var context = new TestCommandContext(workbook);
-        new CellNoFillColorFilterCommand(sheet.Id, range, 0).Apply(context).Success.Should().BeTrue();
+        new CellNoFillColorFilterCommand(sheet.Id, range, 0)
+            .Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
         sheet.FilterHiddenRows.Should().BeEquivalentTo([2u]);
 
         using var saved = new MemoryStream();
@@ -101,8 +106,8 @@ public sealed class Wave193AutoFilterNoFillPhysicalSourceTests
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 5, 2));
-        var context = new TestCommandContext(workbook);
-        new CellNoFillColorFilterCommand(sheet.Id, range, 0).Apply(context).Success.Should().BeTrue();
+        new CellNoFillColorFilterCommand(sheet.Id, range, 0)
+            .Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
         sheet.FilterHiddenRows.Should().BeEquivalentTo(beforeRows);
 
         using var saved = new MemoryStream();
@@ -170,13 +175,5 @@ public sealed class Wave193AutoFilterNoFillPhysicalSourceTests
         entry.Should().NotBeNull($"the XLSX package must contain {entryName}");
         using var stream = entry!.Open();
         return XDocument.Load(stream);
-    }
-
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
     }
 }

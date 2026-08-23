@@ -28,7 +28,9 @@ public sealed class Wave191AutoFilterColorPhysicalSourceTests
         probe.Should().Contain("%[hex:p{${sample_x},${sample_y}}]");
         probe.Should().Contain("autofilter-color-swatch-gate.txt");
         probe.Should().Contain("criteria=\"$(verify_rendered_fill_swatch");
-        probe.Should().Contain("click_autofilter_control 110 220");
+        probe.Should().Contain("local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27");
+        probe.Should().Contain("local sample_x_offset=84 sample_y_offset=216 click_x_offset=110 click_y_offset=220");
+        probe.Should().Contain("click_autofilter_control \"$click_x_offset\" 220");
         probe.Should().Contain("swatch-gate=$swatch_gate");
         probe.Should().NotContain("criteria=\"fill:#00B050\"");
         probe.Should().Contain("fill:#00B050");
