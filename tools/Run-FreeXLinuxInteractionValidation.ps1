@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "autofilter-text-criteria-persistence", "autofilter-numeric-criteria-persistence", "autofilter-date-criteria-persistence", "autofilter-color-persistence", "autofilter-font-color-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
+    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "autofilter-text-criteria-persistence", "autofilter-numeric-criteria-persistence", "autofilter-date-criteria-persistence", "autofilter-color-persistence", "autofilter-font-color-persistence", "autofilter-no-fill-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -61,6 +61,7 @@ $autoFilterNumericFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDo
 $autoFilterDateFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave189AutoFilterDateFixture.ps1"
 $autoFilterColorFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave191AutoFilterColorFixture.ps1"
 $autoFilterFontColorFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave192AutoFilterFontColorFixture.ps1"
+$autoFilterNoFillFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave193AutoFilterNoFillFixture.ps1"
 $native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
 $gridAutofitSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-grid-autofit-validation.schema.json"
 $nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
@@ -747,6 +748,53 @@ function Assert-AutoFilterFontColorPostcondition {
     }
 }
 
+function Assert-AutoFilterNoFillPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    $gatePath = Join-Path $EvidenceDirectory "autofilter-no-fill-swatch-gate.txt"
+    $postconditionPath = Join-Path $EvidenceDirectory "autofilter-no-fill-postcondition.txt"
+    if (-not (Test-Path -LiteralPath $gatePath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $postconditionPath -PathType Leaf)) {
+        throw "AutoFilter No Fill probe did not emit its rendered-swatch gate and postcondition."
+    }
+
+    $gateLines = @(Get-Content -LiteralPath $gatePath)
+    $expectedGate = @(
+        "schema-version=1",
+        "before=autofilter-no-fill-before.png",
+        "source=autofilter-no-fill-menu-open.png",
+        "mode=nofill",
+        "button-bounds=177,439,75,27",
+        "click=219,456",
+        "sample=193,452",
+        "before-rgb=#FFFFFF",
+        "sample-rgb=#FFFFFF",
+        "gate=passed"
+    )
+    $missingGate = @($expectedGate | Where-Object { $_ -notin $gateLines })
+    if ($missingGate.Count -ne 0) {
+        throw "AutoFilter No Fill rendered-swatch gate failed: $($missingGate -join '; ')."
+    }
+
+    $postconditionLines = @(Get-Content -LiteralPath $postconditionPath)
+    $expectedPostconditions = @(
+        "menu-open=true",
+        "swatch-gate=true",
+        "criteria=nofill:#FFFFFF",
+        "visible=South,West,",
+        "save-clean=true",
+        "package=ref=A1:B5|colId=0|cellColor=1|dxfId=0|dxf=empty",
+        "dialog-open=true",
+        "dialog-closed=true",
+        "reopened-visible=South,West,",
+        "reopened-semantic-a4=East"
+    )
+    $missingPostconditions = @($expectedPostconditions | Where-Object { $_ -notin $postconditionLines })
+    if ($missingPostconditions.Count -ne 0) {
+        throw "AutoFilter No Fill postcondition failed exact rendered/semantic/package contract: $($missingPostconditions -join '; ')."
+    }
+}
+
 function Start-ValidationSession {
     param(
         [string[]]$AppArgument = @(),
@@ -1390,6 +1438,16 @@ try {
             throw "autofilter-font-color-persistence requires an existing .xlsx PhysicalDocumentPath."
         }
     }
+    if ($PhysicalProbeSelector -eq "autofilter-no-fill-persistence") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = Join-Path $reportDirectory "fixtures/freex-wave193-autofilter-no-fill.xlsx"
+            & $autoFilterNoFillFixtureGenerator -OutputPath $PhysicalDocumentPath
+        }
+        if (-not (Test-Path -LiteralPath $PhysicalDocumentPath -PathType Leaf) -or
+            [IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "autofilter-no-fill-persistence requires an existing .xlsx PhysicalDocumentPath."
+        }
+    }
     if ($PhysicalProbeSelector -in @("pivot-field-list", "pivot-table-details-double-click")) {
         if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
             $PhysicalDocumentPath = $pivotDetailsFixturePath
@@ -1513,6 +1571,8 @@ try {
         @("autofilter-color-fill-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "autofilter-font-color-persistence") {
         @("autofilter-color-font-save-reopen-physical")
+    } elseif ($PhysicalProbeSelector -eq "autofilter-no-fill-persistence") {
+        @("autofilter-color-no-fill-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "backstage-print") {
         @(
             "backstage-print-ctrl-shift-f12-cancel"
@@ -1664,6 +1724,8 @@ try {
         @("autofilter-color-fill-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "autofilter-font-color-persistence") {
         @("autofilter-color-font-save-reopen-physical")
+    } elseif ($PhysicalProbeSelector -eq "autofilter-no-fill-persistence") {
+        @("autofilter-color-no-fill-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
         @(
             "formula-bar-point-mode-3d-sheet-range-grip"
@@ -1815,6 +1877,9 @@ try {
     }
     if ($PhysicalProbeSelector -eq "autofilter-font-color-persistence") {
         Assert-AutoFilterFontColorPostcondition -EvidenceDirectory $x11EvidenceDirectory
+    }
+    if ($PhysicalProbeSelector -eq "autofilter-no-fill-persistence") {
+        Assert-AutoFilterNoFillPostcondition -EvidenceDirectory $x11EvidenceDirectory
     }
     if ($PhysicalProbeSelector -eq "grid-autofit") {
         Assert-GridAutofitPostcondition -EvidenceDirectory $x11EvidenceDirectory

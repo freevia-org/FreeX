@@ -19,3 +19,10 @@ tests/FreeX.App.Avalonia.Tests/Wave192AutoFilterFontColorPhysicalSourceTests.cs 
 docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/*.json text eol=lf
 docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/*.txt text eol=lf
 docs/parity/avalonia-parity-wave192-freex-autofilter-font-color-20260823.md text eol=lf
+
+# Wave193 No Fill evidence/provenance hashes must be identical across Windows and Linux checkouts.
+tools/LinuxInteractiveDocker/New-FreeXWave193AutoFilterNoFillFixture.ps1 text eol=lf
+tests/FreeX.App.Avalonia.Tests/Wave193AutoFilterNoFillPhysicalSourceTests.cs text eol=lf
+docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/*.json text eol=lf
+docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/*.txt text eol=lf
+docs/parity/avalonia-parity-wave193-freex-autofilter-no-fill-20260823.md text eol=lf

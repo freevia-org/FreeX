@@ -6064,6 +6064,13 @@ probe_autofilter_color_persistence_physical() {
         expected_criteria="font:#00B050"
         expected_package_mode="0"
         expected_package_color="font=FF00B050"
+    elif [[ "$mode" == "nofill" ]]; then
+        prefix="autofilter-no-fill"
+        result_id="autofilter-color-no-fill-save-reopen-physical"
+        description="Filter by No Fill"
+        expected_criteria="nofill:#FFFFFF"
+        expected_package_mode="1"
+        expected_package_color="dxf=empty"
     fi
     local artifacts="${prefix}-before.png;${prefix}-menu-open.png;${prefix}-swatch-gate.txt;${prefix}-applied.png;${prefix}-reopened.png;${prefix}-reopen-diagnostics.txt;${prefix}-postcondition.txt"
     local menu_open=false swatch_gate=false save_clean=false dialog_open=false dialog_closed=false
@@ -6088,6 +6095,7 @@ probe_autofilter_color_persistence_physical() {
 import sys, zipfile, xml.etree.ElementTree as ET
 path = sys.argv[1]
 font_mode = sys.argv[2] == "font"
+no_fill_mode = sys.argv[2] == "nofill"
 main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 with zipfile.ZipFile(path) as package:
     sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
@@ -6109,6 +6117,10 @@ if font_mode:
     if color_node is None or color_node.attrib.get("rgb") != "FF00B050":
         raise SystemExit(1)
     print(f"ref=A1:B5|colId=0|cellColor=0|dxfId={color.attrib['dxfId']}|font={color_node.attrib['rgb']}")
+elif no_fill_mode:
+    if list(dxf):
+        raise SystemExit(1)
+    print(f"ref=A1:B5|colId=0|cellColor=1|dxfId={color.attrib['dxfId']}|dxf=empty")
 else:
     color_node = dxf.find(main + "fill/" + main + "patternFill/" + main + "fgColor")
     if color_node is None or color_node.attrib.get("rgb") != "FF00B050":
@@ -6122,6 +6134,11 @@ PY
         local swatch_mode="$3"
         local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27
         local sample_x_offset=84 sample_y_offset=216 click_x_offset=110 click_y_offset=220
+        if [[ "$swatch_mode" == "nofill" ]]; then
+            button_left_offset=148
+            sample_x_offset=164
+            click_x_offset=190
+        fi
         local button_left=$((a1_x + button_left_offset)) button_top=$((a1_y + button_top_offset))
         local button_right=$((button_left + button_width - 1)) button_bottom=$((button_top + button_height - 1))
         local sample_x=$((a1_x + sample_x_offset)) sample_y=$((a1_y + sample_y_offset))
@@ -6137,7 +6154,11 @@ PY
         fi
 
         local gate=failed
-        if [[ "$before_pixel" != "00B050" && "$pixel" == "00B050" ]]; then
+        if [[ "$swatch_mode" == "nofill" ]]; then
+            if [[ "$before_pixel" == "FFFFFF" && "$pixel" == "FFFFFF" ]]; then
+                gate=passed
+            fi
+        elif [[ "$before_pixel" != "00B050" && "$pixel" == "00B050" ]]; then
             gate=passed
         fi
         write_artifact "${prefix}-swatch-gate.txt" \
@@ -6215,26 +6236,32 @@ PY
         wait_for_document_idle || true
     }
 
+    local expected_visible="North,East," click_x_offset=110
+    if [[ "$mode" == "nofill" ]]; then
+        expected_visible="South,West,"
+        click_x_offset=190
+    fi
+
     capture "${prefix}-before.png"
     select_cell 0 0 A1
     open_autofilter_menu 0
     capture "${prefix}-menu-open.png"
     if screen_changed "$output/${prefix}-before.png" "$output/${prefix}-menu-open.png" 500; then
         menu_open=true
-        if [[ "$mode" == "font" ]]; then
+        if [[ "$mode" == "font" || "$mode" == "nofill" ]]; then
             criteria="$(verify_rendered_color_swatch "$output/${prefix}-before.png" "$output/${prefix}-menu-open.png" "$mode" || true)"
         else
             criteria="$(verify_rendered_fill_swatch "$output/${prefix}-before.png" "$output/${prefix}-menu-open.png" || true)"
         fi
         if [[ "$criteria" == "$expected_criteria" ]]; then
             swatch_gate=true
-            click_autofilter_control 110 220
+            click_autofilter_control "$click_x_offset" 220
             visible="$(read_visible_color_values)"
             capture "${prefix}-applied.png"
         fi
     fi
 
-    if $menu_open && $swatch_gate && [[ "$visible" == "North,East," ]]; then
+    if $menu_open && $swatch_gate && [[ "$visible" == "$expected_visible" ]]; then
         save_color_document && save_clean=true
         package="$(package_color_signature || true)"
     fi
@@ -6258,12 +6285,12 @@ PY
     write_artifact "${prefix}-postcondition.txt" \
         "document-path=$document_path\nmenu-open=$menu_open\nswatch-gate=$swatch_gate\ncriteria=$criteria\nvisible=$visible\nsave-clean=$save_clean\npackage=$package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-visible=$reopened_visible\nreopened-semantic-a4=$reopened_semantic\n"
 
-    if $menu_open && $swatch_gate && [[ "$criteria" == "$expected_criteria" && "$visible" == "North,East," && $save_clean &&
+    if $menu_open && $swatch_gate && [[ "$criteria" == "$expected_criteria" && "$visible" == "$expected_visible" && $save_clean &&
         "$package" == *"ref=A1:B5|colId=0|cellColor=${expected_package_mode}"* && "$package" == *"|${expected_package_color}"* && $dialog_open && $dialog_closed &&
-        "$reopened_visible" == "North,East," && "$reopened_semantic" == "East" ]]; then
+        "$reopened_visible" == "$expected_visible" && "$reopened_semantic" == "East" ]]; then
         record "$result_id" "passed" \
             "${prefix}-menu-open.png;${prefix}-applied.png;${prefix}-reopened.png;${prefix}-postcondition.txt" \
-            "$description used the rendered swatch, retained North and East, saved the exact colorFilter/DXF color, and reopened with matching rendered and semantic state." "$available_artifacts"
+            "$description used the rendered swatch, retained the expected visible rows, saved the exact colorFilter/DXF state, and reopened with matching rendered and semantic state." "$available_artifacts"
     else
         record "$result_id" "failed" "$available_artifacts" \
             "$description filtering did not prove the rendered swatch route, exact visible values, clean save, exact colorFilter/DXF package state, and matching production reopen state." "$available_artifacts"
@@ -6300,6 +6327,19 @@ if [[ "$probe_selector" == "autofilter-font-color-persistence" ]]; then
     probe_autofilter_color_persistence_physical font
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the font-color persistence probe."
+    fi
+    write_manifest
+    probe_failed=false
+    for result in "${results[@]}"; do
+        [[ "$result" == *'\"status\":\"failed\"'* ]] && probe_failed=true
+    done
+    if $probe_failed; then exit 3; fi
+    exit 0
+fi
+if [[ "$probe_selector" == "autofilter-no-fill-persistence" ]]; then
+    probe_autofilter_color_persistence_physical nofill
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the No Fill persistence probe."
     fi
     write_manifest
     probe_failed=false
