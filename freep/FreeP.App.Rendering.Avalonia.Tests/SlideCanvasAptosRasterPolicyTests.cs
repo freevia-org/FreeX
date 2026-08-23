@@ -102,6 +102,18 @@ public sealed class SlideCanvasAptosRasterPolicyTests
             measuredBounds).Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(0x000000)]
+    [InlineData(0x4472C4)]
+    public void ImportedIncreasingCircleCalibration_RejectsResolvedTextColorVariants(int textColorRgb)
+    {
+        SlideCanvas.UsesImportedIncreasingCircleAptosCalibration(
+            true,
+            CreateImportedLayout(textColor: SrgbColor.FromRgb(textColorRgb)),
+            CreateImportedBounds()).Should().BeFalse(
+                "the measured Office cache resolves its lt1 font reference to white text");
+    }
+
     [Fact]
     public void UsesFixedSizeAptosBodyFallback_MatchesSemanticRenderingRoute()
     {
@@ -165,7 +177,8 @@ public sealed class SlideCanvasAptosRasterPolicyTests
         bool hasBodyEffect = false,
         bool includeMixedFontRun = false,
         VerticalAnchor anchor = VerticalAnchor.Top,
-        double? lineSpacingPercent = null) =>
+        double? lineSpacingPercent = null,
+        SrgbColor? textColor = null) =>
         new()
         {
             Anchor = anchor,
@@ -198,7 +211,7 @@ public sealed class SlideCanvasAptosRasterPolicyTests
                                 Text = "Measured",
                                 FontFamily = fontFamily,
                                 FontSizePt = fontSizePt,
-                                Color = SrgbColor.Black,
+                                Color = textColor ?? SrgbColor.White,
                                 TextShadow = hasRunEffect
                                     ? new ResolvedRunShadow
                                     {
@@ -213,7 +226,7 @@ public sealed class SlideCanvasAptosRasterPolicyTests
                                 Text = " variant",
                                 FontFamily = "Calibri",
                                 FontSizePt = fontSizePt,
-                                Color = SrgbColor.Black
+                                Color = textColor ?? SrgbColor.White
                             }
                         ]
                         : [
@@ -222,7 +235,7 @@ public sealed class SlideCanvasAptosRasterPolicyTests
                                 Text = "Measured layout",
                                 FontFamily = fontFamily,
                                 FontSizePt = fontSizePt,
-                                Color = SrgbColor.Black,
+                                Color = textColor ?? SrgbColor.White,
                                 TextShadow = hasRunEffect
                                     ? new ResolvedRunShadow
                                     {

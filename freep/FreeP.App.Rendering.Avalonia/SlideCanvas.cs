@@ -58,6 +58,8 @@ public sealed partial class SlideCanvas : Control
     private const double ImportedIncreasingCircleColumnSpacingDip =
         1_270d / DrawingMlCoordinateUnits.EmuPerPixel;
     private const double ImportedIncreasingCircleMetricTolerance = 0.01;
+    // The measured Office cache uses dsp:style/a:fontRef lt1, resolved to white by the Office theme.
+    private static readonly SrgbColor ImportedIncreasingCircleTextColor = SrgbColor.White;
 
     // ── Styled / direct properties ──────────────────────────────────────────
 
@@ -1634,6 +1636,7 @@ public sealed partial class SlideCanvas : Control
             && !run.Underline
             && !run.Strikethrough
             && run.RightToLeft is null
+            && run.Color == ImportedIncreasingCircleTextColor
             && run.TextFill is null
             && run.TextOutline is null
             && run.TextShadow is null
