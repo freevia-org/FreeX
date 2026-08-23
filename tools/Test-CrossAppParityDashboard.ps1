@@ -24,8 +24,15 @@ $dashboard = Read-ToolJson -Path $DashboardPath -RepoRoot $repoRoot -MissingMess
 Assert-DashboardCondition ($dashboard.schema -eq "freex.parity.cross-app-dashboard.v3") "Cross-app dashboard schema must be v3."
 Assert-DashboardCondition ($dashboard.wave -eq 193) "Cross-app dashboard must describe Wave193."
 Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 579) "Wave193 cumulative app-slice count must be 579."
-Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "pending-final-integration-gates") "Wave193 app-slice count must remain contingent on final integration gates."
-Assert-DashboardCondition ((@($dashboard.pendingIntegrationGates) -join ",") -eq "independent review,repository preflight,full Release build,default non-UI test lane") "Wave193 pending integration gates must remain explicit."
+Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "accepted-final-integration-gates") "Wave193 app-slice count must be accepted after final integration gates."
+Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "accepted") "Wave193 integration gates must be accepted."
+Assert-DashboardCondition (@($dashboard.pendingIntegrationGates).Count -eq 0) "Wave193 must not retain pending integration gates."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.integrationHead -eq "5296d9a47a") "Wave193 integration evidence must name authoritative HEAD 5296d9a47a."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -eq "Passed: independent review found no findings after dashboard and source-guard remediations.") "Wave193 independent-review evidence must be exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.repositoryPreflight -eq "Passed: 288 JSON, 306 XML-backed, and 13,843 text files conflict scanned.") "Wave193 repository-preflight evidence must be exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -match "first full Release build passed before remediation; the post-remediation normal rebuild hit transient shared compiler locks; the prescribed retry dotnet build FreeX\.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors") "Wave193 Release-build evidence must retain the authoritative first-pass, lock, retry, and zero-warning/error results."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.defaultNonUiTestLane -eq "Passed: final default lane exit 0 with Core.IO 5,839 passed/56 skipped, Avalonia 2,178 passed, Host Logic 1,490 passed/4 skipped, FreeP Presentation 5,466 passed, and FreeP Avalonia 724 passed.") "Wave193 default-lane evidence must retain authoritative project totals."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sourceTestRemediation -eq "The initial default lane exposed three source-test regressions; remediation fixed all three, and focused reruns passed.") "Wave193 source-test remediation evidence must be recorded."
 Assert-DashboardCondition ($dashboard.scopeBoundary -match "visual parity") "Cross-app dashboard scope boundary must retain the no-visual-parity claim."
 
 $requiredSources = @(
