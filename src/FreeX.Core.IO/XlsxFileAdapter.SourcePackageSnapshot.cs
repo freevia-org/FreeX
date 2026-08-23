@@ -1914,6 +1914,12 @@ public sealed partial class XlsxFileAdapter
                 .Elements(workbookNs + "sheet")
                 .Select(sheet => sheet.Attribute("name")?.Value ?? string.Empty)
                 .ToList() ?? [];
+            var preservationPolicy = new XlsxDefinedNamePreservationPolicy(
+                workbook,
+                sourceSheetNamesByLocalId,
+                sourceSheetIdsByLocalId,
+                targetSheetNames,
+                liveModelDefinedNameKeys);
 
             var changed = false;
             var targetDefinedNames = root.Element(workbookNs + "definedNames");
@@ -1926,25 +1932,22 @@ public sealed partial class XlsxFileAdapter
 
             var existingKeys = targetDefinedNames
                 .Elements(workbookNs + "definedName")
-                .Select(DefinedNameKey)
+                .Select(XlsxDefinedNamePreservationPolicy.GetKey)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             foreach (var sourceName in sourceDefinedNames.Elements(workbookNs + "definedName"))
             {
-                var key = DefinedNameKey(sourceName);
+                var key = XlsxDefinedNamePreservationPolicy.GetKey(sourceName);
                 var existing = targetDefinedNames
                     .Elements(workbookNs + "definedName")
-                    .FirstOrDefault(element => string.Equals(DefinedNameKey(element), key, StringComparison.OrdinalIgnoreCase));
+                    .FirstOrDefault(element => string.Equals(
+                        XlsxDefinedNamePreservationPolicy.GetKey(element),
+                        key,
+                        StringComparison.OrdinalIgnoreCase));
                 if (existing is not null)
                 {
-                    foreach (var attribute in sourceName.Attributes())
-                    {
-                        if (existing.Attribute(attribute.Name) is not null)
-                            continue;
-
-                        existing.SetAttributeValue(attribute.Name, attribute.Value);
+                    if (XlsxDefinedNamePreservationPolicy.BackfillMissingAttributes(sourceName, existing))
                         changed = true;
-                    }
 
                     continue;
                 }
@@ -1969,74 +1972,16 @@ public sealed partial class XlsxFileAdapter
                 // (pre-round-8) unconditional-restore behavior for names FreeX doesn't model; keep
                 // the liveness gate only for names FreeX *can* model (where an absence genuinely
                 // means the user removed it via the Name Manager).
-                var sourceNameAttr = sourceName.Attribute("name")?.Value;
-                var isModelRepresentable = !string.IsNullOrWhiteSpace(sourceNameAttr) &&
-                    workbook.ValidateNamedRangeName(sourceNameAttr) is null &&
-                    !XlsxNamedRangeMapper.IsUnmodelableDefinedNameRefersTo(sourceName.Value);
-                if (isModelRepresentable &&
-                    !liveModelDefinedNameKeys.Contains(key) &&
-                    !XlsxNamedRangeMapper.IsExcelReservedDefinedName(sourceNameAttr))
-                {
+                if (!preservationPolicy.ShouldPreserveModelCandidate(sourceName))
                     continue;
-                }
 
-                var resurrected = new XElement(sourceName);
-                var localSheetIdAttr = resurrected.Attribute("localSheetId");
-                if (localSheetIdAttr is not null)
+                if (!preservationPolicy.TryPrepareCandidate(sourceName, out var resurrected))
+                    continue;
+
+                key = XlsxDefinedNamePreservationPolicy.GetKey(resurrected);
+
+                if (resurrected.Attribute("localSheetId") is not null)
                 {
-                    // Sheet-scoped: remap the OLD localSheetId (an index into the pristine pre-edit
-                    // <sheets> order) onto that same sheet's CURRENT index, since sheet delete/reorder
-                    // shifts indices but this name was never live in the model to get remapped
-                    // automatically. If the scope sheet itself no longer exists (deleted), drop the
-                    // name entirely rather than emit an out-of-range/misscoped localSheetId (P112).
-                    if (!int.TryParse(localSheetIdAttr.Value, out var oldLocalSheetId) ||
-                        oldLocalSheetId < 0 ||
-                        oldLocalSheetId >= sourceSheetNamesByLocalId.Count)
-                        continue;
-
-                    var scopeSheetName = sourceSheetNamesByLocalId[oldLocalSheetId];
-                    var newLocalSheetId = targetSheetNames.FindIndex(
-                        name => string.Equals(name, scopeSheetName, StringComparison.OrdinalIgnoreCase));
-                    if (newLocalSheetId < 0)
-                    {
-                        // The old scope-sheet name isn't present under any current sheet BY NAME.
-                        // This is ambiguous between the sheet having been deleted (drop the name,
-                        // per the comment above) and the sheet having simply been RENAMED with no
-                        // other structural change (the sheet - and this name's scope - is still
-                        // there, just under a new name). Count+ordinal alone can't tell those apart:
-                        // deleting a sheet and adding an unrelated new one at the same ordinal also
-                        // leaves the count and position matching. Disambiguate by identity instead -
-                        // a rename keeps the SAME Sheet object (and its stable Sheet.Id) alive in the
-                        // model; a delete+add always produces a brand-new Sheet.Id that was never
-                        // present at this snapshot's pristine load/rebase. Only treat this as a
-                        // rename when the ORIGINAL sheet's Sheet.Id genuinely still exists.
-                        var renamedSheetIndex = -1;
-                        if (oldLocalSheetId < sourceSheetIdsByLocalId.Count)
-                        {
-                            var originalSheetId = sourceSheetIdsByLocalId[oldLocalSheetId];
-                            for (var sheetIndex = 0; sheetIndex < workbook.Sheets.Count; sheetIndex++)
-                            {
-                                if (workbook.Sheets[sheetIndex].Id == originalSheetId)
-                                {
-                                    renamedSheetIndex = sheetIndex;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (renamedSheetIndex >= 0)
-                        {
-                            newLocalSheetId = renamedSheetIndex;
-                        }
-                        else
-                        {
-                            continue;
-                        }
-                    }
-
-                    localSheetIdAttr.Value = newLocalSheetId.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    key = DefinedNameKey(resurrected);
-
                     // Re-check for a collision at the remapped index: ClosedXML may already have
                     // re-emitted an entry for this name at the sheet's new index (common for
                     // Excel-reserved names like Print_Area).
@@ -2057,17 +2002,8 @@ public sealed partial class XlsxFileAdapter
                     // print-setting classifier liveness check here: only resurrect when the sheet
                     // this name is (now) scoped to still actually has a print area / print titles
                     // set.
-                    if (XlsxPrintSettingNameClassifier.TryClassify(sourceNameAttr, out var printSettingKind) &&
-                        newLocalSheetId >= 0 &&
-                        newLocalSheetId < workbook.Sheets.Count)
-                    {
-                        var scopeSheet = workbook.Sheets[newLocalSheetId];
-                        var isLive = printSettingKind == XlsxPrintSettingKind.PrintArea
-                            ? scopeSheet.PrintAreas.Count > 0
-                            : scopeSheet.PrintTitleRows is not null || scopeSheet.PrintTitleColumns is not null;
-                        if (!isLive)
-                            continue;
-                    }
+                    if (!preservationPolicy.ShouldPreservePrintSetting(resurrected))
+                        continue;
                 }
 
                 targetDefinedNames.Add(resurrected);
@@ -2078,12 +2014,6 @@ public sealed partial class XlsxFileAdapter
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
 
-            static string DefinedNameKey(XElement element)
-            {
-                var name = element.Attribute("name")?.Value ?? string.Empty;
-                var localSheetId = element.Attribute("localSheetId")?.Value ?? string.Empty;
-                return $"{name}\u001f{localSheetId}";
-            }
         }
 
         // Mirrors XlsxWorkbookSchemaNormalizer.WorkbookChildOrder's CT_Workbook child sequence (the
