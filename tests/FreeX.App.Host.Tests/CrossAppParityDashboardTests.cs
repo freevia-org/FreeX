@@ -27,7 +27,7 @@ public sealed class CrossAppParityDashboardTests
         integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("615b53f474dfa1849ae965018d890cba4a138d42");
         integrationEvidence.TryGetProperty("integrationHead", out _).Should().BeFalse();
         integrationEvidence.GetProperty("acceptanceRefreshNote").GetString().Should().Be(
-            "This dashboard/report is a later docs-only acceptance refresh; it does not alter the tested source commit.");
+            "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit.");
         integrationEvidence.GetProperty("repositoryPreflight").GetString().Should().Be(
             "Passed at tested source commit 615b53f474dfa1849ae965018d890cba4a138d42: 288 JSON, 306 XML-backed, and 13,845 text files conflict scanned.");
         integrationEvidence.GetProperty("fullReleaseBuild").GetString().Should().Be(
@@ -62,5 +62,19 @@ public sealed class CrossAppParityDashboardTests
         markdown.Should().Contain("equal dimensions or paired ids do not establish visual parity.");
         markdown.Should().Contain("unresolved high-delta visual review candidates at triage score >= 0.4");
         markdown.Should().NotContain("System.Object[]");
+    }
+
+    [Fact]
+    public void CrossAppParityDashboard_AcceptanceBoundaryMutationCoverageRejectsUnsafeHistories()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Test-CrossAppParityDashboard.ps1",
+            repoRoot,
+            "-BoundarySelfTest");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        result.CombinedOutput.Should().Contain(
+            "Acceptance boundary mutation coverage passed: unexpected-path and non-ancestor histories rejected.");
     }
 }

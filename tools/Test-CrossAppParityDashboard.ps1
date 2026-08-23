@@ -1,11 +1,156 @@
 param(
-    [string]$DashboardPath = "docs\parity\avalonia-wpf-cross-app-dashboard.json"
+    [string]$DashboardPath = "docs\parity\avalonia-wpf-cross-app-dashboard.json",
+    [switch]$BoundarySelfTest
 )
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+
+$acceptanceRefreshTestedSourceCommit = "615b53f474dfa1849ae965018d890cba4a138d42"
+$acceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
+$acceptanceRefreshAllowedPaths = @(
+    "docs/parity/avalonia-parity-wave193-integration-20260823.md",
+    "docs/parity/avalonia-wpf-cross-app-dashboard.json",
+    "docs/parity/avalonia-wpf-cross-app-dashboard.md",
+    "tests/FreeX.App.Host.Tests/CrossAppParityDashboardTests.cs",
+    "tools/Generate-CrossAppParityDashboard.ps1",
+    "tools/Test-CrossAppParityDashboard.ps1"
+)
+
+function Normalize-GitPath {
+    param([AllowNull()][string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return ""
+    }
+
+    return $Path.Trim().Replace('\', '/').TrimStart('/')
+}
+
+function Test-AcceptanceRefreshGitBoundary {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$TestedSourceCommit,
+        [Parameter(Mandatory = $true)][string[]]$AllowedPaths,
+        [string]$HeadRef = "HEAD"
+    )
+
+    $commitVerification = @(& git -C $RepositoryRoot rev-parse --verify "$TestedSourceCommit^{commit}" 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Acceptance boundary tested source commit '$TestedSourceCommit' does not exist in repository '$RepositoryRoot': $($commitVerification -join ' ')"
+    }
+
+    $null = @(& git -C $RepositoryRoot merge-base --is-ancestor $TestedSourceCommit $HeadRef 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Acceptance boundary tested source commit '$TestedSourceCommit' is not an ancestor of '$HeadRef'."
+    }
+
+    $changedPathOutput = @(& git -C $RepositoryRoot diff --name-only --no-renames $TestedSourceCommit $HeadRef 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Acceptance boundary could not obtain changed paths for '$TestedSourceCommit..$HeadRef': $($changedPathOutput -join ' ')"
+    }
+
+    $normalizedAllowedPaths = @($AllowedPaths | ForEach-Object { Normalize-GitPath $_ } | Sort-Object -Unique)
+    $changedPaths = @($changedPathOutput | ForEach-Object { Normalize-GitPath $_ } | Where-Object { $_ })
+    $unexpectedPaths = @($changedPaths | Where-Object { $normalizedAllowedPaths -notcontains $_ } | Sort-Object -Unique)
+    if ($unexpectedPaths.Count -gt 0) {
+        throw "Acceptance boundary changed paths outside the exact allowlist: $($unexpectedPaths -join ', '). Allowed paths: $($normalizedAllowedPaths -join ', ')."
+    }
+
+    return $changedPaths
+}
+
+function Invoke-AcceptanceBoundaryGit {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $output = @(& git -C $RepositoryRoot @Arguments 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git command failed in acceptance-boundary fixture: git $($Arguments -join ' ')`n$($output -join "`n")"
+    }
+
+    return $output
+}
+
+function Invoke-AcceptanceBoundaryMutationSelfTest {
+    $fixture = New-ToolTemporaryDirectory -Prefix "freex-cross-app-boundary-"
+    try {
+        $fixturePath = $fixture
+        $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("init", "-q")
+        $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("config", "user.email", "acceptance-boundary@example.invalid")
+        $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("config", "user.name", "Acceptance Boundary")
+
+        Set-Content -LiteralPath (Join-Path $fixturePath "seed.txt") -Value "seed" -NoNewline
+        $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("add", "seed.txt")
+        $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("commit", "-q", "-m", "tested source")
+        $testedCommit = ([string](Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("rev-parse", "HEAD"))).Trim()
+
+        foreach ($path in $acceptanceRefreshAllowedPaths) {
+            $absolutePath = Join-Path $fixturePath ($path.Replace('/', '\'))
+            $parent = Split-Path -Parent $absolutePath
+            if (-not (Test-Path -LiteralPath $parent)) {
+                New-Item -ItemType Directory -Path $parent -Force | Out-Null
+            }
+            Set-Content -LiteralPath $absolutePath -Value "acceptance" -NoNewline
+        }
+        $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("add", ".")
+        $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("commit", "-q", "-m", "acceptance refresh")
+
+        $null = Test-AcceptanceRefreshGitBoundary -RepositoryRoot $fixturePath -TestedSourceCommit $testedCommit -AllowedPaths $acceptanceRefreshAllowedPaths
+
+        Set-Content -LiteralPath (Join-Path $fixturePath "unexpected.txt") -Value "unexpected" -NoNewline
+        $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("add", "unexpected.txt")
+        $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("commit", "-q", "-m", "unexpected path")
+        $unexpectedRejected = $false
+        try {
+            $null = Test-AcceptanceRefreshGitBoundary -RepositoryRoot $fixturePath -TestedSourceCommit $testedCommit -AllowedPaths $acceptanceRefreshAllowedPaths
+            throw "Acceptance boundary self-test did not reject an unexpected path."
+        }
+        catch {
+            if ($_.Exception.Message -match "unexpected\.txt") {
+                $unexpectedRejected = $true
+            }
+            else {
+                throw
+            }
+        }
+        if (-not $unexpectedRejected) {
+            throw "Acceptance boundary self-test did not verify unexpected-path rejection."
+        }
+
+        $otherPath = Join-Path $fixturePath "other-root.txt"
+        Set-Content -LiteralPath $otherPath -Value "other root" -NoNewline
+        $otherBlob = ([string](Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("hash-object", "-w", "--", $otherPath))).Trim()
+        $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("update-index", "--add", "--cacheinfo", "100644,$otherBlob,other-root.txt")
+        $otherTree = ([string](Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("write-tree"))).Trim()
+        $otherCommit = ([string](Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("commit-tree", $otherTree, "-m", "unrelated root"))).Trim()
+        $ancestryRejected = $false
+        try {
+            $null = Test-AcceptanceRefreshGitBoundary -RepositoryRoot $fixturePath -TestedSourceCommit $testedCommit -AllowedPaths $acceptanceRefreshAllowedPaths -HeadRef $otherCommit
+            throw "Acceptance boundary self-test did not reject a non-ancestor tested source."
+        }
+        catch {
+            if ($_.Exception.Message -match "not an ancestor") {
+                $ancestryRejected = $true
+            }
+            else {
+                throw
+            }
+        }
+        if (-not $ancestryRejected) {
+            throw "Acceptance boundary self-test did not verify ancestry rejection."
+        }
+
+        Write-Host "Acceptance boundary mutation coverage passed: unexpected-path and non-ancestor histories rejected."
+    }
+    finally {
+        Remove-ToolTemporaryDirectory -Path $fixture
+    }
+}
 
 function Assert-DashboardCondition {
     param(
@@ -18,7 +163,13 @@ function Assert-DashboardCondition {
     }
 }
 
+if ($BoundarySelfTest) {
+    Invoke-AcceptanceBoundaryMutationSelfTest
+    return
+}
+
 $resolvedDashboardPath = Resolve-ToolRepoPath -Path $DashboardPath -RepoRoot $repoRoot
+$changedAcceptancePaths = @(Test-AcceptanceRefreshGitBoundary -RepositoryRoot $repoRoot -TestedSourceCommit $acceptanceRefreshTestedSourceCommit -AllowedPaths $acceptanceRefreshAllowedPaths)
 $dashboard = Read-ToolJson -Path $DashboardPath -RepoRoot $repoRoot -MissingMessage "Required generated cross-app dashboard is missing"
 
 Assert-DashboardCondition ($dashboard.schema -eq "freex.parity.cross-app-dashboard.v3") "Cross-app dashboard schema must be v3."
@@ -27,12 +178,12 @@ Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 579) "Wave193 cumu
 Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "accepted-final-integration-gates") "Wave193 app-slice count must be accepted after final integration gates."
 Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "accepted") "Wave193 integration gates must be accepted."
 Assert-DashboardCondition (@($dashboard.pendingIntegrationGates).Count -eq 0) "Wave193 must not retain pending integration gates."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.testedSourceCommit -eq "615b53f474dfa1849ae965018d890cba4a138d42") "Wave193 integration evidence must name tested source commit 615b53f474dfa1849ae965018d890cba4a138d42."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.testedSourceCommit -eq $acceptanceRefreshTestedSourceCommit) "Wave193 integration evidence must name tested source commit $acceptanceRefreshTestedSourceCommit."
 Assert-DashboardCondition ($null -eq $dashboard.integrationGateEvidence.PSObject.Properties["integrationHead"]) "Wave193 integration evidence must not use a recursive current-HEAD claim."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.acceptanceRefreshNote -eq "This dashboard/report is a later docs-only acceptance refresh; it does not alter the tested source commit.") "Wave193 acceptance evidence must state that the later docs-only refresh does not alter tested source."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.acceptanceRefreshNote -eq $acceptanceRefreshNote) "Wave193 acceptance evidence must state that the acceptance-only documentation/tooling refresh does not alter tested source."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -eq "Passed: independent review found no findings after dashboard and source-guard remediations.") "Wave193 independent-review evidence must be exact."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.repositoryPreflight -eq "Passed at tested source commit 615b53f474dfa1849ae965018d890cba4a138d42: 288 JSON, 306 XML-backed, and 13,845 text files conflict scanned.") "Wave193 repository-preflight evidence must name the tested source and exact authoritative file counts."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -eq "Passed at tested source commit 615b53f474dfa1849ae965018d890cba4a138d42: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors.") "Wave193 Release-build evidence must retain the final tested-source command and zero-warning/error result."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.repositoryPreflight -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: 288 JSON, 306 XML-backed, and 13,845 text files conflict scanned.") "Wave193 repository-preflight evidence must name the tested source and exact authoritative file counts."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors.") "Wave193 Release-build evidence must retain the final tested-source command and zero-warning/error result."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.defaultNonUiTestLane -eq "Passed: final default lane exit 0 with Core.IO 5,839 passed/56 skipped, Avalonia 2,182 passed, Host Logic 1,490 passed/4 skipped, FreeP Presentation 5,466 passed, and FreeP Avalonia 724 passed.") "Wave193 default-lane evidence must retain authoritative project totals."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sourceTestRemediation -eq "The initial default lane exposed three source-test regressions; remediation fixed all three, and focused reruns passed.") "Wave193 source-test remediation evidence must be recorded."
 Assert-DashboardCondition ($dashboard.scopeBoundary -match "visual parity") "Cross-app dashboard scope boundary must retain the no-visual-parity claim."
