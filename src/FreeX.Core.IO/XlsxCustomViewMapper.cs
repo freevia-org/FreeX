@@ -269,7 +269,7 @@ internal static class XlsxCustomViewMapper
                 continue;
 
             root.Element(workbookNs + "customSheetViews")?.Remove();
-            InsertWorksheetCustomViewsInOrder(root, workbookNs, new XElement(
+            XlsxWorksheetElementOrder.Insert(root, new XElement(
                 workbookNs + "customSheetViews",
                 customSheetViews));
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
@@ -584,47 +584,6 @@ internal static class XlsxCustomViewMapper
             workbookRoot.Add(customWorkbookViews);
         else
             insertionPoint.AddBeforeSelf(customWorkbookViews);
-    }
-
-    private static void InsertWorksheetCustomViewsInOrder(
-        XElement worksheetRoot,
-        XNamespace workbookNs,
-        XElement customSheetViews)
-    {
-        string[] laterWorksheetElements =
-        [
-            "mergeCells",
-            "phoneticPr",
-            "conditionalFormatting",
-            "dataValidations",
-            "hyperlinks",
-            "printOptions",
-            "pageMargins",
-            "pageSetup",
-            "headerFooter",
-            "rowBreaks",
-            "colBreaks",
-            "customProperties",
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        var insertionPoint = FindFirstLaterElement(worksheetRoot, workbookNs, laterWorksheetElements);
-        if (insertionPoint is null)
-            worksheetRoot.Add(customSheetViews);
-        else
-            insertionPoint.AddBeforeSelf(customSheetViews);
     }
 
     private static XElement? FindFirstLaterElement(

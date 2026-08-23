@@ -155,7 +155,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                 ignoredErrors.Add(ignoredError);
             }
 
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, ignoredErrors);
+            XlsxWorksheetElementOrder.Insert(root, ignoredErrors);
             session.MarkDirty(edit);
         }
     }
@@ -291,7 +291,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             if (retained.Count == 0)
                 return false;
 
-            InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, new XElement(workbookNs + "ignoredErrors", retained));
+            XlsxWorksheetElementOrder.Insert(targetRoot, new XElement(workbookNs + "ignoredErrors", retained));
             return true;
         }
 

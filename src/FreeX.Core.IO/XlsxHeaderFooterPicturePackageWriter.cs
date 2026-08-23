@@ -441,9 +441,8 @@ internal static class XlsxHeaderFooterPicturePackageWriter
 
         root.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
         root.Elements(worksheetNs + "legacyDrawingHF").Remove();
-        InsertLegacyDrawingHeaderFooterInOrder(
+        XlsxWorksheetElementOrder.Insert(
             root,
-            worksheetNs,
             new XElement(worksheetNs + "legacyDrawingHF", new XAttribute(relNs + "id", vmlRelId)));
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
     }
@@ -472,40 +471,6 @@ internal static class XlsxHeaderFooterPicturePackageWriter
             if (archive.GetEntry(candidatePath) is null && usedImagePaths.Add(candidatePath))
                 return candidatePath;
         }
-    }
-
-    private static void InsertLegacyDrawingHeaderFooterInOrder(
-        XElement worksheetRoot,
-        XNamespace worksheetNs,
-        XElement legacyDrawingHeaderFooter)
-    {
-        string[] laterWorksheetElements =
-        [
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace != worksheetNs ||
-                !laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            insertionPoint = element;
-            break;
-        }
-
-        if (insertionPoint is null)
-            worksheetRoot.Add(legacyDrawingHeaderFooter);
-        else
-            insertionPoint.AddBeforeSelf(legacyDrawingHeaderFooter);
     }
 
 }

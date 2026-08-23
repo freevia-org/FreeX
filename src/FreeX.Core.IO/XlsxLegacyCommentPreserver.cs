@@ -1800,7 +1800,7 @@ internal static class XlsxLegacyCommentPreserver
         if (marker is null)
         {
             marker = new XElement(markerName);
-            InsertLegacyDrawingMarkerInWorksheetOrder(worksheetRoot, marker);
+            XlsxWorksheetElementOrder.Insert(worksheetRoot, marker);
         }
 
         foreach (var extraMarker in existingMarkers.Skip(1))
@@ -1809,16 +1809,6 @@ internal static class XlsxLegacyCommentPreserver
         marker.RemoveAttributes();
         marker.RemoveNodes();
         marker.SetAttributeValue(relNs + "id", relationshipId);
-    }
-
-    private static void InsertLegacyDrawingMarkerInWorksheetOrder(XElement worksheetRoot, XElement marker)
-    {
-        var laterElementNames = new[] { "legacyDrawingHF", "picture", "oleObjects", "controls", "webPublishItems", "tableParts", "extLst" };
-        var insertionPoint = FindLegacyDrawingInsertionPoint(worksheetRoot, marker.Name.Namespace, laterElementNames);
-        if (insertionPoint is null)
-            worksheetRoot.Add(marker);
-        else
-            insertionPoint.AddBeforeSelf(marker);
     }
 
     private static XElement? FindCommentsRelationship(XElement? relationshipsRoot, XNamespace packageRelNs)
@@ -1859,34 +1849,6 @@ internal static class XlsxLegacyCommentPreserver
 
     private static XElement? FirstLegacyDrawingMarker(IReadOnlyList<XElement> markers) =>
         markers.Count == 0 ? null : markers[0];
-
-    private static XElement? FindLegacyDrawingInsertionPoint(
-        XElement worksheetRoot,
-        XNamespace worksheetNs,
-        IReadOnlyCollection<string> laterElementNames)
-    {
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace == worksheetNs &&
-                ContainsElementName(laterElementNames, element.Name.LocalName))
-            {
-                return element;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool ContainsElementName(IReadOnlyCollection<string> elementNames, string elementName)
-    {
-        foreach (var candidate in elementNames)
-        {
-            if (string.Equals(candidate, elementName, StringComparison.Ordinal))
-                return true;
-        }
-
-        return false;
-    }
 
     private static void ReplacePackageXmlPart(ZipArchive archive, string path, XDocument xml)
     {

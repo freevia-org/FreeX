@@ -24,9 +24,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (retainedViews.Count == 0)
                 return false;
 
-            InsertWorksheetMetadataElementInOrder(
+            XlsxWorksheetElementOrder.Insert(
                 targetRoot,
-                workbookNs,
                 new XElement(
                     sourceCustomSheetViews.Name,
                     sourceCustomSheetViews.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration),
@@ -152,7 +151,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                         sourceScenarios.Attributes()
                             .Where(attribute => !IsScenarioListIndexAttribute(attribute))
                             .Select(attribute => new XAttribute(attribute)));
-                    InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, targetScenarios);
+                    XlsxWorksheetElementOrder.Insert(targetRoot, targetScenarios);
                     changed = true;
                 }
 
@@ -172,7 +171,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     sourceScenarios.Attributes()
                         .Where(attribute => !IsScenarioListIndexAttribute(attribute))
                         .Select(attribute => new XAttribute(attribute)));
-                InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, targetScenarios);
+                XlsxWorksheetElementOrder.Insert(targetRoot, targetScenarios);
                 changed = true;
             }
 

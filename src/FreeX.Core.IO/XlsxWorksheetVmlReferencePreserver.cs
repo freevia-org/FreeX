@@ -115,7 +115,7 @@ internal static class XlsxWorksheetVmlReferencePreserver
         if (marker is null)
         {
             marker = new XElement(markerName);
-            InsertMarkerInWorksheetOrder(worksheetRoot, marker);
+            XlsxWorksheetElementOrder.Insert(worksheetRoot, marker);
         }
 
         for (var i = 1; i < existingMarkers.Count; i++)
@@ -126,33 +126,4 @@ internal static class XlsxWorksheetVmlReferencePreserver
         marker.SetAttributeValue(relNs + "id", relationshipId);
     }
 
-    private static void InsertMarkerInWorksheetOrder(XElement worksheetRoot, XElement marker)
-    {
-        var laterElementNames = marker.Name.LocalName == "legacyDrawing"
-            ? new[] { "legacyDrawingHF", "picture", "oleObjects", "controls", "webPublishItems", "tableParts", "extLst" }
-            : new[] { "picture", "oleObjects", "controls", "webPublishItems", "tableParts", "extLst" };
-        var insertionPoint = FindInsertionPoint(worksheetRoot, marker.Name.Namespace, laterElementNames);
-
-        if (insertionPoint is null)
-            worksheetRoot.Add(marker);
-        else
-            insertionPoint.AddBeforeSelf(marker);
-    }
-
-    private static XElement? FindInsertionPoint(
-        XElement worksheetRoot,
-        XNamespace markerNamespace,
-        string[] laterElementNames)
-    {
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace == markerNamespace &&
-                laterElementNames.Contains(element.Name.LocalName, StringComparer.Ordinal))
-            {
-                return element;
-            }
-        }
-
-        return null;
-    }
 }

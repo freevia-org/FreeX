@@ -132,7 +132,7 @@ internal static class XlsxAllowEditRangeMapper
                 sheet.AllowEditRanges.Select((range, index) =>
                     BuildProtectedRangeElement(workbookNs, range, index, sheet.AllowEditRangePasswords)));
 
-            InsertProtectedRangesInOrder(root, workbookNs, protectedRanges);
+        XlsxWorksheetElementOrder.Insert(root, protectedRanges);
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
@@ -185,58 +185,4 @@ internal static class XlsxAllowEditRangeMapper
         return element;
     }
 
-    private static void InsertProtectedRangesInOrder(XElement worksheetRoot, XNamespace workbookNs, XElement protectedRanges)
-    {
-        string[] laterWorksheetElements =
-        [
-            "scenarios",
-            "autoFilter",
-            "sortState",
-            "dataConsolidate",
-            "customSheetViews",
-            "mergeCells",
-            "phoneticPr",
-            "conditionalFormatting",
-            "dataValidations",
-            "hyperlinks",
-            "printOptions",
-            "pageMargins",
-            "pageSetup",
-            "headerFooter",
-            "rowBreaks",
-            "colBreaks",
-            "customProperties",
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace != workbookNs ||
-                !laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            insertionPoint = element;
-            break;
-        }
-
-        if (insertionPoint is null)
-            worksheetRoot.Add(protectedRanges);
-        else
-            insertionPoint.AddBeforeSelf(protectedRanges);
-    }
 }

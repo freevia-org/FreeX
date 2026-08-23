@@ -96,7 +96,7 @@ internal static class XlsxWorksheetCustomPropertyMapper
                 : XlsxPackageXmlEditor.LoadXml(worksheetRelsEntry);
 
             root.Element(workbookNs + "customProperties")?.Remove();
-            InsertCustomPropertiesInOrder(root, workbookNs, new XElement(
+            XlsxWorksheetElementOrder.Insert(root, new XElement(
                 workbookNs + "customProperties",
                 properties.Select(property =>
                 {
@@ -129,45 +129,6 @@ internal static class XlsxWorksheetCustomPropertyMapper
             .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
             .Select(property => property.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static void InsertCustomPropertiesInOrder(
-        XElement worksheetRoot,
-        XNamespace workbookNs,
-        XElement customProperties)
-    {
-        string[] laterWorksheetElements =
-        [
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace == workbookNs &&
-                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
-            {
-                insertionPoint = element;
-                break;
-            }
-        }
-
-        if (insertionPoint is null)
-            worksheetRoot.Add(customProperties);
-        else
-            insertionPoint.AddBeforeSelf(customProperties);
     }
 
     private static NativeXmlPreserveBag? ReadMetadata(XElement customProperty, string? binPayloadBase64)

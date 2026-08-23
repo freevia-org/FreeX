@@ -64,7 +64,7 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
             conditionalFormatting,
             WorksheetNs,
             ConditionalFormattingChildren);
-        changed |= NormalizeExtensionLists(conditionalFormatting);
+        changed |= XlsxWorksheetExtensionListNormalizer.NormalizeChildren(conditionalFormatting);
 
         foreach (var rule in conditionalFormatting.Elements(WorksheetNs + "cfRule").ToList())
             changed |= NormalizeCfRule(rule);
@@ -78,11 +78,11 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(rule, CfRuleAttributes);
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(rule, WorksheetNs, CfRuleChildren);
-        changed |= RemoveDuplicateChildren(rule, "colorScale");
-        changed |= RemoveDuplicateChildren(rule, "dataBar");
-        changed |= RemoveDuplicateChildren(rule, "iconSet");
+        changed |= XlsxWorksheetExtensionListNormalizer.RemoveDuplicateChildren(rule, "colorScale");
+        changed |= XlsxWorksheetExtensionListNormalizer.RemoveDuplicateChildren(rule, "dataBar");
+        changed |= XlsxWorksheetExtensionListNormalizer.RemoveDuplicateChildren(rule, "iconSet");
         changed |= RemovePayloadExtensionLists(rule);
-        changed |= NormalizeExtensionLists(rule);
+        changed |= XlsxWorksheetExtensionListNormalizer.NormalizeChildren(rule);
         changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(rule, CfRuleChildOrder);
         return changed;
     }
@@ -110,52 +110,6 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
             extensionList.Remove();
 
         return true;
-    }
-
-    private static bool NormalizeExtensionLists(XElement parent)
-    {
-        var changed = false;
-        var keptExtensionList = false;
-        foreach (var extensionList in parent.Elements(WorksheetNs + "extLst").ToList())
-        {
-            if (keptExtensionList)
-            {
-                extensionList.Remove();
-                changed = true;
-                continue;
-            }
-
-            changed |= XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
-            if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
-            {
-                extensionList.Remove();
-                changed = true;
-                continue;
-            }
-
-            keptExtensionList = true;
-        }
-
-        return changed;
-    }
-
-    private static bool RemoveDuplicateChildren(XElement element, string localName)
-    {
-        var changed = false;
-        var seen = false;
-        foreach (var child in element.Elements(WorksheetNs + localName).ToList())
-        {
-            if (!seen)
-            {
-                seen = true;
-                continue;
-            }
-
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static int ConditionalFormattingChildOrder(XElement child) =>

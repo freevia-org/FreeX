@@ -73,59 +73,9 @@ internal static class XlsxWorksheetPhoneticPropertyMapper
 
             XlsxWorksheetPhoneticPropertyNormalizer.NormalizeElement(phoneticPr);
             if (phoneticPr.HasAttributes)
-                InsertPhoneticPropertyInOrder(root, workbookNs, phoneticPr);
+                XlsxWorksheetElementOrder.Insert(root, phoneticPr);
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
     }
 
-    private static void InsertPhoneticPropertyInOrder(
-        XElement worksheetRoot,
-        XNamespace workbookNs,
-        XElement phoneticPr)
-    {
-        string[] laterWorksheetElements =
-        [
-            "conditionalFormatting",
-            "dataValidations",
-            "hyperlinks",
-            "printOptions",
-            "pageMargins",
-            "pageSetup",
-            "headerFooter",
-            "rowBreaks",
-            "colBreaks",
-            "customProperties",
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace != workbookNs ||
-                !laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            insertionPoint = element;
-            break;
-        }
-
-        if (insertionPoint is null)
-            worksheetRoot.Add(phoneticPr);
-        else
-            insertionPoint.AddBeforeSelf(phoneticPr);
-    }
 }

@@ -124,27 +124,8 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
         var changed = false;
         var keptExtensionList = false;
         foreach (var extensionList in protectedRange.Elements(WorksheetNs + "extLst").ToList())
-            changed |= NormalizeExtensionListChild(extensionList, ref keptExtensionList);
+            changed |= XlsxWorksheetExtensionListNormalizer.NormalizeChild(extensionList, ref keptExtensionList);
 
-        return changed;
-    }
-
-    private static bool NormalizeExtensionListChild(XElement extensionList, ref bool keptExtensionList)
-    {
-        if (keptExtensionList)
-        {
-            extensionList.Remove();
-            return true;
-        }
-
-        var changed = XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
-        if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
-        {
-            extensionList.Remove();
-            return true;
-        }
-
-        keptExtensionList = true;
         return changed;
     }
 

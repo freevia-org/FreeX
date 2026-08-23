@@ -133,8 +133,8 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         var changed = false;
         changed |= RemoveUnknownAttributes(autoFilter, AutoFilterAttributes);
         changed |= RemoveChildElementsExcept(autoFilter, WorksheetNs, AutoFilterChildren);
-        changed |= RemoveDuplicateChildren(autoFilter, "sortState");
-        changed |= NormalizeExtensionLists(autoFilter);
+        changed |= XlsxWorksheetExtensionListNormalizer.RemoveDuplicateChildren(autoFilter, "sortState");
+        changed |= XlsxWorksheetExtensionListNormalizer.NormalizeChildren(autoFilter);
         changed |= NormalizeAttribute(autoFilter, "ref", NormalizeCellOrRangeReference);
 
         // ClosedXML dereferences autoFilter@ref unconditionally during load, so an
@@ -186,12 +186,12 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         var changed = false;
         changed |= RemoveUnknownAttributes(filterColumn, FilterColumnAttributes);
         changed |= RemoveChildElementsExcept(filterColumn, WorksheetNs, FilterColumnChildren);
-        changed |= RemoveDuplicateChildren(filterColumn, "filters");
-        changed |= RemoveDuplicateChildren(filterColumn, "top10");
-        changed |= RemoveDuplicateChildren(filterColumn, "customFilters");
-        changed |= RemoveDuplicateChildren(filterColumn, "dynamicFilter");
-        changed |= RemoveDuplicateChildren(filterColumn, "colorFilter");
-        changed |= RemoveDuplicateChildren(filterColumn, "iconFilter");
+        changed |= XlsxWorksheetExtensionListNormalizer.RemoveDuplicateChildren(filterColumn, "filters");
+        changed |= XlsxWorksheetExtensionListNormalizer.RemoveDuplicateChildren(filterColumn, "top10");
+        changed |= XlsxWorksheetExtensionListNormalizer.RemoveDuplicateChildren(filterColumn, "customFilters");
+        changed |= XlsxWorksheetExtensionListNormalizer.RemoveDuplicateChildren(filterColumn, "dynamicFilter");
+        changed |= XlsxWorksheetExtensionListNormalizer.RemoveDuplicateChildren(filterColumn, "colorFilter");
+        changed |= XlsxWorksheetExtensionListNormalizer.RemoveDuplicateChildren(filterColumn, "iconFilter");
         changed |= SetAttributeIfChanged(filterColumn, "colId", normalizedColumnId);
         changed |= NormalizeAttribute(filterColumn, "hiddenButton", NormalizeBoolean);
         changed |= NormalizeAttribute(filterColumn, "showButton", NormalizeBoolean);
@@ -336,52 +336,6 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         changed |= RemoveUnknownAttributes(iconFilter, IconFilterAttributes);
         changed |= SetAttributeIfChanged(iconFilter, "iconSet", normalizedIconSet);
         changed |= SetAttributeIfChanged(iconFilter, "iconId", normalizedIconId);
-        return changed;
-    }
-
-    private static bool NormalizeExtensionLists(XElement parent)
-    {
-        var changed = false;
-        var keptExtensionList = false;
-        foreach (var extensionList in parent.Elements(WorksheetNs + "extLst").ToList())
-        {
-            if (keptExtensionList)
-            {
-                extensionList.Remove();
-                changed = true;
-                continue;
-            }
-
-            changed |= XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
-            if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
-            {
-                extensionList.Remove();
-                changed = true;
-                continue;
-            }
-
-            keptExtensionList = true;
-        }
-
-        return changed;
-    }
-
-    private static bool RemoveDuplicateChildren(XElement element, string localName)
-    {
-        var changed = false;
-        var seen = false;
-        foreach (var child in element.Elements(WorksheetNs + localName).ToList())
-        {
-            if (!seen)
-            {
-                seen = true;
-                continue;
-            }
-
-            child.Remove();
-            changed = true;
-        }
-
         return changed;
     }
 

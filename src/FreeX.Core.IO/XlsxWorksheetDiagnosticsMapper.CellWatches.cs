@@ -110,7 +110,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                 cellWatches.Add(cellWatch);
             }
 
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, cellWatches);
+            XlsxWorksheetElementOrder.Insert(root, cellWatches);
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
@@ -133,9 +133,8 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             if (retainedUnsupported.Count == 0)
                 return false;
 
-            InsertWorksheetMetadataElementInOrder(
+            XlsxWorksheetElementOrder.Insert(
                 targetRoot,
-                workbookNs,
                 new XElement(workbookNs + "cellWatches", retainedUnsupported));
             return true;
         }

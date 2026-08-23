@@ -52,66 +52,9 @@ internal static class XlsxWorksheetCalculationPropertyMapper
 
             var sheetCalcPr = new XElement(workbookNs + "sheetCalcPr");
             sheetCalcPr.SetAttributeValue("fullCalcOnLoad", sheet.FullCalculationOnLoad ? "1" : null);
-            InsertCalculationPropertyInOrder(root, workbookNs, sheetCalcPr);
+            XlsxWorksheetElementOrder.Insert(root, sheetCalcPr);
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
     }
 
-    private static void InsertCalculationPropertyInOrder(
-        XElement worksheetRoot,
-        XNamespace workbookNs,
-        XElement sheetCalcPr)
-    {
-        string[] laterWorksheetElements =
-        [
-            "sheetProtection",
-            "protectedRanges",
-            "scenarios",
-            "autoFilter",
-            "sortState",
-            "dataConsolidate",
-            "customSheetViews",
-            "mergeCells",
-            "phoneticPr",
-            "conditionalFormatting",
-            "dataValidations",
-            "hyperlinks",
-            "printOptions",
-            "pageMargins",
-            "pageSetup",
-            "headerFooter",
-            "rowBreaks",
-            "colBreaks",
-            "customProperties",
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace == workbookNs &&
-                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
-            {
-                insertionPoint = element;
-                break;
-            }
-        }
-
-        if (insertionPoint is null)
-            worksheetRoot.Add(sheetCalcPr);
-        else
-            insertionPoint.AddBeforeSelf(sheetCalcPr);
-    }
 }

@@ -101,7 +101,7 @@ internal static class XlsxWorksheetScenarioMapper
                 continue;
 
             root.Element(workbookNs + "scenarios")?.Remove();
-            InsertScenariosInOrder(root, workbookNs, new XElement(
+            XlsxWorksheetElementOrder.Insert(root, new XElement(
                 workbookNs + "scenarios",
                 scenariosForSheet.Select(item =>
                 {
@@ -191,57 +191,4 @@ internal static class XlsxWorksheetScenarioMapper
         _ => string.Empty
     };
 
-    private static void InsertScenariosInOrder(XElement worksheetRoot, XNamespace workbookNs, XElement scenarios)
-    {
-        string[] laterWorksheetElements =
-        [
-            "autoFilter",
-            "sortState",
-            "dataConsolidate",
-            "customSheetViews",
-            "mergeCells",
-            "phoneticPr",
-            "conditionalFormatting",
-            "dataValidations",
-            "hyperlinks",
-            "printOptions",
-            "pageMargins",
-            "pageSetup",
-            "headerFooter",
-            "rowBreaks",
-            "colBreaks",
-            "customProperties",
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace != workbookNs ||
-                !laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            insertionPoint = element;
-            break;
-        }
-
-        if (insertionPoint is null)
-            worksheetRoot.Add(scenarios);
-        else
-            insertionPoint.AddBeforeSelf(scenarios);
-    }
 }

@@ -53,7 +53,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
             var root = worksheetEdit.Root;
             root.Element(worksheetNs + "autoFilter")?.Remove();
             if (ToAutoFilterXml(sheet.AutoFilter, worksheetNs, sheet.Id, colorFilterDxfIds) is { } autoFilter)
-                InsertAutoFilter(root, worksheetNs, autoFilter);
+        XlsxWorksheetElementOrder.Insert(root, autoFilter);
 
             session.MarkDirty(worksheetEdit);
         }
@@ -583,56 +583,5 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
 
     private static bool IsWorksheetAutoFilterModeledAttribute(XAttribute attribute, string localName) =>
         attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName == localName;
-
-    private static void InsertAutoFilter(XElement root, XNamespace worksheetNs, XElement autoFilter)
-    {
-        string[] laterWorksheetElements =
-        [
-            "sortState",
-            "dataConsolidate",
-            "customSheetViews",
-            "mergeCells",
-            "phoneticPr",
-            "conditionalFormatting",
-            "dataValidations",
-            "hyperlinks",
-            "printOptions",
-            "pageMargins",
-            "pageSetup",
-            "headerFooter",
-            "rowBreaks",
-            "colBreaks",
-            "customProperties",
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in root.Elements())
-        {
-            if (element.Name.Namespace == worksheetNs &&
-                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
-            {
-                insertionPoint = element;
-                break;
-            }
-        }
-
-        if (insertionPoint is not null)
-            insertionPoint.AddBeforeSelf(autoFilter);
-        else
-            root.Add(autoFilter);
-    }
 
 }

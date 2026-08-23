@@ -158,7 +158,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (!retained.HasAttributes && !retained.HasElements)
                 return false;
 
-            InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, retained);
+            XlsxWorksheetElementOrder.Insert(targetRoot, retained);
             return true;
         }
 
@@ -195,7 +195,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (!retained.HasAttributes && !retained.HasElements)
                 return false;
 
-            InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, retained);
+            XlsxWorksheetElementOrder.Insert(targetRoot, retained);
             return true;
         }
 
@@ -234,9 +234,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (retainedProperties.Count == 0)
                 return false;
 
-            InsertWorksheetMetadataElementInOrder(
+            XlsxWorksheetElementOrder.Insert(
                 targetRoot,
-                workbookNs,
                 new XElement(sourceCustomProperties.Name, sourceCustomProperties.Attributes(), retainedProperties));
             return true;
         }

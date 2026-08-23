@@ -16,7 +16,7 @@ internal static class XlsxWorksheetSortStateNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(sortState, WorksheetNs, SortStateChildren);
-        changed |= NormalizeExtensionLists(sortState);
+        changed |= XlsxWorksheetExtensionListNormalizer.NormalizeChildren(sortState);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "columnSort", XlsxXmlNormalizationHelpers.NormalizeBoolean);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "caseSensitive", XlsxXmlNormalizationHelpers.NormalizeBoolean);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "sortMethod", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidSortMethods));
@@ -59,33 +59,6 @@ internal static class XlsxWorksheetSortStateNormalizer
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
             }
         }
-    }
-
-    private static bool NormalizeExtensionLists(XElement parent)
-    {
-        var changed = false;
-        var keptExtensionList = false;
-        foreach (var extensionList in parent.Elements(WorksheetNs + "extLst").ToList())
-        {
-            if (keptExtensionList)
-            {
-                extensionList.Remove();
-                changed = true;
-                continue;
-            }
-
-            changed |= XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
-            if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
-            {
-                extensionList.Remove();
-                changed = true;
-                continue;
-            }
-
-            keptExtensionList = true;
-        }
-
-        return changed;
     }
 
     private static int SortStateChildOrder(XElement child) =>

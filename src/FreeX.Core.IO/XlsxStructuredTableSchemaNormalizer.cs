@@ -97,7 +97,7 @@ internal static class XlsxStructuredTableSchemaNormalizer
         if (tableStyleInfo is not null)
             changed |= NormalizeTableStyleInfoElement(tableStyleInfo);
 
-        changed |= NormalizeExtensionLists(table);
+        changed |= XlsxWorksheetExtensionListNormalizer.NormalizeChildren(table);
         changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(table, TableChildOrder);
         return changed;
     }
@@ -153,7 +153,7 @@ internal static class XlsxStructuredTableSchemaNormalizer
         foreach (var formula in tableColumn.Elements(WorksheetNs + "totalsRowFormula"))
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "array", XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
-        changed |= NormalizeExtensionLists(tableColumn);
+        changed |= XlsxWorksheetExtensionListNormalizer.NormalizeChildren(tableColumn);
         changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(tableColumn, TableColumnChildOrder);
         return changed;
     }
@@ -172,7 +172,7 @@ internal static class XlsxStructuredTableSchemaNormalizer
 
     private static bool NormalizeAutoFilterExtensionLists(XElement autoFilter)
     {
-        var changed = NormalizeExtensionLists(autoFilter);
+        var changed = XlsxWorksheetExtensionListNormalizer.NormalizeChildren(autoFilter);
 
         foreach (var filterColumn in autoFilter.Elements(WorksheetNs + "filterColumn"))
             changed |= RemoveExtensionLists(filterColumn);
@@ -185,39 +185,12 @@ internal static class XlsxStructuredTableSchemaNormalizer
 
     private static bool NormalizeSortStateExtensionLists(XElement sortState)
     {
-        var changed = NormalizeExtensionLists(sortState);
+        var changed = XlsxWorksheetExtensionListNormalizer.NormalizeChildren(sortState);
 
         foreach (var sortCondition in sortState.Elements(WorksheetNs + "sortCondition"))
-            changed |= NormalizeExtensionLists(sortCondition);
+            changed |= XlsxWorksheetExtensionListNormalizer.NormalizeChildren(sortCondition);
 
         changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(sortState, SortStateChildOrder);
-        return changed;
-    }
-
-    private static bool NormalizeExtensionLists(XElement parent)
-    {
-        var changed = false;
-        var keptExtensionList = false;
-        foreach (var extensionList in parent.Elements(WorksheetNs + "extLst").ToList())
-        {
-            if (keptExtensionList)
-            {
-                extensionList.Remove();
-                changed = true;
-                continue;
-            }
-
-            changed |= XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
-            if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
-            {
-                extensionList.Remove();
-                changed = true;
-                continue;
-            }
-
-            keptExtensionList = true;
-        }
-
         return changed;
     }
 
