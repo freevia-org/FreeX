@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-$acceptanceRefreshTestedSourceCommit = "cacb80a5c04d3f737808e700bb58cb7ac6d22541"
+$acceptanceRefreshTestedSourceCommit = "1bc64c7a5489fea5fafb536ec4a4fc69ceadf1e0"
 $acceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 $acceptanceRefreshAllowedPaths = @(
     "docs/parity/avalonia-parity-wave194-integration-20260824.md",
@@ -177,15 +177,15 @@ Assert-DashboardCondition ($dashboard.wave -eq 194) "Cross-app dashboard must de
 Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 582) "Wave194 cumulative app-slice count must be 582."
 Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "pending-final-integration-gates") "Wave194 app-slice count must remain pending until final integration gates pass."
 Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "pending") "Wave194 integration gates must remain pending until final results are recorded."
-Assert-DashboardCondition ((@($dashboard.pendingIntegrationGates) -join ",") -eq "final-independent-review,full-release-build,default-non-ui-test-lane,repository-preflight") "Wave194 pending integration gates must name the four final gates in order."
+Assert-DashboardCondition ((@($dashboard.pendingIntegrationGates) -join ",") -eq "default-non-ui-test-lane,repository-preflight") "Wave194 pending integration gates must retain only the default lane and repository preflight."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.testedSourceCommit -eq $acceptanceRefreshTestedSourceCommit) "Wave194 integration evidence must name tested source commit $acceptanceRefreshTestedSourceCommit."
 Assert-DashboardCondition ($null -eq $dashboard.integrationGateEvidence.PSObject.Properties["integrationHead"]) "Wave194 integration evidence must not use a recursive current-HEAD claim."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.acceptanceRefreshNote -eq $acceptanceRefreshNote) "Wave194 acceptance evidence must state that the acceptance-only documentation/tooling refresh does not alter tested source."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.initialIndependentReview -match "two P2 findings.*FreeX.*FreeP") "Wave194 initial independent-review findings must be recorded."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.reviewRemediation -match "one authoritative geometry contract.*schema v3.*complete PPTX") "Wave194 reviewer remediations must be recorded."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -eq "Pending: final independent re-review after both Wave194 remediations.") "Wave194 final independent review must remain pending."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -eq "Passed: final independent review found no findings; all prior Wave194 findings are closed, 20/10/2 FreeX artifact/reachable-provenance/validation hashes are verified, and FreeP and FreeW are clean.") "Wave194 final independent review evidence must be exact."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.repositoryPreflight -match "^Pending:") "Wave194 repository-preflight result must remain pending."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -match "^Pending:") "Wave194 Release-build result must remain pending."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors.") "Wave194 Release-build evidence must be exact."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.defaultNonUiTestLane -match "^Pending:") "Wave194 default-lane result must remain pending."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sourceTestRemediation -match "No Wave194 product/test source changes") "Wave194 source-test scope must be recorded."
 Assert-DashboardCondition ($dashboard.scopeBoundary -match "visual parity") "Cross-app dashboard scope boundary must retain the no-visual-parity claim."
@@ -303,7 +303,7 @@ Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave193Popup
 Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.wave193PopupTransitions.summary -match "popup-open 1905.*popup-dismissed 1905.*restoration 0") "FreeX Wave193 popup transition summary must retain open/dismiss/restoration details."
 Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.wave193PackageSemantics -match "SourcePatch.*no-row-delta") "FreeX Wave193 package semantics must retain SourcePatch/no-row-delta coverage."
 Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.physicalPassed -eq 1 -and $freeX.renderedEvidence.physicalEvidence.wave194.physicalTotal -eq 1) "FreeX Wave194 mixed-type physical lane must pass 1/1."
-Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.focusedAvaloniaGuardPassed -eq 8 -and $freeX.renderedEvidence.physicalEvidence.wave194.focusedAvaloniaGuardTotal -eq 8) "FreeX Wave194 Avalonia guards must be 8/8."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.focusedAvaloniaGuardPassed -eq 9 -and $freeX.renderedEvidence.physicalEvidence.wave194.focusedAvaloniaGuardTotal -eq 9) "FreeX Wave194 Avalonia guards must be 9/9."
 Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.focusedPresentationPassed -eq 1 -and $freeX.renderedEvidence.physicalEvidence.wave194.focusedPresentationTotal -eq 1) "FreeX Wave194 Presentation guards must be 1/1."
 Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.focusedCoreIoPassed -eq 2 -and $freeX.renderedEvidence.physicalEvidence.wave194.focusedCoreIoTotal -eq 2) "FreeX Wave194 Core.IO guards must be 2/2."
 Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.evidenceArtifactCount -eq 20 -and $freeX.renderedEvidence.physicalEvidence.wave194.evidenceArtifactExpectedCount -eq 20) "FreeX Wave194 evidence artifact count must be 20/20."

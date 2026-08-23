@@ -13,7 +13,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 # Keep acceptance evidence anchored to the source that was actually built and tested.
 # The generated docs are committed afterward, so deriving this from the current HEAD
 # would make the evidence self-referential and would change the claim on every refresh.
-$wave194TestedSourceCommit = "cacb80a5c04d3f737808e700bb58cb7ac6d22541"
+$wave194TestedSourceCommit = "1bc64c7a5489fea5fafb536ec4a4fc69ceadf1e0"
 $wave194AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 
 function Get-JsonPropertyValue {
@@ -406,8 +406,8 @@ try {
                 status = "passed"
                 physicalPassed = [int]$freeXWave194PhysicalResult.summary.passed
                 physicalTotal = [int]$freeXWave194PhysicalResult.summary.total
-                focusedAvaloniaGuardPassed = 8
-                focusedAvaloniaGuardTotal = 8
+                focusedAvaloniaGuardPassed = 9
+                focusedAvaloniaGuardTotal = 9
                 focusedPresentationPassed = 1
                 focusedPresentationTotal = 1
                 focusedCoreIoPassed = 2
@@ -865,9 +865,9 @@ try {
         acceptanceRefreshNote = $wave194AcceptanceRefreshNote
         initialIndependentReview = "Recorded: the initial independent review found two P2 findings: FreeX crop/readiness/transition and physical click geometry were duplicated instead of consuming one contract; FreeP topology evidence did not pin the complete source PPTX and initially over-attributed the residual."
         reviewRemediation = "Completed: FreeX now uses one authoritative geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved."
-        independentReview = "Pending: final independent re-review after both Wave194 remediations."
+        independentReview = "Passed: final independent review found no findings; all prior Wave194 findings are closed, 20/10/2 FreeX artifact/reachable-provenance/validation hashes are verified, and FreeP and FreeW are clean."
         repositoryPreflight = "Pending: final repository preflight result at tested source commit ${wave194TestedSourceCommit}."
-        fullReleaseBuild = "Pending: final dotnet build FreeX.slnx --configuration Release result at tested source commit ${wave194TestedSourceCommit}."
+        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors."
         defaultNonUiTestLane = "Pending: final default non-UI test lane result and authoritative project totals at tested source commit ${wave194TestedSourceCommit}."
         sourceTestRemediation = "No Wave194 product/test source changes are claimed by this acceptance refresh; app-slice focused results are recorded under each app and final integration gates remain pending."
     }
@@ -879,8 +879,6 @@ try {
         cumulativeAppSlicesStatus = "pending-final-integration-gates"
         integrationGateStatus = "pending"
         pendingIntegrationGates = @(
-            "final-independent-review",
-            "full-release-build",
             "default-non-ui-test-lane",
             "repository-preflight"
         )
