@@ -44,7 +44,7 @@ public sealed class ExcelAnsiCodecTests
     }
 
     [Fact]
-    public void FormulaAndAccessibilityCallers_AdoptSharedCodec()
+    public void FormulaOwnsExcelAnsiCodec_AndAccessibilityDelegatesFormulaEvaluation()
     {
         var root = FindRepositoryRoot();
         var formulaSource = File.ReadAllText(Path.Combine(
@@ -54,10 +54,9 @@ public sealed class ExcelAnsiCodecTests
 
         formulaSource.Should().Contain("ExcelAnsiCodec.Decode(code)");
         formulaSource.Should().Contain("ExcelAnsiCodec.Encode(text[0])");
-        accessibilitySource.Should().Contain("ExcelAnsiCodec.Decode(code)");
-        accessibilitySource.Should().Contain("ExcelAnsiCodec.Encode(text[0])");
+        accessibilitySource.Should().Contain("ConditionalFormatEvaluationSession");
+        accessibilitySource.Should().NotContain("ExcelAnsiCodec");
         formulaSource.Should().NotContain("ExcelAnsiCodeToChar");
-        accessibilitySource.Should().NotContain("FormulaExcelAnsiCodeToChar");
     }
 
     private static string FindRepositoryRoot()

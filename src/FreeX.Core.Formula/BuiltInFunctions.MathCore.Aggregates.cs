@@ -84,6 +84,20 @@ public static partial class BuiltInFunctions
         foreach (var arg in args)
         {
             if (arg is ErrorValue e) return e;
+            if (arg is ReferencedScalarValue referenced)
+            {
+                if (TryReferencedNumber(referenced, out var referencedNumber, out var referencedError))
+                {
+                    total += referencedNumber * referencedNumber;
+                    if (!double.IsFinite(total)) return ErrorValue.Num;
+                }
+                else if (referencedError is not null)
+                {
+                    return referencedError;
+                }
+
+                continue;
+            }
             if (arg is RangeValue range)
             {
                 foreach (var value in range.Flatten())

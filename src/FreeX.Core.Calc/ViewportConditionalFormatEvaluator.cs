@@ -209,14 +209,20 @@ internal static partial class ViewportConditionalFormatEvaluator
         null,
         new CfFormulaResultCache());
 
-    public static CfEvaluationContext BuildContext(Sheet sheet, Workbook workbook)
+    public static CfEvaluationContext BuildContext(Sheet sheet, Workbook workbook) =>
+        BuildContext(sheet, workbook, occupiedCells: null);
+
+    internal static CfEvaluationContext BuildContext(
+        Sheet sheet,
+        Workbook workbook,
+        IReadOnlyDictionary<(uint Row, uint Col), Cell>? occupiedCells)
     {
         if (sheet.ConditionalFormats.Count == 0)
             return EmptyContext;
 
         var rulesByPriority = CopyRulesByPriority(sheet.ConditionalFormats);
         var iconRulesByPriority = CopyIconRulesByPriority(rulesByPriority);
-        var aggregates = PrecomputeAggregates(sheet);
+        var aggregates = PrecomputeAggregates(sheet, occupiedCells);
         var thresholdFormulas = PrecomputeThresholdFormulaCaches(sheet);
         var staticThresholdFormulaValues = PrecomputeStaticThresholdFormulaValues(sheet, workbook, thresholdFormulas);
 
