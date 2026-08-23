@@ -73,6 +73,17 @@ public sealed partial class XlsxFileAdapter
     private static string CreatePatchValidationModelFingerprint(Workbook workbook)
         => CreateModelFingerprint(workbook, forPatchValidation: true);
 
+    private static string CreateWorksheetAutoFilterFingerprint(Workbook workbook)
+    {
+        using var hash = SHA256.Create();
+        using var cryptoStream = new CryptoStream(Stream.Null, hash, CryptoStreamMode.Write, leaveOpen: true);
+        using var stream = new BufferedStream(cryptoStream, bufferSize: 16 * 1024);
+        new NativeJsonAdapter().SaveWorksheetAutoFilterFingerprint(workbook, stream);
+        stream.Flush();
+        cryptoStream.FlushFinalBlock();
+        return Convert.ToHexString(hash.Hash ?? []);
+    }
+
     private static string CreateDrawingModelFingerprint(Workbook workbook)
     {
         using var hash = SHA256.Create();
@@ -1215,12 +1226,16 @@ public sealed partial class XlsxFileAdapter
                     PatchBlockReasonInvalidatesCalcChain(reason));
             }
 
+            var autoFilterMetadataChanged =
+                cellPatchBaseline.HasWorksheetAutoFilterChanges(workbook);
+
             if (changes.Count == 0 &&
                 dimensionChanges.Count == 0 &&
                 mergeRegionChanges.Count == 0 &&
                 hyperlinkChanges.Count == 0 &&
                 commentChanges.Count == 0 &&
-                worksheetViewChanges.Count == 0)
+                worksheetViewChanges.Count == 0 &&
+                !autoFilterMetadataChanged)
             {
                 CopyTo(stream);
                 diagnostics = XlsxSaveDiagnostics.SourceCopy("model_unchanged_after_patch_baseline");
@@ -1525,7 +1540,8 @@ public sealed partial class XlsxFileAdapter
                         hyperlinkChanges,
                         commentChanges,
                         worksheetViewChanges,
-                        patchedPatchValidationFingerprint),
+                        patchedPatchValidationFingerprint,
+                        CreateWorksheetAutoFilterFingerprint(workbook)),
                     preparedPackage.CellPatchBaselineBlockReason,
                     SourceHasCustomViews: workbook.CustomViews.Count > 0,
                     SourceNeedsPackageGraphNormalization: false,
@@ -6064,19 +6080,22 @@ public sealed partial class XlsxFileAdapter
         private readonly XlsxChartSourceRangeIndex _chartSourceRanges;
         private readonly XlsxPivotSourceRangeIndex _pivotSourceRanges;
         private readonly string _modelFingerprint;
+        private readonly string _worksheetAutoFilterFingerprint;
 
         private XlsxCellPatchBaseline(
             IReadOnlyList<XlsxWorksheetCellPatchBaseline> worksheets,
             IReadOnlyDictionary<StyleId, string?> sourceStyleIndexesByStyleId,
             XlsxChartSourceRangeIndex chartSourceRanges,
             XlsxPivotSourceRangeIndex pivotSourceRanges,
-            string modelFingerprint)
+            string modelFingerprint,
+            string worksheetAutoFilterFingerprint)
         {
             _worksheets = worksheets;
             _sourceStyleIndexesByStyleId = sourceStyleIndexesByStyleId;
             _chartSourceRanges = chartSourceRanges;
             _pivotSourceRanges = pivotSourceRanges;
             _modelFingerprint = modelFingerprint;
+            _worksheetAutoFilterFingerprint = worksheetAutoFilterFingerprint;
         }
 
         public static XlsxCellPatchBaseline? TryCreate(
@@ -6266,7 +6285,8 @@ public sealed partial class XlsxFileAdapter
                     sourceStyleIndexesByStyleId,
                     chartSourceRanges,
                     pivotSourceRanges,
-                    fingerprint);
+                    fingerprint,
+                    CreateWorksheetAutoFilterFingerprint(workbook));
             }
             catch
             {
@@ -6339,8 +6359,15 @@ public sealed partial class XlsxFileAdapter
                 _sourceStyleIndexesByStyleId,
                 _chartSourceRanges,
                 _pivotSourceRanges,
-                modelFingerprint);
+                modelFingerprint,
+                CreateWorksheetAutoFilterFingerprint(workbook));
         }
+
+        public bool HasWorksheetAutoFilterChanges(Workbook workbook) =>
+            !string.Equals(
+                _worksheetAutoFilterFingerprint,
+                CreateWorksheetAutoFilterFingerprint(workbook),
+                StringComparison.Ordinal);
 
         // R140-io-dynamic-array-spill-growth-1: total cell count (rows * cols) of the live spill
         // extent anchored at (row, col) on `sheet`, or 1 if that address is not currently the
@@ -6851,7 +6878,8 @@ public sealed partial class XlsxFileAdapter
             bool modelMatches;
             try
             {
-                if (ChangesOnlyExistingCells(
+                if (HasWorksheetAutoFilterChanges(workbook) ||
+                    ChangesOnlyExistingCells(
                         changes,
                         dimensionChanges,
                         mergeRegionChanges,
@@ -7850,7 +7878,8 @@ public sealed partial class XlsxFileAdapter
             IReadOnlyList<XlsxWorksheetHyperlinkPatch> hyperlinkChanges,
             IReadOnlyList<XlsxWorksheetCommentPatch> commentChanges,
             IReadOnlyList<XlsxWorksheetViewPatch> worksheetViewChanges,
-            string modelFingerprint)
+            string modelFingerprint,
+            string worksheetAutoFilterFingerprint)
         {
             if (changes.Count == 0 &&
                 dimensionChanges.Count == 0 &&
@@ -7864,7 +7893,8 @@ public sealed partial class XlsxFileAdapter
                     _sourceStyleIndexesByStyleId,
                     _chartSourceRanges,
                     _pivotSourceRanges,
-                    modelFingerprint);
+                    modelFingerprint,
+                    worksheetAutoFilterFingerprint);
             }
 
             var changesBySheet = changes
@@ -7926,7 +7956,8 @@ public sealed partial class XlsxFileAdapter
                 _sourceStyleIndexesByStyleId,
                 _chartSourceRanges,
                 _pivotSourceRanges,
-                modelFingerprint);
+                modelFingerprint,
+                worksheetAutoFilterFingerprint);
         }
 
         private bool ModelMatchesWithOriginalValues(

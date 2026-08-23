@@ -107,6 +107,68 @@ public sealed class Wave192AutoFilterColorPackageTests
         reloadedFilter.Color.Should().Be(new CellColor(0, 176, 80));
     }
 
+    [Fact]
+    public void LoadedWorkbook_AutoFilterCriterionChangeWithoutVisibilityDelta_UsesSourcePatch()
+    {
+        var sourceWorkbook = new Workbook("AutoFilterNoVisibilityDelta");
+        var sourceSheet = sourceWorkbook.AddSheet("Data");
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 1, 1), new TextValue("Category"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 2, 1), new TextValue("A"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 3, 1), new TextValue("B"));
+        sourceSheet.AutoFilter = new WorksheetAutoFilterModel("A1:A3", null);
+        sourceSheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["A", "B"],
+            IncludeBlank: false));
+
+        using var source = new MemoryStream();
+        new XlsxFileAdapter().Save(sourceWorkbook, source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+        var sheet = workbook.Sheets.Single();
+        sheet.FilterHiddenRows.Should().BeEmpty();
+        sheet.AutoFilter!.FilterColumns.Clear();
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["A", "B"],
+            IncludeBlank: true));
+        sheet.FilterHiddenRows.Should().BeEmpty("the fixture contains no blank values");
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(
+            XlsxSavePath.SourcePatch,
+            adapter.LastSaveDiagnostics.Reason);
+
+        saved.Position = 0;
+        using (var package = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var filters = LoadXml(package, "xl/worksheets/sheet1.xml").Root!
+                .Element(MainNs + "autoFilter")!
+                .Element(MainNs + "filterColumn")!
+                .Element(MainNs + "filters");
+            filters.Should().NotBeNull();
+            filters!.Attribute("blank")!.Value.Should().Be("1");
+            filters.Elements(MainNs + "filter")
+                .Select(filter => filter.Attribute("val")!.Value)
+                .Should()
+                .Equal("A", "B");
+        }
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        var reloadedColumn = reloaded.Sheets.Single().AutoFilter!.FilterColumns
+            .Should().ContainSingle().Subject;
+        reloadedColumn.IncludeBlank.Should().BeTrue();
+        reloadedColumn.Values.Should().Equal("A", "B");
+        reloaded.Sheets.Single().FilterHiddenRows.Should().BeEmpty();
+    }
+
     private static void AssertPackageSemantics(Stream stream, bool cellColor)
     {
         using var package = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);

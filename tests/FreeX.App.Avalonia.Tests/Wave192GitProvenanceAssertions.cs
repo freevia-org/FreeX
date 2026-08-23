@@ -21,14 +21,28 @@ internal static class Wave192GitProvenanceAssertions
         var integrationResultPath = integration.GetProperty("resultPath").GetString()!;
 
         integration.GetProperty("imageSourceCommit").GetString().Should().Be(imageRevision);
-        GitSucceeds(repositoryRoot, "cat-file", "-e", $"{imageRevision}^{{commit}}");
-        GitSucceeds(repositoryRoot, "cat-file", "-e", $"{integrationResultRevision}:{integrationResultPath}");
-        GitSucceeds(repositoryRoot, "cat-file", "-e", $"{integrationResultRevision}:{manifestPath}");
+        AssertGitObjectType(repositoryRoot, imageRevision, "commit");
+        AssertGitObjectType(repositoryRoot, integrationResultRevision, "commit");
+        GitSucceeds(repositoryRoot, "merge-base", "--is-ancestor", imageRevision, integrationResultRevision);
         GitSucceeds(repositoryRoot, "merge-base", "--is-ancestor", integrationSourceRevision, integrationResultRevision);
         GitSucceeds(repositoryRoot, "merge-base", "--is-ancestor", integrationEvidenceRevision, integrationResultRevision);
+        _ = ReadGitBlob(repositoryRoot, integrationResultRevision, integrationResultPath);
+        _ = ReadGitBlob(repositoryRoot, integrationResultRevision, manifestPath);
         Encoding.UTF8.GetString(ReadGitBlob(repositoryRoot, integrationResultRevision, integrationIndexPath))
             .Should()
             .Contain(manifestPath, "the integration index must make this evidence manifest reachable");
+
+        var manifestDirectory = manifestPath[..manifestPath.LastIndexOf('/')];
+        foreach (var artifact in manifest.GetProperty("files").EnumerateArray())
+        {
+            var relativePath = artifact.GetProperty("path").GetString()!;
+            var hashMode = artifact.GetProperty("hashMode").GetString()!;
+            var expected = artifact.GetProperty("sha256").GetString()!;
+            var resultPath = $"{manifestDirectory}/{relativePath}";
+            ComputeHash(ReadGitBlob(repositoryRoot, integrationResultRevision, resultPath), hashMode)
+                .Should()
+                .Be(expected, $"{resultPath} must be retained unchanged at the integration result");
+        }
 
         var audits = manifest.GetProperty("gitBlobAudit")
             .EnumerateArray()
@@ -55,8 +69,24 @@ internal static class Wave192GitProvenanceAssertions
         }
     }
 
-    private static byte[] ReadGitBlob(string repositoryRoot, string revision, string path) =>
-        RunGit(repositoryRoot, "cat-file", "blob", $"{revision}:{path}").Output;
+    private static byte[] ReadGitBlob(string repositoryRoot, string revision, string path)
+    {
+        var objectName = $"{revision}:{path}";
+        AssertGitObjectType(repositoryRoot, objectName, "blob");
+        var result = RunGit(repositoryRoot, "cat-file", "blob", objectName);
+        result.ExitCode.Should().Be(0, result.Error);
+        return result.Output;
+    }
+
+    private static void AssertGitObjectType(
+        string repositoryRoot,
+        string objectName,
+        string expectedType)
+    {
+        var result = RunGit(repositoryRoot, "cat-file", "-t", objectName);
+        result.ExitCode.Should().Be(0, result.Error);
+        Encoding.UTF8.GetString(result.Output).Trim().Should().Be(expectedType);
+    }
 
     private static void GitSucceeds(string repositoryRoot, params string[] arguments)
     {

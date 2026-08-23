@@ -460,8 +460,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("currentPatchValidationModelFingerprint ?? CreatePatchValidationModelFingerprint(workbook);");
         snapshotSource.Should().Contain("currentPatchValidationModelFingerprint = CreatePatchValidationModelFingerprint(workbook);");
         snapshotSource.Should().Contain("ChangesOnlyExistingCells(");
+        snapshotSource.Should().Contain("HasWorksheetAutoFilterChanges(workbook)");
+        snapshotSource.Should().Contain("CreateWorksheetAutoFilterFingerprint(workbook)");
         snapshotSource.Should().Contain("patchedSourceModelFingerprint,");
-        snapshotSource.Should().Contain("patchedPatchValidationFingerprint),");
+        snapshotSource.Should().Contain("patchedPatchValidationFingerprint,");
         snapshotSource.Should().Contain("CellPatchBaselineBlockReason,");
         snapshotSource.Should().Contain("SourceHasCustomViews: workbook.CustomViews.Count > 0,");
     }

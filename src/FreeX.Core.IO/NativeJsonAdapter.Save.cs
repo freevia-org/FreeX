@@ -22,6 +22,17 @@ public sealed partial class NativeJsonAdapter
     internal void SaveForPatchValidationFingerprint(Workbook workbook, Stream stream) =>
         Save(workbook, stream, includeCells: false, includeStyleOnlyCells: false, includeCellStyles: false, includeWorksheetFilterState: false);
 
+    internal void SaveWorksheetAutoFilterFingerprint(Workbook workbook, Stream stream)
+    {
+        SaveStreamPreparer.TruncateFromCurrentPosition(stream);
+        var filters = workbook.Sheets.Select(sheet => new
+        {
+            sheet.Name,
+            sheet.AutoFilter,
+        });
+        JsonSerializer.Serialize(stream, filters, SaveOptions);
+    }
+
     /// <summary>
     /// Returns the stored representation of a protection password for the .fxl format.
     /// <see cref="Sheet.ProtectionPassword"/>/<see cref="Workbook.StructureProtectionPassword"/>
