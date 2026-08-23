@@ -44,6 +44,81 @@ public sealed class TextDocumentStoryTraversalTests
     }
 
     [Fact]
+    public void EnumerateParagraphs_StorySubsetIncludesOnlyRequestedStoriesInCanonicalOrder()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("body"));
+        document.FinalSectionHeadersFooters.Header = new HeaderFooter("header");
+        document.FinalSectionHeadersFooters.Footer = new HeaderFooter("footer");
+        document.Footnotes[2] = new Footnote(2, "footnote");
+        document.Endnotes[3] = new Endnote(3, "endnote");
+
+        var paragraphs = TextDocumentStoryTraversal.EnumerateParagraphs(
+                document,
+                TextDocumentStorySubset.HeadersFooters | TextDocumentStorySubset.Endnotes,
+                TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs)
+            .ToList();
+
+        paragraphs.Select(paragraph => paragraph.PlainText).Should().Equal("header", "footer", "endnote");
+    }
+
+    [Fact]
+    public void EnumerateParagraphs_TraversalOptionsKeepNestedAndTextBoxReachIndependent()
+    {
+        var document = new TextDocument();
+        var body = new Paragraph("body");
+        body.Runs.Add(new Run(string.Empty)
+        {
+            Shape = new Shape { TextParagraphs = { new Paragraph("shape") } },
+        });
+        var group = new DrawingGroup();
+        group.Children.Add(new Shape { TextParagraphs = { new Paragraph("group") } });
+        body.Runs.Add(new Run(string.Empty) { DrawingGroup = group });
+        document.Blocks.Add(body);
+
+        var outer = Table.Create(1, 1);
+        outer.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("cell");
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("nested");
+        outer.Rows[0].Cells[0].NestedTables.Add(nested);
+        document.Blocks.Add(outer);
+
+        TextDocumentStoryTraversal.EnumerateParagraphs(
+                document,
+                TextDocumentStorySubset.Body,
+                TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
+                | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("body", "shape", "cell");
+
+        TextDocumentStoryTraversal.EnumerateParagraphs(
+                document,
+                TextDocumentStorySubset.Body,
+                TextDocumentStoryTraversalOptions.IncludeTextBoxes
+                | TextDocumentStoryTraversalOptions.IncludeNestedTables
+                | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("body", "shape", "group", "cell", "nested");
+    }
+
+    [Fact]
+    public void EnumerateParagraphs_SubsetTraversalIsDeferredAndStopsBeforeLaterStories()
+    {
+        var document = new TextDocument();
+        var body = new Paragraph("body");
+        document.Blocks.Add(body);
+        document.Footnotes[1] = null!;
+
+        var traversal = TextDocumentStoryTraversal.EnumerateParagraphs(
+            document,
+            TextDocumentStorySubset.All,
+            TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs);
+        document.Blocks.Insert(0, new Paragraph("inserted"));
+
+        traversal.Take(1).Should().Equal((Paragraph)document.Blocks[0]);
+    }
+
+    [Fact]
     public void EnumerateParagraphs_IncludeTextBoxes_UsesWriterExpansionOrder()
     {
         var document = new TextDocument();

@@ -259,40 +259,12 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
     /// lifetime (the document's paragraph structure does not change between them), so it doubles as the
     /// undo/redo lookup key in <see cref="_savedRuns"/>/<see cref="_savedBookmarkBoundaries"/>.
     /// </summary>
-    private static IEnumerable<Paragraph> EnumerateCommentAnchorParagraphs(TextDocument doc)
-    {
-        foreach (var paragraph in doc.Blocks.SelectMany(ParagraphsInBlock))
-            yield return paragraph;
-
-        foreach (var section in doc.Sections)
-        {
-            var headersFooters = section.HeadersFooters;
-            foreach (var headerFooter in new[]
-                     {
-                         headersFooters.Header,
-                         headersFooters.Footer,
-                         headersFooters.EvenHeader,
-                         headersFooters.EvenFooter,
-                         headersFooters.FirstHeader,
-                         headersFooters.FirstFooter,
-                     })
-            {
-                if (headerFooter is null)
-                    continue;
-
-                foreach (var paragraph in headerFooter.Paragraphs)
-                    yield return paragraph;
-            }
-        }
-
-        foreach (var footnote in doc.Footnotes.Values)
-            foreach (var paragraph in footnote.Content)
-                yield return paragraph;
-
-        foreach (var endnote in doc.Endnotes.Values)
-            foreach (var paragraph in endnote.Content)
-                yield return paragraph;
-    }
+    private static IEnumerable<Paragraph> EnumerateCommentAnchorParagraphs(TextDocument doc) =>
+        TextDocumentStoryTraversal.EnumerateParagraphs(
+            doc,
+            TextDocumentStorySubset.All,
+            TextDocumentStoryTraversalOptions.IncludeNestedTables
+            | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs);
 
     private static Run CloneRun(Run source) => new(source.Text, source.Formatting)
     {
@@ -305,29 +277,6 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
         IsPageBreak = source.IsPageBreak,
         IsColumnBreak = source.IsColumnBreak,
     };
-
-    public static IEnumerable<Paragraph> ParagraphsInBlock(Block block)
-    {
-        switch (block)
-        {
-            case Paragraph paragraph:
-                yield return paragraph;
-                break;
-            case Table table:
-                foreach (var row in table.Rows)
-                {
-                    foreach (var cell in row.Cells)
-                    {
-                        foreach (var cellParagraph in cell.Paragraphs)
-                            yield return cellParagraph;
-                        foreach (var nestedTable in cell.NestedTables)
-                            foreach (var nestedParagraph in ParagraphsInBlock(nestedTable))
-                                yield return nestedParagraph;
-                    }
-                }
-                break;
-        }
-    }
 
     public static int ResolveTopLevel(TextDocument doc, int commentId)
     {

@@ -212,7 +212,12 @@ public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
         }
 
         _paragraphRuns = [];
-        foreach (var paragraph in BodyParagraphWalk.Enumerate(document).Concat(EnumerateHeaderFooterParagraphs(document)))
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
+                     document,
+                     TextDocumentStorySubset.Body | TextDocumentStorySubset.HeadersFooters,
+                     TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
+                     | TextDocumentStoryTraversalOptions.IncludeNestedTables
+                     | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
         {
             if (!paragraph.Runs.Any(IsMarker))
                 continue;
@@ -246,38 +251,6 @@ public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
     private bool IsMarker(Run run) =>
         footnote ? run.FootnoteId == id : run.EndnoteId == id;
 
-    /// <summary>
-    /// Yields every paragraph in every header/footer of every document section (header, footer,
-    /// even/first variants), so a reference marker placed in a header or footer (Word allows footnote
-    /// and endnote references there) is found and removed alongside body/table markers. Without this,
-    /// deleting a note leaves a dangling superscript marker in the header or footer that no longer
-    /// resolves to any note content. Routed through <see cref="BodyParagraphWalk"/> so a marker inside a
-    /// text box (Run.Shape) embedded in a header/footer paragraph is reached too, the same way a marker
-    /// inside a body text box is.
-    /// </summary>
-    private static IEnumerable<Paragraph> EnumerateHeaderFooterParagraphs(TextDocument document)
-    {
-        foreach (var section in document.Sections)
-        {
-            var headersFooters = section.HeadersFooters;
-            foreach (var headerFooter in new[]
-                     {
-                         headersFooters.Header,
-                         headersFooters.Footer,
-                         headersFooters.EvenHeader,
-                         headersFooters.EvenFooter,
-                         headersFooters.FirstHeader,
-                         headersFooters.FirstFooter,
-                     })
-            {
-                if (headerFooter is null)
-                    continue;
-
-                foreach (var paragraph in BodyParagraphWalk.Enumerate(headerFooter.Paragraphs))
-                    yield return paragraph;
-            }
-        }
-    }
 }
 
 /// <summary>Updates footnote and endnote numbering settings as one undoable model edit.</summary>

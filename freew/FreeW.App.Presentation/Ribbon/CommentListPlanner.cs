@@ -118,40 +118,15 @@ public static class CommentListPlanner
 
     /// <summary>
     /// Every header/footer of every document section (default, even, and first-page slots), plus every
-    /// footnote's and endnote's own content paragraphs, in that order. Mirrors
-    /// <c>CommentCommands.EnumerateCommentAnchorParagraphs</c>'s identical out-of-body walk.
+    /// footnote's and endnote's own content paragraphs, in that order.
     /// </summary>
-    private static IEnumerable<Paragraph> OutOfBodyParagraphs(TextDocument document)
-    {
-        foreach (var section in document.Sections)
-        {
-            var headersFooters = section.HeadersFooters;
-            foreach (var headerFooter in new[]
-                     {
-                         headersFooters.Header,
-                         headersFooters.Footer,
-                         headersFooters.EvenHeader,
-                         headersFooters.EvenFooter,
-                         headersFooters.FirstHeader,
-                         headersFooters.FirstFooter,
-                     })
-            {
-                if (headerFooter is null)
-                    continue;
-
-                foreach (var paragraph in headerFooter.Paragraphs)
-                    yield return paragraph;
-            }
-        }
-
-        foreach (var footnote in document.Footnotes.Values)
-            foreach (var paragraph in footnote.Content)
-                yield return paragraph;
-
-        foreach (var endnote in document.Endnotes.Values)
-            foreach (var paragraph in endnote.Content)
-                yield return paragraph;
-    }
+    private static IEnumerable<Paragraph> OutOfBodyParagraphs(TextDocument document) =>
+        TextDocumentStoryTraversal.EnumerateParagraphs(
+            document,
+            TextDocumentStorySubset.HeadersFooters
+            | TextDocumentStorySubset.Footnotes
+            | TextDocumentStorySubset.Endnotes,
+            TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs);
 
     public static CommentListItem? SelectAdjacent(
         IReadOnlyList<CommentListItem> items,
