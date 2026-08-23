@@ -41,19 +41,25 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
     internal static void Save(
         XlsxWorksheetXmlEditSession session,
         Workbook workbook,
-        IReadOnlyDictionary<(SheetId, int), int>? colorFilterDxfIds = null)
+        IReadOnlyDictionary<(SheetId, int), int>? colorFilterDxfIds = null,
+        bool removeMissingAutoFilters = false)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.AutoFilter is not null))
+        foreach (var sheet in workbook.Sheets.Where(sheet =>
+                     removeMissingAutoFilters || sheet.AutoFilter is not null))
         {
             if (!session.TryGetWorksheet(sheet, out var worksheetEdit))
                 continue;
 
             var root = worksheetEdit.Root;
-            root.Element(worksheetNs + "autoFilter")?.Remove();
+            var existingAutoFilter = root.Element(worksheetNs + "autoFilter");
+            if (existingAutoFilter is null && sheet.AutoFilter is null)
+                continue;
+
+            existingAutoFilter?.Remove();
             if (ToAutoFilterXml(sheet.AutoFilter, worksheetNs, sheet.Id, colorFilterDxfIds) is { } autoFilter)
-        XlsxWorksheetElementOrder.Insert(root, autoFilter);
+                XlsxWorksheetElementOrder.Insert(root, autoFilter);
 
             session.MarkDirty(worksheetEdit);
         }

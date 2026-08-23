@@ -73,9 +73,7 @@ public sealed class Wave191AutoFilterColorPhysicalSourceTests
         VerifyHashes(
             manifest.RootElement.GetProperty("files"),
             path => Path.Combine(evidenceDirectory, path));
-        VerifyHashes(
-            manifest.RootElement.GetProperty("provenanceFiles"),
-            path => TestWorkspaceFileLocator.FindFromWorkspaceRoot(path.Split('/')));
+        Wave192GitProvenanceAssertions.Verify(manifest.RootElement);
 
         var attributes = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(".gitattributes");
         attributes.Should().Contain("tools/Run-FreeXLinuxInteractionValidation.ps1 text eol=lf");

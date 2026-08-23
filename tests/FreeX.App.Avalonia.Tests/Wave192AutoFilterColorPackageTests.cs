@@ -75,6 +75,9 @@ public sealed class Wave192AutoFilterColorPackageTests
         var adapter = new XlsxFileAdapter();
         using var source = File.OpenRead(fixturePath);
         var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
         var sheet = workbook.Sheets.Single();
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
@@ -89,6 +92,9 @@ public sealed class Wave192AutoFilterColorPackageTests
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(
+            XlsxSavePath.SourcePatch,
+            adapter.LastSaveDiagnostics.Reason);
         saved.Position = 0;
         AssertPackageSemantics(saved, cellColor);
 
