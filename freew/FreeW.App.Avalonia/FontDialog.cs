@@ -31,6 +31,12 @@ public sealed class FontDialog : FreeWDialogWindow
             ComboBoxHeight = 24,
             TabHeight = 20,
             ButtonHeight = 26,
+            // The WPF Font authority paints a 14 x 14 unchecked indicator at 96 DPI.
+            // Keep the shared template and make only this route's height correction local.
+            CheckBoxIndicatorHeight = 14,
+            CheckBoxIndicatorVerticalOffset = 1,
+            CheckBoxIndicatorTopLeftInsetBrush = new SolidColorBrush(Color.FromRgb(0xEB, 0xEB, 0xEB)),
+            CheckBoxIndicatorBottomRightInsetBrush = new SolidColorBrush(Color.FromRgb(0xF6, 0xF6, 0xF6)),
             ForegroundBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
             FocusedInputBorderBrush = new SolidColorBrush(Color.FromRgb(0x56, 0x9D, 0xE5)),
             // WPF's selected combo template uses the standard compact-dialog vertical

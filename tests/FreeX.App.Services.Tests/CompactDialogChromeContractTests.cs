@@ -156,7 +156,10 @@ public sealed class CompactDialogChromeContractTests
             "shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogFallbackStyles.cs");
 
         shared.Should().Contain("Width = CompactDialogVisualTokens.CheckBoxIndicatorWidth");
-        shared.Should().Contain("Height = CompactDialogVisualTokens.CheckBoxIndicatorHeight");
+        shared.Should().Contain("Height = style.CheckBoxIndicatorHeight");
+        shared.Should().Contain("style.CheckBoxIndicatorVerticalOffset");
+        shared.Should().Contain("style.CheckBoxIndicatorTopLeftInsetBrush");
+        shared.Should().Contain("style.CheckBoxIndicatorBottomRightInsetBrush");
         shared.Should().Contain("Converter = ObjectConverters.IsNull");
         shared.Should().Contain("Children = { checkMark, indeterminateMark }");
         shared.Should().Contain("CreateCompactCheckBoxTemplate(");

@@ -23,6 +23,10 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().Contain("FontDialogPlanner.NumberFormChoices");
         source.Should().Contain("FontDialogPlanner.NumberSpacingChoices");
         source.Should().Contain("private static readonly FontDialogSurfaceSpec Surface = FontDialogPlanner.Surface;");
+        source.Should().Contain("CheckBoxIndicatorHeight = 14");
+        source.Should().Contain("CheckBoxIndicatorVerticalOffset = 1");
+        source.Should().Contain("CheckBoxIndicatorTopLeftInsetBrush = new SolidColorBrush(Color.FromRgb(0xEB, 0xEB, 0xEB))");
+        source.Should().Contain("CheckBoxIndicatorBottomRightInsetBrush = new SolidColorBrush(Color.FromRgb(0xF6, 0xF6, 0xF6))");
         source.Should().Contain("foreach (var spec in Surface.Effects)");
         source.Should().Contain("state.EffectValue(spec.Kind)");
         source.Should().Contain("foreach (var kind in Surface.Tabs.First(");
