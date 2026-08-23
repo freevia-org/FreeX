@@ -269,6 +269,14 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("screen_changed \"$output/autofilter-recalculation-before.png\" \"$output/autofilter-recalculation-menu-open.png\"", probe, StringComparison.Ordinal);
         Assert.Contains("click_autofilter_control 75 347", probe, StringComparison.Ordinal);
         Assert.Contains("click_autofilter_control 292 391", probe, StringComparison.Ordinal);
+        Assert.Contains("autofilter-sort-ascending-descending-save-reopen-physical", probe, StringComparison.Ordinal);
+        Assert.Contains("autofilter-sort-ascending-descending-save-reopen-physical", runner, StringComparison.Ordinal);
+        Assert.Contains("autofilter-sort-persistence", runner, StringComparison.Ordinal);
+        Assert.Contains("package_sort_signature", probe, StringComparison.Ordinal);
+        Assert.Contains("descending=1", probe, StringComparison.Ordinal);
+        Assert.Contains("dialog_closed=false", probe, StringComparison.Ordinal);
+        Assert.Contains("screen_changed \"$output/autofilter-sort-before.png\" \"$output/autofilter-sort-ascending-menu-open.png\"", probe, StringComparison.Ordinal);
+        Assert.Contains("available_artifacts", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"sheet-tabs\"", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"name-box-dropdown-parity\"", probe, StringComparison.Ordinal);
         Assert.Contains("probe_outline_column_group_physical", probe, StringComparison.Ordinal);

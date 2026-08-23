@@ -1936,6 +1936,155 @@ probe_autofilter_recalculation() {
     fi
 }
 
+probe_autofilter_sort_persistence_physical() {
+    local artifacts="autofilter-sort-before.png;autofilter-sort-ascending-menu-open.png;autofilter-sort-ascending.png;autofilter-sort-reopened.png;autofilter-sort-descending-menu-open.png;autofilter-sort-descending.png;autofilter-sort-postcondition.txt"
+    local ascending_menu_open=false descending_menu_open=false save_clean=false dialog_open=false dialog_closed=false
+    local ascending_order="" reopened_order="" descending_order="" package_ascending="" package_descending=""
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "autofilter-sort-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path\n"
+        record "autofilter-sort-ascending-descending-save-reopen-physical" "failed" \
+            "autofilter-sort-postcondition.txt" \
+            "The physical AutoFilter sort persistence lane requires an XLSX document path." "$artifacts"
+        return
+    fi
+
+    read_sort_order() {
+        local first second third fourth
+        first="$(copy_cell_formula_by_address A2 || true)"
+        second="$(copy_cell_formula_by_address A3 || true)"
+        third="$(copy_cell_formula_by_address A4 || true)"
+        fourth="$(copy_cell_formula_by_address A5 || true)"
+        printf '%s,%s,%s,%s' "$first" "$second" "$third" "$fourth"
+    }
+
+    package_sort_signature() {
+        python3 - "$document_path" <<'PY'
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+try:
+    with zipfile.ZipFile(sys.argv[1]) as package:
+        root = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+    sort_state = root.find(main + "sortState")
+    if sort_state is None:
+        raise ValueError("missing sortState")
+    condition = sort_state.find(main + "sortCondition")
+    if condition is None:
+        raise ValueError("missing sortCondition")
+    shared = []
+    with zipfile.ZipFile(sys.argv[1]) as package:
+        try:
+            shared_root = ET.fromstring(package.read("xl/sharedStrings.xml"))
+            shared = ["".join(node.itertext()) for node in shared_root.findall(main + "si")]
+        except KeyError:
+            pass
+    values = {}
+    for cell in root.findall(".//" + main + "c"):
+        ref = cell.attrib.get("r", "")
+        text = cell.find(main + "is/" + main + "t")
+        value = text.text if text is not None else (cell.findtext(main + "v") or "")
+        if cell.attrib.get("t") == "s" and value.isdigit() and int(value) < len(shared):
+            value = shared[int(value)]
+        values[ref] = value
+    order = ",".join(values.get(f"A{row}", "") for row in range(2, 6))
+    descending = condition.attrib.get("descending", "")
+    print(f"ref={sort_state.attrib.get('ref','')}|condition={condition.attrib.get('ref','')}|descending={descending}|order={order}")
+except (OSError, KeyError, ET.ParseError, ValueError):
+    raise SystemExit(1)
+PY
+    }
+
+    capture "autofilter-sort-before.png"
+    select_cell 0 0 A1
+    open_autofilter_menu 0
+    capture "autofilter-sort-ascending-menu-open.png"
+    if screen_changed "$output/autofilter-sort-before.png" "$output/autofilter-sort-ascending-menu-open.png" 500; then
+        ascending_menu_open=true
+        # The first two production flyout commands are Sort A to Z and Sort Z to A.
+        click_autofilter_control 75 48
+        sleep "$settle_seconds"
+        ascending_order="$(read_sort_order)"
+        capture "autofilter-sort-ascending.png"
+    fi
+
+    if $ascending_menu_open && [[ "$ascending_order" == "East,North,South,West" ]]; then
+        send_key ctrl+s
+        wait_for_document_clean && save_clean=true
+        package_ascending="$(package_sort_signature || true)"
+    fi
+
+    # Reopen through the production Open route, then prove the saved ascending order is live state.
+    if $save_clean && [[ "$package_ascending" == *"ref=A2:B5|condition=A2:A5|descending=|order=East,North,South,West"* ]]; then
+        local before_windows after_windows
+        before_windows="$(visible_window_count)"
+        send_key ctrl+F12
+        for _ in $(seq 1 12); do
+            after_windows="$(visible_window_count)"
+            if (( after_windows > before_windows )); then dialog_open=true; break; fi
+            sleep 0.2
+        done
+        if $dialog_open; then
+            xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+            xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+            xdotool key --clearmodifiers Return
+            sleep "$settle_seconds"
+            xdotool key --clearmodifiers Return
+            for _ in $(seq 1 16); do
+                after_windows="$(visible_window_count)"
+                if (( after_windows <= before_windows )); then dialog_closed=true; break; fi
+                sleep 0.25
+            done
+        fi
+        if $dialog_closed; then
+            capture "autofilter-sort-reopened.png"
+            reopened_order="$(read_sort_order)"
+        fi
+    fi
+
+    # Use the same live worksheet after reopen to prove the reverse physical command and its saved state.
+    if [[ "$reopened_order" == "East,North,South,West" ]]; then
+        select_cell 0 0 A1
+        open_autofilter_menu 0
+        capture "autofilter-sort-descending-menu-open.png"
+        if screen_changed "$output/autofilter-sort-reopened.png" "$output/autofilter-sort-descending-menu-open.png" 500; then
+            descending_menu_open=true
+            click_autofilter_control 75 76
+            sleep "$settle_seconds"
+            descending_order="$(read_sort_order)"
+            capture "autofilter-sort-descending.png"
+            if [[ "$descending_order" == "West,South,North,East" ]]; then
+                send_key ctrl+s
+                wait_for_document_clean && package_descending="$(package_sort_signature || true)"
+            fi
+        fi
+    fi
+
+    local available_artifacts="autofilter-sort-postcondition.txt"
+    for artifact in ${artifacts//;/ }; do
+        if [[ -f "$output/$artifact" && "$artifact" != "autofilter-sort-postcondition.txt" ]]; then
+            available_artifacts="$available_artifacts;$artifact"
+        fi
+    done
+    write_artifact "autofilter-sort-postcondition.txt" \
+        "document-path=$document_path\nascending-menu-open=$ascending_menu_open\nascending-order=$ascending_order\nsave-clean=$save_clean\npackage-ascending=$package_ascending\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-order=$reopened_order\ndescending-menu-open=$descending_menu_open\ndescending-order=$descending_order\npackage-descending=$package_descending\n"
+    if $ascending_menu_open && $save_clean && $dialog_closed && $descending_menu_open && \
+       [[ "$ascending_order" == "East,North,South,West" && "$reopened_order" == "East,North,South,West" && \
+          "$descending_order" == "West,South,North,East" && \
+          "$package_ascending" == *"ref=A2:B5|condition=A2:A5|descending=|order=East,North,South,West"* && \
+          "$package_descending" == *"ref=A2:B5|condition=A2:A5|descending=1|order=West,South,North,East"* ]]; then
+        record "autofilter-sort-ascending-descending-save-reopen-physical" "passed" \
+            "autofilter-sort-before.png; autofilter-sort-ascending.png; autofilter-sort-reopened.png; autofilter-sort-descending.png; orders=$ascending_order->$reopened_order->$descending_order" \
+            "Physical AutoFilter Sort A to Z and Sort Z to A changed the full data-body order; Ctrl+S wrote worksheet sortState and the production Open route reopened the ascending order before the reverse sort." "$artifacts"
+    else
+        record "autofilter-sort-ascending-descending-save-reopen-physical" "failed" \
+            "$available_artifacts" \
+            "AutoFilter sort persistence was not fully proven: ascending-menu-open=$ascending_menu_open, save-clean=$save_clean, dialog-closed=$dialog_closed, descending-menu-open=$descending_menu_open, ascending='$ascending_order', reopened='$reopened_order', descending='$descending_order', package-ascending='$package_ascending', package-descending='$package_descending'." "$artifacts"
+    fi
+}
+
 sheet_tab_center_x() {
     local index="$1"
     if (( index == 0 )); then
@@ -5031,6 +5180,19 @@ if [[ "$probe_selector" == "outline-nested-save-reopen" ]]; then
     probe_outline_nested_save_reopen_physical
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the nested outline save/reopen probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '\"status\":\"failed\"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "autofilter-sort-persistence" ]]; then
+    # Focused Wave185 lane for physical AutoFilter ascending/descending sorting and XLSX reopen state.
+    probe_autofilter_sort_persistence_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the AutoFilter sort persistence probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '\"status\":\"failed\"' || true) > 0 )); then
