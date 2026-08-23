@@ -97,7 +97,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
                 // comment thread already sits at the destination rather than unioning with it.
                 if (targetSheet.ThreadedComments.TryGetValue(destination, out var oldThreaded))
                 {
-                    _previousThreaded[destination] = CloneThreadedComment(oldThreaded);
+                    _previousThreaded[destination] = ThreadedCommentCloner.Clone(oldThreaded, ThreadedCommentIdPolicy.Preserve);
                     targetSheet.ThreadedComments.Remove(destination);
                 }
 
@@ -145,9 +145,9 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
                 }
 
                 _previousThreaded[destination] = targetSheet.ThreadedComments.TryGetValue(destination, out var oldComment)
-                    ? CloneThreadedComment(oldComment)
+                    ? ThreadedCommentCloner.Clone(oldComment, ThreadedCommentIdPolicy.Preserve)
                     : null;
-                targetSheet.ThreadedComments[destination] = ClonedThreadedCommentForNewAddress(comment);
+                targetSheet.ThreadedComments[destination] = ThreadedCommentCloner.Clone(comment, ThreadedCommentIdPolicy.Reset);
                 affected.Add(destination);
             }
         }
@@ -174,7 +174,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             if (comment is null)
                 sheet.ThreadedComments.Remove(address);
             else
-                sheet.ThreadedComments[address] = CloneThreadedComment(comment);
+                sheet.ThreadedComments[address] = ThreadedCommentCloner.Clone(comment, ThreadedCommentIdPolicy.Preserve);
         }
 
         if (_previousAuthors is not null)
@@ -199,26 +199,6 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             }
         }
     }
-
-    private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
-        comment with { Replies = comment.Replies.ToList() };
-
-    // R80-io-comments-threaded-5-1: pasting a threaded comment onto a new destination cell must
-    // NOT carry over the source's persisted Id or reply Ids -- unlike CloneThreadedComment above
-    // (used only to snapshot/restore a cell's own pre-existing comment in place for undo), this
-    // creates a brand-new, independent thread at the destination. Otherwise the pasted thread's
-    // root serializes with the identical <threadedComment id="..."> as the source
-    // (XlsxWorksheetThreadedCommentMapper.ToThreadedCommentElements reuses comment.Id verbatim),
-    // and reply lookup on reload (grouped globally by parentId string, not scoped per cell)
-    // attaches the source's replies to the pasted thread too. Clearing Id (and each reply's Id)
-    // forces the writer to mint a fresh, address-derived stable guid for the pasted thread
-    // instead. Mirrors CopyRangeCommand.ClonedThreadedCommentForNewAddress.
-    private static ThreadedComment ClonedThreadedCommentForNewAddress(ThreadedComment comment) =>
-        comment with
-        {
-            Id = null,
-            Replies = comment.Replies.Select(reply => reply with { Id = null }).ToList(),
-        };
 
     // R78-commands-paste-special-5-3: when _sourceAreas records a multi-area (Ctrl+click) source,
     // only cells that fall inside one of the ACTUAL copied areas count as "copied" -- a comment

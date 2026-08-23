@@ -28,6 +28,16 @@ public enum TextDocumentStorySubset
 /// </summary>
 public static class TextDocumentStoryTraversal
 {
+    public static IEnumerable<Paragraph> EnumerateBlockParagraphs(
+        IEnumerable<Block> blocks,
+        TextDocumentStoryTraversalOptions options = TextDocumentStoryTraversalOptions.None)
+    {
+        ArgumentNullException.ThrowIfNull(blocks);
+        foreach (var block in blocks)
+            foreach (var paragraph in EnumerateBlockParagraphsCore(block, options))
+                yield return paragraph;
+    }
+
     public static IEnumerable<Paragraph> EnumerateParagraphs(
         TextDocument document,
         IEnumerable<Paragraph> commentParagraphs,
@@ -70,7 +80,7 @@ public static class TextDocumentStoryTraversal
         if (stories.HasFlag(TextDocumentStorySubset.Body))
         {
             foreach (var block in document.Blocks)
-                foreach (var paragraph in EnumerateBlockParagraphs(block, options))
+                foreach (var paragraph in EnumerateBlockParagraphsCore(block, options))
                     foreach (var item in ExpandParagraph(paragraph, options))
                         yield return item;
         }
@@ -121,7 +131,7 @@ public static class TextDocumentStoryTraversal
             yield return firstFooter;
     }
 
-    private static IEnumerable<Paragraph> EnumerateBlockParagraphs(
+    private static IEnumerable<Paragraph> EnumerateBlockParagraphsCore(
         Block block,
         TextDocumentStoryTraversalOptions options)
     {
@@ -143,7 +153,7 @@ public static class TextDocumentStoryTraversal
                 if (options.HasFlag(TextDocumentStoryTraversalOptions.IncludeNestedTables))
                 {
                     foreach (var nestedTable in cell.NestedTables)
-                        foreach (var nestedParagraph in EnumerateBlockParagraphs(nestedTable, options))
+                        foreach (var nestedParagraph in EnumerateBlockParagraphsCore(nestedTable, options))
                             yield return nestedParagraph;
                 }
             }

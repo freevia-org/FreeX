@@ -2007,31 +2007,7 @@ public static class ExternalRichTextClipboardPlanner
             TableCell cell,
             InCanvasRichClipboardTableCellStyle style)
         {
-            if (style.FillPattern is { Length: > 0 } pattern)
-            {
-                cell.Fill = new ShapeFill.Pattern(
-                    pattern,
-                    new ThemeAwareColor(SrgbColor.FromRgb(style.FillForegroundRgb ?? style.FillRgb ?? 0)),
-                    new ThemeAwareColor(SrgbColor.FromRgb(style.FillBackgroundRgb ?? style.FillRgb ?? 0xFFFFFF)));
-            }
-            else if (style.FillRgb is { } fillRgb)
-            {
-                cell.Fill = new ShapeFill.Solid(SrgbColor.FromRgb(fillRgb));
-            }
-
-            cell.Anchor = style.Anchor;
-            if (style.TextVerticalType is { } textVerticalType && cell.TextBody is { } body)
-                body.VerticalType = textVerticalType;
-            cell.InsetLeftPt = style.InsetLeftPt;
-            cell.InsetRightPt = style.InsetRightPt;
-            cell.InsetTopPt = style.InsetTopPt;
-            cell.InsetBottomPt = style.InsetBottomPt;
-            cell.HMerge = style.HorizontalMergeContinuation;
-            cell.VMerge = style.VerticalMergeContinuation;
-            if (style.HorizontalMergeStart)
-                cell.GridSpan = 2;
-            if (style.VerticalMergeStart)
-                cell.RowSpan = 2;
+            ClipboardTableCellStylePolicy.ApplyCore(cell, style);
 
             cell.Borders = new TableCellBorders
             {

@@ -202,7 +202,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
                     sheet.ShownComments.Add(target);
 
                 if (_threadedCommentSnapshot.TryGetValue(source, out var threadedComment))
-                    sheet.ThreadedComments[target] = CloneThreadedComment(threadedComment);
+                    sheet.ThreadedComments[target] = ThreadedCommentCloner.Clone(threadedComment, ThreadedCommentIdPolicy.Preserve);
 
                 // Hyperlinks
                 if (_hyperlinkSnapshot.TryGetValue(source, out var hyperlink))
@@ -523,9 +523,6 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
         foreach (var address in snapshot)
             target.Add(address);
     }
-
-    private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
-        comment with { Replies = comment.Replies.Select(reply => reply with { }).ToList() };
 
     private sealed record CellSnapshot(CellAddress Address, Cell? Cell, StyleId? StyleOnly);
 }

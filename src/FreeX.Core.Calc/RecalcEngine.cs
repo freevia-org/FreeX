@@ -2928,7 +2928,7 @@ public sealed class RecalcEngine
 
             case FunctionCallNode func:
             {
-                var containsVolatileFunction = IsVolatileFunctionName(func.FunctionName) && !IsNonVolatileCellOrInfoCall(func);
+                var containsVolatileFunction = FormulaVolatilityPolicy.IsVolatileCall(func);
                 var arguments = func.Arguments;
                 for (var i = 0; i < arguments.Count; i++)
                 {
@@ -2949,33 +2949,6 @@ public sealed class RecalcEngine
     // self-reference guard, re-declared here since the two projects share no InternalsVisibleTo.
     // Only the node kinds ShiftFormulaForCell actually rewrites are inspected; this is
     // intentionally narrow (not a full reference-tracking pass) to match that guard's purpose.
-    private static bool IsVolatileFunctionName(string name) =>
-        name is "NOW" or "TODAY" or "RAND" or "RANDBETWEEN" or "RANDARRAY" or "INDIRECT" or "OFFSET" or "CELL" or "INFO";
-
-    // CELL and INFO are only SOMETIMES volatile in Excel: CELL("width", ...) reports static layout
-    // metadata (not live state) so it never needs to recalc on unrelated edits, and INFO(...) is
-    // non-volatile for a fixed set of constant info-types (directory/numfile/origin/osversion/recalc/
-    // release/system) that don't change without an explicit recalc trigger elsewhere. When the first
-    // argument isn't a compile-time constant string (e.g. a cell reference or nested expression) we
-    // can't tell which case Excel would apply, so we conservatively leave the call volatile, same as
-    // every other name in IsVolatileFunctionName.
-    private static bool IsNonVolatileCellOrInfoCall(FunctionCallNode func)
-    {
-        if (func.Arguments.Count == 0 || func.Arguments[0] is not StringNode { Value: var infoTypeArg })
-            return false;
-
-        var infoType = infoTypeArg.Trim();
-        return func.FunctionName switch
-        {
-            "CELL" => string.Equals(infoType, "width", StringComparison.OrdinalIgnoreCase),
-            "INFO" => NonVolatileInfoTypes.Contains(infoType.ToLowerInvariant()),
-            _ => false,
-        };
-    }
-
-    private static readonly HashSet<string> NonVolatileInfoTypes =
-        ["directory", "numfile", "origin", "osversion", "recalc", "release", "system"];
-
     /// <summary>
     /// Resolves an ANCHORARRAY anchor argument to the concrete (sheet, row, col) cell it points at,
     /// for dependency-registration purposes. Mirrors TryResolveAnchorAddress in

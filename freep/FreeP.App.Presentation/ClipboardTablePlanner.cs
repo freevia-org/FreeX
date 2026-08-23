@@ -85,31 +85,7 @@ public static class ClipboardTablePlanner
         TableCell cell,
         InCanvasRichClipboardTableCellStyle style)
     {
-        if (style.FillPattern is { Length: > 0 } pattern)
-        {
-            var foreground = new ThemeAwareColor(SrgbColor.FromRgb(
-                style.FillForegroundRgb ?? style.FillRgb ?? 0));
-            var background = new ThemeAwareColor(SrgbColor.FromRgb(
-                style.FillBackgroundRgb ?? style.FillRgb ?? 0xFFFFFF));
-            cell.Fill = new ShapeFill.Pattern(pattern, foreground, background);
-        }
-        else if (style.FillRgb is { } fillRgb)
-        {
-            cell.Fill = new ShapeFill.Solid(SrgbColor.FromRgb(fillRgb));
-        }
-        cell.Anchor = style.Anchor;
-        if (style.TextVerticalType is { } textVerticalType && cell.TextBody is { } body)
-            body.VerticalType = textVerticalType;
-        cell.InsetLeftPt = style.InsetLeftPt;
-        cell.InsetRightPt = style.InsetRightPt;
-        cell.InsetTopPt = style.InsetTopPt;
-        cell.InsetBottomPt = style.InsetBottomPt;
-        cell.HMerge = style.HorizontalMergeContinuation;
-        cell.VMerge = style.VerticalMergeContinuation;
-        if (style.HorizontalMergeStart)
-            cell.GridSpan = 2;
-        if (style.VerticalMergeStart)
-            cell.RowSpan = 2;
+        ClipboardTableCellStylePolicy.ApplyCore(cell, style);
 
         TableCellBorders? borders = null;
         borders = AssignBorder(borders, style.Left, TableCellBorderSide.Left);

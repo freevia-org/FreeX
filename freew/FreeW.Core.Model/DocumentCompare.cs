@@ -829,37 +829,9 @@ public static class DocumentCompare
         string? dateXml,
         CompareSettings settings)
     {
-        target.DefaultRun = source.DefaultRun;
-        target.DefaultParagraph = source.DefaultParagraph;
+        DocumentModelCloner.CopyShellBase(source, target);
         target.DoNotTrackMoves = source.DoNotTrackMoves;
         target.DoNotTrackFormatting = source.DoNotTrackFormatting;
-        target.DoNotAutoCompressPictures = source.DoNotAutoCompressPictures;
-        target.EmbedSystemFonts = source.EmbedSystemFonts;
-        target.SaveSubsetFonts = source.SaveSubsetFonts;
-        target.PageBordersDoNotSurroundHeader = source.PageBordersDoNotSurroundHeader;
-        target.PageBordersDoNotSurroundFooter = source.PageBordersDoNotSurroundFooter;
-        foreach (var (id, style) in source.Styles)
-            target.Styles[id] = style;
-
-        target.Page.WidthPt = source.Page.WidthPt;
-        target.Page.HeightPt = source.Page.HeightPt;
-        target.Page.MarginLeftPt = source.Page.MarginLeftPt;
-        target.Page.MarginRightPt = source.Page.MarginRightPt;
-        target.Page.MarginTopPt = source.Page.MarginTopPt;
-        target.Page.MarginBottomPt = source.Page.MarginBottomPt;
-        target.Page.Landscape = source.Page.Landscape;
-        target.Page.ColumnCount = source.Page.ColumnCount;
-        target.Page.ColumnSpacingPt = source.Page.ColumnSpacingPt;
-        target.Page.ColumnsLineBetween = source.Page.ColumnsLineBetween;
-        target.Page.ColumnWidthsPt = source.Page.ColumnWidthsPt is null ? null : new List<double>(source.Page.ColumnWidthsPt);
-        target.Page.PageBorder = source.Page.PageBorder;
-        target.Page.Watermark = source.Page.Watermark;
-        target.Page.LineNumberMode = source.Page.LineNumberMode;
-        target.Page.LineNumberCountBy = source.Page.LineNumberCountBy;
-        target.Page.LineNumberStartAt = source.Page.LineNumberStartAt;
-        target.Page.AutoHyphenation = source.Page.AutoHyphenation;
-        target.Page.VerticalAlignment = source.Page.VerticalAlignment;
-        target.Page.DifferentFirstPage = source.Page.DifferentFirstPage;
         foreach (var (id, comment) in source.Comments)
             target.Comments[id] = CloneComment(comment);
 
@@ -945,7 +917,7 @@ public static class DocumentCompare
         TextDocument result,
         bool includeDeletedComments)
     {
-        var deletedCommentIds = EnumerateParagraphs(result.Blocks)
+        var deletedCommentIds = TextDocumentStoryTraversal.EnumerateBlockParagraphs(result.Blocks)
             .SelectMany(paragraph => paragraph.Runs)
             .Where(run => run.Revision == RevisionKind.Deleted && run.CommentId is not null)
             .Select(run => run.CommentId!.Value)
@@ -1015,7 +987,7 @@ public static class DocumentCompare
         var usedFootnoteIds = result.Footnotes.Keys.ToHashSet();
         var usedEndnoteIds = result.Endnotes.Keys.ToHashSet();
 
-        foreach (var paragraph in EnumerateParagraphs(result.Blocks))
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateBlockParagraphs(result.Blocks))
         foreach (var run in paragraph.Runs)
         {
             if (run.Revision != RevisionKind.Deleted)
@@ -1049,7 +1021,7 @@ public static class DocumentCompare
         if (footnoteIdMap.Count == 0 && endnoteIdMap.Count == 0)
             return;
 
-        foreach (var paragraph in EnumerateParagraphs(result.Blocks))
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateBlockParagraphs(result.Blocks))
         foreach (var run in paragraph.Runs)
         {
             if (run.Revision != RevisionKind.Deleted)
@@ -1289,7 +1261,7 @@ public static class DocumentCompare
 
     private static void RemapDeletedCommentMarkers(TextDocument document, int oldId, int newId)
     {
-        foreach (var paragraph in EnumerateParagraphs(document.Blocks))
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateBlockParagraphs(document.Blocks))
         foreach (var run in paragraph.Runs)
             if (run.Revision == RevisionKind.Deleted && run.CommentId == oldId)
                 run.CommentId = newId;
@@ -1297,7 +1269,7 @@ public static class DocumentCompare
 
     private static void RemoveDeletedCommentMarkers(TextDocument document, int commentId)
     {
-        foreach (var paragraph in EnumerateParagraphs(document.Blocks))
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateBlockParagraphs(document.Blocks))
         {
             for (var index = paragraph.Runs.Count - 1; index >= 0; index--)
             {
@@ -1310,25 +1282,6 @@ public static class DocumentCompare
                 else
                     run.CommentId = null;
             }
-        }
-    }
-
-    private static IEnumerable<Paragraph> EnumerateParagraphs(IEnumerable<Block> blocks)
-    {
-        foreach (var block in blocks)
-        {
-            if (block is Paragraph paragraph)
-            {
-                yield return paragraph;
-                continue;
-            }
-
-            if (block is not Table table)
-                continue;
-
-            foreach (var cell in table.Rows.SelectMany(row => row.Cells))
-            foreach (var cellParagraph in cell.Paragraphs)
-                yield return cellParagraph;
         }
     }
 

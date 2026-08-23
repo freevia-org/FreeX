@@ -36,24 +36,6 @@ public static class CellBorderVisualPlanner
     private static readonly IReadOnlyList<double> DashDot = Array.AsReadOnly([2.0, 2.0, 1.0, 2.0]);
     private static readonly IReadOnlyList<double> DashDotDot = Array.AsReadOnly([2.0, 2.0, 1.0, 2.0, 1.0, 2.0]);
 
-    private static readonly BorderStyle[] BorderEdgePrecedence =
-    [
-        BorderStyle.Double,
-        BorderStyle.Thick,
-        BorderStyle.Medium,
-        BorderStyle.MediumDashDotDot,
-        BorderStyle.MediumDashDot,
-        BorderStyle.MediumDashed,
-        BorderStyle.SlantDashDot,
-        BorderStyle.Thin,
-        BorderStyle.DashDotDot,
-        BorderStyle.DashDot,
-        BorderStyle.Dashed,
-        BorderStyle.Dotted,
-        BorderStyle.Hair,
-        BorderStyle.None,
-    ];
-
     public static CellBorderStrokePlan Plan(BorderStyle style)
     {
         var thickness = style switch
@@ -88,15 +70,8 @@ public static class CellBorderVisualPlanner
         return new CellBorderStrokePlan(thickness, dashPattern, dashArray, style == BorderStyle.Double);
     }
 
-    public static CellBorder ResolveEdgeWinner(CellBorder mine, CellBorder neighbor)
-    {
-        if (mine.Style == BorderStyle.None)
-            return neighbor;
-        if (neighbor.Style == BorderStyle.None)
-            return mine;
-
-        return GetPrecedenceRank(mine.Style) <= GetPrecedenceRank(neighbor.Style) ? mine : neighbor;
-    }
+    public static CellBorder ResolveEdgeWinner(CellBorder mine, CellBorder neighbor) =>
+        BorderStylePrecedence.ResolveWinner(mine, neighbor);
 
     public static CellBorderDoubleEdgePlan PlanDoubleEdge(
         double x1,
@@ -158,9 +133,4 @@ public static class CellBorderVisualPlanner
         CellBorderLinePrimitive second) =>
         new(first, second, HasSecond: true);
 
-    private static int GetPrecedenceRank(BorderStyle style)
-    {
-        var index = Array.IndexOf(BorderEdgePrecedence, style);
-        return index < 0 ? BorderEdgePrecedence.Length : index;
-    }
 }

@@ -443,7 +443,7 @@ public static class DocumentMerge
     private static HashSet<string> BookmarkNamesIn(TextDocument document)
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var paragraph in EnumerateParagraphs(document.Blocks).Concat(EnumerateAnnotationParagraphs(document)))
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateBlockParagraphs(document.Blocks).Concat(EnumerateAnnotationParagraphs(document)))
             foreach (var name in paragraph.BookmarkNames)
                 if (!string.IsNullOrEmpty(name))
                     names.Add(name);
@@ -520,7 +520,7 @@ public static class DocumentMerge
         TextDocument source,
         IReadOnlyList<Block> clones)
     {
-        var paragraphs = EnumerateParagraphs(clones).ToList();
+        var paragraphs = TextDocumentStoryTraversal.EnumerateBlockParagraphs(clones).ToList();
         var footnoteIds = new Dictionary<int, int>();
         var endnoteIds = new Dictionary<int, int>();
         var commentIds = new Dictionary<int, int>();
@@ -732,24 +732,6 @@ public static class DocumentMerge
                 BlockContentControl = altChunk.BlockContentControl,
                 BlockCustomXml = altChunk.BlockCustomXml
             };
-        }
-    }
-
-    private static IEnumerable<Paragraph> EnumerateParagraphs(IEnumerable<Block> blocks)
-    {
-        foreach (var block in blocks)
-        {
-            if (block is Paragraph paragraph)
-            {
-                yield return paragraph;
-                continue;
-            }
-
-            if (block is not Table table)
-                continue;
-            foreach (var cell in table.Rows.SelectMany(row => row.Cells))
-                foreach (var cellParagraph in cell.Paragraphs)
-                    yield return cellParagraph;
         }
     }
 

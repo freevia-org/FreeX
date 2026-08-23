@@ -721,8 +721,8 @@ public sealed partial class ViewportService : IViewportService
         {
             if (GetRawCellStyleForBorderMigration(workbook, sheet, r, col, ref styleCache) is { } hiddenStyle)
             {
-                winner = ResolveHeavierBorder(winner, hiddenStyle.BorderTop);
-                winner = ResolveHeavierBorder(winner, hiddenStyle.BorderBottom);
+                winner = BorderStylePrecedence.ResolveWinner(winner, hiddenStyle.BorderTop);
+                winner = BorderStylePrecedence.ResolveWinner(winner, hiddenStyle.BorderBottom);
             }
 
             var next = (long)r + rowStep;
@@ -736,7 +736,7 @@ public sealed partial class ViewportService : IViewportService
         if (GetRawCellStyleForBorderMigration(workbook, sheet, r, col, ref styleCache) is { } farStyle)
         {
             var farFacing = rowStep < 0 ? farStyle.BorderBottom : farStyle.BorderTop;
-            winner = ResolveHeavierBorder(winner, farFacing);
+            winner = BorderStylePrecedence.ResolveWinner(winner, farFacing);
         }
 
         return winner;
@@ -756,8 +756,8 @@ public sealed partial class ViewportService : IViewportService
         {
             if (GetRawCellStyleForBorderMigration(workbook, sheet, row, c, ref styleCache) is { } hiddenStyle)
             {
-                winner = ResolveHeavierBorder(winner, hiddenStyle.BorderLeft);
-                winner = ResolveHeavierBorder(winner, hiddenStyle.BorderRight);
+                winner = BorderStylePrecedence.ResolveWinner(winner, hiddenStyle.BorderLeft);
+                winner = BorderStylePrecedence.ResolveWinner(winner, hiddenStyle.BorderRight);
             }
 
             var next = (long)c + colStep;
@@ -769,7 +769,7 @@ public sealed partial class ViewportService : IViewportService
         if (GetRawCellStyleForBorderMigration(workbook, sheet, row, c, ref styleCache) is { } farStyle)
         {
             var farFacing = colStep < 0 ? farStyle.BorderRight : farStyle.BorderLeft;
-            winner = ResolveHeavierBorder(winner, farFacing);
+            winner = BorderStylePrecedence.ResolveWinner(winner, farFacing);
         }
 
         return winner;
@@ -789,39 +789,6 @@ public sealed partial class ViewportService : IViewportService
 
         var styleOnlyId = sheet.GetStyleOnly(row, col);
         return styleOnlyId.HasValue ? styleCache.Get(workbook, styleOnlyId.Value) : null;
-    }
-
-    // Ranked heaviest/most-prominent first, mirroring GridView.Rendering's BorderEdgePrecedence —
-    // kept as an independent copy here since Core.Calc cannot reference the App.UI renderer.
-    private static readonly BorderStyle[] BorderMigrationPrecedence =
-    {
-        BorderStyle.Double,
-        BorderStyle.Thick,
-        BorderStyle.Medium,
-        BorderStyle.MediumDashDotDot,
-        BorderStyle.MediumDashDot,
-        BorderStyle.MediumDashed,
-        BorderStyle.SlantDashDot,
-        BorderStyle.Thin,
-        BorderStyle.DashDotDot,
-        BorderStyle.DashDot,
-        BorderStyle.Dashed,
-        BorderStyle.Dotted,
-        BorderStyle.Hair,
-        BorderStyle.None,
-    };
-
-    private static int BorderMigrationPrecedenceRank(BorderStyle style)
-    {
-        var index = Array.IndexOf(BorderMigrationPrecedence, style);
-        return index < 0 ? BorderMigrationPrecedence.Length : index;
-    }
-
-    private static CellBorder ResolveHeavierBorder(CellBorder mine, CellBorder other)
-    {
-        if (mine.Style == BorderStyle.None) return other;
-        if (other.Style == BorderStyle.None) return mine;
-        return BorderMigrationPrecedenceRank(mine.Style) <= BorderMigrationPrecedenceRank(other.Style) ? mine : other;
     }
 
     private struct ViewportStyleCache
