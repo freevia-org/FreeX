@@ -424,7 +424,7 @@ public sealed class DocumentReferenceEditingCoordinator
             plan.TargetIsFootnote,
             plan.TargetTextStartOffset,
             plan.TargetTextEndOffset));
-        ExecuteGroup(commands, "Insert Cross-reference");
+        DocumentUndoGroupExecutor.Execute(_session.Commands, commands, "Insert Cross-reference");
         return new DocumentReferenceEditResult(true, hostBlockIndex, -1);
     }
 
@@ -647,7 +647,10 @@ public sealed class DocumentReferenceEditingCoordinator
             text ?? string.Empty,
             blockIndex,
             offset));
-        ExecuteGroup(commands, footnote ? "Insert Footnote" : "Insert Endnote");
+        DocumentUndoGroupExecutor.Execute(
+            _session.Commands,
+            commands,
+            footnote ? "Insert Footnote" : "Insert Endnote");
         var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
         return new DocumentReferenceTextEditResult(true, blockIndex, offset + markerLength, id);
     }
@@ -737,7 +740,8 @@ public sealed class DocumentReferenceEditingCoordinator
         if (targets.Count == 0)
             return 0;
 
-        ExecuteGroup(
+        DocumentUndoGroupExecutor.Execute(
+            _session.Commands,
             targets.Select(target => target.TableParagraph is { } tableParagraph
                 ? (IDocumentCommand)new ReplaceTableCellParagraphRunsCommand(
                     target.BlockIndex,
@@ -802,7 +806,7 @@ public sealed class DocumentReferenceEditingCoordinator
         if (edit.Commands.Count == 0)
             return edit.Result;
 
-        ExecuteGroup(edit.Commands, undoLabel);
+        DocumentUndoGroupExecutor.Execute(_session.Commands, edit.Commands, undoLabel);
         return edit.Result;
     }
 
@@ -1281,28 +1285,6 @@ public sealed class DocumentReferenceEditingCoordinator
                 fileName,
                 pageTextAtBlock?.Invoke(blockIndex),
                 pages?.PageCount));
-    }
-
-    private void ExecuteGroup(IReadOnlyList<IDocumentCommand> commands, string undoLabel)
-    {
-        if (commands.Count == 1)
-        {
-            _session.Commands.Execute(commands[0]);
-            return;
-        }
-
-        _session.Commands.BeginUndoGroup();
-        try
-        {
-            foreach (var command in commands)
-                _session.Commands.Execute(command);
-            _session.Commands.CommitUndoGroup(undoLabel);
-        }
-        catch
-        {
-            _session.Commands.AbortUndoGroup();
-            throw;
-        }
     }
 
     private sealed record GeneratedRegionEdit(

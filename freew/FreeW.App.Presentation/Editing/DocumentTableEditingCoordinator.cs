@@ -358,7 +358,7 @@ public sealed class DocumentTableEditingCoordinator
                 firstRow,
                 lastRow));
 
-            ExecuteGroup(commands, "Merge Cells");
+            DocumentUndoGroupExecutor.Execute(_session.Commands, commands, "Merge Cells");
         }
 
         return DocumentTableEditResult.Changed(
@@ -465,7 +465,8 @@ public sealed class DocumentTableEditingCoordinator
         if (targets.Length == 0)
             return DocumentTableEditResult.NoChange(default);
 
-        ExecuteGroup(
+        DocumentUndoGroupExecutor.Execute(
+            _session.Commands,
             targets.Select(target => (IDocumentCommand)new SetCellBordersCommand(
                 target.Edit.Address.BlockIndex,
                 target.Edit.Address.RowIndex,
@@ -706,7 +707,8 @@ public sealed class DocumentTableEditingCoordinator
         if (targets.Length == 0)
             return DocumentTableEditResult.NoChange(default);
 
-        ExecuteGroup(
+        DocumentUndoGroupExecutor.Execute(
+            _session.Commands,
             targets.Select(target => build(target.Address, target.CellIndex)).ToArray(),
             undoLabel);
         return DocumentTableEditResult.Changed(targets[0].Address);
@@ -720,28 +722,6 @@ public sealed class DocumentTableEditingCoordinator
             return DocumentTableEditResult.NoChange(address);
         _session.Commands.Execute(command);
         return DocumentTableEditResult.Changed(address);
-    }
-
-    private void ExecuteGroup(IReadOnlyList<IDocumentCommand> commands, string undoLabel)
-    {
-        if (commands.Count == 1)
-        {
-            _session.Commands.Execute(commands[0]);
-            return;
-        }
-
-        _session.Commands.BeginUndoGroup();
-        try
-        {
-            foreach (var command in commands)
-                _session.Commands.Execute(command);
-            _session.Commands.CommitUndoGroup(undoLabel);
-        }
-        catch
-        {
-            _session.Commands.AbortUndoGroup();
-            throw;
-        }
     }
 
     private bool TryGetTable(int blockIndex, out Table table)
