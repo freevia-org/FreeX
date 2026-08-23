@@ -4,6 +4,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'VisualEvidenceScriptSupport.ps1')
 $root = Join-Path $repo 'docs\parity\freew-shell-visual-2026-08-16'
 $jsonPath = Join-Path $root 'freew_shell_visual_evidence.json'
 $markdownPath = Join-Path $root 'README.md'
@@ -22,10 +23,6 @@ function Relative([string]$path) {
     return $fullPath.Substring($repo.Length).TrimStart('\').Replace('\', '/')
 }
 
-function Sha([string]$path) {
-    return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
-}
-
 $avaloniaManifestPath = Join-Path $root 'avalonia\freew_avalonia_shell_capture_manifest.json'
 $avalonia = Read-Json $avaloniaManifestPath
 if ([string]$avalonia.schema -ne 'freex.freew.shell-visual-capture.v1') { throw 'Unexpected Avalonia shell capture manifest schema.' }
@@ -41,7 +38,7 @@ if ($wordChrome.schemaVersion -ne 1 -or [string]$wordChrome.captureStatus -ne 'c
 foreach ($capture in $wordChrome.captures) {
     $file = Join-Path $wordChromeRoot ([string]$capture.fileName)
     if ([string]$capture.captureStatus -ne 'complete' -or -not (Test-Path -LiteralPath $file) -or
-        (Get-Item -LiteralPath $file).Length -le 0 -or (Sha $file) -ne [string]$capture.sha256) {
+        (Get-Item -LiteralPath $file).Length -le 0 -or (Get-VisualEvidenceFileSha256 -Path $file) -ne [string]$capture.sha256) {
         throw "Invalid native Word chrome capture: $file"
     }
 }
@@ -64,7 +61,7 @@ $sourceFiles = @(
 )
 $sourceSha256 = [ordered]@{}
 foreach ($relativePath in $sourceFiles) {
-    $sourceSha256[$relativePath] = Sha (Join-Path $repo ($relativePath -replace '/', '\\'))
+    $sourceSha256[$relativePath] = Get-VisualEvidenceFileSha256 -Path (Join-Path $repo ($relativePath -replace '/', '\\'))
 }
 
 $standardTabs = @('home', 'insert', 'design', 'layout', 'references', 'mailings', 'review', 'view', 'help', 'developer')
@@ -100,8 +97,8 @@ foreach ($width in $widths) {
             classification = 'paired-capture-review-required'
             wpfPath = Relative $wpfFile
             avaloniaPath = Relative $avaFile
-            wpfSha256 = Sha $wpfFile
-            avaloniaSha256 = Sha $avaFile
+            wpfSha256 = Get-VisualEvidenceFileSha256 -Path $wpfFile
+            avaloniaSha256 = Get-VisualEvidenceFileSha256 -Path $avaFile
             note = 'Whole-window capture is present for both hosts. No pixel pass/fail is inferred because the WPF and Avalonia shell chrome intentionally use different native/window-frame and toolbar structures.'
         }
         $pairedWpfIndices += [int]$wpfCapture[0].TabIndex
@@ -131,8 +128,8 @@ foreach ($width in $widths) {
             classification = 'paired-contextual-capture-review-required'
             wpfPath = Relative $wpfFile
             avaloniaPath = Relative $avaFile
-            wpfSha256 = Sha $wpfFile
-            avaloniaSha256 = Sha $avaFile
+            wpfSha256 = Get-VisualEvidenceFileSha256 -Path $wpfFile
+            avaloniaSha256 = Get-VisualEvidenceFileSha256 -Path $avaFile
             note = 'Both hosts render the contextual ribbon state. WPF uses its established visible-tab driver; Avalonia activates the named state through a real editor fixture before the shell frame is captured. No pixel pass/fail is inferred because host chrome remains structurally different.'
         }
     }
