@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 1. Shareable builds | Complete | Framework-dependent user-test builds publish into `artifacts/releases` with version, timestamp, commit, runtime, and mode in the file name. |
 | 2. Feedback intake | Complete | The old May 24 user-test and retest reports were retired after their findings were resolved and absorbed into regression coverage/status history; GitHub issues now include a structured user-test report template for new feedback. |
-| 3. Local diagnostics | Complete | Test builds record local JSONL usage events and crash reports under `%LOCALAPPDATA%\FreeX\Diagnostics`. No network upload is performed. |
+| 3. Local diagnostics | Complete | Test builds record local JSONL usage events and crash reports under `%LOCALAPPDATA%\FreeX\Diagnostics`. Those files are not automatically uploaded; the separate Phase 5 transport may send an opt-in crash event. |
 | 4. Hosted release channel | Complete | GitHub Actions publishes latest builds through GitHub Releases with versioned artifacts, a stable latest test build link, and an MSIX package that is signed when release certificate secrets are configured. |
 | 5. Crash analytics | Complete | Opt-in Sentry crash upload is wired behind tester consent and `FREEX_SENTRY_DSN`; local diagnostics remain available without network upload. |
 | 6. Lightweight usage analytics | Complete | Stabilization-only app usage events are recorded through the existing diagnostics pipeline and safe crash breadcrumbs. |
@@ -44,7 +44,7 @@ The `Tester Release` GitHub Actions workflow runs repository preflight, restore,
 - `FreeX-latest-win-x64.msix`
 - `FreeX-latest-win-x64.msix.sha256`
 
-The release also receives the Velopack installer/portable/self-update artifacts produced by `tools/Publish-UserTestBuild.ps1 -PublishMode Velopack` (`vpk pack --packId FreeXApp --packTitle FreeX --channel win`), staged from `artifacts/velopack/*`: an installer (e.g. `FreeXApp-win-Setup.exe`), a portable zip (e.g. `FreeXApp-win-Portable.zip`), the full `.nupkg`, and the `RELEASES`/assets feed that installed clients poll to self-update. `packId` is deliberately `FreeXApp` (not `FreeX`) so Velopack's per-machine install/data directory never collides with the app's own `%LocalAppData%\FreeX` data directory; `packTitle` stays `FreeX` so the Start Menu/Programs-and-Features display name is unchanged. <!-- VERIFY: exact Velopack output filenames (Setup.exe/Portable.zip naming) were not confirmed against a real vpk pack run; based on tools/Publish-UserTestBuild.ps1 vpk invocation only. -->
+The release also receives the Velopack installer/portable/self-update artifacts produced by `tools/Publish-UserTestBuild.ps1 -PublishMode Velopack` (`vpk pack --packId FreeXApp --packTitle FreeX --channel win`), staged from `artifacts/velopack/*`: the generated installer, portable zip, full `.nupkg`, and the `RELEASES`/assets feed that installed clients poll to self-update. Velopack controls the version-dependent filenames, so release automation discovers and stages the generated files rather than depending on one provisional name. `packId` is deliberately `FreeXApp` (not `FreeX`) so Velopack's per-machine install/data directory never collides with the app's own `%LocalAppData%\FreeX` data directory; `packTitle` stays `FreeX` so the Start Menu/Programs-and-Features display name is unchanged.
 
 When macOS bundling is explicitly enabled, the same release also receives:
 
@@ -179,7 +179,10 @@ The old serial/no-build-server command shape is no longer the default because it
 
 ## Phase 3 Diagnostics Contract
 
-FreeX writes tester diagnostics locally only. Files stay on the tester machine unless the tester attaches them to an issue.
+FreeX writes a local diagnostics record. Those files stay on the tester machine
+unless the tester attaches them to an issue. When the separate opt-in remote
+crash transport is active, it sends its own privacy-filtered event; it does not
+upload the local JSON/JSONL files.
 
 - `events.jsonl` records app lifecycle events such as `app_start`, `app_ready`, `app_exit`, and `crash`.
 - `CrashReports/*.json` records unhandled WPF dispatcher, AppDomain, and unobserved task exceptions.
@@ -192,9 +195,15 @@ FreeX writes tester diagnostics locally only. Files stay on the tester machine u
 
 Remote crash analytics are off by default. They activate only when all of these are true:
 
-- The tester build is launched with `FREEX_SENTRY_DSN` set to the Sentry DSN.
+- A Sentry DSN is present through the release build configuration or the `FREEX_SENTRY_DSN` environment override.
 - The tester opts in from the first-launch crash report prompt or later through `Options > Trust Center`.
 - `FREEX_CRASH_ANALYTICS` is not set to `0`.
+
+An explicit `FREEX_CRASH_ANALYTICS=1` test/runtime override is available for
+controlled validation, but public packaging must not use it to bypass the
+tester's saved consent choice. A DSN alone does not enable uploads. The
+suite-wide contract and validation gate are in
+[public-preview-readiness.md](public-preview-readiness.md).
 
 Remote crash reports include app version, runtime, operating system, process architecture, session ID, exception type, message, stack trace, and safe breadcrumbs from allowlisted app events. They do not intentionally collect workbook contents, formulas, filenames, or paths, but exception messages and stack traces can occasionally contain sensitive values.
 
