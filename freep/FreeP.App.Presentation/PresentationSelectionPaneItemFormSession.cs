@@ -29,8 +29,13 @@ public sealed class PresentationSelectionPaneItemFormSession
 
     public void Select() => Apply(_item.Select());
 
-    public void CommitRename(string? name, Action<string> restoreName) =>
+    public void CommitRename(string? name, Action<string> restoreName)
+    {
+        if (string.Equals(name, Plan.ShapeName, StringComparison.Ordinal))
+            return;
+
         _apply(_item.CommitRename(name), restoreName);
+    }
 
     public void CancelRename() => Apply(_item.CancelRename());
 

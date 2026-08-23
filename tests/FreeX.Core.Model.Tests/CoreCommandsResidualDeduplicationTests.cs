@@ -115,6 +115,81 @@ public sealed class CoreCommandsResidualDeduplicationTests
     }
 
     [Fact]
+    public void RemainingCellEditCommands_UndoRestoreTupleSpecificCompanionState()
+    {
+        var workbook = new Workbook("remaining snapshots");
+        var sourceSheet = workbook.AddSheet("Source");
+        var groupedSheet = workbook.AddSheet("Grouped");
+        var context = new TestCommandContext(workbook);
+        var source = new CellAddress(sourceSheet.Id, 2, 2);
+        var grouped = new CellAddress(groupedSheet.Id, 2, 2);
+        var style = workbook.RegisterStyle(new CellStyle { Italic = true });
+        groupedSheet.SetStyleOnly(grouped.Row, grouped.Col, style);
+        groupedSheet.Hyperlinks[grouped] = "https://grouped.example";
+        groupedSheet.HyperlinkMetadata[grouped] = new HyperlinkMetadata(ScreenTip: "grouped");
+        groupedSheet.RichTextRuns[grouped] = [new CellTextRun("grouped", true, null, null, null, null, null, null)];
+        groupedSheet.CellPhoneticGuides[grouped] = new CellPhoneticGuide(["guide"], null);
+        var groupedCommand = new GroupedEditCellsCommand(
+            [groupedSheet.Id],
+            sourceSheet.Id,
+            [(source, Cell.FromValue(new TextValue("replacement")))]);
+
+        groupedCommand.Apply(context).Success.Should().BeTrue();
+        groupedCommand.Revert(context);
+
+        groupedSheet.GetCell(grouped).Should().BeNull();
+        groupedSheet.GetStyleOnly(grouped.Row, grouped.Col).Should().Be(style);
+        groupedSheet.Hyperlinks[grouped].Should().Be("https://grouped.example");
+        groupedSheet.HyperlinkMetadata[grouped].ScreenTip.Should().Be("grouped");
+        groupedSheet.RichTextRuns[grouped].Single().Text.Should().Be("grouped");
+        groupedSheet.CellPhoneticGuides[grouped].RunPhoneticXmls.Should().Equal("guide");
+
+        var destination = new CellAddress(groupedSheet.Id, 4, 4);
+        groupedSheet.SetCell(destination, new NumberValue(10));
+        groupedSheet.Hyperlinks[destination] = "https://paste.example";
+        groupedSheet.CellPhoneticGuides[destination] = new CellPhoneticGuide(["paste-guide"], null);
+        var pasteCommand = new PasteSpecialCellsCommand(
+            groupedSheet.Id,
+            new GridRange(source, source),
+            [(source, Cell.FromValue(new NumberValue(5)))],
+            destination,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        pasteCommand.Apply(context).Success.Should().BeTrue();
+        pasteCommand.Revert(context);
+
+        groupedSheet.GetValue(destination).Should().Be(new NumberValue(10));
+        groupedSheet.Hyperlinks[destination].Should().Be("https://paste.example");
+        groupedSheet.CellPhoneticGuides[destination].RunPhoneticXmls.Should().Equal("paste-guide");
+    }
+
+    [Fact]
+    public void ChartFormulaFieldTransformer_TransformsEveryOwnedFormulaSlot()
+    {
+        var chart = new ChartModel
+        {
+            VerbatimSeriesFormulas =
+            [
+                new ChartSeriesVerbatimFormulas(0, "val", "cat", "title", "bubble")
+            ],
+            SeriesRangeDataLabels =
+            [
+                new ChartSeriesRangeDataLabels(0, "label", 1, [])
+            ],
+            ErrorBarPlusRangeFormula = "plus",
+            ErrorBarMinusRangeFormula = "minus",
+        };
+
+        ChartFormulaFieldTransformer.Transform(chart, formula => formula is null ? null : $"{formula}-mapped");
+
+        chart.VerbatimSeriesFormulas![0].Should().Be(
+            new ChartSeriesVerbatimFormulas(0, "val-mapped", "cat-mapped", "title-mapped", "bubble-mapped"));
+        chart.SeriesRangeDataLabels[0].Formula.Should().Be("label-mapped");
+        chart.ErrorBarPlusRangeFormula.Should().Be("plus-mapped");
+        chart.ErrorBarMinusRangeFormula.Should().Be("minus-mapped");
+    }
+
+    [Fact]
     public void TypedPivotSnapshots_RestoreOnlyTheirOwnedState()
     {
         var sheet = SheetId.New();
@@ -186,6 +261,8 @@ public sealed class CoreCommandsResidualDeduplicationTests
 
         ModelSourceTestSupport.ReadCommandsSource("Commands.cs").Should().Contain("CellEditCompanionSnapshot");
         ModelSourceTestSupport.ReadCommandsSource("PasteCellsCommand.cs").Should().Contain("CellEditCompanionSnapshot");
+        ModelSourceTestSupport.ReadCommandsSource("GroupedEditCellsCommand.cs").Should().Contain("CellEditCompanionSnapshot");
+        ModelSourceTestSupport.ReadCommandsSource("PasteSpecialCommand.cs").Should().Contain("CellEditCompanionSnapshot");
         ModelSourceTestSupport.ReadCommandsSource("CustomSortOrder.cs").Should().Contain("CaseSensitiveSortComparison.Compare");
         ModelSourceTestSupport.ReadCommandsSource("SortCommand.cs").Should().Contain("CaseSensitiveSortComparison.Compare");
 
@@ -206,6 +283,17 @@ public sealed class CoreCommandsResidualDeduplicationTests
             .Should().Contain("PivotTableTargetStateSnapshot.Capture");
         ModelSourceTestSupport.ReadCommandsSource("PivotTableSlicerTimelineCommands.cs")
             .Should().Contain("PivotTableTargetStateSnapshot.Capture");
+
+        foreach (var file in new[]
+                 {
+                     "ConvertToRangeStructuredReferenceLowering.cs",
+                     "DuplicateSheetDrawingCloner.cs",
+                     "RowColumnShiftHelpers.PrintAndCharts.cs",
+                 })
+        {
+            ModelSourceTestSupport.ReadCommandsSource(file)
+                .Should().Contain("ChartFormulaFieldTransformer.Transform(", file);
+        }
     }
 
     private static void ClearPivotState(PivotTableModel pivot)

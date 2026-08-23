@@ -248,50 +248,9 @@ internal static class DuplicateSheetDrawingCloner
             return;
 
         foreach (var chart in copy.Charts)
-        {
-            if (chart.VerbatimSeriesFormulas is { Count: > 0 } vf)
-            {
-                for (var i = 0; i < vf.Count; i++)
-                {
-                    var entry = vf[i];
-                    var newVal = RewriteFormulaForTableRenames(entry.ValFormula, renames);
-                    var newCat = RewriteFormulaForTableRenames(entry.CatFormula, renames);
-                    var newTx = RewriteFormulaForTableRenames(entry.TxFormula, renames);
-                    var newBubble = RewriteFormulaForTableRenames(entry.BubbleSizeFormula, renames);
-                    if (!string.Equals(newVal, entry.ValFormula, StringComparison.Ordinal) ||
-                        !string.Equals(newCat, entry.CatFormula, StringComparison.Ordinal) ||
-                        !string.Equals(newTx, entry.TxFormula, StringComparison.Ordinal) ||
-                        !string.Equals(newBubble, entry.BubbleSizeFormula, StringComparison.Ordinal))
-                    {
-                        vf[i] = entry with
-                        {
-                            ValFormula = newVal,
-                            CatFormula = newCat,
-                            TxFormula = newTx,
-                            BubbleSizeFormula = newBubble
-                        };
-                    }
-                }
-            }
-
-            if (chart.SeriesRangeDataLabels is { Count: > 0 } dl)
-            {
-                for (var i = 0; i < dl.Count; i++)
-                {
-                    var entry = dl[i];
-                    var rewritten = RewriteFormulaForTableRenames(entry.Formula, renames);
-                    if (!string.Equals(rewritten, entry.Formula, StringComparison.Ordinal))
-                        dl[i] = entry with { Formula = rewritten };
-                }
-            }
-
-            var newPlus = RewriteFormulaForTableRenames(chart.ErrorBarPlusRangeFormula, renames);
-            var newMinus = RewriteFormulaForTableRenames(chart.ErrorBarMinusRangeFormula, renames);
-            if (!string.Equals(newPlus, chart.ErrorBarPlusRangeFormula, StringComparison.Ordinal))
-                chart.ErrorBarPlusRangeFormula = newPlus;
-            if (!string.Equals(newMinus, chart.ErrorBarMinusRangeFormula, StringComparison.Ordinal))
-                chart.ErrorBarMinusRangeFormula = newMinus;
-        }
+            ChartFormulaFieldTransformer.Transform(
+                chart,
+                formula => RewriteFormulaForTableRenames(formula, renames));
     }
 
     /// <summary>

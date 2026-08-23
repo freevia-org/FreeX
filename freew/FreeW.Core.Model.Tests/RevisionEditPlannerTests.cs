@@ -122,6 +122,21 @@ public sealed class RevisionEditPlannerTests
     }
 
     [Fact]
+    public void InsertRunAtOffset_DoesNotSplitContentControl()
+    {
+        var controlRun = Run.PlainTextControl("Controlled text", tag: "Customer");
+        var inserted = new Run("X");
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(controlRun);
+
+        RevisionEditPlanner.InsertRunAtOffset(paragraph, 5, inserted);
+
+        paragraph.Runs.Should().Equal(controlRun, inserted);
+        paragraph.Runs[0].Control.Should().BeSameAs(controlRun.Control);
+        paragraph.Runs[0].Text.Should().Be("Controlled text");
+    }
+
+    [Fact]
     public void InsertTrackedText_PreservesSplitRunMetadata()
     {
         var paragraph = new Paragraph();

@@ -49,7 +49,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand, IEstimatesMemor
     private readonly IReadOnlyDictionary<CellAddress, string>? _sourceHyperlinks;
     private readonly IReadOnlyDictionary<CellAddress, HyperlinkMetadata>? _sourceHyperlinkMetadata;
     private readonly IReadOnlyDictionary<CellAddress, CellPhoneticGuide>? _sourcePhoneticGuides;
-    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata, bool HadPhoneticGuide, CellPhoneticGuide? OldPhoneticGuide)>? _snapshot;
+    private List<CellEditCompanionSnapshot>? _snapshot;
 
     public string Label => "Paste Special";
 
@@ -133,22 +133,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand, IEstimatesMemor
         var affected = new List<CellAddress>(cells.Count);
         foreach (var (address, cell, sourceAddress) in cells)
         {
-            var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(address, out var oldRuns);
-            var hadHyperlink = sheet.Hyperlinks.TryGetValue(address, out var oldHyperlink);
-            var hadHyperlinkMetadata = sheet.HyperlinkMetadata.TryGetValue(address, out var oldHyperlinkMetadata);
-            var hadPhoneticGuide = sheet.CellPhoneticGuides.TryGetValue(address, out var oldPhoneticGuide);
-            _snapshot.Add((
-                address,
-                sheet.GetCell(address)?.Clone(),
-                sheet.GetStyleOnly(address.Row, address.Col),
-                hadRichTextRuns,
-                oldRuns,
-                hadHyperlink,
-                oldHyperlink,
-                hadHyperlinkMetadata,
-                oldHyperlinkMetadata,
-                hadPhoneticGuide,
-                oldPhoneticGuide));
+            _snapshot.Add(CellEditCompanionSnapshot.Capture(sheet, address));
 
             // A destination cell that is a non-anchor (hidden/covered) member of an existing merged
             // region must stay empty, matching Excel: only the merge's top-left anchor cell ever
@@ -202,41 +187,8 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand, IEstimatesMemor
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (address, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata, hadPhoneticGuide, oldPhoneticGuide) in _snapshot)
-        {
-            if (oldCell is null)
-            {
-                sheet.ClearCell(address);
-                if (oldStyleOnly.HasValue)
-                    sheet.SetStyleOnly(address.Row, address.Col, oldStyleOnly.Value);
-                else
-                    sheet.ClearStyleOnly(address.Row, address.Col);
-            }
-            else
-            {
-                sheet.SetCell(address, oldCell.Clone());
-            }
-
-            if (hadRichTextRuns && oldRichTextRuns is not null)
-                sheet.RichTextRuns[address] = oldRichTextRuns;
-            else
-                sheet.RichTextRuns.Remove(address);
-
-            if (hadHyperlink && oldHyperlink is not null)
-                sheet.Hyperlinks[address] = oldHyperlink;
-            else
-                sheet.Hyperlinks.Remove(address);
-
-            if (hadHyperlinkMetadata && oldHyperlinkMetadata is not null)
-                sheet.HyperlinkMetadata[address] = oldHyperlinkMetadata;
-            else
-                sheet.HyperlinkMetadata.Remove(address);
-
-            if (hadPhoneticGuide && oldPhoneticGuide is not null)
-                sheet.CellPhoneticGuides[address] = oldPhoneticGuide;
-            else
-                sheet.CellPhoneticGuides.Remove(address);
-        }
+        foreach (var snapshot in _snapshot)
+            snapshot.Restore(sheet);
     }
 
     private IEnumerable<(CellAddress Address, Cell Cell, CellAddress SourceAddress)> BuildDestinationCells(Workbook workbook, Sheet sheet)
