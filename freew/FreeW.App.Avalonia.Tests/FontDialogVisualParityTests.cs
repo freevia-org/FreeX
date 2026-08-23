@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
@@ -24,6 +25,15 @@ public sealed class FontDialogVisualParityTests
             var family = Field<TextBox>(dialog, "_familyBox");
             var size = Field<ComboBox>(dialog, "_sizeBox");
             var color = Field<ComboBox>(dialog, "_colorBox");
+            var effects = dialog.GetLogicalDescendants()
+                .OfType<WrapPanel>()
+                .Single(panel => panel.Children.OfType<CheckBox>().Count() == 10);
+            var checks = dialog.GetLogicalDescendants()
+                .OfType<CheckBox>()
+                .Where(checkBox => AutomationProperties.GetAutomationId(checkBox) is not null)
+                .ToDictionary(
+                    checkBox => AutomationProperties.GetAutomationId(checkBox)!,
+                    StringComparer.Ordinal);
             var buttons = dialog.GetLogicalDescendants()
                 .OfType<Button>()
                 .Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton)
@@ -31,6 +41,9 @@ public sealed class FontDialogVisualParityTests
 
             family.Height.Should().Be(25);
             FontDialogPlanner.VisualMetrics.AvaloniaLabelLineHeight.Should().Be(17);
+            effects.Margin.Left.Should().Be(1);
+            checks["FontDialogUnderlineCheckBox"].Margin.Right.Should().Be(11);
+            checks["FontDialogSmallCapsCheckBox"].Margin.Right.Should().Be(13);
             var colorBrush = color.Background;
             colorBrush.Should().BeOfType<LinearGradientBrush>();
             ((LinearGradientBrush)colorBrush!).GradientStops.Select(stop => stop.Color)
