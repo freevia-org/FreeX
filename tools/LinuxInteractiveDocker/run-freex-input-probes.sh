@@ -6426,8 +6426,8 @@ PY
 
     verify_mixed_type_popup_gate() {
         local before="$1" opened="$2" cleared="$3" selected="$4" dismissed="$5"
-        local left=$((a1_x + 68)) top=$((a1_y + 455)) width=260 height=18
-        local click_x=$((a1_x + 75)) click_y=$((a1_y + 464))
+        local left=$((a1_x + 68)) top=$((a1_y + 353)) width=260 height=18
+        local click_x=$((a1_x + 74)) click_y=$((a1_y + 362))
         local geometry="${width}x${height}+${left}+${top}"
         local before_crop="$output/${prefix}-target-before.png"
         local open_crop="$output/${prefix}-target-menu-open.png"
@@ -6535,11 +6535,11 @@ PY
     select_cell 0 0 A1
     open_autofilter_menu 0
     capture "${prefix}-menu-open.png"
-    click_autofilter_control 75 424
+    click_autofilter_control 74 319
     capture "${prefix}-menu-cleared.png"
-    click_autofilter_control 75 464
+    click_autofilter_control 74 362
     capture "${prefix}-target-checked.png"
-    click_autofilter_control 292 523
+    click_autofilter_control 292 433
     sleep "$settle_seconds"
     capture "${prefix}-applied.png"
 
