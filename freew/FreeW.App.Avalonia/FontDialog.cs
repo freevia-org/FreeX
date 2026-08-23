@@ -31,6 +31,9 @@ public sealed class FontDialog : FreeWDialogWindow
             ComboBoxHeight = 24,
             TabHeight = 20,
             ButtonHeight = 26,
+            // WPF's native Font checkmark is a one-device-pixel glyph. Keep the shared
+            // template and make only this route's authority-specific stroke correction local.
+            CheckBoxCheckMarkStrokeThickness = 1,
             ForegroundBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
             FocusedInputBorderBrush = new SolidColorBrush(Color.FromRgb(0x56, 0x9D, 0xE5)),
             // WPF's selected combo template uses the standard compact-dialog vertical

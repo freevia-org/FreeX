@@ -23,6 +23,7 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().Contain("FontDialogPlanner.NumberFormChoices");
         source.Should().Contain("FontDialogPlanner.NumberSpacingChoices");
         source.Should().Contain("private static readonly FontDialogSurfaceSpec Surface = FontDialogPlanner.Surface;");
+        source.Should().Contain("CheckBoxCheckMarkStrokeThickness = 1");
         source.Should().Contain("foreach (var spec in Surface.Effects)");
         source.Should().Contain("state.EffectValue(spec.Kind)");
         source.Should().Contain("foreach (var kind in Surface.Tabs.First(");

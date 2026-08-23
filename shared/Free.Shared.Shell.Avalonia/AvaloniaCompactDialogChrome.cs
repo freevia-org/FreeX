@@ -24,6 +24,8 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public double? ComboBoxHeight { get; init; }
     public double? TabHeight { get; init; }
     public double CompactRadioButtonHeight { get; init; } = 20;
+    public double CheckBoxCheckMarkStrokeThickness { get; init; } =
+        CompactDialogVisualTokens.CheckBoxCheckMarkStrokeThickness;
     public double ButtonHeight { get; init; } = CompactDialogVisualTokens.ButtonHeight;
     public double ButtonMinWidth { get; init; } = CompactDialogVisualTokens.ButtonMinWidth;
     public double FontSize { get; init; } = CompactDialogVisualTokens.FontSize;
@@ -984,7 +986,7 @@ public static class AvaloniaCompactDialogChrome
             {
                 Data = Geometry.Parse("M 2 6 L 5 9 L 12 2"),
                 Stroke = foreground,
-                StrokeThickness = 1.4,
+                StrokeThickness = style.CheckBoxCheckMarkStrokeThickness,
                 Width = CompactDialogVisualTokens.CheckBoxCheckMarkWidth,
                 Height = CompactDialogVisualTokens.CheckBoxCheckMarkHeight,
                 HorizontalAlignment = HorizontalAlignment.Center,

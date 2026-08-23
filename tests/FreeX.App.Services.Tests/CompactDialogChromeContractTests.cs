@@ -157,6 +157,7 @@ public sealed class CompactDialogChromeContractTests
 
         shared.Should().Contain("Width = CompactDialogVisualTokens.CheckBoxIndicatorWidth");
         shared.Should().Contain("Height = CompactDialogVisualTokens.CheckBoxIndicatorHeight");
+        shared.Should().Contain("StrokeThickness = style.CheckBoxCheckMarkStrokeThickness");
         shared.Should().Contain("Converter = ObjectConverters.IsNull");
         shared.Should().Contain("Children = { checkMark, indeterminateMark }");
         shared.Should().Contain("CreateCompactCheckBoxTemplate(");
