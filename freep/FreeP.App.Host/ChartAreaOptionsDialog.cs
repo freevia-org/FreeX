@@ -1,52 +1,33 @@
 using System.Globalization;
-using System.Windows;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style chart-area and plot-area formatting dialog.</summary>
-public sealed partial class ChartAreaOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartAreaOptionsDialog : ChartOptionsDialogHost<ChartAreaOptionsDialogSession>
 {
-    private readonly ChartAreaOptionsDialogSession _session;
-    private readonly ChartOptionsDialogForm _form;
-
-    public ChartAreaOptionsDialog(
-        EditingSession editor,
-        ChartAreaFormattingTarget? initialTarget = null)
+    public ChartAreaOptionsDialog(EditingSession editor, ChartAreaFormattingTarget? initialTarget = null)
+        : this(new ChartAreaOptionsDialogSession(editor, initialTarget))
     {
-        _session = new ChartAreaOptionsDialogSession(editor, initialTarget);
-        var plan = _session.BuildDialogPlan(CultureInfo.CurrentCulture);
-        _form = ChartOptionsDialogChrome.CreateForm(plan, OnOk, Close, OnValueChanged);
-
-        Title = plan.Title;
-        Width = plan.Width;
-        Height = plan.Height;
-        MinWidth = plan.MinimumWidth;
-        MinHeight = plan.MinimumHeight;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode = ResizeMode.NoResize;
-        Content = _form.Content;
     }
 
-    private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
+    private ChartAreaOptionsDialog(ChartAreaOptionsDialogSession session)
+        : base(session, session.BuildDialogPlan(CultureInfo.CurrentCulture), Submit, Replan)
     {
-        if (_session.TryApplySelectionChange(fieldId, _form.SelectedIndex(fieldId), out var plan))
-            _form.ApplyPlan(plan);
     }
 
-    private void OnOk()
+    private static ChartOptionsDialogPlan? Replan(
+        ChartAreaOptionsDialogSession session,
+        ChartOptionsDialogFieldId fieldId,
+        int selectedIndex) =>
+        session.TryApplySelectionChange(fieldId, selectedIndex, out var plan) ? plan : null;
+
+    private static ChartOptionsDialogSubmission Submit(
+        ChartAreaOptionsDialogSession session,
+        ChartOptionsDialogValues values)
     {
-        var result = _session.TryCommit(ReadInput(), CultureInfo.CurrentCulture);
-        if (result.Succeeded)
-        {
-            DialogResult = true;
-            return;
-        }
-
-        DialogMessageHelper.ShowWarning(this, result.Error, Title);
+        var result = session.TryCommit(session.BuildInput(values), CultureInfo.CurrentCulture);
+        return new(result.Succeeded, result.Error);
     }
-
-    private ChartAreaOptionsDialogInput ReadInput() =>
-        _session.BuildInput(_form.CaptureValues());
 }

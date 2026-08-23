@@ -28,6 +28,7 @@ public sealed class ChartOptionsDialogFormSessionOwnershipTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var baseSource = Read(root, "freep", "FreeP.App.Avalonia", "FreePDialogWindow.cs");
+        var hostSource = Read(root, "freep", "FreeP.App.Avalonia", "ChartOptionsDialogHost.cs");
         var chromeSource = Read(root, "freep", "FreeP.App.Avalonia", "ChartOptionsDialogChrome.cs");
 
         baseSource.Should().Contain("class FreePDialogWindow : AvaloniaDialogWindow")
@@ -35,11 +36,14 @@ public sealed class ChartOptionsDialogFormSessionOwnershipTests
             .And.NotContain("FontFamily.Default");
         chromeSource.Should().Contain("AvaloniaCompactDialogChrome.WindowsStyle")
             .And.NotContain("new(FontFamily.Default)");
+        hostSource.Should().Contain("class ChartOptionsDialogHost<TSession> : FreePDialogWindow")
+            .And.NotContain("Background =")
+            .And.NotContain("using Avalonia.Media;");
 
         foreach (var fileName in ChartOptionDialogFiles)
         {
             var source = Read(root, "freep", "FreeP.App.Avalonia", fileName);
-            source.Should().Contain($"class {Path.GetFileNameWithoutExtension(fileName)} : FreePDialogWindow", fileName)
+            source.Should().Contain($"class {Path.GetFileNameWithoutExtension(fileName)} : ChartOptionsDialogHost<", fileName)
                 .And.NotContain(" : Window", fileName)
                 .And.NotContain("Background =", fileName)
                 .And.NotContain("Color.FromRgb(0xF3", fileName)
@@ -82,11 +86,14 @@ public sealed class ChartOptionsDialogFormSessionOwnershipTests
 
         foreach (var app in new[] { "FreeP.App.Host", "FreeP.App.Avalonia" })
         {
+            var host = Read(root, "freep", app, "ChartOptionsDialogHost.cs");
+            host.Should().Contain("_form.SelectedIndex(fieldId)")
+                .And.Contain("_form.ApplyPlan(updated)");
+
             foreach (var dialogFile in dialogFiles)
             {
                 var source = Read(root, "freep", app, dialogFile);
-                source.Should().Contain("_session.TryApplySelectionChange(fieldId, _form.SelectedIndex(fieldId), out var plan)")
-                    .And.Contain("_form.ApplyPlan(plan)")
+                source.Should().Contain("session.TryApplySelectionChange(fieldId, selectedIndex, out var plan)")
                     .And.NotContain("_session.SelectAxis(")
                     .And.NotContain("_session.SelectTarget(")
                     .And.NotContain("_session.SelectSeries(")

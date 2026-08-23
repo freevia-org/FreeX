@@ -56,7 +56,7 @@ public static class SlideShowShredTransitionPlanner
         if (width <= 0 || height <= 0 || progress <= 0)
             return Array.Empty<SlideShowMaskPolygon>();
         if (progress >= 1)
-            return new[] { new SlideShowMaskPolygon(BuildRectangle(width, height)) };
+            return new[] { new SlideShowMaskPolygon(SlideShowTransitionGeometry.BuildRectangle(width, height)) };
 
         var fragments = Math.Max(2, plan.FragmentCount);
         var revealWindow = Math.Clamp(plan.RevealWindow, 0.05, 0.9);
@@ -69,7 +69,7 @@ public static class SlideShowShredTransitionPlanner
             for (var fragment = 0; fragment < fragments; fragment++)
             {
                 var order = StableUnit(fragment, fragments);
-                var local = SmoothStep(Math.Clamp(
+                var local = SlideShowTransitionGeometry.SmoothStep(Math.Clamp(
                     (progress - order) / revealWindow,
                     0,
                     1));
@@ -113,7 +113,7 @@ public static class SlideShowShredTransitionPlanner
             for (var fragment = 0; fragment < fragments; fragment++)
             {
                 var order = StableUnit(fragment, fragments);
-                var local = SmoothStep(Math.Clamp(
+                var local = SlideShowTransitionGeometry.SmoothStep(Math.Clamp(
                     (progress - order) / revealWindow,
                     0,
                     1));
@@ -158,14 +158,5 @@ public static class SlideShowShredTransitionPlanner
     private static double StableUnit(int index, int count) =>
         ((index * 7) % count) / (double)count;
 
-    private static double SmoothStep(double value) => value * value * (3 - 2 * value);
 
-    private static IReadOnlyList<SlideShowMaskPoint> BuildRectangle(double width, double height) =>
-        new[]
-        {
-            new SlideShowMaskPoint(0, 0),
-            new SlideShowMaskPoint(width, 0),
-            new SlideShowMaskPoint(width, height),
-            new SlideShowMaskPoint(0, height)
-        };
 }

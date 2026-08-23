@@ -1,38 +1,21 @@
 using System.Globalization;
-using Avalonia.Controls;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class ChartPieOptionsDialog : FreePDialogWindow
+internal sealed partial class ChartPieOptionsDialog : ChartOptionsDialogHost<ChartPieOptionsDialogSession>
 {
-    private readonly ChartPieOptionsDialogSession _session;
-    private readonly ChartOptionsDialogForm _form;
-
     internal ChartPieOptionsDialog(EditingSession editor)
+        : this(new ChartPieOptionsDialogSession(editor))
     {
-        _session = new ChartPieOptionsDialogSession(editor);
-        var plan = _session.BuildDialogPlan(CultureInfo.CurrentCulture);
-        _form = ChartOptionsDialogChrome.CreateForm(plan, OnOk, () => Close(false));
-
-        Title = plan.Title;
-        Width = plan.Width;
-        Height = plan.Height;
-        MinWidth = plan.MinimumWidth;
-        MinHeight = plan.MinimumHeight;
-        CanResize = plan.IsResizable;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Content = _form.Content;
     }
 
-    private void OnOk()
+    private ChartPieOptionsDialog(ChartPieOptionsDialogSession session)
+        : base(session, session.BuildDialogPlan(CultureInfo.CurrentCulture), Submit)
     {
-        var result = _session.TryCommit(ReadInput(), CultureInfo.CurrentCulture);
-        if (result.Succeeded)
-            Close(true);
     }
 
-    private ChartPieOptionsDialogInput ReadInput() =>
-        _session.BuildInput(_form.CaptureValues());
+    private static bool Submit(ChartPieOptionsDialogSession session, ChartOptionsDialogValues values) =>
+        session.TryCommit(session.BuildInput(values), CultureInfo.CurrentCulture).Succeeded;
 }

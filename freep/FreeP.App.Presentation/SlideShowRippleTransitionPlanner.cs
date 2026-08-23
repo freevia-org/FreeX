@@ -52,7 +52,7 @@ public static class SlideShowRippleTransitionPlanner
         if (width <= 0 || height <= 0 || progress <= 0)
             return Array.Empty<SlideShowMaskPolygon>();
         if (progress >= 1)
-            return new[] { new SlideShowMaskPolygon(BuildRectangle(width, height)) };
+            return new[] { new SlideShowMaskPolygon(SlideShowTransitionGeometry.BuildRectangle(width, height)) };
 
         var segments = Math.Max(12, plan.SegmentCount);
         var centerX = width / 2;
@@ -77,12 +77,4 @@ public static class SlideShowRippleTransitionPlanner
         return new[] { new SlideShowMaskPolygon(points) };
     }
 
-    private static IReadOnlyList<SlideShowMaskPoint> BuildRectangle(double width, double height) =>
-        new[]
-        {
-            new SlideShowMaskPoint(0, 0),
-            new SlideShowMaskPoint(width, 0),
-            new SlideShowMaskPoint(width, height),
-            new SlideShowMaskPoint(0, height)
-        };
 }

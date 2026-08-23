@@ -1,36 +1,23 @@
-using Avalonia.Controls;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class ChartProtectionOptionsDialog : FreePDialogWindow
+internal sealed partial class ChartProtectionOptionsDialog : ChartOptionsDialogHost<ChartProtectionOptionsDialogSession>
 {
-    private readonly ChartProtectionOptionsDialogSession _session;
-    private readonly ChartOptionsDialogForm _form;
-
     internal ChartProtectionOptionsDialog(EditingSession editor)
+        : this(new ChartProtectionOptionsDialogSession(editor))
     {
-        _session = new ChartProtectionOptionsDialogSession(editor);
-        var plan = _session.BuildDialogPlan();
-        _form = ChartOptionsDialogChrome.CreateForm(plan, OnOk, () => Close(false));
-
-        Title = plan.Title;
-        Width = plan.Width;
-        Height = plan.Height;
-        MinWidth = plan.MinimumWidth;
-        MinHeight = plan.MinimumHeight;
-        CanResize = plan.IsResizable;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Content = _form.Content;
     }
 
-    private void OnOk()
+    private ChartProtectionOptionsDialog(ChartProtectionOptionsDialogSession session)
+        : base(session, session.BuildDialogPlan(), Submit)
     {
-        _session.Submit(ReadInput());
-        Close(true);
     }
 
-    private ChartProtectionOptionsDialogInput ReadInput() =>
-        _session.BuildInput(_form.CaptureValues());
+    private static bool Submit(ChartProtectionOptionsDialogSession session, ChartOptionsDialogValues values)
+    {
+        session.Submit(session.BuildInput(values));
+        return true;
+    }
 }

@@ -1,42 +1,26 @@
-using Avalonia.Controls;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class ChartAxisOptionsDialog : FreePDialogWindow
+internal sealed partial class ChartAxisOptionsDialog : ChartOptionsDialogHost<ChartAxisOptionsDialogSession>
 {
-    private readonly ChartAxisOptionsDialogSession _session;
-    private readonly ChartOptionsDialogForm _form;
-
     internal ChartAxisOptionsDialog(EditingSession editor, ChartAxisKind? initialAxis = null)
+        : this(new ChartAxisOptionsDialogSession(editor, initialAxis))
     {
-        _session = new ChartAxisOptionsDialogSession(editor, initialAxis);
-        var plan = _session.BuildDialogPlan();
-        _form = ChartOptionsDialogChrome.CreateForm(plan, OnOk, () => Close(false), OnValueChanged);
-
-        Title = plan.Title;
-        Width = plan.Width;
-        Height = plan.Height;
-        MinWidth = plan.MinimumWidth;
-        MinHeight = plan.MinimumHeight;
-        CanResize = plan.IsResizable;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Content = _form.Content;
     }
 
-    private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
+    private ChartAxisOptionsDialog(ChartAxisOptionsDialogSession session)
+        : base(session, session.BuildDialogPlan(), Submit, Replan)
     {
-        if (_session.TryApplySelectionChange(fieldId, _form.SelectedIndex(fieldId), out var plan))
-            _form.ApplyPlan(plan);
     }
 
-    private void OnOk()
-    {
-        var result = _session.Submit(ReadInput());
-        Close(result.ShouldClose);
-    }
+    private static ChartOptionsDialogPlan? Replan(
+        ChartAxisOptionsDialogSession session,
+        ChartOptionsDialogFieldId fieldId,
+        int selectedIndex) =>
+        session.TryApplySelectionChange(fieldId, selectedIndex, out var plan) ? plan : null;
 
-    private ChartAxisOptionsDialogInput ReadInput() =>
-        _session.BuildInput(_form.CaptureValues());
+    private static bool Submit(ChartAxisOptionsDialogSession session, ChartOptionsDialogValues values) =>
+        session.Submit(session.BuildInput(values)).ShouldClose;
 }

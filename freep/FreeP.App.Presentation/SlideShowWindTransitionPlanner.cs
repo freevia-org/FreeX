@@ -56,7 +56,7 @@ public static class SlideShowWindTransitionPlanner
         if (width <= 0 || height <= 0 || progress <= 0)
             return Array.Empty<SlideShowMaskPolygon>();
         if (progress >= 1)
-            return new[] { new SlideShowMaskPolygon(BuildRectangle(width, height)) };
+            return new[] { new SlideShowMaskPolygon(SlideShowTransitionGeometry.BuildRectangle(width, height)) };
 
         var bands = Math.Max(1, plan.BandCount);
         var staggerWindow = Math.Clamp(plan.StaggerWindow, 0.01, 0.9);
@@ -145,12 +145,4 @@ public static class SlideShowWindTransitionPlanner
         return polygons;
     }
 
-    private static IReadOnlyList<SlideShowMaskPoint> BuildRectangle(double width, double height) =>
-        new[]
-        {
-            new SlideShowMaskPoint(0, 0),
-            new SlideShowMaskPoint(width, 0),
-            new SlideShowMaskPoint(width, height),
-            new SlideShowMaskPoint(0, height)
-        };
 }
