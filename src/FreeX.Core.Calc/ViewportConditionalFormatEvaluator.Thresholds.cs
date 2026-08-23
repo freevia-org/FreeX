@@ -77,7 +77,7 @@ internal static partial class ViewportConditionalFormatEvaluator
         Dictionary<CfThresholdFormulaKey, double>? result = null;
         foreach (var (key, ast) in thresholdFormulas)
         {
-            if (HasRelativeReferences(ast) || IsCurrentCellSensitive(ast))
+            if (FormulaAstReferenceShifter.HasRelativeReferences(ast) || IsCurrentCellSensitive(ast))
                 continue;
 
             if (TryEvaluateThresholdFormula(ast, sheet, workbook, key.Rule.AppliesTo.Start, out var value))

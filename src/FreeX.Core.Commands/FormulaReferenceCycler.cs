@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -250,8 +251,8 @@ public static partial class FormulaReferenceCycler
         if (!match.Success)
             return false;
 
-        if (!TryResolveR1C1Part(match.Groups["row"].Value, anchor.Row, out var row, out var rowAbsolute) ||
-            !TryResolveR1C1Part(match.Groups["col"].Value, anchor.Col, out var col, out var colAbsolute) ||
+        if (!R1C1ReferencePartResolver.TryResolve(match.Groups["row"].Value, anchor.Row, out var row, out var rowAbsolute) ||
+            !R1C1ReferencePartResolver.TryResolve(match.Groups["col"].Value, anchor.Col, out var col, out var colAbsolute) ||
             row is < 1 or > CellAddress.MaxRow ||
             col is < 1 or > CellAddress.MaxCol)
         {
@@ -291,40 +292,6 @@ public static partial class FormulaReferenceCycler
         {
             return false;
         }
-    }
-
-    private static bool TryResolveR1C1Part(string text, uint anchorValue, out long value, out bool absolute)
-    {
-        if (string.IsNullOrEmpty(text))
-        {
-            absolute = false;
-            value = anchorValue;
-            return true;
-        }
-
-        if (text.StartsWith("[", StringComparison.Ordinal) && text.EndsWith("]", StringComparison.Ordinal))
-        {
-            absolute = false;
-            if (!long.TryParse(text[1..^1], out var offset))
-            {
-                value = 0;
-                return false;
-            }
-
-            try
-            {
-                value = checked(anchorValue + offset);
-                return true;
-            }
-            catch (OverflowException)
-            {
-                value = 0;
-                return false;
-            }
-        }
-
-        absolute = true;
-        return long.TryParse(text, out value);
     }
 
     private static string FormatR1C1Reference(uint row, uint col, bool rowAbsolute, bool colAbsolute, CellAddress anchor)

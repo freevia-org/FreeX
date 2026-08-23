@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -57,8 +58,8 @@ public static partial class FormulaReferenceStyleService
             {
                 var rowText = match.Groups["row"].Value;
                 var colText = match.Groups["col"].Value;
-                if (!TryResolveR1C1Part(rowText, anchor.Row, out var row, out var rowAbsolute) ||
-                    !TryResolveR1C1Part(colText, anchor.Col, out var col, out var colAbsolute))
+                if (!R1C1ReferencePartResolver.TryResolve(rowText, anchor.Row, out var row, out var rowAbsolute) ||
+                    !R1C1ReferencePartResolver.TryResolve(colText, anchor.Col, out var col, out var colAbsolute))
                 {
                     return match.Value;
                 }
@@ -74,8 +75,8 @@ public static partial class FormulaReferenceStyleService
             // Whole-row reference range typed directly, e.g. "R1:R3".
             if (match.Groups["rowRangeA"].Success)
             {
-                if (!TryResolveR1C1Part(match.Groups["rowRangeA"].Value, anchor.Row, out var rowA, out var rowAbsA) ||
-                    !TryResolveR1C1Part(match.Groups["rowRangeB"].Value, anchor.Row, out var rowB, out var rowAbsB))
+                if (!R1C1ReferencePartResolver.TryResolve(match.Groups["rowRangeA"].Value, anchor.Row, out var rowA, out var rowAbsA) ||
+                    !R1C1ReferencePartResolver.TryResolve(match.Groups["rowRangeB"].Value, anchor.Row, out var rowB, out var rowAbsB))
                     return match.Value;
 
                 if (rowA is < 1 or > CellAddress.MaxRow || rowB is < 1 or > CellAddress.MaxRow)
@@ -87,8 +88,8 @@ public static partial class FormulaReferenceStyleService
             // Whole-column reference range typed directly, e.g. "C1:C3".
             if (match.Groups["colRangeA"].Success)
             {
-                if (!TryResolveR1C1Part(match.Groups["colRangeA"].Value, anchor.Col, out var colA, out var colAbsA) ||
-                    !TryResolveR1C1Part(match.Groups["colRangeB"].Value, anchor.Col, out var colB, out var colAbsB))
+                if (!R1C1ReferencePartResolver.TryResolve(match.Groups["colRangeA"].Value, anchor.Col, out var colA, out var colAbsA) ||
+                    !R1C1ReferencePartResolver.TryResolve(match.Groups["colRangeB"].Value, anchor.Col, out var colB, out var colAbsB))
                     return match.Value;
 
                 if (colA is < 1 or > CellAddress.MaxCol || colB is < 1 or > CellAddress.MaxCol)
@@ -100,7 +101,7 @@ public static partial class FormulaReferenceStyleService
             // A lone whole-row reference, e.g. "R5" (entire row 5) - Excel shows this in A1 as "5:5".
             if (match.Groups["rowOnly"].Success)
             {
-                if (!TryResolveR1C1Part(match.Groups["rowOnly"].Value, anchor.Row, out var row, out var rowAbsolute))
+                if (!R1C1ReferencePartResolver.TryResolve(match.Groups["rowOnly"].Value, anchor.Row, out var row, out var rowAbsolute))
                     return match.Value;
 
                 if (row is < 1 or > CellAddress.MaxRow)
@@ -112,7 +113,7 @@ public static partial class FormulaReferenceStyleService
 
             // A lone whole-column reference, e.g. "C1" (entire column 1/A) - Excel shows this in A1 as "A:A".
             {
-                if (!TryResolveR1C1Part(match.Groups["colOnly"].Value, anchor.Col, out var col, out var colAbsolute))
+                if (!R1C1ReferencePartResolver.TryResolve(match.Groups["colOnly"].Value, anchor.Col, out var col, out var colAbsolute))
                     return match.Value;
 
                 if (col is < 1 or > CellAddress.MaxCol)
@@ -324,40 +325,6 @@ public static partial class FormulaReferenceStyleService
     }
 
     private static string FormatRelativePart(long offset) => offset == 0 ? "" : $"[{offset}]";
-
-    private static bool TryResolveR1C1Part(string text, uint anchorValue, out long value, out bool absolute)
-    {
-        if (string.IsNullOrEmpty(text))
-        {
-            absolute = false;
-            value = anchorValue;
-            return true;
-        }
-
-        if (text.StartsWith("[", StringComparison.Ordinal) && text.EndsWith("]", StringComparison.Ordinal))
-        {
-            absolute = false;
-            if (!long.TryParse(text[1..^1], out var offset))
-            {
-                value = 0;
-                return false;
-            }
-
-            try
-            {
-                value = checked(anchorValue + offset);
-                return true;
-            }
-            catch (OverflowException)
-            {
-                value = 0;
-                return false;
-            }
-        }
-
-        absolute = true;
-        return long.TryParse(text, out value);
-    }
 
     // A cell reference must not be followed by '(' - that shape is a function call whose name merely
     // looks like a column+row (e.g. LOG10(...) parses as col "LOG", row "10"), not a reference.
