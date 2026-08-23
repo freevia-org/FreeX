@@ -6907,11 +6907,18 @@ internal static class ForegroundGuard
         }
 
         var current = WindowFinder.GetWindowInfo(NativeMethods.GetForegroundWindow());
-        var reason = current is null
-            ? "No foreground window detected."
-            : $"Foreground is PID {current.ProcessId} '{current.Title}' class '{current.ClassName}', expected PID {expectedProcessId} title containing '{titleContains}'.";
+        var reason = IsWindowsLockScreen(current)
+            ? "Windows lock screen is active; unlock the interactive console before running foreground capture."
+            : current is null
+                ? "No foreground window detected."
+                : $"Foreground is PID {current.ProcessId} '{current.Title}' class '{current.ClassName}', expected PID {expectedProcessId} title containing '{titleContains}'.";
         return new ForegroundGuardResult(false, expectedProcessId, handle.ToInt64(), current, reason);
     }
+
+    private static bool IsWindowsLockScreen(WindowInfo? window) =>
+        window is not null &&
+        window.Title.Equals("Windows Default Lock Screen", StringComparison.OrdinalIgnoreCase) &&
+        window.ClassName.Equals("Windows.UI.Core.CoreWindow", StringComparison.OrdinalIgnoreCase);
 
     private static void ForceForeground(IntPtr handle)
     {

@@ -161,6 +161,16 @@ public sealed class ToolHarnessDedupSourceTests
     }
 
     [Fact]
+    public void ForegroundCapture_ReportsTheWindowsLockScreenExplicitly()
+    {
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundCapture.Should().Contain("IsWindowsLockScreen(current)");
+        foregroundCapture.Should().Contain("Windows lock screen is active; unlock the interactive console before running foreground capture.");
+        foregroundCapture.Should().Contain("Windows Default Lock Screen");
+    }
+
+    [Fact]
     public void ToolScripts_UseCanonicalSharedSupportEntryPoints()
     {
         var support = TestWorkspaceFiles.ReadRepoText("tools", "ToolScriptSupport.ps1");
