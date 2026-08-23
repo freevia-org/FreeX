@@ -42,6 +42,16 @@ public sealed class FontDialogVisualParityTests
     }
 
     [Fact]
+    public async Task Font_uses_grayscale_text_rendering_to_match_Wpf_capture_authority()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new FontDialog(new RunFormatting { FontSizePt = 12 });
+            TextOptions.GetTextRenderingMode(dialog).Should().Be(TextRenderingMode.Antialias);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Font_combo_glyph_uses_the_compact_Wpf_arrow_geometry_and_trailing_alignment()
     {
         await Session.Dispatch(() =>

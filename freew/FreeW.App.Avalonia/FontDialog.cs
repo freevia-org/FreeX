@@ -75,6 +75,11 @@ public sealed class FontDialog : FreeWDialogWindow
         IUserMessageService? messageService = null)
         : base(DialogChromeStyle)
     {
+        // WPF's RenderTargetBitmap authority rasterizes this compact dialog in grayscale.
+        // Keep the route-local policy here so shared compact dialogs retain their native
+        // subpixel text contract while Font remains comparable to its WPF sister surface.
+        TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
+
         _session = FontDialogPlanner.CreateSession(selection, CultureInfo.CurrentCulture);
         _messageService = messageService ?? new AvaloniaUserMessageService(this);
 
