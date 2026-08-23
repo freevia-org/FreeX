@@ -13,7 +13,7 @@ public sealed class XlsxAutoFilterXmlCodecTests
     private static readonly XNamespace StrictSpreadsheetNs = "http://purl.oclc.org/ooxml/spreadsheetml/main";
 
     [Fact]
-    public void WriteColorFilter_PreservesRawPrecedenceDefaultsNamespaceAndNativeAttributes()
+    public void WriteColorFilter_RawLexicalValuesPrecedeModeledAndNativeValues()
     {
         XNamespace strictNs = "http://purl.oclc.org/ooxml/spreadsheetml/main";
         XNamespace nativeNs = "urn:freex:test";
@@ -25,6 +25,7 @@ public sealed class XlsxAutoFilterXmlCodecTests
             NativeAttributes: new Dictionary<string, string>
             {
                 ["dxfId"] = "native-must-not-win",
+                ["cellColor"] = "native-must-not-win",
                 [(nativeNs + "flag").ToString()] = "keep",
             });
 
@@ -35,24 +36,37 @@ public sealed class XlsxAutoFilterXmlCodecTests
         element.Attribute("cellColor")!.Value.Should().Be("raw-cell");
         element.Attribute(nativeNs + "flag")!.Value.Should().Be("keep");
         element.Attributes("dxfId").Should().ContainSingle();
+        element.Attributes("cellColor").Should().ContainSingle();
     }
 
     [Theory]
-    [InlineData(null, true, null, null)]
-    [InlineData(null, false, null, "0")]
-    [InlineData(4, true, "4", null)]
-    public void WriteColorFilter_UsesModeledValuesAndBooleanOmission(
+    [InlineData(null, true, null, null, null, "1")]
+    [InlineData(null, false, null, null, null, "0")]
+    [InlineData(4, true, null, "0", "4", "1")]
+    [InlineData(4, false, null, "1", "4", "0")]
+    [InlineData(null, true, "false", "0", null, "false")]
+    [InlineData(4, false, "1", "0", "4", "1")]
+    public void WriteColorFilter_WritesExplicitModeledBooleansAndPreservesRawLexicalValues(
         int? dxfId,
         bool cellColor,
+        string? cellColorRaw,
+        string? nativeCellColor,
         string? expectedDxfId,
-        string? expectedCellColor)
+        string expectedCellColor)
     {
         var element = XlsxAutoFilterXmlCodec.WriteColorFilter(
-            new WorksheetAutoFilterColorFilterModel(dxfId, cellColor),
+            new WorksheetAutoFilterColorFilterModel(
+                DifferentialFormatId: dxfId,
+                CellColor: cellColor,
+                CellColorRaw: cellColorRaw,
+                NativeAttributes: nativeCellColor is null
+                    ? null
+                    : new Dictionary<string, string> { ["cellColor"] = nativeCellColor }),
             SpreadsheetNs);
 
         element.Attribute("dxfId")?.Value.Should().Be(expectedDxfId);
-        element.Attribute("cellColor")?.Value.Should().Be(expectedCellColor);
+        element.Attribute("cellColor")!.Value.Should().Be(expectedCellColor);
+        element.Attributes("cellColor").Should().ContainSingle();
     }
 
     [Fact]

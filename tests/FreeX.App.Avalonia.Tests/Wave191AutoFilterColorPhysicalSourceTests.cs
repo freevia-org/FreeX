@@ -1,5 +1,6 @@
 using FluentAssertions;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -59,12 +60,15 @@ public sealed class Wave191AutoFilterColorPhysicalSourceTests
     }
 
     [Fact]
-    public void ColorEvidenceManifest_HashesMatchCheckoutBytes()
+    public void ColorEvidenceManifest_HashesMatchDeclaredCrossPlatformPolicy()
     {
         var manifestPath = TestWorkspaceFileLocator.FindFromWorkspaceRoot(
             "docs", "parity", "evidence", "wave191-freex-autofilter-color-20260823", "manifest.json");
         using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
         var evidenceDirectory = Path.GetDirectoryName(manifestPath)!;
+        var hashPolicy = manifest.RootElement.GetProperty("hashPolicy");
+        hashPolicy.GetProperty("canonical-lf").GetString().Should().Contain("strict UTF-8");
+        hashPolicy.GetProperty("raw").GetString().Should().Contain("exact file bytes");
 
         VerifyHashes(
             manifest.RootElement.GetProperty("files"),
@@ -79,15 +83,49 @@ public sealed class Wave191AutoFilterColorPhysicalSourceTests
         attributes.Should().Contain("docs/parity/evidence/wave191-freex-autofilter-color-20260823/*.json text eol=lf");
     }
 
+    [Fact]
+    public void ColorEvidenceCanonicalLfHash_IsInvariantAcrossExistingWindowsCheckouts()
+    {
+        var lf = Encoding.UTF8.GetBytes("first\nsecond\n");
+        var crlf = Encoding.UTF8.GetBytes("first\r\nsecond\r\n");
+        var cr = Encoding.UTF8.GetBytes("first\rsecond\r");
+
+        ComputeHash(lf, "canonical-lf").Should().Be(ComputeHash(crlf, "canonical-lf"));
+        ComputeHash(lf, "canonical-lf").Should().Be(ComputeHash(cr, "canonical-lf"));
+        ComputeHash(lf, "raw").Should().NotBe(ComputeHash(crlf, "raw"),
+            "raw binary hashing must never normalize file bytes");
+    }
+
     private static void VerifyHashes(JsonElement entries, Func<string, string> resolvePath)
     {
         foreach (var entry in entries.EnumerateArray())
         {
             var relativePath = entry.GetProperty("path").GetString()!;
             var expected = entry.GetProperty("sha256").GetString()!;
-            var actual = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(resolvePath(relativePath))))
-                .ToLowerInvariant();
-            actual.Should().Be(expected, $"the committed checkout bytes for {relativePath} must match the manifest");
+            var hashMode = entry.GetProperty("hashMode").GetString()!;
+            var extension = Path.GetExtension(relativePath);
+            if (extension is ".png" or ".xlsx")
+                hashMode.Should().Be("raw", $"binary evidence {relativePath} must remain byte-exact");
+            else
+                hashMode.Should().Be("canonical-lf", $"text evidence/provenance {relativePath} must be checkout-independent");
+
+            var actual = ComputeHash(File.ReadAllBytes(resolvePath(relativePath)), hashMode);
+            actual.Should().Be(expected, $"the {hashMode} bytes for {relativePath} must match the manifest");
         }
+    }
+
+    private static string ComputeHash(byte[] bytes, string hashMode)
+    {
+        var hashBytes = hashMode switch
+        {
+            "raw" => bytes,
+            "canonical-lf" => Encoding.UTF8.GetBytes(
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+                    .GetString(bytes)
+                    .Replace("\r\n", "\n", StringComparison.Ordinal)
+                    .Replace("\r", "\n", StringComparison.Ordinal)),
+            _ => throw new InvalidDataException($"Unknown Wave191 hash mode '{hashMode}'."),
+        };
+        return Convert.ToHexString(SHA256.HashData(hashBytes)).ToLowerInvariant();
     }
 }
