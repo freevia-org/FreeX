@@ -171,7 +171,7 @@ try {
     $freePNativePickerEvidence = Read-ToolJson -Path "docs\parity\freep-native-picker-human-evidence.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
     $freePOfficeBaseline = Read-ToolJson -Path "docs\parity\freep-powerpoint-baseline-2026-08-14.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint Office baseline manifest is missing"
     $freePOfficeRecalibration = Read-ToolJson -Path "docs\parity\freep-powerpoint-recalibration-2026-08-15.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint current-source recalibration is missing"
-    $freePWave191Metrics = Read-ToolJson -Path "docs\parity\avalonia-parity-wave191-freep-evidence-20260823\metrics.json" -RepoRoot $repoRoot -MissingMessage "Required Wave191 FreeP current-source metrics are missing"
+    $freePWave192Metrics = Read-ToolJson -Path "docs\parity\evidence\avalonia-parity-wave192-freep-evidence-20260823\metrics.json" -RepoRoot $repoRoot -MissingMessage "Required Wave192 FreeP current-source metrics are missing"
     $freePPowerPointChrome = Read-ToolJson -Path "docs\parity\freep-powerpoint-chrome-2026-08-16\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint chrome capture manifest is missing"
     $freePResponsiveChrome = Read-ToolJson -Path "docs\parity\freep-responsive-chrome-2026-08-16\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required FreeP responsive chrome capture manifest is missing"
 
@@ -257,7 +257,9 @@ try {
             "docs/parity/avalonia-parity-wave190-freex-autofilter-date-20260823.md",
             "docs/parity/evidence/wave190-freex-autofilter-date-20260823/manifest.json",
             "docs/parity/avalonia-parity-wave191-freex-autofilter-color-20260823.md",
-            "docs/parity/evidence/wave191-freex-autofilter-color-20260823/manifest.json"
+            "docs/parity/evidence/wave191-freex-autofilter-color-20260823/manifest.json",
+            "docs/parity/avalonia-parity-wave192-freex-autofilter-font-color-20260823.md",
+            "docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/manifest.json"
         )
         routeCoverage = [ordered]@{
             inventoryRouteCount = $freeXDialogRoutes.totalRoutes
@@ -321,6 +323,9 @@ try {
             linuxAutoFilterFillColorPassed = 1
             linuxAutoFilterFillColorTotal = 1
             linuxAutoFilterFillColorStatus = "passed-production-x11"
+            linuxAutoFilterFontColorPassed = 1
+            linuxAutoFilterFontColorTotal = 1
+            linuxAutoFilterFontColorStatus = "passed-production-x11"
             limitations = @(
                 "The 2026-08-16 interactive run captured 36 foreground ribbon states for each of Excel, WPF, and Avalonia, including Draw at all four widths, plus six guarded Excel popup/dialog surfaces. The 27 fixed-viewport triage rows average 13.937% RGB delta for WPF and 15.639% for Avalonia versus Excel; nine maximized rows are coverage-only, not an acceptance threshold.",
                 "The ribbon harness creates a blank workbook before tab discovery so the enabled Draw tab is materialized; the current manifest records no unavailable-tab skips.",
@@ -331,6 +336,7 @@ try {
                 "The production Linux X11 numeric AutoFilter save/reopen workflows pass 2/2 for Greater Than 50 and Equals 50 through the rendered non-first-column B1 glyph, with exact visible-row and package-state postconditions. Wave188 also makes fixture readiness deterministic and restricts the glyph bridge to left-click while retaining Button.Click for keyboard/accessibility activation.",
                 "The production Linux X11 date AutoFilter lane passes 2/2 end to end. Before February 1 retains Jan01/Jan15 and saves lessThan=45323; After February 1 retains Mar15 and saves greaterThan=45323. Both use identity-checked Open Workbook dialogs and reopen with matching rendered-grid and semantic state, with a compact committed evidence bundle.",
                 "The production Linux X11 fill-color AutoFilter save/reopen lane passes 1/1. It selects the rendered #00B050 swatch, retains North/East, reopens through the identity-checked production picker, reads semantic A4=East, and saves explicit Excel-compatible cellColor=1 with fill FF00B050. Four rendered captures, the saved package, and hash-verified source/image provenance are committed.",
+                "The production Linux X11 font-color AutoFilter save/reopen lane passes 1/1. It pixel-gates and selects the rendered #00B050 font swatch, retains North/East, reopens through the identity-checked production picker, reads semantic A4=East, and independently verifies cellColor=0 with DXF font FF00B050. Four rendered captures, the saved package, and hash-verified source/image provenance are committed.",
                 "The current-source range corpus retains 35 Avalonia grid captures: eight charts, seven cell styles, and 20 native PivotTable surfaces. These are renderer coverage evidence, not raw-pixel Office acceptance rows.",
                 [string]$freeXOfficeBaseline.limitation
             )
@@ -364,7 +370,7 @@ try {
             -DialogRoutes $freeXDialogRoutes `
             -DialogVisualEvidence $freeXDialogVisualEvidence
     }
-    $freeX.nextSlice = "$($freeX.nextSlice) Production Linux evidence now covers Name Box (1/1 visual, 8/8 interaction), AutoFilter apply/change/clear recalculation (1/1), sort/save/reopen persistence (1/1), text-criteria save/reopen persistence (2/2), numeric Greater Than/Equals persistence (2/2), date criteria (2/2), and fill-color save/reopen (1/1). Extend physical verification to font-color, No Fill, mixed-type, multi-column, and color criteria change/clear workflows."
+    $freeX.nextSlice = "$($freeX.nextSlice) Production Linux evidence now covers Name Box (1/1 visual, 8/8 interaction), AutoFilter apply/change/clear recalculation (1/1), sort/save/reopen persistence (1/1), text-criteria save/reopen persistence (2/2), numeric Greater Than/Equals persistence (2/2), date criteria (2/2), fill-color save/reopen (1/1), and font-color save/reopen (1/1). Extend physical verification to No Fill, mixed-type, multi-column, and color criteria change/clear workflows."
 
     $freeWComparisonRows = @($freeWVisualComparison.rows)
     $freeWPairedComparisonRows = @($freeWComparisonRows | Where-Object { $_.captureStatus -eq "captured/captured" })
@@ -386,7 +392,8 @@ try {
             "docs/parity/avalonia-parity-wave188-freew-font-20260823.md",
             "docs/parity/avalonia-parity-wave189-freew-font-antialias-20260823.md",
             "docs/parity/avalonia-parity-wave190-freew-visual-20260823.md",
-            "docs/parity/avalonia-parity-wave191-freew-font-template-20260823.md"
+            "docs/parity/avalonia-parity-wave191-freew-font-template-20260823.md",
+            "docs/parity/avalonia-parity-wave192-freew-font-checkbox-20260823.md"
         )
         canonicalComparison = [ordered]@{
             kind = [string]$freeWVisualComparison.scope.kind
@@ -444,6 +451,7 @@ try {
                 "Wave189's route-local grayscale text raster reduces the three-state Font dialog aggregate from 58705 to 57620 changed pixels, a further 1.848% reduction; all three states improve and remain genuine visual mismatches.",
                 "Wave190 aligns the Font dialog's Avalonia-only vertical cadence and reduces the three-state aggregate from 57620 to 44687 changed pixels, a 22.4453% relative reduction; all three states improve in both changed pixels and mean channel delta while retaining exact 421 x 321 painted bounds and genuine-mismatch classification.",
                 "Wave191 aligns the Avalonia Font route's selected combo template with the WPF gradient, neutral border, and one-DIP cadence. The three-state aggregate falls from 44687 to 36053 changed pixels, a further 19.321055% reduction; all states improve, exact 421 x 321 painted bounds remain stable, and all three remain genuine mismatches.",
+                "Wave192 aligns the Font route's checkbox/effect-lane registration and measured trailing margins. The three-state aggregate falls from 36053 to 34196 changed pixels, a further 5.1508% reduction; all states improve, exact 421 x 321 painted bounds remain stable, and all three remain genuine mismatches.",
                 "Avalonia-only route/state rows are reported separately and are outside the WPF-authority pairing set.",
                 [string]$freeWOfficeBaseline.limitation
             )
@@ -477,7 +485,7 @@ try {
             classifiedRows = $true
         }
         renderedEvidence = $freeWRenderedEvidence
-        nextSlice = "A committed current-source Word PNG baseline bundle is available for $($freeWOfficeBaseline.comparison.comparableRows) comparable rows, but $($freeWOfficeBaseline.comparison.failedRows) comparisons remain outside tolerance. Font dialog captures now improve from 61396 to 36053 aggregate changed pixels across Waves188-191 and match WPF painted bounds; continue with the checkbox/effect indicator raster tail, action-row/tab template edges, Legal Notices glyph/template tail, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
+        nextSlice = "A committed current-source Word PNG baseline bundle is available for $($freeWOfficeBaseline.comparison.comparableRows) comparable rows, but $($freeWOfficeBaseline.comparison.failedRows) comparisons remain outside tolerance. Font dialog captures now improve from 61396 to 34196 aggregate changed pixels across Waves188-192 and match WPF painted bounds; continue with the remaining native checkbox/glyph raster tail, action-row/tab template edges, Legal Notices glyph/template tail, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
     }
 
     $freePExternalPowerPointResidual = Get-ResidualById -Residuals $freePRenderParity.Residuals -Id "external-powerpoint-baseline"
@@ -535,7 +543,9 @@ try {
             "docs/parity/avalonia-parity-wave190-freep-smartart-text-origin-20260823.md",
             "docs/parity/avalonia-parity-wave190-freep-evidence-20260823/metrics.json",
             "docs/parity/avalonia-parity-wave191-freep-smartart-color-gate-20260823.md",
-            "docs/parity/avalonia-parity-wave191-freep-evidence-20260823/metrics.json"
+            "docs/parity/avalonia-parity-wave191-freep-evidence-20260823/metrics.json",
+            "docs/parity/avalonia-parity-wave192-freep-render-residual-20260823.md",
+            "docs/parity/evidence/avalonia-parity-wave192-freep-evidence-20260823/metrics.json"
         )
         routeCoverage = [ordered]@{
             laneEntries = @(
@@ -603,6 +613,7 @@ try {
                 "Wave189 consumes the same semantic IncreasingCircle cache flag on Avalonia and improves slide-09 Avalonia/Office from 1.6879% to 1.5440% and WPF/Avalonia from 1.6009% to 1.3657%; WPF/Office remains 0.9662%, and neighboring SmartArt plus Surface3D controls are unchanged.",
                 "Wave190 introduced an exact source-signature-gated Avalonia text-origin correction, but its white text-color discriminator did not match the imported cache's resolved black source. Current-source measurement before Wave191 therefore remained 1.6879% Avalonia/Office and 1.6009% WPF/Avalonia rather than activating the intended correction.",
                 "Wave191 corrects that semantic color gate to the source-proven black run. Slide-09 Avalonia/Office improves from 1.6879% to 0.8675% and WPF/Avalonia from 1.6009% to 0.8540%; WPF/Office remains 0.9662%. Across all 53 slides, Avalonia/Office improves from 1.0117% to 0.9962% average and WPF/Avalonia from 0.6238% to 0.6097%, with measured controls unchanged.",
+                "Wave192 retains no new runtime rendering change. Fresh 27-deck/53-slide evidence confirms the Wave191 aggregate, rejects an IncreasingCircle text-policy probe that regressed Avalonia/Office from 0.8675% to 0.8775%, and records that a general Surface3D correction needs a new Office-authored topology rather than a fixture-specific overlay.",
                 [string]$freePRecordingHardwareResidual.Description,
                 [string]$freePRecordingHardwareResidual.ArtifactStatus,
                 [string]$freePNativePickerEvidence.reason
@@ -617,18 +628,18 @@ try {
             captureMode = [string]$freePOfficeBaseline.captureMode
             referenceReadyDecks = [int]$freePOfficeBaseline.comparison.referenceReadyDecks
             missingReferenceDecks = [int]$freePOfficeBaseline.comparison.missingReferenceDecks
-            currentSourceRevision = "00d5dbf748"
-            wpfAverageMeanPercent = [double]$freePWave191Metrics.corpusAfter.wpfAverage
-            wpfMaximumMeanPercent = [double]$freePWave191Metrics.corpusAfter.wpfMaximum
-            avaloniaAverageMeanPercent = [double]$freePWave191Metrics.corpusAfter.avaloniaAverage
-            avaloniaMaximumMeanPercent = [double]$freePWave191Metrics.corpusAfter.avaloniaMaximum
-            rendererPairAverageMeanPercent = [double]$freePWave191Metrics.corpusAfter.wpfAvaloniaAverage
-            rendererPairMaximumMeanPercent = [double]$freePWave191Metrics.corpusAfter.wpfAvaloniaMaximum
+            currentSourceRevision = [string]$freePWave192Metrics.source.baseRevision
+            wpfAverageMeanPercent = [double]$freePWave192Metrics.aggregate.wpfOfficeAverage
+            wpfMaximumMeanPercent = [double]$freePWave192Metrics.aggregate.wpfOfficeMaximum
+            avaloniaAverageMeanPercent = [double]$freePWave192Metrics.aggregate.avaloniaOfficeAverage
+            avaloniaMaximumMeanPercent = [double]$freePWave192Metrics.aggregate.avaloniaOfficeMaximum
+            rendererPairAverageMeanPercent = [double]$freePWave192Metrics.aggregate.wpfAvaloniaAverage
+            rendererPairMaximumMeanPercent = [double]$freePWave192Metrics.aggregate.wpfAvaloniaMaximum
         }
         claimBoundary = "Route/scenario coverage, committed PNG manifests, and local WPF/Avalonia comparison results only; no PowerPoint visual-parity claim is made."
     }
 
-    $freePNextSlice = "The tracked PowerPoint corpus has $($freePOfficeBaseline.artifactCount) COM-exported reference slides across $($freePOfficeBaseline.comparison.referenceReadyDecks) ready decks, with $($freePOfficeBaseline.comparison.missingReferenceDecks) deck missing references. Wave191's current-source 53-slide rerender averages $($freePWave191Metrics.corpusAfter.wpfAverage)% for WPF and $($freePWave191Metrics.corpusAfter.avaloniaAverage)% for Avalonia, with maxima of $($freePWave191Metrics.corpusAfter.wpfMaximum)% / $($freePWave191Metrics.corpusAfter.avaloniaMaximum)%. The source-proven IncreasingCircleProcess slide-09 Avalonia result is 0.8675%; continue with its remaining residual or the Surface3D deck25 maximum at 2.5815%, using Office and neighboring controls."
+    $freePNextSlice = "The tracked PowerPoint corpus has $($freePOfficeBaseline.artifactCount) COM-exported reference slides across $($freePOfficeBaseline.comparison.referenceReadyDecks) ready decks, with $($freePOfficeBaseline.comparison.missingReferenceDecks) deck missing references. Wave192's fresh 53-slide rerender preserves averages of $($freePWave192Metrics.aggregate.wpfOfficeAverage)% for WPF and $($freePWave192Metrics.aggregate.avaloniaOfficeAverage)% for Avalonia, with maxima of $($freePWave192Metrics.aggregate.wpfOfficeMaximum)% / $($freePWave192Metrics.aggregate.avaloniaOfficeMaximum)%. Surface3D deck25 remains the Avalonia/Office maximum at 2.5815% but needs a new authored topology for a general correction; the next executable existing-corpus residual is deck17 slide02 at 2.5360% Avalonia/Office and 2.9091% WPF/Avalonia."
 
     $freeP = [ordered]@{
         app = "FreeP"
@@ -677,6 +688,8 @@ try {
                     "docs/parity/evidence/wave190-freex-autofilter-date-20260823/manifest.json",
                     "docs/parity/avalonia-parity-wave191-freex-autofilter-color-20260823.md",
                     "docs/parity/evidence/wave191-freex-autofilter-color-20260823/manifest.json",
+                    "docs/parity/avalonia-parity-wave192-freex-autofilter-font-color-20260823.md",
+                    "docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/manifest.json",
             "docs/parity/freew-command-inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
@@ -691,6 +704,7 @@ try {
             "docs/parity/avalonia-parity-wave189-freew-font-antialias-20260823.md",
             "docs/parity/avalonia-parity-wave190-freew-visual-20260823.md",
             "docs/parity/avalonia-parity-wave191-freew-font-template-20260823.md",
+            "docs/parity/avalonia-parity-wave192-freew-font-checkbox-20260823.md",
             "docs/parity/freep-command-parity-inventory.json",
             "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
             "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json",
@@ -713,7 +727,9 @@ try {
             "docs/parity/avalonia-parity-wave190-freep-smartart-text-origin-20260823.md",
             "docs/parity/avalonia-parity-wave190-freep-evidence-20260823/metrics.json",
             "docs/parity/avalonia-parity-wave191-freep-smartart-color-gate-20260823.md",
-            "docs/parity/avalonia-parity-wave191-freep-evidence-20260823/metrics.json"
+            "docs/parity/avalonia-parity-wave191-freep-evidence-20260823/metrics.json",
+            "docs/parity/avalonia-parity-wave192-freep-render-residual-20260823.md",
+            "docs/parity/evidence/avalonia-parity-wave192-freep-evidence-20260823/metrics.json"
         )
         apps = @($freeX, $freeW, $freeP)
     }
@@ -788,6 +804,8 @@ try {
         '- `docs/parity/evidence/wave190-freex-autofilter-date-20260823/manifest.json`',
         '- `docs/parity/avalonia-parity-wave191-freex-autofilter-color-20260823.md`',
         '- `docs/parity/evidence/wave191-freex-autofilter-color-20260823/manifest.json`',
+        '- `docs/parity/avalonia-parity-wave192-freex-autofilter-font-color-20260823.md`',
+        '- `docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/manifest.json`',
         '- `docs/parity/freew-command-inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json`',
@@ -802,6 +820,7 @@ try {
         '- `docs/parity/avalonia-parity-wave189-freew-font-antialias-20260823.md`',
         '- `docs/parity/avalonia-parity-wave190-freew-visual-20260823.md`',
         '- `docs/parity/avalonia-parity-wave191-freew-font-template-20260823.md`',
+        '- `docs/parity/avalonia-parity-wave192-freew-font-checkbox-20260823.md`',
         '- `docs/parity/freep-command-parity-inventory.json`',
         '- `docs/parity/freep-dialog-pane-visual-evidence/summary.json`',
         '- `docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json`',
@@ -824,7 +843,9 @@ try {
         '- `docs/parity/avalonia-parity-wave190-freep-smartart-text-origin-20260823.md`',
         '- `docs/parity/avalonia-parity-wave190-freep-evidence-20260823/metrics.json`',
         '- `docs/parity/avalonia-parity-wave191-freep-smartart-color-gate-20260823.md`',
-        '- `docs/parity/avalonia-parity-wave191-freep-evidence-20260823/metrics.json`'
+        '- `docs/parity/avalonia-parity-wave191-freep-evidence-20260823/metrics.json`',
+        '- `docs/parity/avalonia-parity-wave192-freep-render-residual-20260823.md`',
+        '- `docs/parity/evidence/avalonia-parity-wave192-freep-evidence-20260823/metrics.json`'
     ) -join "`n"
     Set-Content -LiteralPath $tempMarkdownPath -Value ($md + "`n") -NoNewline -Encoding UTF8
 
