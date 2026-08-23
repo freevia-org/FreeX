@@ -120,7 +120,7 @@ foreach ($expectedState in $expectedStates) {
 
         $externalPath = Resolve-RepoPath $capture.captureArtifact.path
         if (Test-Path -LiteralPath $externalPath) {
-            Assert-Equal (Get-FileSha256 $capture.captureArtifact.path) $capture.captureArtifact.sha256 "present external capture manifest hash for $host/$($bundleRow.scenarioId)"
+            Assert-Equal (Get-FileSha256 $capture.captureArtifact.path) $capture.captureArtifact.sha256 "present external capture manifest hash for $captureHost/$($bundleRow.scenarioId)"
         }
     }
 }

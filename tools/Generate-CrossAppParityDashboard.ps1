@@ -382,6 +382,7 @@ try {
         sourceFiles = @(
             "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
+            "docs/parity/freew-dialog-harness/freew_font_visual_provenance.json",
             "docs/parity/freew-word-baseline-2026-08-16/manifest.json",
             "docs/parity/freew-shell-visual-2026-08-16/freew_shell_visual_evidence.json",
             "docs/parity/freew-word-chrome-2026-08-16/manifest.json",
@@ -452,6 +453,7 @@ try {
                 "Wave190 aligns the Font dialog's Avalonia-only vertical cadence and reduces the three-state aggregate from 57620 to 44687 changed pixels, a 22.4453% relative reduction; all three states improve in both changed pixels and mean channel delta while retaining exact 421 x 321 painted bounds and genuine-mismatch classification.",
                 "Wave191 aligns the Avalonia Font route's selected combo template with the WPF gradient, neutral border, and one-DIP cadence. The three-state aggregate falls from 44687 to 36053 changed pixels, a further 19.321055% reduction; all states improve, exact 421 x 321 painted bounds remain stable, and all three remain genuine mismatches.",
                 "Wave192 aligns the Font route's checkbox/effect-lane registration and measured trailing margins. The three-state aggregate falls from 36053 to 34196 changed pixels, a further 5.1508% reduction; all states improve, exact 421 x 321 painted bounds remain stable, and all three remain genuine mismatches.",
+                "Wave192's tracked Font provenance binds all three states and six host captures to dimensions, painted bounds, exact canonical comparison rows, source hashes, and external capture-manifest identities. The external PNGs remain uncommitted and require the capture hosts for pixel reproduction.",
                 "Avalonia-only route/state rows are reported separately and are outside the WPF-authority pairing set.",
                 [string]$freeWOfficeBaseline.limitation
             )
@@ -693,6 +695,7 @@ try {
             "docs/parity/freew-command-inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
+            "docs/parity/freew-dialog-harness/freew_font_visual_provenance.json",
             "docs/parity/freew-word-baseline-2026-08-16/manifest.json",
             "docs/parity/freew-shell-visual-2026-08-16/freew_shell_visual_evidence.json",
             "docs/parity/freew-word-chrome-2026-08-16/manifest.json",
@@ -809,6 +812,7 @@ try {
         '- `docs/parity/freew-command-inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json`',
+        '- `docs/parity/freew-dialog-harness/freew_font_visual_provenance.json`',
         '- `docs/parity/freew-word-baseline-2026-08-16/manifest.json`',
         '- `docs/parity/freew-shell-visual-2026-08-16/freew_shell_visual_evidence.json`',
         '- `docs/parity/freew-word-chrome-2026-08-16/manifest.json`',

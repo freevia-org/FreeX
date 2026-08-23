@@ -27,6 +27,7 @@ Assert-DashboardCondition ($dashboard.scopeBoundary -match "visual parity") "Cro
 $requiredSources = @(
     "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
     "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
+    "docs/parity/freew-dialog-harness/freew_font_visual_provenance.json",
     "docs/parity/freew-word-baseline-2026-08-16/manifest.json",
     "docs/parity/freew-shell-visual-2026-08-16/freew_shell_visual_evidence.json",
     "docs/parity/freew-word-chrome-2026-08-16/manifest.json",
