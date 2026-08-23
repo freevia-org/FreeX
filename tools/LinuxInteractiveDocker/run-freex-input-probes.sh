@@ -265,6 +265,26 @@ wait_for_document_clean() {
     return 1
 }
 
+wait_for_document_idle() {
+    # The title loses its dirty marker when the save completion plan is applied, just before
+    # MainWindow's save workflow releases _isSaving in its ExecutionCompleted hook. Require a
+    # short consecutive clean-title window so the next production command cannot be rejected by
+    # that still-owned save boundary.
+    local clean_reads=0
+    for _ in $(seq 1 20); do
+        if wait_for_document_clean; then
+            clean_reads=$((clean_reads + 1))
+            if (( clean_reads >= 3 )); then
+                return 0
+            fi
+        else
+            clean_reads=0
+        fi
+        sleep 0.25
+    done
+    return 1
+}
+
 lossy_save_confirmation="not-required"
 
 confirm_lossy_format_save_if_shown() {
@@ -2531,9 +2551,9 @@ PY
 }
 
 probe_autofilter_date_criteria_persistence_physical() {
-    local artifacts="autofilter-date-before.png;autofilter-date-before-menu-open.png;autofilter-date-before-applied.png;autofilter-date-before-reopened.png;autofilter-date-after-before.png;autofilter-date-after-menu-open.png;autofilter-date-after-applied.png;autofilter-date-after-reopened.png;autofilter-date-postcondition.txt"
+    local artifacts="autofilter-date-before.png;autofilter-date-before-menu-open.png;autofilter-date-before-applied.png;autofilter-date-before-reopened.png;autofilter-date-after-before.png;autofilter-date-after-menu-open.png;autofilter-date-after-applied.png;autofilter-date-after-reopened.png;autofilter-date-after-open-cycle.txt;autofilter-date-postcondition.txt"
     local before_menu_open=false after_menu_open=false before_save_clean=false before_dialog_open=false before_dialog_closed=false
-    local after_save_clean=false after_dialog_open=false after_dialog_closed=false
+    local after_save_clean=false after_dialog_open=false after_dialog_closed=false after_open_attempts=0
     local before_criteria="" after_criteria="" before_visible="" before_reopened="" after_visible="" after_reopened=""
     local before_package="" after_package=""
 
@@ -2551,6 +2571,14 @@ probe_autofilter_date_criteria_persistence_physical() {
         third="$(copy_cell_display 0 3 date-visible-third || true)"
         send_key Escape
         printf '%s,%s,%s' "$first" "$second" "$third"
+    }
+
+    read_filtered_visible_date_labels() {
+        local first
+        # Filtered worksheet row 5 is rendered in the first visible data-row slot (screen row 2),
+        # while Ctrl+G plus the production formula-bar route reads its hidden worksheet address.
+        first="$(copy_cell_formula_by_address A5 || true)"
+        printf '%s,,' "$first"
     }
 
     package_date_signature() {
@@ -2594,7 +2622,8 @@ PY
         fi
         for _ in $(seq 1 20); do
             package_signature="$(package_date_signature "$expected_operator" "$expected_value" || true)"
-            if [[ "$package_signature" == *"operator=$expected_operator|value=$expected_value"* ]]; then
+            if [[ "$package_signature" == *"operator=$expected_operator|value=$expected_value"* ]] &&
+               wait_for_document_idle; then
                 return 0
             fi
             sleep 0.25
@@ -2676,10 +2705,19 @@ PY
     if [[ "$before_reopened" == "Jan01,Jan15," ]]; then
         select_cell 1 0 B1 || true
         capture "autofilter-date-after-before.png"
-        click_date_glyph >/dev/null
-        capture "autofilter-date-after-menu-open.png"
-        if screen_changed "$output/autofilter-date-after-before.png" "$output/autofilter-date-after-menu-open.png" 500; then
-            after_menu_open=true
+        after_menu_open=false
+        for _ in $(seq 1 3); do
+            click_date_glyph >/dev/null
+            capture "autofilter-date-after-menu-open.png"
+            if screen_changed "$output/autofilter-date-after-before.png" "$output/autofilter-date-after-menu-open.png" 500; then
+                after_menu_open=true
+                break
+            fi
+            send_key Escape || true
+            select_cell 1 0 B1 || true
+            sleep "$settle_seconds"
+        done
+        if $after_menu_open; then
             # Date Filters > After is the third item after Equals (index 2).
             apply_date_criteria 2 "2024-02-01"
             after_criteria="date>:2024-02-01"
@@ -2698,11 +2736,18 @@ PY
         select_cell 1 0 B1 || true
         focus_app
         before_windows="$(visible_window_count)"
-        send_key ctrl+F12
-        for _ in $(seq 1 12); do
-            after_windows="$(visible_window_count)"
-            if (( after_windows > before_windows )); then after_dialog_open=true; break; fi
-            sleep 0.2
+        : > "$output/autofilter-date-after-open-cycle.txt"
+        write_open_cycle_diagnostics "$output/autofilter-date-after-open-cycle.txt" "before-ctrl-f12"
+        for attempt in $(seq 1 4); do
+            after_open_attempts="$attempt"
+            send_key ctrl+F12
+            for _ in $(seq 1 12); do
+                after_windows="$(visible_window_count)"
+                write_open_cycle_diagnostics "$output/autofilter-date-after-open-cycle.txt" "after-ctrl-f12-$attempt-$after_windows"
+                if (( after_windows > before_windows )); then after_dialog_open=true; break 2; fi
+                sleep 0.2
+            done
+            sleep 0.5
         done
         if $after_dialog_open; then
             xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
@@ -2717,8 +2762,11 @@ PY
             done
         fi
         if $after_dialog_closed; then
+            sleep "$dialog_settle_seconds"
             capture "autofilter-date-after-reopened.png"
-            after_reopened="$(read_visible_date_labels)"
+            # After >February 1 hides rows 2-4, so read the first rendered data-row slot after
+            # the native dialog closes instead of applying the unfiltered selection geometry.
+            after_reopened="$(read_filtered_visible_date_labels)"
         fi
     fi
 
@@ -2729,7 +2777,7 @@ PY
         fi
     done
     write_artifact "autofilter-date-postcondition.txt" \
-        "document-path=$document_path\nbefore-menu-open=$before_menu_open\nbefore-criteria=$before_criteria\nbefore-visible=$before_visible\nbefore-save-clean=$before_save_clean\nbefore-package=$before_package\nbefore-dialog-open=$before_dialog_open\nbefore-dialog-closed=$before_dialog_closed\nbefore-reopened=$before_reopened\nafter-menu-open=$after_menu_open\nafter-criteria=$after_criteria\nafter-visible=$after_visible\nafter-save-clean=$after_save_clean\nafter-package=$after_package\nafter-dialog-open=$after_dialog_open\nafter-dialog-closed=$after_dialog_closed\nafter-reopened=$after_reopened\n"
+        "document-path=$document_path\nbefore-menu-open=$before_menu_open\nbefore-criteria=$before_criteria\nbefore-visible=$before_visible\nbefore-save-clean=$before_save_clean\nbefore-package=$before_package\nbefore-dialog-open=$before_dialog_open\nbefore-dialog-closed=$before_dialog_closed\nbefore-reopened=$before_reopened\nafter-menu-open=$after_menu_open\nafter-criteria=$after_criteria\nafter-visible=$after_visible\nafter-save-clean=$after_save_clean\nafter-package=$after_package\nafter-open-attempts=$after_open_attempts\nafter-dialog-open=$after_dialog_open\nafter-dialog-closed=$after_dialog_closed\nafter-reopened=$after_reopened\n"
 
     if $before_menu_open && [[ "$before_criteria" == "date<:2024-02-01" && "$before_visible" == "Jan01,Jan15," &&
         "$before_package" == *"ref=A1:B5|colId=1|operator=lessThan|value=45323"* && $before_save_clean &&
@@ -5156,6 +5204,26 @@ x11_window_snapshot() {
         geometry="$(xdotool getwindowgeometry --shell "$id" 2>/dev/null | tr '\n' ' ' || true)"
         printf '%s|%s|%s\n' "$id" "${name//$'\n'/ }" "$geometry" >> "$path"
     done < <(xdotool search --onlyvisible --name '.*' 2>/dev/null | sort -n)
+}
+
+write_open_cycle_diagnostics() {
+    local path="$1" phase="$2" active="" active_name="" active_pid="" title=""
+    local snapshot_path="${path}.windows"
+    active="$(xdotool getactivewindow 2>/dev/null || true)"
+    active_name="$(xdotool getwindowname "$active" 2>/dev/null || true)"
+    active_pid="$(xdotool getwindowpid "$active" 2>/dev/null || true)"
+    title="$(xdotool getwindowname "$window_id" 2>/dev/null || true)"
+    {
+        printf 'phase=%s\nmain-window-id=%s\nmain-title=%s\nactive-window-id=%s\nactive-window-name=%s\nactive-window-pid=%s\n' \
+            "$phase" "$window_id" "$title" "$active" "$active_name" "$active_pid"
+        printf 'wmctrl-window-count=%s\n' "$(visible_window_count)"
+        printf 'xdotool-visible-windows:\n'
+        x11_window_snapshot "$snapshot_path"
+        while IFS= read -r line; do
+            printf '%s\n' "$line"
+        done < "$snapshot_path"
+    } >> "$path"
+    rm -f "$snapshot_path"
 }
 
 freex_window_ids() {
