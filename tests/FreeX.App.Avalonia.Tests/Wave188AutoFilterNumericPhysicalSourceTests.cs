@@ -43,5 +43,8 @@ public sealed class Wave188AutoFilterNumericPhysicalSourceTests
         source.Should().Contain("_session.ExecuteWorksheetFilterMutationPlan(plan)");
         source.Should().Contain("AutoFilterButton_{address.Row}_{address.Col}");
         source.Should().Contain("buttonBorder.PointerPressed");
+        source.Should().Contain("button.Click += (_, _) => OpenAutoFilterFlyout(button, address);");
+        source.Should().Contain("var point = e.GetCurrentPoint(buttonBorder);");
+        source.Should().Contain("if (!point.Properties.IsLeftButtonPressed)");
     }
 }

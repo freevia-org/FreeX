@@ -114,6 +114,10 @@ public sealed partial class MainWindow
             if (e.Handled)
                 return;
 
+            var point = e.GetCurrentPoint(buttonBorder);
+            if (!point.Properties.IsLeftButtonPressed)
+                return;
+
             e.Handled = true;
             OpenAutoFilterFlyout(button, address);
         };
