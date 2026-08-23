@@ -46,6 +46,18 @@ public sealed partial class SlideCanvas : Control
     internal const double ImportedIncreasingCircleAptosFontScale = 0.930;
     // Avalonia's FormattedText origin for this imported cache sits lower than Office's raster.
     internal const double ImportedIncreasingCircleAptosOriginOffsetY = -4.0;
+    private const double ImportedIncreasingCircleAptosFontSizePt = 44.0;
+    private const double ImportedIncreasingCircleTextWidthDip =
+        2_500_245d / DrawingMlCoordinateUnits.EmuPerPixel;
+    private const double ImportedIncreasingCircleTopTextHeightDip =
+        3_556_686d / DrawingMlCoordinateUnits.EmuPerPixel;
+    private const double ImportedIncreasingCircleBottomTextHeightDip =
+        845_153d / DrawingMlCoordinateUnits.EmuPerPixel;
+    private const double ImportedIncreasingCircleTextInsetDip =
+        111_760d / DrawingMlCoordinateUnits.EmuPerPixel;
+    private const double ImportedIncreasingCircleColumnSpacingDip =
+        1_270d / DrawingMlCoordinateUnits.EmuPerPixel;
+    private const double ImportedIncreasingCircleMetricTolerance = 0.01;
 
     // ── Styled / direct properties ──────────────────────────────────────────
 
@@ -1525,7 +1537,8 @@ public sealed partial class SlideCanvas : Control
         bool useImportedIncreasingCircleAptosCalibration =
             UsesImportedIncreasingCircleAptosCalibration(
                 useImportedIncreasingCircleTextRaster,
-                text);
+                text,
+                bounds);
         double? importedIncreasingCircleFontScale =
             useImportedIncreasingCircleAptosCalibration
                 ? ImportedIncreasingCircleAptosFontScale
@@ -1556,20 +1569,106 @@ public sealed partial class SlideCanvas : Control
             applyFixedSizeAptosBodyFallback: UsesFixedSizeAptosBodyFallback(text),
             originOffsetY: ResolveImportedIncreasingCircleAptosOriginOffsetY(
                 useImportedIncreasingCircleTextRaster,
-                text));
+                text,
+                bounds));
     }
 
     internal static bool UsesImportedIncreasingCircleAptosCalibration(
         bool useImportedIncreasingCircleTextRaster,
-        ResolvedTextLayout text) =>
-        useImportedIncreasingCircleTextRaster && UsesImportedIncreasingCircleAptosText(text);
+        ResolvedTextLayout text,
+        LayoutRect bounds)
+    {
+        if (!useImportedIncreasingCircleTextRaster
+            || text.AutoFitKind != TextAutoFitKind.None
+            || text.HasStoredFontScale
+            || text.ColumnCount != 1
+            || !MatchesImportedIncreasingCircleMetric(text.FontScale, 1.0)
+            || !MatchesImportedIncreasingCircleMetric(text.LnSpcReduction, 0.0)
+            || !MatchesImportedIncreasingCircleMetric(
+                text.ColumnSpacingDip,
+                ImportedIncreasingCircleColumnSpacingDip)
+            || !MatchesImportedIncreasingCircleMetric(text.InsetLeftDip, ImportedIncreasingCircleTextInsetDip)
+            || !MatchesImportedIncreasingCircleMetric(text.InsetTopDip, ImportedIncreasingCircleTextInsetDip)
+            || !MatchesImportedIncreasingCircleMetric(text.InsetRightDip, ImportedIncreasingCircleTextInsetDip)
+            || !MatchesImportedIncreasingCircleMetric(text.InsetBottomDip, ImportedIncreasingCircleTextInsetDip)
+            || !text.Wrap
+            || text.VerticalType != TextVerticalType.Horizontal
+            || text.WarpPreset is not null
+            || text.WarpAdjusts.Count != 0
+            || text.Text3dEffects is not null
+            || text.Paragraphs.Count != 1
+            || !MatchesImportedIncreasingCircleTextFrame(text.Anchor, bounds))
+        {
+            return false;
+        }
+
+        var paragraph = text.Paragraphs[0];
+        if (paragraph.Align != TextAlign.Left
+            || paragraph.RightToLeft
+            || paragraph.Level != 0
+            || paragraph.BulletKind != BulletKind.None
+            || paragraph.BulletChar is not null
+            || paragraph.BulletImage is not null
+            || paragraph.BulletText.Length != 0
+            || !MatchesImportedIncreasingCircleMetric(paragraph.SpaceBeforePt, 0.0)
+            || !MatchesImportedIncreasingCircleMetric(paragraph.SpaceAfterPt, 0.0)
+            || paragraph.LineSpacingPercent is not null
+            || paragraph.LineSpacingPointsExact is not null
+            || paragraph.TabStops.Count != 0
+            || !MatchesImportedIncreasingCircleMetric(paragraph.IndentDip, 0.0)
+            || !MatchesImportedIncreasingCircleMetric(paragraph.HangingDip, 0.0)
+            || paragraph.Runs.Count != 1)
+        {
+            return false;
+        }
+
+        var run = paragraph.Runs[0];
+        return !string.IsNullOrWhiteSpace(run.Text)
+            && string.Equals(run.FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+            && MatchesImportedIncreasingCircleMetric(
+                run.FontSizePt,
+                ImportedIncreasingCircleAptosFontSizePt)
+            && run.BaselineOffset is null
+            && !run.Bold
+            && !run.Italic
+            && !run.Underline
+            && !run.Strikethrough
+            && run.RightToLeft is null
+            && run.TextFill is null
+            && run.TextOutline is null
+            && run.TextShadow is null
+            && run.TextReflection is null
+            && run.TextGlow is null
+            && run.TextSoftEdge is null
+            && !run.IsMathRun;
+    }
 
     internal static double ResolveImportedIncreasingCircleAptosOriginOffsetY(
         bool useImportedIncreasingCircleTextRaster,
-        ResolvedTextLayout text) =>
-        UsesImportedIncreasingCircleAptosCalibration(useImportedIncreasingCircleTextRaster, text)
+        ResolvedTextLayout text,
+        LayoutRect bounds) =>
+        UsesImportedIncreasingCircleAptosCalibration(
+            useImportedIncreasingCircleTextRaster,
+            text,
+            bounds)
             ? ImportedIncreasingCircleAptosOriginOffsetY
             : 0.0;
+
+    private static bool MatchesImportedIncreasingCircleTextFrame(
+        VerticalAnchor anchor,
+        LayoutRect bounds) =>
+        MatchesImportedIncreasingCircleMetric(bounds.Width, ImportedIncreasingCircleTextWidthDip)
+        && ((anchor == VerticalAnchor.Top
+                && MatchesImportedIncreasingCircleMetric(
+                    bounds.Height,
+                    ImportedIncreasingCircleTopTextHeightDip))
+            || (anchor == VerticalAnchor.Bottom
+                && MatchesImportedIncreasingCircleMetric(
+                    bounds.Height,
+                    ImportedIncreasingCircleBottomTextHeightDip)));
+
+    private static bool MatchesImportedIncreasingCircleMetric(double actual, double expected) =>
+        Math.Abs(actual - expected) < ImportedIncreasingCircleMetricTolerance;
 
     internal static bool UsesImportedIncreasingCircleAptosText(ResolvedTextLayout text) =>
         text.Paragraphs.Count > 0

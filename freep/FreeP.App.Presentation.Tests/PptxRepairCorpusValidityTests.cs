@@ -481,6 +481,101 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
+    public void SmartArtLiveCorpus_PinsIncreasingCircleTextCalibrationSourceSignature()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "15-smartart-grouped-list.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var calibratedShapes = SlideCompositor.Compose(presentation, presentation.Slides[8])
+            .OfType<DrawOp.Shape>()
+            .Where(shape => shape.UseImportedIncreasingCircleTextRaster)
+            .ToArray();
+
+        calibratedShapes.Should().HaveCount(4);
+        calibratedShapes.Count(shape => shape.Text!.Anchor == VerticalAnchor.Top).Should().Be(2);
+        calibratedShapes.Count(shape => shape.Text!.Anchor == VerticalAnchor.Bottom).Should().Be(2);
+
+        foreach (var shape in calibratedShapes)
+        {
+            var text = shape.Text!;
+            text.AutoFitKind.Should().Be(TextAutoFitKind.None);
+            text.HasStoredFontScale.Should().BeFalse();
+            text.FontScale.Should().BeApproximately(1.0, 0.001);
+            text.LnSpcReduction.Should().BeApproximately(0.0, 0.001);
+            text.ColumnCount.Should().Be(1);
+            text.ColumnSpacingDip.Should().BeApproximately(
+                DrawingMlCoordinateUnits.EmuToPixels(1_270),
+                0.001);
+            text.Wrap.Should().BeTrue();
+            text.VerticalType.Should().Be(TextVerticalType.Horizontal);
+            text.WarpPreset.Should().BeNull();
+            text.WarpAdjusts.Should().BeEmpty();
+            text.Text3dEffects.Should().BeNull();
+            text.InsetLeftDip.Should().BeApproximately(
+                DrawingMlCoordinateUnits.EmuToPixels(111_760),
+                0.001);
+            text.InsetTopDip.Should().BeApproximately(
+                DrawingMlCoordinateUnits.EmuToPixels(111_760),
+                0.001);
+            text.InsetRightDip.Should().BeApproximately(
+                DrawingMlCoordinateUnits.EmuToPixels(111_760),
+                0.001);
+            text.InsetBottomDip.Should().BeApproximately(
+                DrawingMlCoordinateUnits.EmuToPixels(111_760),
+                0.001);
+            shape.BoundsDip.Width.Should().BeApproximately(
+                DrawingMlCoordinateUnits.EmuToPixels(2_500_245),
+                0.001);
+
+            if (text.Anchor == VerticalAnchor.Top)
+            {
+                shape.BoundsDip.Height.Should().BeApproximately(
+                    DrawingMlCoordinateUnits.EmuToPixels(3_556_686),
+                    0.001);
+            }
+            else
+            {
+                shape.BoundsDip.Height.Should().BeApproximately(
+                    DrawingMlCoordinateUnits.EmuToPixels(845_153),
+                    0.001);
+            }
+
+            var paragraph = text.Paragraphs.Should().ContainSingle().Subject;
+            paragraph.Align.Should().Be(TextAlign.Left);
+            paragraph.RightToLeft.Should().BeFalse();
+            paragraph.Level.Should().Be(0);
+            paragraph.BulletKind.Should().Be(BulletKind.None);
+            paragraph.BulletChar.Should().BeNull();
+            paragraph.BulletImage.Should().BeNull();
+            paragraph.BulletText.Should().BeEmpty();
+            paragraph.SpaceBeforePt.Should().BeApproximately(0.0, 0.001);
+            paragraph.SpaceAfterPt.Should().BeApproximately(0.0, 0.001);
+            paragraph.LineSpacingPercent.Should().BeNull();
+            paragraph.LineSpacingPointsExact.Should().BeNull();
+            paragraph.TabStops.Should().BeEmpty();
+            paragraph.IndentDip.Should().BeApproximately(0.0, 0.001);
+            paragraph.HangingDip.Should().BeApproximately(0.0, 0.001);
+
+            var run = paragraph.Runs.Should().ContainSingle().Subject;
+            run.Text.Should().NotBeNullOrWhiteSpace();
+            run.FontFamily.Should().Be("Aptos");
+            run.FontSizePt.Should().BeApproximately(44.0, 0.001);
+            run.BaselineOffset.Should().BeNull();
+            run.Bold.Should().BeFalse();
+            run.Italic.Should().BeFalse();
+            run.Underline.Should().BeFalse();
+            run.Strikethrough.Should().BeFalse();
+            run.RightToLeft.Should().BeNull();
+            run.TextFill.Should().BeNull();
+            run.TextOutline.Should().BeNull();
+            run.TextShadow.Should().BeNull();
+            run.TextReflection.Should().BeNull();
+            run.TextGlow.Should().BeNull();
+            run.TextSoftEdge.Should().BeNull();
+            run.IsMathRun.Should().BeFalse();
+        }
+    }
+
+    [Fact]
     public void OrdinaryAuthoredPhaseLabels_DoNotUseImportedIncreasingCircleTextRaster()
     {
         var presentation = Presentation.CreateEmpty();
