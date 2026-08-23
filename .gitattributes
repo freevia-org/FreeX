@@ -1,2 +1,13 @@
+/.gitattributes text eol=lf
 tools/packaging/linux/*.conf text eol=lf
 tools/LinuxInteractiveDocker/*.sh text eol=lf
+
+# Wave191 evidence/provenance hashes must be identical across Windows and Linux checkouts.
+tools/Run-FreeXLinuxInteractionValidation.ps1 text eol=lf
+tools/LinuxInteractiveDocker/New-FreeXWave191AutoFilterColorFixture.ps1 text eol=lf
+src/FreeX.Core.IO/XlsxAutoFilterXmlCodec.cs text eol=lf
+tests/FreeX.Core.IO.Tests/R89_AutoFilterColorDxfTests.cs text eol=lf
+tests/FreeX.App.Avalonia.Tests/Wave191AutoFilterColorPhysicalSourceTests.cs text eol=lf
+docs/parity/avalonia-parity-wave191-freex-autofilter-color-20260823.md text eol=lf
+docs/parity/evidence/wave191-freex-autofilter-color-20260823/*.json text eol=lf
+docs/parity/evidence/wave191-freex-autofilter-color-20260823/*.txt text eol=lf

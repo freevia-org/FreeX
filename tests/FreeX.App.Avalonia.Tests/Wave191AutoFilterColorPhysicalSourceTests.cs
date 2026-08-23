@@ -17,8 +17,17 @@ public sealed class Wave191AutoFilterColorPhysicalSourceTests
         runner.Should().Contain("autofilter-color-persistence");
         runner.Should().Contain("autofilter-color-fill-save-reopen-physical");
         runner.Should().Contain("New-FreeXWave191AutoFilterColorFixture.ps1");
+        runner.Should().Contain("Assert-AutoFilterColorPostcondition");
+        runner.Should().Contain("before-rgb=#FFFFFF");
+        runner.Should().Contain("sample-rgb=#00B050");
         probe.Should().Contain("probe_autofilter_color_persistence_physical");
+        probe.Should().Contain("verify_rendered_fill_swatch");
+        probe.Should().Contain("%[hex:p{${sample_x},${sample_y}}]");
+        probe.Should().Contain("autofilter-color-swatch-gate.txt");
+        probe.Should().Contain("criteria=\"$(verify_rendered_fill_swatch");
         probe.Should().Contain("click_autofilter_control 110 220");
+        probe.Should().Contain("swatch-gate=$swatch_gate");
+        probe.Should().NotContain("criteria=\"fill:#00B050\"");
         probe.Should().Contain("fill:#00B050");
         probe.Should().Contain("North,East,");
         probe.Should().Contain("ref=A1:B5|colId=0|cellColor=1");

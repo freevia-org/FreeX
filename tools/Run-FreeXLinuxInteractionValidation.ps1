@@ -653,6 +653,52 @@ function Assert-FormulaWholeRangePointPostcondition {
     }
 }
 
+function Assert-AutoFilterColorPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    $gatePath = Join-Path $EvidenceDirectory "autofilter-color-swatch-gate.txt"
+    $postconditionPath = Join-Path $EvidenceDirectory "autofilter-color-postcondition.txt"
+    if (-not (Test-Path -LiteralPath $gatePath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $postconditionPath -PathType Leaf)) {
+        throw "AutoFilter color probe did not emit its rendered-swatch gate and postcondition."
+    }
+
+    $gateLines = @(Get-Content -LiteralPath $gatePath)
+    $expectedGate = @(
+        "schema-version=1",
+        "before=autofilter-color-before.png",
+        "source=autofilter-color-menu-open.png",
+        "button-bounds=97,439,75,27",
+        "click=139,456",
+        "sample=113,452",
+        "before-rgb=#FFFFFF",
+        "sample-rgb=#00B050",
+        "gate=passed"
+    )
+    $missingGate = @($expectedGate | Where-Object { $_ -notin $gateLines })
+    if ($missingGate.Count -ne 0) {
+        throw "AutoFilter color rendered-swatch gate failed: $($missingGate -join '; ')."
+    }
+
+    $postconditionLines = @(Get-Content -LiteralPath $postconditionPath)
+    $expectedPostconditions = @(
+        "menu-open=true",
+        "swatch-gate=true",
+        "criteria=fill:#00B050",
+        "visible=North,East,",
+        "save-clean=true",
+        "package=ref=A1:B5|colId=0|cellColor=1|dxfId=0|fill=FF00B050",
+        "dialog-open=true",
+        "dialog-closed=true",
+        "reopened-visible=North,East,",
+        "reopened-semantic-a4=East"
+    )
+    $missingPostconditions = @($expectedPostconditions | Where-Object { $_ -notin $postconditionLines })
+    if ($missingPostconditions.Count -ne 0) {
+        throw "AutoFilter color postcondition failed exact rendered/semantic/package contract: $($missingPostconditions -join '; ')."
+    }
+}
+
 function Start-ValidationSession {
     param(
         [string[]]$AppArgument = @(),
@@ -1701,6 +1747,9 @@ try {
     }
     if ($PhysicalProbeSelector -eq "formula-whole-range-point") {
         Assert-FormulaWholeRangePointPostcondition -EvidenceDirectory $x11EvidenceDirectory
+    }
+    if ($PhysicalProbeSelector -eq "autofilter-color-persistence") {
+        Assert-AutoFilterColorPostcondition -EvidenceDirectory $x11EvidenceDirectory
     }
     if ($PhysicalProbeSelector -eq "grid-autofit") {
         Assert-GridAutofitPostcondition -EvidenceDirectory $x11EvidenceDirectory

@@ -6051,8 +6051,8 @@ if [[ "$probe_selector" == "autofilter-numeric-criteria-persistence" ]]; then
     exit 0
 fi
 probe_autofilter_color_persistence_physical() {
-    local artifacts="autofilter-color-before.png;autofilter-color-menu-open.png;autofilter-color-applied.png;autofilter-color-reopened.png;autofilter-color-reopen-diagnostics.txt;autofilter-color-postcondition.txt"
-    local menu_open=false save_clean=false dialog_open=false dialog_closed=false
+    local artifacts="autofilter-color-before.png;autofilter-color-menu-open.png;autofilter-color-swatch-gate.txt;autofilter-color-applied.png;autofilter-color-reopened.png;autofilter-color-reopen-diagnostics.txt;autofilter-color-postcondition.txt"
+    local menu_open=false swatch_gate=false save_clean=false dialog_open=false dialog_closed=false
     local criteria="" visible="" reopened_visible="" reopened_semantic="" package=""
 
     if [[ "${document_path,,}" != *.xlsx ]]; then
@@ -6093,6 +6093,34 @@ if fg is None or fg.attrib.get("rgb") != "FF00B050":
     raise SystemExit(1)
 print(f"ref=A1:B5|colId=0|cellColor=1|dxfId={color.attrib['dxfId']}|fill={fg.attrib['rgb']}")
 PY
+    }
+
+    verify_rendered_fill_swatch() {
+        local before_screenshot="$1" screenshot="$2"
+        local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27
+        local sample_x_offset=84 sample_y_offset=216 click_x_offset=110 click_y_offset=220
+        local button_left=$((a1_x + button_left_offset)) button_top=$((a1_y + button_top_offset))
+        local button_right=$((button_left + button_width - 1)) button_bottom=$((button_top + button_height - 1))
+        local sample_x=$((a1_x + sample_x_offset)) sample_y=$((a1_y + sample_y_offset))
+        local click_x=$((a1_x + click_x_offset)) click_y=$((a1_y + click_y_offset)) before_pixel="" pixel=""
+
+        before_pixel="$(convert "$before_screenshot" -format "%[hex:p{${sample_x},${sample_y}}]" info: 2>/dev/null || true)"
+        pixel="$(convert "$screenshot" -format "%[hex:p{${sample_x},${sample_y}}]" info: 2>/dev/null || true)"
+        before_pixel="${before_pixel^^}"
+        pixel="${pixel^^}"
+        if (( sample_x < button_left || sample_x > button_right || sample_y < button_top || sample_y > button_bottom ||
+              click_x < button_left || click_x > button_right || click_y < button_top || click_y > button_bottom )); then
+            pixel="OUT-OF-BOUNDS"
+        fi
+
+        local gate=failed
+        if [[ "$before_pixel" != "00B050" && "$pixel" == "00B050" ]]; then
+            gate=passed
+        fi
+        write_artifact "autofilter-color-swatch-gate.txt" \
+            "schema-version=1\nbefore=autofilter-color-before.png\nsource=autofilter-color-menu-open.png\nbutton-bounds=${button_left},${button_top},${button_width},${button_height}\nclick=${click_x},${click_y}\nsample=${sample_x},${sample_y}\nbefore-rgb=#${before_pixel}\nsample-rgb=#${pixel}\ngate=${gate}\n"
+        [[ "$gate" == "passed" ]] || return 1
+        printf 'fill:#%s' "$pixel"
     }
 
     save_color_document() {
@@ -6166,14 +6194,16 @@ PY
     capture "autofilter-color-menu-open.png"
     if screen_changed "$output/autofilter-color-before.png" "$output/autofilter-color-menu-open.png" 500; then
         menu_open=true
-        # The first Filter-by-Color swatch is the green fill authored by the fixture.
-        click_autofilter_control 110 220
-        criteria="fill:#00B050"
-        visible="$(read_visible_color_values)"
-        capture "autofilter-color-applied.png"
+        criteria="$(verify_rendered_fill_swatch "$output/autofilter-color-before.png" "$output/autofilter-color-menu-open.png" || true)"
+        if [[ "$criteria" == "fill:#00B050" ]]; then
+            swatch_gate=true
+            click_autofilter_control 110 220
+            visible="$(read_visible_color_values)"
+            capture "autofilter-color-applied.png"
+        fi
     fi
 
-    if $menu_open && [[ "$visible" == "North,East," ]]; then
+    if $menu_open && $swatch_gate && [[ "$visible" == "North,East," ]]; then
         save_color_document && save_clean=true
         package="$(package_fill_color_signature || true)"
     fi
@@ -6195,9 +6225,9 @@ PY
         fi
     done
     write_artifact "autofilter-color-postcondition.txt" \
-        "document-path=$document_path\nmenu-open=$menu_open\ncriteria=$criteria\nvisible=$visible\nsave-clean=$save_clean\npackage=$package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-visible=$reopened_visible\nreopened-semantic-a4=$reopened_semantic\n"
+        "document-path=$document_path\nmenu-open=$menu_open\nswatch-gate=$swatch_gate\ncriteria=$criteria\nvisible=$visible\nsave-clean=$save_clean\npackage=$package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-visible=$reopened_visible\nreopened-semantic-a4=$reopened_semantic\n"
 
-    if $menu_open && [[ "$criteria" == "fill:#00B050" && "$visible" == "North,East," && $save_clean &&
+    if $menu_open && $swatch_gate && [[ "$criteria" == "fill:#00B050" && "$visible" == "North,East," && $save_clean &&
         "$package" == *"ref=A1:B5|colId=0|cellColor=1"* && "$package" == *"|fill=FF00B050"* && $dialog_open && $dialog_closed &&
         "$reopened_visible" == "North,East," && "$reopened_semantic" == "East" ]]; then
         record "autofilter-color-fill-save-reopen-physical" "passed" \
