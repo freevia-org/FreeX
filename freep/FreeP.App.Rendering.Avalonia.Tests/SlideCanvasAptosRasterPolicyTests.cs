@@ -103,7 +103,7 @@ public sealed class SlideCanvasAptosRasterPolicyTests
     }
 
     [Theory]
-    [InlineData(0x000000)]
+    [InlineData(0xFFFFFF)]
     [InlineData(0x4472C4)]
     public void ImportedIncreasingCircleCalibration_RejectsResolvedTextColorVariants(int textColorRgb)
     {
@@ -111,7 +111,7 @@ public sealed class SlideCanvasAptosRasterPolicyTests
             true,
             CreateImportedLayout(textColor: SrgbColor.FromRgb(textColorRgb)),
             CreateImportedBounds()).Should().BeFalse(
-                "the measured Office cache resolves its lt1 font reference to white text");
+                "the measured Office cache resolves its omitted run color to black text");
     }
 
     [Fact]
@@ -211,7 +211,7 @@ public sealed class SlideCanvasAptosRasterPolicyTests
                                 Text = "Measured",
                                 FontFamily = fontFamily,
                                 FontSizePt = fontSizePt,
-                                Color = textColor ?? SrgbColor.White,
+                                Color = textColor ?? SrgbColor.Black,
                                 TextShadow = hasRunEffect
                                     ? new ResolvedRunShadow
                                     {
@@ -226,7 +226,7 @@ public sealed class SlideCanvasAptosRasterPolicyTests
                                 Text = " variant",
                                 FontFamily = "Calibri",
                                 FontSizePt = fontSizePt,
-                                Color = textColor ?? SrgbColor.White
+                                Color = textColor ?? SrgbColor.Black
                             }
                         ]
                         : [
@@ -235,7 +235,7 @@ public sealed class SlideCanvasAptosRasterPolicyTests
                                 Text = "Measured layout",
                                 FontFamily = fontFamily,
                                 FontSizePt = fontSizePt,
-                                Color = textColor ?? SrgbColor.White,
+                                Color = textColor ?? SrgbColor.Black,
                                 TextShadow = hasRunEffect
                                     ? new ResolvedRunShadow
                                     {

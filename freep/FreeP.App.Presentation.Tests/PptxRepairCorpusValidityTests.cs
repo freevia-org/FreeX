@@ -557,6 +557,7 @@ public sealed class PptxRepairCorpusValidityTests
 
             var run = paragraph.Runs.Should().ContainSingle().Subject;
             run.Text.Should().NotBeNullOrWhiteSpace();
+            run.Color.Should().Be(SrgbColor.Black);
             run.FontFamily.Should().Be("Aptos");
             run.FontSizePt.Should().BeApproximately(44.0, 0.001);
             run.BaselineOffset.Should().BeNull();
