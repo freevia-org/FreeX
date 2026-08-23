@@ -40,6 +40,10 @@ public sealed partial class SlideCanvas : Control
     private const double PowerPointFixedTextLineSpacingFactor = 1.20;
     private const double PowerPointAptosBodyCalibrationFontSizePt = 18.0;
     internal const double FixedSizeAptosBodyFontScale = 0.930;
+    // Imported IncreasingCircleProcess labels use the same Arial fallback as other Aptos text,
+    // but the cached Office text raster is optically smaller on the Avalonia host. Keep this
+    // calibration semantic and scoped to the compositor's authoritative cache flag.
+    internal const double ImportedIncreasingCircleAptosFontScale = 0.930;
 
     // ── Styled / direct properties ──────────────────────────────────────────
 
@@ -485,7 +489,11 @@ public sealed partial class SlideCanvas : Control
             if (hasTextTransform)
                 textTransformScope = dc.PushTransform(ToAvaloniaMatrix(autoFitPlan.TextRenderTransform));
 
-            RenderText(dc, shape.Text, bounds);
+            RenderText(
+                dc,
+                shape.Text,
+                bounds,
+                shape.UseImportedIncreasingCircleTextRaster);
 
             textTransformScope?.Dispose();
         }
@@ -1381,7 +1389,11 @@ public sealed partial class SlideCanvas : Control
 
     // ── Text ─────────────────────────────────────────────────────────────────
 
-    private static void RenderText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
+    private static void RenderText(
+        DrawingContext dc,
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        bool useImportedIncreasingCircleTextRaster = false)
     {
         // Wave 18B: vertical text — rotate the text block around the shape center.
         var orientation = TextLayoutPlanner.PlanTextOrientation(text, bounds);
@@ -1398,11 +1410,19 @@ public sealed partial class SlideCanvas : Control
                 Matrix.CreateTranslation(-orientation.RotationCenterX, -orientation.RotationCenterY)
                 * Matrix.CreateRotation(rad)
                 * Matrix.CreateTranslation(orientation.RotationCenterX, orientation.RotationCenterY));
-            RenderTextCore(dc, text, orientation.TextBounds);
+            RenderTextCore(
+                dc,
+                text,
+                orientation.TextBounds,
+                useImportedIncreasingCircleTextRaster);
             return;
         }
 
-        RenderTextCore(dc, text, orientation.TextBounds);
+        RenderTextCore(
+            dc,
+            text,
+            orientation.TextBounds,
+            useImportedIncreasingCircleTextRaster);
     }
 
     private static void RenderStackedVerticalText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
@@ -1487,7 +1507,11 @@ public sealed partial class SlideCanvas : Control
         return true;
     }
 
-    private static void RenderTextCore(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
+    private static void RenderTextCore(
+        DrawingContext dc,
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        bool useImportedIncreasingCircleTextRaster = false)
     {
         // Wave 22B: multi-column layout
         if (text.ColumnCount > 1)
@@ -1496,6 +1520,10 @@ public sealed partial class SlideCanvas : Control
             return;
         }
 
+        double? importedIncreasingCircleFontScale =
+            useImportedIncreasingCircleTextRaster && UsesImportedIncreasingCircleAptosText(text)
+                ? ImportedIncreasingCircleAptosFontScale
+                : null;
         var plan = TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>(
             text,
             bounds,
@@ -1506,9 +1534,10 @@ public sealed partial class SlideCanvas : Control
                     request.MaxWidthDip,
                     request.Text.Wrap,
                     request.Text.AutoFitKind,
-                    UsesFixedSizeAptosBodyFallback(request.Text)
+                    importedIncreasingCircleFontScale
+                        ?? (UsesFixedSizeAptosBodyFallback(request.Text)
                         ? FixedSizeAptosBodyFontScale
-                        : null);
+                        : null));
                 return new TextNativeMeasurement<FormattedText>(
                     formattedText,
                     formattedText.Height,
@@ -1520,6 +1549,13 @@ public sealed partial class SlideCanvas : Control
             bounds,
             applyFixedSizeAptosBodyFallback: UsesFixedSizeAptosBodyFallback(text));
     }
+
+    internal static bool UsesImportedIncreasingCircleAptosText(ResolvedTextLayout text) =>
+        text.Paragraphs.Count > 0
+        && text.Paragraphs.All(paragraph =>
+            paragraph.Runs.Count > 0
+            && paragraph.Runs.All(run =>
+                string.Equals(run.FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)));
 
     private static void RenderMeasuredParagraphsAvalonia(
         DrawingContext dc,

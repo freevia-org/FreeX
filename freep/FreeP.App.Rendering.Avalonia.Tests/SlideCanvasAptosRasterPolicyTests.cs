@@ -13,6 +13,17 @@ public sealed class SlideCanvasAptosRasterPolicyTests
     }
 
     [Fact]
+    public void ImportedIncreasingCircleText_UsesDedicatedAptosCalibrationOnly()
+    {
+        SlideCanvas.ImportedIncreasingCircleAptosFontScale.Should().Be(0.930);
+        SlideCanvas.UsesImportedIncreasingCircleAptosText(CreateLayout(1)).Should().BeTrue();
+        SlideCanvas.UsesImportedIncreasingCircleAptosText(
+            CreateLayout(1, fontFamily: "Aptos Display")).Should().BeFalse();
+        SlideCanvas.UsesImportedIncreasingCircleAptosText(
+            CreateLayout(1, fontFamily: "Calibri")).Should().BeFalse();
+    }
+
+    [Fact]
     public void UsesFixedSizeAptosBodyFallback_MatchesSemanticRenderingRoute()
     {
         SlideCanvas.UsesFixedSizeAptosBodyFallback(CreateLayout(8)).Should().BeTrue();
