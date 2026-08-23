@@ -530,7 +530,7 @@ public sealed class DocumentTableEditingCoordinator
         TableFormulaField formula)
     {
         ArgumentNullException.ThrowIfNull(formula);
-        if (!TryResolveCell(address, out _, out var cellIndex))
+        if (!TryResolveCellParagraph(address, paragraphIndex, out var cellIndex))
             return new DocumentTableTextEditResult(false, address, paragraphIndex, textOffset);
 
         var command = new InsertTableCellFormulaCommand(
@@ -555,7 +555,7 @@ public sealed class DocumentTableEditingCoordinator
         string? text,
         bool footnote)
     {
-        if (!TryResolveCell(address, out _, out var cellIndex))
+        if (!TryResolveCellParagraph(address, paragraphIndex, out var cellIndex))
             return new DocumentTableTextEditResult(false, address, paragraphIndex, textOffset);
 
         var id = footnote
@@ -773,6 +773,18 @@ public sealed class DocumentTableEditingCoordinator
 
         cell = table.Rows[address.RowIndex].Cells[cellIndex];
         return true;
+    }
+
+    private bool TryResolveCellParagraph(
+        DocumentTableCellAddress address,
+        int paragraphIndex,
+        out int cellIndex)
+    {
+        if (!TryResolveCell(address, out var table, out cellIndex))
+            return false;
+
+        var paragraphs = table.Rows[address.RowIndex].Cells[cellIndex].Paragraphs;
+        return paragraphIndex >= 0 && paragraphIndex < paragraphs.Count;
     }
 
     private static int GridWidth(Table table) =>

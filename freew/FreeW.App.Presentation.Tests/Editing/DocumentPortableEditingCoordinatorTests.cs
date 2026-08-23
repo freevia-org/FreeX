@@ -436,6 +436,46 @@ public sealed class DocumentTableEditingCoordinatorTests
     }
 
     [Fact]
+    public void InsertFormulaRejectsAStaleParagraphWithoutMovingTheCaretOrCreatingUndo()
+    {
+        var table = Table.Create(1, 1);
+        var session = SessionWith(table);
+        var address = new DocumentTableCellAddress(0, 0, 0);
+
+        var result = session.Tables.InsertFormula(
+            address,
+            paragraphIndex: 7,
+            textOffset: 4,
+            new TableFormulaField("=SUM(ABOVE)"));
+
+        result.Applied.Should().BeFalse();
+        result.TextOffset.Should().Be(4);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Should().BeEmpty();
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void InsertNoteRejectsAStaleParagraphWithoutMovingTheCaretOrCreatingUndo()
+    {
+        var table = Table.Create(1, 1);
+        var session = SessionWith(table);
+        var address = new DocumentTableCellAddress(0, 0, 0);
+
+        var result = session.Tables.InsertNote(
+            address,
+            paragraphIndex: -1,
+            textOffset: 5,
+            text: "note",
+            footnote: true);
+
+        result.Applied.Should().BeFalse();
+        result.TextOffset.Should().Be(5);
+        session.Document.Footnotes.Should().BeEmpty();
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Should().BeEmpty();
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void TableStylePreviewSwitchAndCancelRestoreTheCompleteBaselineWithoutUndo()
     {
         var table = Table.Create(1, 1);
