@@ -6367,6 +6367,291 @@ PY
     fi
 }
 
+probe_autofilter_mixed_type_persistence_physical() {
+    local prefix="autofilter-mixed-type"
+    local result_id="autofilter-mixed-type-value-save-reopen-physical"
+    local artifacts="${prefix}-before.png;${prefix}-menu-open.png;${prefix}-menu-cleared.png;${prefix}-target-checked.png;${prefix}-applied.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt;${prefix}-reopen-diagnostics.txt;${prefix}-target-before.png;${prefix}-target-menu-open.png;${prefix}-target-cleared.png;${prefix}-target-selected.png;${prefix}-target-dismissed.png;${prefix}-screenshots.tar.gz"
+    local menu_open=false target_cleared=false target_selected=false popup_dismissed=false
+    local save_clean=false dialog_open=false dialog_closed=false
+    local popup_route="none"
+    local initial_total="" applied_total="" reopened_total=""
+    local visible="" reopened_visible="" semantic="" reopened_semantic="" package=""
+    local expected_visible="42,'42,"
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "${prefix}-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path"
+        record "$result_id" "failed" "${prefix}-postcondition.txt" "The mixed-type AutoFilter lane requires an XLSX document path." "$artifacts"
+        return
+    fi
+
+    read_visible_mixed_values() {
+        local first second
+        first="$(copy_cell_display 0 1 mixed-visible-first || true)"
+        second="$(copy_cell_display 0 2 mixed-visible-second || true)"
+        send_key Escape
+        printf '%s,%s,' "$first" "$second"
+    }
+
+    package_mixed_type_signature() {
+        python3 - "$document_path" <<'PY'
+import sys, zipfile, xml.etree.ElementTree as ET
+
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+with zipfile.ZipFile(sys.argv[1]) as package:
+    sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+
+auto_filter = sheet.find(main + "autoFilter")
+column = auto_filter.find(main + "filterColumn") if auto_filter is not None else None
+filters = column.find(main + "filters") if column is not None else None
+values = [node.attrib.get("val", "") for node in filters.findall(main + "filter")] if filters is not None else []
+hidden = [row.attrib["r"] for row in sheet.findall(".//" + main + "row") if row.attrib.get("hidden") == "1"]
+cells = {cell.attrib.get("r", ""): cell for cell in sheet.findall(".//" + main + "c")}
+
+def cell_value(address):
+    cell = cells[address]
+    inline = cell.find(main + "is/" + main + "t")
+    return inline.text if inline is not None else (cell.findtext(main + "v") or "")
+
+if auto_filter is None or column is None or filters is None:
+    raise SystemExit(1)
+formula = cells["C1"].findtext(main + "f") or ""
+print(
+    f"ref={auto_filter.attrib.get('ref','')}|colId={column.attrib.get('colId','')}|"
+    f"filters={','.join(values)}|blank={filters.attrib.get('blank','')}|hidden={','.join(hidden)}|"
+    f"A2-type={cells['A2'].attrib.get('t','n')}|A2={cell_value('A2')}|"
+    f"A3-type={cells['A3'].attrib.get('t','n')}|A3={cell_value('A3')}|"
+    f"A6-style={cells['A6'].attrib.get('s','')}|A6={cell_value('A6')}|"
+    f"C1-formula={formula}|C1={cell_value('C1')}"
+)
+PY
+    }
+
+    verify_mixed_type_popup_gate() {
+        local before="$1" opened="$2" cleared="$3" selected="$4" dismissed="$5"
+        local left=$((a1_x + 68)) top=$((a1_y + 353)) width=260 height=18
+        local click_x=$((a1_x + 74)) click_y=$((a1_y + 362))
+        local geometry="${width}x${height}+${left}+${top}"
+        local before_crop="$output/${prefix}-target-before.png"
+        local open_crop="$output/${prefix}-target-menu-open.png"
+        local cleared_crop="$output/${prefix}-target-cleared.png"
+        local selected_crop="$output/${prefix}-target-selected.png"
+        local dismissed_crop="$output/${prefix}-target-dismissed.png"
+        local open_delta clear_delta select_delta dismiss_delta restore_delta
+        local before_hash open_hash clear_hash selected_hash dismissed_hash gate=failed
+        local open_threshold=1000 clear_threshold=20 select_threshold=20 dismiss_threshold=1000 restore_maximum=100
+
+        convert "$before" -crop "$geometry" +repage "$before_crop"
+        convert "$opened" -crop "$geometry" +repage "$open_crop"
+        convert "$cleared" -crop "$geometry" +repage "$cleared_crop"
+        convert "$selected" -crop "$geometry" +repage "$selected_crop"
+        convert "$dismissed" -crop "$geometry" +repage "$dismissed_crop"
+        open_delta="$(compare -metric AE "$before_crop" "$open_crop" null: 2>&1 || true)"
+        clear_delta="$(compare -metric AE "$open_crop" "$cleared_crop" null: 2>&1 || true)"
+        select_delta="$(compare -metric AE "$cleared_crop" "$selected_crop" null: 2>&1 || true)"
+        dismiss_delta="$(compare -metric AE "$selected_crop" "$dismissed_crop" null: 2>&1 || true)"
+        restore_delta="$(compare -metric AE "$before_crop" "$dismissed_crop" null: 2>&1 || true)"
+        before_hash="$(sha256sum "$before_crop" | awk '{print $1}')"
+        open_hash="$(sha256sum "$open_crop" | awk '{print $1}')"
+        clear_hash="$(sha256sum "$cleared_crop" | awk '{print $1}')"
+        selected_hash="$(sha256sum "$selected_crop" | awk '{print $1}')"
+        dismissed_hash="$(sha256sum "$dismissed_crop" | awk '{print $1}')"
+
+        if [[ "$open_delta" =~ ^[0-9]+$ ]] && (( open_delta >= open_threshold )); then menu_open=true; fi
+        if [[ "$clear_delta" =~ ^[0-9]+$ ]] && (( clear_delta >= clear_threshold )); then target_cleared=true; fi
+        if [[ "$select_delta" =~ ^[0-9]+$ ]] && (( select_delta >= select_threshold )); then target_selected=true; fi
+        if [[ "$dismiss_delta" =~ ^[0-9]+$ ]] && (( dismiss_delta >= dismiss_threshold )) &&
+           [[ "$restore_delta" =~ ^[0-9]+$ ]] && (( restore_delta <= restore_maximum )); then popup_dismissed=true; fi
+        if (( click_x >= left && click_x < left + width && click_y >= top && click_y < top + height )) &&
+           $menu_open && $target_cleared && $target_selected && $popup_dismissed &&
+           [[ "$before_hash" != "$open_hash" && "$open_hash" != "$clear_hash" &&
+              "$clear_hash" != "$selected_hash" && "$selected_hash" != "$dismissed_hash" ]]; then
+            gate=passed
+        fi
+
+        write_artifact "${prefix}-popup-gate.txt" \
+            "schema-version=1\nbefore=${prefix}-before.png\nopened=${prefix}-menu-open.png\ncleared=${prefix}-menu-cleared.png\nselected=${prefix}-target-checked.png\ndismissed=${prefix}-applied.png\ntarget-bounds=${left},${top},${width},${height}\ntarget-click=${click_x},${click_y}\nopen-delta=${open_delta}\nopen-threshold=${open_threshold}\nclear-delta=${clear_delta}\nclear-threshold=${clear_threshold}\nselect-delta=${select_delta}\nselect-threshold=${select_threshold}\ndismiss-delta=${dismiss_delta}\ndismiss-threshold=${dismiss_threshold}\nrestore-delta=${restore_delta}\nrestore-maximum=${restore_maximum}\nbefore-sha256=${before_hash}\nopen-sha256=${open_hash}\nclear-sha256=${clear_hash}\nselected-sha256=${selected_hash}\ndismissed-sha256=${dismissed_hash}\nmenu-open=${menu_open}\ntarget-cleared=${target_cleared}\ntarget-selected=${target_selected}\npopup-dismissed=${popup_dismissed}\ngate=${gate}"
+        [[ "$gate" == "passed" ]]
+    }
+
+    wait_for_mixed_type_popup_target() {
+        local before="$1" destination="$2"
+        local left=$((a1_x + 68)) top=$((a1_y + 353)) width=260 height=18
+        local geometry="${width}x${height}+${left}+${top}"
+        local before_crop="$output/${prefix}-popup-wait-before.png"
+        local candidate_crop="$output/${prefix}-popup-wait-candidate.png"
+        local delta=""
+
+        convert "$before" -crop "$geometry" +repage "$before_crop"
+        for _ in $(seq 1 10); do
+            capture "$(basename "$destination")"
+            convert "$destination" -crop "$geometry" +repage "$candidate_crop"
+            delta="$(compare -metric AE "$before_crop" "$candidate_crop" null: 2>&1 || true)"
+            if [[ "$delta" =~ ^[0-9]+$ ]] && (( delta >= 1000 )); then
+                return 0
+            fi
+            sleep 0.2
+        done
+        return 1
+    }
+
+    mixed_type_target_region_changed() {
+        local first="$1" second="$2" minimum="$3"
+        local left=$((a1_x + 68)) top=$((a1_y + 353)) width=260 height=18
+        local geometry="${width}x${height}+${left}+${top}"
+        local first_crop="$output/${prefix}-target-change-first.png"
+        local second_crop="$output/${prefix}-target-change-second.png"
+        local delta=""
+        convert "$first" -crop "$geometry" +repage "$first_crop"
+        convert "$second" -crop "$geometry" +repage "$second_crop"
+        delta="$(compare -metric AE "$first_crop" "$second_crop" null: 2>&1 || true)"
+        [[ "$delta" =~ ^[0-9]+$ ]] && (( delta >= minimum ))
+    }
+
+    save_mixed_type_document() {
+        select_cell 0 0 A1 || return 1
+        send_key ctrl+s
+        if wait_for_document_clean; then return 0; fi
+        send_key shift+F12
+        wait_for_document_clean
+    }
+
+    reopen_mixed_type_document() {
+        local before_windows after_windows main_pid baseline_ids active_id active_title active_pid visible_dialog_id shortcut
+        local diagnostics_path="$output/${prefix}-reopen-diagnostics.txt"
+        : > "$diagnostics_path"
+        wait_for_document_idle || true
+        select_cell 0 0 A1 || true
+        focus_app
+        before_windows="$(visible_window_count)"
+        main_pid="$(xdotool getwindowpid "$window_id" 2>/dev/null || true)"
+        baseline_ids="$(xdotool search --onlyvisible --name '.*' 2>/dev/null | sort -n | tr '\n' ' ')"
+        baseline_ids="${baseline_ids% }"
+        [[ -n "$main_pid" ]] || return 1
+        printf 'before-windows=%s\nmain-window-id=%s\nmain-window-pid=%s\nbaseline-window-ids=%s\n' \
+            "$before_windows" "$window_id" "$main_pid" "$baseline_ids" >> "$diagnostics_path"
+        for shortcut in ctrl+F12 ctrl+o ctrl+F12; do
+            send_key "$shortcut"
+            for _ in $(seq 1 12); do
+                after_windows="$(visible_window_count)"
+                active_id="$(xdotool getactivewindow 2>/dev/null || true)"
+                active_title="$(xdotool getwindowname "$active_id" 2>/dev/null || true)"
+                active_pid="$(xdotool getwindowpid "$active_id" 2>/dev/null || true)"
+                printf 'shortcut=%s|windows=%s|active-id=%s|active-title=%s|active-pid=%s\n' \
+                    "$shortcut" "$after_windows" "$active_id" "$active_title" "$active_pid" >> "$diagnostics_path"
+                if [[ "$active_id" != "$window_id" && "$active_title" == "Open Workbook" &&
+                      "$active_pid" == "$main_pid" && " $baseline_ids " != *" $active_id "* ]]; then
+                    dialog_open=true
+                    break 2
+                fi
+                sleep 0.2
+            done
+            sleep 0.5
+        done
+        $dialog_open || return 1
+        xdotool windowactivate --sync "$active_id" 2>/dev/null || return 1
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+        xdotool key --clearmodifiers Return
+        sleep "$settle_seconds"
+        xdotool key --clearmodifiers Return
+        for _ in $(seq 1 20); do
+            visible_dialog_id="$(xdotool search --onlyvisible --name '^Open Workbook$' 2>/dev/null | awk -v target="$active_id" '$1 == target { print $1; exit }')"
+            if [[ "$visible_dialog_id" != "$active_id" ]]; then dialog_closed=true; break; fi
+            sleep 0.25
+        done
+        $dialog_closed || return 1
+        wait_for_expected_document || return 1
+        sleep "$dialog_settle_seconds"
+        focus_app
+        wait_for_document_idle || true
+    }
+
+    initial_total="$(copy_cell_display 2 0 C1-initial-total || true)"
+    select_cell 0 0 A1
+    capture "${prefix}-before.png"
+    open_autofilter_menu 0
+    if wait_for_mixed_type_popup_target \
+        "$output/${prefix}-before.png" "$output/${prefix}-menu-open.png"; then
+        popup_route="alt-down"
+    else
+        send_key Escape
+        focus_app
+        xdotool_mousemove_sync "$((a1_x + 55))" "$((a1_y + 14))" click 1
+        sleep "$settle_seconds"
+        if wait_for_mixed_type_popup_target \
+            "$output/${prefix}-before.png" "$output/${prefix}-menu-open.png"; then
+            popup_route="header-arrow"
+        fi
+    fi
+    if [[ "$popup_route" != "none" ]]; then
+        click_autofilter_control 74 319
+        capture "${prefix}-menu-cleared.png"
+        if ! mixed_type_target_region_changed \
+            "$output/${prefix}-menu-open.png" "$output/${prefix}-menu-cleared.png" 20; then
+            click_autofilter_control 74 319
+            capture "${prefix}-menu-cleared.png"
+        fi
+        click_autofilter_control 74 362
+        capture "${prefix}-target-checked.png"
+        click_autofilter_control 292 433
+        sleep "$settle_seconds"
+        capture "${prefix}-applied.png"
+    else
+        capture "${prefix}-menu-cleared.png"
+        capture "${prefix}-target-checked.png"
+        capture "${prefix}-applied.png"
+    fi
+
+    if verify_mixed_type_popup_gate \
+        "$output/${prefix}-before.png" "$output/${prefix}-menu-open.png" \
+        "$output/${prefix}-menu-cleared.png" "$output/${prefix}-target-checked.png" \
+        "$output/${prefix}-applied.png"; then
+        visible="$(read_visible_mixed_values)"
+        semantic="$(copy_cell_formula_by_address B2 || true),$(copy_cell_formula_by_address B3 || true)"
+        applied_total="$(copy_cell_display 2 0 C1-applied-total || true)"
+    fi
+
+    if [[ "$visible" == "$expected_visible" && "$semantic" == "Number,NumericText" &&
+          "$initial_total" == "5" && "$applied_total" == "2" ]]; then
+        save_mixed_type_document && save_clean=true
+        package="$(package_mixed_type_signature || true)"
+    fi
+
+    local expected_package="ref=A1:B7|colId=0|filters=42|blank=|hidden=4,5,6,7|A2-type=n|A2=42|A3-type=inlineStr|A3=42|A6-style=1|A6=45292|C1-formula=SUBTOTAL(103,A2:A7)|C1=2"
+    if $save_clean && [[ "$package" == "$expected_package" ]]; then
+        reopen_mixed_type_document || true
+        if $dialog_closed; then
+            capture "${prefix}-reopened.png"
+            reopened_visible="$(read_visible_mixed_values)"
+            reopened_semantic="$(copy_cell_formula_by_address B2 || true),$(copy_cell_formula_by_address B3 || true)"
+            reopened_total="$(copy_cell_display 2 0 C1-reopened-total || true)"
+        fi
+    fi
+
+    write_artifact "${prefix}-postcondition.txt" \
+        "document-path=$document_path\npopup-route=$popup_route\nmenu-open=$menu_open\ntarget-cleared=$target_cleared\ntarget-selected=$target_selected\npopup-dismissed=$popup_dismissed\ninitial-total=$initial_total\napplied-total=$applied_total\nvisible=$visible\nsemantic=$semantic\nsave-clean=$save_clean\npackage=$package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-total=$reopened_total\nreopened-visible=$reopened_visible\nreopened-semantic=$reopened_semantic"
+
+    tar -czf "$output/${prefix}-screenshots.tar.gz" -C "$output" \
+        "${prefix}-before.png" "${prefix}-menu-open.png" "${prefix}-menu-cleared.png" \
+        "${prefix}-target-checked.png" "${prefix}-applied.png" "${prefix}-reopened.png" \
+        "${prefix}-target-before.png" "${prefix}-target-menu-open.png" \
+        "${prefix}-target-cleared.png" "${prefix}-target-selected.png" \
+        "${prefix}-target-dismissed.png"
+
+    if $menu_open && $target_cleared && $target_selected && $popup_dismissed &&
+       [[ "$initial_total" == "5" && "$applied_total" == "2" && "$visible" == "$expected_visible" &&
+          "$semantic" == "Number,NumericText" && $save_clean && "$package" == "$expected_package" &&
+          $dialog_open && $dialog_closed && "$reopened_total" == "2" &&
+          "$reopened_visible" == "$expected_visible" && "$reopened_semantic" == "Number,NumericText" ]]; then
+        record "$result_id" "passed" \
+            "${prefix}-menu-open.png;${prefix}-target-checked.png;${prefix}-applied.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt" \
+            "The rendered mixed-type checklist grouped number 42 and text 42, acknowledged the fixed checkbox click and popup dismissal, recalculated 5 to 2, saved exact filter/hidden/type state, and reopened through the production picker with matching rendered and semantic values." "$artifacts"
+    else
+        record "$result_id" "failed" "$artifacts" \
+            "The mixed-type lane did not prove the rendered checklist transitions, 42/42 visible rows, 5-to-2 recalculation, exact package state, and matching production reopen." "$artifacts"
+    fi
+}
+
 if [[ "$probe_selector" == "autofilter-date-criteria-persistence" ]]; then
     probe_autofilter_date_criteria_persistence_physical
     if (( mousemove_timeout_count > 0 )); then
@@ -6410,6 +6695,19 @@ if [[ "$probe_selector" == "autofilter-no-fill-persistence" ]]; then
     probe_autofilter_color_persistence_physical nofill
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the No Fill persistence probe."
+    fi
+    write_manifest
+    probe_failed=false
+    for result in "${results[@]}"; do
+        [[ "$result" == *'\"status\":\"failed\"'* ]] && probe_failed=true
+    done
+    if $probe_failed; then exit 3; fi
+    exit 0
+fi
+if [[ "$probe_selector" == "autofilter-mixed-type-persistence" ]]; then
+    probe_autofilter_mixed_type_persistence_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the mixed-type AutoFilter persistence probe."
     fi
     write_manifest
     probe_failed=false
