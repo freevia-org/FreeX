@@ -763,17 +763,24 @@ try {
         nextSlice = $freePNextSlice
     }
 
+    $wave193IntegrationGateEvidence = [ordered]@{
+        integrationHead = "5296d9a47a"
+        independentReview = "Passed: independent review found no findings after dashboard and source-guard remediations."
+        repositoryPreflight = "Passed: 288 JSON, 306 XML-backed, and 13,843 text files conflict scanned."
+        fullReleaseBuild = "Passed: the first full Release build passed before remediation; the post-remediation normal rebuild hit transient shared compiler locks; the prescribed retry dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors."
+        defaultNonUiTestLane = "Passed: final default lane exit 0 with Core.IO 5,839 passed/56 skipped, Avalonia 2,178 passed, Host Logic 1,490 passed/4 skipped, FreeP Presentation 5,466 passed, and FreeP Avalonia 724 passed."
+        sourceTestRemediation = "The initial default lane exposed three source-test regressions; remediation fixed all three, and focused reruns passed."
+    }
+    $wave193IntegrationHead = [string]$wave193IntegrationGateEvidence["integrationHead"]
+
     $dashboard = [ordered]@{
         schema = "freex.parity.cross-app-dashboard.v3"
         wave = 193
         cumulativeAppSlices = 579
-        cumulativeAppSlicesStatus = "pending-final-integration-gates"
-        pendingIntegrationGates = @(
-            "independent review",
-            "repository preflight",
-            "full Release build",
-            "default non-UI test lane"
-        )
+        cumulativeAppSlicesStatus = "accepted-final-integration-gates"
+        integrationGateStatus = "accepted"
+        pendingIntegrationGates = @()
+        integrationGateEvidence = $wave193IntegrationGateEvidence
         scopeBoundary = "Generated counts prove command/profile routing, route and artifact coverage, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates, physical/no-COM limitations, and authoritative Microsoft Office baseline availability remain explicitly separate from coverage metrics."
         sources = @(
             "docs/parity/command-inventory.json",
@@ -871,7 +878,7 @@ try {
         "",
         "> Generated counts prove command/profile routing, route and artifact coverage, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates, physical/no-COM limitations, and authoritative Microsoft Office baseline availability remain explicitly separate from coverage metrics.",
         "",
-        "> Wave193 records a provisional cumulative **$($dashboard.cumulativeAppSlices)** app slices. That count remains contingent on the pending independent review, repository preflight, full Release build, and default non-UI test lane.",
+        "> Wave193 records an accepted cumulative **$($dashboard.cumulativeAppSlices)** app slices. Final integration gates passed at HEAD ``$wave193IntegrationHead``; no pending gates remain.",
         "",
         "## Summary",
         "",
@@ -897,7 +904,13 @@ try {
         "",
         "## Integration Gates",
         "",
-        "Wave193's cumulative 579 app-slice count is **pending** final integration gates: $($dashboard.pendingIntegrationGates -join ', '). No full build or default test lane is represented by this generated dashboard.",
+        "Wave193's cumulative 579 app-slice count is **accepted**. All final integration gates passed at integration HEAD ``$wave193IntegrationHead``.",
+        "",
+        "- Independent review: $($dashboard.integrationGateEvidence.independentReview)",
+        "- Repository preflight: $($dashboard.integrationGateEvidence.repositoryPreflight)",
+        "- Full Release build: $($dashboard.integrationGateEvidence.fullReleaseBuild)",
+        "- Final default non-UI test lane: $($dashboard.integrationGateEvidence.defaultNonUiTestLane)",
+        "- Remediation: $($dashboard.integrationGateEvidence.sourceTestRemediation)",
         "",
         "## FreeX Visual Review Queue",
         "",
