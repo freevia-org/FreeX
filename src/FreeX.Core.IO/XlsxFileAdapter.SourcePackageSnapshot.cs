@@ -5387,7 +5387,7 @@ public sealed partial class XlsxFileAdapter
 
             foreach (var relationship in relationshipsXml.Root.Elements(packageRelNs + "Relationship"))
             {
-                if (!IsStructurallyValidPackageRelationship(relationship))
+                if (!OpcRelationships.IsStructurallyValidRelationship(relationship))
                     return !sourceIsRichData;
 
                 var relationshipType = relationship.Attribute("Type")?.Value.Trim() ?? "";
@@ -5421,35 +5421,6 @@ public sealed partial class XlsxFileAdapter
             }
 
             return true;
-        }
-
-        private static bool IsStructurallyValidPackageRelationship(XElement relationship)
-        {
-            if (relationship.Attributes().Any(attribute =>
-                    !attribute.IsNamespaceDeclaration &&
-                    attribute.Name.NamespaceName.Length != 0))
-            {
-                return false;
-            }
-
-            if (relationship.Attributes().Any(attribute =>
-                    !attribute.IsNamespaceDeclaration &&
-                    attribute.Name.LocalName is not "Id" and not "Type" and not "Target" and not "TargetMode"))
-            {
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value) ||
-                string.IsNullOrWhiteSpace(relationship.Attribute("Type")?.Value) ||
-                string.IsNullOrWhiteSpace(relationship.Attribute("Target")?.Value))
-            {
-                return false;
-            }
-
-            var targetMode = relationship.Attribute("TargetMode")?.Value;
-            return string.IsNullOrWhiteSpace(targetMode) ||
-                   string.Equals(targetMode.Trim(), "External", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(targetMode.Trim(), "Internal", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsRichDataRelationshipType(string relationshipType) =>
@@ -7163,7 +7134,10 @@ public sealed partial class XlsxFileAdapter
                             continue;
                         }
 
-                        WriteCurrentXmlNode(reader, writer);
+                        XmlStreamingCopy.WriteCurrentNode(
+                            reader,
+                            writer,
+                            writeXmlDeclarationAsProcessingInstruction: true);
                         hasNode = reader.Read();
                     }
                 }
@@ -7242,67 +7216,6 @@ public sealed partial class XlsxFileAdapter
                 ApplyCellStyle(cell, change.NewSourceStyleIndex);
 
             return true;
-        }
-
-        private static void WriteCurrentXmlNode(XmlReader reader, XmlWriter writer)
-        {
-            switch (reader.NodeType)
-            {
-                case XmlNodeType.Element:
-                    writer.WriteStartElement(reader.Prefix, reader.LocalName, reader.NamespaceURI);
-                    if (reader.HasAttributes)
-                    {
-                        while (reader.MoveToNextAttribute())
-                        {
-                            writer.WriteStartAttribute(reader.Prefix, reader.LocalName, reader.NamespaceURI);
-                            writer.WriteString(reader.Value);
-                            writer.WriteEndAttribute();
-                        }
-
-                        reader.MoveToElement();
-                    }
-
-                    if (reader.IsEmptyElement)
-                        writer.WriteEndElement();
-                    break;
-
-                case XmlNodeType.EndElement:
-                    writer.WriteFullEndElement();
-                    break;
-
-                case XmlNodeType.Text:
-                    writer.WriteString(reader.Value);
-                    break;
-
-                case XmlNodeType.CDATA:
-                    writer.WriteCData(reader.Value);
-                    break;
-
-                case XmlNodeType.Whitespace:
-                case XmlNodeType.SignificantWhitespace:
-                    writer.WriteWhitespace(reader.Value);
-                    break;
-
-                case XmlNodeType.Comment:
-                    writer.WriteComment(reader.Value);
-                    break;
-
-                case XmlNodeType.ProcessingInstruction:
-                    writer.WriteProcessingInstruction(reader.Name, reader.Value);
-                    break;
-
-                case XmlNodeType.XmlDeclaration:
-                    writer.WriteProcessingInstruction(reader.Name, reader.Value);
-                    break;
-
-                case XmlNodeType.DocumentType:
-                    writer.WriteDocType(reader.Name, reader.GetAttribute("PUBLIC"), reader.GetAttribute("SYSTEM"), reader.Value);
-                    break;
-
-                case XmlNodeType.EntityReference:
-                    writer.WriteEntityRef(reader.Name);
-                    break;
-            }
         }
 
         public static bool ApplyChanges(
