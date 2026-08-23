@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FreeW.Core.Model;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -29,6 +30,7 @@ public sealed class FontDialogVisualParityTests
                 .ToArray();
 
             family.Height.Should().Be(25);
+            FontDialogPlanner.VisualMetrics.AvaloniaLabelLineHeight.Should().Be(16);
             family.FocusAdorner.Should().BeNull();
             size.Height.Should().Be(24);
             color.Height.Should().Be(24);

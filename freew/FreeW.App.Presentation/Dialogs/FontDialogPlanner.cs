@@ -124,15 +124,17 @@ public sealed record FontDialogVisualMetrics
 {
     public FontDialogThickness WpfRootMargin { get; init; } = new(12, 12, 12, 12);
     public FontDialogThickness WpfTabContentMargin { get; init; } = new(10, 10, 10, 10);
-    public FontDialogThickness AvaloniaRootMargin { get; init; } = new(12, 12, 11, 12);
-    public FontDialogThickness AvaloniaFontTabContentMargin { get; init; } = new(12, 12, 11, 6);
+    public FontDialogThickness AvaloniaRootMargin { get; init; } = new(12, 12, 13, 12);
+    public FontDialogThickness AvaloniaFontTabContentMargin { get; init; } = new(12, 12, 13, 11);
     public FontDialogThickness AvaloniaAdvancedTabContentMargin { get; init; } = new(10, 12, 10, 10);
     public FontDialogThickness AvaloniaTabPaneMargin { get; init; } = new(-12, -1, -12, 0);
     public FontDialogThickness FieldLabelMargin { get; init; } = new(0, 0, 0, 2);
+    public double AvaloniaLabelLineHeight { get; init; } = 16;
     public FontDialogThickness FieldControlMargin { get; init; } = new(0, 0, 0, 8);
     public FontDialogThickness WpfEffectsLabelMargin { get; init; } = new(0, 4, 0, 2);
     public FontDialogThickness AvaloniaEffectsLabelMargin { get; init; } = new(0, 3, 0, 2);
     public FontDialogThickness ActionRowMargin { get; init; } = new(0, 10, 0, 0);
+    public FontDialogThickness AvaloniaActionRowMargin { get; init; } = new(0, 13, 0, 0);
     public FontDialogThickness AvaloniaValidationMargin { get; init; } = new(0, 6, 0, 0);
     public double EffectTrailingMargin { get; init; } = 12;
     public double EffectBottomMargin { get; init; } = 4;

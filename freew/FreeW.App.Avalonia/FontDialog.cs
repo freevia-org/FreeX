@@ -165,7 +165,12 @@ public sealed class FontDialog : FreeWDialogWindow
         var fontPanel = new StackPanel { Margin = ToThickness(Layout.AvaloniaFontTabContentMargin) };
         foreach (var kind in Surface.Tabs.First(tab => tab.Kind == FontDialogTabKind.Font).Fields)
             AddField(fontPanel, Surface.Field(kind).Label, fieldControls[kind]);
-        fontPanel.Children.Add(new TextBlock { Text = Surface.EffectsSectionLabel, Margin = ToThickness(Layout.AvaloniaEffectsLabelMargin) });
+        fontPanel.Children.Add(new TextBlock
+        {
+            Text = Surface.EffectsSectionLabel,
+            LineHeight = Layout.AvaloniaLabelLineHeight,
+            Margin = ToThickness(Layout.AvaloniaEffectsLabelMargin),
+        });
         var effects = new WrapPanel();
         foreach (var spec in Surface.Effects)
             effects.Children.Add(EffectControlFor(spec.Kind));
@@ -208,7 +213,7 @@ public sealed class FontDialog : FreeWDialogWindow
             OnOk,
             () => Close(null),
             buttonWidth: Surface.ActionButtonWidth,
-            margin: ToThickness(Layout.ActionRowMargin),
+            margin: ToThickness(Layout.AvaloniaActionRowMargin),
             style: DialogChromeStyle);
 
         var root = new StackPanel { Margin = ToThickness(Layout.AvaloniaRootMargin) };
@@ -356,7 +361,12 @@ public sealed class FontDialog : FreeWDialogWindow
 
     private static void AddField(Panel panel, string label, Control control)
     {
-        panel.Children.Add(new TextBlock { Text = label, Margin = ToThickness(Layout.FieldLabelMargin) });
+        panel.Children.Add(new TextBlock
+        {
+            Text = label,
+            LineHeight = Layout.AvaloniaLabelLineHeight,
+            Margin = ToThickness(Layout.FieldLabelMargin),
+        });
         control.Margin = ToThickness(Layout.FieldControlMargin);
         control.HorizontalAlignment = HorizontalAlignment.Stretch;
         panel.Children.Add(control);
