@@ -6,6 +6,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
@@ -55,6 +56,10 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
         var metrics = PageSetupDialogPlanner.PresentationMetrics;
         var surface = PageSetupDialogPlanner.Surface;
         PageLayoutDialogChrome.Configure(this, surface.Title, metrics.WindowWidth);
+        // The WPF authority captures this compact dialog with grayscale glyph edges. The shared
+        // Avalonia shell defaults to subpixel antialiasing for broader routes, but its colored
+        // fringe is a measurable residual on this six-state page-setup family.
+        TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
 
         _session = PageSetupDialogPlanner.CreateSession(
             current,

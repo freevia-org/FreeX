@@ -117,6 +117,23 @@ public sealed class PageSetupDialogVisualParityTests
     }
 
     [Fact]
+    public async Task Uses_grayscale_like_antialiasing_for_the_Wpf_page_setup_text_surface()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new PageSetupDialog(new PageSettings());
+            try
+            {
+                TextOptions.GetTextRenderingMode(dialog).Should().Be(TextRenderingMode.Antialias);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Layout_tab_matches_Wpf_field_order_and_checkbox_grouping()
     {
         await Session.Dispatch(() =>
