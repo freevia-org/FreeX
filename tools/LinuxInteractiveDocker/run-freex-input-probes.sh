@@ -1504,6 +1504,10 @@ open_autofilter_menu() {
     local column_offset="$1"
     select_cell "$column_offset" 0 "filter-header-$column_offset"
     send_key alt+Down
+    # The keyboard route must leave a visible flyout before any checklist click. A missing
+    # surface is a product/input failure, and clicking the worksheet would dismiss any transient
+    # popup while making the later SUBTOTAL assertion misleading.
+    sleep "$settle_seconds"
 }
 
 click_autofilter_control() {
@@ -1873,9 +1877,20 @@ probe_autofilter_recalculation() {
     # calibrated A1 header so criteria controls cannot make this probe depend on incidental tab order.
     open_autofilter_menu 0
     capture "autofilter-recalculation-menu-open.png"
-    click_autofilter_control 29 366
+    if ! screen_changed "$output/autofilter-recalculation-before.png" "$output/autofilter-recalculation-menu-open.png" 500; then
+        write_artifact "autofilter-recalculation-postcondition.txt" \
+            "initial=$initial_value\nmenu-open=false\nnorth=\nsouth=\ncleared=\n"
+        record "autofilter-recalculation-apply-change-clear-physical" "failed" \
+            "autofilter-recalculation-before.png; autofilter-recalculation-menu-open.png; autofilter-recalculation-postcondition.txt" \
+            "Alt+Down did not produce a visible AutoFilter flyout before checklist input." \
+            "$artifacts"
+        return
+    fi
+    # The flyout is anchored at the calibrated A1 header. Keep these offsets tied to the visible
+    # checkbox/OK controls rather than the old popup-root coordinates that clicked outside the menu.
+    click_autofilter_control 75 365
     capture "autofilter-recalculation-north-checked.png"
-    click_autofilter_control 246 395
+    click_autofilter_control 292 391
     capture "autofilter-recalculation-north-committed.png"
     sleep "$settle_seconds"
     # One filtered data row is hidden, so B4 occupies the third visible worksheet row.
@@ -1885,10 +1900,10 @@ probe_autofilter_recalculation() {
     # Change the active checklist from North to South, preserving the same formula cell.
     select_cell 0 0 A1
     open_autofilter_menu 0
-    click_autofilter_control 29 348
-    click_autofilter_control 29 366
+    click_autofilter_control 75 365
+    click_autofilter_control 75 347
     capture "autofilter-recalculation-south-checked.png"
-    click_autofilter_control 246 395
+    click_autofilter_control 292 391
     capture "autofilter-recalculation-south-committed.png"
     sleep "$settle_seconds"
     south_value="$(copy_cell_display 1 2 B4-filtered-south || true)"

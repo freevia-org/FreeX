@@ -24,6 +24,9 @@ public sealed partial class MainWindow
 {
     internal bool AutoFilterFlyoutOpenForTest => _autoFilterFlyout is not null;
 
+    internal string? AutoFilterFlyoutPlacementTargetAutomationIdForTest =>
+        _autoFilterPlacementTargetAutomationIdForTest;
+
     internal void RunAutoFilterForTest(
         GridRange range,
         uint columnOffset,

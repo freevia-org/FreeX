@@ -264,6 +264,11 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.DoesNotContain("--window \"$dialog_id\" Escape", probe, StringComparison.Ordinal);
         Assert.Contains("FREEX_X11_DIALOG_SETTLE_SECONDS", probe, StringComparison.Ordinal);
         Assert.Contains("FREEX_X11_PROBE_SELECTOR", probe, StringComparison.Ordinal);
+        Assert.Contains("autofilter-recalculation-apply-change-clear-physical", probe, StringComparison.Ordinal);
+        Assert.Contains("autofilter-recalculation-apply-change-clear-physical", runner, StringComparison.Ordinal);
+        Assert.Contains("screen_changed \"$output/autofilter-recalculation-before.png\" \"$output/autofilter-recalculation-menu-open.png\"", probe, StringComparison.Ordinal);
+        Assert.Contains("click_autofilter_control 75 347", probe, StringComparison.Ordinal);
+        Assert.Contains("click_autofilter_control 292 391", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"sheet-tabs\"", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"name-box-dropdown-parity\"", probe, StringComparison.Ordinal);
         Assert.Contains("probe_outline_column_group_physical", probe, StringComparison.Ordinal);

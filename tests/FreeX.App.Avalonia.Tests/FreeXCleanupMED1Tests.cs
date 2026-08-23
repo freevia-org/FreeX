@@ -146,6 +146,8 @@ public sealed class FreeXCleanupMED1Tests
                 "previously this key press did nothing at all for a keyboard-only user");
             window.AutoFilterFlyoutOpenForTest.Should().BeTrue(
                 "the handled key must open the actual AutoFilter flyout, not the adjacent-text pick list");
+            window.AutoFilterFlyoutPlacementTargetAutomationIdForTest.Should().Be("AutoFilterButton_1_1",
+                "the keyboard route must anchor the physical flyout to the live rendered header button");
             window.DataValidationDropdownOpenForTest.Should().BeFalse();
 
             window.AllowCloseWithoutDirtyPromptForParityCapture();

@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.VisualTree;
 
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Ribbon.Avalonia;
@@ -23,6 +24,7 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private Flyout? _autoFilterFlyout;
+    private string? _autoFilterPlacementTargetAutomationIdForTest;
 
     private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);
 
@@ -128,9 +130,22 @@ public sealed partial class MainWindow
         if (!AutoFilterHeaderButtonPlanner.IsFilterButtonCell(_session.ActiveSheet, address.Row, address.Col))
             return false;
 
-        var anchor = (Control?)_activeCellBorder ?? _sheetGridHost;
+        var anchor = FindAutoFilterHeaderButton(address) ?? (Control?)_activeCellBorder ?? _sheetGridHost;
         OpenAutoFilterFlyout(anchor, address);
         return true;
+    }
+
+    private Button? FindAutoFilterHeaderButton(CellAddress address)
+    {
+        var automationId = $"AutoFilterButton_{address.Row}_{address.Col}";
+        return _sheetGridHost
+            .GetVisualDescendants()
+            .OfType<Button>()
+            .FirstOrDefault(button =>
+                string.Equals(
+                    AutomationProperties.GetAutomationId(button),
+                    automationId,
+                    StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -388,6 +403,7 @@ public sealed partial class MainWindow
         };
         flyout.Content = new Border { Padding = new Thickness(8), Child = panel };
         _autoFilterFlyout = flyout;
+        _autoFilterPlacementTargetAutomationIdForTest = AutomationProperties.GetAutomationId(anchor);
         flyout.Closed += (_, _) =>
         {
             if (ReferenceEquals(_autoFilterFlyout, flyout))
