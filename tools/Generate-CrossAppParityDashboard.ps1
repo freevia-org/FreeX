@@ -14,7 +14,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 # The generated docs are committed afterward, so deriving this from the current HEAD
 # would make the evidence self-referential and would change the claim on every refresh.
 $wave193TestedSourceCommit = "615b53f474dfa1849ae965018d890cba4a138d42"
-$wave193AcceptanceRefreshNote = "This dashboard/report is a later docs-only acceptance refresh; it does not alter the tested source commit."
+$wave193AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 
 function Get-JsonPropertyValue {
     param(
