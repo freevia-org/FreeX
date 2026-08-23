@@ -6051,6 +6051,7 @@ if [[ "$probe_selector" == "autofilter-numeric-criteria-persistence" ]]; then
     exit 0
 fi
 probe_autofilter_color_persistence_physical() {
+    # Wave191 artifact: autofilter-color-swatch-gate.txt
     local mode="${1:-fill}"
     local prefix="autofilter-color" result_id="autofilter-color-fill-save-reopen-physical" description="Filter by Cell Color"
     local expected_criteria="fill:#00B050" expected_package_mode="1" expected_package_color="fill=FF00B050"

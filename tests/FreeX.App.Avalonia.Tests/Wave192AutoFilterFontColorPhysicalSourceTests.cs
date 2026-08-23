@@ -72,6 +72,12 @@ public sealed class Wave192AutoFilterFontColorPhysicalSourceTests
         VerifyHashes(manifest.RootElement.GetProperty("files"), path => Path.Combine(evidenceDirectory, path));
         VerifyHashes(manifest.RootElement.GetProperty("provenanceFiles"), path =>
             TestWorkspaceFileLocator.FindFromWorkspaceRoot(path.Split('/')));
+        foreach (var audit in manifest.RootElement.GetProperty("gitBlobAudit").EnumerateArray())
+        {
+            audit.GetProperty("hashMode").GetString().Should().Be("canonical-lf");
+            audit.GetProperty("match").GetBoolean().Should().BeTrue();
+            audit.GetProperty("worktreeSha256").GetString().Should().Be(audit.GetProperty("gitBlobContentSha256").GetString());
+        }
 
         var attributes = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(".gitattributes");
         attributes.Should().Contain("tools/LinuxInteractiveDocker/New-FreeXWave192AutoFilterFontColorFixture.ps1 text eol=lf");
