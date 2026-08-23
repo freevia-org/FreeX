@@ -136,6 +136,141 @@ public sealed class ConditionalFormatEvaluationSessionTests
     }
 
     [Fact]
+    public void EvaluateEffectiveStyle_LiteralDxfColorsClearInheritedThemeReferences()
+    {
+        var (workbook, sheet) = TestWorkbookFixture.CreateWorkbook();
+        workbook.Theme = WorkbookTheme.Office
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 20, 30))
+            .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(40, 50, 60));
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var value = new NumberValue(5);
+        var literalFont = new CellColor(120, 121, 122);
+        var literalFill = new CellColor(130, 131, 132);
+        sheet.SetCell(address, value);
+        sheet.ConditionalFormats.Add(TrueCellValueRule(address, priority: 1, new CellStyle
+        {
+            FontColor = literalFont,
+            DxfFontColor = literalFont,
+            FillColor = literalFill,
+            Bold = true
+        }));
+
+        var session = new ConditionalFormatEvaluationSession(sheet, workbook, sheet.GetOccupiedCellMap());
+        var style = session.EvaluateEffectiveStyle(address, value, new CellStyle
+        {
+            FontColor = new CellColor(1, 2, 3),
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.15),
+            FillColor = new CellColor(4, 5, 6),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.2),
+            Italic = true,
+            NumberFormat = "0.00"
+        });
+
+        style.FontThemeColor.Should().BeNull();
+        style.FillThemeColor.Should().BeNull();
+        style.FontColor.Should().Be(literalFont);
+        style.FillColor.Should().Be(literalFill);
+        style.ResolveFontColor(workbook.Theme).Should().Be(literalFont);
+        style.ResolveFillColor(workbook.Theme).Should().Be(literalFill);
+        style.Bold.Should().BeTrue();
+        style.Italic.Should().BeTrue();
+        style.NumberFormat.Should().Be("0.00");
+    }
+
+    [Fact]
+    public void EvaluateEffectiveStyle_ThemeDxfColorsReplaceInheritedThemeAndRetainTint()
+    {
+        var (workbook, sheet) = TestWorkbookFixture.CreateWorkbook();
+        workbook.Theme = WorkbookTheme.Office
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 20, 30))
+            .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(40, 50, 60))
+            .WithColor(WorkbookThemeColorSlot.Accent3, new CellColor(70, 80, 90))
+            .WithColor(WorkbookThemeColorSlot.Accent4, new CellColor(100, 110, 120));
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var value = new NumberValue(5);
+        var fontTheme = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.25);
+        var fillTheme = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.3);
+        var fontFallback = new CellColor(7, 8, 9);
+        var fillFallback = new CellColor(11, 12, 13);
+        sheet.SetCell(address, value);
+        sheet.ConditionalFormats.Add(TrueCellValueRule(address, priority: 1, new CellStyle
+        {
+            FontColor = fontFallback,
+            DxfFontColor = fontFallback,
+            FontThemeColor = fontTheme,
+            FillColor = fillFallback,
+            FillThemeColor = fillTheme,
+            Underline = true
+        }));
+        var lowerPriorityFont = new CellColor(200, 201, 202);
+        sheet.ConditionalFormats.Add(TrueCellValueRule(address, priority: 2, new CellStyle
+        {
+            FontColor = lowerPriorityFont,
+            DxfFontColor = lowerPriorityFont,
+            FillColor = new CellColor(210, 211, 212),
+            Bold = true
+        }));
+
+        var session = new ConditionalFormatEvaluationSession(sheet, workbook, sheet.GetOccupiedCellMap());
+        var style = session.EvaluateEffectiveStyle(address, value, new CellStyle
+        {
+            FontColor = new CellColor(1, 2, 3),
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+            FillColor = new CellColor(4, 5, 6),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            Strikethrough = true
+        });
+
+        style.FontThemeColor.Should().Be(fontTheme);
+        style.FillThemeColor.Should().Be(fillTheme);
+        style.FontColor.Should().Be(fontFallback);
+        style.FillColor.Should().Be(fillFallback);
+        style.ResolveFontColor(workbook.Theme).Should().Be(fontTheme.Resolve(workbook.Theme));
+        style.ResolveFillColor(workbook.Theme).Should().Be(fillTheme.Resolve(workbook.Theme));
+        style.Bold.Should().BeTrue("unrelated lower-priority fields still stack");
+        style.Underline.Should().BeTrue();
+        style.Strikethrough.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EvaluateEffectiveStyle_ColorScaleClearsInheritedFillThemeReference()
+    {
+        var (workbook, sheet) = TestWorkbookFixture.CreateWorkbook();
+        workbook.Theme = WorkbookTheme.Office.WithColor(
+            WorkbookThemeColorSlot.Accent1,
+            new CellColor(12, 34, 56));
+        var low = new CellAddress(sheet.Id, 1, 1);
+        var high = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(low, new NumberValue(0));
+        sheet.SetCell(high, new NumberValue(100));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(low, high),
+            Priority = 1,
+            RuleType = CfRuleType.ColorScale,
+            MinColor = new RgbColor(240, 241, 242),
+            MaxColor = new RgbColor(10, 11, 12),
+            UseThreeColorScale = false
+        });
+
+        var session = new ConditionalFormatEvaluationSession(sheet, workbook, sheet.GetOccupiedCellMap());
+        var style = session.EvaluateEffectiveStyle(low, sheet.GetValue(low), new CellStyle
+        {
+            FillColor = new CellColor(1, 2, 3),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.4),
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+            Italic = true
+        });
+
+        var expectedFill = new CellColor(240, 241, 242);
+        style.FillThemeColor.Should().BeNull();
+        style.FillColor.Should().Be(expectedFill);
+        style.ResolveFillColor(workbook.Theme).Should().Be(expectedFill);
+        style.FontThemeColor.Should().NotBeNull();
+        style.Italic.Should().BeTrue();
+    }
+
+    [Fact]
     public void Constructor_CapturesOneSparseAggregateSnapshotPerSession()
     {
         var (workbook, sheet) = TestWorkbookFixture.CreateWorkbook();

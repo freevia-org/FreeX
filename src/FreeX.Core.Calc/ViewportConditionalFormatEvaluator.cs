@@ -538,17 +538,26 @@ internal static partial class ViewportConditionalFormatEvaluator
         dxfValue ?? (plainValue ? true : null);
 
     /// <summary>
-    /// Resolves a CF dxf-derived style's font color decision, mirroring <see cref="EffectiveToggle"/>:
-    /// <paramref name="dxfFontColor"/> (the style's <see cref="CellStyle.DxfFontColor"/>) wins when the
-    /// dxf reader recorded an explicit color - including an explicit black, which the plain
-    /// <paramref name="plainFontColor"/> value cannot distinguish from "never specified". Falls back to
-    /// treating a non-black <paramref name="plainFontColor"/> as an implicit "explicitly set" (matching
-    /// every non-dxf CF style producer's existing convention: UI/paste-built rules never set
-    /// DxfFontColor). Returns null when no color was specified at all, in which case the caller must
-    /// leave the base/accumulated color untouched.
+    /// Resolves whether a CF style explicitly decides font color. A dxf sentinel, theme reference, or
+    /// non-default plain color all count; the plain color remains the RGB fallback for theme colors.
     /// </summary>
-    private static CellColor? EffectiveFontColor(CellColor? dxfFontColor, CellColor plainFontColor) =>
-        dxfFontColor ?? (plainFontColor != CellColor.Black ? plainFontColor : null);
+    private static bool TryGetExplicitFontColor(CellStyle cfStyle, out CellColor fontColor)
+    {
+        if (cfStyle.DxfFontColor is { } dxfFontColor)
+        {
+            fontColor = dxfFontColor;
+            return true;
+        }
+
+        if (cfStyle.FontThemeColor is not null || cfStyle.FontColor != CellColor.Black)
+        {
+            fontColor = cfStyle.FontColor;
+            return true;
+        }
+
+        fontColor = default;
+        return false;
+    }
 
     public static CellStyle MergeStyles(CellStyle? baseStyle, CellStyle cfStyle)
     {
@@ -561,14 +570,19 @@ internal static partial class ViewportConditionalFormatEvaluator
         // Clear the stale gradient and adopt the CF's pattern fields verbatim (including "None")
         // instead of only conditionally overwriting them, so a plain solid CF fill doesn't leave
         // the base cell's pattern hatch or gradient visible on top of/instead of the CF color.
-        if (cfStyle.FillColor.HasValue || cfStyle.FillPatternStyle != CellFillPatternStyle.None)
+        var hasFillColorOverride = cfStyle.FillColor.HasValue || cfStyle.FillThemeColor is not null;
+        if (hasFillColorOverride || cfStyle.FillPatternStyle != CellFillPatternStyle.None)
         {
             result.GradientFill = null;
             result.FillPatternStyle = cfStyle.FillPatternStyle;
             result.FillPatternColor = cfStyle.FillPatternColor;
+            result.FillPatternThemeColor = cfStyle.FillPatternThemeColor;
         }
-        if (cfStyle.FillColor.HasValue)
+        if (hasFillColorOverride)
+        {
             result.FillColor = cfStyle.FillColor;
+            result.FillThemeColor = cfStyle.FillThemeColor;
+        }
 
         // Bold/Italic/Underline/Strikethrough: a dxf that explicitly turns one of these off (e.g. Format
         // Cells > Font > Font style = Regular over an already-bold base cell) must clear it, not just
@@ -604,9 +618,10 @@ internal static partial class ViewportConditionalFormatEvaluator
         // deliberately-authored black doesn't get mistaken for "no color specified" and skipped in
         // favor of the base cell's own color. The resolved value is also written back onto
         // DxfFontColor on the result so a later stacking layer still sees this as explicitly decided.
-        if (EffectiveFontColor(cfStyle.DxfFontColor, cfStyle.FontColor) is { } fontColorOverride)
+        if (TryGetExplicitFontColor(cfStyle, out var fontColorOverride))
         {
             result.FontColor = fontColorOverride;
+            result.FontThemeColor = cfStyle.FontThemeColor;
             result.DxfFontColor = fontColorOverride;
         }
 
@@ -634,13 +649,23 @@ internal static partial class ViewportConditionalFormatEvaluator
     {
         var result = (accumulatedStyle ?? CellStyle.Default).Clone();
 
-        if (!result.FillColor.HasValue && cfStyle.FillColor.HasValue)
+        if (!result.FillColor.HasValue &&
+            result.FillThemeColor is null &&
+            (cfStyle.FillColor.HasValue || cfStyle.FillThemeColor is not null))
+        {
             result.FillColor = cfStyle.FillColor;
+            result.FillThemeColor = cfStyle.FillThemeColor;
+        }
         if (result.FillPatternStyle == CellFillPatternStyle.None &&
             cfStyle.FillPatternStyle != CellFillPatternStyle.None)
             result.FillPatternStyle = cfStyle.FillPatternStyle;
-        if (!result.FillPatternColor.HasValue && cfStyle.FillPatternColor.HasValue)
+        if (!result.FillPatternColor.HasValue &&
+            result.FillPatternThemeColor is null &&
+            (cfStyle.FillPatternColor.HasValue || cfStyle.FillPatternThemeColor is not null))
+        {
             result.FillPatternColor = cfStyle.FillPatternColor;
+            result.FillPatternThemeColor = cfStyle.FillPatternThemeColor;
+        }
 
         // First matching (highest-priority) rule that explicitly decides Bold/Italic/Underline/
         // Strikethrough wins, exactly like the "first matching rule wins" borders/number-format rule
@@ -674,10 +699,10 @@ internal static partial class ViewportConditionalFormatEvaluator
         // resolved on `result` by an earlier MergeStyles/StackDifferentialStyle call) records whether
         // a higher-priority rule already explicitly decided this attribute - including an explicit
         // black - so a lower-priority rule's non-black color never silently overwrites it.
-        if (!result.DxfFontColor.HasValue &&
-            EffectiveFontColor(cfStyle.DxfFontColor, cfStyle.FontColor) is { } fontColorOverride)
+        if (!result.DxfFontColor.HasValue && TryGetExplicitFontColor(cfStyle, out var fontColorOverride))
         {
             result.FontColor = fontColorOverride;
+            result.FontThemeColor = cfStyle.FontThemeColor;
             result.DxfFontColor = fontColorOverride;
         }
 

@@ -33,6 +33,92 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_ConditionalRgbColorsOverrideThemedBaseColors()
+    {
+        var workbook = new Workbook("Accessibility")
+        {
+            Theme = WorkbookTheme.Office
+                .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 10, 10))
+                .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(250, 250, 250))
+        };
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        var baseStyleId = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(1, 2, 3),
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            FillColor = new CellColor(4, 5, 6),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)
+        });
+        var cell = Cell.FromValue(new TextValue("At risk"));
+        cell.StyleId = baseStyleId;
+        sheet.SetCell(address, cell);
+        var conditionalFont = new CellColor(245, 245, 245);
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            RuleType = CfRuleType.ContainsText,
+            TextRuleText = "risk",
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = conditionalFont,
+                DxfFontColor = conditionalFont,
+                FillColor = new CellColor(250, 250, 250)
+            }
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(issue =>
+                issue.Kind == AccessibilityIssueKind.LowContrastCellText &&
+                issue.Location == "B2");
+    }
+
+    [Fact]
+    public void FindIssues_ConditionalThemeColorsReplaceThemedBaseColors()
+    {
+        var workbook = new Workbook("Accessibility")
+        {
+            Theme = WorkbookTheme.Office
+                .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 10, 10))
+                .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(250, 250, 250))
+                .WithColor(WorkbookThemeColorSlot.Accent3, new CellColor(235, 235, 235))
+                .WithColor(WorkbookThemeColorSlot.Accent4, new CellColor(245, 245, 245))
+        };
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        var baseStyleId = workbook.RegisterStyle(new CellStyle
+        {
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)
+        });
+        var cell = Cell.FromValue(new TextValue("At risk"));
+        cell.StyleId = baseStyleId;
+        sheet.SetCell(address, cell);
+        var conditionalFontTheme = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.1);
+        var conditionalFillTheme = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.05);
+        var conditionalFontFallback = new CellColor(7, 8, 9);
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            RuleType = CfRuleType.ContainsText,
+            TextRuleText = "risk",
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = conditionalFontFallback,
+                DxfFontColor = conditionalFontFallback,
+                FontThemeColor = conditionalFontTheme,
+                FillColor = new CellColor(11, 12, 13),
+                FillThemeColor = conditionalFillTheme
+            }
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(issue =>
+                issue.Kind == AccessibilityIssueKind.LowContrastCellText &&
+                issue.Location == "B2");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromDuplicateValuesConditionalFormat()
     {
         var workbook = new Workbook("Accessibility");
