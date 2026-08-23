@@ -245,6 +245,9 @@ internal static class XlsxXmlNormalizationHelpers
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
+    public static bool NormalizeRelationshipId(XElement element, XName relationshipIdName) =>
+        NormalizeAttribute(element, relationshipIdName, NormalizeOptionalText);
+
     public static string? NormalizeBase64BinaryOrNull(string? value)
     {
         var trimmed = value?.Trim();

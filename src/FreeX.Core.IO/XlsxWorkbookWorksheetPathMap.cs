@@ -5,14 +5,20 @@ namespace FreeX.Core.IO;
 
 internal sealed class XlsxWorkbookWorksheetPathMap
 {
-    private XlsxWorkbookWorksheetPathMap(IReadOnlyDictionary<string, string> sheetPathsByName)
+    private XlsxWorkbookWorksheetPathMap(
+        IReadOnlyDictionary<string, string> sheetPathsByName,
+        IReadOnlyList<XlsxWorkbookWorksheetPath> worksheets)
     {
         SheetPathsByName = sheetPathsByName;
+        Worksheets = worksheets;
     }
 
     public IReadOnlyDictionary<string, string> SheetPathsByName { get; }
+    public IReadOnlyList<XlsxWorkbookWorksheetPath> Worksheets { get; }
 
-    public static XlsxWorkbookWorksheetPathMap? TryCreate(ZipArchive archive)
+    public static XlsxWorkbookWorksheetPathMap? TryCreate(
+        ZipArchive archive,
+        bool rejectDuplicateRelationshipIds = false)
     {
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
         var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
@@ -24,14 +30,28 @@ internal sealed class XlsxWorkbookWorksheetPathMap
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        var workbookRels = XlsxRelationshipReader.LoadTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+        var workbookRels = rejectDuplicateRelationshipIds
+            ? XlsxRelationshipReader.LoadTargetsStrict(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                XlsxPackagePath.NormalizeWorkbookTarget,
+                packageRelNs)
+            : XlsxRelationshipReader.LoadTargets(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                "xl/workbook.xml",
+                packageRelNs);
+        var worksheets = XlsxWorkbookSheetPathReader
+            .GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+            .Select(pair => new XlsxWorkbookWorksheetPath(pair.SheetName, pair.WorksheetPath))
+            .ToList();
+        var sheetPaths = worksheets.ToDictionary(
+            pair => pair.SheetName,
+            pair => pair.WorksheetPath,
+            StringComparer.OrdinalIgnoreCase);
 
-        return new XlsxWorkbookWorksheetPathMap(sheetPaths);
+        return new XlsxWorkbookWorksheetPathMap(sheetPaths, worksheets);
     }
 }
+
+internal readonly record struct XlsxWorkbookWorksheetPath(string SheetName, string WorksheetPath);

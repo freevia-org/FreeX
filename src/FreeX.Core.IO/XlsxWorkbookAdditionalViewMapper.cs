@@ -136,7 +136,7 @@ internal static class XlsxWorkbookAdditionalViewMapper
 
         var element = new XElement(WorkbookNs + "workbookView");
         XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(element, model.NativeAttributes, []);
-        RemoveOfficeRevisionAttributes(element);
+        XlsxXmlPreservationPolicy.RemoveOfficeRevisionAttributes(element);
         XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(element);
         return element;
     }
@@ -152,7 +152,7 @@ internal static class XlsxWorkbookAdditionalViewMapper
             if (nativeElement.Name != WorkbookNs + "workbookView")
                 return null;
 
-            RemoveOfficeRevisionAttributes(nativeElement);
+            XlsxXmlPreservationPolicy.RemoveOfficeRevisionAttributes(nativeElement);
             XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(nativeElement);
             return nativeElement;
         }
@@ -161,30 +161,5 @@ internal static class XlsxWorkbookAdditionalViewMapper
             return null;
         }
     }
-
-    private static void RemoveOfficeRevisionAttributes(XElement element)
-    {
-        foreach (var attribute in element.Attributes().Where(IsOfficeRevisionAttribute).ToList())
-            attribute.Remove();
-
-        foreach (var namespaceAttribute in element.Attributes().Where(attribute =>
-                     attribute.IsNamespaceDeclaration &&
-                     IsOfficeRevisionNamespace(attribute.Value) &&
-                     !element.Attributes().Any(other =>
-                         !other.IsNamespaceDeclaration &&
-                         other.Name.NamespaceName == attribute.Value)).ToList())
-        {
-            namespaceAttribute.Remove();
-        }
-    }
-
-    private static bool IsOfficeRevisionAttribute(XAttribute attribute) =>
-        !attribute.IsNamespaceDeclaration &&
-        string.Equals(attribute.Name.LocalName, "uid", StringComparison.Ordinal) &&
-        IsOfficeRevisionNamespace(attribute.Name.NamespaceName);
-
-    private static bool IsOfficeRevisionNamespace(string namespaceName) =>
-        namespaceName.StartsWith("http://schemas.microsoft.com/office/spreadsheetml/", StringComparison.Ordinal) &&
-        namespaceName.Contains("/revision", StringComparison.Ordinal);
 
 }

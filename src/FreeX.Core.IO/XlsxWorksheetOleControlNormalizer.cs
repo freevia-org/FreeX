@@ -95,6 +95,16 @@ internal static class XlsxWorksheetOleControlNormalizer
         }
     }
 
+    internal static bool NormalizePackageRelationships(
+        ZipArchive archive,
+        string worksheetPath,
+        XDocument worksheetXml)
+    {
+        var changed = RebindOleObjectRelationships(archive, worksheetPath, worksheetXml);
+        changed |= RebindControlPropertiesRelationships(archive, worksheetPath, worksheetXml);
+        return changed;
+    }
+
     public static bool NormalizeWorksheetRoot(XElement worksheetRoot)
     {
         var changed = false;

@@ -83,28 +83,8 @@ internal static class XlsxWorkbookPivotCachesNormalizer
             RelationshipNs + "id");
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(pivotCache);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pivotCache, "cacheId", NormalizeNonNegativeIntTextOrNull);
-        changed |= NormalizeRelationshipId(pivotCache);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeRelationshipId(pivotCache, RelationshipNs + "id");
         return changed;
-    }
-
-    private static bool NormalizeRelationshipId(XElement pivotCache)
-    {
-        var attribute = pivotCache.Attribute(RelationshipNs + "id");
-        var trimmed = attribute?.Value.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, trimmed, StringComparison.Ordinal))
-            return false;
-
-        pivotCache.SetAttributeValue(RelationshipNs + "id", trimmed);
-        return true;
     }
 
     private static string? NormalizeNonNegativeIntTextOrNull(string? value) =>

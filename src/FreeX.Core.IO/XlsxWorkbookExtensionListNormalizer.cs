@@ -14,4 +14,31 @@ internal static class XlsxWorkbookExtensionListNormalizer
 
     public static bool ShouldRemoveExtensionListElement(XElement extensionList) =>
         XlsxExtensionListNormalizer.ShouldRemove(extensionList, WorkbookNs);
+
+    public static bool NormalizeParent(XElement parent)
+    {
+        var changed = false;
+        var keptExtensionList = false;
+        foreach (var extensionList in parent.Elements(WorkbookNs + "extLst").ToList())
+        {
+            if (keptExtensionList)
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            changed |= NormalizeExtensionListElement(extensionList);
+            if (ShouldRemoveExtensionListElement(extensionList))
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            keptExtensionList = true;
+        }
+
+        return changed;
+    }
 }

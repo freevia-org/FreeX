@@ -23,29 +23,17 @@ internal static class XlsxStructuredTableMetadataReader
     {
         try
         {
-            var workbookEntry = archive.GetEntry("xl/workbook.xml");
-            var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-            if (workbookEntry is null || workbookRelsEntry is null)
+            var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive, rejectDuplicateRelationshipIds: true);
+            if (worksheetPathMap is null)
                 return StructuredTablePackageMetadata.Empty;
-
-            var workbookXml = LoadXml(workbookEntry);
-            var workbookRelsXml = LoadXml(workbookRelsEntry);
 
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-            var workbookRels = workbookRelsXml.Root?
-                .Elements(packageRelNs + "Relationship")
-                .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-                .ToDictionary(
-                    e => e.Attribute("Id")!.Value,
-                    e => XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", e.Attribute("Target")!.Value),
-                    StringComparer.OrdinalIgnoreCase)
-                ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            var sheetsByPath = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-                .ToDictionary(pair => pair.WorksheetPath, pair => pair.SheetName, StringComparer.OrdinalIgnoreCase);
+            var sheetsByPath = worksheetPathMap.SheetPathsByName.ToDictionary(
+                pair => pair.Value,
+                pair => pair.Key,
+                StringComparer.OrdinalIgnoreCase);
             var tablesBySheetName = LoadTablesBySheetName(archive, sheetsByPath, workbookNs, relNs, packageRelNs);
             return new StructuredTablePackageMetadata(tablesBySheetName);
         }
@@ -245,38 +233,7 @@ internal static class XlsxStructuredTableMetadataReader
         string sourcePart,
         XNamespace packageRelNs)
     {
-        var relsEntry = archive.GetEntry(relsPath);
-        if (relsEntry is null)
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        var relsXml = LoadXml(relsEntry);
-        return relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.ResolveRelationshipTarget(sourcePart, e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static IEnumerable<(string SheetName, string WorksheetPath)> GetWorkbookSheetPaths(
-        XDocument workbookXml,
-        IReadOnlyDictionary<string, string> workbookRels,
-        XNamespace workbookNs,
-        XNamespace relNs)
-    {
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (!string.IsNullOrWhiteSpace(name) &&
-                !string.IsNullOrWhiteSpace(relId) &&
-                workbookRels.TryGetValue(relId, out var worksheetPath))
-            {
-                yield return (name, worksheetPath);
-            }
-        }
+        return XlsxRelationshipReader.LoadTargets(archive, relsPath, sourcePart, packageRelNs);
     }
 
     private static string? ReadTableColumnFormula(XElement column, XNamespace workbookNs, string elementName)

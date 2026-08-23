@@ -778,8 +778,8 @@ internal static class XlsxSourceDrawingGeometryRewriter
             // height, using the same column-width/row-height walk the model writer uses for charts
             // (XlsxWorksheetChartWriter.ToAnchorMarker) so a save-then-reload measures the resize
             // identically to how XlsxDrawingAnchorApplier/GetAnchorSize measured it on load.
-            var fromLeft = SumColumnPixels(sheet, 1, fromCol) + offsetXPixels;
-            var fromTop = SumRowPixels(sheet, 1, fromRow) + offsetYPixels;
+            var fromLeft = WorksheetMetricSpanCalculator.SumColumnPixels(sheet, 1, fromCol) + offsetXPixels;
+            var fromTop = WorksheetMetricSpanCalculator.SumRowPixels(sheet, 1, fromRow) + offsetYPixels;
             var (toCol, toColOffset) = ToMarkerIndex(
                 fromLeft + widthPixels,
                 sheet.DefaultColumnWidth * 8,
@@ -1084,29 +1084,4 @@ internal static class XlsxSourceDrawingGeometryRewriter
         return (maxIndex - 1, Math.Min(remaining, Math.Max(0, defaultSize)));
     }
 
-    private static double SumColumnPixels(Sheet sheet, uint firstColumn, uint count)
-    {
-        double width = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var col = firstColumn + offset;
-            if (!sheet.IsColEffectivelyHidden(col))
-                width += sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
-        }
-
-        return width;
-    }
-
-    private static double SumRowPixels(Sheet sheet, uint firstRow, uint count)
-    {
-        double height = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var row = firstRow + offset;
-            if (!sheet.IsRowEffectivelyHidden(row))
-                height += sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
-        }
-
-        return height;
-    }
 }

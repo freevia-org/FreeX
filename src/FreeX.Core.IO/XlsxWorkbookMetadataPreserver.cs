@@ -680,35 +680,10 @@ internal static class XlsxWorkbookMetadataPreserver
     private static XElement CloneWorkbookViewForPreservation(XElement sourceView)
     {
         var clone = new XElement(sourceView);
-        RemoveOfficeRevisionAttributes(clone);
+        XlsxXmlPreservationPolicy.RemoveOfficeRevisionAttributes(clone);
         XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(clone);
         return clone;
     }
-
-    private static void RemoveOfficeRevisionAttributes(XElement element)
-    {
-        foreach (var attribute in element.Attributes().Where(IsOfficeRevisionAttribute).ToList())
-            attribute.Remove();
-
-        foreach (var namespaceAttribute in element.Attributes().Where(attribute =>
-                     attribute.IsNamespaceDeclaration &&
-                     IsOfficeRevisionNamespace(attribute.Value) &&
-                     !element.Attributes().Any(other =>
-                         !other.IsNamespaceDeclaration &&
-                         other.Name.NamespaceName == attribute.Value)).ToList())
-        {
-            namespaceAttribute.Remove();
-        }
-    }
-
-    private static bool IsOfficeRevisionAttribute(XAttribute attribute) =>
-        !attribute.IsNamespaceDeclaration &&
-        string.Equals(attribute.Name.LocalName, "uid", StringComparison.Ordinal) &&
-        IsOfficeRevisionNamespace(attribute.Name.NamespaceName);
-
-    private static bool IsOfficeRevisionNamespace(string namespaceName) =>
-        namespaceName.StartsWith("http://schemas.microsoft.com/office/spreadsheetml/", StringComparison.Ordinal) &&
-        namespaceName.Contains("/revision", StringComparison.Ordinal);
 
     private static bool MergeDefinedNames(
         XElement? sourceDefinedNames,
@@ -957,23 +932,6 @@ internal static class XlsxWorkbookMetadataPreserver
     private static bool MergeMissingAttributes(
         XElement sourceElement,
         XElement targetElement,
-        IReadOnlyCollection<string> excludedLocalNames)
-    {
-        var changed = false;
-        foreach (var attribute in sourceElement.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                IsOfficeRevisionAttribute(attribute) ||
-                excludedLocalNames.Contains(attribute.Name.LocalName, StringComparer.Ordinal) ||
-                targetElement.Attribute(attribute.Name) is not null)
-            {
-                continue;
-            }
-
-            targetElement.SetAttributeValue(attribute.Name, attribute.Value);
-            changed = true;
-        }
-
-        return changed;
-    }
+        IReadOnlyCollection<string> excludedLocalNames) =>
+        XlsxXmlPreservationPolicy.MergeMissingAttributes(sourceElement, targetElement, excludedLocalNames);
 }

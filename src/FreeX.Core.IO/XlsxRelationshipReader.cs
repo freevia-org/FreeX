@@ -27,4 +27,25 @@ internal static class XlsxRelationshipReader
             packageRelNs,
             target => XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target));
     }
+
+    public static Dictionary<string, string> LoadTargetsStrict(
+        ZipArchive archive,
+        string relationshipsPath,
+        Func<string, string> resolveTarget,
+        XNamespace packageRelNs)
+    {
+        var relationshipsEntry = archive.GetEntry(relationshipsPath);
+        if (relationshipsEntry is null)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+        return relationshipsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(element => element.Attribute("Id") is not null && element.Attribute("Target") is not null)
+            .ToDictionary(
+                element => element.Attribute("Id")!.Value,
+                element => resolveTarget(element.Attribute("Target")!.Value),
+                StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    }
 }

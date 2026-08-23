@@ -59,15 +59,15 @@ internal static class XlsxDrawingAnchorApplier
         var fromRow = ClampRow(anchor.FromRowZeroBased);
 
         chart.DrawingAnchorKind = anchor.Kind;
-        chart.Left = anchor.AbsoluteLeft ?? (SumColumnPixels(sheet, 1, fromColumn) + anchor.FromColumnOffset);
-        chart.Top = anchor.AbsoluteTop ?? (SumRowPixels(sheet, 1, fromRow) + anchor.FromRowOffset);
+        chart.Left = anchor.AbsoluteLeft ?? (WorksheetMetricSpanCalculator.SumColumnPixels(sheet, 1, fromColumn) + anchor.FromColumnOffset);
+        chart.Top = anchor.AbsoluteTop ?? (WorksheetMetricSpanCalculator.SumRowPixels(sheet, 1, fromRow) + anchor.FromRowOffset);
 
         var width = anchor.Width ?? (
-            SumColumnPixels(sheet, fromColumn + 1, ZeroBasedSpan(fromColumn, ClampColumn(anchor.ToColumnZeroBased!.Value)))
+            WorksheetMetricSpanCalculator.SumColumnPixels(sheet, fromColumn + 1, ZeroBasedSpan(fromColumn, ClampColumn(anchor.ToColumnZeroBased!.Value)))
             + anchor.ToColumnOffset!.Value
             - anchor.FromColumnOffset);
         var height = anchor.Height ?? (
-            SumRowPixels(sheet, fromRow + 1, ZeroBasedSpan(fromRow, ClampRow(anchor.ToRowZeroBased!.Value)))
+            WorksheetMetricSpanCalculator.SumRowPixels(sheet, fromRow + 1, ZeroBasedSpan(fromRow, ClampRow(anchor.ToRowZeroBased!.Value)))
             + anchor.ToRowOffset!.Value
             - anchor.FromRowOffset);
         if (width > 0)
@@ -208,11 +208,11 @@ internal static class XlsxDrawingAnchorApplier
         var fromRow = ClampRow(anchor.FromRowZeroBased);
 
         var width = anchor.Width ?? (
-            SumColumnPixels(sheet, fromColumn + 1, ZeroBasedSpan(fromColumn, ClampColumn(anchor.ToColumnZeroBased!.Value)))
+            WorksheetMetricSpanCalculator.SumColumnPixels(sheet, fromColumn + 1, ZeroBasedSpan(fromColumn, ClampColumn(anchor.ToColumnZeroBased!.Value)))
             + anchor.ToColumnOffset!.Value
             - anchor.FromColumnOffset);
         var height = anchor.Height ?? (
-            SumRowPixels(sheet, fromRow + 1, ZeroBasedSpan(fromRow, ClampRow(anchor.ToRowZeroBased!.Value)))
+            WorksheetMetricSpanCalculator.SumRowPixels(sheet, fromRow + 1, ZeroBasedSpan(fromRow, ClampRow(anchor.ToRowZeroBased!.Value)))
             + anchor.ToRowOffset!.Value
             - anchor.FromRowOffset);
         return (width, height);
@@ -232,29 +232,4 @@ internal static class XlsxDrawingAnchorApplier
     private static uint ZeroBasedSpan(uint fromZeroBased, uint toZeroBased) =>
         toZeroBased > fromZeroBased ? toZeroBased - fromZeroBased : 0u;
 
-    private static double SumColumnPixels(Sheet sheet, uint firstColumn, uint count)
-    {
-        double width = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var col = firstColumn + offset;
-            if (!sheet.IsColEffectivelyHidden(col))
-                width += sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
-        }
-
-        return width;
-    }
-
-    private static double SumRowPixels(Sheet sheet, uint firstRow, uint count)
-    {
-        double height = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var row = firstRow + offset;
-            if (!sheet.IsRowEffectivelyHidden(row))
-                height += sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
-        }
-
-        return height;
-    }
 }

@@ -1428,7 +1428,7 @@ internal static class XlsxLegacyCommentPreserver
         else if (!isPinned && visibleElement is not null)
             visibleElement.Remove();
 
-        ApplyVisibilityStyle(shape, isPinned);
+        XlsxVmlStylePolicy.SetVisibility(shape, isPinned);
     }
 
     /// <summary>
@@ -1437,39 +1437,6 @@ internal static class XlsxLegacyCommentPreserver
     /// pinned, <c>hidden</c> otherwise — without disturbing any other CSS properties already
     /// present (position, margins, size, z-index, etc).
     /// </summary>
-    private static void ApplyVisibilityStyle(XElement shape, bool isPinned)
-    {
-        var newValue = isPinned ? "visible" : "hidden";
-        var styleAttribute = shape.Attribute("style");
-        var styleValue = styleAttribute?.Value ?? "";
-
-        var properties = styleValue.Length == 0
-            ? []
-            : styleValue.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        var found = false;
-        var rebuilt = new List<string>(properties.Length + 1);
-        foreach (var property in properties)
-        {
-            var colonIndex = property.IndexOf(':');
-            if (colonIndex >= 0 &&
-                string.Equals(property[..colonIndex].Trim(), "visibility", StringComparison.OrdinalIgnoreCase))
-            {
-                rebuilt.Add($"visibility:{newValue}");
-                found = true;
-            }
-            else
-            {
-                rebuilt.Add(property);
-            }
-        }
-
-        if (!found)
-            rebuilt.Add($"visibility:{newValue}");
-
-        shape.SetAttributeValue("style", string.Join(";", rebuilt));
-    }
-
     /// <summary>
     /// Indexes VML note shapes by their 0-based (row, col) ClientData anchor.
     /// Only shapes with <c>ObjectType="Note"</c> ClientData are indexed.

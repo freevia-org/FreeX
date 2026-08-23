@@ -78,26 +78,13 @@ internal static class XlsxWorksheetChartWriter
         IDictionary<string, string>? freshlyAllocatedDrawingPathsBySheet = null)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
+        var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive, rejectDuplicateRelationshipIds: true);
+        if (worksheetPathMap is null)
             return;
-
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
         var sourceDrawingPaths = sourceDrawingPathsBySheet ?? EmptyDrawingPathsBySheet;
@@ -106,12 +93,9 @@ internal static class XlsxWorksheetChartWriter
         var reservedDrawingPaths = sourceDrawingPaths.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var usedDrawingPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var chartIndex = 1;
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        foreach (var worksheet in worksheetPathMap.Worksheets)
         {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relId))
-                continue;
+            var name = worksheet.SheetName;
             if (!sheetsByName.TryGetValue(name, out var sheet))
                 continue;
             var supportedCharts = sheet.Charts
@@ -119,8 +103,7 @@ internal static class XlsxWorksheetChartWriter
                 .ToList();
             if (supportedCharts.Count == 0)
                 continue;
-            if (!relTargets.TryGetValue(relId, out var worksheetPath))
-                continue;
+            var worksheetPath = worksheet.WorksheetPath;
 
             // Reuse the sheet's own source drawing part when it has one (so its rebuilt charts and any
             // preserved drawing content stay on the same sheet); otherwise allocate a drawing name that
