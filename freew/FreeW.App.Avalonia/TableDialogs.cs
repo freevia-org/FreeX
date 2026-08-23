@@ -235,6 +235,9 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
         var state = _session.InitialState;
 
         Title = TablePropertiesDialogPlanner.Title;
+        // The WPF authority capture uses monochrome glyph edges for this compact route.
+        // Keep the correction local to Table Properties rather than changing shared dialog chrome.
+        TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
         Width = Layout.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;

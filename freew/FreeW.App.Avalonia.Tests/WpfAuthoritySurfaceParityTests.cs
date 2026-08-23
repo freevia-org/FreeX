@@ -337,6 +337,19 @@ public sealed class WpfAuthoritySurfaceParityTests
     }
 
     [Fact]
+    public async Task Table_properties_uses_route_local_grayscale_text_policy()
+    {
+        await Session.Dispatch(() =>
+        {
+            var (_, table) = CreateTableEditor();
+            var dialog = new TablePropertiesDialog(
+                new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]));
+
+            TextOptions.GetTextRenderingMode(dialog).Should().Be(TextRenderingMode.Antialias);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Table_properties_cell_tab_keeps_Wpf_checkbox_geometry()
     {
         await Session.Dispatch(() =>
