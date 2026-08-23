@@ -24,18 +24,22 @@ public sealed class ThirdPartyNoticeTests
     {
         var notices = WorkspaceFileLocator.ReadAllText("THIRD_PARTY_NOTICES.md");
         var licenses = WorkspaceFileLocator.ReadAllText("THIRD_PARTY_LICENSES.md");
-        var audit = WorkspaceFileLocator.ReadAllText("docs", "legal/third-party-license-audit-2026-05-30.md");
 
         notices.Should().Contain("[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)");
         notices.Should().Contain("FluentAssertions 8.9.0 is a test/development dependency only");
-        notices.Should().Contain("non-commercial use");
+        notices.Should().MatchRegex(@"Versions 8 and later require a paid\s+license for commercial use");
+        notices.Should().MatchRegex(@"replace this dependency,\s+use a suitably licensed version, or confirm the required license has been\s+obtained");
         notices.Should().Contain("Microsoft.NET.ILLink.Tasks `THIRD-PARTY-NOTICES.TXT`");
+        notices.Should().Contain("Coverage: every restored package is listed below.");
+        notices.Should().Contain("LGPL Runtime Distribution Requirements");
+        notices.Should().Contain("permit replacement/relinking as required by the applicable");
         licenses.Should().Contain("Microsoft.NET.ILLink.Tasks Package Third-Party Notices");
         licenses.Should().Contain("Apache License");
         licenses.Should().Contain("SharpVectors.Wpf Package License File");
         licenses.Should().Contain("FluentAssertions Package License");
-        audit.Should().Contain("66 unique restored NuGet packages");
-        audit.Should().Contain("Open Compliance Watch Item");
+        licenses.Should().Contain("COMMUNITY LICENSE AGREEMENT");
+        licenses.Should().Contain("(for Non-Commercial Use)");
+        licenses.Should().Contain("requires a paid Commercial License");
     }
 
     private static IReadOnlyCollection<(string Name, string Version)> FindRestoredPackages()
