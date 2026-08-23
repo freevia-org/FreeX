@@ -8,10 +8,10 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-$acceptanceRefreshTestedSourceCommit = "615b53f474dfa1849ae965018d890cba4a138d42"
+$acceptanceRefreshTestedSourceCommit = "cacb80a5c04d3f737808e700bb58cb7ac6d22541"
 $acceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 $acceptanceRefreshAllowedPaths = @(
-    "docs/parity/avalonia-parity-wave193-integration-20260823.md",
+    "docs/parity/avalonia-parity-wave194-integration-20260824.md",
     "docs/parity/avalonia-wpf-cross-app-dashboard.json",
     "docs/parity/avalonia-wpf-cross-app-dashboard.md",
     "tests/FreeX.App.Host.Tests/CrossAppParityDashboardTests.cs",
@@ -173,19 +173,21 @@ $changedAcceptancePaths = @(Test-AcceptanceRefreshGitBoundary -RepositoryRoot $r
 $dashboard = Read-ToolJson -Path $DashboardPath -RepoRoot $repoRoot -MissingMessage "Required generated cross-app dashboard is missing"
 
 Assert-DashboardCondition ($dashboard.schema -eq "freex.parity.cross-app-dashboard.v3") "Cross-app dashboard schema must be v3."
-Assert-DashboardCondition ($dashboard.wave -eq 193) "Cross-app dashboard must describe Wave193."
-Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 579) "Wave193 cumulative app-slice count must be 579."
-Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "accepted-final-integration-gates") "Wave193 app-slice count must be accepted after final integration gates."
-Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "accepted") "Wave193 integration gates must be accepted."
-Assert-DashboardCondition (@($dashboard.pendingIntegrationGates).Count -eq 0) "Wave193 must not retain pending integration gates."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.testedSourceCommit -eq $acceptanceRefreshTestedSourceCommit) "Wave193 integration evidence must name tested source commit $acceptanceRefreshTestedSourceCommit."
-Assert-DashboardCondition ($null -eq $dashboard.integrationGateEvidence.PSObject.Properties["integrationHead"]) "Wave193 integration evidence must not use a recursive current-HEAD claim."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.acceptanceRefreshNote -eq $acceptanceRefreshNote) "Wave193 acceptance evidence must state that the acceptance-only documentation/tooling refresh does not alter tested source."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -eq "Passed: independent review found no findings after dashboard and source-guard remediations.") "Wave193 independent-review evidence must be exact."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.repositoryPreflight -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: 288 JSON, 306 XML-backed, and 13,845 text files conflict scanned.") "Wave193 repository-preflight evidence must name the tested source and exact authoritative file counts."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors.") "Wave193 Release-build evidence must retain the final tested-source command and zero-warning/error result."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.defaultNonUiTestLane -eq "Passed: final default lane exit 0 with Core.IO 5,839 passed/56 skipped, Avalonia 2,182 passed, Host Logic 1,490 passed/4 skipped, FreeP Presentation 5,466 passed, and FreeP Avalonia 724 passed.") "Wave193 default-lane evidence must retain authoritative project totals."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sourceTestRemediation -eq "The initial default lane exposed three source-test regressions; remediation fixed all three, and focused reruns passed.") "Wave193 source-test remediation evidence must be recorded."
+Assert-DashboardCondition ($dashboard.wave -eq 194) "Cross-app dashboard must describe Wave194."
+Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 582) "Wave194 cumulative app-slice count must be 582."
+Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "pending-final-integration-gates") "Wave194 app-slice count must remain pending until final integration gates pass."
+Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "pending") "Wave194 integration gates must remain pending until final results are recorded."
+Assert-DashboardCondition ((@($dashboard.pendingIntegrationGates) -join ",") -eq "final-independent-review,full-release-build,default-non-ui-test-lane,repository-preflight") "Wave194 pending integration gates must name the four final gates in order."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.testedSourceCommit -eq $acceptanceRefreshTestedSourceCommit) "Wave194 integration evidence must name tested source commit $acceptanceRefreshTestedSourceCommit."
+Assert-DashboardCondition ($null -eq $dashboard.integrationGateEvidence.PSObject.Properties["integrationHead"]) "Wave194 integration evidence must not use a recursive current-HEAD claim."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.acceptanceRefreshNote -eq $acceptanceRefreshNote) "Wave194 acceptance evidence must state that the acceptance-only documentation/tooling refresh does not alter tested source."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.initialIndependentReview -match "two P2 findings.*FreeX.*FreeP") "Wave194 initial independent-review findings must be recorded."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.reviewRemediation -match "one authoritative geometry contract.*schema v3.*complete PPTX") "Wave194 reviewer remediations must be recorded."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -eq "Pending: final independent re-review after both Wave194 remediations.") "Wave194 final independent review must remain pending."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.repositoryPreflight -match "^Pending:") "Wave194 repository-preflight result must remain pending."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -match "^Pending:") "Wave194 Release-build result must remain pending."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.defaultNonUiTestLane -match "^Pending:") "Wave194 default-lane result must remain pending."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sourceTestRemediation -match "No Wave194 product/test source changes") "Wave194 source-test scope must be recorded."
 Assert-DashboardCondition ($dashboard.scopeBoundary -match "visual parity") "Cross-app dashboard scope boundary must retain the no-visual-parity claim."
 
 $requiredSources = @(
@@ -205,8 +207,12 @@ $requiredSources = @(
     "docs/parity/avalonia-parity-wave193-freex-autofilter-no-fill-20260823.md",
     "docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/physical-result.json",
     "docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/manifest.json",
+    "docs/parity/avalonia-parity-wave194-freex-autofilter-mixed-type-20260823.md",
+    "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/physical-result.json",
+    "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/manifest.json",
     "docs/parity/avalonia-parity-wave192-freew-font-checkbox-20260823.md",
     "docs/parity/avalonia-parity-wave193-freew-font-checkbox-glyph-20260823.md",
+    "docs/parity/avalonia-parity-wave194-freew-font-action-border-20260824.md",
     "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
     "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json",
     "docs/parity/freep-whole-window-visual-evidence/summary.json",
@@ -223,7 +229,9 @@ $requiredSources = @(
     "docs/parity/avalonia-parity-wave193-freep-render-residual-20260823.md",
     "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/metrics.json",
     "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/references.json",
-    "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/images.json"
+    "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/images.json",
+    "docs/parity/freep-wave194-deck17-slide02-topology-20260823.md",
+    "docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json"
 )
 foreach ($source in $requiredSources) {
     Assert-DashboardCondition (@($dashboard.sources) -contains $source) "Cross-app dashboard is missing authoritative source '$source'."
@@ -294,6 +302,19 @@ Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave193Popup
 Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave193PopupTransitions.clickAcknowledged -eq $true) "FreeX Wave193 popup click acknowledgement must remain explicit."
 Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.wave193PopupTransitions.summary -match "popup-open 1905.*popup-dismissed 1905.*restoration 0") "FreeX Wave193 popup transition summary must retain open/dismiss/restoration details."
 Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.wave193PackageSemantics -match "SourcePatch.*no-row-delta") "FreeX Wave193 package semantics must retain SourcePatch/no-row-delta coverage."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.physicalPassed -eq 1 -and $freeX.renderedEvidence.physicalEvidence.wave194.physicalTotal -eq 1) "FreeX Wave194 mixed-type physical lane must pass 1/1."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.focusedAvaloniaGuardPassed -eq 8 -and $freeX.renderedEvidence.physicalEvidence.wave194.focusedAvaloniaGuardTotal -eq 8) "FreeX Wave194 Avalonia guards must be 8/8."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.focusedPresentationPassed -eq 1 -and $freeX.renderedEvidence.physicalEvidence.wave194.focusedPresentationTotal -eq 1) "FreeX Wave194 Presentation guards must be 1/1."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.focusedCoreIoPassed -eq 2 -and $freeX.renderedEvidence.physicalEvidence.wave194.focusedCoreIoTotal -eq 2) "FreeX Wave194 Core.IO guards must be 2/2."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.evidenceArtifactCount -eq 20 -and $freeX.renderedEvidence.physicalEvidence.wave194.evidenceArtifactExpectedCount -eq 20) "FreeX Wave194 evidence artifact count must be 20/20."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave194.reachableProvenanceFileCount -eq 10 -and $freeX.renderedEvidence.physicalEvidence.wave194.validationFileCount -eq 2) "FreeX Wave194 provenance and validation counts must be 10 and 2."
+Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.wave194.geometry.bounds -eq "97,589,260,18" -and [string]$freeX.renderedEvidence.physicalEvidence.wave194.geometry.click -eq "103,598") "FreeX Wave194 geometry must retain the accepted bounds and click."
+Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.wave194.visibleReadback -eq "42,'42,") "FreeX Wave194 visible/readback value must remain exact."
+Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.wave194.semanticReadback -eq "Number,NumericText") "FreeX Wave194 semantic readback must remain exact."
+Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.wave194.recalculation -eq "5->2") "FreeX Wave194 SUBTOTAL recalculation must remain 5->2."
+Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.wave194.package -eq "ref=A1:B7|colId=0|filters=42|blank=|hidden=4,5,6,7|A2-type=n|A2=42|A3-type=inlineStr|A3=42|A6-style=1|A6=45292|C1-formula=SUBTOTAL(103,A2:A7)|C1=2") "FreeX Wave194 package semantics must remain exact."
+Assert-DashboardCondition ([bool]$freeX.renderedEvidence.physicalEvidence.wave194.evidenceUnchangedAfterGeometryRemediation) "FreeX Wave194 physical evidence must remain byte-equivalent after geometry remediation."
+Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.wave194.claimBoundary -match "Bounded physical") "FreeX Wave194 claim boundary must remain bounded."
 
 $freeP = $apps["FreeP"]
 $freePLanes = @($freeP.renderedEvidence.routeCoverage.laneEntries)
@@ -318,6 +339,11 @@ Assert-DashboardCondition ($freeW.renderedEvidence.wave193.aggregateDelta -eq -1
 Assert-DashboardCondition ($freeW.renderedEvidence.wave193.relativeImprovement -eq 0.0390396537606738) "FreeW Wave193 Font relative improvement must remain 3.9040%."
 Assert-DashboardCondition ($freeW.renderedEvidence.wave193.nonFontRowsCompared -eq 288 -and $freeW.renderedEvidence.wave193.nonFontRowsChanged -eq 0) "FreeW Wave193 non-Font row stability must remain 0/288 changes."
 Assert-DashboardCondition ([string]$freeW.renderedEvidence.wave193.paintedBounds -eq "421 x 321") "FreeW Wave193 painted bounds must remain exact."
+Assert-DashboardCondition ($freeW.renderedEvidence.wave194.baselineAggregateChangedPixels -eq 32861 -and $freeW.renderedEvidence.wave194.aggregateChangedPixels -eq 32312) "FreeW Wave194 aggregate changed pixels must be 32,861 -> 32,312."
+Assert-DashboardCondition ($freeW.renderedEvidence.wave194.aggregateDelta -eq -549 -and [math]::Abs([double]$freeW.renderedEvidence.wave194.relativeImprovement - 0.016712006337408244) -lt 0.000000000000001) "FreeW Wave194 aggregate improvement must remain exact."
+Assert-DashboardCondition ($freeW.renderedEvidence.wave194.changedPixelsByState.initial -eq 10599 -and $freeW.renderedEvidence.wave194.changedPixelsByState.populated -eq 10756 -and $freeW.renderedEvidence.wave194.changedPixelsByState.validationError -eq 10957) "FreeW Wave194 state changed-pixel counts must remain exact."
+Assert-DashboardCondition ($freeW.renderedEvidence.wave194.nonFontRowsCompared -eq 288 -and $freeW.renderedEvidence.wave194.nonFontRowsChanged -eq 0 -and [string]$freeW.renderedEvidence.wave194.paintedBounds -eq "421 x 321") "FreeW Wave194 non-Font stability and bounds must remain exact."
+Assert-DashboardCondition ([string]$freeW.renderedEvidence.wave194.correction -match "#C8C8C8") "FreeW Wave194 correction must record the WPF-style action border."
 Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.status -eq "no-runtime-change-retained") "FreeP Wave193 must retain the no-runtime-change result."
 Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.retainedRowCount -eq 53) "FreeP Wave193 retained row count must remain 53."
 Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.retainedOfficeReferenceCount -eq 53) "FreeP Wave193 retained Office reference count must remain 53."
@@ -326,5 +352,11 @@ Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.workerRunWpf
 Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.fullRenderArtifactsRetained -eq $false) "FreeP Wave193 must distinguish worker-run renders from retained artifacts."
 Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.avaloniaAverageMeanPercent -eq 0.9962) "FreeP Wave193 Avalonia/Office aggregate must remain explicit."
 Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.avaloniaMaximumMeanPercent -eq 2.5815) "FreeP Wave193 Avalonia/Office maximum must remain explicit."
+Assert-DashboardCondition ([string]$freeP.renderedEvidence.wave194Topology.schema -eq "freep.parity.wave194.deck17-slide02.topology.v3") "FreeP Wave194 topology schema must be v3."
+Assert-DashboardCondition ([string]$freeP.renderedEvidence.wave194Topology.sourceCorpusSha256 -eq "f4fc0c9e3d048cac3e0c7fe3d929029238448ff05281be542df105a46c6c88ea") "FreeP Wave194 topology must pin the complete source PPTX SHA-256."
+Assert-DashboardCondition ([string]$freeP.renderedEvidence.wave194Topology.sourceCorpusHashScope -eq "entire raw file bytes") "FreeP Wave194 topology hash scope must cover the entire raw source file."
+Assert-DashboardCondition ([string]$freeP.renderedEvidence.wave194Topology.title.autoFitKind -eq "Shape" -and [string]$freeP.renderedEvidence.wave194Topology.title.effectiveFontFamily -eq "Aptos Display" -and $freeP.renderedEvidence.wave194Topology.title.effectiveFontSizePt -eq 28) "FreeP Wave194 title topology must remain exact."
+Assert-DashboardCondition ([string]$freeP.renderedEvidence.wave194Topology.body.autoFitKind -eq "None" -and [string]$freeP.renderedEvidence.wave194Topology.body.effectiveFontFamily -eq "Aptos" -and $freeP.renderedEvidence.wave194Topology.body.effectiveFontSizePt -eq 18 -and $freeP.renderedEvidence.wave194Topology.body.paragraphCount -eq 8) "FreeP Wave194 body topology must remain exact."
+Assert-DashboardCondition ([string]$freeP.renderedEvidence.wave194Topology.residualClaim -match "unresolved.*not attributed") "FreeP Wave194 residual claim must remain unresolved and non-attributed."
 
 Write-Host "Cross-app parity dashboard schema and evidence aggregation guards passed."
