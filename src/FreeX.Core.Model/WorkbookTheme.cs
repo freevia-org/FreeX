@@ -77,7 +77,9 @@ public sealed record WorkbookTheme(
         {
             MajorFontName = normalizedMajor,
             MinorFontName = normalizedMinor,
-            NativeFontSchemeXml = PatchNativeFontScheme(NativeFontSchemeXml, normalizedMajor, normalizedMinor)
+            NativeFontSchemeXml = DrawingMlThemeXml
+                .TryPatchNativeFontScheme(NativeFontSchemeXml, normalizedMajor, normalizedMinor)?
+                .ToString(SaveOptions.DisableFormatting)
         };
     }
 
@@ -214,40 +216,6 @@ public sealed record WorkbookTheme(
         var renamedFormatScheme = new XElement(formatScheme);
         renamedFormatScheme.SetAttributeValue("name", effectsName);
         return renamedFormatScheme.ToString(SaveOptions.DisableFormatting);
-    }
-
-    private static string? PatchNativeFontScheme(string? fontSchemeXml, string majorFontName, string minorFontName)
-    {
-        var fontScheme = TryParseFontScheme(fontSchemeXml);
-        if (fontScheme is null)
-            return null;
-
-        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-        var patchedFontScheme = new XElement(fontScheme);
-        patchedFontScheme.Element(drawingNs + "majorFont")?
-            .Element(drawingNs + "latin")?
-            .SetAttributeValue("typeface", majorFontName);
-        patchedFontScheme.Element(drawingNs + "minorFont")?
-            .Element(drawingNs + "latin")?
-            .SetAttributeValue("typeface", minorFontName);
-        return patchedFontScheme.ToString(SaveOptions.DisableFormatting);
-    }
-
-    private static XElement? TryParseFontScheme(string? fontSchemeXml)
-    {
-        if (string.IsNullOrWhiteSpace(fontSchemeXml))
-            return null;
-
-        try
-        {
-            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-            var fontScheme = XElement.Parse(fontSchemeXml);
-            return fontScheme.Name == drawingNs + "fontScheme" ? fontScheme : null;
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     private static WorkbookThemeEffectDefaults? ReadFormatSchemeEffectDefaults(string? formatSchemeXml)

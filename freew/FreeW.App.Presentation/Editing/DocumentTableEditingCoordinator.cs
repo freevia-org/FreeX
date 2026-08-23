@@ -358,7 +358,7 @@ public sealed class DocumentTableEditingCoordinator
                 firstRow,
                 lastRow));
 
-            ExecuteGroup(commands, "Merge Cells");
+            DocumentUndoGroupExecutor.Execute(_session.Commands, commands, "Merge Cells");
         }
 
         return DocumentTableEditResult.Changed(
@@ -465,7 +465,8 @@ public sealed class DocumentTableEditingCoordinator
         if (targets.Length == 0)
             return DocumentTableEditResult.NoChange(default);
 
-        ExecuteGroup(
+        DocumentUndoGroupExecutor.Execute(
+            _session.Commands,
             targets.Select(target => (IDocumentCommand)new SetCellBordersCommand(
                 target.Edit.Address.BlockIndex,
                 target.Edit.Address.RowIndex,
@@ -529,7 +530,7 @@ public sealed class DocumentTableEditingCoordinator
         TableFormulaField formula)
     {
         ArgumentNullException.ThrowIfNull(formula);
-        if (!TryResolveCell(address, out _, out var cellIndex))
+        if (!TryResolveCellParagraph(address, paragraphIndex, out var cellIndex))
             return new DocumentTableTextEditResult(false, address, paragraphIndex, textOffset);
 
         var command = new InsertTableCellFormulaCommand(
@@ -544,7 +545,7 @@ public sealed class DocumentTableEditingCoordinator
             true,
             address,
             paragraphIndex,
-            textOffset + command.InsertedTextLength);
+            command.EffectiveInsertionOffset + command.InsertedTextLength);
     }
 
     public DocumentTableTextEditResult InsertNote(
@@ -554,13 +555,13 @@ public sealed class DocumentTableEditingCoordinator
         string? text,
         bool footnote)
     {
-        if (!TryResolveCell(address, out _, out var cellIndex))
+        if (!TryResolveCellParagraph(address, paragraphIndex, out var cellIndex))
             return new DocumentTableTextEditResult(false, address, paragraphIndex, textOffset);
 
         var id = footnote
             ? _session.Document.NextFootnoteId()
             : _session.Document.NextEndnoteId();
-        _session.Commands.Execute(new InsertTableCellNoteCommand(
+        var command = new InsertTableCellNoteCommand(
             id,
             footnote,
             text ?? string.Empty,
@@ -568,13 +569,14 @@ public sealed class DocumentTableEditingCoordinator
             address.RowIndex,
             cellIndex,
             paragraphIndex,
-            textOffset));
+            textOffset);
+        _session.Commands.Execute(command);
         var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
         return new DocumentTableTextEditResult(
             true,
             address,
             paragraphIndex,
-            textOffset + markerLength);
+            command.EffectiveInsertionOffset + markerLength);
     }
 
     public DocumentTableEditResult UpdateFormatting(
@@ -706,7 +708,8 @@ public sealed class DocumentTableEditingCoordinator
         if (targets.Length == 0)
             return DocumentTableEditResult.NoChange(default);
 
-        ExecuteGroup(
+        DocumentUndoGroupExecutor.Execute(
+            _session.Commands,
             targets.Select(target => build(target.Address, target.CellIndex)).ToArray(),
             undoLabel);
         return DocumentTableEditResult.Changed(targets[0].Address);
@@ -720,28 +723,6 @@ public sealed class DocumentTableEditingCoordinator
             return DocumentTableEditResult.NoChange(address);
         _session.Commands.Execute(command);
         return DocumentTableEditResult.Changed(address);
-    }
-
-    private void ExecuteGroup(IReadOnlyList<IDocumentCommand> commands, string undoLabel)
-    {
-        if (commands.Count == 1)
-        {
-            _session.Commands.Execute(commands[0]);
-            return;
-        }
-
-        _session.Commands.BeginUndoGroup();
-        try
-        {
-            foreach (var command in commands)
-                _session.Commands.Execute(command);
-            _session.Commands.CommitUndoGroup(undoLabel);
-        }
-        catch
-        {
-            _session.Commands.AbortUndoGroup();
-            throw;
-        }
     }
 
     private bool TryGetTable(int blockIndex, out Table table)
@@ -792,6 +773,18 @@ public sealed class DocumentTableEditingCoordinator
 
         cell = table.Rows[address.RowIndex].Cells[cellIndex];
         return true;
+    }
+
+    private bool TryResolveCellParagraph(
+        DocumentTableCellAddress address,
+        int paragraphIndex,
+        out int cellIndex)
+    {
+        if (!TryResolveCell(address, out var table, out cellIndex))
+            return false;
+
+        var paragraphs = table.Rows[address.RowIndex].Cells[cellIndex].Paragraphs;
+        return paragraphIndex >= 0 && paragraphIndex < paragraphs.Count;
     }
 
     private static int GridWidth(Table table) =>

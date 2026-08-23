@@ -59,6 +59,58 @@ public sealed class SlideShapeTraversalTests
     }
 
     [Fact]
+    public void CollectionAndRootOverloads_PreservePreorderWhileShapePropertiesMutate()
+    {
+        var root = Shape(1, SlideShapeKind.Group);
+        var child = Shape(2, SlideShapeKind.Group);
+        var grandchild = Shape(3);
+        var sibling = Shape(4);
+        child.Children.Add(grandchild);
+        root.Children.Add(child);
+
+        var visited = new List<SlideShape>();
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(root))
+        {
+            visited.Add(shape);
+            shape.Name = $"visited-{shape.Id}";
+        }
+
+        visited.Should().Equal(root, child, grandchild);
+        visited.Should().OnlyContain(shape => shape.Name == $"visited-{shape.Id}");
+        SlideShapeTraversal.EnumerateDepthFirst(new[] { root, sibling })
+            .Should().Equal(root, child, grandchild, sibling);
+        SlideShapeTraversal.FindById(new[] { root, sibling }, grandchild.Id)
+            .Should().BeSameAs(grandchild);
+    }
+
+    [Fact]
+    public void PortableResidualConsumers_UseCanonicalPreorderTraversal()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var expectedConsumers = new[]
+        {
+            "freep/FreeP.App.Presentation/EditingSession.cs",
+            "freep/FreeP.App.Presentation/PresentationMediaTranscriptPlanner.cs",
+            "freep/FreeP.App.Presentation/SectionZoomInsertionPlanner.cs",
+            "freep/FreeP.App.Presentation/SlideShowMediaInteractionPlanner.cs",
+            "freep/FreeP.App.Presentation/SlideZoomInsertionPlanner.cs",
+            "freep/FreeP.App.Presentation/SmartArtEditingPlanner.cs",
+            "freep/FreeP.App.Presentation/SummaryZoomInsertionPlanner.cs",
+            "freep/FreeP.Core.IO/PptxPackageWriter.cs",
+        };
+
+        foreach (var relativePath in expectedConsumers)
+        {
+            var source = File.ReadAllText(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+            source.Should().Contain("SlideShapeTraversal.EnumerateDepthFirst");
+        }
+
+        File.ReadAllText(Path.Combine(root, "freep", "FreeP.Core.IO", "PptxPackageWriter.cs"))
+            .Should().NotContain("EnumerateShapesRecursive")
+            .And.NotContain("IEnumerable<SlideShape> AllShapes");
+    }
+
+    [Fact]
     public void PlatformHosts_UseOnlyTheCanonicalSlideShapeTraversal()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");

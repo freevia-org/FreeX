@@ -56,6 +56,35 @@ public static class OpcRelationships
     public static XDocument CreateDocument(params object?[] relationships) =>
         new(new XDeclaration("1.0", "UTF-8", "yes"), CreateRoot(relationships));
 
+    public static bool IsStructurallyValidRelationship(XElement relationship)
+    {
+        if (relationship.Attributes().Any(attribute =>
+                !attribute.IsNamespaceDeclaration &&
+                attribute.Name.NamespaceName.Length != 0))
+        {
+            return false;
+        }
+
+        if (relationship.Attributes().Any(attribute =>
+                !attribute.IsNamespaceDeclaration &&
+                attribute.Name.LocalName is not "Id" and not "Type" and not "Target" and not "TargetMode"))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value) ||
+            string.IsNullOrWhiteSpace(relationship.Attribute("Type")?.Value) ||
+            string.IsNullOrWhiteSpace(relationship.Attribute("Target")?.Value))
+        {
+            return false;
+        }
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value;
+        return string.IsNullOrWhiteSpace(targetMode) ||
+               string.Equals(targetMode.Trim(), "External", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(targetMode.Trim(), "Internal", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static IReadOnlyList<OpcRelationship> Load(
         ZipArchive archive,
         string relsPath,

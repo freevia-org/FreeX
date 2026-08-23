@@ -56,7 +56,7 @@ public static class SlideShowPrismTransitionPlanner
         if (width <= 0 || height <= 0 || progress <= 0)
             return Array.Empty<SlideShowMaskPolygon>();
         if (progress >= 1)
-            return new[] { new SlideShowMaskPolygon(BuildRectangle(width, height)) };
+            return new[] { new SlideShowMaskPolygon(SlideShowTransitionGeometry.BuildRectangle(width, height)) };
 
         var facets = Math.Max(3, plan.FacetCount);
         var revealWindow = Math.Clamp(plan.RevealWindow, 0.20, 0.95);
@@ -71,7 +71,7 @@ public static class SlideShowPrismTransitionPlanner
                 var centerDistance = Math.Abs(facet - (facets - 1) * 0.5)
                     / Math.Max(1, (facets - 1) * 0.5);
                 var order = plan.Reverse ? 1 - centerDistance : centerDistance;
-                var local = SmoothStep(Math.Clamp(
+                var local = SlideShowTransitionGeometry.SmoothStep(Math.Clamp(
                     (progress - order * (1 - revealWindow)) / revealWindow,
                     0,
                     1));
@@ -100,7 +100,7 @@ public static class SlideShowPrismTransitionPlanner
                 var centerDistance = Math.Abs(facet - (facets - 1) * 0.5)
                     / Math.Max(1, (facets - 1) * 0.5);
                 var order = plan.Reverse ? 1 - centerDistance : centerDistance;
-                var local = SmoothStep(Math.Clamp(
+                var local = SlideShowTransitionGeometry.SmoothStep(Math.Clamp(
                     (progress - order * (1 - revealWindow)) / revealWindow,
                     0,
                     1));
@@ -125,14 +125,5 @@ public static class SlideShowPrismTransitionPlanner
         return polygons;
     }
 
-    private static double SmoothStep(double value) => value * value * (3 - 2 * value);
 
-    private static IReadOnlyList<SlideShowMaskPoint> BuildRectangle(double width, double height) =>
-        new[]
-        {
-            new SlideShowMaskPoint(0, 0),
-            new SlideShowMaskPoint(width, 0),
-            new SlideShowMaskPoint(width, height),
-            new SlideShowMaskPoint(0, height)
-        };
 }

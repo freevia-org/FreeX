@@ -318,8 +318,8 @@ internal static class XlsxStylesheetSchemaNormalizer
 
             changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(tableStyle, "name", name);
             changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(tableStyle, TableStyleAttributes);
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyle, "pivot", NormalizeBoolean);
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyle, "table", NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyle, "pivot", XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyle, "table", XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
             changed |= RemoveUnexpectedChildren(tableStyle, workbookNs + "tableStyleElement");
 
             foreach (var tableStyleElement in tableStyle.Elements(workbookNs + "tableStyleElement").ToList())
@@ -440,24 +440,6 @@ internal static class XlsxStylesheetSchemaNormalizer
         element.Name == workbookNs + "family" ? 13 :
         element.Name == workbookNs + "scheme" ? 14 :
         90;
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.Equals(trimmed, "1", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase))
-        {
-            return "1";
-        }
-
-        if (string.Equals(trimmed, "0", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase))
-        {
-            return "0";
-        }
-
-        return null;
-    }
 
     private static bool RemoveUnexpectedChildren(XElement element, XName allowedChildName)
     {

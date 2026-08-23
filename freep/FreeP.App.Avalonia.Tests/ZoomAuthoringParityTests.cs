@@ -106,8 +106,7 @@ public sealed class ZoomAuthoringParityTests
     {
         foreach (var file in new[]
                  {
-                     "SlideZoomDialog.cs",
-                     "SectionZoomDialog.cs",
+                     "SingleTargetZoomDialog.cs",
                      "SummaryZoomCoverImageTargetDialog.cs",
                  })
         {
@@ -118,6 +117,19 @@ public sealed class ZoomAuthoringParityTests
             source.Should().NotContain("record TargetOption");
             source.Should().NotContain("AvaloniaCompactDialogChromeStyle");
         }
+    }
+
+    [Fact]
+    public void Avalonia_slide_and_section_zoom_commands_adopt_one_parameterized_modal_renderer()
+    {
+        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("new SingleTargetZoomDialog(")
+            .And.Contain("ZoomTargetDialogKind.Slide")
+            .And.Contain("ZoomTargetDialogKind.Section")
+            .And.Contain("ShowDialog<bool?>(this)")
+            .And.NotContain("new SlideZoomDialog(")
+            .And.NotContain("new SectionZoomDialog(");
     }
 
     private static string RepoFile(params string[] parts) =>

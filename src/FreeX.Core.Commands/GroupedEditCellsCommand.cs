@@ -10,7 +10,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
     private readonly IReadOnlyList<SheetId> _sheetIds;
     private readonly SheetId _sourceSheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _sourceEdits;
-    private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata, bool HadPhoneticGuide, CellPhoneticGuide? OldPhoneticGuide)>? _snapshot;
+    private List<(SheetId SheetId, CellEditCompanionSnapshot Snapshot)>? _snapshot;
 
     // R115-data-table-master-formula-refresh: mirrors EditCellsCommand's _appliedTableEffects --
     // a grouped edit that lands on a registered Data Table's master formula cell on one of the
@@ -75,31 +75,15 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
             foreach (var (sourceAddress, sourceCell) in _sourceEdits)
             {
                 var address = RemapAddress(sourceAddress, sheetId);
-                var oldCell = sheet.GetCell(address)?.Clone();
-                var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(address, out var oldRuns);
-                var hadHyperlink = sheet.Hyperlinks.TryGetValue(address, out var oldHyperlink);
-                var hadHyperlinkMetadata = sheet.HyperlinkMetadata.TryGetValue(address, out var oldHyperlinkMetadata);
-                var hadPhoneticGuide = sheet.CellPhoneticGuides.TryGetValue(address, out var oldPhoneticGuide);
-                _snapshot.Add((
-                    sheetId,
-                    address,
-                    oldCell,
-                    sheet.GetStyleOnly(address.Row, address.Col),
-                    hadRichTextRuns,
-                    oldRuns,
-                    hadHyperlink,
-                    oldHyperlink,
-                    hadHyperlinkMetadata,
-                    oldHyperlinkMetadata,
-                    hadPhoneticGuide,
-                    oldPhoneticGuide));
+                var snapshot = CellEditCompanionSnapshot.Capture(sheet, address);
+                _snapshot.Add((sheetId, snapshot));
 
                 var appliedCell = sourceCell.Clone();
                 if (appliedCell.StyleId == StyleId.Default)
                 {
-                    if (oldCell is not null)
-                        appliedCell.StyleId = oldCell.StyleId;
-                    else if (sheet.GetStyleOnly(address.Row, address.Col) is { } styleOnly)
+                    if (snapshot.Cell is not null)
+                        appliedCell.StyleId = snapshot.Cell.StyleId;
+                    else if (snapshot.StyleOnly is { } styleOnly)
                         appliedCell.StyleId = styleOnly;
                 }
 
@@ -139,39 +123,8 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
             _appliedTableEffects[i].Revert(ctx);
         _appliedTableEffects.Clear();
 
-        foreach (var (sheetId, address, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata, hadPhoneticGuide, oldPhoneticGuide) in _snapshot)
-        {
-            var sheet = ctx.GetSheet(sheetId);
-            if (oldCell is null)
-            {
-                sheet.ClearCell(address);
-                RestoreStyleOnly(sheet, address, oldStyleOnly);
-            }
-            else
-            {
-                sheet.SetCell(address, oldCell.Clone());
-            }
-
-            if (hadRichTextRuns && oldRichTextRuns is not null)
-                sheet.RichTextRuns[address] = oldRichTextRuns;
-            else
-                sheet.RichTextRuns.Remove(address);
-
-            if (hadHyperlink && oldHyperlink is not null)
-                sheet.Hyperlinks[address] = oldHyperlink;
-            else
-                sheet.Hyperlinks.Remove(address);
-
-            if (hadHyperlinkMetadata && oldHyperlinkMetadata is not null)
-                sheet.HyperlinkMetadata[address] = oldHyperlinkMetadata;
-            else
-                sheet.HyperlinkMetadata.Remove(address);
-
-            if (hadPhoneticGuide && oldPhoneticGuide is not null)
-                sheet.CellPhoneticGuides[address] = oldPhoneticGuide;
-            else
-                sheet.CellPhoneticGuides.Remove(address);
-        }
+        foreach (var (sheetId, snapshot) in _snapshot)
+            snapshot.Restore(ctx.GetSheet(sheetId));
     }
 
     private CellAddress RemapAddress(CellAddress address, SheetId targetSheetId)
@@ -180,13 +133,5 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
             ? address
             : new CellAddress(_sourceSheetId, address.Row, address.Col);
         return new CellAddress(targetSheetId, sourceAddress.Row, sourceAddress.Col);
-    }
-
-    private static void RestoreStyleOnly(Sheet sheet, CellAddress address, StyleId? styleId)
-    {
-        if (styleId.HasValue)
-            sheet.SetStyleOnly(address.Row, address.Col, styleId.Value);
-        else
-            sheet.ClearStyleOnly(address.Row, address.Col);
     }
 }

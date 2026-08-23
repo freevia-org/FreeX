@@ -2048,7 +2048,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         return (a, b) switch
         {
             (TextValue ta,   TextValue tb  ) => caseSensitive
-                ? CompareCaseSensitiveText(ta.Value, tb.Value)
+                ? CaseSensitiveSortComparison.Compare(ta.Value, tb.Value)
                 : string.Compare(ta.Value, tb.Value, StringComparison.OrdinalIgnoreCase),
             (TextValue,      _             ) => -1,  // text before bool/blank
             (_,              TextValue     ) =>  1,
@@ -2062,38 +2062,4 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         };
     }
 
-    /// <summary>
-    /// R39-commands-sort-custom-2-1: Excel's "Case Sensitive" sort option does NOT switch to raw
-    /// ordinal/codepoint ordering (which would clump all uppercase-leading words ahead of all
-    /// lowercase-leading ones, e.g. "Mango","Zebra","apple","banana"). It still sorts
-    /// alphabetically first — case only breaks a tie between strings that are otherwise
-    /// letter-for-letter identical, and in that tiebreak lowercase sorts before uppercase (e.g.
-    /// "apple" before "Apple"). This compares case-insensitively first, then falls back to a
-    /// per-character lowercase-before-uppercase tiebreak only when the case-insensitive compare
-    /// found the strings equal.
-    /// </summary>
-    private static int CompareCaseSensitiveText(string a, string b)
-    {
-        var primary = string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
-        if (primary != 0)
-            return primary;
-
-        var len = Math.Min(a.Length, b.Length);
-        for (var i = 0; i < len; i++)
-        {
-            var ca = a[i];
-            var cb = b[i];
-            if (ca == cb)
-                continue;
-
-            var aLower = char.IsLower(ca);
-            var bLower = char.IsLower(cb);
-            if (aLower != bLower)
-                return aLower ? -1 : 1; // lowercase before uppercase, as a same-letter tiebreak only
-
-            return ca.CompareTo(cb);
-        }
-
-        return a.Length.CompareTo(b.Length);
-    }
 }

@@ -1552,50 +1552,9 @@ internal static partial class RowColumnShiftHelpers
         foreach (var sheet in workbook.Sheets)
         {
             foreach (var chart in sheet.Charts)
-            {
-                if (chart.VerbatimSeriesFormulas is { Count: > 0 } vf)
-                {
-                    for (var i = 0; i < vf.Count; i++)
-                    {
-                        var entry = vf[i];
-                        var newVal = RewriteWholeChartFormula(entry.ValFormula, op);
-                        var newCat = RewriteWholeChartFormula(entry.CatFormula, op);
-                        var newTx = RewriteWholeChartFormula(entry.TxFormula, op);
-                        var newBubble = RewriteWholeChartFormula(entry.BubbleSizeFormula, op);
-                        if (!string.Equals(newVal, entry.ValFormula, StringComparison.Ordinal) ||
-                            !string.Equals(newCat, entry.CatFormula, StringComparison.Ordinal) ||
-                            !string.Equals(newTx, entry.TxFormula, StringComparison.Ordinal) ||
-                            !string.Equals(newBubble, entry.BubbleSizeFormula, StringComparison.Ordinal))
-                        {
-                            vf[i] = entry with
-                            {
-                                ValFormula = newVal,
-                                CatFormula = newCat,
-                                TxFormula = newTx,
-                                BubbleSizeFormula = newBubble
-                            };
-                        }
-                    }
-                }
-
-                if (chart.SeriesRangeDataLabels is { Count: > 0 } dl)
-                {
-                    for (var i = 0; i < dl.Count; i++)
-                    {
-                        var entry = dl[i];
-                        var rewritten = RewriteWholeChartFormula(entry.Formula, op);
-                        if (!string.Equals(rewritten, entry.Formula, StringComparison.Ordinal))
-                            dl[i] = entry with { Formula = rewritten };
-                    }
-                }
-
-                var newPlus = RewriteWholeChartFormula(chart.ErrorBarPlusRangeFormula, op);
-                var newMinus = RewriteWholeChartFormula(chart.ErrorBarMinusRangeFormula, op);
-                if (!string.Equals(newPlus, chart.ErrorBarPlusRangeFormula, StringComparison.Ordinal))
-                    chart.ErrorBarPlusRangeFormula = newPlus;
-                if (!string.Equals(newMinus, chart.ErrorBarMinusRangeFormula, StringComparison.Ordinal))
-                    chart.ErrorBarMinusRangeFormula = newMinus;
-            }
+                ChartFormulaFieldTransformer.Transform(
+                    chart,
+                    formula => RewriteWholeChartFormula(formula, op));
         }
     }
 

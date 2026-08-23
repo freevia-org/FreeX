@@ -1,6 +1,5 @@
 using System.IO.Compression;
 using System.Xml.Linq;
-using System.Xml;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -144,11 +143,10 @@ internal static partial class XlsxPivotTableReader
         XNamespace relNs,
         XNamespace packageRelNs)
     {
-        var pivotRelIds = ReadWorksheetRelationshipIds(
+        var pivotRelIds = XlsxWorksheetRelationshipIdReader.ReadAll(
             worksheetEntry,
-            "pivotTableDefinition",
-            "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
-            relNs.NamespaceName);
+            XName.Get("pivotTableDefinition", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"),
+            relNs + "id");
         if (pivotRelIds.Count == 0)
             return [];
 
@@ -169,39 +167,6 @@ internal static partial class XlsxPivotTableReader
         string sourcePart,
         XNamespace packageRelNs) =>
         XlsxRelationshipReader.LoadTargets(archive, relsPath, sourcePart, packageRelNs);
-
-    private static List<string> ReadWorksheetRelationshipIds(
-        ZipArchiveEntry worksheetEntry,
-        string localName,
-        string namespaceName,
-        string relationshipNamespaceName)
-    {
-        var result = new List<string>();
-        using var stream = worksheetEntry.Open();
-        using var reader = XmlReader.Create(stream, new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            IgnoreComments = true,
-            IgnoreProcessingInstructions = true,
-            IgnoreWhitespace = true,
-        });
-
-        while (reader.Read())
-        {
-            if (reader.NodeType != XmlNodeType.Element ||
-                !string.Equals(reader.LocalName, localName, StringComparison.Ordinal) ||
-                !string.Equals(reader.NamespaceURI, namespaceName, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var relId = reader.GetAttribute("id", relationshipNamespaceName);
-            if (!string.IsNullOrWhiteSpace(relId))
-                result.Add(relId);
-        }
-
-        return result;
-    }
 
     private static bool TryReadPivotTable(
         XDocument pivotXml,

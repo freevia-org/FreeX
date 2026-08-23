@@ -1028,29 +1028,12 @@ public static class DocxWriter
         }
     }
 
-    private static IEnumerable<Paragraph> EnumerateStoryParagraphs(TextDocument document)
-    {
-        foreach (var paragraph in EnumerateHyperlinkParagraphs(EnumerateParagraphs(document)))
-            yield return paragraph;
-
-        foreach (var headersFooters in document.Sections.Select(section => section.HeadersFooters))
-            foreach (var content in new[]
-            {
-                headersFooters.Header, headersFooters.Footer,
-                headersFooters.EvenHeader, headersFooters.EvenFooter,
-                headersFooters.FirstHeader, headersFooters.FirstFooter
-            })
-                if (content is not null)
-                    foreach (var paragraph in EnumerateHyperlinkParagraphs(content.Paragraphs))
-                        yield return paragraph;
-
-        foreach (var paragraph in EnumerateHyperlinkParagraphs(document.Footnotes.Values.SelectMany(note => note.Content)))
-            yield return paragraph;
-        foreach (var paragraph in EnumerateHyperlinkParagraphs(document.Endnotes.Values.SelectMany(note => note.Content)))
-            yield return paragraph;
-        foreach (var paragraph in EnumerateHyperlinkParagraphs(FlattenComments(document).SelectMany(comment => comment.Content)))
-            yield return paragraph;
-    }
+    private static IEnumerable<Paragraph> EnumerateStoryParagraphs(TextDocument document) =>
+        TextDocumentStoryTraversal.EnumerateParagraphs(
+            document,
+            FlattenComments(document).SelectMany(comment => comment.Content),
+            TextDocumentStoryTraversalOptions.IncludeTextBoxes
+            | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs);
 
     private static void WritePart(ZipArchive archive, string entryPath, XDocument content)
         => OpcXml.WriteXmlEntry(archive, entryPath, content);
@@ -8178,7 +8161,7 @@ public static class DocxWriter
         // "auto" attributes, and nullable model "#RRGGBB" fields are not strict DrawingML srgbClr
         // normalization.
         if (f.HighlightColorHex is { Length: > 0 } highlightToken
-            && HexToHighlightToken(highlightToken) is { } namedHighlight)
+            && WordHighlightColorCodec.ToToken(highlightToken) is { } namedHighlight)
             rPr.Add(new XElement(W + "highlight", new XAttribute(W + "val", namedHighlight)));
         if (f.Underline)
             rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
@@ -10001,7 +9984,7 @@ public static class DocxWriter
         }
         // See BuildRunProperties above: w:highlight is independent of the CharacterShadingHex/w:shd slot.
         if (f.HighlightColorHex is { Length: > 0 } highlightToken
-            && HexToHighlightToken(highlightToken) is { } namedHighlight)
+            && WordHighlightColorCodec.ToToken(highlightToken) is { } namedHighlight)
             rPr.Add(new XElement(W + "highlight", new XAttribute(W + "val", namedHighlight)));
         if (f.Underline)
             rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
@@ -10242,33 +10225,4 @@ public static class DocxWriter
             c != '\t' && c != '\n' && c != '\r' && (c < ' ' || c == '￾' || c == '￿');
     }
 
-    /// <summary>
-    /// Maps a <c>#RRGGBB</c> hex color to the <c>w:highlight/@w:val</c> named token used by Word's
-    /// highlight gallery, or <c>null</c> when the color has no named equivalent. Comparison is
-    /// case-insensitive against the canonical uppercase hex values.
-    /// </summary>
-    private static string? HexToHighlightToken(string hex)
-    {
-        var normalized = hex.TrimStart('#').ToUpperInvariant();
-        return normalized switch
-        {
-            "FFFF00" => "yellow",
-            "00FF00" => "green",
-            "00FFFF" => "cyan",
-            "FF00FF" => "magenta",
-            "0000FF" => "blue",
-            "FF0000" => "red",
-            "000080" => "darkBlue",
-            "008080" => "darkCyan",
-            "008000" => "darkGreen",
-            "800080" => "darkMagenta",
-            "800000" => "darkRed",
-            "808000" => "darkYellow",
-            "808080" => "darkGray",
-            "C0C0C0" => "lightGray",
-            "000000" => "black",
-            "FFFFFF" => "white",
-            _ => null
-        };
-    }
 }

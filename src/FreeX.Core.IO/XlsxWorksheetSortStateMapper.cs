@@ -55,7 +55,7 @@ internal static class XlsxWorksheetSortStateMapper
 
             if (ToXml(sortStateModel) is { } sortState)
             {
-                InsertSortState(root, sortState);
+                XlsxWorksheetElementOrder.Insert(root, sortState);
                 changed = true;
             }
 
@@ -124,64 +124,6 @@ internal static class XlsxWorksheetSortStateMapper
         element.SetAttributeValue("iconSet", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.IconSet));
         element.SetAttributeValue("iconId", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.IconId));
         return element;
-    }
-
-    private static void InsertSortState(XElement root, XElement sortState)
-    {
-        string[] laterElementNames =
-        [
-            "dataConsolidate",
-            "customSheetViews",
-            "mergeCells",
-            "phoneticPr",
-            "conditionalFormatting",
-            "dataValidations",
-            "hyperlinks",
-            "printOptions",
-            "pageMargins",
-            "pageSetup",
-            "headerFooter",
-            "rowBreaks",
-            "colBreaks",
-            "customProperties",
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in root.Elements())
-        {
-            if (element.Name.Namespace != WorksheetNs)
-                continue;
-
-            foreach (var laterElementName in laterElementNames)
-            {
-                if (string.Equals(element.Name.LocalName, laterElementName, StringComparison.Ordinal))
-                {
-                    insertionPoint = element;
-                    break;
-                }
-            }
-
-            if (insertionPoint is not null)
-                break;
-        }
-
-        if (insertionPoint is null)
-            root.Add(sortState);
-        else
-            insertionPoint.AddBeforeSelf(sortState);
     }
 
 }

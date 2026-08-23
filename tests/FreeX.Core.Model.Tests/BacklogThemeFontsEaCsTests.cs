@@ -57,4 +57,16 @@ public sealed class BacklogThemeFontsEaCsTests
         theme.MajorFontName.Should().Be("Calibri");
         theme.NativeFontSchemeXml.Should().BeNull();
     }
+
+    [Fact]
+    public void WithFonts_InvalidNativeFontSchemeXml_RemainsNonFatalAndClearsNativeScheme()
+    {
+        var theme = WorkbookTheme.Office
+            .WithNativeFontSchemeXml("\uD800")
+            .WithFonts("Calibri", "Calibri Light");
+
+        theme.MajorFontName.Should().Be("Calibri");
+        theme.MinorFontName.Should().Be("Calibri Light");
+        theme.NativeFontSchemeXml.Should().BeNull();
+    }
 }

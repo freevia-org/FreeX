@@ -42,13 +42,8 @@ public static class OleInsertionPlanner
         };
     }
 
-    public static string NormalizeExtension(string? extension)
-    {
-        var normalized = (extension ?? string.Empty).Trim().TrimStart('.');
-        return normalized.Length > 0 && normalized.All(char.IsLetterOrDigit)
-            ? normalized.ToLowerInvariant()
-            : "bin";
-    }
+    public static string NormalizeExtension(string? extension) =>
+        FilePathPolicy.NormalizeSafeExtension(extension);
 
     public static string ContentTypeFor(string extension) =>
         OpcMediaTypes.GetContentTypeForFileNameOrExtension(

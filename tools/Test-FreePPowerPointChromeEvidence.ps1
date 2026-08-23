@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
 
 $resolvedRoot = Resolve-ToolRepoPath -Path $EvidenceRoot -RepoRoot $repoRoot
 $resolvedCaptureScript = Resolve-ToolRepoPath -Path $CaptureScriptPath -RepoRoot $repoRoot
@@ -90,7 +90,7 @@ foreach ($capture in $manifest.captures) {
     if (-not (Test-Path -LiteralPath $imagePath -PathType Leaf) -or (Get-Item -LiteralPath $imagePath).Length -le 0) {
         throw "FreeP PowerPoint chrome PNG is missing or empty: $($capture.fileName)"
     }
-    $actualHash = (Get-FileHash -LiteralPath $imagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actualHash = Get-VisualEvidenceFileSha256 -Path $imagePath
     if ($actualHash -ne $capture.sha256) {
         throw "FreeP PowerPoint chrome PNG hash is stale: $($capture.fileName)"
     }

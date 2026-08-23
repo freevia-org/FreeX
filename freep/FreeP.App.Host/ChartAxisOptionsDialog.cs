@@ -1,49 +1,32 @@
-using System.Windows;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style chart axis scale and display dialog.</summary>
-public sealed partial class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartAxisOptionsDialog : ChartOptionsDialogHost<ChartAxisOptionsDialogSession>
 {
-    private readonly ChartAxisOptionsDialogSession _session;
-    private readonly ChartOptionsDialogForm _form;
-
     public ChartAxisOptionsDialog(EditingSession editor, ChartAxisKind? initialAxis = null)
+        : this(new ChartAxisOptionsDialogSession(editor, initialAxis))
     {
-        _session = new ChartAxisOptionsDialogSession(editor, initialAxis);
-        var plan = _session.BuildDialogPlan();
-        _form = ChartOptionsDialogChrome.CreateForm(plan, OnOk, Close, OnValueChanged);
-
-        Title = plan.Title;
-        Width = plan.Width;
-        Height = plan.Height;
-        MinWidth = plan.MinimumWidth;
-        MinHeight = plan.MinimumHeight;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode = ResizeMode.NoResize;
-        Content = _form.Content;
     }
 
-    private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
+    private ChartAxisOptionsDialog(ChartAxisOptionsDialogSession session)
+        : base(session, session.BuildDialogPlan(), Submit, Replan)
     {
-        if (_session.TryApplySelectionChange(fieldId, _form.SelectedIndex(fieldId), out var plan))
-            _form.ApplyPlan(plan);
     }
 
-    private void OnOk()
+    private static ChartOptionsDialogPlan? Replan(
+        ChartAxisOptionsDialogSession session,
+        ChartOptionsDialogFieldId fieldId,
+        int selectedIndex) =>
+        session.TryApplySelectionChange(fieldId, selectedIndex, out var plan) ? plan : null;
+
+    private static ChartOptionsDialogSubmission Submit(
+        ChartAxisOptionsDialogSession session,
+        ChartOptionsDialogValues values)
     {
-        var result = _session.Submit(ReadInput());
-        if (result.ShouldClose)
-        {
-            DialogResult = true;
-            return;
-        }
-
-        DialogMessageHelper.ShowWarning(this, result.ValidationMessage, Title);
+        var result = session.Submit(session.BuildInput(values));
+        return new(result.ShouldClose, result.ValidationMessage);
     }
-
-    private ChartAxisOptionsDialogInput ReadInput() =>
-        _session.BuildInput(_form.CaptureValues());
 }

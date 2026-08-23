@@ -63,7 +63,7 @@ internal static class XlsxWorksheetHyperlinkNormalizer
 
             changed |= RemoveUnknownHyperlinkAttributes(hyperlink);
             changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(hyperlink, "ref", normalizedRef);
-            changed |= NormalizeRelationshipId(hyperlink);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeRelationshipId(hyperlink, RelationshipNs + "id");
             changed |= NormalizeLocation(hyperlink);
             if (!HasTarget(hyperlink) || !seenRefs.Add(normalizedRef))
             {
@@ -95,26 +95,6 @@ internal static class XlsxWorksheetHyperlinkNormalizer
     private static bool HasTarget(XElement hyperlink) =>
         !string.IsNullOrWhiteSpace(hyperlink.Attribute(RelationshipNs + "id")?.Value) ||
         !string.IsNullOrWhiteSpace(hyperlink.Attribute("location")?.Value);
-
-    private static bool NormalizeRelationshipId(XElement hyperlink)
-    {
-        var relationshipId = hyperlink.Attribute(RelationshipNs + "id");
-        if (relationshipId is null)
-            return false;
-
-        var normalized = relationshipId.Value.Trim();
-        if (normalized.Length == 0)
-        {
-            relationshipId.Remove();
-            return true;
-        }
-
-        if (string.Equals(relationshipId.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        relationshipId.Value = normalized;
-        return true;
-    }
 
     private static bool NormalizeLocation(XElement hyperlink)
     {

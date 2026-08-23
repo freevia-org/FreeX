@@ -520,7 +520,7 @@ public sealed class WorkbookCellEditService
             return true;
         }
 
-        if (!CanEditCell(workbook, changingSheet, request.ChangingCell))
+        if (!CommandGuards.CanEditCell(workbook, changingSheet, request.ChangingCell))
         {
             errorMessage = "The sheet is protected.";
             return true;
@@ -533,34 +533,6 @@ public sealed class WorkbookCellEditService
     private static bool IsValidAddress(CellAddress address) =>
         address.Row is >= 1 and <= CellAddress.MaxRow &&
         address.Col is >= 1 and <= CellAddress.MaxCol;
-
-    // N44: mirrors FreeX.Core.Commands.CommandGuards.CanEditCell (internal to that assembly and not
-    // visible here) so Goal Seek's pre-validation agrees with the authoritative guard that
-    // GoalSeekCommand.Apply itself runs. A range listed in Sheet.AllowEditRanges only grants access
-    // when it has no Allow-Edit-Range password, or the password has already been unlocked this
-    // session (Sheet.UnlockedAllowEditRanges) -- otherwise fall through to the locked-style check
-    // below, same as an unlisted cell.
-    private static bool CanEditCell(Workbook workbook, Sheet sheet, CellAddress address)
-    {
-        if (!sheet.IsProtected)
-            return true;
-
-        foreach (var range in sheet.AllowEditRanges)
-        {
-            if (!range.Contains(address))
-                continue;
-
-            var isPasswordProtected = sheet.AllowEditRangePasswords.TryGetValue(range, out var stored) &&
-                !string.IsNullOrEmpty(stored);
-            if (!isPasswordProtected || sheet.UnlockedAllowEditRanges.Contains(range))
-                return true;
-        }
-
-        var styleId = sheet.GetCell(address)?.StyleId ??
-            sheet.GetStyleOnly(address.Row, address.Col) ??
-            StyleId.Default;
-        return !workbook.GetStyle(styleId).Locked;
-    }
 
     private void UpdateFormulaDependencies(Workbook workbook, IReadOnlyList<CellAddress> affectedCells)
     {

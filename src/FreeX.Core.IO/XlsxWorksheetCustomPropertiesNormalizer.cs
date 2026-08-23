@@ -57,7 +57,7 @@ internal static class XlsxWorksheetCustomPropertiesNormalizer
 
             changed |= RemoveUnknownCustomPropertyAttributes(customProperty);
             changed |= NormalizeLegacyId(customProperty);
-            changed |= NormalizeRelationshipId(customProperty);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeRelationshipId(customProperty, RelationshipNs + "id");
             changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(customProperty);
         }
 
@@ -100,26 +100,6 @@ internal static class XlsxWorksheetCustomPropertiesNormalizer
 
         var normalized = int.Parse(id.Value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture)
             .ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (string.Equals(id.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        id.Value = normalized;
-        return true;
-    }
-
-    private static bool NormalizeRelationshipId(XElement element)
-    {
-        var id = element.Attribute(RelationshipNs + "id");
-        if (id is null)
-            return false;
-
-        var normalized = id.Value.Trim();
-        if (normalized.Length == 0)
-        {
-            id.Remove();
-            return true;
-        }
-
         if (string.Equals(id.Value, normalized, StringComparison.Ordinal))
             return false;
 

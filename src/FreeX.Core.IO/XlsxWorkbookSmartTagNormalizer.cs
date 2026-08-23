@@ -65,7 +65,7 @@ internal static class XlsxWorkbookSmartTagNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(smartTagType);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "namespaceUri", NormalizeNonEmptyText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "name", NormalizeNonEmptyText);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "url", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "url", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
         return changed;
     }
 
@@ -75,9 +75,4 @@ internal static class XlsxWorkbookSmartTagNormalizer
         return string.IsNullOrEmpty(trimmed) ? null : trimmed;
     }
 
-    private static string? NormalizeOptionalText(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
-    }
 }

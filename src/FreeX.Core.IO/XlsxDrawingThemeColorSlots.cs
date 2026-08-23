@@ -44,7 +44,7 @@ internal static class XlsxDrawingThemeColorSlots
             _ => WorkbookThemeColorSlot.Dark1
         };
 
-    private static DrawingMlThemeColorSlot ToSharedSlot(WorkbookThemeColorSlot slot) =>
+    public static DrawingMlThemeColorSlot ToSharedSlot(WorkbookThemeColorSlot slot) =>
         slot switch
         {
             WorkbookThemeColorSlot.Dark1 => DrawingMlThemeColorSlot.Dark1,

@@ -255,6 +255,36 @@ public sealed class SelectionPaneTests
     }
 
     [Fact]
+    public void ItemFormSession_DoesNotPersistUnchangedDisplayPlaceholder()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "Placeholder" };
+        slide.Shapes.Clear();
+        var shape = MakeShape(17, "   ");
+        slide.Shapes.Add(shape);
+        presentation.Slides.Add(slide);
+        var paneSession = new PresentationSelectionPaneSession(
+            new EditingSession(presentation, new PresentationCommandBus(presentation)));
+        var itemPlan = paneSession.CurrentPlan.Items.Single();
+        var applyCount = 0;
+        var form = new PresentationSelectionPaneItemFormSession(
+            paneSession.CreateItemSession(shape.Id),
+            itemPlan,
+            index: 0,
+            (transition, restore) => applyCount++);
+
+        form.CommitRename(itemPlan.ShapeName, _ => { });
+
+        applyCount.Should().Be(0);
+        shape.Name.Should().Be("   ");
+
+        form.CommitRename("Named shape", _ => { });
+
+        applyCount.Should().Be(1);
+        shape.Name.Should().Be("Named shape");
+    }
+
+    [Fact]
     public void ItemSession_MapsMoveIntentAndRejectsCurrentBoundary()
     {
         var presentation = new Presentation();
@@ -354,10 +384,12 @@ public sealed class SelectionPaneTests
             source.Should().NotContain(".SetShapeName(");
             source.Should().NotContain(".ToggleShapeHidden(");
             source.Should().NotContain(".MoveSelectedShapeInReadingOrder(");
+            source.Should().NotContain("rename.Text == item.ShapeName");
         }
 
         itemForm.Should().Contain("_item.Select()");
         itemForm.Should().Contain("_item.CommitRename(name)");
+        itemForm.Should().Contain("string.Equals(name, Plan.ShapeName, StringComparison.Ordinal)");
         itemForm.Should().Contain("_item.CancelRename()");
         itemForm.Should().Contain("_item.ToggleVisibility()");
         itemForm.Should().Contain("_item.MoveTowardFront()");

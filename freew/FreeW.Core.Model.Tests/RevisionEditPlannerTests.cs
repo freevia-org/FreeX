@@ -114,11 +114,44 @@ public sealed class RevisionEditPlannerTests
         paragraph.Runs.Add(rubyRun);
         var mark = DocumentIndex.MarkRun("Alpha");
 
-        RevisionEditPlanner.InsertRunAtOffset(paragraph, 5, mark);
+        var effectiveOffset = RevisionEditPlanner.InsertRunAtOffset(paragraph, 5, mark);
 
+        effectiveOffset.Should().Be(rubyRun.Text.Length);
         paragraph.Runs.Should().Equal(rubyRun, mark);
         paragraph.Runs[0].Ruby.Should().BeSameAs(ruby);
         paragraph.PlainText.Should().Be("Alpha beta");
+    }
+
+    [Fact]
+    public void InsertRunAtOffset_DoesNotSplitContentControl()
+    {
+        var controlRun = Run.PlainTextControl("Controlled text", tag: "Customer");
+        var inserted = new Run("X");
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(controlRun);
+
+        var effectiveOffset = RevisionEditPlanner.InsertRunAtOffset(paragraph, 5, inserted);
+
+        effectiveOffset.Should().Be(controlRun.Text.Length);
+        paragraph.Runs.Should().Equal(controlRun, inserted);
+        paragraph.Runs[0].Control.Should().BeSameAs(controlRun.Control);
+        paragraph.Runs[0].Text.Should().Be("Controlled text");
+    }
+
+    [Fact]
+    public void InsertText_ReturnsCaretAfterAdjustedContentControlBoundary()
+    {
+        var controlRun = Run.PlainTextControl("Controlled text", tag: "Customer");
+        var paragraph = new Paragraph { Runs = { controlRun } };
+
+        var nextOffset = RevisionEditPlanner.InsertText(
+            paragraph,
+            5,
+            "X",
+            RunFormatting.Default);
+
+        nextOffset.Should().Be(controlRun.Text.Length + 1);
+        paragraph.Runs.Select(run => run.Text).Should().Equal("Controlled text", "X");
     }
 
     [Fact]

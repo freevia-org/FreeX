@@ -18,22 +18,24 @@ public sealed class PresentationCustomDictionaryStore
     public const string FileName = "customdictionary.lex";
 
     private readonly List<string> _words = [];
-    private readonly string? _storePath;
-    private readonly IPresentationCustomDictionaryFileSystem _fileSystem;
+    private readonly AtomicLineSetStore _store;
 
     public PresentationCustomDictionaryStore(
         string? storePath,
-        IPresentationCustomDictionaryFileSystem? fileSystem = null)
+        IAtomicLineSetFileSystem? fileSystem = null)
     {
-        _storePath = storePath;
-        _fileSystem = fileSystem ?? RealPresentationCustomDictionaryFileSystem.Instance;
-        TryLoad();
+        _store = new AtomicLineSetStore(storePath, fileSystem);
+        foreach (var line in _store.Load())
+        {
+            if (!string.IsNullOrEmpty(line) && !_words.Contains(line, StringComparer.Ordinal))
+                _words.Add(line);
+        }
     }
 
     /// <summary>The persisted words, already normalized (upper-invariant) by the caller.</summary>
     public IReadOnlyList<string> Words => _words;
 
-    public string? DictionaryPath => _storePath;
+    public string? DictionaryPath => _store.StorePath;
 
     /// <summary>The default disk-backed store, rooted at the ambient product's app-data folder.</summary>
     public static PresentationCustomDictionaryStore Load()
@@ -64,78 +66,7 @@ public sealed class PresentationCustomDictionaryStore
             return false;
 
         _words.Add(normalizedWord);
-        TrySave();
+        _store.TrySave(_words);
         return true;
     }
-
-    private void TryLoad()
-    {
-        if (string.IsNullOrEmpty(_storePath) || !_fileSystem.Exists(_storePath))
-            return;
-
-        try
-        {
-            foreach (var line in _fileSystem.ReadAllLines(_storePath))
-            {
-                if (!string.IsNullOrEmpty(line) && !_words.Contains(line, StringComparer.Ordinal))
-                    _words.Add(line);
-            }
-        }
-        catch
-        {
-            // Corrupt or unreadable state starts a fresh session.
-        }
-    }
-
-    private void TrySave()
-    {
-        if (string.IsNullOrEmpty(_storePath))
-            return;
-
-        try
-        {
-            var directory = Path.GetDirectoryName(_storePath);
-            if (!string.IsNullOrEmpty(directory))
-                _fileSystem.CreateDirectory(directory);
-
-            _fileSystem.WriteAllLinesAtomically(_storePath, _words);
-        }
-        catch
-        {
-            // Best-effort: a failed save never blocks proofing.
-        }
-    }
-}
-
-public interface IPresentationCustomDictionaryFileSystem
-{
-    bool Exists(string path);
-    string[] ReadAllLines(string path);
-    void WriteAllLinesAtomically(string path, IEnumerable<string> lines);
-    void CreateDirectory(string path);
-}
-
-public sealed class RealPresentationCustomDictionaryFileSystem : IPresentationCustomDictionaryFileSystem
-{
-    public static readonly RealPresentationCustomDictionaryFileSystem Instance = new();
-
-    private RealPresentationCustomDictionaryFileSystem()
-    {
-    }
-
-    public bool Exists(string path) => File.Exists(path);
-
-    public string[] ReadAllLines(string path) => File.ReadAllLines(path);
-
-    public void WriteAllLinesAtomically(string path, IEnumerable<string> lines)
-    {
-        var materialized = lines.ToArray();
-        var content = string.Join(Environment.NewLine, materialized);
-        if (materialized.Length > 0)
-            content += Environment.NewLine;
-
-        AtomicFileWriter.WriteAllText(path, content);
-    }
-
-    public void CreateDirectory(string path) => Directory.CreateDirectory(path);
 }

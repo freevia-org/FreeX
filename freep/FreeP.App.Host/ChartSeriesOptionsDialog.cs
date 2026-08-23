@@ -1,49 +1,32 @@
-using System.Windows;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style per-series chart formatting dialog.</summary>
-public sealed partial class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartSeriesOptionsDialog : ChartOptionsDialogHost<ChartSeriesOptionsDialogSession>
 {
-    private readonly ChartSeriesOptionsDialogSession _session;
-    private readonly ChartOptionsDialogForm _form;
-
     public ChartSeriesOptionsDialog(EditingSession editor, int? initialSeriesIndex = null)
+        : this(new ChartSeriesOptionsDialogSession(editor, initialSeriesIndex))
     {
-        _session = new ChartSeriesOptionsDialogSession(editor, initialSeriesIndex);
-        var plan = _session.BuildDialogPlan();
-        _form = ChartOptionsDialogChrome.CreateForm(plan, OnOk, Close, OnValueChanged);
-
-        Title = plan.Title;
-        Width = plan.Width;
-        Height = plan.Height;
-        MinWidth = plan.MinimumWidth;
-        MinHeight = plan.MinimumHeight;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode = ResizeMode.NoResize;
-        Content = _form.Content;
     }
 
-    private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
+    private ChartSeriesOptionsDialog(ChartSeriesOptionsDialogSession session)
+        : base(session, session.BuildDialogPlan(), Submit, Replan)
     {
-        if (_session.TryApplySelectionChange(fieldId, _form.SelectedIndex(fieldId), out var plan))
-            _form.ApplyPlan(plan);
     }
 
-    private void OnOk()
+    private static ChartOptionsDialogPlan? Replan(
+        ChartSeriesOptionsDialogSession session,
+        ChartOptionsDialogFieldId fieldId,
+        int selectedIndex) =>
+        session.TryApplySelectionChange(fieldId, selectedIndex, out var plan) ? plan : null;
+
+    private static ChartOptionsDialogSubmission Submit(
+        ChartSeriesOptionsDialogSession session,
+        ChartOptionsDialogValues values)
     {
-        var result = _session.TryCommit(ReadInput());
-        if (result.Succeeded)
-        {
-            DialogResult = true;
-            return;
-        }
-
-        DialogMessageHelper.ShowWarning(this, result.Error, Title);
+        var result = session.TryCommit(session.BuildInput(values));
+        return new(result.Succeeded, result.Error);
     }
-
-    private ChartSeriesOptionsDialogInput ReadInput() =>
-        _session.BuildInput(_form.CaptureValues());
 }

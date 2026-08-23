@@ -551,7 +551,7 @@ public sealed partial class XlsxFileAdapter
                 return false;
             }
 
-            var root = CreateShallowElement(reader);
+            var root = XmlReaderElementMaterializer.CreateShallowElement(reader);
             worksheetXml.Add(root);
             if (reader.IsEmptyElement)
                 return true;
@@ -579,7 +579,7 @@ public sealed partial class XlsxFileAdapter
                 if (reader.LocalName == "sheetData" &&
                     string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal))
                 {
-                    root.Add(CreateShallowElement(reader));
+                    root.Add(XmlReaderElementMaterializer.CreateShallowElement(reader));
                     sheetDataLayout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(
                         reader,
                         worksheetNs,
@@ -628,34 +628,6 @@ public sealed partial class XlsxFileAdapter
         new(
             new XlsxWorksheetRowColumnLayout([], [], [], [], [], [], [], []),
             new XlsxWorksheetCellLayout([], [], [], false, false, 0, []));
-
-    private static XElement CreateShallowElement(XmlReader reader)
-    {
-        var element = new XElement(XName.Get(reader.LocalName, reader.NamespaceURI));
-        if (!reader.HasAttributes)
-            return element;
-
-        for (var i = 0; i < reader.AttributeCount; i++)
-        {
-            reader.MoveToAttribute(i);
-            element.Add(new XAttribute(GetAttributeName(reader), reader.Value));
-        }
-
-        reader.MoveToElement();
-        return element;
-    }
-
-    private static XName GetAttributeName(XmlReader reader)
-    {
-        if (reader.Prefix == "xmlns")
-            return XNamespace.Xmlns + reader.LocalName;
-        if (reader.Name == "xmlns")
-            return XName.Get("xmlns");
-        if (reader.NamespaceURI.Length == 0)
-            return XName.Get(reader.LocalName);
-
-        return XName.Get(reader.LocalName, reader.NamespaceURI);
-    }
 
     private static bool HasDynamicFilter(WorksheetAutoFilterModel? autoFilter)
     {

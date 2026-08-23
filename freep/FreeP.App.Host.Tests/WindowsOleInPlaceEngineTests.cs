@@ -193,6 +193,10 @@ public sealed class WindowsOleInPlaceEngineTests
         {
             string source = File.ReadAllText(path);
             source.Should().Contain("WindowsOleInPlaceEngine")
+                .And.Contain("OleActivationService.BuildOleObjectUpdateCallback")
+                .And.Contain("OleActivationService.BuildInlineOleObjectUpdateCallback")
+                .And.NotContain("BuildCommitCallback")
+                .And.NotContain("EmbeddedBytes = bytes")
                 .And.NotContain("DllImport(")
                 .And.NotContain("class OleSite")
                 .And.NotContain("interface IOleObject")

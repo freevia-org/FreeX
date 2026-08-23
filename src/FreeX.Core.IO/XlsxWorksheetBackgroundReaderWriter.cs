@@ -182,28 +182,9 @@ internal static class XlsxWorksheetBackgroundReaderWriter
 
         root.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
         root.Elements(worksheetNs + "picture").Remove();
-        InsertPictureInOrder(root, worksheetNs, new XElement(worksheetNs + "picture", new XAttribute(relNs + "id", relId)));
+        XlsxWorksheetElementOrder.Insert(root, new XElement(worksheetNs + "picture", new XAttribute(relNs + "id", relId)));
 
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
-    }
-
-    private static void InsertPictureInOrder(XElement worksheetRoot, XNamespace worksheetNs, XElement picture)
-    {
-        string[] laterWorksheetElements =
-        [
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        var insertionPoint = FindFirstLaterWorksheetElement(worksheetRoot, worksheetNs, laterWorksheetElements);
-
-        if (insertionPoint is null)
-            worksheetRoot.Add(picture);
-        else
-            insertionPoint.AddBeforeSelf(picture);
     }
 
     private static XElement? FindRelationshipById(XDocument relsXml, XNamespace packageRelNs, string relId)
@@ -216,26 +197,6 @@ internal static class XlsxWorksheetBackgroundReaderWriter
         {
             if (string.Equals(relationship.Attribute("Id")?.Value, relId, StringComparison.Ordinal))
                 return relationship;
-        }
-
-        return null;
-    }
-
-    private static XElement? FindFirstLaterWorksheetElement(
-        XElement worksheetRoot,
-        XNamespace worksheetNs,
-        string[] laterWorksheetElements)
-    {
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace != worksheetNs)
-                continue;
-
-            foreach (var laterWorksheetElement in laterWorksheetElements)
-            {
-                if (string.Equals(element.Name.LocalName, laterWorksheetElement, StringComparison.Ordinal))
-                    return element;
-            }
         }
 
         return null;

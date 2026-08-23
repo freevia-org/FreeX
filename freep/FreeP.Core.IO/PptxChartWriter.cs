@@ -2064,7 +2064,7 @@ internal static class PptxChartWriter
             null => null,
             ShapeFill.None => new XElement(A + "noFill"),
             ShapeFill.Solid s => new XElement(A + "solidFill", BuildColorEl(s.Color)),
-            ShapeFill.Gradient g => BuildGradFillEl(g),
+            ShapeFill.Gradient g => DrawingMlGradientFillWriter.Build(g, BuildColorEl),
             ShapeFill.Pattern p => new XElement(A + "pattFill",
                 new XAttribute("prst", p.Preset),
                 new XElement(A + "fgClr", BuildColorEl(p.ForegroundColor)),
@@ -2085,7 +2085,7 @@ internal static class PptxChartWriter
                     : null),
             ShapeOutline.GradientVisible gv => new XElement(A + "ln",
                 new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(gv.WidthPt)),
-                BuildGradFillEl(gv.Gradient),
+                DrawingMlGradientFillWriter.Build(gv.Gradient, BuildColorEl),
                 gv.Dash != OutlineDash.Solid
                     ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(gv.Dash)))
                     : null),
@@ -2098,7 +2098,7 @@ internal static class PptxChartWriter
             null => null,
             ShapeFill.None => new XElement(A + "noFill"),
             ShapeFill.Solid s => new XElement(A + "solidFill", BuildColorEl(s.Color)),
-            ShapeFill.Gradient g => BuildGradFillEl(g),
+            ShapeFill.Gradient g => DrawingMlGradientFillWriter.Build(g, BuildColorEl),
             ShapeFill.Pattern p => new XElement(A + "pattFill",
                 new XAttribute("prst", p.Preset),
                 new XElement(A + "fgClr", BuildColorEl(p.ForegroundColor)),
@@ -2121,73 +2121,12 @@ internal static class PptxChartWriter
             // data-table border round-trips instead of being dropped in favor of default gray.
             ShapeOutline.GradientVisible gv => new XElement(A + "ln",
                 new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(gv.WidthPt)),
-                BuildGradFillEl(gv.Gradient),
+                DrawingMlGradientFillWriter.Build(gv.Gradient, BuildColorEl),
                 gv.Dash != OutlineDash.Solid
                     ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(gv.Dash)))
                     : null),
             _ => null
         };
-
-    /// <summary>
-    /// Builds an <c>a:gradFill</c> element from a <see cref="ShapeFill.Gradient"/>.
-    /// Mirrors <c>PptxPackageWriter.BuildGradFillEl</c> (kept as a local copy here, matching
-    /// this file's existing convention of duplicating small color/fill helpers rather than
-    /// exposing them across writer classes — see <see cref="BuildColorEl"/> above).
-    /// </summary>
-    private static XElement BuildGradFillEl(ShapeFill.Gradient g)
-    {
-        // Stops MUST be in ascending position order per OOXML CT_GradientStopList.
-        // a:gsLst requires at least 2 stops; synthesise when the model has fewer.
-        var stops = g.Stops.OrderBy(s => s.Position).ToList();
-        if (stops.Count == 0)
-        {
-            stops = new List<GradientStop>
-            {
-                new GradientStop(0.0, ThemeAwareColor.White),
-                new GradientStop(1.0, ThemeAwareColor.Black),
-            };
-        }
-        else if (stops.Count == 1)
-        {
-            var singleColor = stops[0].Color;
-            stops = new List<GradientStop>
-            {
-                new GradientStop(0.0, singleColor),
-                new GradientStop(1.0, singleColor),
-            };
-        }
-
-        var gsLst = new XElement(A + "gsLst");
-        foreach (var stop in stops)
-        {
-            int pos = (int)Math.Round(stop.Position * 100000);
-            // CT_GradientStop: a:gs must contain a color element directly (srgbClr/schemeClr/…),
-            // NOT wrapped in a:solidFill — that wrapper is invalid per ECMA-376 schema.
-            gsLst.Add(new XElement(A + "gs",
-                new XAttribute("pos", pos),
-                BuildColorEl(stop.Color)));
-        }
-
-        XElement kindEl;
-        if (g.Kind == GradientKind.Radial)
-        {
-            kindEl = new XElement(A + "path",
-                new XAttribute("path", "circle"),
-                new XElement(A + "fillToRect",
-                    new XAttribute("l", "50000"),
-                    new XAttribute("t", "50000"),
-                    new XAttribute("r", "50000"),
-                    new XAttribute("b", "50000")));
-        }
-        else
-        {
-            kindEl = new XElement(A + "lin",
-                new XAttribute("ang", (long)Math.Round(g.AngleDegrees * 60000)),
-                new XAttribute("scaled", "0"));
-        }
-
-        return new XElement(A + "gradFill", gsLst, kindEl);
-    }
 
     private static XElement? BuildChartTextPropertiesEl(
         ChartTextStyle? style,
@@ -2744,7 +2683,7 @@ internal static class PptxChartWriter
         fill switch
         {
             ShapeFill.None => new XElement(A + "noFill"),
-            ShapeFill.Gradient gradient => BuildGradFillEl(gradient),
+            ShapeFill.Gradient gradient => DrawingMlGradientFillWriter.Build(gradient, BuildColorEl),
             ShapeFill.Pattern pattern => BuildPattFillEl(pattern),
             ShapeFill.Solid solid => new XElement(A + "solidFill", BuildColorEl(solid.Color)),
             _ when solidFallback is not null => new XElement(A + "solidFill", BuildColorEl(solidFallback)),

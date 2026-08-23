@@ -1,5 +1,3 @@
-using System.Globalization;
-
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.SlicerTimeline;
@@ -32,9 +30,10 @@ public static class SlicerItemResolver
         ArgumentNullException.ThrowIfNull(slicer);
         ArgumentNullException.ThrowIfNull(workbook);
 
-        if (slicer.SourceTableId is { } tableId && slicer.SourceTableColumnId is { } columnId)
+        if (slicer.SourceTableId is { } tableId &&
+            slicer.SourceTableColumnId is { } columnId &&
+            StructuredTableCaptionResolver.TryResolveColumnCaptions(workbook, tableId, columnId, out var tableItems))
         {
-            var tableItems = ResolveTableColumnItems(workbook, tableId, columnId);
             if (tableItems.Count > 0)
                 return tableItems;
         }
@@ -43,62 +42,6 @@ public static class SlicerItemResolver
         return field?.SharedItems is { Count: > 0 }
             ? ResolvePivotCacheItems(slicer, field)
             : [];
-    }
-
-    private static IReadOnlyList<string> ResolveTableColumnItems(Workbook workbook, int tableId, int columnId)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            foreach (var table in sheet.StructuredTables)
-            {
-                if (table.Id != tableId)
-                    continue;
-
-                var columnOffset = ColumnOffsetForId(table, columnId);
-                return columnOffset < 0 ? [] : DistinctColumnValues(sheet, table, columnOffset);
-            }
-        }
-
-        return [];
-    }
-
-    private static int ColumnOffsetForId(StructuredTableModel table, int columnId)
-    {
-        for (var index = 0; index < table.Columns.Count; index++)
-        {
-            if (table.Columns[index].Id == columnId)
-                return index;
-        }
-
-        return -1;
-    }
-
-    private static IReadOnlyList<string> DistinctColumnValues(
-        Sheet sheet,
-        StructuredTableModel table,
-        int columnOffset)
-    {
-        var range = table.Range;
-        var col = range.Start.Col + (uint)columnOffset;
-        if (col > range.End.Col)
-            return [];
-
-        var hasHeaderRow = table.HeaderRowCount is null or > 0;
-        var firstDataRow = range.Start.Row + (hasHeaderRow ? 1u : 0u);
-        var lastDataRow = table.TotalsRowShown && range.End.Row > range.Start.Row
-            ? range.End.Row - 1
-            : range.End.Row;
-        lastDataRow = Math.Max(firstDataRow, lastDataRow);
-        var seen = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
-        var items = new List<string>();
-        for (var row = firstDataRow; row <= lastDataRow; row++)
-        {
-            var text = ToDisplayText(sheet.GetCell(row, col)?.Value ?? BlankValue.Instance);
-            if (!string.IsNullOrEmpty(text) && seen.Add(text))
-                items.Add(text);
-        }
-
-        return items;
     }
 
     private static IReadOnlyList<string> ResolvePivotCacheItems(
@@ -142,7 +85,7 @@ public static class SlicerItemResolver
                 return;
 
             var kind = kinds is not null && index < kinds.Count ? kinds[index] : (char?)null;
-            var caption = NormalizeSharedItemCaption(raw, kind, field);
+            var caption = PivotSharedItemCaptionResolver.Resolve(raw, kind, field);
             if (string.IsNullOrEmpty(caption))
                 return;
 
@@ -151,33 +94,6 @@ public static class SlicerItemResolver
             if (isSelected && selectedSeen.Add(caption))
                 selectedFromCache.Add(caption);
         }
-    }
-
-    private static string NormalizeSharedItemCaption(string raw, char? kind, PivotCacheFieldModel field)
-    {
-        if (kind == 'd' || (kind is null && field.ContainsDate && !field.ContainsString && !field.ContainsNumber))
-        {
-            if (!DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-                return raw;
-
-            return field.Grouping switch
-            {
-                PivotFieldGrouping.Year => date.Year.ToString(CultureInfo.InvariantCulture),
-                PivotFieldGrouping.Quarter => $"{date.Year}-Q{((date.Month - 1) / 3) + 1}",
-                PivotFieldGrouping.Month => date.ToString("yyyy-MM", CultureInfo.InvariantCulture),
-                PivotFieldGrouping.Day => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                _ => date.ToShortDateString()
-            };
-        }
-
-        if (kind == 'n' || (kind is null && field.ContainsNumber && !field.ContainsString && !field.ContainsDate))
-        {
-            return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
-                ? number.ToString(CultureInfo.CurrentCulture)
-                : raw;
-        }
-
-        return raw;
     }
 
     private static PivotCacheFieldModel? ResolveSharedItemsField(
@@ -220,14 +136,4 @@ public static class SlicerItemResolver
         return null;
     }
 
-    private static string ToDisplayText(ScalarValue value) => value switch
-    {
-        TextValue text => text.Value,
-        NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        DateTimeValue date => date.ToDateTime().ToString(CultureInfo.CurrentCulture),
-        BlankValue => string.Empty,
-        ErrorValue => string.Empty,
-        _ => value.ToString() ?? string.Empty,
-    };
 }

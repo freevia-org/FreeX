@@ -30,7 +30,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
     // untranslated behavior exactly, which every pre-existing caller that doesn't supply this still
     // gets.
     private readonly IReadOnlyDictionary<CellAddress, CellStyle>? _sourceStyles;
-    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata, bool HadPhoneticGuide, CellPhoneticGuide? OldPhoneticGuide)>? _snapshot;
+    private List<CellEditCompanionSnapshot>? _snapshot;
 
     // R119-commands-undo-byte-budget-1: the undo snapshot holds a full Cell clone plus style,
     // hyperlink/metadata, rich-text runs and phonetic guide PER PASTED CELL (see Apply below), so
@@ -94,22 +94,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
 
         foreach (var (addr, cell) in _cells)
         {
-            var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(addr, out var oldRuns);
-            var hadHyperlink = sheet.Hyperlinks.TryGetValue(addr, out var oldHyperlink);
-            var hadHyperlinkMetadata = sheet.HyperlinkMetadata.TryGetValue(addr, out var oldHyperlinkMetadata);
-            var hadPhoneticGuide = sheet.CellPhoneticGuides.TryGetValue(addr, out var oldPhoneticGuide);
-            _snapshot.Add((
-                addr,
-                sheet.GetCell(addr)?.Clone(),
-                sheet.GetStyleOnly(addr.Row, addr.Col),
-                hadRichTextRuns,
-                oldRuns,
-                hadHyperlink,
-                oldHyperlink,
-                hadHyperlinkMetadata,
-                oldHyperlinkMetadata,
-                hadPhoneticGuide,
-                oldPhoneticGuide));
+            _snapshot.Add(CellEditCompanionSnapshot.Capture(sheet, addr));
 
             // A destination cell that is a non-anchor (hidden/covered) member of an existing merged
             // region must stay empty, matching Excel: only the merge's top-left anchor cell ever
@@ -162,46 +147,8 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (addr, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata, hadPhoneticGuide, oldPhoneticGuide) in _snapshot)
-        {
-            if (oldCell is null)
-            {
-                sheet.ClearCell(addr);
-                RestoreStyleOnly(sheet, addr, oldStyleOnly);
-            }
-            else
-            {
-                sheet.SetCell(addr, oldCell.Clone());
-            }
-
-            if (hadRichTextRuns && oldRichTextRuns is not null)
-                sheet.RichTextRuns[addr] = oldRichTextRuns;
-            else
-                sheet.RichTextRuns.Remove(addr);
-
-            if (hadHyperlink && oldHyperlink is not null)
-                sheet.Hyperlinks[addr] = oldHyperlink;
-            else
-                sheet.Hyperlinks.Remove(addr);
-
-            if (hadHyperlinkMetadata && oldHyperlinkMetadata is not null)
-                sheet.HyperlinkMetadata[addr] = oldHyperlinkMetadata;
-            else
-                sheet.HyperlinkMetadata.Remove(addr);
-
-            if (hadPhoneticGuide && oldPhoneticGuide is not null)
-                sheet.CellPhoneticGuides[addr] = oldPhoneticGuide;
-            else
-                sheet.CellPhoneticGuides.Remove(addr);
-        }
-    }
-
-    private static void RestoreStyleOnly(Sheet sheet, CellAddress address, StyleId? styleId)
-    {
-        if (styleId.HasValue)
-            sheet.SetStyleOnly(address.Row, address.Col, styleId.Value);
-        else
-            sheet.ClearStyleOnly(address.Row, address.Col);
+        foreach (var snapshot in _snapshot)
+            snapshot.Restore(sheet);
     }
 }
 

@@ -84,23 +84,7 @@ internal static class XlsxCellBorderStyleReader
         if (edge is null)
             return default;
 
-        var style = edge.Attribute("style")?.Value switch
-        {
-            "thin" => BorderStyle.Thin,
-            "medium" => BorderStyle.Medium,
-            "thick" => BorderStyle.Thick,
-            "dashed" => BorderStyle.Dashed,
-            "dotted" => BorderStyle.Dotted,
-            "double" => BorderStyle.Double,
-            "hair" => BorderStyle.Hair,
-            "slantDashDot" => BorderStyle.SlantDashDot,
-            "mediumDashed" => BorderStyle.MediumDashed,
-            "dashDot" => BorderStyle.DashDot,
-            "mediumDashDot" => BorderStyle.MediumDashDot,
-            "dashDotDot" => BorderStyle.DashDotDot,
-            "mediumDashDotDot" => BorderStyle.MediumDashDotDot,
-            _ => BorderStyle.None
-        };
+        var style = XlsxBorderStyleCodec.Decode(edge.Attribute("style")?.Value);
         if (style == BorderStyle.None)
             return default;
 

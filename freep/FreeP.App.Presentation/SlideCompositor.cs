@@ -1,4 +1,5 @@
 using Free.Shared.Drawing;
+using FreeP.Core.IO;
 using FreeP.Core.Model;
 using PresentationModel = FreeP.Core.Model.Presentation;
 using System.Globalization;
@@ -1045,7 +1046,9 @@ public static class SlideCompositor
         var dash = line?.Elements().FirstOrDefault(element =>
                 string.Equals(element.Name.LocalName, "prstDash", StringComparison.OrdinalIgnoreCase))
             ?.Attribute("val")?.Value;
-        var resolvedDash = TryParseZoomDash(dash) ?? fallback?.FrameBorderDash ?? OutlineDash.Solid;
+        var resolvedDash = PptxZoomObjectPropertiesXmlReader.ParseDashToken(dash)
+            ?? fallback?.FrameBorderDash
+            ?? OutlineDash.Solid;
 
         var gradientFill = line?.Elements().FirstOrDefault(element =>
             string.Equals(element.Name.LocalName, "gradFill", StringComparison.OrdinalIgnoreCase));
@@ -1258,24 +1261,6 @@ public static class SlideCompositor
             ? fallback?.FrameGeometry
             : geometry.Trim();
     }
-
-    private static OutlineDash? TryParseZoomDash(string? value) =>
-        string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Trim().ToLowerInvariant() switch
-            {
-                "solid" => OutlineDash.Solid,
-                "dash" => OutlineDash.Dash,
-                "dot" => OutlineDash.Dot,
-                "dashdot" => OutlineDash.DashDot,
-                "lgdash" => OutlineDash.LongDash,
-                "lgdashdot" => OutlineDash.LongDashDot,
-                "lgdashdotdot" => OutlineDash.LongDashDotDot,
-                "sysdash" => OutlineDash.SystemDash,
-                "sysdot" => OutlineDash.SystemDot,
-                "sysdashdot" => OutlineDash.SystemDashDot,
-                _ => null,
-            };
 
     private static void AddSummaryZoomPlaceholder(
         uint shapeId,

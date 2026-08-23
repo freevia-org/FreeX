@@ -79,6 +79,36 @@ public sealed record ApplicationOptionsSummaryTextDescriptor(
         [RecentFilesKeptLabel, DefaultSaveFormatLabel, UiLanguageLabel, DataFolderLabel, SystemDefaultLanguageLabel];
 }
 
+public static class SisterBackstagePaneTextResources
+{
+    public static ApplicationOptionsSummaryTextDescriptor ApplicationOptionsSummaryDescriptor { get; } = new(
+        CommonShellTextResources.RecentFilesKept,
+        CommonShellTextResources.DefaultSaveFormat,
+        CommonShellTextResources.UiLanguage,
+        CommonShellTextResources.DataFolder,
+        CommonShellTextResources.SystemDefault);
+
+    public static SisterBackstageInfoPaneTextDescriptor CreateInfoDescriptor(
+        ResourceTextDescriptor heading)
+    {
+        ArgumentNullException.ThrowIfNull(heading);
+
+        return new SisterBackstageInfoPaneTextDescriptor(
+            heading,
+            CommonShellTextResources.Location,
+            CommonShellTextResources.NotSavedYet,
+            CommonShellTextResources.Properties,
+            CommonShellTextResources.Statistics,
+            CommonShellTextResources.UnsavedChangesSuffix,
+            new SisterBackstageCorePropertiesTextDescriptor(
+                CommonShellTextResources.Title,
+                CommonShellTextResources.Author,
+                CommonShellTextResources.Subject,
+                CommonShellTextResources.Keywords,
+                CommonShellTextResources.EmptyValue));
+    }
+}
+
 public sealed record SisterBackstagePaneTextDescriptor(
     ResourceTextDescriptor RecentEmptyText,
     ResourceTextDescriptor TemplateHeading,

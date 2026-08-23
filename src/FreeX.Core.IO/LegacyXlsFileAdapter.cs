@@ -2088,8 +2088,8 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         var fromRowOffset = HssfRowOffsetToPixels(sheet, fromRow, Math.Min(anchor.Dy1, anchor.Dy2));
         var toRowOffset = HssfRowOffsetToPixels(sheet, toRow, Math.Max(anchor.Dy1, anchor.Dy2));
 
-        var width = SumColumnPixels(sheet, fromColumn, toColumn - fromColumn) + toColumnOffset - fromColumnOffset;
-        var height = SumRowPixels(sheet, fromRow, toRow - fromRow) + toRowOffset - fromRowOffset;
+        var width = WorksheetMetricSpanCalculator.SumColumnPixels(sheet, fromColumn, toColumn - fromColumn) + toColumnOffset - fromColumnOffset;
+        var height = WorksheetMetricSpanCalculator.SumRowPixels(sheet, fromRow, toRow - fromRow) + toRowOffset - fromRowOffset;
         return (width, height);
     }
 
@@ -2098,32 +2098,6 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     private static double HssfRowOffsetToPixels(Sheet sheet, uint row, int offset) =>
         Math.Clamp(offset, 0, 255) / 256.0 * GetRowPixelHeight(sheet, row);
-
-    private static double SumColumnPixels(Sheet sheet, uint firstColumn, uint count)
-    {
-        double width = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var column = firstColumn + offset;
-            if (!sheet.IsColEffectivelyHidden(column))
-                width += GetColumnPixelWidth(sheet, column);
-        }
-
-        return width;
-    }
-
-    private static double SumRowPixels(Sheet sheet, uint firstRow, uint count)
-    {
-        double height = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var row = firstRow + offset;
-            if (!sheet.IsRowEffectivelyHidden(row))
-                height += GetRowPixelHeight(sheet, row);
-        }
-
-        return height;
-    }
 
     private static double GetColumnPixelWidth(Sheet sheet, uint column) =>
         sheet.ColumnWidths.GetValueOrDefault(column, sheet.DefaultColumnWidth) * 8;

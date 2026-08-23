@@ -254,7 +254,7 @@ public static class PptxPackageWriter
         Dictionary<Slide, uint>? finalNumericIds = null;
         foreach (var slide in slides)
         {
-            foreach (var shape in EnumerateShapesRecursive(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.PreservedObject is not { ObjectKind: PreservedObjectKind.Zoom } info
                     || string.IsNullOrEmpty(info.ZoomTargetSlideId))
@@ -302,17 +302,6 @@ public static class PptxPackageWriter
             result[slide] = numericId;
         }
         return result;
-    }
-
-    private static IEnumerable<SlideShape> EnumerateShapesRecursive(IEnumerable<SlideShape> shapes)
-    {
-        foreach (var shape in shapes)
-        {
-            yield return shape;
-            if (shape.Children.Count > 0)
-                foreach (var child in EnumerateShapesRecursive(shape.Children))
-                    yield return child;
-        }
     }
 
     /// <summary>Patches the <c>sldId</c> attribute of every <c>p:sldZmObj</c> (Slide Zoom target)
@@ -376,7 +365,7 @@ public static class PptxPackageWriter
                 mediaExtensions.Add(sndExt);
             }
 
-            foreach (var shape in AllShapes(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.Kind == SlideShapeKind.SmartArt && shape.SmartArt is { } smartArt)
                 {
@@ -454,8 +443,8 @@ public static class PptxPackageWriter
         // to use would land in the package with no [Content_Types].xml Default entry: a second,
         // independent OOXML validity defect layered on top of the dangling-relationship one this
         // round is fixing.
-        foreach (var shape in masters.SelectMany(m => AllShapes(m.Placeholders))
-                     .Concat(layouts.SelectMany(l => AllShapes(l.Placeholders))))
+        foreach (var shape in masters.SelectMany(m => SlideShapeTraversal.EnumerateDepthFirst(m.Placeholders))
+                     .Concat(layouts.SelectMany(l => SlideShapeTraversal.EnumerateDepthFirst(l.Placeholders))))
         {
             if ((shape.Kind == SlideShapeKind.Picture || shape.Kind == SlideShapeKind.Media)
                 && shape.Picture?.Bytes is { Length: > 0 })
@@ -531,7 +520,7 @@ public static class PptxPackageWriter
             {
                 var slide = presentation.Slides[preSlideIdx - 1];
 
-                foreach (var shape in AllShapes(slide.Shapes))
+                foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
                 {
                     if (shape.PreservedObject is not { } prvInfo) continue;
 
@@ -1154,7 +1143,7 @@ public static class PptxPackageWriter
 
     private static string GetPackagePathExtension(string packagePath)
     {
-        var normalized = NormalizeZipPath(packagePath);
+        var normalized = ToZipEntryPath(packagePath);
         var fileName = normalized.Contains('/')
             ? normalized[(normalized.LastIndexOf('/') + 1)..]
             : normalized;
@@ -1164,12 +1153,9 @@ public static class PptxPackageWriter
             : string.Empty;
     }
 
-    private static string NormalizeZipPath(string packagePath) =>
-        packagePath.Replace('\\', '/').TrimStart('/');
-
     private static bool TryNormalizeRecordingMediaPackagePath(string packagePath, out string normalizedPath)
     {
-        normalizedPath = NormalizeZipPath(packagePath);
+        normalizedPath = ToZipEntryPath(packagePath);
         if (string.IsNullOrWhiteSpace(normalizedPath) ||
             !normalizedPath.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase) ||
             normalizedPath.EndsWith("/", StringComparison.Ordinal) ||
@@ -1255,7 +1241,7 @@ public static class PptxPackageWriter
         int chartGlobalIdx = 1;
         foreach (var slide in p.Slides)
         {
-            foreach (var shape in AllShapes(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.Kind == SlideShapeKind.Chart && shape.Chart is not null)
                 {
@@ -1310,7 +1296,7 @@ public static class PptxPackageWriter
         int oleEmbIdx = 1;
         foreach (var slide in p.Slides)
         {
-            foreach (var shape in AllShapes(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.Kind == SlideShapeKind.Ole && shape.OleObject is { } oleObj
                     && oleObj.EmbeddedBytes.Length > 0)
@@ -1326,7 +1312,7 @@ public static class PptxPackageWriter
         var seenSmartArtParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var slide in p.Slides)
         {
-            foreach (var shape in AllShapes(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.Kind == SlideShapeKind.SmartArt && shape.SmartArt is { } sa)
                 {
@@ -1358,7 +1344,7 @@ public static class PptxPackageWriter
             var slide = p.Slides[si];
             int slideIdxForRemap = si + 1; // matches preSlideIdx / slideIdx (1-based) elsewhere
 
-            foreach (var shape in AllShapes(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.PreservedObject is { } info)
                 {
@@ -2574,7 +2560,7 @@ public static class PptxPackageWriter
     private static XElement? BuildTimingEl(Slide slide)
     {
         var animations = slide.Animations;
-        var timedMedia = AllShapes(slide.Shapes)
+        var timedMedia = SlideShapeTraversal.EnumerateDepthFirst(slide)
             .Where(shape => shape.Kind == SlideShapeKind.Media
                 && (shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically
                     || shape.Media?.Loop == true
@@ -3508,7 +3494,10 @@ public static class PptxPackageWriter
     // themes created programmatically (no source file to preserve from).
     private static XElement BuildThemeFontSchemeXml(PresentationTheme theme)
     {
-        if (TryPatchNativeFontScheme(theme.NativeFontSchemeXml, theme.FontScheme.MajorLatinFont, theme.FontScheme.MinorLatinFont) is { } patched)
+        if (DrawingMlThemeXml.TryPatchNativeFontScheme(
+                theme.NativeFontSchemeXml,
+                theme.FontScheme.MajorLatinFont,
+                theme.FontScheme.MinorLatinFont) is { } patched)
             return patched;
 
         return new XElement(A + "fontScheme", new XAttribute("name", theme.Name),
@@ -3520,29 +3509,6 @@ public static class PptxPackageWriter
                 new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MinorLatinFont)),
                 new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
                 new XElement(A + "cs", new XAttribute("typeface", string.Empty))));
-    }
-
-    private static XElement? TryPatchNativeFontScheme(string? fontSchemeXml, string majorFontName, string minorFontName)
-    {
-        if (string.IsNullOrWhiteSpace(fontSchemeXml))
-            return null;
-
-        XElement fontScheme;
-        try
-        {
-            fontScheme = XElement.Parse(fontSchemeXml);
-        }
-        catch (XmlException)
-        {
-            return null;
-        }
-
-        if (fontScheme.Name != A + "fontScheme")
-            return null;
-
-        fontScheme.Element(A + "majorFont")?.Element(A + "latin")?.SetAttributeValue("typeface", majorFontName);
-        fontScheme.Element(A + "minorFont")?.Element(A + "latin")?.SetAttributeValue("typeface", minorFontName);
-        return fontScheme;
     }
 
     // Round-trip fidelity: when this theme was read from a real .pptx, theme.FillStyles /
@@ -4721,7 +4687,7 @@ public static class PptxPackageWriter
             var children = new List<object>
             {
                 new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(gv.WidthPt)),
-                BuildGradFillEl(gv.Gradient)
+                DrawingMlGradientFillWriter.Build(gv.Gradient, BuildColorEl)
             };
             if (gv.Dash != OutlineDash.Solid)
                 children.Add(new XElement(A + "prstDash", new XAttribute("val", ToDashStr(gv.Dash))));
@@ -4745,68 +4711,11 @@ public static class PptxPackageWriter
         {
             ShapeFill.None => new XElement(A + "noFill"),
             ShapeFill.Solid s => new XElement(A + "solidFill", BuildColorEl(s.Color)),
-            ShapeFill.Gradient g => BuildGradFillEl(g),
+            ShapeFill.Gradient g => DrawingMlGradientFillWriter.Build(g, BuildColorEl),
             ShapeFill.Picture p when blipRelId is not null => BuildBlipFillEl(p, blipRelId),
             ShapeFill.Pattern pat => BuildPattFillEl(pat),
             _ => null
         };
-
-    private static XElement BuildGradFillEl(ShapeFill.Gradient g)
-    {
-        // HH2: stops MUST be in ascending position order per OOXML CT_GradientStopList.
-        // HH3: a:gsLst requires at least 2 stops; synthesise when model has fewer.
-        var stops = g.Stops.OrderBy(s => s.Position).ToList();
-        if (stops.Count == 0)
-        {
-            // No stops at all: emit white@0 → black@100k
-            stops = new List<GradientStop>
-            {
-                new GradientStop(0.0, ThemeAwareColor.White),
-                new GradientStop(1.0, ThemeAwareColor.Black),
-            };
-        }
-        else if (stops.Count == 1)
-        {
-            // Duplicate the single stop at position 0 and 100000
-            var singleColor = stops[0].Color;
-            stops = new List<GradientStop>
-            {
-                new GradientStop(0.0, singleColor),
-                new GradientStop(1.0, singleColor),
-            };
-        }
-
-        var gsLst = new XElement(A + "gsLst");
-        foreach (var stop in stops)
-        {
-            int pos = (int)Math.Round(stop.Position * 100000);
-            // CT_GradientStop: a:gs must contain a color element directly (srgbClr/schemeClr/…),
-            // NOT wrapped in a:solidFill — that wrapper is invalid per ECMA-376 schema.
-            gsLst.Add(new XElement(A + "gs",
-                new XAttribute("pos", pos),
-                BuildColorEl(stop.Color)));
-        }
-
-        XElement kindEl;
-        if (g.Kind == GradientKind.Radial)
-        {
-            kindEl = new XElement(A + "path",
-                new XAttribute("path", "circle"),
-                new XElement(A + "fillToRect",
-                    new XAttribute("l", "50000"),
-                    new XAttribute("t", "50000"),
-                    new XAttribute("r", "50000"),
-                    new XAttribute("b", "50000")));
-        }
-        else
-        {
-            kindEl = new XElement(A + "lin",
-                new XAttribute("ang", (long)Math.Round(g.AngleDegrees * 60000)),
-                new XAttribute("scaled", "0"));
-        }
-
-        return new XElement(A + "gradFill", gsLst, kindEl);
-    }
 
     private static XElement BuildBlipFillEl(ShapeFill.Picture p, string blipRelId)
     {
@@ -4895,7 +4804,7 @@ public static class PptxPackageWriter
         var children = new List<object?>
         {
             new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(outline.WidthPt)),
-            BuildGradFillEl(outline.Gradient),
+            DrawingMlGradientFillWriter.Build(outline.Gradient, BuildColorEl),
             outline.Dash != OutlineDash.Solid
                 ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(outline.Dash)))
                 : null
@@ -5642,7 +5551,7 @@ public static class PptxPackageWriter
         List<(string relId, string relType, string target, bool external)> entries)
     {
         int counter = 1;
-        foreach (var shape in AllShapes(slide.Shapes))
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
         {
             if (shape.Hyperlink is not null)
                 EnsureHlinkRel(shape.Hyperlink, allSlides, slideIndex, hlinkRelIds, entries, ref counter);
@@ -5704,7 +5613,7 @@ public static class PptxPackageWriter
         var fillBlipResult = new List<(uint, string, string)>();
         int mediaIdx = 1;
 
-        foreach (var shape in AllShapes(shapes))
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(shapes))
         {
             // Picture shape OR media-shape poster image.
             if ((shape.Kind == SlideShapeKind.Picture || shape.Kind == SlideShapeKind.Media)
@@ -5783,7 +5692,7 @@ public static class PptxPackageWriter
 
     private static IEnumerable<Paragraph> EnumerateSlideParagraphs(Slide slide)
     {
-        foreach (var shape in AllShapes(slide.Shapes))
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
         {
             if (shape.TextBody is not null)
             {
@@ -5825,7 +5734,7 @@ public static class PptxPackageWriter
         var result = new List<(uint, string, string, bool, bool)>();
         int n = 1;
 
-        foreach (var shape in AllShapes(shapes))
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(shapes))
         {
             if (shape.Kind != SlideShapeKind.Media) continue;
             var media = shape.Media;
@@ -5933,7 +5842,7 @@ public static class PptxPackageWriter
         var result = new List<(uint shapeId, MediaCaptionTrackRelationship relationship, string target, bool isExternal)>();
         var captionIndex = 1;
 
-        foreach (var shape in AllShapes(slide.Shapes))
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
         {
             if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
                 continue;
@@ -6172,7 +6081,7 @@ public static class PptxPackageWriter
     {
         var result = new List<(uint, string, string, string)>();
 
-        foreach (var shape in AllShapes(slide.Shapes))
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
         {
             if (shape.Kind != SlideShapeKind.Chart || shape.Chart is null)
                 continue;
@@ -6239,7 +6148,7 @@ public static class PptxPackageWriter
             return id;
         }
 
-        foreach (var shape in AllShapes(slide.Shapes))
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
         {
             if (shape.Kind != SlideShapeKind.SmartArt || shape.SmartArt is not { } smart)
                 continue;
@@ -6490,7 +6399,7 @@ public static class PptxPackageWriter
             return id;
         }
 
-        foreach (var shape in AllShapes(slide.Shapes))
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
         {
             if (shape.PreservedObject is not { } info) continue;
 
@@ -6866,7 +6775,7 @@ public static class PptxPackageWriter
             return id;
         }
 
-        foreach (var shape in AllShapes(slide.Shapes))
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
         {
             if (shape.Kind != SlideShapeKind.Ole || shape.OleObject is not { } ole)
                 continue;
@@ -7226,7 +7135,7 @@ public static class PptxPackageWriter
         var chartIndex = 1;
         foreach (var slide in presentation.Slides)
         {
-            foreach (var shape in AllShapes(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.Kind != SlideShapeKind.Chart || shape.Chart is null)
                     continue;
@@ -7299,7 +7208,7 @@ public static class PptxPackageWriter
         var chartIndex = 1;
         foreach (var slide in presentation.Slides)
         {
-            foreach (var shape in AllShapes(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.Kind != SlideShapeKind.Chart || shape.Chart is not { IsChartEx: true } chart)
                     continue;
@@ -7350,7 +7259,7 @@ public static class PptxPackageWriter
 
         foreach (var slide in presentation.Slides)
         {
-            foreach (var shape in AllShapes(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
                     continue;
@@ -7385,7 +7294,7 @@ public static class PptxPackageWriter
 
         foreach (var slide in presentation.Slides)
         {
-            foreach (var shape in AllShapes(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.Kind != SlideShapeKind.Media
                     || shape.Media is not { } media
@@ -7568,16 +7477,6 @@ public static class PptxPackageWriter
                 new XElement(A + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")),
                 new XElement(A + "chExt", new XAttribute("cx", "0"), new XAttribute("cy", "0"))))
     };
-
-    private static IEnumerable<SlideShape> AllShapes(IEnumerable<SlideShape> shapes)
-    {
-        foreach (var s in shapes)
-        {
-            yield return s;
-            foreach (var c in AllShapes(s.Children))
-                yield return c;
-        }
-    }
 
     private static string FmtColor(SrgbColor c) => new DrawingMlRgbColor(c.R, c.G, c.B).ToHexRgb();
 

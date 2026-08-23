@@ -22,6 +22,7 @@
     <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
     <!-- Shared 45-preset DrawingML geometry tier (see DocxReader.BuildCustomGeometryFromPreset): the
          DOCX shape reader routes unrecognized a:prstGeom presets through this instead of collapsing
          them to a plain rectangle. -->

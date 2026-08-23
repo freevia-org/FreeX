@@ -178,7 +178,15 @@ public static partial class AccessibilityCheckerService
     }
 
     private static string ReadHeaderText(Sheet sheet, CellAddress headerAddress) =>
-        ValueText(sheet.GetValue(headerAddress));
+        sheet.GetValue(headerAddress) switch
+        {
+            TextValue text => text.Value,
+            NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            BoolValue boolean => boolean.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            DateTimeValue dateTime => dateTime.ToDateTime().ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ErrorValue error => error.Code,
+            _ => string.Empty
+        };
 
     private static string NormalizeHeaderText(string text) =>
         string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));

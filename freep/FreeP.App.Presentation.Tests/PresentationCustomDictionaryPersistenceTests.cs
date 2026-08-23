@@ -1,5 +1,6 @@
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using Free.Shared.AppServices;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -59,6 +60,42 @@ public sealed class PresentationCustomDictionaryPersistenceTests
         secondSession.ShowProofingPane().Rows.Should().ContainSingle(row => row.Text == "teh");
     }
 
+    [Fact]
+    public void Store_PreservesFreePOrdinalDuplicateAndBlankLineSemantics()
+    {
+        var fs = new FakeDictionaryFileSystem();
+        fs.Files[StorePath] = ["TEH", "TEH", "teh", "", " "];
+
+        var store = new PresentationCustomDictionaryStore(StorePath, fs);
+
+        store.Words.Should().Equal("TEH", "teh", " ");
+        store.Add("TEH").Should().BeFalse();
+        store.Add("Teh").Should().BeTrue();
+    }
+
+    [Fact]
+    public void Store_FileSystemFailuresNeverBlockInMemoryProofing()
+    {
+        var fs = new FakeDictionaryFileSystem { ThrowOnAccess = true };
+
+        var action = () => new PresentationCustomDictionaryStore(StorePath, fs);
+
+        action.Should().NotThrow();
+        var store = action();
+        store.Add("TEH").Should().BeTrue();
+        store.Words.Should().Equal("TEH");
+    }
+
+    [Fact]
+    public void Store_NullPathRemainsInMemoryOnlyWithoutTouchingTheFileSystem()
+    {
+        var fs = new FakeDictionaryFileSystem { ThrowOnAccess = true };
+        var store = new PresentationCustomDictionaryStore(storePath: null, fs);
+
+        store.Add("TEH").Should().BeTrue();
+        store.Words.Should().Equal("TEH");
+    }
+
     private static Presentation BuildTypoPresentation()
     {
         var presentation = Presentation.CreateEmpty();
@@ -94,20 +131,45 @@ public sealed class PresentationCustomDictionaryPersistenceTests
             dictionaryStore);
     }
 
-    private sealed class FakeDictionaryFileSystem : IPresentationCustomDictionaryFileSystem
+    private sealed class FakeDictionaryFileSystem : IAtomicLineSetFileSystem
     {
         public Dictionary<string, string[]> Files { get; } = [];
+        public bool ThrowOnAccess { get; init; }
 
-        public bool Exists(string path) => Files.ContainsKey(path);
+        public bool FileExists(string path)
+        {
+            ThrowIfRequested();
+            return Files.ContainsKey(path);
+        }
 
-        public string[] ReadAllLines(string path) => Files.TryGetValue(path, out var lines) ? lines : [];
+        public string[] ReadAllLines(string path)
+        {
+            ThrowIfRequested();
+            return Files.TryGetValue(path, out var lines) ? lines : [];
+        }
 
-        public void WriteAllLinesAtomically(string path, IEnumerable<string> lines) =>
-            Files[path] = [.. lines];
+        public void WriteAllTextAtomically(string path, string content)
+        {
+            ThrowIfRequested();
+            Files[path] = ParseLines(content);
+        }
 
         public void CreateDirectory(string path)
         {
+            ThrowIfRequested();
             // The fake keeps files in a flat dictionary; no directory structure to create.
         }
+
+        private void ThrowIfRequested()
+        {
+            if (ThrowOnAccess)
+                throw new IOException("simulated dictionary file-system failure");
+        }
+
+        private static string[] ParseLines(string content) =>
+            content.Length == 0
+                ? []
+                : content[..^Environment.NewLine.Length]
+                    .Split(Environment.NewLine, StringSplitOptions.None);
     }
 }

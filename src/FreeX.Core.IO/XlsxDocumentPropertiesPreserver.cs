@@ -41,10 +41,10 @@ internal static class XlsxDocumentPropertiesPreserver
         // element-preservation pass above (and the wholesale part copy that happens earlier
         // in the pipeline for a brand-new target part) otherwise carries the SOURCE file's
         // stamp through unchanged forever. dcterms:created is intentionally left untouched.
-        UpdateModifiedAndRevisionOnSave(targetArchive, saveTimestamp ?? DateTimeOffset.UtcNow);
+        UpdateCorePropertiesOnSave(targetArchive, saveTimestamp ?? DateTimeOffset.UtcNow);
     }
 
-    private static void UpdateModifiedAndRevisionOnSave(ZipArchive targetArchive, DateTimeOffset saveTimestamp)
+    internal static void UpdateCorePropertiesOnSave(ZipArchive targetArchive, DateTimeOffset saveTimestamp)
     {
         var targetEntry = targetArchive.GetEntry(CorePropertiesPart);
         if (targetEntry is null)
@@ -60,9 +60,13 @@ internal static class XlsxDocumentPropertiesPreserver
         var modifiedElement = targetRoot.Element(modifiedName);
         if (modifiedElement is null)
         {
+            var dcTermsPrefix = EnsureNamespaceDeclared(
+                targetRoot,
+                OpcDocumentProperties.DublinCoreTermsNamespace,
+                "dcterms");
             targetRoot.Add(new XElement(
                 modifiedName,
-                new XAttribute(OpcDocumentProperties.XmlSchemaInstanceNamespace + "type", "dcterms:W3CDTF"),
+                new XAttribute(OpcDocumentProperties.XmlSchemaInstanceNamespace + "type", $"{dcTermsPrefix}:W3CDTF"),
                 modifiedValue));
         }
         else
@@ -86,6 +90,16 @@ internal static class XlsxDocumentPropertiesPreserver
             revisionElement.SetValue(nextRevision);
 
         XlsxPackageXmlEditor.ReplaceXml(targetArchive, CorePropertiesPart, targetXml);
+    }
+
+    private static string EnsureNamespaceDeclared(XElement element, XNamespace ns, string preferredPrefix)
+    {
+        var existingPrefix = element.GetPrefixOfNamespace(ns);
+        if (existingPrefix is not null)
+            return existingPrefix;
+
+        element.SetAttributeValue(XNamespace.Xmlns + preferredPrefix, ns.NamespaceName);
+        return preferredPrefix;
     }
 
     public static void NormalizePackageGraph(Stream packageStream)

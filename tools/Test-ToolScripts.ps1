@@ -261,6 +261,17 @@ function Assert-ToolSourceCentralization {
             throw "VisualEvidenceScriptSupport.ps1 is missing required helper '$requiredHelper'."
         }
     }
+    foreach ($requiredPortableHashCall in @(
+            "[IO.File]::OpenRead(`$Path)",
+            "[Security.Cryptography.SHA256]::Create()",
+            "ComputeHash(`$stream)")) {
+        if (-not $visualEvidenceSupport.Contains($requiredPortableHashCall)) {
+            throw "VisualEvidenceScriptSupport.ps1 must use portable SHA-256 file hashing via '$requiredPortableHashCall'."
+        }
+    }
+    if ($visualEvidenceSupport.Contains("Get-FileHash")) {
+        throw "VisualEvidenceScriptSupport.ps1 must not depend on the optional Get-FileHash cmdlet."
+    }
 
     foreach ($readinessScriptName in @(
             "Test-LinuxAppReadiness.ps1",
@@ -379,6 +390,19 @@ function Assert-ToolSourceCentralization {
         if ($generator -match 'function\s+(Get-EvidenceRelativePath|Get-RelativePath|Get-NormalizedTextSha256)\b' -or
             $generator.Contains("Get-FileHash")) {
             throw "$generatorName redeclares visual-evidence hashing or inventory logic."
+        }
+    }
+
+    foreach ($hashConsumerName in @(
+            "Generate-FreeWShellVisualEvidence.ps1",
+            "Test-FreePPowerPointChromeEvidence.ps1",
+            "Test-FreeWWordChromeEvidence.ps1")) {
+        $hashConsumer = Get-Content -LiteralPath (Join-Path $ToolRoot $hashConsumerName) -Raw
+        if (-not $hashConsumer.Contains("VisualEvidenceScriptSupport.ps1") -or
+            -not $hashConsumer.Contains("Get-VisualEvidenceFileSha256") -or
+            $hashConsumer.Contains("Get-FileHash") -or
+            $hashConsumer -match 'function\s+Sha\b') {
+            throw "$hashConsumerName must use shared portable visual-evidence file hashing."
         }
     }
 

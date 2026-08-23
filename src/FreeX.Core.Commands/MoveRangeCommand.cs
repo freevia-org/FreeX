@@ -565,7 +565,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
                 sheet.CommentAuthors.TryGetValue(source, out var commentAuthor) ? commentAuthor : null,
                 sheet.ShownComments.Contains(source),
                 sheet.ThreadedComments.TryGetValue(source, out var threadedComment)
-                    ? CloneThreadedComment(threadedComment)
+                    ? ThreadedCommentCloner.Clone(threadedComment, ThreadedCommentIdPolicy.Preserve)
                     : null,
                 sheet.Hyperlinks.TryGetValue(source, out var hyperlink) ? hyperlink : null,
                 sheet.HyperlinkMetadata.TryGetValue(source, out var metadata) ? metadata : null,
@@ -739,7 +739,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         if (payload.CommentShown)
             sheet.ShownComments.Add(payload.Target);
         if (payload.ThreadedComment is not null)
-            sheet.ThreadedComments[payload.Target] = CloneThreadedComment(payload.ThreadedComment);
+            sheet.ThreadedComments[payload.Target] = ThreadedCommentCloner.Clone(payload.ThreadedComment, ThreadedCommentIdPolicy.Preserve);
         if (payload.Hyperlink is not null)
             sheet.Hyperlinks[payload.Target] = payload.Hyperlink;
         if (payload.HyperlinkMetadata is not null)
@@ -816,9 +816,6 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
 
         return false;
     }
-
-    private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
-        comment with { Replies = comment.Replies.Select(reply => reply with { }).ToList() };
 
     /// <summary>
     /// Builds a copy of <paramref name="table"/> relocated to <paramref name="newRange"/>. A pure

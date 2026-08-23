@@ -109,8 +109,8 @@ internal static class XlsxWorkbookCustomViewNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(customWorkbookView, CustomWorkbookViewAttributes);
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(customWorkbookView, WorkbookNs + "extLst");
-        changed |= NormalizeExtensionLists(customWorkbookView);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "name", NormalizeOptionalText);
+        changed |= XlsxWorkbookExtensionListNormalizer.NormalizeParent(customWorkbookView);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "name", XlsxXmlNormalizationHelpers.NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "guid", NormalizeGuid);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "showComments", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ShowCommentsValues));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "showObjects", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ShowObjectsValues));
@@ -130,33 +130,6 @@ internal static class XlsxWorkbookCustomViewNormalizer
         string.IsNullOrWhiteSpace(customWorkbookView.Attribute("name")?.Value) ||
         string.IsNullOrWhiteSpace(customWorkbookView.Attribute("guid")?.Value);
 
-    private static bool NormalizeExtensionLists(XElement customWorkbookView)
-    {
-        var changed = false;
-        var keptExtensionList = false;
-        foreach (var extensionList in customWorkbookView.Elements(WorkbookNs + "extLst").ToList())
-        {
-            if (keptExtensionList)
-            {
-                extensionList.Remove();
-                changed = true;
-                continue;
-            }
-
-            changed |= XlsxWorkbookExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
-            if (XlsxWorkbookExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
-            {
-                extensionList.Remove();
-                changed = true;
-                continue;
-            }
-
-            keptExtensionList = true;
-        }
-
-        return changed;
-    }
-
     private static string? NormalizeGuid(string? value)
     {
         var trimmed = value?.Trim();
@@ -171,12 +144,6 @@ internal static class XlsxWorkbookCustomViewNormalizer
         return int.TryParse(trimmed, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
             ? parsed.ToString(CultureInfo.InvariantCulture)
             : null;
-    }
-
-    private static string? NormalizeOptionalText(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
     private static string NormalizeUnsignedIntOrDefault(string? value, string defaultValue)

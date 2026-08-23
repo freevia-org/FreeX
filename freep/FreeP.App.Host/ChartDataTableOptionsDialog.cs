@@ -1,44 +1,27 @@
 using System.Globalization;
-using System.Windows;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style chart data-table options dialog.</summary>
-public sealed partial class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartDataTableOptionsDialog : ChartOptionsDialogHost<ChartDataTableOptionsDialogSession>
 {
-    private readonly ChartDataTableOptionsDialogSession _session;
-    private readonly ChartOptionsDialogForm _form;
-
     public ChartDataTableOptionsDialog(EditingSession editor)
+        : this(new ChartDataTableOptionsDialogSession(editor))
     {
-        _session = new ChartDataTableOptionsDialogSession(editor);
-        var plan = _session.BuildDialogPlan(CultureInfo.CurrentCulture);
-        _form = ChartOptionsDialogChrome.CreateForm(plan, OnOk, Close);
-
-        Title = plan.Title;
-        Width = plan.Width;
-        Height = plan.Height;
-        MinWidth = plan.MinimumWidth;
-        MinHeight = plan.MinimumHeight;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode = ResizeMode.NoResize;
-        Content = _form.Content;
     }
 
-    private void OnOk()
+    private ChartDataTableOptionsDialog(ChartDataTableOptionsDialogSession session)
+        : base(session, session.BuildDialogPlan(CultureInfo.CurrentCulture), Submit)
     {
-        var result = _session.TryCommit(ReadInput(), CultureInfo.CurrentCulture);
-        if (result.Succeeded)
-        {
-            DialogResult = true;
-            return;
-        }
-
-        DialogMessageHelper.ShowWarning(this, result.Error, Title);
     }
 
-    private ChartDataTableOptionsDialogInput ReadInput() =>
-        _session.BuildInput(_form.CaptureValues());
+    private static ChartOptionsDialogSubmission Submit(
+        ChartDataTableOptionsDialogSession session,
+        ChartOptionsDialogValues values)
+    {
+        var result = session.TryCommit(session.BuildInput(values), CultureInfo.CurrentCulture);
+        return new(result.Succeeded, result.Error);
+    }
 }

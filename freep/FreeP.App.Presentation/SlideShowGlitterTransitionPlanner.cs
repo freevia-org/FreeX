@@ -48,7 +48,7 @@ public static class SlideShowGlitterTransitionPlanner
         if (width <= 0 || height <= 0 || progress <= 0)
             return Array.Empty<SlideShowMaskPolygon>();
         if (progress >= 1)
-            return new[] { new SlideShowMaskPolygon(BuildRectangle(width, height)) };
+            return new[] { new SlideShowMaskPolygon(SlideShowTransitionGeometry.BuildRectangle(width, height)) };
 
         var columns = Math.Max(1, plan.ColumnCount);
         var rows = Math.Max(1, plan.RowCount);
@@ -116,12 +116,4 @@ public static class SlideShowGlitterTransitionPlanner
         return value / (double)uint.MaxValue;
     }
 
-    private static IReadOnlyList<SlideShowMaskPoint> BuildRectangle(double width, double height) =>
-        new[]
-        {
-            new SlideShowMaskPoint(0, 0),
-            new SlideShowMaskPoint(width, 0),
-            new SlideShowMaskPoint(width, height),
-            new SlideShowMaskPoint(0, height)
-        };
 }

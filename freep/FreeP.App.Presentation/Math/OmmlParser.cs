@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 
 namespace FreeP.App.Compositor.MathLayout;
 
@@ -254,14 +255,7 @@ public static class OmmlParser
         var value = element.Attribute(M + "val")?.Value
             ?? element.Attribute("val")?.Value
             ?? element.Value;
-        if (string.IsNullOrWhiteSpace(value))
-            return true;
-
-        return value.Trim().ToLowerInvariant() switch
-        {
-            "0" or "false" or "off" => false,
-            _ => true
-        };
+        return ParseOnOffLexical(value, absentDefault: true, invalidDefault: true);
     }
 
     private static MathNode.MathParagraphJustification? ParseDefaultJustificationOverride(
@@ -288,18 +282,12 @@ public static class OmmlParser
         if (element is null)
             return null;
 
-        var value = ReadVal(element);
-        if (string.IsNullOrWhiteSpace(value))
-            return true;
-
-        return value.Trim().ToLowerInvariant() switch
-        {
-            "0" or "false" or "off" => false,
-            // CT_OnOff uses true for a val-less element. Keep malformed
-            // authored values on the same conservative fallback as the
-            // parser's existing OMML binary properties.
-            _ => true,
-        };
+        // CT_OnOff uses true for a val-less element. Keep malformed authored
+        // values on the parser's existing conservative fallback.
+        return ParseOnOffLexical(
+            ReadVal(element),
+            absentDefault: true,
+            invalidDefault: true);
     }
 
     private static MathNode.MathParagraphBinaryBreak? ParseBinaryBreakOverride(XElement mathProperties)
@@ -514,8 +502,10 @@ public static class OmmlParser
         bool isItalic = true; // default: italic (no m:nor element at all)
         if (norEl is not null)
         {
-            var norVal = norEl.Attribute(M + "val")?.Value;
-            bool norOn = norVal is null or "1" or "true" or "on";
+            bool norOn = OoxmlOnOffLexical.Parse(
+                norEl.Attribute(M + "val")?.Value,
+                absentDefault: true,
+                invalidDefault: false);
             isItalic = !norOn;
         }
 
@@ -894,14 +884,7 @@ public static class OmmlParser
                ?? element.Attribute("val")?.Value
                ?? element.Value;
 
-        if (string.IsNullOrWhiteSpace(val))
-            return true;
-
-        return val.Trim().ToLowerInvariant() switch
-        {
-            "0" or "false" or "off" => false,
-            _ => true
-        };
+        return ParseOnOffLexical(val, absentDefault: true, invalidDefault: true);
     }
 
     private static MathNode ParseGroupChr(XElement el, MathNode.MathProperties inheritedProperties)
@@ -1172,9 +1155,21 @@ public static class OmmlParser
         if (element is null)
             return false;
 
-        var value = ReadVal(element)?.Trim().ToLowerInvariant();
-        return value is null or "" or "1" or "true" or "on";
+        var value = ReadVal(element);
+        return ParseOnOffLexical(
+            string.IsNullOrWhiteSpace(value) ? null : value,
+            absentDefault: true,
+            invalidDefault: false);
     }
+
+    private static bool ParseOnOffLexical(
+        string? value,
+        bool absentDefault,
+        bool invalidDefault) =>
+        OoxmlOnOffLexical.Parse(
+            value?.Trim().ToLowerInvariant(),
+            absentDefault,
+            invalidDefault);
 
     private static (MathNode Row, IReadOnlyList<MathNode.EqArray.Marker> Markers) ParseEqArrayRow(
         XElement eEl,

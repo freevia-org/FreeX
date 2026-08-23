@@ -279,19 +279,13 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
     private sealed record TimelineRangeSnapshot(
         string? SelectedStartDate,
         string? SelectedEndDate,
-        IReadOnlyList<PivotTableFieldsSnapshot> PivotTables)
+        IReadOnlyList<PivotTableTargetStateSnapshot> PivotTables)
     {
         public static TimelineRangeSnapshot Capture(TimelineModel timeline, IReadOnlyList<(Sheet Sheet, PivotTableModel PivotTable)> targets) =>
             new(
                 timeline.SelectedStartDate,
                 timeline.SelectedEndDate,
-                targets.Select(t => new PivotTableFieldsSnapshot(
-                    t.Sheet,
-                    t.PivotTable,
-                    t.PivotTable.RowFields.ToList(),
-                    t.PivotTable.ColumnFields.ToList(),
-                    t.PivotTable.PageFields.ToList(),
-                    t.PivotTable.LastRenderedRange)).ToList());
+                targets.Select(t => PivotTableTargetStateSnapshot.Capture(t.Sheet, t.PivotTable)).ToList());
 
         public void Restore(TimelineModel timeline)
         {
@@ -299,23 +293,9 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             timeline.SelectedEndDate = SelectedEndDate;
 
             foreach (var snapshot in PivotTables)
-            {
-                var pivotTable = snapshot.PivotTable;
-                PivotTableCommandCollections.Replace(pivotTable.RowFields, snapshot.RowFields);
-                PivotTableCommandCollections.Replace(pivotTable.ColumnFields, snapshot.ColumnFields);
-                PivotTableCommandCollections.Replace(pivotTable.PageFields, snapshot.PageFields);
-                pivotTable.LastRenderedRange = snapshot.LastRenderedRange;
-            }
+                snapshot.Restore();
         }
     }
-
-    private sealed record PivotTableFieldsSnapshot(
-        Sheet Sheet,
-        PivotTableModel PivotTable,
-        IReadOnlyList<PivotFieldModel> RowFields,
-        IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields,
-        GridRange? LastRenderedRange);
 }
 
 /// <summary>

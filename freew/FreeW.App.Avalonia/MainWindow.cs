@@ -458,6 +458,7 @@ public sealed partial class MainWindow : Window
         // Dirty-gate on close: cancel the synchronous event and let the shared async
         // coordinator resume the close only after the dirty decision settles.
         Closing += OnWindowClosing;
+        Closed += (_, _) => _autosave.Dispose();
 
         var frame = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
             chrome: ribbon,

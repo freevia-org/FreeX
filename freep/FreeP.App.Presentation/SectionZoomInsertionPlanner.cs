@@ -133,18 +133,8 @@ public static class SectionZoomInsertionPlanner
 
     private static uint NextShapeId(Presentation presentation) =>
         presentation.Slides
-            .SelectMany(slide => Enumerate(slide.Shapes))
+            .SelectMany(SlideShapeTraversal.EnumerateDepthFirst)
             .Select(shape => shape.Id)
             .DefaultIfEmpty(0u)
             .Max() + 1;
-
-    private static IEnumerable<SlideShape> Enumerate(IEnumerable<SlideShape> shapes)
-    {
-        foreach (var shape in shapes)
-        {
-            yield return shape;
-            foreach (var child in Enumerate(shape.Children))
-                yield return child;
-        }
-    }
 }

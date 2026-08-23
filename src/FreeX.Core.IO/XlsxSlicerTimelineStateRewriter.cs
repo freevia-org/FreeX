@@ -35,8 +35,6 @@ internal static class XlsxSlicerTimelineStateRewriter
     // The reader parses SelectedItems from any descendant <selectedItem @value> (namespace-tolerant).
     private static readonly XNamespace FreexSelectionNs = "https://freex.local/xlsx/slicerTimelineState";
     private const string SlicerSelectionExtensionUri = "{9F2C6F77-9A06-4E1E-AF41-4DB3CB03A6A6}";
-    private const string TableSlicerCacheExtensionUri = "{2F2917AC-EB37-4324-AD4E-5DD8C200BD13}";
-
     private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
     // R37-io-slicer-timeline-1: namespaces/relationship types/extension URIs needed to author a brand-new
@@ -44,9 +42,7 @@ internal static class XlsxSlicerTimelineStateRewriter
     // AppendNewControls below).
     private static readonly XNamespace SlicerXmlNs = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
     private static readonly XNamespace TimelineXmlNs = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
-    private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-    private static readonly XNamespace MarkupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private const string SlicerWorkbookExtensionUri = "{BBE1A952-AA13-448e-AADC-164F8A28A991}";
     private const string TimelineWorkbookExtensionUri = "{D0CA8CA8-9F24-4464-BF8E-62219DCF47F9}";
     private const string SlicerWorksheetExtensionUri = "{A8765BA9-456A-4DAB-B4F3-ACF838C121DE}";
@@ -158,8 +154,8 @@ internal static class XlsxSlicerTimelineStateRewriter
         XlsxWorkbookWorksheetPathMap? worksheetPathMap,
         List<SlicerModel> newSlicers)
     {
-        var usedSlicerIndices = GetUsedIndices(archive, "xl/slicers/", "slicer");
-        var usedCacheIndices = GetUsedIndices(archive, "xl/slicerCaches/", "slicerCache");
+        var usedSlicerIndices = XlsxSlicerTimelinePackageAuthoring.GetUsedPartIndices(archive, "xl/slicers/", "slicer");
+        var usedCacheIndices = XlsxSlicerTimelinePackageAuthoring.GetUsedPartIndices(archive, "xl/slicerCaches/", "slicerCache");
         var emittedCachesByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         // Seed already-emitted cache paths from the existing archive so a new slicer sharing a CacheName
@@ -176,95 +172,36 @@ internal static class XlsxSlicerTimelineStateRewriter
 
         foreach (var slicer in newSlicers)
         {
-            var slicerIndex = AllocateNextIndex(usedSlicerIndices);
+            var slicerIndex = XlsxSlicerTimelinePackageAuthoring.AllocateNextPartIndex(usedSlicerIndices);
             var slicerPath = $"xl/slicers/slicer{slicerIndex}.xml";
             var cacheName = string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName;
 
             var isNewCache = !emittedCachesByName.TryGetValue(cacheName, out var cachePath);
             if (isNewCache)
             {
-                var cacheIndex = AllocateNextIndex(usedCacheIndices);
+                var cacheIndex = XlsxSlicerTimelinePackageAuthoring.AllocateNextPartIndex(usedCacheIndices);
                 cachePath = $"xl/slicerCaches/slicerCache{cacheIndex}.xml";
                 emittedCachesByName[cacheName] = cachePath;
             }
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, slicerPath, new XDocument(
-                new XElement(SlicerXmlNs + "slicers",
-                    new XAttribute(XNamespace.Xmlns + "mc", MarkupCompatNs.NamespaceName),
-                    new XAttribute(MarkupCompatNs + "Ignorable", "x"),
-                    new XAttribute(XNamespace.Xmlns + "x", WorkbookNs.NamespaceName),
-                    new XElement(SlicerXmlNs + "slicer",
-                        new XAttribute("name", slicer.Name),
-                        OptionalAttribute("caption", slicer.Caption),
-                        OptionalAttribute("style", slicer.StyleName),
-                        new XAttribute("cache", cacheName),
-                        new XAttribute("rowHeight", "228600"),
-                        slicer.ColumnCount != 1
-                            ? new XAttribute("columnCount", slicer.ColumnCount.ToString(CultureInfo.InvariantCulture))
-                            : null,
-                        !slicer.ShowCaption
-                            ? new XAttribute("showCaption", "0")
-                            : null))));
+            XlsxPackageXmlEditor.ReplaceXml(
+                archive,
+                slicerPath,
+                XlsxSlicerTimelineXmlAuthoring.BuildSlicerPart(slicer, cacheName));
 
             if (isNewCache)
             {
-                var isTableSlicer = slicer.SourceTableId is not null &&
-                                    string.IsNullOrWhiteSpace(slicer.SourcePivotTableName);
-
-                var extensions = new List<XElement>();
-                if (isTableSlicer)
-                {
-                    extensions.Add(new XElement(WorkbookNs + "ext",
-                        new XAttribute("uri", TableSlicerCacheExtensionUri),
-                        new XElement(TimelineXmlNs + "tableSlicerCache",
-                            new XAttribute("tableId", slicer.SourceTableId!.Value.ToString(CultureInfo.InvariantCulture)),
-                            slicer.SourceTableColumnId is { } tableColumn
-                                ? new XAttribute("column", tableColumn.ToString(CultureInfo.InvariantCulture))
-                                : null)));
-                }
-
-                if (slicer.SelectedItems.Count > 0)
-                {
-                    extensions.Add(new XElement(WorkbookNs + "ext",
-                        new XAttribute("uri", SlicerSelectionExtensionUri),
-                        new XElement(FreexSelectionNs + "selectedItems",
-                            slicer.SelectedItems.Select(item =>
-                                new XElement(FreexSelectionNs + "selectedItem", new XAttribute("value", item))))));
-                }
-
-                XlsxPackageXmlEditor.ReplaceXml(archive, cachePath!, new XDocument(
-                    new XElement(SlicerXmlNs + "slicerCacheDefinition",
-                        slicer.SelectedItems.Count == 0
-                            ? null
-                            : new XAttribute(XNamespace.Xmlns + "x", WorkbookNs.NamespaceName),
-                        isTableSlicer
-                            ? new XAttribute(XNamespace.Xmlns + "x15", TimelineXmlNs.NamespaceName)
-                            : null,
-                        new XAttribute("name", cacheName),
-                        OptionalAttribute("sourceName", slicer.SourceFieldName),
-                        isTableSlicer
-                            ? null
-                            : new XElement(SlicerXmlNs + "pivotTables",
-                                new XElement(
-                                    SlicerXmlNs + "pivotTable",
-                                    OptionalAttribute("name", slicer.SourcePivotTableName),
-                                    new XAttribute("tabId", ResolvePivotHostTabId(workbook, workbookXml, slicer.SourcePivotTableName)))),
-                        // R84-io-slicer-append-tabular: a pivot slicer ADDED to an already-loaded
-                        // (source-preserved) workbook (AddSlicerCommand) must carry the SAME native
-                        // <data><tabular pivotCacheId=".."><items><i x=".." s="1"/> list the fresh writer
-                        // emits (R44-io-pivot-filter-page-3-2) -- it is the ONLY form real Excel and FreeX's
-                        // own reload (XlsxSlicerTimelineMetadataReader -> SlicerModel.CacheItems) draw the
-                        // slicer's item tiles from; the fx: selectedItems extLst below is a FreeX-private
-                        // fallback neither reads. Shared with the fresh writer via XlsxPivotSlicerCacheData so
-                        // both stamp the required pivotCacheId from the OWNING pivot cache's id
-                        // (R83-io-slicer-tabular-pivotcacheid). Null for a table slicer (no bound pivot cache
-                        // field), keeping it purely on the x15:tableSlicerCache binding exactly as before.
-                        isTableSlicer
-                            ? null
-                            : XlsxPivotSlicerCacheData.BuildPivotSlicerCacheDataElement(workbook, slicer),
-                        extensions.Count == 0
-                            ? null
-                            : new XElement(SlicerXmlNs + "extLst", extensions))));
+                // Source-preserved append keeps its historical primary-only pivot binding. Existing
+                // cache parts and their full connection lists remain untouched by this path.
+                XlsxPackageXmlEditor.ReplaceXml(
+                    archive,
+                    cachePath!,
+                    XlsxSlicerTimelineXmlAuthoring.BuildSlicerCacheDefinition(
+                        workbook,
+                        workbookXml,
+                        slicer,
+                        cacheName,
+                        [slicer.SourcePivotTableName]));
             }
 
             var resolvedCachePath = cachePath!;
@@ -274,8 +211,8 @@ internal static class XlsxSlicerTimelineStateRewriter
                 "xl/workbook.xml",
                 resolvedCachePath,
                 SlicerCacheRelationshipType);
-            EnsurePartRelationship(archive, slicerPath, resolvedCachePath, SlicerCacheRelationshipType);
-            EnsureWorkbookExtensionRef(
+            XlsxSlicerTimelinePackageAuthoring.EnsurePartRelationship(archive, slicerPath, resolvedCachePath, SlicerCacheRelationshipType);
+            XlsxSlicerTimelinePackageAuthoring.EnsureWorkbookExtensionRef(
                 workbookXml,
                 SlicerXmlNs,
                 "x14",
@@ -287,8 +224,8 @@ internal static class XlsxSlicerTimelineStateRewriter
             var worksheetPath = ResolveWorksheetPath(workbook, worksheetPathMap, slicer.SourceSheetName, slicer.SourcePivotTableName);
             if (!string.IsNullOrWhiteSpace(worksheetPath))
             {
-                var slicerRelationshipId = EnsureWorksheetRelationship(archive, worksheetPath, slicerPath, SlicerRelationshipType);
-                EnsureWorksheetExtensionRef(
+                var slicerRelationshipId = XlsxSlicerTimelinePackageAuthoring.EnsureWorksheetRelationship(archive, worksheetPath, slicerPath, SlicerRelationshipType);
+                XlsxSlicerTimelinePackageAuthoring.EnsureWorksheetExtensionRef(
                     archive,
                     worksheetPath,
                     SlicerXmlNs,
@@ -316,8 +253,8 @@ internal static class XlsxSlicerTimelineStateRewriter
         XlsxWorkbookWorksheetPathMap? worksheetPathMap,
         List<TimelineModel> newTimelines)
     {
-        var usedTimelineIndices = GetUsedIndices(archive, "xl/timelines/", "timeline");
-        var usedTimelineCacheIndices = GetUsedIndices(archive, "xl/timelineCaches/", "timelineCache");
+        var usedTimelineIndices = XlsxSlicerTimelinePackageAuthoring.GetUsedPartIndices(archive, "xl/timelines/", "timeline");
+        var usedTimelineCacheIndices = XlsxSlicerTimelinePackageAuthoring.GetUsedPartIndices(archive, "xl/timelineCaches/", "timelineCache");
         var emittedCachesByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var cacheEntry in archive.Entries
@@ -332,47 +269,34 @@ internal static class XlsxSlicerTimelineStateRewriter
 
         foreach (var timeline in newTimelines)
         {
-            var timelineIndex = AllocateNextIndex(usedTimelineIndices);
+            var timelineIndex = XlsxSlicerTimelinePackageAuthoring.AllocateNextPartIndex(usedTimelineIndices);
             var timelinePath = $"xl/timelines/timeline{timelineIndex}.xml";
             var cacheName = string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName;
 
             var isNewTimelineCache = !emittedCachesByName.TryGetValue(cacheName, out var cachePath);
             if (isNewTimelineCache)
             {
-                var cacheIndex = AllocateNextIndex(usedTimelineCacheIndices);
+                var cacheIndex = XlsxSlicerTimelinePackageAuthoring.AllocateNextPartIndex(usedTimelineCacheIndices);
                 cachePath = $"xl/timelineCaches/timelineCache{cacheIndex}.xml";
                 emittedCachesByName[cacheName] = cachePath;
             }
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, timelinePath, new XDocument(
-                new XElement(TimelineXmlNs + "timelines",
-                    new XElement(TimelineXmlNs + "timeline",
-                        new XAttribute("name", timeline.Name),
-                        OptionalAttribute("caption", timeline.Caption),
-                        OptionalAttribute("style", timeline.StyleName),
-                        new XAttribute("cache", cacheName),
-                        timeline.Level is { } lvl
-                            ? new XAttribute("level", lvl.ToString(CultureInfo.InvariantCulture))
-                            : null,
-                        (timeline.SelectionLevel ?? timeline.Level) is { } selLvl
-                            ? new XAttribute("selectionLevel", selLvl.ToString(CultureInfo.InvariantCulture))
-                            : null,
-                        timeline.ScrollPosition is { Length: > 0 } scrollPos
-                            ? new XAttribute("scrollPosition", scrollPos + "T00:00:00")
-                            : null))));
+            XlsxPackageXmlEditor.ReplaceXml(
+                archive,
+                timelinePath,
+                XlsxSlicerTimelineXmlAuthoring.BuildTimelinePart(timeline, cacheName));
 
             if (isNewTimelineCache)
             {
-                XlsxPackageXmlEditor.ReplaceXml(archive, cachePath!, new XDocument(
-                    new XElement(TimelineXmlNs + "timelineCacheDefinition",
-                        new XAttribute("name", cacheName),
-                        OptionalAttribute("sourceName", timeline.SourceFieldName),
-                        OptionalAttribute("startDate", timeline.StartDate),
-                        OptionalAttribute("endDate", timeline.EndDate),
-                        OptionalAttribute("selectedStartDate", timeline.SelectedStartDate),
-                        OptionalAttribute("selectedEndDate", timeline.SelectedEndDate),
-                        new XElement(TimelineXmlNs + "pivotTables",
-                            new XElement(TimelineXmlNs + "pivotTable", OptionalAttribute("name", timeline.SourcePivotTableName))))));
+                // Match the source-preserved append contract: only the primary binding is authored for
+                // the new cache while all pre-existing native cache XML remains byte-preserved.
+                XlsxPackageXmlEditor.ReplaceXml(
+                    archive,
+                    cachePath!,
+                    XlsxSlicerTimelineXmlAuthoring.BuildTimelineCacheDefinition(
+                        timeline,
+                        cacheName,
+                        [timeline.SourcePivotTableName]));
             }
 
             var resolvedTimelineCachePath = cachePath!;
@@ -382,8 +306,8 @@ internal static class XlsxSlicerTimelineStateRewriter
                 "xl/workbook.xml",
                 resolvedTimelineCachePath,
                 TimelineCacheRelationshipType);
-            EnsurePartRelationship(archive, timelinePath, resolvedTimelineCachePath, TimelineCacheRelationshipType);
-            EnsureWorkbookExtensionRef(
+            XlsxSlicerTimelinePackageAuthoring.EnsurePartRelationship(archive, timelinePath, resolvedTimelineCachePath, TimelineCacheRelationshipType);
+            XlsxSlicerTimelinePackageAuthoring.EnsureWorkbookExtensionRef(
                 workbookXml,
                 TimelineXmlNs,
                 "x15",
@@ -395,8 +319,8 @@ internal static class XlsxSlicerTimelineStateRewriter
             var worksheetPath = ResolveWorksheetPath(workbook, worksheetPathMap, timeline.SourceSheetName, timeline.SourcePivotTableName);
             if (!string.IsNullOrWhiteSpace(worksheetPath))
             {
-                var timelineRelationshipId = EnsureWorksheetRelationship(archive, worksheetPath, timelinePath, TimelineRelationshipType);
-                EnsureWorksheetExtensionRef(
+                var timelineRelationshipId = XlsxSlicerTimelinePackageAuthoring.EnsureWorksheetRelationship(archive, worksheetPath, timelinePath, TimelineRelationshipType);
+                XlsxSlicerTimelinePackageAuthoring.EnsureWorksheetExtensionRef(
                     archive,
                     worksheetPath,
                     TimelineXmlNs,
@@ -414,43 +338,6 @@ internal static class XlsxSlicerTimelineStateRewriter
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{timelinePath}", "application/vnd.ms-excel.Timeline+xml");
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{resolvedTimelineCachePath}", "application/vnd.ms-excel.TimelineCache+xml");
         }
-    }
-
-    // Mirrors XlsxSlicerTimelineWriter.ResolvePivotHostTabId: the slicerCache's pivotTable/@tabId is the
-    // sheetId of the worksheet hosting the pivot, resolved by name; falls back to "1" for a degenerate
-    // package (no matching sheet/sheetId found).
-    private static string ResolvePivotHostTabId(Workbook workbook, XDocument workbookXml, string? sourcePivotTableName)
-    {
-        if (string.IsNullOrWhiteSpace(sourcePivotTableName))
-            return "1";
-
-        string? hostSheetName = null;
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (sheet.PivotTables.Any(pivot =>
-                    string.Equals(pivot.Name, sourcePivotTableName, StringComparison.OrdinalIgnoreCase)))
-            {
-                hostSheetName = sheet.Name;
-                break;
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(hostSheetName))
-            return "1";
-
-        var sheetsElement = workbookXml.Root?.Element(WorkbookNs + "sheets");
-        foreach (var sheetElement in sheetsElement?.Elements(WorkbookNs + "sheet") ?? [])
-        {
-            if (string.Equals(sheetElement.Attribute("name")?.Value, hostSheetName, StringComparison.OrdinalIgnoreCase))
-            {
-                var sheetId = sheetElement.Attribute("sheetId")?.Value;
-                if (!string.IsNullOrWhiteSpace(sheetId))
-                    return sheetId;
-                break;
-            }
-        }
-
-        return "1";
     }
 
     // Resolves the ACTUAL preserved worksheet part path for the sheet HOSTING THE CONTROL ITSELF, via the
@@ -493,204 +380,6 @@ internal static class XlsxSlicerTimelineStateRewriter
 
         return null;
     }
-
-    private static HashSet<int> GetUsedIndices(ZipArchive archive, string directory, string stem)
-    {
-        var used = new HashSet<int>();
-        foreach (var entry in archive.Entries)
-        {
-            var name = entry.FullName;
-            if (name.StartsWith(directory, StringComparison.OrdinalIgnoreCase) &&
-                name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-            {
-                var file = name[directory.Length..^".xml".Length];
-                if (file.StartsWith(stem, StringComparison.OrdinalIgnoreCase) &&
-                    int.TryParse(file[stem.Length..], out var index))
-                {
-                    used.Add(index);
-                }
-            }
-        }
-
-        return used;
-    }
-
-    private static int AllocateNextIndex(HashSet<int> usedIndices)
-    {
-        var index = 1;
-        while (usedIndices.Contains(index))
-            index++;
-        usedIndices.Add(index);
-        return index;
-    }
-
-    private static void EnsurePartRelationship(
-        ZipArchive archive,
-        string sourcePart,
-        string targetPart,
-        string relationshipType)
-    {
-        var relationshipPath = XlsxPackagePath.GetRelationshipPartPath(sourcePart);
-        var relsXml = archive.GetEntry(relationshipPath) is { } relsEntry
-            ? XlsxPackageXmlEditor.LoadXml(relsEntry)
-            : new XDocument(new XElement(PackageRelNs + "Relationships"));
-        XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
-            relsXml,
-            PackageRelNs,
-            sourcePart,
-            targetPart,
-            relationshipType);
-        XlsxPackageXmlEditor.ReplaceXml(archive, relationshipPath, relsXml);
-    }
-
-    private static string EnsureWorksheetRelationship(
-        ZipArchive archive,
-        string worksheetPath,
-        string targetPart,
-        string relationshipType)
-    {
-        var relationshipPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
-        var relsXml = archive.GetEntry(relationshipPath) is { } relsEntry
-            ? XlsxPackageXmlEditor.LoadXml(relsEntry)
-            : new XDocument(new XElement(PackageRelNs + "Relationships"));
-        var relationshipId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
-            relsXml,
-            PackageRelNs,
-            worksheetPath,
-            targetPart,
-            relationshipType);
-        XlsxPackageXmlEditor.ReplaceXml(archive, relationshipPath, relsXml);
-        return relationshipId;
-    }
-
-    private static void EnsureWorkbookExtensionRef(
-        XDocument workbookXml,
-        XNamespace extensionNs,
-        string prefix,
-        string extensionUri,
-        string containerName,
-        string childName,
-        string relationshipId)
-    {
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        EnsureNamespace(root, "r", RelNs);
-        EnsureNamespace(root, prefix, extensionNs);
-        AddIgnorablePrefix(root, prefix);
-        var extension = EnsureExtension(root, WorkbookNs, extensionNs, prefix, extensionUri);
-        var container = extension.Element(extensionNs + containerName);
-        if (container is null)
-        {
-            container = new XElement(extensionNs + containerName);
-            extension.Add(container);
-        }
-
-        container.Elements(extensionNs + childName)
-            .Where(element => string.Equals(element.Attribute(RelNs + "id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase))
-            .Remove();
-        container.Add(new XElement(extensionNs + childName, new XAttribute(RelNs + "id", relationshipId)));
-    }
-
-    private static void EnsureWorksheetExtensionRef(
-        ZipArchive archive,
-        string worksheetPath,
-        XNamespace extensionNs,
-        string prefix,
-        string extensionUri,
-        string containerName,
-        string childName,
-        string relationshipId)
-    {
-        var worksheetEntry = archive.GetEntry(worksheetPath);
-        if (worksheetEntry is null)
-            return;
-
-        var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-        var root = worksheetXml.Root;
-        if (root is null)
-            return;
-
-        EnsureNamespace(root, "r", RelNs);
-        EnsureNamespace(root, prefix, extensionNs);
-        AddIgnorablePrefix(root, prefix);
-        var extension = EnsureExtension(root, WorkbookNs, extensionNs, prefix, extensionUri);
-        var container = extension.Element(extensionNs + containerName);
-        if (container is null)
-        {
-            container = new XElement(extensionNs + containerName);
-            extension.Add(container);
-        }
-
-        container.Elements(extensionNs + childName)
-            .Where(element => string.Equals(element.Attribute(RelNs + "id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase))
-            .Remove();
-        container.Add(new XElement(extensionNs + childName, new XAttribute(RelNs + "id", relationshipId)));
-        XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
-    }
-
-    private static XElement EnsureExtension(
-        XElement root,
-        XNamespace workbookNs,
-        XNamespace extensionNs,
-        string prefix,
-        string extensionUri)
-    {
-        var extensionList = root.Element(workbookNs + "extLst");
-        if (extensionList is null)
-        {
-            extensionList = new XElement(workbookNs + "extLst");
-            root.Add(extensionList);
-        }
-
-        XElement? extension = null;
-        foreach (var element in extensionList.Elements(workbookNs + "ext"))
-        {
-            if (string.Equals(element.Attribute("uri")?.Value, extensionUri, StringComparison.OrdinalIgnoreCase))
-            {
-                extension = element;
-                break;
-            }
-        }
-
-        if (extension is not null)
-        {
-            extension.SetAttributeValue("uri", extensionUri);
-            EnsureNamespace(extension, prefix, extensionNs);
-            return extension;
-        }
-
-        extension = new XElement(
-            workbookNs + "ext",
-            new XAttribute("uri", extensionUri),
-            new XAttribute(XNamespace.Xmlns + prefix, extensionNs.NamespaceName));
-        extensionList.Add(extension);
-        return extension;
-    }
-
-    private static void EnsureNamespace(XElement element, string prefix, XNamespace ns)
-    {
-        if (element.Attribute(XNamespace.Xmlns + prefix) is null)
-            element.SetAttributeValue(XNamespace.Xmlns + prefix, ns.NamespaceName);
-    }
-
-    private static void AddIgnorablePrefix(XElement root, string prefix)
-    {
-        EnsureNamespace(root, "mc", MarkupCompatNs);
-        var current = root.Attribute(MarkupCompatNs + "Ignorable")?.Value;
-        var prefixes = (current ?? "")
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .ToList();
-        if (prefixes.Any(value => string.Equals(value, prefix, StringComparison.OrdinalIgnoreCase)))
-            return;
-
-        prefixes.Add(prefix);
-        root.SetAttributeValue(MarkupCompatNs + "Ignorable", string.Join(" ", prefixes));
-    }
-
-    private static XAttribute? OptionalAttribute(string name, string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : new XAttribute(name, value);
 
     private static void RewriteSlicerSelections(ZipArchive archive, Workbook workbook)
     {
@@ -1076,18 +765,17 @@ internal static class XlsxSlicerTimelineStateRewriter
     /// for one -- leaving <see cref="RewriteNativeCacheItemSelection"/> a permanent no-op for every table
     /// slicer and the native <c>&lt;i s="1"&gt;</c> flags Excel reads permanently stale after a selection
     /// change. Resolve the caption list from the referenced structured table's column distinct values
-    /// instead, mirroring FreeX.Core.Commands.SlicerItemResolver.ResolveTableColumnItems/DistinctColumnValues's
-    /// own first-occurrence-order computation (header row skipped, case-insensitive de-dup) so the index space
-    /// patched here agrees with what the rest of FreeX treats as that slicer's available items.
+    /// instead through <see cref="StructuredTableCaptionResolver"/>, so the structural-row rules, scalar
+    /// formatting, and first-occurrence index space patched here agree with the slicer's available items.
     /// </para>
     /// </summary>
     private static IReadOnlyList<string?>? ResolveRawSharedItemCaptions(ZipArchive archive, Workbook workbook, SlicerModel slicer)
     {
-        if (slicer.SourceTableId is { } tableId && slicer.SourceTableColumnId is { } columnId)
+        if (slicer.SourceTableId is { } tableId &&
+            slicer.SourceTableColumnId is { } columnId &&
+            StructuredTableCaptionResolver.TryResolveColumnCaptions(workbook, tableId, columnId, out var tableCaptions))
         {
-            var tableCaptions = ResolveStructuredTableColumnCaptions(workbook, tableId, columnId);
-            if (tableCaptions is not null)
-                return tableCaptions;
+            return tableCaptions;
         }
 
         var fieldName = slicer.SourceFieldName;
@@ -1159,79 +847,6 @@ internal static class XlsxSlicerTimelineStateRewriter
             .ToList();
     }
 
-    /// <summary>
-    /// Resolves the distinct, first-occurrence-ordered caption list for a table slicer's referenced
-    /// structured-table column, or <see langword="null"/> when the table/column can't be found. Mirrors
-    /// <c>FreeX.Core.Commands.SlicerItemResolver.ResolveTableColumnItems</c>/<c>DistinctColumnValues</c>
-    /// exactly (header row skipped, <see cref="StringComparer.CurrentCultureIgnoreCase"/> de-dup) so the
-    /// caption&lt;-&gt;index space used to patch the native <c>&lt;i s="1"&gt;</c> flags here agrees with
-    /// what the rest of FreeX treats as that slicer's available items.
-    /// </summary>
-    private static IReadOnlyList<string?>? ResolveStructuredTableColumnCaptions(Workbook workbook, int tableId, int columnId)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            foreach (var table in sheet.StructuredTables)
-            {
-                if (table.Id != tableId)
-                    continue;
-
-                var columnOffset = -1;
-                for (var index = 0; index < table.Columns.Count; index++)
-                {
-                    if (table.Columns[index].Id == columnId)
-                    {
-                        columnOffset = index;
-                        break;
-                    }
-                }
-
-                if (columnOffset < 0)
-                    return null;
-
-                return DistinctStructuredTableColumnValues(sheet, table.Range, columnOffset);
-            }
-        }
-
-        return null;
-    }
-
-    private static IReadOnlyList<string?> DistinctStructuredTableColumnValues(Sheet sheet, GridRange range, int columnOffset)
-    {
-        var col = range.Start.Col + (uint)columnOffset;
-        if (col > range.End.Col)
-            return [];
-
-        // Skip the header row (the table's first row is the header).
-        var firstDataRow = range.Start.Row + 1;
-        var seen = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
-        var items = new List<string?>();
-        for (var row = firstDataRow; row <= range.End.Row; row++)
-        {
-            var text = ToStructuredTableCellDisplayText(sheet.GetCell(row, col)?.Value ?? BlankValue.Instance);
-            if (string.IsNullOrEmpty(text))
-                continue;
-            if (seen.Add(text))
-                items.Add(text);
-        }
-
-        return items;
-    }
-
-    // Mirrors FreeX.Core.Commands.SlicerItemResolver.ToDisplayText exactly, so a table slicer's cell values
-    // format into the same caption the resolver/renderer and SetSlicerSelectionCommand compare against.
-    private static string ToStructuredTableCellDisplayText(ScalarValue value) =>
-        value switch
-        {
-            TextValue t => t.Value,
-            NumberValue n => n.Value.ToString(CultureInfo.CurrentCulture),
-            BoolValue b => b.Value ? "TRUE" : "FALSE",
-            DateTimeValue d => d.ToDateTime().ToString(CultureInfo.CurrentCulture),
-            BlankValue => string.Empty,
-            ErrorValue => string.Empty,
-            _ => value.ToString() ?? string.Empty,
-        };
-
     /// <summary>Resolves a single raw <c>&lt;sharedItems&gt;</c> child's caption, or null when it has no
     /// <c>v</c> (e.g. <c>&lt;m/&gt;</c>) so it can never match a selection.</summary>
     private static string? ResolveRawSharedItemCaption(XElement item, PivotCacheFieldModel field)
@@ -1241,53 +856,7 @@ internal static class XlsxSlicerTimelineStateRewriter
             return null;
 
         var kind = item.Name.LocalName.Length > 0 ? item.Name.LocalName[0] : (char?)null;
-        return NormalizeSharedItemCaption(raw, kind, field);
-    }
-
-    /// <summary>
-    /// Reformats a raw pivot-cache shared-item attribute string into the same caption
-    /// FreeX.Core.Commands.SlicerItemResolver would resolve for that value (its own
-    /// NormalizeSharedItemCaption), so the caption compared here against
-    /// <see cref="SlicerModel.SelectedItems"/> matches what the UI/refresh path uses. Text items pass
-    /// through unchanged; numbers/dates are reformatted using current-culture formatting.
-    /// <para>
-    /// R17-slicer-timeline-cache-1: keys off the per-item <paramref name="kind"/> char ('d'/'n'/'s'/...,
-    /// from <see cref="PivotCacheFieldModel.SharedItemKinds"/>) exactly like the resolver does, falling
-    /// back to the field-level Contains* flags only when no per-item kind was preserved. A MIXED-type
-    /// field (both dates and text/numbers) fails the field-level "exclusively one kind" gate for every
-    /// item, so keying only on those flags left every item's raw ISO/invariant string un-formatted —
-    /// mismatching the resolver's per-item-kind caption and silently dropping a selected date/number
-    /// tile's <c>s="1"</c> flag on save.
-    /// </para>
-    /// </summary>
-    private static string NormalizeSharedItemCaption(string raw, char? kind, PivotCacheFieldModel? field)
-    {
-        if (field is null || string.IsNullOrEmpty(raw))
-            return raw;
-
-        if (kind == 'd' || (kind is null && field.ContainsDate && !field.ContainsString && !field.ContainsNumber))
-        {
-            if (!DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-                return raw;
-
-            return field.Grouping switch
-            {
-                PivotFieldGrouping.Year => date.Year.ToString(CultureInfo.InvariantCulture),
-                PivotFieldGrouping.Quarter => $"{date.Year}-Q{((date.Month - 1) / 3) + 1}",
-                PivotFieldGrouping.Month => date.ToString("yyyy-MM", CultureInfo.InvariantCulture),
-                PivotFieldGrouping.Day => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                _ => date.ToShortDateString()
-            };
-        }
-
-        if (kind == 'n' || (kind is null && field.ContainsNumber && !field.ContainsString && !field.ContainsDate))
-        {
-            return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
-                ? number.ToString(CultureInfo.CurrentCulture)
-                : raw;
-        }
-
-        return raw;
+        return PivotSharedItemCaptionResolver.Resolve(raw, kind, field);
     }
 
     private static void RewriteTimelineState(ZipArchive archive, Workbook workbook)

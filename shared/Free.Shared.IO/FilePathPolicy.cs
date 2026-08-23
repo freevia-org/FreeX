@@ -63,6 +63,16 @@ public static class FilePathPolicy
     public static string GetExtensionOrEmpty(string? path) =>
         TryGetExtension(path, out var extension) ? extension : string.Empty;
 
+    public static string NormalizeSafeExtension(string? extension, string fallback = "bin")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fallback);
+
+        var normalized = (extension ?? string.Empty).Trim().TrimStart('.');
+        return normalized.Length > 0 && normalized.All(char.IsLetterOrDigit)
+            ? normalized.ToLowerInvariant()
+            : fallback;
+    }
+
     public static bool TryChangeExtension(
         string? path,
         string? extension,

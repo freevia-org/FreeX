@@ -1231,31 +1231,27 @@ public sealed class PresentationFileCommandSession
             // tracks (CurrentPath). Save-As to a different path -- or the first save of a
             // never-saved presentation, where CurrentPath is null -- has nothing to compare
             // against, so the comparer's null-safe Equals naturally turns the guard off.
-            var expectedLastWriteTimeUtc = PlatformPathIdentityComparer.Current.Equals(CurrentPath, path)
-                ? _currentFileSourceLastWriteTimeUtc
-                : null;
-
-            if (expectedLastWriteTimeUtc is { } expectedWriteTimeUtc &&
-                File.Exists(path) &&
-                File.GetLastWriteTimeUtc(path) != expectedWriteTimeUtc)
+            var expectedLastWriteTimeUtc = ExternalFileWriteConflictPolicy.SelectExpectedLastWriteTimeUtc(
+                CurrentPath,
+                path,
+                _currentFileSourceLastWriteTimeUtc);
+            var conflictPreparation = await ExternalFileWriteConflictPolicy.PrepareAsync(
+                path,
+                expectedLastWriteTimeUtc,
+                _confirmExternallyModifiedOverwriteAsync is null
+                    ? null
+                    : async (conflictingPath, token) =>
+                        await _confirmExternallyModifiedOverwriteAsync(conflictingPath, token),
+                cancellationToken);
+            if (!conflictPreparation.CanWrite)
             {
-                // Someone else wrote path since it was last observed (another FreeP instance, a
-                // sync client, a colleague on a shared path). Ask before clobbering their write; a
-                // null callback (host wired nothing) or a declined prompt both refuse the overwrite.
-                var observedWriteTimeUtc = File.GetLastWriteTimeUtc(path);
-                var confirmed = _confirmExternallyModifiedOverwriteAsync is not null &&
-                    await _confirmExternallyModifiedOverwriteAsync(path, cancellationToken);
-                if (!confirmed)
-                    return await CompleteAsync(ExternalWriteConflictResult(command), cancellationToken);
-
-                // The user accepted the write visible at the prompt. Advance the baseline to that
-                // accepted version so Save's own check-then-act guard (last line of defense
-                // against a race between the prompt and the write below) compares against what was
-                // just approved rather than the stale value that triggered this prompt.
-                expectedLastWriteTimeUtc = observedWriteTimeUtc;
+                return await CompleteAsync(ExternalWriteConflictResult(command), cancellationToken);
             }
 
-            var result = PresentationFilePersistenceWorkflow.Save(path, _getPresentation(), expectedLastWriteTimeUtc);
+            var result = PresentationFilePersistenceWorkflow.Save(
+                path,
+                _getPresentation(),
+                conflictPreparation.ExpectedLastWriteTimeUtc);
             _currentFileSourceLastWriteTimeUtc =
                 File.Exists(result.SavedPath) ? File.GetLastWriteTimeUtc(result.SavedPath) : null;
             _lifecycle.MarkSavedWithPath(result.SavedPath, result.SuppressRecentFiles);

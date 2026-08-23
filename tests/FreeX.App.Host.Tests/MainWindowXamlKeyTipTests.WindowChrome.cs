@@ -135,7 +135,7 @@ public sealed partial class MainWindowXamlKeyTipTests
 
             var styleText = style.ToString(SaveOptions.DisableFormatting);
             styleText.Should().Contain(
-                styleKey == "StatusBarZoomButtonStyle" ? "FreeXAccentBrush" : "FreeXTitleBarHoverBrush",
+                styleKey == "StatusBarZoomButtonStyle" ? "FreeXRibbonButtonHoverBrush" : "FreeXTitleBarHoverBrush",
                 $"{styleKey} should use its contrast-safe chrome hover color");
         }
 

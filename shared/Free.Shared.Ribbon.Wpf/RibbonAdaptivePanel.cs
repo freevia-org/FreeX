@@ -366,12 +366,13 @@ public sealed class RibbonAdaptivePanel : Panel
                 width += host.LayoutWidth - previousWidth;
             }
 
-            // A pure fallback plan can leave a large unused strip after lower-priority groups fold.
-            // Spend that space back on the highest-priority group one supported presentation at a time,
-            // matching Office's preference for a useful primary group over a row of overflow buttons.
+            // A fallback plan can leave enough room to restore a useful higher-priority presentation.
+            // Always recover from the pathological all-collapsed state; otherwise preserve the existing
+            // conservative threshold so ordinary mixed layouts do not churn during resize.
+            var recoverFromAllCollapsed = hosts.Count > 0 && hosts.All(host => host.Collapsed);
             foreach (var host in hosts.OrderByDescending(h => h.Priority))
             {
-                if (!HasSevereUnusedWidth(width, fitAvailable) ||
+                if ((!recoverFromAllCollapsed && !HasSevereUnusedWidth(width, fitAvailable)) ||
                     !host.TryGetNextExpandedState(fitAvailable, out var expandedState))
                 {
                     continue;
@@ -379,10 +380,9 @@ public sealed class RibbonAdaptivePanel : Panel
 
                 var previousState = host.LayoutState;
                 var previousWidth = GetChildLayoutWidth(host);
-                var remainingWidth = Math.Max(0, fitAvailable - (width - previousWidth));
                 host.LayoutState = expandedState;
-                host.Measure(new Size(remainingWidth, availableSize.Height));
-                host.LayoutWidth = host.DesiredSize.Width;
+                host.LayoutWidth = host.MeasureWidth(expandedState, infinite, fitAvailable);
+                host.Measure(new Size(host.LayoutWidth, availableSize.Height));
 
                 var expandedWidth = GetChildLayoutWidth(host);
                 if (width + expandedWidth - previousWidth <= fitAvailable)
@@ -394,6 +394,7 @@ public sealed class RibbonAdaptivePanel : Panel
                 host.LayoutState = previousState;
                 host.Measure(new Size(previousWidth, availableSize.Height));
                 host.LayoutWidth = previousWidth;
+                break;
             }
         }
 

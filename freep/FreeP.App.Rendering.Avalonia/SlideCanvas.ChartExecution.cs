@@ -28,12 +28,9 @@ public sealed partial class SlideCanvas
             var bounds = ToRect(frame.Bounds);
             var fill = ToBrush(frame.Fill);
             var stroke = frame.Stroke is { } frameStroke ? ToPen(frameStroke) : null;
-            if (frame.RoundedCorners)
+            if (frame.CornerRadius > 0)
             {
-                double radius = Math.Min(
-                    ChartRenderPlanner.RoundedChartCornerRadius,
-                    Math.Min(bounds.Width, bounds.Height) / 2.0);
-                dc.DrawRectangle(fill, stroke, bounds, radius, radius);
+                dc.DrawRectangle(fill, stroke, bounds, frame.CornerRadius, frame.CornerRadius);
             }
             else
             {
@@ -168,10 +165,10 @@ public sealed partial class SlideCanvas
                     ?? throw new InvalidOperationException("Pie sidewall geometry is required.")),
             _ => ToPieSliceGeometry(command.Primitive),
         };
-        var border = command.Pass == ChartPieSliceRenderPass.Body
-            ? new Pen(Brushes.White, 0.8)
-            : null;
-        dc.DrawGeometry(ToBrush(command.Fill), border, geometry);
+        dc.DrawGeometry(
+            ToBrush(command.Fill),
+            command.Stroke is { } stroke ? ToPen(stroke) : null,
+            geometry);
     }
 
     private static void DrawChartDoughnutSlice(

@@ -1,7 +1,5 @@
 using System.Windows;
-using System.Windows.Threading;
 using Free.Shared.AppServices;
-using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -15,7 +13,7 @@ namespace FreeP.App.Host;
 internal sealed partial class AutosaveCoordinator
 {
     private readonly PresentationFileCommandSession _file;
-    private readonly DispatcherTimer _timer;
+    private readonly WpfAutosaveTimer _timer;
     private readonly FreePAutosaveSession _session;
     private readonly Func<AutosaveRecoveryCandidate, bool>? _recoverInNewWindow;
 
@@ -37,8 +35,7 @@ internal sealed partial class AutosaveCoordinator
             ExecuteWithPresentation: writePresentation => writePresentation(getPresentation()));
         _session = sessionFactory?.Invoke(ports) ?? new FreePAutosaveSession(ports);
         _recoverInNewWindow = recoverInNewWindow;
-        _timer = new DispatcherTimer { Interval = FreePAutosaveSession.DefaultInterval };
-        _timer.Tick += (_, _) => _session.Snapshot();
+        _timer = new WpfAutosaveTimer(FreePAutosaveSession.DefaultInterval, _session.Snapshot);
     }
 
     public void Start() => _timer.Start();
@@ -76,37 +73,23 @@ internal sealed partial class AutosaveCoordinator
     public bool OfferRecovery(Window owner)
     {
         var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
-        try
-        {
-            var currentWindowHasExplicitDocument = _file.CurrentPath is not null;
-
-            return FreePRecoveryWorkflow.RunAsync(
-                    _session.PlanRecoveries(),
-                    FreePRecoveryPromptMode.Startup,
-                    offer => new ValueTask<bool>(DialogMessageHelper.AskYesNo(
-                        owner,
-                        offer.Prompt,
-                        text.Title)),
-                    (recovery, useCurrentWindow) =>
-                    {
-                        var recovered = _session.CompleteRecovery(
-                            recovery,
-                            accepted: true,
-                            useCurrentWindow && !currentWindowHasExplicitDocument
-                                ? _file.RestoreAutosaveSnapshot
-                                : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false,
-                            FreePRecoveryRestoreExceptionPolicy.QuarantineCandidate);
-                        return new ValueTask<bool>(recovered);
-                    })
-                .GetAwaiter()
-                .GetResult()
-                .AnyAccepted;
-        }
-        catch
-        {
-            // Recovery is best-effort; never block startup on it.
-            return false;
-        }
+        return WpfAutosaveRecoveryHost.OfferStartup(
+            owner,
+            new WpfAutosaveRecoveryMessages(
+                text.Title,
+                text.NoDocumentsMessage,
+                text.FailureMessageFormat),
+            () => _file.CurrentPath is not null,
+            _session.PlanRecoveries,
+            (recovery, remainingCount) =>
+                new FreePRecoveryOffer(recovery, remainingCount, FreePRecoveryPromptMode.Startup).Prompt,
+            (recovery, useCurrentWindow) => _session.CompleteRecovery(
+                recovery,
+                accepted: true,
+                useCurrentWindow
+                    ? _file.RestoreAutosaveSnapshot
+                    : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false,
+                FreePRecoveryRestoreExceptionPolicy.QuarantineCandidate));
     }
 
     /// <summary>
@@ -118,68 +101,36 @@ internal sealed partial class AutosaveCoordinator
     public bool RecoverUnsavedPresentations(Window owner)
     {
         var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
-        try
-        {
-            var recoveries = _session.PlanRecoveries();
-            if (recoveries.Count == 0)
+        return WpfAutosaveRecoveryHost.RecoverManually(
+            owner,
+            new WpfAutosaveRecoveryMessages(
+                text.Title,
+                text.NoDocumentsMessage,
+                text.FailureMessageFormat),
+            _session.PlanRecoveries,
+            (recovery, remainingCount) =>
+                new FreePRecoveryOffer(recovery, remainingCount, FreePRecoveryPromptMode.Manual).Prompt,
+            (recovery, useCurrentWindow) =>
             {
-                DialogMessageHelper.ShowInfo(owner,
-                    text.NoDocumentsMessage,
-                    text.Title);
-                return false;
-            }
+                // The manual command may target a window with unrelated unsaved edits. Run the
+                // product's asynchronous dirty gate before accepting the recovery candidate.
+                if (useCurrentWindow &&
+                    !_file.ConfirmCloseAllowedAsync("recovering an unsaved presentation")
+                        .GetAwaiter()
+                        .GetResult())
+                {
+                    return _session.CompleteRecovery(
+                        recovery,
+                        accepted: false,
+                        _file.RestoreAutosaveSnapshot);
+                }
 
-            return FreePRecoveryWorkflow.RunAsync(
-                    recoveries,
-                    FreePRecoveryPromptMode.Manual,
-                    offer => new ValueTask<bool>(DialogMessageHelper.ShowMessage(
-                        owner,
-                        offer.Prompt,
-                        text.Title,
-                        UserMessageButtons.OkCancel,
-                        UserMessageIcon.Question) == UserMessageResult.Ok),
-                    (recovery, useCurrentWindow) =>
-                    {
-                        // r146: the manual command can be invoked at any time, not just on a fresh
-                        // startup window -- unlike OfferRecovery, the "current window" it targets may
-                        // already hold unsaved edits. Route the destructive replace through the same
-                        // dirty gate every other destructive file command uses (New/Open/Close) so the
-                        // user is asked to save/discard/cancel BEFORE their own unsaved work is
-                        // overwritten by the recovered snapshot. Mirrors FreeW's
-                        // AutosaveCoordinator.RecoverUnsavedDocuments -> FileCommands.RecoverSnapshot,
-                        // which wraps the same restore through FileCommandWorkflow.Open's
-                        // ConfirmDiscardOrSave gate. A no-op when the current window isn't dirty.
-                        if (useCurrentWindow &&
-                            !_file.ConfirmCloseAllowedAsync("recovering an unsaved presentation")
-                                .GetAwaiter()
-                                .GetResult())
-                        {
-                            // Declined: leave the candidate on disk (accepted:false -> Keep
-                            // disposition) so the user can revisit it later, same as declining the
-                            // initial "Recover unsaved changes to X?" offer above.
-                            return new ValueTask<bool>(_session.CompleteRecovery(
-                                recovery,
-                                accepted: false,
-                                _file.RestoreAutosaveSnapshot));
-                        }
-
-                        return new ValueTask<bool>(_session.CompleteRecovery(
-                            recovery,
-                            accepted: true,
-                            useCurrentWindow
-                                ? _file.RestoreAutosaveSnapshot
-                                : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false));
-                    })
-                .GetAwaiter()
-                .GetResult()
-                .AnyRecovered;
-        }
-        catch (Exception ex)
-        {
-            DialogMessageHelper.ShowError(owner,
-                string.Format(System.Globalization.CultureInfo.CurrentCulture, text.FailureMessageFormat, ex.Message),
-                text.Title);
-            return false;
-        }
+                return _session.CompleteRecovery(
+                    recovery,
+                    accepted: true,
+                    useCurrentWindow
+                        ? _file.RestoreAutosaveSnapshot
+                        : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false);
+            });
     }
 }

@@ -1931,65 +1931,6 @@ public static class TableCellEditPlanner
             : Enumerable.Range(0, body.Paragraphs.Count).ToArray();
     }
 
-    private static bool GetRunFormat(Run run, TableCellTextFormatKind kind) => kind switch
-    {
-        TableCellTextFormatKind.Bold => run.Bold,
-        TableCellTextFormatKind.Italic => run.Italic,
-        TableCellTextFormatKind.Underline => run.Underline,
-        TableCellTextFormatKind.Strikethrough => run.Strikethrough,
-        TableCellTextFormatKind.Superscript => run.BaselineOffset > 0,
-        TableCellTextFormatKind.Subscript => run.BaselineOffset < 0,
-        _ => false,
-    };
-
-    private static void SetRunFormat(Run run, TableCellTextFormatKind kind, bool value)
-    {
-        switch (kind)
-        {
-            case TableCellTextFormatKind.Bold:
-                run.Bold = value;
-                run.BoldSet = true;
-                break;
-            case TableCellTextFormatKind.Italic:
-                run.Italic = value;
-                run.ItalicSet = true;
-                break;
-            case TableCellTextFormatKind.Underline:
-                run.Underline = value;
-                break;
-            case TableCellTextFormatKind.Strikethrough:
-                run.Strikethrough = value;
-                run.StrikeStyleToken = value ? "sngStrike" : null;
-                break;
-            case TableCellTextFormatKind.Superscript:
-                run.BaselineOffset = value ? 10000 : null;
-                break;
-            case TableCellTextFormatKind.Subscript:
-                run.BaselineOffset = value ? -10000 : null;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
-        }
-    }
-
-    private static void SetRunValueFormat(Run run, TableCellTextValueFormatKind kind, object? value)
-    {
-        switch (kind)
-        {
-            case TableCellTextValueFormatKind.FontFamily:
-                run.FontFamily = (string?)value;
-                break;
-            case TableCellTextValueFormatKind.FontSize:
-                run.FontSizePt = (double?)value;
-                break;
-            case TableCellTextValueFormatKind.Color:
-                run.Color = (ThemeAwareColor?)value;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
-        }
-    }
-
     private static (int Row, int Col, TableCell Cell)? NormalizeCell(
         TableShape table,
         int row,

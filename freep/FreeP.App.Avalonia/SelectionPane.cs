@@ -127,11 +127,6 @@ internal sealed partial class SelectionPane : Border
         ToolTip.SetTip(rename, PresentationSelectionPaneItemPlan.RenameToolTipText);
         void CommitName()
         {
-            // A focus round-trip with no typed edit must not commit anything: item.ShapeName can be
-            // a display-only fallback label (e.g. "Shape") for a shape whose real Name is still blank,
-            // so an unconditional commit here would persist that placeholder as the shape's real name.
-            if (rename.Text == item.ShapeName)
-                return;
             itemForm.CommitRename(rename.Text, restoreName => rename.Text = restoreName);
         }
         OnRenameCommitObserved(rename, CommitName);

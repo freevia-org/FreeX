@@ -57,7 +57,10 @@ public sealed class WpfPresentationFileCommandPortsSourceTests
         source.Should().NotContain("PresentationVideoFramePackageExecutor.BuildPackage(");
 
         session.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
-        session.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getPresentation(), expectedLastWriteTimeUtc)");
+        session.Should().Contain("ExternalFileWriteConflictPolicy.SelectExpectedLastWriteTimeUtc(");
+        session.Should().Contain("ExternalFileWriteConflictPolicy.PrepareAsync(");
+        session.Should().Contain("conflictPreparation.ExpectedLastWriteTimeUtc");
+        session.Should().Contain("PresentationFilePersistenceWorkflow.Save(");
         session.Should().Contain("PresentationFileDialogPlanner.BuildOpenDialogPlan()");
         session.Should().Contain("PresentationExportPlanner.BuildPdfExportDialogPlan(");
         session.Should().Contain("PresentationFilePdfExportExecutor.ExportRaster(");

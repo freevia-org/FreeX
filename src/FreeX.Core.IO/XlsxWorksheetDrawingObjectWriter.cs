@@ -189,26 +189,13 @@ internal static class XlsxWorksheetDrawingObjectWriter
         IReadOnlyDictionary<string, string>? chartDrawingPathsBySheet = null)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
+        var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive, rejectDuplicateRelationshipIds: true);
+        if (worksheetPathMap is null)
             return;
-
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
 
         // Every drawing part that any source sheet already owns is off-limits for fresh allocation; a sheet
@@ -224,14 +211,11 @@ internal static class XlsxWorksheetDrawingObjectWriter
         // source-preserved range.  Additionally, AllocateFreshPictureIndex bumps past any
         // freexPictureN files already present in the generated archive.
         var pictureIndex = AllocateFreshPictureIndex(archive, startPictureIndex);
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        foreach (var worksheet in worksheetPathMap.Worksheets)
         {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                string.IsNullOrWhiteSpace(relId) ||
-                !sheetsByName.TryGetValue(name, out var sheet) ||
-                !relTargets.TryGetValue(relId, out var worksheetPath))
+            var name = worksheet.SheetName;
+            var worksheetPath = worksheet.WorksheetPath;
+            if (!sheetsByName.TryGetValue(name, out var sheet))
             {
                 continue;
             }

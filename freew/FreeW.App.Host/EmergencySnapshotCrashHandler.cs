@@ -1,5 +1,5 @@
 using System.Windows;
-using System.Windows.Threading;
+using Free.Shared.Shell.Wpf;
 
 namespace FreeW.App.Host;
 
@@ -30,53 +30,10 @@ internal static class EmergencySnapshotCrashHandler
     /// </summary>
     public static void TryEmergencySnapshotAllWindows()
     {
-        try
+        WpfEmergencySnapshotFanOut.TrySnapshotAllWindows(window =>
         {
-            var dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher is null)
-                return;
-
-            if (dispatcher.CheckAccess())
-            {
-                TryEmergencySnapshotAllWindowsOnDispatcher();
-            }
-            else
-            {
-                dispatcher.Invoke(
-                    TryEmergencySnapshotAllWindowsOnDispatcher,
-                    DispatcherPriority.Send,
-                    System.Threading.CancellationToken.None,
-                    TimeSpan.FromSeconds(8));
-            }
-        }
-        catch
-        {
-            // Outer guard — crash handlers must never throw.
-        }
-    }
-
-    private static void TryEmergencySnapshotAllWindowsOnDispatcher()
-    {
-        try
-        {
-            foreach (Window window in Application.Current.Windows)
-            {
-                if (window is not MainWindow mainWindow)
-                    continue;
-
-                try
-                {
-                    mainWindow.AutosaveCoordinatorForCrashHandler?.TryEmergencySnapshot();
-                }
-                catch
-                {
-                    // A crash handler must never throw.
-                }
-            }
-        }
-        catch
-        {
-            // Outer guard — crash handlers must never throw.
-        }
+            if (window is MainWindow mainWindow)
+                mainWindow.AutosaveCoordinatorForCrashHandler?.TryEmergencySnapshot();
+        });
     }
 }

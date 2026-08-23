@@ -18,8 +18,7 @@ public sealed class CommonDialogChromeParityTests
     private static readonly string[] SharedChromeDialogFiles =
     [
         "HyperlinkDialog.cs",
-        "SectionZoomDialog.cs",
-        "SlideZoomDialog.cs",
+        "SingleTargetZoomDialog.cs",
         "SummaryZoomDialog.cs",
         "SummaryZoomCoverImageTargetDialog.cs",
         "ZoomObjectPropertiesDialog.cs",

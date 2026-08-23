@@ -145,59 +145,7 @@ public static partial class BuiltInFunctions
         var cell = range.SheetName is null
             ? ctx.TryGetCell(row, col)
             : ctx.TryGetCell(range.SheetName, row, col);
-        return IsSubtotalOrAggregateFormula(cell?.FormulaText);
-    }
-
-    private static bool IsSubtotalOrAggregateFormula(string? formulaText)
-    {
-        if (string.IsNullOrWhiteSpace(formulaText)) return false;
-
-        // Excel's anti-double-counting rule excludes a cell whose formula contains a nested
-        // SUBTOTAL/AGGREGATE call ANYWHERE in the expression, not just when the whole formula is
-        // literally that call (e.g. "=1+SUBTOTAL(9,A1:A1)" must be recognized as nested too).
-        return ContainsFunctionCall(formulaText, "SUBTOTAL")
-            || ContainsFunctionCall(formulaText, "AGGREGATE");
-    }
-
-    private static bool ContainsFunctionCall(string text, string functionName)
-    {
-        // Scan the raw formula source character-by-character, tracking whether the cursor is
-        // inside a "..." string literal (with Excel's "" doubled-quote escape) so that a
-        // function-name-shaped substring that only occurs INSIDE a quoted string constant
-        // (e.g. ="SUBTOTAL("&"9,B1:B2)") is never mistaken for a real nested call.
-        bool inString = false;
-        for (int i = 0; i < text.Length; i++)
-        {
-            var ch = text[i];
-            if (ch == '"')
-            {
-                if (inString && i + 1 < text.Length && text[i + 1] == '"')
-                {
-                    i++; // escaped "" inside a string literal - stays inside the literal
-                    continue;
-                }
-                inString = !inString;
-                continue;
-            }
-            if (inString) continue;
-
-            if (i + functionName.Length > text.Length) continue;
-            if (string.Compare(text, i, functionName, 0, functionName.Length, StringComparison.OrdinalIgnoreCase) != 0)
-                continue;
-
-            // Reject matches that are part of a longer identifier (e.g. "MYSUBTOTAL(" must not
-            // match "SUBTOTAL(") by requiring the preceding character not be an identifier character.
-            var precededByIdentifierChar = i > 0 &&
-                (char.IsLetterOrDigit(text[i - 1]) || text[i - 1] == '_' || text[i - 1] == '.');
-            if (!precededByIdentifierChar)
-            {
-                var cursor = i + functionName.Length;
-                while (cursor < text.Length && char.IsWhiteSpace(text[cursor])) cursor++;
-                if (cursor < text.Length && text[cursor] == '(') return true;
-            }
-        }
-
-        return false;
+        return FormulaFunctionCallScanner.ContainsSubtotalOrAggregateCall(cell?.FormulaText);
     }
 
     private static bool IsSubtotalStatisticalFunction(int baseFunc)

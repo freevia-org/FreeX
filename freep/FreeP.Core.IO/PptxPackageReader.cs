@@ -93,7 +93,14 @@ public static class PptxPackageReader
 
         // Copy to MemoryStream so ZipArchive can seek.
         var ms = new MemoryStream();
-        CopyToMemoryStreamWithLimit(stream, ms, WorkbookOpenSizeGuard.DefaultMaxFileBytes);
+        WorkbookOpenSizeGuard.CopyToWithLimit(
+            stream,
+            ms,
+            WorkbookOpenSizeGuard.DefaultMaxFileBytes,
+            limit => new WorkbookTooLargeException(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"The file exceeds the {limit:N0} byte open limit.")));
         ms.Position = 0;
 
         // Sniff before handing the buffer to ZipArchive, which otherwise throws an opaque
@@ -151,37 +158,6 @@ public static class PptxPackageReader
         throw new InvalidDataException(
             "The file doesn't look like a valid .pptx presentation. It may have been renamed from a " +
             "different file type, or it may be corrupt.");
-    }
-
-    /// <summary>
-    /// Copies <paramref name="source"/> into <paramref name="destination"/> in bounded chunks, throwing
-    /// <see cref="WorkbookTooLargeException"/> the moment the copy would exceed <paramref name="maxFileBytes"/>
-    /// instead of first buffering the whole (possibly multi-gigabyte or unbounded) input. This is the same
-    /// bound-during-copy shape as <c>XlsxFileAdapter.CopyToMemoryStreamWithLimit</c>.
-    /// </summary>
-    private static void CopyToMemoryStreamWithLimit(Stream source, MemoryStream destination, long maxFileBytes)
-    {
-        var buffer = new byte[81920];
-        while (true)
-        {
-            var remainingAllowance = maxFileBytes - destination.Length;
-            var maxRead = remainingAllowance >= buffer.Length
-                ? buffer.Length
-                : (int)Math.Max(1, remainingAllowance + 1);
-            var read = source.Read(buffer, 0, maxRead);
-            if (read == 0)
-                return;
-
-            if (read > remainingAllowance)
-            {
-                throw new WorkbookTooLargeException(
-                    string.Create(
-                        CultureInfo.InvariantCulture,
-                        $"The file exceeds the {maxFileBytes:N0} byte open limit."));
-            }
-
-            destination.Write(buffer, 0, read);
-        }
     }
 
     private static PresentationPackageKind DetectPackageKind(PptxPackageSnapshot snapshot)
@@ -628,7 +604,7 @@ public static class PptxPackageReader
             }
 
             var packagePath = element.Attribute("packagePath")?.Value ?? string.Empty;
-            var normalizedPackagePath = NormalizeZipPath(packagePath);
+            var normalizedPackagePath = ToZipEntryPath(packagePath);
             var payloadBytes = string.IsNullOrWhiteSpace(normalizedPackagePath)
                 ? null
                 : ReadEntryBytes(archive, normalizedPackagePath);
@@ -647,9 +623,6 @@ public static class PptxPackageReader
                 payloadBytes));
         }
     }
-
-    private static string NormalizeZipPath(string packagePath) =>
-        packagePath.Replace('\\', '/').TrimStart('/');
 
     private static PptxPackageSnapshot CapturePackageSnapshot(ZipArchive archive)
     {
@@ -2150,340 +2123,7 @@ public static class PptxPackageReader
         var properties = graphicFrame.Descendants()
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
                 StringComparison.OrdinalIgnoreCase));
-        if (properties is null)
-            return null;
-
-        var value = new ZoomObjectProperties(
-            ParseNullableBoolean(properties.Attribute("returnToParent")?.Value),
-            properties.Attribute("imageType")?.Value,
-            properties.Attribute("transitionDur")?.Value,
-            ParseNullableBoolean(properties.Attribute("showBg")?.Value),
-            ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
-                element.Name.LocalName == "srcRect")?.Attribute("l")?.Value),
-            ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
-                element.Name.LocalName == "srcRect")?.Attribute("t")?.Value),
-            ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
-                element.Name.LocalName == "srcRect")?.Attribute("r")?.Value),
-            ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
-                element.Name.LocalName == "srcRect")?.Attribute("b")?.Value),
-            ReadZoomFrameBorderColor(properties),
-            ReadZoomFrameBorderWidth(properties),
-            ReadZoomFrameBorderDash(properties),
-            ReadZoomFrameGeometry(properties),
-            ReadZoomFrameBorderGradient(properties),
-            ReadZoomFrameBorderPattern(properties),
-            ReadZoomFrameBorderNoFill(properties),
-            ReadZoomFrameBorderThemeColor(properties),
-            ReadZoomFrameBorderShadow(properties),
-            ReadZoomFrameBorderShadowEnabled(properties),
-            ReadZoomFrameBorderGlow(properties),
-            ReadZoomFrameBorderGlowEnabled(properties),
-            ReadZoomFrameBorderSoftEdge(properties),
-            ReadZoomFrameBorderSoftEdgeEnabled(properties),
-            ReadZoomFrameBorderReflection(properties),
-            ReadZoomFrameBorderReflectionEnabled(properties));
-        return value.IsEmpty ? null : value;
-    }
-
-    private static ZoomFrameBorderShadow? ReadZoomFrameBorderShadow(XElement properties)
-    {
-        var shadow = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase));
-        var color = shadow?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
-        if (color is not { Length: 6 } || !color.All(Uri.IsHexDigit))
-            return null;
-
-        var alpha = ParseNullableInt(shadow?.Descendants().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "alpha", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("val")?.Value) ?? 50000;
-        var blur = ParseNullableLong(shadow?.Attribute("blurRad")?.Value) ?? 0;
-        var distance = ParseNullableLong(shadow?.Attribute("dist")?.Value) ?? 0;
-        var direction = ParseNullableInt(shadow?.Attribute("dir")?.Value) ?? 0;
-        if (alpha is < 0 or > 100000 || blur < 0 || distance < 0
-            || direction is < 0 or > 21600000)
-            return null;
-
-        return new ZoomFrameBorderShadow(color.ToUpperInvariant(), alpha, blur, distance, direction);
-    }
-
-    private static bool? ReadZoomFrameBorderShadowEnabled(XElement properties)
-    {
-        var shapeProperties = properties.Elements().FirstOrDefault(element =>
-            string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase));
-        var effectList = shapeProperties?.Elements().FirstOrDefault(element =>
-            string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
-        return effectList?.Elements().Any(element =>
-            string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase)) == true
-            ? true
-            : null;
-    }
-
-    private static ZoomFrameBorderGlow? ReadZoomFrameBorderGlow(XElement properties)
-    {
-        var glow = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "glow", StringComparison.OrdinalIgnoreCase));
-        var color = glow?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
-        if (color is not { Length: 6 } || !color.All(Uri.IsHexDigit))
-            return null;
-
-        var alpha = ParseNullableInt(glow?.Descendants().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "alpha", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("val")?.Value) ?? 50000;
-        var radius = ParseNullableLong(glow?.Attribute("rad")?.Value) ?? 0;
-        if (alpha is < 0 or > 100000 || radius < 0)
-            return null;
-
-        return new ZoomFrameBorderGlow(color.ToUpperInvariant(), alpha, radius);
-    }
-
-    private static bool? ReadZoomFrameBorderGlowEnabled(XElement properties)
-    {
-        var effectList = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
-        return effectList?.Elements().Any(element =>
-            string.Equals(element.Name.LocalName, "glow", StringComparison.OrdinalIgnoreCase)) == true
-            ? true
-            : null;
-    }
-
-    private static ZoomFrameBorderSoftEdge? ReadZoomFrameBorderSoftEdge(XElement properties)
-    {
-        var softEdge = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "softEdge", StringComparison.OrdinalIgnoreCase));
-        var radius = ParseNullableLong(softEdge?.Attribute("rad")?.Value);
-        return radius is >= 0 ? new ZoomFrameBorderSoftEdge(radius.Value) : null;
-    }
-
-    private static bool? ReadZoomFrameBorderSoftEdgeEnabled(XElement properties)
-    {
-        var effectList = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
-        return effectList?.Elements().Any(element =>
-            string.Equals(element.Name.LocalName, "softEdge", StringComparison.OrdinalIgnoreCase)) == true
-            ? true
-            : null;
-    }
-
-    private static ZoomFrameBorderReflection? ReadZoomFrameBorderReflection(XElement properties)
-    {
-        var reflection = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "reflection", StringComparison.OrdinalIgnoreCase));
-        if (reflection is null)
-            return null;
-
-        var alpha = ParseNullableInt(reflection.Attribute("stA")?.Value) ?? 50000;
-        var blur = ParseNullableLong(reflection.Attribute("blurRad")?.Value) ?? 0;
-        var distance = ParseNullableLong(reflection.Attribute("dist")?.Value) ?? 0;
-        var direction = ParseNullableInt(reflection.Attribute("dir")?.Value) ?? 5400000;
-        var scaleY = ParseNullableInt(reflection.Attribute("sy")?.Value) ?? -100000;
-        var endPosition = ParseNullableInt(reflection.Attribute("endPos")?.Value) ?? 100000;
-        if (alpha is < 0 or > 100000 || blur < 0 || distance < 0
-            || direction is < 0 or > 21600000
-            || scaleY is < -100000 or > 100000
-            || endPosition is < 0 or > 100000)
-            return null;
-
-        return new ZoomFrameBorderReflection(alpha, blur, distance, direction, scaleY, endPosition);
-    }
-
-    private static bool? ReadZoomFrameBorderReflectionEnabled(XElement properties)
-    {
-        var effectList = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
-        return effectList?.Elements().Any(element =>
-            string.Equals(element.Name.LocalName, "reflection", StringComparison.OrdinalIgnoreCase)) == true
-            ? true
-            : null;
-    }
-
-    private static string? ReadZoomFrameGeometry(XElement properties)
-    {
-        var geometry = properties.Descendants().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "prstGeom", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("prst")?.Value?.Trim();
-        return string.Equals(geometry, "rect", StringComparison.OrdinalIgnoreCase)
-            ? null
-            : geometry;
-    }
-
-    private static string? ReadZoomFrameBorderColor(XElement properties)
-    {
-        var shapeProperties = properties.Elements().FirstOrDefault(element =>
-            string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase));
-        var line = shapeProperties?.Elements().FirstOrDefault(element =>
-            string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
-        var solidFill = line?.Elements().FirstOrDefault(element =>
-            string.Equals(element.Name.LocalName, "solidFill", StringComparison.OrdinalIgnoreCase));
-        var color = solidFill?.Elements().FirstOrDefault(element =>
-            string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("val")?.Value;
-        if (color is null)
-            return null;
-
-        var value = color.Trim().TrimStart('#');
-        return value.Length == 6 && value.All(Uri.IsHexDigit)
-            ? value.ToUpperInvariant()
-            : null;
-    }
-
-    private static int? ReadZoomFrameBorderWidth(XElement properties)
-    {
-        var line = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
-        return int.TryParse(line?.Attribute("w")?.Value, out var width) && width > 0
-            ? width
-            : null;
-    }
-
-    private static OutlineDash? ReadZoomFrameBorderDash(XElement properties)
-    {
-        var line = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
-        var token = line?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "prstDash", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("val")?.Value;
-        return string.IsNullOrWhiteSpace(token)
-            ? null
-            : token.Trim().ToLowerInvariant() switch
-            {
-                "solid" => OutlineDash.Solid,
-                "dash" => OutlineDash.Dash,
-                "dot" => OutlineDash.Dot,
-                "dashdot" => OutlineDash.DashDot,
-                "lgdash" => OutlineDash.LongDash,
-                "lgdashdot" => OutlineDash.LongDashDot,
-                "lgdashdotdot" => OutlineDash.LongDashDotDot,
-                "sysdash" => OutlineDash.SystemDash,
-                "sysdot" => OutlineDash.SystemDot,
-                "sysdashdot" => OutlineDash.SystemDashDot,
-                _ => null,
-            };
-    }
-
-    private static ZoomFrameBorderGradient? ReadZoomFrameBorderGradient(XElement properties)
-    {
-        var line = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
-        var gradient = line?.Elements().FirstOrDefault(element =>
-            string.Equals(element.Name.LocalName, "gradFill", StringComparison.OrdinalIgnoreCase));
-        var stops = gradient?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "gsLst", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().Where(element =>
-                string.Equals(element.Name.LocalName, "gs", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-        if (stops is not { Length: >= 2 })
-            return null;
-
-        var start = ReadZoomRgbStop(stops[0]);
-        var end = ReadZoomRgbStop(stops[^1]);
-        var angleText = gradient?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "lin", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("ang")?.Value;
-        var angle = string.IsNullOrWhiteSpace(angleText)
-            ? 0
-            : int.TryParse(angleText, out var parsedAngle) ? parsedAngle : -1;
-        return start is not null && end is not null
-            && angle is >= 0 and <= 21_600_000
-            ? new ZoomFrameBorderGradient(start, end, angle)
-            : null;
-    }
-
-    private static ZoomFrameBorderPattern? ReadZoomFrameBorderPattern(XElement properties)
-    {
-        var line = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
-        var pattern = line?.Elements().FirstOrDefault(element =>
-            string.Equals(element.Name.LocalName, "pattFill", StringComparison.OrdinalIgnoreCase));
-        var preset = ZoomFrameBorderPatternCatalog.Normalize(pattern?.Attribute("prst")?.Value);
-        var foreground = ReadZoomPatternColor(pattern?.Elements().FirstOrDefault(element =>
-            string.Equals(element.Name.LocalName, "fgClr", StringComparison.OrdinalIgnoreCase)));
-        var background = ReadZoomPatternColor(pattern?.Elements().FirstOrDefault(element =>
-            string.Equals(element.Name.LocalName, "bgClr", StringComparison.OrdinalIgnoreCase)));
-        return preset is { Length: > 0 }
-            && foreground is not null
-            && background is not null
-            ? new ZoomFrameBorderPattern(preset, foreground, background)
-            : null;
-    }
-
-    private static bool? ReadZoomFrameBorderNoFill(XElement properties)
-    {
-        var line = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
-        return line?.Elements().Any(element =>
-            string.Equals(element.Name.LocalName, "noFill", StringComparison.OrdinalIgnoreCase)) == true
-            ? true
-            : null;
-    }
-
-    private static ThemeColorSlot? ReadZoomFrameBorderThemeColor(XElement properties)
-    {
-        var line = properties.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
-        var value = line?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "solidFill", StringComparison.OrdinalIgnoreCase))
-            ?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "schemeClr", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("val")?.Value;
-        return ThemeColorSlotMapper.TryMapRole(value, out var slot) ? slot : null;
-    }
-
-    private static string? ReadZoomPatternColor(XElement? color)
-    {
-        var value = color?.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
-        return value is { Length: 6 } && value.All(Uri.IsHexDigit)
-            ? value.ToUpperInvariant()
-            : null;
-    }
-
-    private static string? ReadZoomRgbStop(XElement stop)
-    {
-        var value = stop.Elements().FirstOrDefault(element =>
-                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
-        return value is { Length: 6 } && value.All(Uri.IsHexDigit)
-            ? value.ToUpperInvariant()
-            : null;
+        return properties is null ? null : PptxZoomObjectPropertiesXmlReader.Read(properties);
     }
 
     private static IEnumerable<SummaryZoomTarget> ReadSummaryZoomTargets(XElement graphicFrame)
@@ -3612,7 +3252,7 @@ public static class PptxPackageReader
         if (data is null || !IsPictureNodeLayout(data.LayoutUniqueId))
             return;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         if (nodes.Count == 0)
         {
             data.IsLiveLayoutSupported = false;
@@ -3684,21 +3324,6 @@ public static class PptxPackageReader
         data.IsLiveLayoutSupported = true;
     }
 
-    private static List<SmartArtNode> FlattenSmartArtNodes(SmartArtData data)
-    {
-        var nodes = new List<SmartArtNode>();
-        foreach (var root in data.Nodes)
-            Collect(root);
-        return nodes;
-
-        void Collect(SmartArtNode node)
-        {
-            nodes.Add(node);
-            foreach (var child in node.Children)
-                Collect(child);
-        }
-    }
-
     private static bool IsGroupedListLayout(string uniqueId)
     {
         if (string.IsNullOrWhiteSpace(uniqueId))
@@ -3764,7 +3389,7 @@ public static class PptxPackageReader
 
     private static bool CanUseSimpleNodeCache(SmartArtShape smart, SmartArtData data)
     {
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         if (nodes.Count == 0 || smart.FallbackShapes.Count != nodes.Count)
             return false;
 
@@ -3788,7 +3413,7 @@ public static class PptxPackageReader
             || data.Nodes.Count < 2)
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var visibleNodes = nodes.Where(node => !string.IsNullOrWhiteSpace(node.Text)).ToList();
         var groups = data.Nodes
             .Where(node => !string.IsNullOrWhiteSpace(node.Text))
@@ -3866,7 +3491,7 @@ public static class PptxPackageReader
         if (!IsHierarchy3Layout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         if (nodes.Count == 0)
             return false;
 
@@ -3930,7 +3555,7 @@ public static class PptxPackageReader
         if (!IsCycle2Layout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         if (nodes.Count is < 2 or > 7)
             return false;
 
@@ -3971,7 +3596,7 @@ public static class PptxPackageReader
         if (!IsBasicRelationshipLayout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         if (nodes.Count is < 2 or > 3 || smart.FallbackShapes.Count != nodes.Count)
             return false;
 
@@ -4033,7 +3658,7 @@ public static class PptxPackageReader
         if (!IsGridMatrixLayout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (nodes.Count is < 1 or > 4 || shapes.Count != nodes.Count)
             return false;
@@ -4102,7 +3727,7 @@ public static class PptxPackageReader
         if (!IsIncreasingCircleProcessLayout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (nodes.Count != 4 || shapes.Count != 7)
             return false;
@@ -4284,7 +3909,7 @@ public static class PptxPackageReader
             || data.Nodes.Count != 4)
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (nodes.Count != 4
             || data.Nodes.Any(node => node.Level != 0 || node.Children.Count != 0)
@@ -4323,7 +3948,7 @@ public static class PptxPackageReader
         if (!IsProcess1Layout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (data.Nodes.Count != 1
             || nodes.Count != 5
@@ -4385,7 +4010,7 @@ public static class PptxPackageReader
         if (!IsDefaultListLayout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (nodes.Count != 5 || shapes.Count != 5)
             return false;
@@ -4466,7 +4091,7 @@ public static class PptxPackageReader
         if (!IsList1Layout(data.LayoutUniqueId))
             return false;
 
-        var nodes = FlattenSmartArtNodes(data);
+        var nodes = SmartArtNodeTraversal.FlattenPreorder(data);
         var shapes = smart.FallbackShapes;
         if (data.Nodes.Count != 4
             || nodes.Count != 4
@@ -6816,14 +6441,10 @@ public static class PptxPackageReader
         var value = element.Attribute(M + "val")?.Value
             ?? element.Attribute("val")?.Value
             ?? element.Value;
-        if (string.IsNullOrWhiteSpace(value))
-            return true;
-
-        return value.Trim().ToLowerInvariant() switch
-        {
-            "0" or "false" or "off" => false,
-            _ => true
-        };
+        return OoxmlOnOffLexical.Parse(
+            value?.Trim().ToLowerInvariant(),
+            absentDefault: true,
+            invalidDefault: true);
     }
 
     private static Run ReadFieldRun(XElement fldEl, PresentationColorScheme scheme)
@@ -7824,8 +7445,8 @@ public static class PptxPackageReader
             : (null, false);
     }
 
-    private static bool ReadBoolean(string? value)
-        => value is "1" or "true" or "on";
+    private static bool ReadBoolean(string? value) =>
+        OoxmlOnOffLexical.Parse(value, absentDefault: false, invalidDefault: false);
 
     private static int? ReadTimingPercentage(string? value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)

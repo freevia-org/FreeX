@@ -178,10 +178,26 @@ public class InCanvasRichTextEditBuffer
         return true;
     }
 
-    private bool TryGetInlineTableAt(int logicalPosition, out TableShape? table)
+    private bool TryGetInlineTableAt(int logicalPosition, out TableShape? table) =>
+        FindInlineTableAt(_body, logicalPosition, out table);
+
+    /// <summary>
+    /// Finds the inline table marker covering a logical text position. The returned table is the
+    /// live model instance so callers can apply already-planned mutations without another walk.
+    /// </summary>
+    public static bool FindInlineTableAt(
+        TextBody? body,
+        int logicalPosition,
+        out TableShape? table)
     {
+        if (body is null)
+        {
+            table = null;
+            return false;
+        }
+
         int position = 0;
-        foreach (var paragraph in _body.Paragraphs)
+        foreach (var paragraph in body.Paragraphs)
         {
             foreach (var run in paragraph.Runs)
             {

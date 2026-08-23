@@ -17,8 +17,9 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         fieldsSource.Should().NotContain("_lastRibbonAdaptiveAppliedStates");
         ribbonSource.Should().Contain("panel.InvalidateMeasure();");
         ribbonSource.Should().NotContain("RibbonAdaptiveLayoutEngine");
-        panelSource.Should().Contain("host.FullWidth = host.MeasureFullWidth(infinite);");
-        panelSource.Should().Contain("RibbonAdaptiveCollapsePolicy.Plan(");
-        panelSource.Should().Contain("hosts[index].Collapsed = decisions[index].IsCollapsed;");
+        panelSource.Should().Contain("host.FullWidth = host.MeasureWidth(RibbonAdaptiveGroupState.Full, infinite, fitAvailable);");
+        panelSource.Should().Contain("RibbonAdaptiveLayoutPlanner.Plan(");
+        panelSource.Should().Contain("orderedHosts[index].Host.LayoutState = orderedStates[index];");
+        panelSource.Should().NotContain("MeasureFullWidth(");
     }
 }

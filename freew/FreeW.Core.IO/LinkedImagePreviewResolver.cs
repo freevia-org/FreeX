@@ -102,54 +102,12 @@ public static class LinkedImagePreviewResolver
                 yield return image;
     }
 
-    private static IEnumerable<Paragraph> EnumerateStoryParagraphs(TextDocument document)
-    {
-        var seen = new HashSet<Paragraph>(ReferenceEqualityComparer.Instance);
-        foreach (var paragraph in document.Blocks.SelectMany(EnumerateParagraphs))
-            if (seen.Add(paragraph))
-                yield return paragraph;
-
-        foreach (var section in document.Sections)
-        {
-            foreach (var content in new[]
-                     {
-                         section.HeadersFooters.Header, section.HeadersFooters.Footer,
-                         section.HeadersFooters.EvenHeader, section.HeadersFooters.EvenFooter,
-                         section.HeadersFooters.FirstHeader, section.HeadersFooters.FirstFooter
-                     })
-            {
-                if (content is null)
-                    continue;
-                foreach (var paragraph in content.Paragraphs)
-                    if (seen.Add(paragraph))
-                        yield return paragraph;
-            }
-        }
-
-        foreach (var paragraph in document.Footnotes.Values.SelectMany(note => note.Content)
-                     .Concat(document.Endnotes.Values.SelectMany(note => note.Content))
-                     .Concat(document.Comments.Values.SelectMany(comment => comment.ThreadInOrder()).SelectMany(comment => comment.Content)))
-        {
-            if (seen.Add(paragraph))
-                yield return paragraph;
-        }
-    }
-
-    private static IEnumerable<Paragraph> EnumerateParagraphs(Block block)
-    {
-        if (block is Paragraph paragraph)
-        {
-            yield return paragraph;
-            yield break;
-        }
-
-        if (block is not Table table)
-            yield break;
-        foreach (var row in table.Rows)
-            foreach (var cell in row.Cells)
-                foreach (var cellParagraph in cell.Paragraphs)
-                    yield return cellParagraph;
-    }
+    private static IEnumerable<Paragraph> EnumerateStoryParagraphs(TextDocument document) =>
+        TextDocumentStoryTraversal.EnumerateParagraphs(
+            document,
+            document.Comments.Values
+                .SelectMany(comment => comment.ThreadInOrder())
+                .SelectMany(comment => comment.Content));
 
     private static IEnumerable<InlineImage> EnumerateParagraphImages(Paragraph paragraph)
     {

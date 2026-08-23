@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -42,17 +43,6 @@ public static class OleActivationService
     private static readonly ConcurrentDictionary<int, OleActivationSession> ActiveSessions = new();
     private static int _nextSessionId;
 
-    private static readonly IReadOnlyDictionary<string, string> ContentTypeExtensions =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"] = "xlsx",
-            ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"] = "docx",
-            ["application/vnd.openxmlformats-officedocument.presentationml.presentation"] = "pptx",
-            ["application/vnd.ms-excel"] = "xls",
-            ["application/msword"] = "doc",
-            ["application/vnd.ms-powerpoint"] = "ppt",
-        };
-
     /// <summary>
     /// Activates a slide-level embedded object. <paramref name="onPayloadUpdated"/> mirrors the
     /// <see cref="TryActivate(InlineOleObjectInfo?, Action{byte[]}?)"/> overload's hook: it fires
@@ -71,7 +61,7 @@ public static class OleActivationService
     /// launch through the public <see cref="TryActivate(OleObjectInfo?, Action{byte[]}?)"/> entry
     /// point (that overload always uses the real launcher/temp-file store).
     /// </summary>
-    internal static Action<byte[]> BuildOleObjectUpdateCallback(OleObjectInfo? oleObject, Action<byte[]>? onPayloadUpdated) =>
+    public static Action<byte[]> BuildOleObjectUpdateCallback(OleObjectInfo? oleObject, Action<byte[]>? onPayloadUpdated = null) =>
         bytes =>
         {
             if (oleObject is null) return;
@@ -86,9 +76,10 @@ public static class OleActivationService
 
     /// <summary>
     /// Builds the payload-commit callback for an inline embedded object. Mirrors
-    /// <see cref="BuildOleObjectUpdateCallback"/> -- see that method for why this is extracted.
+    /// <see cref="BuildOleObjectUpdateCallback"/> and is shared by external activation and the
+    /// native renderer hosts so payload assignment and notification ordering cannot drift.
     /// </summary>
-    internal static Action<byte[]> BuildInlineOleObjectUpdateCallback(InlineOleObjectInfo? inlineObject, Action<byte[]>? onPayloadUpdated) =>
+    public static Action<byte[]> BuildInlineOleObjectUpdateCallback(InlineOleObjectInfo? inlineObject, Action<byte[]>? onPayloadUpdated = null) =>
         bytes =>
         {
             if (inlineObject is null) return;
@@ -183,14 +174,14 @@ public static class OleActivationService
 
     public static string ResolveExtension(OleObjectInfo oleObject)
     {
-        var extension = NormalizeExtension(oleObject.EmbeddedExtension);
+        var extension = FilePathPolicy.NormalizeSafeExtension(oleObject.EmbeddedExtension);
         return extension != "bin" ? extension :
-            ContentTypeExtensions.TryGetValue(oleObject.EmbeddedContentType, out var value) ? value : "bin";
+            OpcMediaTypes.TryGetOfficeEmbeddedObjectExtension(oleObject.EmbeddedContentType, out var value) ? value : "bin";
     }
 
     public static string ResolveExtension(InlineOleObjectInfo inlineObject)
     {
-        var extension = NormalizeExtension(FilePathPolicy.GetExtensionOrEmpty(inlineObject.FileName));
+        var extension = FilePathPolicy.NormalizeSafeExtension(FilePathPolicy.GetExtensionOrEmpty(inlineObject.FileName));
         if (extension != "bin")
             return extension;
 
@@ -200,13 +191,6 @@ public static class OleActivationService
             "word.document.12" => "docx", "word.document.8" => "doc",
             "powerpoint.show.12" => "pptx", "powerpoint.show.8" => "ppt", _ => "bin"
         };
-    }
-
-    private static string NormalizeExtension(string? extension)
-    {
-        var candidate = (extension ?? string.Empty).Trim().TrimStart('.');
-        return candidate.Length > 0 && candidate.All(char.IsLetterOrDigit)
-            ? candidate.ToLowerInvariant() : "bin";
     }
 
     private static bool IsBlockedExtension(string extension) => extension.ToLowerInvariant() switch

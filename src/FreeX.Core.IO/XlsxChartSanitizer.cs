@@ -9,19 +9,7 @@ internal static class XlsxChartSanitizer
         var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);
         ChartSeriesIndexSanitizer.SanitizeSecondaryAxisAndComboLineIndexes(chart, seriesCount);
 
-        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
-        {
-            chart.ShowLinearTrendline = false;
-            chart.TrendlineType = ChartTrendlineType.Linear;
-            chart.TrendlinePeriod = 2;
-            chart.TrendlineOrder = 2;
-            chart.ShowTrendlineEquation = false;
-            chart.ShowTrendlineRSquared = false;
-            chart.TrendlineColor = null;
-            chart.TrendlineThemeColor = null;
-            chart.TrendlineThickness = 1.5;
-            chart.TrendlineDashStyle = ChartLineDashStyle.Dash;
-        }
+        ChartTrendlineSupportPolicy.NormalizeUnsupported(chart);
         if (!ChartTypeSupport.SupportsSeriesLines(chart.Type))
         {
             chart.ShowSeriesLines = false;

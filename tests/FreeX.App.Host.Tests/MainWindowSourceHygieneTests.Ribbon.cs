@@ -1476,7 +1476,8 @@ public sealed partial class MainWindowSourceHygieneTests
         hostSource.Should().Contain("GetActiveDeclarativeRibbonPanel()");
         rendererSource.Should().Contain("var panel = new RibbonAdaptivePanel");
         rendererSource.Should().Contain("panel.Children.Add(new RibbonGroupHost(");
-        panelSource.Should().Contain("RibbonAdaptiveCollapsePolicy.Plan(");
+        panelSource.Should().Contain("RibbonAdaptiveLayoutPlanner.Plan(");
+        panelSource.Should().Contain("orderedHosts[index].Host.LayoutState = orderedStates[index];");
         panelSource.Should().Contain("private static double ResolveMeasuredAvailableWidth(");
     }
 

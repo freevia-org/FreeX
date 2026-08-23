@@ -1,7 +1,6 @@
 using FreeX.Core.Model;
 using System.IO.Compression;
 using System.Xml.Linq;
-using System.Xml;
 
 namespace FreeX.Core.IO;
 
@@ -24,29 +23,17 @@ internal static class XlsxStructuredTableMetadataReader
     {
         try
         {
-            var workbookEntry = archive.GetEntry("xl/workbook.xml");
-            var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-            if (workbookEntry is null || workbookRelsEntry is null)
+            var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive, rejectDuplicateRelationshipIds: true);
+            if (worksheetPathMap is null)
                 return StructuredTablePackageMetadata.Empty;
-
-            var workbookXml = LoadXml(workbookEntry);
-            var workbookRelsXml = LoadXml(workbookRelsEntry);
 
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-            var workbookRels = workbookRelsXml.Root?
-                .Elements(packageRelNs + "Relationship")
-                .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-                .ToDictionary(
-                    e => e.Attribute("Id")!.Value,
-                    e => XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", e.Attribute("Target")!.Value),
-                    StringComparer.OrdinalIgnoreCase)
-                ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            var sheetsByPath = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-                .ToDictionary(pair => pair.WorksheetPath, pair => pair.SheetName, StringComparer.OrdinalIgnoreCase);
+            var sheetsByPath = worksheetPathMap.SheetPathsByName.ToDictionary(
+                pair => pair.Value,
+                pair => pair.Key,
+                StringComparer.OrdinalIgnoreCase);
             var tablesBySheetName = LoadTablesBySheetName(archive, sheetsByPath, workbookNs, relNs, packageRelNs);
             return new StructuredTablePackageMetadata(tablesBySheetName);
         }
@@ -97,11 +84,10 @@ internal static class XlsxStructuredTableMetadataReader
             if (worksheetEntry is null)
                 continue;
 
-            var tableRelIds = ReadWorksheetRelationshipIds(
+            var tableRelIds = XlsxWorksheetRelationshipIdReader.ReadAll(
                 worksheetEntry,
-                "tablePart",
-                "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
-                relNs.NamespaceName);
+                workbookNs + "tablePart",
+                relNs + "id");
             if (tableRelIds.Count == 0)
                 continue;
 
@@ -241,77 +227,13 @@ internal static class XlsxStructuredTableMetadataReader
         return XlsxPackageXmlEditor.LoadXml(entry);
     }
 
-    private static List<string> ReadWorksheetRelationshipIds(
-        ZipArchiveEntry worksheetEntry,
-        string localName,
-        string namespaceName,
-        string relationshipNamespaceName)
-    {
-        var result = new List<string>();
-        using var stream = worksheetEntry.Open();
-        using var reader = XmlReader.Create(stream, new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            IgnoreComments = true,
-            IgnoreProcessingInstructions = true,
-            IgnoreWhitespace = true,
-        });
-
-        while (reader.Read())
-        {
-            if (reader.NodeType != XmlNodeType.Element ||
-                !string.Equals(reader.LocalName, localName, StringComparison.Ordinal) ||
-                !string.Equals(reader.NamespaceURI, namespaceName, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var relId = reader.GetAttribute("id", relationshipNamespaceName);
-            if (!string.IsNullOrWhiteSpace(relId))
-                result.Add(relId);
-        }
-
-        return result;
-    }
-
     private static Dictionary<string, string> LoadRelationshipTargets(
         ZipArchive archive,
         string relsPath,
         string sourcePart,
         XNamespace packageRelNs)
     {
-        var relsEntry = archive.GetEntry(relsPath);
-        if (relsEntry is null)
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        var relsXml = LoadXml(relsEntry);
-        return relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.ResolveRelationshipTarget(sourcePart, e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static IEnumerable<(string SheetName, string WorksheetPath)> GetWorkbookSheetPaths(
-        XDocument workbookXml,
-        IReadOnlyDictionary<string, string> workbookRels,
-        XNamespace workbookNs,
-        XNamespace relNs)
-    {
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (!string.IsNullOrWhiteSpace(name) &&
-                !string.IsNullOrWhiteSpace(relId) &&
-                workbookRels.TryGetValue(relId, out var worksheetPath))
-            {
-                yield return (name, worksheetPath);
-            }
-        }
+        return XlsxRelationshipReader.LoadTargets(archive, relsPath, sourcePart, packageRelNs);
     }
 
     private static string? ReadTableColumnFormula(XElement column, XNamespace workbookNs, string elementName)
@@ -388,22 +310,22 @@ internal static class XlsxStructuredTableMetadataReader
                     // XlsxStructuredTableWriter.ToFilterColumnXml unconditionally excludes
                     // "colorFilter" from that passthrough (it re-emits ColorFilter itself instead),
                     // so a loaded table whose colorFilter never lands here was silently dropped on
-                    // the very next save. Mirrors XlsxWorksheetAutoFilterXmlMapper.ReadColorFilter,
+                    // the very next save. The shared codec optionally resolves DXF colors when the
                     // minus dxf-color resolution: this reader has no access to the workbook's
                     // resolved differential styles, but Color is purely an informational
                     // convenience (the writer only ever emits dxfId/cellColor), so leaving it null
                     // here does not affect round-trip fidelity.
-                    ColorFilter = ReadColorFilter(colorFilterElement),
+                    ColorFilter = XlsxAutoFilterXmlCodec.ReadColorFilter(colorFilterElement),
                     // R111-io-structured-table-dategroup-roundtrip-1: parse <filters>/<dateGroupItem>
                     // children (Excel's built-in Year/Quarter/Month/Day date-checklist filter) the same
-                    // way XlsxWorksheetAutoFilterXmlMapper.ReadDateGroupItem does for the sheet-level
+                    // way XlsxAutoFilterXmlCodec does for the sheet-level
                     // AutoFilter path -- see StructuredTableFilterColumnModel.DateGroups for the full
                     // rationale. A <filters> element whose only children are dateGroupItem has no
                     // <filter> children at all, so without this the column had Values.Count==0 and
                     // nothing else to keep it, and the inclusion guard below dropped it entirely.
                     DateGroups = filters?
                         .Elements(workbookNs + "dateGroupItem")
-                        .Select(ReadDateGroupItem)
+                        .Select(XlsxAutoFilterXmlCodec.ReadDateGroupItem)
                         .ToList() ?? [],
                 };
             })
@@ -418,55 +340,6 @@ internal static class XlsxStructuredTableMetadataReader
                  column.NativeFilterXmls.Count > 0 ||
                  column.NativeAttributes?.Count > 0))
             .ToList();
-    }
-
-    /// <summary>Mirrors XlsxWorksheetAutoFilterXmlMapper.ReadDateGroupItem exactly (same model type, same attribute set) so a table's &lt;dateGroupItem&gt; parses identically to the sheet-level AutoFilter path.</summary>
-    private static WorksheetAutoFilterDateGroupItemModel ReadDateGroupItem(XElement dateGroup)
-    {
-        var nativeAttributes = dateGroup.Attributes()
-            .Where(attribute =>
-                !IsModeledAttribute(attribute, "year") &&
-                !IsModeledAttribute(attribute, "month") &&
-                !IsModeledAttribute(attribute, "day") &&
-                !IsModeledAttribute(attribute, "hour") &&
-                !IsModeledAttribute(attribute, "minute") &&
-                !IsModeledAttribute(attribute, "second") &&
-                !IsModeledAttribute(attribute, "dateTimeGrouping"))
-            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
-        return new WorksheetAutoFilterDateGroupItemModel(
-            Year: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "year"),
-            Month: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "month"),
-            Day: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "day"),
-            Hour: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "hour"),
-            Minute: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "minute"),
-            Second: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "second"),
-            DateTimeGrouping: dateGroup.Attribute("dateTimeGrouping")?.Value,
-            YearRaw: dateGroup.Attribute("year")?.Value,
-            MonthRaw: dateGroup.Attribute("month")?.Value,
-            DayRaw: dateGroup.Attribute("day")?.Value,
-            HourRaw: dateGroup.Attribute("hour")?.Value,
-            MinuteRaw: dateGroup.Attribute("minute")?.Value,
-            SecondRaw: dateGroup.Attribute("second")?.Value,
-            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
-    }
-
-    private static WorksheetAutoFilterColorFilterModel? ReadColorFilter(XElement? colorFilter)
-    {
-        if (colorFilter is null)
-            return null;
-
-        var nativeAttributes = colorFilter.Attributes()
-            .Where(attribute =>
-                !IsModeledAttribute(attribute, "dxfId") &&
-                !IsModeledAttribute(attribute, "cellColor"))
-            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
-
-        return new WorksheetAutoFilterColorFilterModel(
-            DifferentialFormatId: XlsxXmlAttributeReader.ReadIntAttribute(colorFilter, "dxfId"),
-            CellColor: XlsxXmlAttributeReader.ReadBoolAttribute(colorFilter, "cellColor", defaultValue: true),
-            DifferentialFormatIdRaw: colorFilter.Attribute("dxfId")?.Value,
-            CellColorRaw: colorFilter.Attribute("cellColor")?.Value,
-            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
     }
 
     private static IReadOnlyDictionary<string, string>? ReadCustomFilterNativeAttributes(XElement filter)

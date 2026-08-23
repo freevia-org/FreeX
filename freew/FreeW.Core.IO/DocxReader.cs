@@ -7806,7 +7806,7 @@ public static class DocxReader
 
         // w:highlight takes precedence over w:shd for the highlight field (but does not affect charShadingHex).
         if (highlightNamedToken is not null && highlightNamedToken != "none")
-            highlightHex = HighlightTokenToHex(highlightNamedToken);
+            highlightHex = WordHighlightColorCodec.ToHex(highlightNamedToken);
 
         // w:bdr (character border) — same edge encoding as w:pBdr. ReadParagraphBorder reuses the same
         // structure so we delegate to it directly.
@@ -8617,29 +8617,4 @@ public static class DocxReader
         return ReadDrawingGroup(run, archive, imageRelationships, hyperlinkRelationships, numbering);
     }
 
-    /// <summary>
-    /// Maps Word's <c>w:highlight/@w:val</c> named color token to a <c>#RRGGBB</c> hex string, or
-    /// <c>null</c> for unrecognised/none tokens. The colors are the fixed sRGB values Word uses for its
-    /// highlight gallery (same across all themes).
-    /// </summary>
-    internal static string? HighlightTokenToHex(string? token) => token switch
-    {
-        "yellow"      => "#FFFF00",
-        "green"       => "#00FF00",
-        "cyan"        => "#00FFFF",
-        "magenta"     => "#FF00FF",
-        "blue"        => "#0000FF",
-        "red"         => "#FF0000",
-        "darkBlue"    => "#000080",
-        "darkCyan"    => "#008080",
-        "darkGreen"   => "#008000",
-        "darkMagenta" => "#800080",
-        "darkRed"     => "#800000",
-        "darkYellow"  => "#808000",
-        "darkGray"    => "#808080",
-        "lightGray"   => "#C0C0C0",
-        "black"       => "#000000",
-        "white"       => "#FFFFFF",
-        _ => null
-    };
 }

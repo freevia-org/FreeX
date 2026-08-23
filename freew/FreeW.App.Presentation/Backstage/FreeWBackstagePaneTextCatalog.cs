@@ -39,25 +39,9 @@ public static class FreeWBackstagePaneTextCatalog
             Text(FreeWBackstagePaneResourceKeys.ExportXpsActionLabel, "Export to XPS"),
             Text(FreeWBackstagePaneResourceKeys.ExportXpsActionDescription, "Publish an XPS document with selectable, searchable vector text.")),
         Text(FreeWBackstagePaneResourceKeys.OptionsEditText, "Edit options\u2026"),
-        Info: new SisterBackstageInfoPaneTextDescriptor(
-            Text(FreeWBackstagePaneResourceKeys.InfoHeading, "Document information"),
-            CommonShellTextResources.Location,
-            CommonShellTextResources.NotSavedYet,
-            CommonShellTextResources.Properties,
-            CommonShellTextResources.Statistics,
-            CommonShellTextResources.UnsavedChangesSuffix,
-            new SisterBackstageCorePropertiesTextDescriptor(
-                CommonShellTextResources.Title,
-                CommonShellTextResources.Author,
-                CommonShellTextResources.Subject,
-                CommonShellTextResources.Keywords,
-                CommonShellTextResources.EmptyValue)),
-        OptionsSummary: new ApplicationOptionsSummaryTextDescriptor(
-            CommonShellTextResources.RecentFilesKept,
-            CommonShellTextResources.DefaultSaveFormat,
-            CommonShellTextResources.UiLanguage,
-            CommonShellTextResources.DataFolder,
-            CommonShellTextResources.SystemDefault));
+        Info: SisterBackstagePaneTextResources.CreateInfoDescriptor(
+            Text(FreeWBackstagePaneResourceKeys.InfoHeading, "Document information")),
+        OptionsSummary: SisterBackstagePaneTextResources.ApplicationOptionsSummaryDescriptor);
 
     public static IReadOnlyList<string> RequiredResourceKeys => Descriptor.ResourceKeys;
 

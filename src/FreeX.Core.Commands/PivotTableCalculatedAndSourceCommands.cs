@@ -11,7 +11,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
     private readonly IReadOnlyList<PivotFieldModel> _pageFields;
     private readonly IReadOnlyList<PivotCalculatedFieldModel> _calculatedFields;
     private readonly IReadOnlyList<PivotCalculatedItemModel> _calculatedItems;
-    private PivotCalculatedItemsSnapshot? _snapshot;
+    private PivotCalculatedItemsStateSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
 
     public ConfigurePivotTableCalculatedItemsCommand(
@@ -57,7 +57,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
             return new CommandOutcome(false, "Calculated field and item names and formulas are required.");
         }
 
-        _snapshot = PivotCalculatedItemsSnapshot.Capture(pivotTable);
+        _snapshot = PivotCalculatedItemsStateSnapshot.Capture(pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
         PivotTableCommandCollections.Replace(pivotTable.RowFields, _rowFields);
@@ -69,15 +69,13 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
         // R140-remediation-pivot-refresh-growth-guard-completeness: a calculated item/field can add a
         // new row/column item, which can grow the pivot's footprint past its previous render -- see
         // PivotTableRefreshService.GrowthGuard.cs.
-        var snapshot = _snapshot;
-        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
-        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable)) is { } failure)
+        if (PivotTableCommandRefreshTransaction.RefreshGuarded(
+                ctx.Workbook, sheet, pivotTable, _snapshot) is { } failure)
         {
             _snapshot = null;
             _targetSnapshot = null;
             return failure;
         }
-        UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
 
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
@@ -85,58 +83,17 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
-        {
-            PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
-            _snapshot.Restore(pivotTable);
-        }
-        AddPivotTableCommand.Restore(sheet, _targetSnapshot);
-        if (pivotTable is not null)
-            UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
+        CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable);
+        PivotTableCommandRefreshTransaction.Revert(
+            ctx.Workbook,
+            sheet,
+            pivotTable,
+            _targetSnapshot,
+            _snapshot);
         _snapshot = null;
         _targetSnapshot = null;
     }
 
-    private static void UpdateBoundPivotChartRanges(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
-    {
-        var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
-        foreach (var chartSheet in workbook.Sheets)
-        foreach (var chart in chartSheet.Charts.Where(chart =>
-                     chart.IsPivotChart &&
-                     string.Equals(chart.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)))
-        {
-            chart.DataRange = outputRange;
-            chart.PivotCacheId = pivotTable.CacheId;
-        }
-    }
-
-    private sealed record PivotCalculatedItemsSnapshot(
-        IReadOnlyList<PivotFieldModel> RowFields,
-        IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields,
-        IReadOnlyList<PivotCalculatedFieldModel> CalculatedFields,
-        IReadOnlyList<PivotCalculatedItemModel> CalculatedItems,
-        GridRange? LastRenderedRange)
-    {
-        public static PivotCalculatedItemsSnapshot Capture(PivotTableModel pivotTable) =>
-            new(
-                pivotTable.RowFields.ToList(),
-                pivotTable.ColumnFields.ToList(),
-                pivotTable.PageFields.ToList(),
-                pivotTable.CalculatedFields.ToList(),
-                pivotTable.CalculatedItems.ToList(),
-                pivotTable.LastRenderedRange);
-
-        public void Restore(PivotTableModel pivotTable)
-        {
-            PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
-            PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
-            PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
-            PivotTableCommandCollections.Replace(pivotTable.CalculatedFields, CalculatedFields);
-            PivotTableCommandCollections.Replace(pivotTable.CalculatedItems, CalculatedItems);
-            pivotTable.LastRenderedRange = LastRenderedRange;
-        }
-    }
 }
 
 public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
@@ -242,8 +199,8 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         // gets the same growth-conflict guard -- see PivotTableRefreshService.GrowthGuard.cs.
         var snapshot = _snapshot;
         var workbook = ctx.Workbook;
-        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
-        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable, workbook)) is { } failure)
+        if (PivotTableCommandRefreshTransaction.RefreshGuarded(
+                workbook, sheet, pivotTable, () => snapshot!.Restore(pivotTable, workbook)) is { } failure)
         {
             _snapshot = null;
             _targetSnapshot = null;
@@ -253,7 +210,6 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         // pivot's materialized output just like every other refresh-triggering mutation -- without this,
         // a PivotChart bound to this pivot table keeps rendering the cells the pivot occupied against the
         // OLD source, silently inconsistent with the pivot right next to it.
-        PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
 

@@ -136,7 +136,7 @@ public static class SlideZoomInsertionPlanner
 
     private static uint NextShapeId(Presentation presentation) =>
         presentation.Slides
-            .SelectMany(slide => Enumerate(slide.Shapes))
+            .SelectMany(SlideShapeTraversal.EnumerateDepthFirst)
             .Select(shape => shape.Id)
             .DefaultIfEmpty(0u)
             .Max() + 1;
@@ -164,15 +164,5 @@ public static class SlideZoomInsertionPlanner
         }
 
         throw new InvalidOperationException("The target slide is not part of the presentation.");
-    }
-
-    private static IEnumerable<SlideShape> Enumerate(IEnumerable<SlideShape> shapes)
-    {
-        foreach (var shape in shapes)
-        {
-            yield return shape;
-            foreach (var child in Enumerate(shape.Children))
-                yield return child;
-        }
     }
 }

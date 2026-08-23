@@ -4,20 +4,25 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Host;
 
-internal sealed class SlideZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed class SingleTargetZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ZoomSingleTargetDialogNativeBinding<ComboBox> _binding;
     private ZoomSingleTargetDialogSession _session => _binding.Session;
 
-    internal string? SelectedTargetSlideId => _binding.SelectedTargetId;
+    internal ZoomTargetDialogKind TargetKind => _session.Kind;
+    internal string? SelectedTargetId => _binding.SelectedTargetId;
 
-    internal SlideZoomDialog(
+    internal SingleTargetZoomDialog(
+        ZoomTargetDialogKind kind,
         IReadOnlyList<(string Id, string DisplayName)> options,
         string? title = null,
         string? selectedTargetId = null)
     {
+        if (kind is not ZoomTargetDialogKind.Slide and not ZoomTargetDialogKind.Section)
+            throw new ArgumentOutOfRangeException(nameof(kind));
+
         _binding = new(
-            ZoomTargetDialogKind.Slide,
+            kind,
             options,
             session => new ComboBox
             {
@@ -67,17 +72,15 @@ internal sealed class SlideZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var ok = ZoomDialogChrome.MakeButton(
             surface.Action(ZoomTargetDialogAction.Accept),
             Apply,
-            _binding.Session.CanAccept);
+            _session.CanAccept);
         ok.Margin = new Thickness(0, 0, 8, 0);
-        var cancel = ZoomDialogChrome.MakeButton(
-            surface.Action(ZoomTargetDialogAction.Cancel),
-            () => DialogResult = false);
         buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        buttons.Children.Add(ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Cancel),
+            () => DialogResult = false));
         Grid.SetRow(buttons, 1);
         Grid.SetColumnSpan(buttons, 2);
         grid.Children.Add(buttons);
-
         Content = grid;
     }
 

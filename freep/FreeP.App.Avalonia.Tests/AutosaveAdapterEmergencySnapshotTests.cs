@@ -126,9 +126,10 @@ public sealed class AutosaveAdapterEmergencySnapshotTests
     }
 
     /// <summary>
-    /// Drives the REAL production <c>FreePAutosavePorts.ExecuteWithPresentation</c> marshal (only
-    /// the store is swapped out) from inside a UI-thread-dispatched action, reproducing the exact
-    /// reentrancy shape of <c>AppDomain.UnhandledException</c> firing on the UI thread. A naive
+    /// Keeps the real production <c>FreePAutosavePorts.ExecuteWithPresentation</c> model projection
+    /// (only the store is swapped out) and drives the adapter's shared whole-snapshot dispatcher
+    /// transaction from inside a UI-thread-dispatched action, reproducing the exact reentrancy
+    /// shape of <c>AppDomain.UnhandledException</c> firing on the UI thread. A naive
     /// <c>Dispatcher.UIThread.InvokeAsync(...).GetAwaiter().GetResult()</c> deadlocks permanently
     /// here -- FreeW hit this in R138 and left a note warning FreeP not to reintroduce it. The
     /// timeout is the backstop; the wall-clock assertion pins that the fix takes the

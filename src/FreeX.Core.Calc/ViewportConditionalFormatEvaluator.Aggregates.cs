@@ -5,7 +5,9 @@ namespace FreeX.Core.Calc;
 
 internal static partial class ViewportConditionalFormatEvaluator
 {
-    private static Dictionary<ConditionalFormat, CfAggregateCache> PrecomputeAggregates(Sheet sheet)
+    private static Dictionary<ConditionalFormat, CfAggregateCache> PrecomputeAggregates(
+        Sheet sheet,
+        IReadOnlyDictionary<(uint Row, uint Col), Cell>? occupiedCells)
     {
         Dictionary<ConditionalFormat, CfAggregateCache>? result = null;
         foreach (var cf in sheet.ConditionalFormats)
@@ -21,7 +23,7 @@ internal static partial class ViewportConditionalFormatEvaluator
                 cf.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues
                     ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
                     : null;
-            foreach (var (a, v) in EnumerateAllAggregateValues(sheet, cf))
+            foreach (var (a, v) in EnumerateAllAggregateValues(sheet, cf, occupiedCells))
             {
                 if (valueCounts is not null && !IsBlankValue(v))
                 {
@@ -167,8 +169,21 @@ internal static partial class ViewportConditionalFormatEvaluator
 
     private static IEnumerable<(CellAddress Address, ScalarValue Value)> EnumerateAllAggregateValues(
         Sheet sheet,
-        ConditionalFormat cf)
+        ConditionalFormat cf,
+        IReadOnlyDictionary<(uint Row, uint Col), Cell>? occupiedCells)
     {
+        if (occupiedCells is not null)
+        {
+            foreach (var ((row, col), cell) in occupiedCells)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                if (cf.AllRanges.Any(range => range.Contains(address)))
+                    yield return (address, cell.Value);
+            }
+
+            yield break;
+        }
+
         // A rule's sqref can list multiple ranges that overlap each other (e.g. "A1:B2 B2:C3"),
         // and Excel treats the covered cell set as a set — each cell counted once regardless of
         // how many of the rule's ranges include it. Without de-duplication a cell in the overlap

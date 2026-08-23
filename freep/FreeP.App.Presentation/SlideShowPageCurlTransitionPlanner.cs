@@ -50,7 +50,7 @@ public static class SlideShowPageCurlTransitionPlanner
         if (width <= 0 || height <= 0 || progress >= 1)
             return Array.Empty<SlideShowMaskPolygon>();
         if (progress <= 0)
-            return new[] { new SlideShowMaskPolygon(BuildRectangle(width, height)) };
+            return new[] { new SlideShowMaskPolygon(SlideShowTransitionGeometry.BuildRectangle(width, height)) };
 
         var remaining = 1 - progress;
         if (plan.DoubleFold)
@@ -161,12 +161,4 @@ public static class SlideShowPageCurlTransitionPlanner
         };
     }
 
-    private static IReadOnlyList<SlideShowMaskPoint> BuildRectangle(double width, double height) =>
-        new[]
-        {
-            new SlideShowMaskPoint(0, 0),
-            new SlideShowMaskPoint(width, 0),
-            new SlideShowMaskPoint(width, height),
-            new SlideShowMaskPoint(0, height)
-        };
 }

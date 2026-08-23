@@ -4,14 +4,14 @@ namespace FreeX.App.Services;
 
 public static class WorkbookFactory
 {
-    public const string DefaultWorkbookNamePrefix = "Book";
-    public const string DefaultWorkbookName = DefaultWorkbookNamePrefix + "1";
-    public const string DefaultFontNameFallback = "Calibri";
-    public const int DefaultFontSizeFallback = 11;
-    public const int MaxDefaultFontSize = 409;
-    public const int MinDefaultSheetCount = 1;
-    public const int MaxDefaultSheetCount = 255;
-    public const int DefaultSheetCountFallback = 1;
+    public const string DefaultWorkbookNamePrefix = WorkbookCreationDefaults.WorkbookNamePrefix;
+    public const string DefaultWorkbookName = WorkbookCreationDefaults.WorkbookName;
+    public const string DefaultFontNameFallback = WorkbookCreationDefaults.FontName;
+    public const int DefaultFontSizeFallback = WorkbookCreationDefaults.FontSize;
+    public const int MaxDefaultFontSize = WorkbookCreationDefaults.MaxFontSize;
+    public const int MinDefaultSheetCount = WorkbookCreationDefaults.MinSheetCount;
+    public const int MaxDefaultSheetCount = WorkbookCreationDefaults.MaxSheetCount;
+    public const int DefaultSheetCountFallback = WorkbookCreationDefaults.SheetCount;
 
     public static Workbook Create(WorkbookCreationOptions? options = null)
     {
@@ -55,32 +55,18 @@ public static class WorkbookFactory
             UserName: options.UserName));
     }
 
-    public static string NormalizeDefaultFontName(string? fontName)
-    {
-        var normalized = fontName?.Trim();
-        return string.IsNullOrEmpty(normalized) ? DefaultFontNameFallback : normalized;
-    }
+    public static string NormalizeDefaultFontName(string? fontName) =>
+        WorkbookCreationDefaults.NormalizeFontName(fontName);
 
-    public static int NormalizeDefaultFontSize(int fontSize)
-    {
-        if (fontSize <= 0)
-            return DefaultFontSizeFallback;
-
-        return Math.Min(fontSize, MaxDefaultFontSize);
-    }
+    public static int NormalizeDefaultFontSize(int fontSize) =>
+        WorkbookCreationDefaults.NormalizeFontSize(fontSize);
 
     public static int NormalizeDefaultSheetCount(int sheetCount) =>
-        Math.Clamp(sheetCount, MinDefaultSheetCount, MaxDefaultSheetCount);
+        WorkbookCreationDefaults.NormalizeSheetCount(sheetCount);
 
-    public static string NormalizeUserName(string? userName)
-    {
-        var normalized = userName?.Trim();
-        return string.IsNullOrEmpty(normalized) ? Environment.UserName : normalized;
-    }
+    public static string NormalizeUserName(string? userName) =>
+        WorkbookCreationDefaults.NormalizeUserName(userName);
 
-    private static string NormalizeWorkbookName(string? name)
-    {
-        var normalized = name?.Trim();
-        return string.IsNullOrEmpty(normalized) ? DefaultWorkbookName : normalized;
-    }
+    private static string NormalizeWorkbookName(string? name) =>
+        WorkbookCreationDefaults.NormalizeWorkbookName(name);
 }

@@ -40,6 +40,34 @@ public sealed class DedupOwnershipGuardTests
         dataTable.Should().NotContain("public static CellAddress GetDefaultFormulaCell(");
     }
 
+    [Fact]
+    public void PivotSharedItemCaptions_HaveSingleModelOwner()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var modelSource = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.Core.Model",
+            "PivotSharedItemCaptionResolver.cs"));
+        var presentationSource = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Presentation",
+            "SlicerTimeline",
+            "SlicerItemResolver.cs"));
+        var coreIoSource = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.Core.IO",
+            "XlsxSlicerTimelineStateRewriter.cs"));
+
+        modelSource.Should().Contain("public static class PivotSharedItemCaptionResolver");
+        presentationSource.Should().Contain("PivotSharedItemCaptionResolver.Resolve(raw, kind, field)");
+        coreIoSource.Should().Contain("PivotSharedItemCaptionResolver.Resolve(raw, kind, field)");
+        presentationSource.Should().NotContain("DateTime.TryParse(raw");
+        coreIoSource.Should().NotContain("DateTime.TryParse(raw");
+    }
+
     /// <summary>
     /// Checked-in production sources only. Enumerating every .cs under src/ also walks obj/ and bin/,
     /// which is wrong twice over: those directories hold generated files that a concurrent build can

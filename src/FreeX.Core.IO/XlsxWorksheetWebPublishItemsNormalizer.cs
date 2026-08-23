@@ -132,7 +132,7 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "autoRepublish", XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
         foreach (var attributeName in TextAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, attributeName, NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, attributeName, XlsxXmlNormalizationHelpers.NormalizeOptionalText);
 
         return changed;
     }
@@ -147,13 +147,6 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
         var count = webPublishItems.Elements(WorksheetNs + "webPublishItem").Count().ToString(CultureInfo.InvariantCulture);
         return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(webPublishItems, "count", count);
     }
-
-    private static string? NormalizeOptionalText(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
 
     private static bool IsWebPublishItemsPartEntry(ZipArchiveEntry entry)
     {

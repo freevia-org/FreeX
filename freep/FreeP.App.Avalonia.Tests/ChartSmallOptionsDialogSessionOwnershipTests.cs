@@ -11,9 +11,9 @@ public sealed class ChartSmallOptionsDialogSessionOwnershipTests
         var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", fileName));
 
         source.Should().Contain($"new {sessionType}(editor");
-        source.Should().Contain("_session.Submit(ReadInput())");
-        source.Should().Contain("_session.BuildInput(_form.CaptureValues())");
-        source.Should().Contain("ReadInput()");
+        source.Should().Contain($"ChartOptionsDialogHost<{sessionType}>");
+        source.Should().Contain("session.Submit(session.BuildInput(values))");
+        source.Should().NotContain("ReadInput()");
         source.Should().NotContain("ChartDialogOptionProjection.");
         source.Should().NotContain("_planner");
         source.Should().NotContain("_editor");

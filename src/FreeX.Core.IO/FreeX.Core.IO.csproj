@@ -6,12 +6,14 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.IO.FileFormatDescriptor" Alias="FileFormatDescriptor" />
     <Using Include="Free.Shared.Opc" />
+    <Using Include="Free.Shared.Pdf.Import" />
   </ItemGroup>
 
   <ItemGroup>

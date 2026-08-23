@@ -133,7 +133,13 @@ public class DependencyGraphTests
         source.Should().NotContain(
             "private static bool ContainsVolatileFunction",
             "volatile detection should stay fused with reference collection on the registration hot path");
-        referenceCollection.Should().Contain("IsVolatileFunctionName(func.FunctionName)");
+        referenceCollection.Should().Contain("FormulaVolatilityPolicy.IsVolatileCall(func)");
+        source.Should().NotContain(
+            "private static bool IsVolatileFunctionName",
+            "volatile function ownership should remain in the shared formula policy");
+        source.Should().NotContain(
+            "private static bool IsNonVolatileCellOrInfoCall",
+            "CELL and INFO exceptions should remain in the shared formula policy");
         referenceCollection.Should().NotContain(
             "BuiltInFunctions.IsVolatile(",
             "dependency-only rebuild should not initialize the full built-in function registry just to detect volatile names");

@@ -61,17 +61,26 @@ public sealed partial class ViewportService
                 formulaCache.HasRelativeReferences);
 
             var result = _cfEvaluator.Evaluate(ast, sheet, workbook, addr);
-            return result switch
-            {
-                BoolValue bv => bv.Value,
-                NumberValue nv => nv.Value != 0,
-                _ => false
-            };
+            return MatchesConditionalFormulaResult(result);
         }
         catch
         {
             return false;
         }
+    }
+
+    private static bool MatchesConditionalFormulaResult(ScalarValue result)
+    {
+        while (result is RangeValue { RowCount: 1, ColCount: 1 } singleCell)
+            result = singleCell.Cells[0, 0];
+
+        return result switch
+        {
+            BoolValue boolean => boolean.Value,
+            NumberValue number => number.Value != 0,
+            DateTimeValue date => date.Value != 0,
+            _ => false
+        };
     }
 
     private static bool MatchesSimpleComparison(

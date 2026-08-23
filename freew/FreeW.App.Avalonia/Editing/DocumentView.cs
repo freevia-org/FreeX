@@ -14790,7 +14790,7 @@ public sealed partial class DocumentView : Control
         rebuiltShape.TextParagraphs.AddRange(plan.Paragraphs);
         var paragraphIndex = plan.Caret.TextParagraphIndex;
         var insertionOffset = ShapeTextOffset(rebuiltShape, plan.Caret);
-        RevisionEditPlanner.InsertRunAtOffset(
+        var effectiveInsertionOffset = RevisionEditPlanner.InsertRunAtOffset(
             plan.Paragraphs[paragraphIndex], insertionOffset, run);
 
         rebuiltShape = new Shape();
@@ -14800,7 +14800,7 @@ public sealed partial class DocumentView : Control
             caret.BlockIndex,
             caret.RunIndex,
             paragraphIndex,
-            insertionOffset + run.Text.Length);
+            effectiveInsertionOffset + run.Text.Length);
         _bus.Execute(new ReplaceShapeTextParagraphsCommand(
             caret.BlockIndex,
             caret.RunIndex,
@@ -18246,12 +18246,13 @@ public sealed partial class DocumentView : Control
                 if (para == null || !IsEditable(para))
                     return;
                 var offset = replacementCaret.Offset;
+                var nextOffset = offset;
                 var fmt = ActiveFormatting(para, offset);
                 _bus.Execute(new ReplaceCellParagraphRunsCommand(
                     replacementCaret.TableBlock, replacementCaret.Row, replacementCaret.Col,
                     replacementCaret.ParaIdx, p =>
                     {
-                        RevisionEditPlanner.InsertText(
+                        nextOffset = RevisionEditPlanner.InsertText(
                             p,
                             offset,
                             text,
@@ -18263,12 +18264,12 @@ public sealed partial class DocumentView : Control
                                     _editingSession.RevisionDateXmlForEdit())
                                 : default);
                     }));
-                _cellCaret = replacementCaret with { Offset = offset + text.Length };
+                _cellCaret = replacementCaret with { Offset = nextOffset };
                 _cellAnchor = _cellCaret;
                 _caret = new DocPosition(
                     replacementCaret.TableBlock,
                     FindCellGlyphOffset(replacementCaret.TableBlock, replacementCaret.Row,
-                        replacementCaret.Col, replacementCaret.ParaIdx, offset + text.Length));
+                        replacementCaret.Col, replacementCaret.ParaIdx, nextOffset));
                 _selectionAnchor = _caret;
             }
             finally
@@ -18285,10 +18286,11 @@ public sealed partial class DocumentView : Control
             if (para == null || !IsEditable(para))
                 return;
             var offset = cc.Offset;
+            var nextOffset = offset;
             var fmt = ActiveFormatting(para, offset);
             _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
             {
-                RevisionEditPlanner.InsertText(
+                nextOffset = RevisionEditPlanner.InsertText(
                     p,
                     offset,
                     text,
@@ -18300,10 +18302,11 @@ public sealed partial class DocumentView : Control
                             _editingSession.RevisionDateXmlForEdit())
                         : default);
             }));
-            _cellCaret = cc with { Offset = offset + text.Length };
+            _cellCaret = cc with { Offset = nextOffset };
             _cellAnchor = _cellCaret;
             // Update _caret.Offset to match so TryGetCaretRect can find the sentinel.
-            _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, cc.Offset + text.Length));
+            _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(
+                cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, nextOffset));
             _selectionAnchor = _caret;
             return;
         }
@@ -18395,11 +18398,12 @@ public sealed partial class DocumentView : Control
             bodyOffset = _caret.Offset;
             bodyFmt = pendingFmt ?? ActiveFormatting(fallbackParagraph, bodyOffset);
             insLink = ActiveLink(fallbackParagraph, bodyOffset);
+            var nextBodyOffset = bodyOffset;
             _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
             {
                 // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
                 // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
-                RevisionEditPlanner.InsertText(
+                nextBodyOffset = RevisionEditPlanner.InsertText(
                     p,
                     bodyOffset,
                     text,
@@ -18419,7 +18423,7 @@ public sealed partial class DocumentView : Control
                 CoalesceAdjacentPlainTextRuns(p);
                 CoalesceAdjacentHyperlinkRuns(p);
             }));
-            _caret = new DocPosition(block, bodyOffset + text.Length);
+            _caret = new DocPosition(block, nextBodyOffset);
             _selectionAnchor = _caret;
             if (ownsFallbackUndoGroup)
                 _bus.CommitUndoGroup("Insert text");
@@ -18461,13 +18465,14 @@ public sealed partial class DocumentView : Control
         _pendingRunFmt = null;
         var link = ActiveLink(paragraph, offset);
         var ownsUndoGroup = !_bus.IsUndoGroupOpen;
+        var nextOffset = offset;
         if (ownsUndoGroup)
             _bus.BeginUndoGroup();
         try
         {
             _bus.Execute(new ReplaceParagraphRunsCommand(blockIndex, p =>
             {
-                RevisionEditPlanner.InsertText(
+                nextOffset = RevisionEditPlanner.InsertText(
                     p,
                     offset,
                     text,
@@ -18487,7 +18492,7 @@ public sealed partial class DocumentView : Control
                 CoalesceAdjacentPlainTextRuns(p);
                 CoalesceAdjacentHyperlinkRuns(p);
             }));
-            _caret = new DocPosition(blockIndex, offset + text.Length);
+            _caret = new DocPosition(blockIndex, nextOffset);
             _selectionAnchor = _caret;
             if (ownsUndoGroup)
                 _bus.CommitUndoGroup("Insert text");
@@ -19401,8 +19406,11 @@ public sealed partial class DocumentView : Control
 
             var block = _caret.Block;
             var offset = _caret.Offset;
-            _bus.Execute(new ReplaceParagraphRunsCommand(block, p => InsertRunAtOffset(p, offset, run)));
-            _caret = new DocPosition(block, offset + run.Text.Length);
+            var effectiveOffset = offset;
+            _bus.Execute(new ReplaceParagraphRunsCommand(
+                block,
+                p => effectiveOffset = RevisionEditPlanner.InsertRunAtOffset(p, offset, run)));
+            _caret = new DocPosition(block, effectiveOffset + run.Text.Length);
             _selectionAnchor = _caret;
             if (ownsUndoGroup)
                 _bus.CommitUndoGroup("Insert content control");
@@ -22728,9 +22736,10 @@ public sealed partial class DocumentView : Control
                 ComplexField = citationRun.ComplexField
             };
 
+            var effectiveOffset = bodyOffset;
             _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
-                InsertRunAtOffset(p, bodyOffset, formattedRun)));
-            _caret = new DocPosition(block, bodyOffset + formattedRun.Text.Length);
+                effectiveOffset = RevisionEditPlanner.InsertRunAtOffset(p, bodyOffset, formattedRun)));
+            _caret = new DocPosition(block, effectiveOffset + formattedRun.Text.Length);
             _selectionAnchor = _caret;
             _bus.CommitUndoGroup("Insert Citation");
         }
@@ -23200,13 +23209,14 @@ public sealed partial class DocumentView : Control
                 }
 
                 var offset = cellCaret.Offset;
+                var effectiveOffset = offset;
                 _bus.Execute(new ReplaceCellParagraphRunsCommand(
                     cellCaret.TableBlock,
                     cellCaret.Row,
                     cellCaret.Col,
                     cellCaret.ParaIdx,
-                    p => RevisionEditPlanner.InsertRunAtOffset(p, offset, run)));
-                _cellCaret = cellCaret with { Offset = offset + run.Text.Length };
+                    p => effectiveOffset = RevisionEditPlanner.InsertRunAtOffset(p, offset, run)));
+                _cellCaret = cellCaret with { Offset = effectiveOffset + run.Text.Length };
                 _cellAnchor = _cellCaret;
             }
             else
@@ -23224,10 +23234,11 @@ public sealed partial class DocumentView : Control
 
                 var block = _caret.Block;
                 var offset = _caret.Offset;
+                var effectiveOffset = offset;
                 _bus.Execute(new ReplaceParagraphRunsCommand(
                     block,
-                    p => RevisionEditPlanner.InsertRunAtOffset(p, offset, run)));
-                _caret = new DocPosition(block, offset + run.Text.Length);
+                    p => effectiveOffset = RevisionEditPlanner.InsertRunAtOffset(p, offset, run)));
+                _caret = new DocPosition(block, effectiveOffset + run.Text.Length);
                 _selectionAnchor = _caret;
             }
 
@@ -25978,45 +25989,6 @@ public sealed partial class DocumentView : Control
         return cells;
     }
 
-    private static void InsertRunAtOffset(Paragraph paragraph, int offset, Run insertedRun)
-    {
-        var targetOffset = Math.Clamp(offset, 0, paragraph.PlainText.Length);
-        var consumed = 0;
-        for (var i = 0; i < paragraph.Runs.Count; i++)
-        {
-            var run = paragraph.Runs[i];
-            var runLength = run.Text.Length;
-            if (targetOffset > consumed + runLength)
-            {
-                consumed += runLength;
-                continue;
-            }
-
-            var local = targetOffset - consumed;
-            if (local <= 0)
-            {
-                paragraph.Runs.Insert(i, insertedRun);
-            }
-            else if (local >= runLength)
-            {
-                paragraph.Runs.Insert(i + 1, insertedRun);
-            }
-            else
-            {
-                var before = RevisionEditPlanner.CloneRunWithText(run, run.Text[..local]);
-                var after = RevisionEditPlanner.CloneRunWithText(run, run.Text[local..]);
-                paragraph.Runs.RemoveAt(i);
-                paragraph.Runs.Insert(i, before);
-                paragraph.Runs.Insert(i + 1, insertedRun);
-                paragraph.Runs.Insert(i + 2, after);
-            }
-            return;
-        }
-
-        paragraph.Runs.Add(insertedRun);
-    }
-
-
     private static void SetRuns(Paragraph paragraph, IReadOnlyList<Cell> cells)
     {
         // AV-CCEDIT: an empty content control (a field the user has cleared) contributes no cells, so it
@@ -26112,7 +26084,7 @@ public sealed partial class DocumentView : Control
                      .OrderByDescending(entry => entry.Offset)
                      .ThenByDescending(entry => entry.Index))
         {
-            InsertRunAtOffset(
+            RevisionEditPlanner.InsertRunAtOffset(
                 paragraph,
                 item.Offset,
                 RevisionEditPlanner.CloneRunWithText(item.Run, string.Empty));

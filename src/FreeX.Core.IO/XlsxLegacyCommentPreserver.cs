@@ -1428,7 +1428,7 @@ internal static class XlsxLegacyCommentPreserver
         else if (!isPinned && visibleElement is not null)
             visibleElement.Remove();
 
-        ApplyVisibilityStyle(shape, isPinned);
+        XlsxVmlStylePolicy.SetVisibility(shape, isPinned);
     }
 
     /// <summary>
@@ -1437,39 +1437,6 @@ internal static class XlsxLegacyCommentPreserver
     /// pinned, <c>hidden</c> otherwise — without disturbing any other CSS properties already
     /// present (position, margins, size, z-index, etc).
     /// </summary>
-    private static void ApplyVisibilityStyle(XElement shape, bool isPinned)
-    {
-        var newValue = isPinned ? "visible" : "hidden";
-        var styleAttribute = shape.Attribute("style");
-        var styleValue = styleAttribute?.Value ?? "";
-
-        var properties = styleValue.Length == 0
-            ? []
-            : styleValue.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        var found = false;
-        var rebuilt = new List<string>(properties.Length + 1);
-        foreach (var property in properties)
-        {
-            var colonIndex = property.IndexOf(':');
-            if (colonIndex >= 0 &&
-                string.Equals(property[..colonIndex].Trim(), "visibility", StringComparison.OrdinalIgnoreCase))
-            {
-                rebuilt.Add($"visibility:{newValue}");
-                found = true;
-            }
-            else
-            {
-                rebuilt.Add(property);
-            }
-        }
-
-        if (!found)
-            rebuilt.Add($"visibility:{newValue}");
-
-        shape.SetAttributeValue("style", string.Join(";", rebuilt));
-    }
-
     /// <summary>
     /// Indexes VML note shapes by their 0-based (row, col) ClientData anchor.
     /// Only shapes with <c>ObjectType="Note"</c> ClientData are indexed.
@@ -1800,7 +1767,7 @@ internal static class XlsxLegacyCommentPreserver
         if (marker is null)
         {
             marker = new XElement(markerName);
-            InsertLegacyDrawingMarkerInWorksheetOrder(worksheetRoot, marker);
+            XlsxWorksheetElementOrder.Insert(worksheetRoot, marker);
         }
 
         foreach (var extraMarker in existingMarkers.Skip(1))
@@ -1809,16 +1776,6 @@ internal static class XlsxLegacyCommentPreserver
         marker.RemoveAttributes();
         marker.RemoveNodes();
         marker.SetAttributeValue(relNs + "id", relationshipId);
-    }
-
-    private static void InsertLegacyDrawingMarkerInWorksheetOrder(XElement worksheetRoot, XElement marker)
-    {
-        var laterElementNames = new[] { "legacyDrawingHF", "picture", "oleObjects", "controls", "webPublishItems", "tableParts", "extLst" };
-        var insertionPoint = FindLegacyDrawingInsertionPoint(worksheetRoot, marker.Name.Namespace, laterElementNames);
-        if (insertionPoint is null)
-            worksheetRoot.Add(marker);
-        else
-            insertionPoint.AddBeforeSelf(marker);
     }
 
     private static XElement? FindCommentsRelationship(XElement? relationshipsRoot, XNamespace packageRelNs)
@@ -1859,34 +1816,6 @@ internal static class XlsxLegacyCommentPreserver
 
     private static XElement? FirstLegacyDrawingMarker(IReadOnlyList<XElement> markers) =>
         markers.Count == 0 ? null : markers[0];
-
-    private static XElement? FindLegacyDrawingInsertionPoint(
-        XElement worksheetRoot,
-        XNamespace worksheetNs,
-        IReadOnlyCollection<string> laterElementNames)
-    {
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace == worksheetNs &&
-                ContainsElementName(laterElementNames, element.Name.LocalName))
-            {
-                return element;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool ContainsElementName(IReadOnlyCollection<string> elementNames, string elementName)
-    {
-        foreach (var candidate in elementNames)
-        {
-            if (string.Equals(candidate, elementName, StringComparison.Ordinal))
-                return true;
-        }
-
-        return false;
-    }
 
     private static void ReplacePackageXmlPart(ZipArchive archive, string path, XDocument xml)
     {

@@ -434,24 +434,25 @@ public sealed class EditingSession
     /// </summary>
     private void AssignShapeIds(SlideShape shape, Dictionary<uint, uint> remap)
     {
-        var oldId = shape.Id;
-        var newId = AllocateShapeId();
-        if (!remap.ContainsKey(oldId))
-            remap.Add(oldId, newId);
-        shape.Id = newId;
-
-        foreach (var child in shape.Children)
-            AssignShapeIds(child, remap);
+        foreach (var current in SlideShapeTraversal.EnumerateDepthFirst(shape))
+        {
+            var oldId = current.Id;
+            var newId = AllocateShapeId();
+            if (!remap.ContainsKey(oldId))
+                remap.Add(oldId, newId);
+            current.Id = newId;
+        }
     }
 
     private static void RewriteConnectorTargets(SlideShape shape, IReadOnlyDictionary<uint, uint> remap)
     {
-        if (shape.ConnectionStart is { } start && remap.TryGetValue(start.ShapeId, out var startId))
-            start.ShapeId = startId;
-        if (shape.ConnectionEnd is { } end && remap.TryGetValue(end.ShapeId, out var endId))
-            end.ShapeId = endId;
-        foreach (var child in shape.Children)
-            RewriteConnectorTargets(child, remap);
+        foreach (var current in SlideShapeTraversal.EnumerateDepthFirst(shape))
+        {
+            if (current.ConnectionStart is { } start && remap.TryGetValue(start.ShapeId, out var startId))
+                start.ShapeId = startId;
+            if (current.ConnectionEnd is { } end && remap.TryGetValue(end.ShapeId, out var endId))
+                end.ShapeId = endId;
+        }
     }
 
     /// <summary>
@@ -619,7 +620,9 @@ public sealed class EditingSession
     {
         if (_selectedShapeIds.Count == 0) return;
         var slide = CurrentSlide;
-        var live = slide is null ? null : new HashSet<uint>(EnumerateAllShapes(slide.Shapes).Select(s => s.Id));
+        var live = slide is null
+            ? null
+            : new HashSet<uint>(SlideShapeTraversal.EnumerateDepthFirst(slide).Select(shape => shape.Id));
         var removed = _selectedShapeIds.RemoveAll(id => live is null || !live.Contains(id));
         if (removed > 0)
             SelectionChanged?.Invoke(this, EventArgs.Empty);
@@ -1668,17 +1671,8 @@ public sealed class EditingSession
         return null;
     }
 
-    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
-    {
-        foreach (var shape in shapes)
-        {
-            if (shape.Id == shapeId) return shape;
-            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
-                return child;
-        }
-
-        return null;
-    }
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId) =>
+        SlideShapeTraversal.FindById(shapes, shapeId);
 
     // ── Transition operations ─────────────────────────────────────────────────────
 
@@ -2208,7 +2202,7 @@ public sealed class EditingSession
     private uint AllocateShapeId()
     {
         _shapeIdWatermark ??= Presentation.Slides
-            .SelectMany(s => EnumerateAllShapes(s.Shapes))
+            .SelectMany(SlideShapeTraversal.EnumerateDepthFirst)
             .Select(shape => shape.Id)
             .DefaultIfEmpty()
             .Max();
@@ -2216,22 +2210,12 @@ public sealed class EditingSession
         return _shapeIdWatermark.Value;
     }
 
-    private static IEnumerable<SlideShape> EnumerateAllShapes(IEnumerable<SlideShape> shapes)
-    {
-        foreach (var shape in shapes)
-        {
-            yield return shape;
-            foreach (var child in EnumerateAllShapes(shape.Children))
-                yield return child;
-        }
-    }
-
     private int NextSmartArtPartIndex()
     {
         var max = 0;
         foreach (var slide in Presentation.Slides)
         {
-            foreach (var shape in EnumerateShapes(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.SmartArt is not { } smartArt)
                     continue;
@@ -2250,16 +2234,6 @@ public sealed class EditingSession
         }
 
         return max + 1;
-
-        static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
-        {
-            foreach (var shape in shapes)
-            {
-                yield return shape;
-                foreach (var child in EnumerateShapes(shape.Children))
-                    yield return child;
-            }
-        }
     }
 
     /// <summary>Creates and inserts a default text-box shape onto the current slide.</summary>

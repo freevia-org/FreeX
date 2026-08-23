@@ -39,6 +39,7 @@ public sealed class RibbonTabParityTests
             "Charts",
             "Sparklines",
             "Filters",
+            "Controls",
             "Links",
             "Comments",
             "Text",
@@ -51,6 +52,7 @@ public sealed class RibbonTabParityTests
         // Insert Slicer is surfaced on the PivotTable Analyze contextual tab (it requires a table/pivot
         // context); the Insert tab's Filters group carries only the timeline affordance.
         CommandTitles(Group(insertTab, "Filters")).Should().Contain("Insert Timeline");
+        CommandTitles(Group(insertTab, "Controls")).Should().ContainSingle("Form Controls");
         CommandTitles(Group(insertTab, "Links")).Should().Contain("Insert Link");
         CommandTitles(Group(insertTab, "Comments")).Should().Contain("Comment");
         CommandTitles(Group(insertTab, "Text")).Should().Contain(["Text Box", "Header & Footer"]);

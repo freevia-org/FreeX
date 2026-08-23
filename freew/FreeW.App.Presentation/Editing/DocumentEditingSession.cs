@@ -525,7 +525,8 @@ public sealed class DocumentEditingSession
         if (targets.Count == 0)
             return false;
 
-        ExecuteGroup(
+        DocumentUndoGroupExecutor.Execute(
+            _commands,
             targets
                 .Select(index => (IDocumentCommand)new SetParagraphFormattingCommand(
                     index,
@@ -548,7 +549,8 @@ public sealed class DocumentEditingSession
         if (targets.Count == 0)
             return false;
 
-        ExecuteGroup(
+        DocumentUndoGroupExecutor.Execute(
+            _commands,
             targets
                 .Select(index => (IDocumentCommand)new FormatParagraphRunsCommand(index, transform))
                 .ToArray(),
@@ -731,7 +733,8 @@ public sealed class DocumentEditingSession
         if (targets.Count == 0)
             return false;
 
-        ExecuteGroup(
+        DocumentUndoGroupExecutor.Execute(
+            _commands,
             targets
                 .Select(index => (IDocumentCommand)new SetParagraphStyleCommand(index, styleId))
                 .ToArray(),
@@ -798,7 +801,7 @@ public sealed class DocumentEditingSession
             "Apply Character Style",
             skipUnchangedRanges: true);
         if (commands.Count > 0)
-            ExecuteGroup(commands, "Apply Character Style");
+            DocumentUndoGroupExecutor.Execute(_commands, commands, "Apply Character Style");
 
         return new NamedStyleApplicationResult(
             plan.RequestedStyleId,
@@ -854,7 +857,7 @@ public sealed class DocumentEditingSession
                 commands.Add(new SetParagraphStyleCommand(index, linkedStyleId));
         }
         commands.Add(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
-        ExecuteGroup(commands, "Define Multilevel List");
+        DocumentUndoGroupExecutor.Execute(_commands, commands, "Define Multilevel List");
         return true;
     }
 
@@ -2025,7 +2028,7 @@ public sealed class DocumentEditingSession
             undoLabel,
             skipUnchangedRanges: true);
         if (commands.Count > 0)
-            ExecuteGroup(commands, undoLabel);
+            DocumentUndoGroupExecutor.Execute(_commands, commands, undoLabel);
     }
 
     private static void ApplyRunFormattingToTextRange(
@@ -2094,30 +2097,8 @@ public sealed class DocumentEditingSession
                 && Document.Blocks[index] is Paragraph)
             .ToArray();
 
-    private void ExecuteGroup(IReadOnlyList<IDocumentCommand> commands, string undoLabel)
-    {
-        if (commands.Count == 1)
-        {
-            _commands.Execute(commands[0]);
-            return;
-        }
-
-        _commands.BeginUndoGroup();
-        try
-        {
-            foreach (var command in commands)
-                _commands.Execute(command);
-            _commands.CommitUndoGroup(undoLabel);
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
-    }
-
     internal void ExecuteCommands(IReadOnlyList<IDocumentCommand> commands, string undoLabel) =>
-        ExecuteGroup(commands, undoLabel);
+        DocumentUndoGroupExecutor.Execute(_commands, commands, undoLabel);
 
     internal void NotifyChanged() => Changed?.Invoke();
 

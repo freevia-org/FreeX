@@ -57,7 +57,7 @@ internal static class XlsxWorksheetDataConsolidationMapper
 
             if (ToXml(dataConsolidationModel) is { } dataConsolidate)
             {
-                InsertDataConsolidate(root, dataConsolidate);
+                XlsxWorksheetElementOrder.Insert(root, dataConsolidate);
                 changed = true;
             }
 
@@ -120,60 +120,4 @@ internal static class XlsxWorksheetDataConsolidationMapper
         return element;
     }
 
-    private static void InsertDataConsolidate(XElement root, XElement dataConsolidate)
-    {
-        string[] laterElementNames =
-        [
-            "customSheetViews",
-            "mergeCells",
-            "phoneticPr",
-            "conditionalFormatting",
-            "dataValidations",
-            "hyperlinks",
-            "printOptions",
-            "pageMargins",
-            "pageSetup",
-            "headerFooter",
-            "rowBreaks",
-            "colBreaks",
-            "customProperties",
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in root.Elements())
-        {
-            if (element.Name.Namespace != WorksheetNs)
-                continue;
-
-            foreach (var laterElementName in laterElementNames)
-            {
-                if (string.Equals(element.Name.LocalName, laterElementName, StringComparison.Ordinal))
-                {
-                    insertionPoint = element;
-                    break;
-                }
-            }
-
-            if (insertionPoint is not null)
-                break;
-        }
-
-        if (insertionPoint is null)
-            root.Add(dataConsolidate);
-        else
-            insertionPoint.AddBeforeSelf(dataConsolidate);
-    }
 }

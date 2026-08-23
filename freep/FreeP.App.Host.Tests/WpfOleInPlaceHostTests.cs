@@ -120,34 +120,4 @@ public sealed class WpfOleInPlaceHostTests
         container.Child.Should().BeSameAs(fallback);
     }
 
-    [StaFact]
-    public void CommitCallback_UpdatesModelAndNotifiesCaller_ForNativeInPlaceRoute()
-    {
-        // TryShow's native-activation branch cannot run headless (no real OLE server), so this
-        // exercises the exact commit callback TryShow wires into WindowsOleInPlaceEngine -- the
-        // same path CloseAndCommit invokes when a routine gesture (reselect, navigate slides)
-        // closes the active in-place host per WindowsOleInPlaceEngine.CloseAndCommit.
-        var oleObject = new OleObjectInfo { EmbeddedBytes = [1, 2, 3] };
-        byte[]? notified = null;
-
-        var commitCallback = WpfOleInPlaceHost.BuildCommitCallback(
-            oleObject,
-            bytes => notified = bytes);
-        commitCallback([4, 5, 6, 7]);
-
-        oleObject.EmbeddedBytes.Should().Equal(4, 5, 6, 7);
-        notified.Should().Equal(4, 5, 6, 7);
-    }
-
-    [StaFact]
-    public void CommitCallback_ToleratesNoObserver_ForNativeInPlaceRoute()
-    {
-        var oleObject = new OleObjectInfo { EmbeddedBytes = [1, 2, 3] };
-
-        var commitCallback = WpfOleInPlaceHost.BuildCommitCallback(oleObject, onPayloadUpdated: null);
-        Action act = () => commitCallback([9]);
-
-        act.Should().NotThrow();
-        oleObject.EmbeddedBytes.Should().Equal(9);
-    }
 }

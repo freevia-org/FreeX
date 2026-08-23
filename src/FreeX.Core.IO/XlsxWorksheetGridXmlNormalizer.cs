@@ -669,7 +669,7 @@ internal static class XlsxWorksheetGridXmlNormalizer
 
             if (child.Name == WorksheetNs + "extLst")
             {
-                changed |= NormalizeExtensionListChild(child, ref keptExtensionList);
+                changed |= XlsxWorksheetExtensionListNormalizer.NormalizeChild(child, ref keptExtensionList);
                 continue;
             }
 
@@ -712,7 +712,7 @@ internal static class XlsxWorksheetGridXmlNormalizer
 
             if (child.Name == WorksheetNs + "extLst")
             {
-                changed |= NormalizeExtensionListChild(child, ref keptExtensionList);
+                changed |= XlsxWorksheetExtensionListNormalizer.NormalizeChild(child, ref keptExtensionList);
                 continue;
             }
 
@@ -720,25 +720,6 @@ internal static class XlsxWorksheetGridXmlNormalizer
             changed = true;
         }
 
-        return changed;
-    }
-
-    private static bool NormalizeExtensionListChild(XElement extensionList, ref bool keptExtensionList)
-    {
-        if (keptExtensionList)
-        {
-            extensionList.Remove();
-            return true;
-        }
-
-        var changed = XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
-        if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
-        {
-            extensionList.Remove();
-            return true;
-        }
-
-        keptExtensionList = true;
         return changed;
     }
 

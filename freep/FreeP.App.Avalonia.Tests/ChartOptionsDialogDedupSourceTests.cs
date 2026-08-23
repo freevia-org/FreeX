@@ -5,6 +5,15 @@ public sealed class ChartOptionsDialogDedupSourceTests
     [Fact]
     public void AvaloniaChartOptionDialogsDelegateDecisionsAndChrome()
     {
+        var host = File.ReadAllText(RepoFile(
+            "freep",
+            "FreeP.App.Avalonia",
+            "ChartOptionsDialogHost.cs"));
+        host.Should().Contain("ChartOptionsDialogChrome.CreateForm(");
+        host.Should().Contain("Content = _form.Content");
+        host.Should().Contain("WindowStartupLocation = WindowStartupLocation.CenterOwner");
+        host.Should().Contain("CanResize = plan.IsResizable");
+
         foreach (var fileName in ChartOptionDialogFiles)
         {
             var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", fileName));
@@ -13,30 +22,26 @@ public sealed class ChartOptionsDialogDedupSourceTests
                 "TestSupport",
                 "HostAccess.Avalonia",
                 "ChartOptionsDialogs.TestAccess.cs"));
-            (source.Contains("ChartDialogOptionProjection.", StringComparison.Ordinal)
-                || source.Contains("DialogSession", StringComparison.Ordinal))
-                .Should().BeTrue(fileName);
-            source.Should().Contain("private readonly ChartOptionsDialogForm _form", fileName);
-            source.Should().Contain("_session.BuildDialogPlan(", fileName);
-            source.Should().Contain("ChartOptionsDialogChrome.CreateForm(", fileName);
-            source.Should().Contain("Content = _form.Content", fileName);
+            var dialogName = Path.GetFileNameWithoutExtension(fileName);
+            source.Should().Contain($"ChartOptionsDialogHost<{dialogName}Session>", fileName);
+            source.Should().Contain($"new {dialogName}Session(", fileName);
+            source.Should().Contain("session.BuildDialogPlan(", fileName);
+            source.Should().Contain("Submit", fileName);
+            source.Should().NotContain("ChartOptionsDialogChrome.CreateForm(", fileName);
+            source.Should().NotContain("Content =", fileName);
+            source.Should().NotContain("WindowStartupLocation =", fileName);
             if (!string.Equals(fileName, "ChartExSeriesLayoutDialog.cs", StringComparison.Ordinal))
             {
-                source.Should().Contain("_session.BuildInput(_form.CaptureValues())", fileName);
+                source.Should().Contain("session.BuildInput(values)", fileName);
                 source.Should().NotContain("ForTests", fileName);
                 testSupport.Should().Contain(
-                    $"partial class {Path.GetFileNameWithoutExtension(fileName)}",
+                    $"partial class {dialogName}",
                     fileName);
                 testSupport.Should().Contain("BuildCommitPlanForTests()", fileName);
                 source.Should().NotContain("_form.SetText(", fileName);
                 source.Should().NotContain("_form.SetSelectedIndex(", fileName);
                 source.Should().NotContain("_form.SetChecked(", fileName);
                 source.Should().NotContain("_form.SetChoices(", fileName);
-                if (source.Contains("SetOptionsForTests", StringComparison.Ordinal)
-                    || source.Contains("SetOfPieOptionsForTests", StringComparison.Ordinal))
-                {
-                    source.Should().Contain("_form.ApplyValues(buildValues(_session))", fileName);
-                }
                 source.Should().NotContain("OptionsDialogTestSettings", fileName);
                 source.Should().NotContain("_session.BuildTestValues(", fileName);
             }

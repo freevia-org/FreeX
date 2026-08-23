@@ -150,7 +150,7 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
             // portion that survives ALL of them.
             IEnumerable<GridRange> remainder = existingRanges;
             foreach (var footprint in footprints)
-                remainder = remainder.SelectMany(range => ClearDataValidationCommand.Subtract(range, footprint));
+                remainder = remainder.SelectMany(range => GridRangeSubtraction.Subtract(range, footprint));
 
             // includeAdditionalRanges:false -- see PasteDataValidationCommand's identical fix
             // (R52-commands-data-validation-apply-3-2): each surviving fragment becomes its own
@@ -241,7 +241,7 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
             _removed.Add((i, rule));
             sheet.DataValidations.RemoveAt(i);
             var remainingRanges = allRanges
-                .SelectMany(range => Subtract(range, _range))
+                .SelectMany(range => GridRangeSubtraction.Subtract(range, _range))
                 .ToList();
             var replacements = BuildReplacementRules(rule, remainingRanges).ToList();
             for (var r = replacements.Count - 1; r >= 0; r--)
@@ -270,39 +270,6 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
         foreach (var (index, rule) in _removed)
             sheet.DataValidations.Insert(Math.Min(index, sheet.DataValidations.Count), rule);
     }
-
-    // R52-commands-data-validation-apply-3-3: widened from private to internal so
-    // SetDataValidationCommand.ClearOtherOverlappingRules (same file) can reuse this
-    // rectangle-subtraction logic instead of duplicating it.
-    internal static IEnumerable<GridRange> Subtract(GridRange source, GridRange remove)
-    {
-        if (!source.Overlaps(remove))
-        {
-            yield return source;
-            yield break;
-        }
-
-        var top = Math.Max(source.Start.Row, remove.Start.Row);
-        var bottom = Math.Min(source.End.Row, remove.End.Row);
-        var left = Math.Max(source.Start.Col, remove.Start.Col);
-        var right = Math.Min(source.End.Col, remove.End.Col);
-        var sheet = source.Start.Sheet;
-
-        if (source.Start.Row < top)
-            yield return MakeRange(sheet, source.Start.Row, source.Start.Col, top - 1, source.End.Col);
-
-        if (bottom < source.End.Row)
-            yield return MakeRange(sheet, bottom + 1, source.Start.Col, source.End.Row, source.End.Col);
-
-        if (source.Start.Col < left)
-            yield return MakeRange(sheet, top, source.Start.Col, bottom, left - 1);
-
-        if (right < source.End.Col)
-            yield return MakeRange(sheet, top, right + 1, bottom, source.End.Col);
-    }
-
-    private static GridRange MakeRange(SheetId sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>
-        new(new CellAddress(sheet, startRow, startCol), new CellAddress(sheet, endRow, endCol));
 
     private static DataValidation CloneForRange(DataValidation source, GridRange range) =>
         new()

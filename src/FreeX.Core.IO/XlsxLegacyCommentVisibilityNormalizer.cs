@@ -160,7 +160,7 @@ internal static class XlsxLegacyCommentVisibilityNormalizer
                 modified = true;
             }
 
-            if (ApplyVisibilityStyle(shape, isPinned))
+            if (XlsxVmlStylePolicy.SetVisibility(shape, isPinned))
                 modified = true;
         }
 
@@ -177,41 +177,4 @@ internal static class XlsxLegacyCommentVisibilityNormalizer
     /// not sufficient (see the sibling fix in <see cref="XlsxLegacyCommentPreserver"/>).
     /// </summary>
     /// <returns><see langword="true"/> if the style attribute was changed.</returns>
-    private static bool ApplyVisibilityStyle(XElement shape, bool isPinned)
-    {
-        var newValue = isPinned ? "visible" : "hidden";
-        var styleAttribute = shape.Attribute("style");
-        var styleValue = styleAttribute?.Value ?? "";
-
-        var properties = styleValue.Length == 0
-            ? []
-            : styleValue.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        var found = false;
-        var rebuilt = new List<string>(properties.Length + 1);
-        foreach (var property in properties)
-        {
-            var colonIndex = property.IndexOf(':');
-            if (colonIndex >= 0 &&
-                string.Equals(property[..colonIndex].Trim(), "visibility", StringComparison.OrdinalIgnoreCase))
-            {
-                rebuilt.Add($"visibility:{newValue}");
-                found = true;
-            }
-            else
-            {
-                rebuilt.Add(property);
-            }
-        }
-
-        if (!found)
-            rebuilt.Add($"visibility:{newValue}");
-
-        var newStyleValue = string.Join(";", rebuilt);
-        if (string.Equals(styleValue, newStyleValue, StringComparison.Ordinal))
-            return false;
-
-        shape.SetAttributeValue("style", newStyleValue);
-        return true;
-    }
 }

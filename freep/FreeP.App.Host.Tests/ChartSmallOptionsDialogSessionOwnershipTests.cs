@@ -14,8 +14,12 @@ public sealed class ChartSmallOptionsDialogSessionOwnershipTests
         var testSupport = ReadChartOptionsTestSupport();
 
         source.Should().Contain($"new {sessionType}(editor");
-        source.Should().Contain("_session.Submit(ReadInput())");
-        source.Should().Contain("ReadInput()");
+        source.Should().Contain($"ChartOptionsDialogHost<{sessionType}>");
+        source.Should().Contain("session.Submit(session.BuildInput(values))");
+        source.Should().Contain(": base(session, session.BuildDialogPlan(");
+        source.Should().NotContain("ReadInput()");
+        source.Should().NotContain("ChartOptionsDialogChrome.");
+        source.Should().NotContain("DialogMessageHelper.ShowWarning(");
         source.Should().NotContain("ForTests");
         testSupport.Should().Contain($"partial class {Path.GetFileNameWithoutExtension(fileName)}");
         testSupport.Should().Contain("BuildCommitPlanForTests()");

@@ -53,7 +53,7 @@ public static class SlideShowCurtainsTransitionPlanner
         if (width <= 0 || height <= 0 || progress <= 0)
             return Array.Empty<SlideShowMaskPolygon>();
         if (progress >= 1)
-            return new[] { new SlideShowMaskPolygon(BuildRectangle(width, height)) };
+            return new[] { new SlideShowMaskPolygon(SlideShowTransitionGeometry.BuildRectangle(width, height)) };
 
         var panels = Math.Max(2, plan.PanelCount);
         var foldDepth = Math.Clamp(plan.FoldDepth, 0, 0.45);
@@ -66,7 +66,7 @@ public static class SlideShowCurtainsTransitionPlanner
             {
                 var normalized = (panel + 0.5) / panels;
                 var distance = Math.Abs(normalized - 0.5) * 2;
-                var local = SmoothStep(Math.Clamp((progress - distance * 0.45) / 0.55, 0, 1));
+                var local = SlideShowTransitionGeometry.SmoothStep(Math.Clamp((progress - distance * 0.45) / 0.55, 0, 1));
                 if (local <= 0)
                     continue;
 
@@ -93,7 +93,7 @@ public static class SlideShowCurtainsTransitionPlanner
             {
                 var normalized = (panel + 0.5) / panels;
                 var distance = Math.Abs(normalized - 0.5) * 2;
-                var local = SmoothStep(Math.Clamp((progress - distance * 0.45) / 0.55, 0, 1));
+                var local = SlideShowTransitionGeometry.SmoothStep(Math.Clamp((progress - distance * 0.45) / 0.55, 0, 1));
                 if (local <= 0)
                     continue;
 
@@ -117,14 +117,5 @@ public static class SlideShowCurtainsTransitionPlanner
         return polygons;
     }
 
-    private static double SmoothStep(double value) => value * value * (3 - 2 * value);
 
-    private static IReadOnlyList<SlideShowMaskPoint> BuildRectangle(double width, double height) =>
-        new[]
-        {
-            new SlideShowMaskPoint(0, 0),
-            new SlideShowMaskPoint(width, 0),
-            new SlideShowMaskPoint(width, height),
-            new SlideShowMaskPoint(0, height)
-        };
 }

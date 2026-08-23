@@ -63,6 +63,36 @@ public sealed class OpcMediaCatalogAdoptionTests
         string expected) =>
         OpcMediaTypes.GetSourceExtension(source).Should().Be(expected);
 
+    [Theory]
+    [InlineData("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx")]
+    [InlineData("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx")]
+    [InlineData("application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx")]
+    [InlineData("application/vnd.ms-excel", "xls")]
+    [InlineData("application/msword", "doc")]
+    [InlineData("application/vnd.ms-powerpoint", "ppt")]
+    public void OfficeEmbeddedObjectExtension_MapsTheSixEstablishedContentTypes(
+        string contentType,
+        string expected)
+    {
+        OpcMediaTypes.TryGetOfficeEmbeddedObjectExtension(contentType, out var extension)
+            .Should()
+            .BeTrue();
+        extension.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("application/vnd.ms-excel.sheet.macroEnabled.12")]
+    [InlineData("application/octet-stream")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void OfficeEmbeddedObjectExtension_DoesNotExpandBeyondTheSixEstablishedMappings(string? contentType)
+    {
+        OpcMediaTypes.TryGetOfficeEmbeddedObjectExtension(contentType, out var extension)
+            .Should()
+            .BeFalse();
+        extension.Should().BeEmpty();
+    }
+
     [Fact]
     public void FreePMediaConsumers_DelegateCatalogOwnershipToOpcMediaTypes()
     {
@@ -73,8 +103,10 @@ public sealed class OpcMediaCatalogAdoptionTests
         var externalXaml = Read("freep", "FreeP.App.Presentation", "ExternalXamlClipboardPlanner.cs");
         var listGallery = Read("freep", "FreeP.App.Presentation", "PresentationListGalleryPlanner.cs");
         var oleInsertion = Read("freep", "FreeP.App.Presentation", "OleInsertionPlanner.cs");
+        var oleActivation = Read("freep", "FreeP.App.Presentation", "OleActivationService.cs");
         var packageReader = Read("freep", "FreeP.Core.IO", "PptxPackageReader.cs");
         var packageWriter = Read("freep", "FreeP.Core.IO", "PptxPackageWriter.cs");
+        var xlsxReader = Read("src", "FreeX.Core.IO", "XlsxFileAdapter.cs");
 
         mediaPlayback.Should().Contain("OpcMediaExtensionProfile.TemporaryPlaybackMaterialization");
         mediaPlayback.Should().NotContain("MediaContentTypeExtensions");
@@ -85,8 +117,17 @@ public sealed class OpcMediaCatalogAdoptionTests
         externalXaml.Should().Contain("OpcMediaContentTypeProfile.ExternalXamlPicture");
         listGallery.Should().Contain("OpcMediaContentTypeProfile.PresentationListGalleryPicture");
         oleInsertion.Should().Contain("OpcMediaContentTypeProfile.OfficeEmbeddedObjectInsertion");
+        oleInsertion.Should().Contain("FilePathPolicy.NormalizeSafeExtension");
+        oleActivation.Should().Contain("FilePathPolicy.NormalizeSafeExtension");
+        oleActivation.Should().Contain("OpcMediaTypes.TryGetOfficeEmbeddedObjectExtension");
+        oleActivation.Should().NotContain("ContentTypeExtensions");
+        oleActivation.Should().NotContain("private static string NormalizeExtension");
         packageReader.Should().Contain("OpcMediaContentTypeProfile.OfficeEmbeddedObjectPackageRead");
         packageReader.Should().Contain("OpcMediaContentTypeProfile.PresentationCaptionTrack");
+        packageReader.Should().Contain("WorkbookOpenSizeGuard.CopyToWithLimit");
+        packageReader.Should().Contain("ToZipEntryPath(packagePath)");
+        packageReader.Should().NotContain("CopyToMemoryStreamWithLimit");
+        packageReader.Should().NotContain("NormalizeZipPath");
         packageReader.Should().NotContain("OleExtensionToContentType");
         packageWriter.Should().Contain("OpcMediaExtensionProfile.PackageTransitionSound");
         packageWriter.Should().Contain("OpcMediaExtensionProfile.PresentationPackageMediaPart");
@@ -95,6 +136,10 @@ public sealed class OpcMediaCatalogAdoptionTests
         packageWriter.Should().NotContain("private static string GetCaptionTrackExtension");
         packageWriter.Should().NotContain("private static string GetAudioVideoExtension");
         packageWriter.Should().NotContain("var ext = media.ContentType switch");
+        packageWriter.Should().Contain("ToZipEntryPath(packagePath)");
+        packageWriter.Should().NotContain("NormalizeZipPath");
+        xlsxReader.Should().Contain("WorkbookOpenSizeGuard.CopyToWithLimit");
+        xlsxReader.Should().NotContain("CopyToMemoryStreamWithLimit");
     }
 
     private static string Read(params string[] relativeParts) =>

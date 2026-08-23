@@ -3,8 +3,9 @@ namespace Free.Shared.AppServices;
 /// <summary>
 /// Per-app binding that supplies the autosave engine with everything it needs to decide
 /// whether to snapshot and how to produce the snapshot bytes. Each app implements this:
-/// FreeX serializes a workbook, FreeW writes a .docx. The engine itself owns the neutral
-/// orchestration (dirty/generation gating, sidecar, atomic write, emergency-save, delete).
+/// FreeX serializes a workbook, FreeW writes a .docx, and FreeP writes a .pptx. The engine itself
+/// owns the neutral orchestration (dirty/generation gating, sidecar, atomic write,
+/// emergency-save, delete).
 /// </summary>
 public interface IAutosaveSnapshotSource
 {
@@ -42,14 +43,15 @@ public interface IAutosaveSnapshotSource
 }
 
 /// <summary>
-/// Neutral autosave orchestration shared by FreeX and FreeW. Given an
+/// Neutral autosave orchestration shared by FreeX, FreeW, and FreeP. Given an
 /// <see cref="IAutosaveSnapshotSource"/>, it gates snapshots on dirty-state and generation,
 /// writes the snapshot atomically (temp + move) followed by the sidecar, supports a never-throw
 /// emergency snapshot for crash handlers, and deletes the snapshot on clean save/close.
 ///
-/// This type is timer-agnostic: the host owns the periodic timer (FreeX uses a background-priority
-/// DispatcherTimer at 5 min, FreeW a 30 s DispatcherTimer) and calls <see cref="Snapshot"/> on each
-/// tick. Keeping the timer in the host preserves each app's exact threading and interval behavior.
+/// This type is timer-agnostic. WPF hosts and FreeX Avalonia retain their dispatcher timers, while
+/// the FreeW and FreeP Avalonia hosts use <see cref="AutosavePeriodicTaskLoop"/> with product-specific
+/// intervals. Each host calls <see cref="Snapshot"/> from its renderer-appropriate dispatcher
+/// transaction, preserving the existing threading behavior.
 ///
 /// Thread note: serialization runs synchronously on the calling (dispatcher) thread, matching the
 /// prior per-app behavior.

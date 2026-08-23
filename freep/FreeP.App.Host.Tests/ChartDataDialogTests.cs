@@ -634,7 +634,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDisplayOptionsDialog.cs");
 
         source.Should().Contain("new ChartDisplayOptionsDialogSession(editor)");
-        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().Contain("session.Submit(session.BuildInput(values))");
         source.Should().NotContain("_editor.ApplyChartDisplayOptions");
         source.Should().NotContain("new SetChartDisplayOptionsCommand");
     }
@@ -645,7 +645,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartAxisOptionsDialog.cs");
 
         source.Should().Contain("new ChartAxisOptionsDialogSession(editor, initialAxis)");
-        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().Contain("session.Submit(session.BuildInput(values))");
         source.Should().NotContain("_editor.ApplyChartAxisOptions");
         source.Should().NotContain("new SetChartAxisOptionsCommand");
     }
@@ -656,7 +656,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartSeriesOptionsDialog.cs");
 
         source.Should().Contain("new ChartSeriesOptionsDialogSession(");
-        source.Should().Contain("_session.TryCommit(");
+        source.Should().Contain("session.TryCommit(session.BuildInput(values)");
         source.Should().NotContain("_planner.");
         source.Should().NotContain("_editor.ApplyChartSeriesOptions");
         source.Should().NotContain("new SetChartSeriesOptionsCommand");
@@ -668,7 +668,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartPointOptionsDialog.cs");
 
         source.Should().Contain("new ChartPointOptionsDialogSession(");
-        source.Should().Contain("_session.TryCommit(");
+        source.Should().Contain("session.TryCommit(session.BuildInput(values)");
         source.Should().NotContain("_planner.");
         source.Should().NotContain("_editor.ApplyChartPointOptions");
         source.Should().NotContain("new SetChartPointOptionsCommand");
@@ -680,7 +680,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartLayoutOptionsDialog.cs");
 
         source.Should().Contain("new ChartLayoutOptionsDialogSession(editor)");
-        source.Should().Contain("_session.TryCommit(");
+        source.Should().Contain("session.TryCommit(session.BuildInput(values)");
         source.Should().NotContain("_planner.");
         source.Should().NotContain("_editor.ApplyChartLayoutOptions");
         source.Should().NotContain("new SetChartLayoutOptionsCommand");
@@ -692,7 +692,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDataTableOptionsDialog.cs");
 
         source.Should().Contain("new ChartDataTableOptionsDialogSession(editor)");
-        source.Should().Contain("_session.TryCommit(");
+        source.Should().Contain("session.TryCommit(session.BuildInput(values)");
         source.Should().NotContain("_planner.");
         source.Should().NotContain("_editor.ApplyChartDataTableOptions");
         source.Should().NotContain("new SetChartDataTableOptionsCommand");
@@ -704,7 +704,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "Chart3DViewOptionsDialog.cs");
 
         source.Should().Contain("new Chart3DViewOptionsDialogSession(editor");
-        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().Contain("session.Submit(session.BuildInput(values))");
         source.Should().NotContain("_planner");
         source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChart3DViewOptionsCommand");
@@ -784,7 +784,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var windowSource = ReadWorkspaceFile("freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs");
 
         source.Should().Contain("new ChartBubbleOptionsDialogSession(editor");
-        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().Contain("session.Submit(session.BuildInput(values))");
         source.Should().NotContain("_planner");
         source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChartBubbleOptionsCommand");
@@ -800,7 +800,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var windowSource = ReadWorkspaceFile("freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs");
 
         source.Should().Contain("new ChartPieOptionsDialogSession(editor)");
-        source.Should().Contain("_session.TryCommit(");
+        source.Should().Contain("session.TryCommit(session.BuildInput(values)");
         source.Should().NotContain("_planner.");
         source.Should().NotContain("_editor.ApplyChartPieOptions");
         source.Should().NotContain("new SetChartPieOptionsCommand");
@@ -816,7 +816,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var windowSource = ReadWorkspaceFile("freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs");
 
         source.Should().Contain("new ChartPlotStyleOptionsDialogSession(editor");
-        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().Contain("session.Submit(session.BuildInput(values))");
         source.Should().NotContain("_planner");
         source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChartPlotStyleOptionsCommand");
@@ -830,7 +830,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartTextOptionsDialog.cs");
 
         source.Should().Contain("new ChartTextOptionsDialogSession(editor, target)");
-        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().Contain("session.Submit(session.BuildInput(values))");
         source.Should().NotContain("_planner");
         source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChartTextOptionsCommand");

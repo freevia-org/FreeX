@@ -74,9 +74,9 @@ internal static class XlsxStructuredTableNativeMetadataReader
         filterColumn.Elements()
             // R111-io-structured-table-colorfilter-roundtrip-1: colorFilter is now parsed into the
             // typed StructuredTableFilterColumnModel.ColorFilter field (mirroring
-            // XlsxWorksheetAutoFilterXmlMapper.ReadColorFilter), so it must be excluded here the same
+            // XlsxAutoFilterXmlCodec.ReadColorFilter), so it must be excluded here the same
             // way "filters"/"customFilters" already are -- otherwise it would double up with the
-            // writer's own ToColorFilterXml emission the moment ColorFilter round-trips a save.
+            // codec's own WriteColorFilter emission the moment ColorFilter round-trips a save.
             .Where(element =>
                 element.Name != workbookNs + "filters" &&
                 element.Name != workbookNs + "customFilters" &&

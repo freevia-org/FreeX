@@ -126,7 +126,7 @@ public sealed partial class XlsxFileAdapter
                         AdditionalRanges = additionalRanges,
                         Priority = priority,
                         RuleType = CfRuleType.IconSet,
-                        IconSetStyle = NormalizeOptionalText(iconSet.Attribute("iconSet")?.Value),
+                        IconSetStyle = XlsxXmlNormalizationHelpers.NormalizeOptionalText(iconSet.Attribute("iconSet")?.Value),
                         IconSetShowValue = !IsFalse(iconSet.Attribute("showValue")?.Value),
                         IconSetReverse = IsTruthy(iconSet.Attribute("reverse")?.Value),
                         StopIfTrue = IsTruthy(rule.Attribute("stopIfTrue")?.Value),
@@ -504,7 +504,7 @@ public sealed partial class XlsxFileAdapter
                                 };
                             }
 
-                            format.IconSetStyle = NormalizeOptionalText(x14IconSet.Attribute("iconSet")?.Value);
+                            format.IconSetStyle = XlsxXmlNormalizationHelpers.NormalizeOptionalText(x14IconSet.Attribute("iconSet")?.Value);
                             format.IconSetShowValue = !IsFalse(x14IconSet.Attribute("showValue")?.Value);
                             format.IconSetReverse = IsTruthy(x14IconSet.Attribute("reverse")?.Value);
 
@@ -732,9 +732,6 @@ public sealed partial class XlsxFileAdapter
                 yield return new CfIconOverride(iconSetAttr, iconId);
         }
     }
-
-    private static string? NormalizeOptionalText(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>
     /// Parses a space-separated sqref string into a primary <see cref="GridRange"/> and an optional

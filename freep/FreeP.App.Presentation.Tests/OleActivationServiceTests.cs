@@ -327,6 +327,52 @@ public sealed class OleActivationServiceTests : IDisposable
     }
 
     [Fact]
+    public void PayloadCommitCallbacks_AssignBeforeNotifying_AndPreserveMetadata()
+    {
+        var slide = new OleObjectInfo
+        {
+            EmbeddedBytes = [1],
+            FileName = "Budget.xlsx",
+            EmbeddedContentType = "application/test",
+            ProgId = "Excel.Sheet.12",
+        };
+        var inline = new InlineOleObjectInfo
+        {
+            EmbeddedBytes = [2],
+            FileName = "Notes.docx",
+            ClassName = "Word.Document.12",
+        };
+
+        OleActivationService.BuildOleObjectUpdateCallback(
+            slide,
+            bytes => slide.EmbeddedBytes.Should().BeSameAs(bytes))([3, 4]);
+        OleActivationService.BuildInlineOleObjectUpdateCallback(
+            inline,
+            bytes => inline.EmbeddedBytes.Should().BeSameAs(bytes))([5, 6]);
+
+        slide.FileName.Should().Be("Budget.xlsx");
+        slide.EmbeddedContentType.Should().Be("application/test");
+        slide.ProgId.Should().Be("Excel.Sheet.12");
+        inline.FileName.Should().Be("Notes.docx");
+        inline.ClassName.Should().Be("Word.Document.12");
+    }
+
+    [Fact]
+    public void PayloadCommitCallbacks_IgnoreMissingTargetsWithoutNotifying()
+    {
+        var notifications = new List<byte[]>();
+
+        Action slideCommit = () => OleActivationService
+            .BuildOleObjectUpdateCallback(null, notifications.Add)([1]);
+        Action inlineCommit = () => OleActivationService
+            .BuildInlineOleObjectUpdateCallback(null, notifications.Add)([2]);
+
+        slideCommit.Should().NotThrow();
+        inlineCommit.Should().NotThrow();
+        notifications.Should().BeEmpty();
+    }
+
+    [Fact]
     public void TryCommitEditedPayload_ReplacesChangedBytes()
     {
         string path = Path.Combine(_temporaryDirectory.Path, "changed.bin");

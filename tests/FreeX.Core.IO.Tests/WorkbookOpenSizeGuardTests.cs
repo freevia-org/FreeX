@@ -24,6 +24,47 @@ public sealed class WorkbookOpenSizeGuardTests
     }
 
     [Fact]
+    public void CopyToWithLimit_Uses81920ByteChunksAndAllowancePlusOneProbe()
+    {
+        var payload = new byte[81920];
+        using var source = new RecordingReadStream(payload);
+        using var destination = new MemoryStream();
+
+        WorkbookOpenSizeGuard.CopyToWithLimit(
+            source,
+            destination,
+            payload.Length,
+            limit => new InvalidDataException($"limit {limit}"));
+
+        destination.ToArray().Should().Equal(payload);
+        source.RequestedReadSizes.Should().Equal(81920, 1);
+    }
+
+    [Fact]
+    public void CopyToWithLimit_ThrowsInjectedExceptionBeforeWritingOverflowingChunk()
+    {
+        using var source = new RecordingReadStream([1, 2, 3, 4, 5, 6]);
+        using var destination = new MemoryStream();
+        var expected = new InvalidDataException("product-specific overflow");
+        long? observedLimit = null;
+
+        Action act = () => WorkbookOpenSizeGuard.CopyToWithLimit(
+            source,
+            destination,
+            maxFileBytes: 5,
+            limit =>
+            {
+                observedLimit = limit;
+                return expected;
+            });
+
+        act.Should().Throw<InvalidDataException>().Which.Should().BeSameAs(expected);
+        observedLimit.Should().Be(5);
+        source.RequestedReadSizes.Should().Equal(6);
+        destination.Length.Should().Be(0, "overflow must be detected before the chunk is written");
+    }
+
+    [Fact]
     public void EnsureArchiveWithinLimits_ThrowsWhenDeclaredUncompressedExceedsCap()
     {
         using var package = CreatePackageWithCompressibleEntry(uncompressedBytes: 8 * 1024 * 1024);
@@ -96,5 +137,16 @@ public sealed class WorkbookOpenSizeGuardTests
 
         package.Position = 0;
         return package;
+    }
+
+    private sealed class RecordingReadStream(byte[] payload) : MemoryStream(payload)
+    {
+        public List<int> RequestedReadSizes { get; } = [];
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            RequestedReadSizes.Add(count);
+            return base.Read(buffer, offset, count);
+        }
     }
 }

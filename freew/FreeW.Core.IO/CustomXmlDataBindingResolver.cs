@@ -473,7 +473,7 @@ public static class CustomXmlDataBindingResolver
                 var runs = blocks
                     .Skip(start)
                     .Take(end - start)
-                    .SelectMany(EnumerateParagraphs)
+                    .SelectMany(EnumerateBlockParagraphs)
                     .SelectMany(paragraph => paragraph.Runs)
                     .ToList();
                 if (runs.Count > 0)
@@ -605,41 +605,10 @@ public static class CustomXmlDataBindingResolver
     private static string? NormalizeStoreItemId(string? value) =>
         Guid.TryParse(value, out var id) ? id.ToString("D") : null;
 
-    private static IEnumerable<Paragraph> EnumerateStoryParagraphs(TextDocument document)
-    {
-        var seen = new HashSet<Paragraph>(ReferenceEqualityComparer.Instance);
+    private static IEnumerable<Paragraph> EnumerateStoryParagraphs(TextDocument document) =>
+        TextDocumentStoryTraversal.EnumerateParagraphs(document, EnumerateComments(document));
 
-        foreach (var paragraph in document.Blocks.SelectMany(EnumerateParagraphs))
-            if (seen.Add(paragraph))
-                yield return paragraph;
-
-        foreach (var section in document.Sections)
-        {
-            foreach (var content in new[]
-                     {
-                         section.HeadersFooters.Header, section.HeadersFooters.Footer,
-                         section.HeadersFooters.EvenHeader, section.HeadersFooters.EvenFooter,
-                         section.HeadersFooters.FirstHeader, section.HeadersFooters.FirstFooter
-                     })
-            {
-                if (content is null)
-                    continue;
-                foreach (var paragraph in content.Paragraphs)
-                    if (seen.Add(paragraph))
-                        yield return paragraph;
-            }
-        }
-
-        foreach (var paragraph in document.Footnotes.Values.SelectMany(note => note.Content)
-                     .Concat(document.Endnotes.Values.SelectMany(note => note.Content))
-                     .Concat(EnumerateComments(document)))
-        {
-            if (seen.Add(paragraph))
-                yield return paragraph;
-        }
-    }
-
-    private static IEnumerable<Paragraph> EnumerateParagraphs(Block block)
+    private static IEnumerable<Paragraph> EnumerateBlockParagraphs(Block block)
     {
         if (block is Paragraph paragraph)
         {

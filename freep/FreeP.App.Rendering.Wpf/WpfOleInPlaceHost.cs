@@ -48,7 +48,7 @@ public sealed class WpfOleInPlaceHost : HwndHost
                     "inplace",
                     extension,
                     oleObject.EmbeddedBytes,
-                    BuildCommitCallback(oleObject, onPayloadUpdated),
+                    OleActivationService.BuildOleObjectUpdateCallback(oleObject, onPayloadUpdated),
                     out engine)
                 || engine is null)
                 return false;
@@ -84,22 +84,6 @@ public sealed class WpfOleInPlaceHost : HwndHost
         }
     }
 
-    /// <summary>
-    /// Builds the payload-commit callback for the native in-place route: writes the edited bytes
-    /// onto the model and then reports the commit via <paramref name="onPayloadUpdated"/>, mirroring
-    /// <see cref="OleActivationService.BuildOleObjectUpdateCallback"/> for the external-activation
-    /// route. Extracted so tests can verify the notification fires without driving real native OLE
-    /// activation through the public <see cref="TryShow"/> entry point.
-    /// </summary>
-    internal static Action<byte[]> BuildCommitCallback(
-        OleObjectInfo oleObject,
-        Action<byte[]>? onPayloadUpdated) =>
-        bytes =>
-        {
-            oleObject.EmbeddedBytes = bytes;
-            onPayloadUpdated?.Invoke(bytes);
-        };
-
     private static bool TryCreateInline(
         InlineOleObjectInfo inlineObject,
         double width,
@@ -113,11 +97,9 @@ public sealed class WpfOleInPlaceHost : HwndHost
                 "inline",
                 extension,
                 inlineObject.EmbeddedBytes,
-                bytes =>
-                {
-                    inlineObject.EmbeddedBytes = bytes;
-                    onPayloadUpdated?.Invoke(bytes);
-                },
+                OleActivationService.BuildInlineOleObjectUpdateCallback(
+                    inlineObject,
+                    onPayloadUpdated),
                 out var engine)
             || engine is null)
             return false;

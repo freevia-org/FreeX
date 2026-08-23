@@ -336,7 +336,7 @@ public static class DocumentInspector
     /// Every paragraph that can carry a comment anchor (<see cref="Run.CommentId"/> /
     /// <see cref="Run.IsCommentReference"/>): the body/table paragraphs from <see cref="EnumerateParagraphs"/>,
     /// plus every header/footer of every document section (default, even, and first-page slots — mirroring
-    /// <see cref="NoteCommands.EnumerateHeaderFooterParagraphs"/>'s fix for the identical footnote/endnote
+    /// the note-deletion walk's fix for the identical footnote/endnote
     /// dangling-marker bug), plus every footnote's and endnote's own content paragraphs. Word allows anchoring
     /// a review comment in any of these; without walking them too, <see cref="RemoveComments"/> would clear
     /// <see cref="TextDocument.Comments"/> while leaving header/footer/footnote/endnote runs still carrying a
@@ -345,36 +345,20 @@ public static class DocumentInspector
     /// </summary>
     private static IEnumerable<Paragraph> EnumerateCommentAnchorParagraphs(TextDocument document)
     {
-        foreach (var paragraph in EnumerateParagraphs(document))
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
+                     document,
+                     TextDocumentStorySubset.Body,
+                     TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
+                     | TextDocumentStoryTraversalOptions.IncludeNestedTables
+                     | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
             yield return paragraph;
 
-        foreach (var section in document.Sections)
-        {
-            var headersFooters = section.HeadersFooters;
-            foreach (var headerFooter in new[]
-                     {
-                         headersFooters.Header,
-                         headersFooters.Footer,
-                         headersFooters.EvenHeader,
-                         headersFooters.EvenFooter,
-                         headersFooters.FirstHeader,
-                         headersFooters.FirstFooter,
-                     })
-            {
-                if (headerFooter is null)
-                    continue;
-
-                foreach (var paragraph in headerFooter.Paragraphs)
-                    yield return paragraph;
-            }
-        }
-
-        foreach (var footnote in document.Footnotes.Values)
-            foreach (var paragraph in footnote.Content)
-                yield return paragraph;
-
-        foreach (var endnote in document.Endnotes.Values)
-            foreach (var paragraph in endnote.Content)
-                yield return paragraph;
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
+                     document,
+                     TextDocumentStorySubset.HeadersFooters
+                     | TextDocumentStorySubset.Footnotes
+                     | TextDocumentStorySubset.Endnotes,
+                     TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
+            yield return paragraph;
     }
 }

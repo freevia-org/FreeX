@@ -22,9 +22,26 @@ internal static class XlsxWorksheetSinglePassNormalizer
     /// remain as separate calls in <c>XlsxFileAdapter.SourcePackage.cs</c>.
     /// </summary>
     public static void NormalizeWorksheets(ZipArchive archive)
+        => NormalizeWorksheets(archive, WorksheetNormalizationProfile.SourcePreservation);
+
+    /// <summary>
+    /// Runs the worksheet-scoped portion of <see cref="XlsxWorkbookSchemaNormalizer"/> in one
+    /// archive traversal. The selected steps and their order exactly match the former schema
+    /// pipeline; package-only normalizers still run in their original positions around this call.
+    /// </summary>
+    internal static void NormalizeSchemaWorksheets(
+        ZipArchive archive,
+        Action<string>? onWorksheetVisited = null)
+        => NormalizeWorksheets(archive, WorksheetNormalizationProfile.Schema, onWorksheetVisited);
+
+    private static void NormalizeWorksheets(
+        ZipArchive archive,
+        WorksheetNormalizationProfile profile,
+        Action<string>? onWorksheetVisited = null)
     {
-        // Read metadata counts once for XlsxWorksheetGridXmlNormalizer (step 1).
-        var (cellMetadataCount, valueMetadataCount) = XlsxWorksheetGridXmlNormalizer.ReadMetadataCountsForSinglePass(archive);
+        var (cellMetadataCount, valueMetadataCount) = profile == WorksheetNormalizationProfile.SourcePreservation
+            ? XlsxWorksheetGridXmlNormalizer.ReadMetadataCountsForSinglePass(archive)
+            : (0u, 0u);
 
         // Collect worksheet entries upfront (the entry list must not change during normalization).
         var entries = archive.Entries
@@ -36,6 +53,7 @@ internal static class XlsxWorksheetSinglePassNormalizer
 
         foreach (var entry in entries)
         {
+            onWorksheetVisited?.Invoke(entry.FullName);
             var xml = XlsxPackageXmlEditor.LoadXml(entry);
             var root = xml.Root;
             if (root is null)
@@ -43,10 +61,13 @@ internal static class XlsxWorksheetSinglePassNormalizer
 
             var changed = false;
 
-            // Step  1 – XlsxWorksheetGridXmlNormalizer
-            changed |= XlsxWorksheetGridXmlNormalizer.NormalizeWorksheetRoot(root, cellMetadataCount, valueMetadataCount);
-            // Step  2 – XlsxWorksheetMergeCellsNormalizer
-            changed |= XlsxWorksheetMergeCellsNormalizer.NormalizeWorksheetRoot(root);
+            if (profile == WorksheetNormalizationProfile.SourcePreservation)
+            {
+                // Source-preservation steps 1-2 are not part of the schema normalizer's former
+                // worksheet pipeline.
+                changed |= XlsxWorksheetGridXmlNormalizer.NormalizeWorksheetRoot(root, cellMetadataCount, valueMetadataCount);
+                changed |= XlsxWorksheetMergeCellsNormalizer.NormalizeWorksheetRoot(root);
+            }
             // Step  3 – XlsxWorksheetDimensionNormalizer
             changed |= XlsxWorksheetDimensionNormalizer.NormalizeWorksheetRoot(root);
             // Step  4 – XlsxWorksheetCalculationPropertyNormalizer
@@ -95,6 +116,8 @@ internal static class XlsxWorksheetSinglePassNormalizer
                 worksheetPathsWithWebPublishItems.Add(entry.FullName);
             // Step 25 – XlsxWorksheetOleControlNormalizer
             changed |= XlsxWorksheetOleControlNormalizer.NormalizeWorksheetRoot(root);
+            if (profile == WorksheetNormalizationProfile.Schema)
+                changed |= XlsxWorksheetOleControlNormalizer.NormalizePackageRelationships(archive, entry.FullName, xml);
             // Step 26 – XlsxWorksheetRelationshipMarkerNormalizer
             changed |= XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheetRoot(root);
             // Step 27 – XlsxWorksheetPageLayoutNormalizer
@@ -115,4 +138,10 @@ internal static class XlsxWorksheetSinglePassNormalizer
     // Namespace used to locate webPublishItems children after normalization.
     private static readonly XNamespace XlsxWorksheetWebPublishItemsNs =
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+    private enum WorksheetNormalizationProfile
+    {
+        SourcePreservation,
+        Schema
+    }
 }

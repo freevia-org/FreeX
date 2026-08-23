@@ -629,15 +629,15 @@ internal static class TextBodyRunMutationPlanner
         if (range is { } r)
         {
             var selectedRuns = TextBodyRunMutator.SplitRunsAtSelection(editedBody, r.Start, r.End);
-            targetValue = selectedRuns.Count == 0 || !selectedRuns.All(run => GetRunFormat(run, kind));
+            targetValue = selectedRuns.Count == 0 || !selectedRuns.All(run => TextRunFormattingPolicy.Get(run, kind));
             foreach (var run in selectedRuns)
-                SetRunFormat(run, kind, targetValue);
+                TextRunFormattingPolicy.Set(run, kind, targetValue);
         }
         else
         {
-            targetValue = !sourceRuns.All(run => GetRunFormat(run, kind));
+            targetValue = !sourceRuns.All(run => TextRunFormattingPolicy.Get(run, kind));
             foreach (var run in editedBody.Paragraphs.SelectMany(p => p.Runs))
-                SetRunFormat(run, kind, targetValue);
+                TextRunFormattingPolicy.Set(run, kind, targetValue);
         }
 
         TextBodyRunMutator.MergeAdjacentRunsWithSameFormat(editedBody);
@@ -659,7 +659,7 @@ internal static class TextBodyRunMutationPlanner
             : editedBody.Paragraphs.SelectMany(p => p.Runs).ToList();
 
         foreach (var run in targetRuns)
-            SetRunValueFormat(run, kind, value);
+            TextRunFormattingPolicy.SetValue(run, kind, value);
 
         TextBodyRunMutator.MergeAdjacentRunsWithSameFormat(editedBody);
         return editedBody;
@@ -734,65 +734,6 @@ internal static class TextBodyRunMutationPlanner
                 Tooltip = source.Tooltip,
             };
 
-    private static bool GetRunFormat(Run run, TableCellTextFormatKind kind) => kind switch
-    {
-        TableCellTextFormatKind.Bold => run.Bold,
-        TableCellTextFormatKind.Italic => run.Italic,
-        TableCellTextFormatKind.Underline => run.Underline,
-        TableCellTextFormatKind.Strikethrough => run.Strikethrough,
-        TableCellTextFormatKind.Superscript => run.BaselineOffset > 0,
-        TableCellTextFormatKind.Subscript => run.BaselineOffset < 0,
-        _ => false,
-    };
-
-    private static void SetRunFormat(Run run, TableCellTextFormatKind kind, bool value)
-    {
-        switch (kind)
-        {
-            case TableCellTextFormatKind.Bold:
-                run.Bold = value;
-                run.BoldSet = true;
-                break;
-            case TableCellTextFormatKind.Italic:
-                run.Italic = value;
-                run.ItalicSet = true;
-                break;
-            case TableCellTextFormatKind.Underline:
-                run.Underline = value;
-                run.UnderlineStyleToken = value ? "sng" : null;
-                break;
-            case TableCellTextFormatKind.Strikethrough:
-                run.Strikethrough = value;
-                run.StrikeStyleToken = value ? "sngStrike" : null;
-                break;
-            case TableCellTextFormatKind.Superscript:
-                run.BaselineOffset = value ? 10000 : null;
-                break;
-            case TableCellTextFormatKind.Subscript:
-                run.BaselineOffset = value ? -10000 : null;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
-        }
-    }
-
-    private static void SetRunValueFormat(Run run, TableCellTextValueFormatKind kind, object? value)
-    {
-        switch (kind)
-        {
-            case TableCellTextValueFormatKind.FontFamily:
-                run.FontFamily = (string?)value;
-                break;
-            case TableCellTextValueFormatKind.FontSize:
-                run.FontSizePt = (double?)value;
-                break;
-            case TableCellTextValueFormatKind.Color:
-                run.Color = (ThemeAwareColor?)value;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
-        }
-    }
 }
 
 /// <summary>

@@ -128,7 +128,7 @@ public sealed class ClearConditionalFormatsCommand : IWorkbookCommand
 
             var remaining = new List<GridRange>();
             foreach (var r in rule.AllRanges)
-                remaining.AddRange(SubtractRange(r, _range));
+                remaining.AddRange(GridRangeSubtraction.Subtract(r, _range));
 
             if (remaining.Count == 0)
                 continue; // whole rule range was selected -- drop the rule
@@ -154,56 +154,6 @@ public sealed class ClearConditionalFormatsCommand : IWorkbookCommand
         rules.AddRange(_previousRules);
     }
 
-    /// <summary>
-    /// Returns the rectangle(s) that remain from <paramref name="source"/> after removing every
-    /// cell also covered by <paramref name="cut"/>. Disjoint ranges are returned unchanged; a
-    /// partial overlap yields up to four non-overlapping rectangles (above/below/left/right of the
-    /// intersection); full containment yields nothing.
-    /// </summary>
-    private static IEnumerable<GridRange> SubtractRange(GridRange source, GridRange cut)
-    {
-        if (!source.Overlaps(cut))
-        {
-            yield return source;
-            yield break;
-        }
-
-        var sheet = source.Start.Sheet;
-
-        // Band above the intersection (full width of source).
-        if (cut.Start.Row > source.Start.Row)
-        {
-            yield return new GridRange(
-                new CellAddress(sheet, source.Start.Row, source.Start.Col),
-                new CellAddress(sheet, Math.Min(cut.Start.Row - 1, source.End.Row), source.End.Col));
-        }
-
-        // Band below the intersection (full width of source).
-        if (cut.End.Row < source.End.Row)
-        {
-            yield return new GridRange(
-                new CellAddress(sheet, Math.Max(cut.End.Row + 1, source.Start.Row), source.Start.Col),
-                new CellAddress(sheet, source.End.Row, source.End.Col));
-        }
-
-        // Middle band (rows shared with the intersection), left and right slivers only.
-        var midStartRow = Math.Max(source.Start.Row, cut.Start.Row);
-        var midEndRow = Math.Min(source.End.Row, cut.End.Row);
-
-        if (cut.Start.Col > source.Start.Col)
-        {
-            yield return new GridRange(
-                new CellAddress(sheet, midStartRow, source.Start.Col),
-                new CellAddress(sheet, midEndRow, Math.Min(cut.Start.Col - 1, source.End.Col)));
-        }
-
-        if (cut.End.Col < source.End.Col)
-        {
-            yield return new GridRange(
-                new CellAddress(sheet, midStartRow, Math.Max(cut.End.Col + 1, source.Start.Col)),
-                new CellAddress(sheet, midEndRow, source.End.Col));
-        }
-    }
 }
 
 /// <summary>

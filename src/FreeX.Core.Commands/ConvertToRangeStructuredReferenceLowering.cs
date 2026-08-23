@@ -226,50 +226,9 @@ internal static class ConvertToRangeStructuredReferenceLowering
             var hostAddress = new CellAddress(sheet.Id, 0, 0);
 
             foreach (var chart in sheet.Charts)
-            {
-                if (chart.VerbatimSeriesFormulas is { Count: > 0 } vf)
-                {
-                    for (var i = 0; i < vf.Count; i++)
-                    {
-                        var entry = vf[i];
-                        var newVal = LowerChartFormula(entry.ValFormula, workbook, tableSheet, table, hostAddress);
-                        var newCat = LowerChartFormula(entry.CatFormula, workbook, tableSheet, table, hostAddress);
-                        var newTx = LowerChartFormula(entry.TxFormula, workbook, tableSheet, table, hostAddress);
-                        var newBubble = LowerChartFormula(entry.BubbleSizeFormula, workbook, tableSheet, table, hostAddress);
-                        if (!string.Equals(newVal, entry.ValFormula, StringComparison.Ordinal) ||
-                            !string.Equals(newCat, entry.CatFormula, StringComparison.Ordinal) ||
-                            !string.Equals(newTx, entry.TxFormula, StringComparison.Ordinal) ||
-                            !string.Equals(newBubble, entry.BubbleSizeFormula, StringComparison.Ordinal))
-                        {
-                            vf[i] = entry with
-                            {
-                                ValFormula = newVal,
-                                CatFormula = newCat,
-                                TxFormula = newTx,
-                                BubbleSizeFormula = newBubble
-                            };
-                        }
-                    }
-                }
-
-                if (chart.SeriesRangeDataLabels is { Count: > 0 } dl)
-                {
-                    for (var i = 0; i < dl.Count; i++)
-                    {
-                        var entry = dl[i];
-                        var lowered = LowerChartFormula(entry.Formula, workbook, tableSheet, table, hostAddress);
-                        if (!string.Equals(lowered, entry.Formula, StringComparison.Ordinal))
-                            dl[i] = entry with { Formula = lowered };
-                    }
-                }
-
-                var newPlus = LowerChartFormula(chart.ErrorBarPlusRangeFormula, workbook, tableSheet, table, hostAddress);
-                var newMinus = LowerChartFormula(chart.ErrorBarMinusRangeFormula, workbook, tableSheet, table, hostAddress);
-                if (!string.Equals(newPlus, chart.ErrorBarPlusRangeFormula, StringComparison.Ordinal))
-                    chart.ErrorBarPlusRangeFormula = newPlus;
-                if (!string.Equals(newMinus, chart.ErrorBarMinusRangeFormula, StringComparison.Ordinal))
-                    chart.ErrorBarMinusRangeFormula = newMinus;
-            }
+                ChartFormulaFieldTransformer.Transform(
+                    chart,
+                    formula => LowerChartFormula(formula, workbook, tableSheet, table, hostAddress));
         }
     }
 

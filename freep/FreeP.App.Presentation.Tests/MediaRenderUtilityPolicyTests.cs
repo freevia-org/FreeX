@@ -77,8 +77,9 @@ public sealed class MediaRenderUtilityPolicyTests
 
         foreach (var media in new[] { wpfMedia, avaloniaMedia })
         {
-            media.Should().Contain("RgbColorTextCodec.TryParse");
-            media.Should().Contain("RgbColorTextProfile.CaptionPayload");
+            media.Should().Contain("PresentationCaptionPaintPlanner.Resolve");
+            media.Should().NotContain("RgbColorTextCodec.TryParse");
+            media.Should().NotContain("RgbColorTextProfile.CaptionPayload");
             media.Should().NotContain("Color.Parse(\"#\" + colorHex)");
             media.Should().NotContain("ColorConverter.ConvertFromString(\"#\" + colorHex)");
         }

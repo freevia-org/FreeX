@@ -1167,7 +1167,7 @@ public sealed class MacOsAppReadinessPreflightTests
         using var temp = new TestTemporaryDirectory();
         CreateMinimalMacOsReadinessRepo(temp.Path);
         File.WriteAllText(
-            Path.Combine(temp.Path, "src", "FreeX.App.Avalonia", "Packaging", "macos", "FreeX.icns"),
+            Path.Combine(temp.Path, "shared", "Free.Shared.Shell", "Resources", "FreeX.icns"),
             "not-an-icns");
 
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
@@ -1198,6 +1198,10 @@ public sealed class MacOsAppReadinessPreflightTests
             "src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj",
             """
             <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <FreeBrand>FreeX</FreeBrand>
+              </PropertyGroup>
+              <Import Project="..\..\shared\Free.Shared.Shell\BrandAssets.props" />
               <ItemGroup>
                 <ProjectReference Include="..\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
                 <ProjectReference Include="..\FreeX.App.Services\FreeX.App.Services.csproj" />
@@ -1215,7 +1219,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
               </ItemGroup>
               <ItemGroup>
-                <Content Include="Packaging\macos\FreeX.icns" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+                <Content Include="$(BrandMacOsIconPath)" Link="$(BrandMacOsIconFileName)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
               </ItemGroup>
               <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-macos'">
                 <Compile Remove="MacOs\**\*.cs" />
@@ -1408,7 +1412,7 @@ public sealed class MacOsAppReadinessPreflightTests
                         -p:PublishSingleFile=false --output "$validation_published"
                       test -x "$validation_host"
                       cp src/FreeX.App.Avalonia/Packaging/macos/Info.plist "$app/Contents/Info.plist"
-                      cp src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns "$app/Contents/Resources/FreeX.icns"
+                      cp shared/Free.Shared.Shell/Resources/FreeX.icns "$app/Contents/Resources/FreeX.icns"
                       plutil -lint "$app/Contents/Info.plist"
                       test -f "$app/Contents/MacOS/FreeX"
                       test -x "$app/Contents/MacOS/FreeX"
@@ -1901,7 +1905,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       --prerelease
             """);
 
-        WriteMinimalIcns(root, "src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns");
+        WriteMinimalIcns(root, "shared/Free.Shared.Shell/Resources/FreeX.icns");
 
         WriteFile(
             root,
@@ -2261,6 +2265,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);
                 WorkbookViewportScrollPlanner.CalculateViewportOrigin(
                 _session.SetViewportOrigin(topRow, leftCol)
+                _ => FocusActiveCellOrGridHost()
                 */
                 public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files) => await Task.CompletedTask;
                 private IWorkbookFileAccessService _fileAccess = WorkbookFileAccessServiceFactory.Create(App.Diagnostics);
@@ -4338,7 +4343,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 new ClearHyperlinksCommand(sheetId, sheetRange)
                 public WorkbookCellEditResult InsertAutoSumFormula(string functionName)
                 AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan)
-                CreateEditCellsCommand([(plan.Target, Cell.FromFormula(plan.Formula))])
+                CreateEditCellsCommand([(plan.Target, autoSumCell)])
                 ApplySuccessfulEditResult(result, plan.Target);
                 public bool CanFillSelectedRange(FillCellsDirection direction)
                 public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)
@@ -5140,17 +5145,14 @@ public sealed class MacOsAppReadinessPreflightTests
     {
         var path = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(
-            path,
-            [
-                (byte)'i', (byte)'c', (byte)'n', (byte)'s',
-                0, 0, 0, 32,
-                (byte)'i', (byte)'c', (byte)'p', (byte)'4',
-                0, 0, 0, 8,
-                (byte)'i', (byte)'c', (byte)'p', (byte)'5',
-                0, 0, 0, 8,
-                (byte)'i', (byte)'c', (byte)'0', (byte)'8',
-                0, 0, 0, 8
-            ]);
+        var bytes = new List<byte> { (byte)'i', (byte)'c', (byte)'n', (byte)'s', 0, 0, 0, 0 };
+        foreach (var type in new[] { "ic07", "ic08", "ic09", "ic10", "ic11", "ic12", "ic13", "ic14" })
+        {
+            bytes.AddRange(System.Text.Encoding.ASCII.GetBytes(type));
+            bytes.AddRange([0, 0, 0, 8]);
+        }
+
+        bytes[7] = (byte)bytes.Count;
+        File.WriteAllBytes(path, bytes.ToArray());
     }
 }

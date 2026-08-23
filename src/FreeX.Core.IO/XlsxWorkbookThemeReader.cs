@@ -321,22 +321,7 @@ public static class XlsxWorkbookThemeReader
     }
 
     private static DrawingMlThemeColorSlot ToSharedSlot(WorkbookThemeColorSlot slot) =>
-        slot switch
-        {
-            WorkbookThemeColorSlot.Dark1 => DrawingMlThemeColorSlot.Dark1,
-            WorkbookThemeColorSlot.Light1 => DrawingMlThemeColorSlot.Light1,
-            WorkbookThemeColorSlot.Dark2 => DrawingMlThemeColorSlot.Dark2,
-            WorkbookThemeColorSlot.Light2 => DrawingMlThemeColorSlot.Light2,
-            WorkbookThemeColorSlot.Accent1 => DrawingMlThemeColorSlot.Accent1,
-            WorkbookThemeColorSlot.Accent2 => DrawingMlThemeColorSlot.Accent2,
-            WorkbookThemeColorSlot.Accent3 => DrawingMlThemeColorSlot.Accent3,
-            WorkbookThemeColorSlot.Accent4 => DrawingMlThemeColorSlot.Accent4,
-            WorkbookThemeColorSlot.Accent5 => DrawingMlThemeColorSlot.Accent5,
-            WorkbookThemeColorSlot.Accent6 => DrawingMlThemeColorSlot.Accent6,
-            WorkbookThemeColorSlot.Hyperlink => DrawingMlThemeColorSlot.Hyperlink,
-            WorkbookThemeColorSlot.FollowedHyperlink => DrawingMlThemeColorSlot.FollowedHyperlink,
-            _ => DrawingMlThemeColorSlot.Dark1
-        };
+        XlsxDrawingThemeColorSlots.ToSharedSlot(slot);
 
     private static CellColor ToCellColor(DrawingMlRgbColor color) =>
         new(color.R, color.G, color.B);

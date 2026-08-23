@@ -246,29 +246,7 @@ public static partial class PivotTableRefreshService
             return lastRenderedRange;
         }
 
-        uint? minRow = null;
-        uint? minCol = null;
-        uint? maxRow = null;
-        uint? maxCol = null;
-
-        for (var row = pivotTable.TargetRange.Start.Row; row <= pivotTable.TargetRange.End.Row; row++)
-        for (var col = pivotTable.TargetRange.Start.Col; col <= pivotTable.TargetRange.End.Col; col++)
-        {
-            if (sheet.GetCell(row, col) is null)
-                continue;
-
-            minRow = minRow is null ? row : Math.Min(minRow.Value, row);
-            minCol = minCol is null ? col : Math.Min(minCol.Value, col);
-            maxRow = maxRow is null ? row : Math.Max(maxRow.Value, row);
-            maxCol = maxCol is null ? col : Math.Max(maxCol.Value, col);
-        }
-
-        if (minRow is null || minCol is null || maxRow is null || maxCol is null)
-            return new GridRange(pivotTable.TargetRange.Start, pivotTable.TargetRange.Start);
-
-        return new GridRange(
-            new CellAddress(sheet.Id, minRow.Value, minCol.Value),
-            new CellAddress(sheet.Id, maxRow.Value, maxCol.Value));
+        return PivotTableTargetRangeResolver.GetOccupiedRange(sheet, pivotTable);
     }
 
     /// <summary>
@@ -279,10 +257,9 @@ public static partial class PivotTableRefreshService
     /// and, this fix's own target, a slicer/timeline selection change), or the chart keeps rendering
     /// whatever cells the pivot happened to occupy at some earlier point -- stale and silently
     /// inconsistent with the pivot right next to it. This is the single shared implementation of the
-    /// per-command "sync bound charts" step that most pivot-mutating commands already each carry their
-    /// own private copy of (see e.g. <c>PivotTableActionCommands.UpdateBoundPivotChartRanges</c>,
-    /// <c>ConfigurePivotTableFieldFiltersCommand.UpdateBoundPivotChartRanges</c>) -- new callers should
-    /// call this shared method rather than adding yet another textually-disjoint copy of the same loop.
+    /// per-command "sync bound charts" step. Pivot mutation commands route through this method, either
+    /// directly or through <see cref="PivotTableCommandRefreshTransaction"/>, so new callers do not
+    /// need to reproduce the chart scan and binding updates.
     /// A PivotChart can only ever live on the SAME sheet as its source pivot table (both
     /// <c>MoveChartCommand</c> and <c>MoveChartToNewSheetCommand</c> reject <c>IsPivotChart</c> charts
     /// outright), but this still scans every sheet -- matching the majority of the existing per-command

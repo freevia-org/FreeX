@@ -189,7 +189,7 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
                 sheet.CommentAuthors.TryGetValue(source, out var commentAuthor) ? commentAuthor : null,
                 sheet.ShownComments.Contains(source),
                 sheet.ThreadedComments.TryGetValue(source, out var threadedComment)
-                    ? ClonedThreadedCommentForNewAddress(threadedComment)
+                    ? ThreadedCommentCloner.Clone(threadedComment, ThreadedCommentIdPolicy.Reset)
                     : null,
                 sheet.Hyperlinks.TryGetValue(source, out var hyperlink) ? hyperlink : null,
                 sheet.HyperlinkMetadata.TryGetValue(source, out var metadata) ? metadata : null,
@@ -213,7 +213,7 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
                 sheet.CommentAuthors.TryGetValue(address, out var commentAuthor) ? commentAuthor : null,
                 sheet.ShownComments.Contains(address),
                 sheet.ThreadedComments.TryGetValue(address, out var threadedComment)
-                    ? CloneThreadedComment(threadedComment)
+                    ? ThreadedCommentCloner.Clone(threadedComment, ThreadedCommentIdPolicy.Preserve)
                     : null,
                 sheet.Hyperlinks.TryGetValue(address, out var hyperlink) ? hyperlink : null,
                 sheet.HyperlinkMetadata.TryGetValue(address, out var metadata) ? metadata : null,
@@ -255,7 +255,7 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
             sheet.ShownComments.Remove(payload.Target);
 
         if (payload.ThreadedComment is not null)
-            sheet.ThreadedComments[payload.Target] = CloneThreadedComment(payload.ThreadedComment);
+            sheet.ThreadedComments[payload.Target] = ThreadedCommentCloner.Clone(payload.ThreadedComment, ThreadedCommentIdPolicy.Preserve);
         else
             sheet.ThreadedComments.Remove(payload.Target);
 
@@ -314,7 +314,7 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
             sheet.ShownComments.Remove(snapshot.Address);
 
         if (snapshot.ThreadedComment is not null)
-            sheet.ThreadedComments[snapshot.Address] = CloneThreadedComment(snapshot.ThreadedComment);
+            sheet.ThreadedComments[snapshot.Address] = ThreadedCommentCloner.Clone(snapshot.ThreadedComment, ThreadedCommentIdPolicy.Preserve);
         else
             sheet.ThreadedComments.Remove(snapshot.Address);
 
@@ -338,25 +338,6 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         else
             sheet.CellPhoneticGuides.Remove(snapshot.Address);
     }
-
-    private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
-        comment with { Replies = comment.Replies.Select(reply => reply with { }).ToList() };
-
-    // A copy/paste creates a brand-new, independent comment thread at the destination address --
-    // unlike CloneThreadedComment above (used only to snapshot/restore a cell's own pre-existing
-    // comment in place for undo), this must NOT carry over the source's persisted Id or reply
-    // Ids. Otherwise the pasted thread's root serializes with the identical
-    // <threadedComment id="..."> as the source (XlsxWorksheetThreadedCommentMapper.
-    // ToThreadedCommentElements reuses comment.Id verbatim), and reply lookup on reload (grouped
-    // globally by parentId string, not scoped per cell) attaches the source's replies to the
-    // pasted thread too. Clearing Id (and each reply's Id) forces the writer to mint a fresh,
-    // address-derived stable guid for the pasted thread instead.
-    private static ThreadedComment ClonedThreadedCommentForNewAddress(ThreadedComment comment) =>
-        comment with
-        {
-            Id = null,
-            Replies = comment.Replies.Select(reply => reply with { Id = null }).ToList(),
-        };
 
     private static bool HasComments(Sheet sheet, IEnumerable<CellAddress> addresses)
     {

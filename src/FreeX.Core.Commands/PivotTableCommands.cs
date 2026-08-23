@@ -347,15 +347,14 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemor
         // this refresh with a warning instead of silently overwriting adjacent data. Without this, Undo
         // could never repair the loss either: the destroyed cell was never part of any undo snapshot in
         // the first place (see Revert below, which only ever knew about the OLD footprint).
-        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
         var fieldSnapshot = _fieldSnapshot;
 
         // R116-commands-pivot-refresh-scope: this command IS the F5 / "Refresh PivotTable" action --
         // the one genuine "source data may have changed" entry point -- so it is the only caller that
         // asks Refresh to re-derive cache.Fields' SharedItems from the live source (see
         // PivotTableRefreshService.Refresh's rescanCacheSharedItems parameter doc).
-        if (PivotTableRefreshService.RefreshGuarded(
-                ctx.Workbook, sheet, pivotTable, baseline,
+        if (PivotTableCommandRefreshTransaction.RefreshGuarded(
+                ctx.Workbook, sheet, pivotTable,
                 () => fieldSnapshot!.Restore(pivotTable, ctx.Workbook),
                 rescanCacheSharedItems: true) is { } failure)
         {
@@ -366,7 +365,6 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemor
             return failure;
         }
 
-        UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
 
@@ -393,24 +391,11 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemor
                 sheet.AddMergedRegion(region);
         }
         if (pivotTable is not null)
-            UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
+            PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
         _targetSnapshot = null;
         _lastRenderedRangeSnapshot = null;
         _fieldSnapshot = null;
         _oldMergedRegions = null;
-    }
-
-    private static void UpdateBoundPivotChartRanges(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
-    {
-        var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
-        foreach (var chartSheet in workbook.Sheets)
-        foreach (var chart in chartSheet.Charts.Where(chart =>
-                     chart.IsPivotChart &&
-                     string.Equals(chart.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)))
-        {
-            chart.DataRange = outputRange;
-            chart.PivotCacheId = pivotTable.CacheId;
-        }
     }
 
     /// <summary>

@@ -55,17 +55,12 @@ public sealed class WorkbookSaveService
         // it can never see (and therefore can never race) its own in-flight file.
         CleanupOrphanedTemporaryFiles(path);
 
-        // Detect a concurrent second writer: if the caller captured the file's write time at open
-        // (WorkbookOpenResult.SourceLastWriteTimeUtc) and the file on disk has a different write
-        // time now, someone else changed it since we read it -- writing over it here would silently
-        // discard their changes. This is a best-effort check-then-act (not a held file lock), but it
-        // catches the common "another instance/colleague saved while I was still editing" case.
-        if (expectedLastWriteTimeUtc is { } expectedWriteTimeUtc &&
-            _fileOperations.FileExists(path) &&
-            _fileOperations.GetLastWriteTimeUtc(path) != expectedWriteTimeUtc)
-        {
-            throw new WorkbookExternallyModifiedException(path);
-        }
+        ExternalFileWriteConflictPolicy.ThrowIfChangedSince(
+            path,
+            expectedLastWriteTimeUtc,
+            static conflictingPath => new WorkbookExternallyModifiedException(conflictingPath),
+            _fileOperations.FileExists,
+            _fileOperations.GetLastWriteTimeUtc);
 
         ReportProgress(progress, WorkbookSavePhase.Preparing, TimeSpan.Zero, 1);
         var tempPath = CreateTemporaryPath(path, ".tmp");

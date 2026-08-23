@@ -31,8 +31,10 @@ public sealed class XlsxWorksheetNativeMetadataWriterPerformanceTests
     public void AdditionalWorksheetViews_SaveSkipsSheetsWithoutViewsWithoutLinqFiltering()
     {
         var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetAdditionalViewMapper.cs");
+        var traversal = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetPackageEditTraversal.cs");
 
-        source.Should().Contain("foreach (var sheet in workbook.Sheets)");
+        source.Should().Contain("XlsxWorksheetPackageEditTraversal.Edit");
+        traversal.Should().Contain("foreach (var sheet in workbook.Sheets)");
         source.Should().Contain("var additionalViews = sheet.AdditionalViews;");
         source.Should().Contain("if (additionalViews is null)");
         source.Should().NotContain(

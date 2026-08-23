@@ -170,6 +170,8 @@ public sealed class ChartRenderCommandPlannerTests
         commands[0].EndAngle.Should().Be(Math.PI);
         commands[0].Fill.Should().NotBe(primitive.DepthFill!.Value);
         commands[0].DepthSidewallGeometry.Should().NotBeNull();
+        commands[0].Stroke.Should().BeNull();
+        commands[1].Stroke.Should().Be(new ChartStrokePlan(SrgbColor.White, 255, 0.8));
         var sidewall = commands[0].DepthSidewallGeometry!.Value;
         sidewall.TopStart.X.Should().BeApproximately(70, 0.000001);
         sidewall.TopStart.Y.Should().BeApproximately(50, 0.000001);
@@ -180,6 +182,31 @@ public sealed class ChartRenderCommandPlannerTests
         sidewall.RadiusX.Should().Be(20);
         sidewall.RadiusY.Should().Be(14);
         commands[1].Fill.Should().Be(primitive.Fill!.Value);
+    }
+
+    [Fact]
+    public void Plan_ResolvesRoundedFrameRadiusIntoThePortableCommand()
+    {
+        var roundedScene = new ChartScenePlan
+        {
+            Frame = Frame() with
+            {
+                Bounds = new ChartPlanRect(0, 0, 10, 6),
+            },
+            GeometryKind = ChartSceneGeometryKind.Empty,
+            RoundedCorners = true,
+        };
+        var squareScene = new ChartScenePlan
+        {
+            Frame = Frame(),
+            GeometryKind = ChartSceneGeometryKind.Empty,
+            RoundedCorners = false,
+        };
+
+        ChartRenderCommandPlanner.Plan(roundedScene, ChartRenderExecutionProfile.Wpf)
+            .OfType<ChartRenderCommand.Frame>().Single().CornerRadius.Should().Be(3);
+        ChartRenderCommandPlanner.Plan(squareScene, ChartRenderExecutionProfile.Avalonia)
+            .OfType<ChartRenderCommand.Frame>().Single().CornerRadius.Should().Be(0);
     }
 
     [Fact]

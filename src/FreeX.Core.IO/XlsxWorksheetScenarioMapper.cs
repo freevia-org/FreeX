@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -51,25 +50,8 @@ internal static class XlsxWorksheetScenarioMapper
 
     public static void Save(Stream packageStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        var workbookRels = XlsxRelationshipReader.LoadTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
+        XlsxWorksheetPackageEditTraversal.Edit(packageStream, workbook, (session, sheet, edit) =>
         {
             var scenariosForSheet = workbook.Scenarios
                 .Select(scenario => new
@@ -85,23 +67,12 @@ internal static class XlsxWorksheetScenarioMapper
                 })
                 .Where(item => item.Changes.Count > 0)
                 .ToList();
-            if (scenariosForSheet.Count == 0 ||
-                !sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-            {
-                continue;
-            }
+            if (scenariosForSheet.Count == 0)
+                return;
 
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
+            var root = edit.Root;
             root.Element(workbookNs + "scenarios")?.Remove();
-            InsertScenariosInOrder(root, workbookNs, new XElement(
+            XlsxWorksheetElementOrder.Insert(root, new XElement(
                 workbookNs + "scenarios",
                 scenariosForSheet.Select(item =>
                 {
@@ -125,8 +96,8 @@ internal static class XlsxWorksheetScenarioMapper
                     return scenario;
                 })));
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
-        }
+            session.MarkDirty(edit);
+        });
     }
 
     public static HashSet<string> GetModeledNamesForSheet(Workbook workbook, string sheetName)
@@ -191,57 +162,4 @@ internal static class XlsxWorksheetScenarioMapper
         _ => string.Empty
     };
 
-    private static void InsertScenariosInOrder(XElement worksheetRoot, XNamespace workbookNs, XElement scenarios)
-    {
-        string[] laterWorksheetElements =
-        [
-            "autoFilter",
-            "sortState",
-            "dataConsolidate",
-            "customSheetViews",
-            "mergeCells",
-            "phoneticPr",
-            "conditionalFormatting",
-            "dataValidations",
-            "hyperlinks",
-            "printOptions",
-            "pageMargins",
-            "pageSetup",
-            "headerFooter",
-            "rowBreaks",
-            "colBreaks",
-            "customProperties",
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace != workbookNs ||
-                !laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            insertionPoint = element;
-            break;
-        }
-
-        if (insertionPoint is null)
-            worksheetRoot.Add(scenarios);
-        else
-            insertionPoint.AddBeforeSelf(scenarios);
-    }
 }

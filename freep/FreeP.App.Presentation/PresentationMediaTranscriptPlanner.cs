@@ -411,7 +411,7 @@ public static class PresentationMediaTranscriptPlanner
         }
 
         var selectedShapeId = selectedShapeIds[0];
-        return EnumerateShapes(slide.Shapes).FirstOrDefault(shape =>
+        return SlideShapeTraversal.EnumerateDepthFirst(slide).FirstOrDefault(shape =>
             shape.Id == selectedShapeId
             && shape.Kind == SlideShapeKind.Media
             && shape.Media is not null);
@@ -603,7 +603,7 @@ public static class PresentationMediaTranscriptPlanner
         for (var slideIndex = 0; slideIndex < presentation.Slides.Count; slideIndex++)
         {
             var slide = presentation.Slides[slideIndex];
-            foreach (var shape in EnumerateShapes(slide.Shapes))
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
             {
                 if (shape.Kind != SlideShapeKind.Media || shape.Media is not { } media)
                 {
@@ -3018,15 +3018,4 @@ public static class PresentationMediaTranscriptPlanner
             ? WhitespacePattern.Replace(normalized, " ")
             : string.Empty;
 
-    private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
-    {
-        foreach (var shape in shapes)
-        {
-            yield return shape;
-            foreach (var child in EnumerateShapes(shape.Children))
-            {
-                yield return child;
-            }
-        }
-    }
 }

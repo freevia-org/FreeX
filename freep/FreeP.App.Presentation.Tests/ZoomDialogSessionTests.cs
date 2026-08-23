@@ -117,8 +117,7 @@ public sealed class ZoomDialogSessionTests
     {
         foreach (var fileName in new[]
                  {
-                     "SectionZoomDialog.cs",
-                     "SlideZoomDialog.cs",
+                     "SingleTargetZoomDialog.cs",
                      "SummaryZoomDialog.cs",
                      "SummaryZoomCoverImageTargetDialog.cs",
                  })

@@ -10,26 +10,13 @@ internal static class XlsxStructuredTableWriter
     public static void Save(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
+        var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive, rejectDuplicateRelationshipIds: true);
+        if (worksheetPathMap is null)
             return;
-
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
 
         // Reserve every table PackagePart already claimed anywhere in the workbook up front, so a
@@ -66,15 +53,11 @@ internal static class XlsxStructuredTableWriter
         if (XlsxAutoFilterColorFilterDxfWriter.HasUnallocatedStructuredTableColorFilters(workbook))
             tableColorFilterDxfIds = XlsxAutoFilterColorFilterDxfWriter.SaveForStructuredTables(archive, workbook, workbookNs);
 
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        foreach (var worksheet in worksheetPathMap.Worksheets)
         {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                string.IsNullOrWhiteSpace(relId) ||
-                !sheetsByName.TryGetValue(name, out var sheet) ||
-                sheet.StructuredTables.Count == 0 ||
-                !relTargets.TryGetValue(relId, out var worksheetPath))
+            var name = worksheet.SheetName;
+            var worksheetPath = worksheet.WorksheetPath;
+            if (!sheetsByName.TryGetValue(name, out var sheet) || sheet.StructuredTables.Count == 0)
             {
                 continue;
             }
@@ -419,7 +402,7 @@ internal static class XlsxStructuredTableWriter
                 // <filters> element it was read from, mirroring
                 // XlsxWorksheetAutoFilterXmlMapper.ToFilterColumnXml's identical DateGroups emission
                 // for the sheet-level AutoFilter path.
-                filterColumn.DateGroups.Select(dateGroup => ToDateGroupItemXml(dateGroup, workbookNs))));
+                filterColumn.DateGroups.Select(dateGroup => XlsxAutoFilterXmlCodec.WriteDateGroupItem(dateGroup, workbookNs))));
         }
 
         if (hasCustomFilters)
@@ -443,13 +426,13 @@ internal static class XlsxStructuredTableWriter
         // same way "filters"/"customFilters" already are.
         // R111-io-structured-table-colorfilter-roundtrip-1: XlsxStructuredTableMetadataReader now
         // populates ColorFilter from a loaded file's <colorFilter> element too (mirroring
-        // XlsxWorksheetAutoFilterXmlMapper.ReadColorFilter) and excludes "colorFilter" from
+        // XlsxAutoFilterXmlCodec.ReadColorFilter) and excludes "colorFilter" from
         // NativeFilterXmls, so this branch -- not the passthrough loop below -- is what re-emits a
         // round-tripped colorFilter. That keeps ColorFilter as the single source of truth: never
         // dropped (this branch fires whenever it is set, loaded or fresh) and never duplicated (the
         // passthrough loop below never sees a "colorFilter" element to re-add).
         if (!hasCustomFilters && filterColumn.ColorFilter is { } colorFilter)
-            element.Add(ToColorFilterXml(colorFilter, workbookNs, allocatedColorFilterDxfId));
+            element.Add(XlsxAutoFilterXmlCodec.WriteColorFilter(colorFilter, workbookNs, allocatedColorFilterDxfId));
 
         foreach (var nativeFilterXml in filterColumn.NativeFilterXmls)
         {
@@ -457,53 +440,6 @@ internal static class XlsxStructuredTableWriter
         }
 
         return element;
-    }
-
-    /// <summary>Mirrors XlsxWorksheetAutoFilterXmlMapper.ToColorFilterXml exactly (same model type, same attribute-omission rules) so a table's &lt;colorFilter&gt; is byte-shape-identical to what the worksheet-level AutoFilter path would emit for the same criterion.</summary>
-    private static XElement ToColorFilterXml(WorksheetAutoFilterColorFilterModel colorFilter, XNamespace workbookNs, int? allocatedDxfId)
-    {
-        var element = new XElement(workbookNs + "colorFilter");
-        if (colorFilter.DifferentialFormatIdRaw is not null)
-            element.SetAttributeValue("dxfId", colorFilter.DifferentialFormatIdRaw);
-        else if (colorFilter.DifferentialFormatId is not null)
-            element.SetAttributeValue("dxfId", colorFilter.DifferentialFormatId.Value.ToString(CultureInfo.InvariantCulture));
-        else if (allocatedDxfId is not null)
-            element.SetAttributeValue("dxfId", allocatedDxfId.Value.ToString(CultureInfo.InvariantCulture));
-
-        if (colorFilter.CellColorRaw is not null)
-            element.SetAttributeValue("cellColor", colorFilter.CellColorRaw);
-        else if (!colorFilter.CellColor)
-            element.SetAttributeValue("cellColor", "0");
-
-        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, colorFilter.NativeAttributes);
-
-        return element;
-    }
-
-    /// <summary>Mirrors XlsxWorksheetAutoFilterXmlMapper.ToDateGroupItemXml exactly (same model type, same attribute-omission rules) so a table's &lt;dateGroupItem&gt; is byte-shape-identical to what the worksheet-level AutoFilter path would emit for the same criterion.</summary>
-    private static XElement ToDateGroupItemXml(WorksheetAutoFilterDateGroupItemModel dateGroup, XNamespace workbookNs)
-    {
-        var element = new XElement(workbookNs + "dateGroupItem");
-        SetRawOrIntAttribute(element, "year", dateGroup.YearRaw, dateGroup.Year);
-        SetRawOrIntAttribute(element, "month", dateGroup.MonthRaw, dateGroup.Month);
-        SetRawOrIntAttribute(element, "day", dateGroup.DayRaw, dateGroup.Day);
-        SetRawOrIntAttribute(element, "hour", dateGroup.HourRaw, dateGroup.Hour);
-        SetRawOrIntAttribute(element, "minute", dateGroup.MinuteRaw, dateGroup.Minute);
-        SetRawOrIntAttribute(element, "second", dateGroup.SecondRaw, dateGroup.Second);
-        if (!string.IsNullOrWhiteSpace(dateGroup.DateTimeGrouping))
-            element.SetAttributeValue("dateTimeGrouping", dateGroup.DateTimeGrouping);
-
-        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, dateGroup.NativeAttributes);
-
-        return element;
-    }
-
-    private static void SetRawOrIntAttribute(XElement element, string name, string? rawValue, int? value)
-    {
-        if (rawValue is not null)
-            element.SetAttributeValue(name, rawValue);
-        else if (value is not null)
-            element.SetAttributeValue(name, value.Value.ToString(CultureInfo.InvariantCulture));
     }
 
     private static XElement ToCustomFilterXml(StructuredTableCustomFilterModel filter, XNamespace workbookNs)

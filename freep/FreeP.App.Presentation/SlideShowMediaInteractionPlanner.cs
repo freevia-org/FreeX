@@ -428,18 +428,8 @@ public static class SlideShowMediaInteractionPlanner
     private static IEnumerable<SlideShape> EnumerateEligibleShapes(
         Slide slide,
         bool showNarration) =>
-        EnumerateShapes(slide.Shapes).Where(shape =>
+        SlideShapeTraversal.EnumerateDepthFirst(slide).Where(shape =>
             shape.Kind == SlideShapeKind.Media
             && shape.Media is not null
             && (showNarration || shape.Media.IsVideo));
-
-    private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
-    {
-        foreach (var shape in shapes)
-        {
-            yield return shape;
-            foreach (var child in EnumerateShapes(shape.Children))
-                yield return child;
-        }
-    }
 }

@@ -144,7 +144,7 @@ public sealed class FormatPainterDataValidationCommand : IWorkbookCommand
 
             targetSheet.DataValidations.RemoveAt(i);
             var remainingRanges = allRanges
-                .SelectMany(range => Subtract(range, _targetRange))
+                .SelectMany(range => GridRangeSubtraction.Subtract(range, _targetRange))
                 .ToList();
             for (var r = remainingRanges.Count - 1; r >= 0; r--)
             {
@@ -159,36 +159,6 @@ public sealed class FormatPainterDataValidationCommand : IWorkbookCommand
             }
         }
     }
-
-    private static IEnumerable<GridRange> Subtract(GridRange source, GridRange remove)
-    {
-        if (!source.Overlaps(remove))
-        {
-            yield return source;
-            yield break;
-        }
-
-        var top = Math.Max(source.Start.Row, remove.Start.Row);
-        var bottom = Math.Min(source.End.Row, remove.End.Row);
-        var left = Math.Max(source.Start.Col, remove.Start.Col);
-        var right = Math.Min(source.End.Col, remove.End.Col);
-        var sheet = source.Start.Sheet;
-
-        if (source.Start.Row < top)
-            yield return MakeRange(sheet, source.Start.Row, source.Start.Col, top - 1, source.End.Col);
-
-        if (bottom < source.End.Row)
-            yield return MakeRange(sheet, bottom + 1, source.Start.Col, source.End.Row, source.End.Col);
-
-        if (source.Start.Col < left)
-            yield return MakeRange(sheet, top, source.Start.Col, bottom, left - 1);
-
-        if (right < source.End.Col)
-            yield return MakeRange(sheet, top, right + 1, bottom, source.End.Col);
-    }
-
-    private static GridRange MakeRange(SheetId sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>
-        new(new CellAddress(sheet, startRow, startCol), new CellAddress(sheet, endRow, endCol));
 
     private static bool RuleAppliesToSourceCell(DataValidation rule, CellAddress address) =>
         rule.AppliesTo.Contains(address) ||

@@ -53,7 +53,7 @@ public static class SlideShowFractureTransitionPlanner
         if (width <= 0 || height <= 0 || progress <= 0)
             return Array.Empty<SlideShowMaskPolygon>();
         if (progress >= 1)
-            return new[] { new SlideShowMaskPolygon(BuildRectangle(width, height)) };
+            return new[] { new SlideShowMaskPolygon(SlideShowTransitionGeometry.BuildRectangle(width, height)) };
 
         var rows = Math.Max(2, plan.RowCount);
         var columns = Math.Max(2, plan.ColumnCount);
@@ -76,7 +76,7 @@ public static class SlideShowFractureTransitionPlanner
                 if (plan.Reverse)
                     order = 1 - order;
 
-                var local = SmoothStep(Math.Clamp(
+                var local = SlideShowTransitionGeometry.SmoothStep(Math.Clamp(
                     (progress - order * (1 - revealWindow)) / revealWindow,
                     0,
                     1));
@@ -102,14 +102,5 @@ public static class SlideShowFractureTransitionPlanner
         return polygons;
     }
 
-    private static double SmoothStep(double value) => value * value * (3 - 2 * value);
 
-    private static IReadOnlyList<SlideShowMaskPoint> BuildRectangle(double width, double height) =>
-        new[]
-        {
-            new SlideShowMaskPoint(0, 0),
-            new SlideShowMaskPoint(width, 0),
-            new SlideShowMaskPoint(width, height),
-            new SlideShowMaskPoint(0, height)
-        };
 }

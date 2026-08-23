@@ -417,35 +417,7 @@ public static class DocumentCombine
 
     private static void CopyShell(TextDocument source, TextDocument target)
     {
-        target.DefaultRun = source.DefaultRun;
-        target.DefaultParagraph = source.DefaultParagraph;
-        target.DoNotAutoCompressPictures = source.DoNotAutoCompressPictures;
-        target.EmbedSystemFonts = source.EmbedSystemFonts;
-        target.SaveSubsetFonts = source.SaveSubsetFonts;
-        target.PageBordersDoNotSurroundHeader = source.PageBordersDoNotSurroundHeader;
-        target.PageBordersDoNotSurroundFooter = source.PageBordersDoNotSurroundFooter;
-        foreach (var (id, style) in source.Styles)
-            target.Styles[id] = style;
-
-        target.Page.WidthPt = source.Page.WidthPt;
-        target.Page.HeightPt = source.Page.HeightPt;
-        target.Page.MarginLeftPt = source.Page.MarginLeftPt;
-        target.Page.MarginRightPt = source.Page.MarginRightPt;
-        target.Page.MarginTopPt = source.Page.MarginTopPt;
-        target.Page.MarginBottomPt = source.Page.MarginBottomPt;
-        target.Page.Landscape = source.Page.Landscape;
-        target.Page.ColumnCount = source.Page.ColumnCount;
-        target.Page.ColumnSpacingPt = source.Page.ColumnSpacingPt;
-        target.Page.ColumnsLineBetween = source.Page.ColumnsLineBetween;
-        target.Page.ColumnWidthsPt = source.Page.ColumnWidthsPt is null ? null : new List<double>(source.Page.ColumnWidthsPt);
-        target.Page.PageBorder = source.Page.PageBorder;
-        target.Page.Watermark = source.Page.Watermark;
-        target.Page.LineNumberMode = source.Page.LineNumberMode;
-        target.Page.LineNumberCountBy = source.Page.LineNumberCountBy;
-        target.Page.LineNumberStartAt = source.Page.LineNumberStartAt;
-        target.Page.AutoHyphenation = source.Page.AutoHyphenation;
-        target.Page.VerticalAlignment = source.Page.VerticalAlignment;
-        target.Page.DifferentFirstPage = source.Page.DifferentFirstPage;
+        DocumentModelCloner.CopyShellBase(source, target);
 
         // Mirrors DocumentCompare.CopyDocumentShell: footnotes/endnotes/final-section headers-footers live
         // on the document, not on any Paragraph, so the merged body's surviving footnote/endnote references

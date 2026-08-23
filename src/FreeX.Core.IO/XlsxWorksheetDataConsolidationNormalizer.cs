@@ -46,7 +46,7 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
             foreach (var dataRef in dataRefs.Elements(WorksheetNs + "dataRef"))
             {
                 changed |= RemoveUnknownDataReferenceAttributes(dataRef);
-                changed |= NormalizeRelationshipId(dataRef);
+                changed |= XlsxXmlNormalizationHelpers.NormalizeRelationshipId(dataRef, RelationshipNs + "id");
                 changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(dataRef);
             }
 
@@ -110,26 +110,6 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
         }
 
         return changed;
-    }
-
-    private static bool NormalizeRelationshipId(XElement element)
-    {
-        var relationshipId = element.Attribute(RelationshipNs + "id");
-        if (relationshipId is null)
-            return false;
-
-        var normalized = relationshipId.Value.Trim();
-        if (normalized.Length == 0)
-        {
-            relationshipId.Remove();
-            return true;
-        }
-
-        if (string.Equals(relationshipId.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        relationshipId.Value = normalized;
-        return true;
     }
 
 }

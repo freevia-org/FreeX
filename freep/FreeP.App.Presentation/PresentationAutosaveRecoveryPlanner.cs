@@ -4,7 +4,7 @@ namespace FreeP.App.Compositor;
 
 public sealed record AutosaveRecoveryPlan(
     AutosaveRecoveryCandidate Candidate,
-    string DisplayName);
+    string DisplayName) : IAutosaveRecoveryPlan;
 
 public sealed record AutosaveRecoveryText(
     string Title,
@@ -16,80 +16,64 @@ public sealed record AutosaveRecoveryText(
 
 public static class AutosaveRecoveryTextCatalog
 {
-    private static readonly ResourceTextDescriptor[] Texts =
-    [
-        new("Autosave_Recovery_Title", "FreeP - Recover"),
-        new("Autosave_Recovery_Recover_Button", "Recover"),
-        new("Autosave_Recovery_Skip_Button", "Skip"),
-        new("Autosave_Recovery_None_Message", "No unsaved presentations were found."),
-        new("Autosave_Recovery_Failure_Message_Format", "Could not recover the presentation.\n\n{0}"),
-        new("Autosave_Recovery_Backstage_Label", "Recover Unsaved Presentations"),
-    ];
+    private static readonly AutosaveRecoveryTextResolver Common = new(
+        new AutosaveRecoveryTextDefaults(
+            "FreeP - Recover",
+            "Recover",
+            "Skip",
+            "No unsaved presentations were found.",
+            "Could not recover the presentation.\n\n{0}"));
+
+    private static readonly ResourceTextDescriptor BackstageLabel =
+        new("Autosave_Recovery_Backstage_Label", "Recover Unsaved Presentations");
 
     public static IReadOnlyList<string> RequiredResourceKeys =>
-        Texts.Select(text => text.ResourceKey).ToArray();
+        [.. Common.RequiredResourceKeys, BackstageLabel.ResourceKey];
 
-    public static AutosaveRecoveryText Resolve(Func<string, string?>? getText = null) =>
-        new(
-            Texts[0].Resolve(getText),
-            Texts[1].Resolve(getText),
-            Texts[2].Resolve(getText),
-            Texts[3].Resolve(getText),
-            Texts[4].Resolve(getText),
-            Texts[5].Resolve(getText));
+    public static AutosaveRecoveryText Resolve(Func<string, string?>? getText = null)
+    {
+        var common = Common.Resolve(getText);
+        return new AutosaveRecoveryText(
+            common.Title,
+            common.RecoverButton,
+            common.SkipButton,
+            common.NoDocumentsMessage,
+            common.FailureMessageFormat,
+            BackstageLabel.Resolve(getText));
+    }
 }
 
 public static class AutosaveRecoveryPlanner
 {
     private const string UnnamedPresentationFallback = "a presentation";
 
-    public static AutosaveRecoveryPlan? PlanLatest(AutosaveSnapshotStore store)
-    {
-        ArgumentNullException.ThrowIfNull(store);
-
-        return PlanLatest(PrepareCandidates(store));
-    }
+    public static AutosaveRecoveryPlan? PlanLatest(AutosaveSnapshotStore store) =>
+        AutosaveRecoveryPlannerCore.PlanLatest(
+            store,
+            UnnamedPresentationFallback,
+            CreatePlan);
 
     public static AutosaveRecoveryPlan? PlanLatest(
-        IEnumerable<AutosaveRecoveryCandidate> candidates)
-    {
-        var candidate = AutosaveRecoveryPolicy.SelectLatest(candidates);
-        return candidate is null ? null : CreatePlan(candidate);
-    }
+        IEnumerable<AutosaveRecoveryCandidate> candidates) =>
+        AutosaveRecoveryPlannerCore.PlanLatest(
+            candidates,
+            UnnamedPresentationFallback,
+            CreatePlan);
 
-    public static IReadOnlyList<AutosaveRecoveryPlan> PlanAll(AutosaveSnapshotStore store)
-    {
-        ArgumentNullException.ThrowIfNull(store);
-
-        return AutosaveRecoveryPolicy
-            .OrderNewestFirst(PrepareCandidates(store))
-            .Select(CreatePlan)
-            .ToList();
-    }
-
-    /// <summary>
-    /// Applies the shared candidate-preparation policy (same one FreeX's
-    /// <c>AutosaveRecoveryOfferPlanner</c> uses) before a candidate is ever offered: it drops any
-    /// snapshot whose original file was saved more recently than the snapshot itself, so recovery is
-    /// never offered for a snapshot that is now staler than what the user already has on disk.
-    /// </summary>
-    private static IReadOnlyList<AutosaveRecoveryCandidate> PrepareCandidates(AutosaveSnapshotStore store) =>
-        AutosaveRecoveryCandidateProcessor.PrepareForRecovery(store.ExcludeLiveOwned(store.EnumerateCandidates()));
+    public static IReadOnlyList<AutosaveRecoveryPlan> PlanAll(AutosaveSnapshotStore store) =>
+        AutosaveRecoveryPlannerCore.PlanAll(
+            store,
+            UnnamedPresentationFallback,
+            CreatePlan);
 
     public static AutosaveRecoveryDisposition Complete(
         AutosaveRecoveryPlan plan,
         bool accepted,
-        bool recovered)
-    {
-        ArgumentNullException.ThrowIfNull(plan);
+        bool recovered) =>
+        AutosaveRecoveryPlannerCore.Complete(plan, accepted, recovered);
 
-        var disposition = AutosaveRecoveryPolicy.ResolveDisposition(accepted, recovered);
-        AutosaveRecoveryPolicy.ApplyDisposition(plan.Candidate, disposition);
-        return disposition;
-    }
-
-    private static AutosaveRecoveryPlan CreatePlan(AutosaveRecoveryCandidate candidate) =>
-        new(
-            candidate,
-            AutosaveRecoveryPolicy.ResolveDisplayName(candidate, UnnamedPresentationFallback));
+    private static AutosaveRecoveryPlan CreatePlan(
+        AutosaveRecoveryCandidate candidate,
+        string displayName) =>
+        new(candidate, displayName);
 }

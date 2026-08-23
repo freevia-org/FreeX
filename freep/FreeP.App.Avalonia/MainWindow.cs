@@ -2942,13 +2942,14 @@ public sealed partial class MainWindow : Window,
         if (request is null || !IsVisible)
             return;
 
-        var dialog = new SlideZoomDialog(
+        var dialog = new SingleTargetZoomDialog(
+            ZoomTargetDialogKind.Slide,
             request.Options,
             request.Title,
             request.SelectedTargetId);
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true)
-            _zoomAuthoringSession.ApplySlideInsertion(dialog.SelectedTargetSlideId);
+            _zoomAuthoringSession.ApplySlideInsertion(dialog.SelectedTargetId);
     }
 
     internal void OpenSectionZoomDialog() =>
@@ -2960,13 +2961,14 @@ public sealed partial class MainWindow : Window,
         if (request is null || !IsVisible)
             return;
 
-        var dialog = new SectionZoomDialog(
+        var dialog = new SingleTargetZoomDialog(
+            ZoomTargetDialogKind.Section,
             request.Options,
             request.Title,
             request.SelectedTargetId);
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true)
-            _zoomAuthoringSession.ApplySectionInsertion(dialog.SelectedTargetSectionId);
+            _zoomAuthoringSession.ApplySectionInsertion(dialog.SelectedTargetId);
     }
 
     internal void OpenSummaryZoomDialog() =>
@@ -2998,23 +3000,25 @@ public sealed partial class MainWindow : Window,
 
         if (request.Kind == PresentationZoomTargetKind.Slide)
         {
-            var dialog = new SlideZoomDialog(
+            var dialog = new SingleTargetZoomDialog(
+                ZoomTargetDialogKind.Slide,
                 request.Options,
                 request.Title,
                 request.SelectedTargetId);
             var result = await dialog.ShowDialog<bool?>(this);
             if (result == true)
-                _zoomAuthoringSession.ApplySelectedTarget(request, dialog.SelectedTargetSlideId);
+                _zoomAuthoringSession.ApplySelectedTarget(request, dialog.SelectedTargetId);
             return;
         }
 
-        var sectionDialog = new SectionZoomDialog(
+        var sectionDialog = new SingleTargetZoomDialog(
+            ZoomTargetDialogKind.Section,
             request.Options,
             request.Title,
             request.SelectedTargetId);
         var sectionResult = await sectionDialog.ShowDialog<bool?>(this);
         if (sectionResult == true)
-            _zoomAuthoringSession.ApplySelectedTarget(request, sectionDialog.SelectedTargetSectionId);
+            _zoomAuthoringSession.ApplySelectedTarget(request, sectionDialog.SelectedTargetId);
     }
 
     internal void OpenSummaryZoomTargetsDialog() =>

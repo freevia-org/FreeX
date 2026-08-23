@@ -13,6 +13,19 @@ namespace FreeX.App.Host.Tests;
 public sealed class RibbonKeyTipTabScopeTests
 {
     [Fact]
+    public void InsertChartControls_KeepDistinctStableKeyTips()
+    {
+        var controls = FreeXRibbon.Build().FindTab("InsertTab")!.Groups
+            .SelectMany(group => group.Controls)
+            .ToArray();
+
+        controls.Single(control => control.CommandId.Value == FreeXRibbonCommandIds.PivotChartInsert)
+            .KeyTip.Should().Be("PC");
+        controls.Single(control => control.CommandId.Value == "100% Stacked Column Chart")
+            .KeyTip.Should().Be("PCC");
+    }
+
+    [Fact]
     public void ControlKeyTips_AreUniqueWithinEachTab_AcrossAllGroups()
     {
         var definition = FreeXRibbon.Build();

@@ -586,7 +586,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
                     sheet.ShownComments.Remove(address);
 
                 if (hadThreadedComment && threadedComment is not null)
-                    sheet.ThreadedComments[address] = CloneThreadedComment(threadedComment);
+                    sheet.ThreadedComments[address] = ThreadedCommentCloner.Clone(threadedComment, ThreadedCommentIdPolicy.Preserve);
                 else
                     sheet.ThreadedComments.Remove(address);
             }
@@ -618,7 +618,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
             oldCommentAuthor,
             sheet.ShownComments.Contains(addr),
             sheet.ThreadedComments.TryGetValue(addr, out var oldThreadedComment),
-            oldThreadedComment is null ? null : CloneThreadedComment(oldThreadedComment)));
+            oldThreadedComment is null ? null : ThreadedCommentCloner.Clone(oldThreadedComment, ThreadedCommentIdPolicy.Preserve)));
     }
 
     /// <summary>
@@ -672,7 +672,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
     /// reads then writes/removes the same key. A fresh, independent threaded-comment thread is
     /// minted for the destination (Id cleared) so multiple filled cells sharing one source note
     /// don't collide on the same persisted thread id on save (mirrors CopyRangeCommand.
-    /// ClonedThreadedCommentForNewAddress).
+    /// ThreadedCommentCloner with reset identity).
     /// </summary>
     private static void CopyCommentAnnotations(Sheet sheet, CellAddress source, CellAddress target)
     {
@@ -692,7 +692,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
             sheet.ShownComments.Remove(target);
 
         if (sheet.ThreadedComments.TryGetValue(source, out var sourceThreadedComment))
-            sheet.ThreadedComments[target] = ClonedThreadedCommentForNewAddress(sourceThreadedComment);
+            sheet.ThreadedComments[target] = ThreadedCommentCloner.Clone(sourceThreadedComment, ThreadedCommentIdPolicy.Reset);
         else
             sheet.ThreadedComments.Remove(target);
     }
@@ -709,24 +709,6 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
         sheet.ShownComments.Remove(addr);
         sheet.ThreadedComments.Remove(addr);
     }
-
-    /// <summary>Deep-clones a threaded comment (including its reply list) for a snapshot, preserving its Id. Mirrors CopyRangeCommand.CloneThreadedComment.</summary>
-    private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
-        comment with { Replies = comment.Replies.Select(reply => reply with { }).ToList() };
-
-    /// <summary>
-    /// Clones a threaded comment for a NEW destination address, clearing its Id (and each reply's
-    /// Id) so the copy mints its own independent, address-derived thread id on save instead of
-    /// colliding with the source's persisted <c>&lt;threadedComment id="..."&gt;</c>. Mirrors
-    /// CopyRangeCommand.ClonedThreadedCommentForNewAddress.
-    /// </summary>
-    private static ThreadedComment ClonedThreadedCommentForNewAddress(ThreadedComment comment) =>
-        comment with
-        {
-            Id = null,
-            Replies = comment.Replies.Select(reply => reply with { Id = null }).ToList(),
-        };
-
 
     private bool TryGetFillPlan(out FillPlan plan)
     {

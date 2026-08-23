@@ -424,7 +424,7 @@ public sealed class DocumentReferenceEditingCoordinator
             plan.TargetIsFootnote,
             plan.TargetTextStartOffset,
             plan.TargetTextEndOffset));
-        ExecuteGroup(commands, "Insert Cross-reference");
+        DocumentUndoGroupExecutor.Execute(_session.Commands, commands, "Insert Cross-reference");
         return new DocumentReferenceEditResult(true, hostBlockIndex, -1);
     }
 
@@ -641,15 +641,23 @@ public sealed class DocumentReferenceEditingCoordinator
         var id = footnote
             ? _session.Document.NextFootnoteId()
             : _session.Document.NextEndnoteId();
-        commands.Add(new InsertNoteCommand(
+        var noteCommand = new InsertNoteCommand(
             id,
             footnote,
             text ?? string.Empty,
             blockIndex,
-            offset));
-        ExecuteGroup(commands, footnote ? "Insert Footnote" : "Insert Endnote");
+            offset);
+        commands.Add(noteCommand);
+        DocumentUndoGroupExecutor.Execute(
+            _session.Commands,
+            commands,
+            footnote ? "Insert Footnote" : "Insert Endnote");
         var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
-        return new DocumentReferenceTextEditResult(true, blockIndex, offset + markerLength, id);
+        return new DocumentReferenceTextEditResult(
+            true,
+            blockIndex,
+            noteCommand.EffectiveInsertionOffset + markerLength,
+            id);
     }
 
     public void DeleteNote(int id, bool footnote) =>
@@ -722,9 +730,10 @@ public sealed class DocumentReferenceEditingCoordinator
         }
 
         var offset = Math.Clamp(textOffset, 0, paragraph.PlainText.Length);
+        var effectiveOffset = offset;
         _session.Commands.Execute(new ReplaceParagraphRunsCommand(blockIndex, target =>
-            RevisionEditPlanner.InsertRunAtOffset(target, offset, markRun)));
-        return new DocumentReferenceTextEditResult(true, blockIndex, offset, 0);
+            effectiveOffset = RevisionEditPlanner.InsertRunAtOffset(target, offset, markRun)));
+        return new DocumentReferenceTextEditResult(true, blockIndex, effectiveOffset, 0);
     }
 
     public int MarkAllIndexEntries(string sourceText, IndexMark mark)
@@ -737,7 +746,8 @@ public sealed class DocumentReferenceEditingCoordinator
         if (targets.Count == 0)
             return 0;
 
-        ExecuteGroup(
+        DocumentUndoGroupExecutor.Execute(
+            _session.Commands,
             targets.Select(target => target.TableParagraph is { } tableParagraph
                 ? (IDocumentCommand)new ReplaceTableCellParagraphRunsCommand(
                     target.BlockIndex,
@@ -766,9 +776,13 @@ public sealed class DocumentReferenceEditingCoordinator
             return new DocumentReferenceTextEditResult(false, blockIndex, textOffset, 0);
 
         var offset = Math.Clamp(textOffset, 0, paragraph.PlainText.Length);
+        var effectiveOffset = offset;
         _session.Commands.Execute(new ReplaceParagraphRunsCommand(blockIndex, target =>
-            RevisionEditPlanner.InsertRunAtOffset(target, offset, Run.CitationMark(citation))));
-        return new DocumentReferenceTextEditResult(true, blockIndex, offset, 0);
+            effectiveOffset = RevisionEditPlanner.InsertRunAtOffset(
+                target,
+                offset,
+                Run.CitationMark(citation))));
+        return new DocumentReferenceTextEditResult(true, blockIndex, effectiveOffset, 0);
     }
 
     public DocumentReferenceRegionEditResult RefreshGeneratedRegion(
@@ -802,7 +816,7 @@ public sealed class DocumentReferenceEditingCoordinator
         if (edit.Commands.Count == 0)
             return edit.Result;
 
-        ExecuteGroup(edit.Commands, undoLabel);
+        DocumentUndoGroupExecutor.Execute(_session.Commands, edit.Commands, undoLabel);
         return edit.Result;
     }
 
@@ -1281,28 +1295,6 @@ public sealed class DocumentReferenceEditingCoordinator
                 fileName,
                 pageTextAtBlock?.Invoke(blockIndex),
                 pages?.PageCount));
-    }
-
-    private void ExecuteGroup(IReadOnlyList<IDocumentCommand> commands, string undoLabel)
-    {
-        if (commands.Count == 1)
-        {
-            _session.Commands.Execute(commands[0]);
-            return;
-        }
-
-        _session.Commands.BeginUndoGroup();
-        try
-        {
-            foreach (var command in commands)
-                _session.Commands.Execute(command);
-            _session.Commands.CommitUndoGroup(undoLabel);
-        }
-        catch
-        {
-            _session.Commands.AbortUndoGroup();
-            throw;
-        }
     }
 
     private sealed record GeneratedRegionEdit(

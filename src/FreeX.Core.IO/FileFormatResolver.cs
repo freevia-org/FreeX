@@ -1,3 +1,4 @@
+using Free.Shared.IO;
 using SharedFileDialogFilterBuilder = Free.Shared.IO.FileDialogFilterBuilder;
 
 namespace FreeX.Core.IO;
@@ -8,13 +9,23 @@ public static class FileFormatResolver
         IEnumerable<IFileAdapter> adapters,
         string extension,
         out FileFormatDescriptor? format) =>
-        FindAdapter(adapters, extension, candidate => candidate.CanOpen, out format);
+        FileFormatAdapterResolver.Find(
+            adapters,
+            static adapter => adapter.Formats,
+            extension,
+            static candidate => candidate.CanOpen,
+            out format);
 
     public static IFileAdapter? FindSaveAdapter(
         IEnumerable<IFileAdapter> adapters,
         string extension,
         out FileFormatDescriptor? format) =>
-        FindAdapter(adapters, extension, candidate => candidate.CanSave, out format);
+        FileFormatAdapterResolver.Find(
+            adapters,
+            static adapter => adapter.Formats,
+            extension,
+            static candidate => candidate.CanSave,
+            out format);
 
     /// <summary>
     /// Resolves the adapter whose descriptor matches both <paramref name="extension"/> and
@@ -29,8 +40,9 @@ public static class FileFormatResolver
         out FileFormatDescriptor? format)
     {
         var materialized = adapters as IReadOnlyCollection<IFileAdapter> ?? adapters.ToList();
-        var byName = FindAdapter(
+        var byName = FileFormatAdapterResolver.Find(
             materialized,
+            static adapter => adapter.Formats,
             extension,
             candidate => candidate.CanSave &&
                 string.Equals(candidate.FormatName, formatName, StringComparison.OrdinalIgnoreCase),
@@ -46,8 +58,9 @@ public static class FileFormatResolver
         out FileFormatDescriptor? format)
     {
         var materialized = adapters as IReadOnlyCollection<IFileAdapter> ?? adapters.ToList();
-        var byName = FindAdapter(
+        var byName = FileFormatAdapterResolver.Find(
             materialized,
+            static adapter => adapter.Formats,
             extension,
             candidate => candidate.CanOpen &&
                 string.Equals(candidate.FormatName, formatName, StringComparison.OrdinalIgnoreCase),
@@ -69,30 +82,4 @@ public static class FileFormatResolver
 
     public static string NormalizeExtension(string extension) =>
         SharedFileDialogFilterBuilder.NormalizeExtension(extension);
-
-    private static IFileAdapter? FindAdapter(
-        IEnumerable<IFileAdapter> adapters,
-        string extension,
-        Func<FileFormatDescriptor, bool> predicate,
-        out FileFormatDescriptor? format)
-    {
-        var normalizedExtension = NormalizeExtension(extension);
-        foreach (var adapter in adapters)
-        {
-            foreach (var candidate in adapter.Formats)
-            {
-                if (!predicate(candidate) ||
-                    !string.Equals(NormalizeExtension(candidate.Extension), normalizedExtension, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                format = candidate;
-                return adapter;
-            }
-        }
-
-        format = null;
-        return null;
-    }
 }

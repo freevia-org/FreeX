@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -82,60 +81,20 @@ internal static class XlsxAllowEditRangeMapper
 
     public static void Save(Stream xlsxStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
-            return;
-
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
-
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        XlsxWorksheetPackageEditTraversal.EditSourceMapped(
+            xlsxStream,
+            workbook,
+            sheet => sheet.AllowEditRanges.Count > 0,
+            (sheet, root) =>
         {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                string.IsNullOrWhiteSpace(relId) ||
-                !sheetsByName.TryGetValue(name, out var sheet) ||
-                sheet.AllowEditRanges.Count == 0 ||
-                !relTargets.TryGetValue(relId, out var worksheetPath))
-            {
-                continue;
-            }
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
             root.Elements(workbookNs + "protectedRanges").Remove();
             var protectedRanges = new XElement(workbookNs + "protectedRanges",
                 sheet.AllowEditRanges.Select((range, index) =>
                     BuildProtectedRangeElement(workbookNs, range, index, sheet.AllowEditRangePasswords)));
 
-            InsertProtectedRangesInOrder(root, workbookNs, protectedRanges);
-
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
-        }
+            XlsxWorksheetElementOrder.Insert(root, protectedRanges);
+        });
     }
 
     public static IReadOnlySet<string> GetModeledReferences(Workbook workbook, string sheetName)
@@ -185,58 +144,4 @@ internal static class XlsxAllowEditRangeMapper
         return element;
     }
 
-    private static void InsertProtectedRangesInOrder(XElement worksheetRoot, XNamespace workbookNs, XElement protectedRanges)
-    {
-        string[] laterWorksheetElements =
-        [
-            "scenarios",
-            "autoFilter",
-            "sortState",
-            "dataConsolidate",
-            "customSheetViews",
-            "mergeCells",
-            "phoneticPr",
-            "conditionalFormatting",
-            "dataValidations",
-            "hyperlinks",
-            "printOptions",
-            "pageMargins",
-            "pageSetup",
-            "headerFooter",
-            "rowBreaks",
-            "colBreaks",
-            "customProperties",
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace != workbookNs ||
-                !laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            insertionPoint = element;
-            break;
-        }
-
-        if (insertionPoint is null)
-            worksheetRoot.Add(protectedRanges);
-        else
-            insertionPoint.AddBeforeSelf(protectedRanges);
-    }
 }

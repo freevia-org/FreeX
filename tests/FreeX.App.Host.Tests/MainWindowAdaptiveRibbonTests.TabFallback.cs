@@ -22,7 +22,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.SelectRibbonTab("Insert", 800);
+            harness.SelectRibbonTab("Insert", 900);
 
             // The declarative Insert tab does not surface a chart-formatting command block, so deep
             // chart-formatting commands never appear on the ribbon face (expanded or in any overflow menu).
@@ -30,8 +30,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             harness.VisibleRibbonCommandLabels.Should().NotContain("Y Bounds", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().NotContain("Data Label Border", harness.DebugActiveRibbonChildren);
 
-            // 2-state truth: at 800px the lower-priority Insert groups fold into overflow buttons that still
-            // open their commands, while the highest-priority Tables group stays expanded.
+            // At 900px the lower-priority Insert groups fold into overflow buttons that still open their
+            // commands, while the highest-priority Tables group stays expanded. The narrower 800px
+            // breakpoint can no longer fit the full group after PivotChart joined PivotTable and Table.
             harness.CollapsedActiveRibbonGroupNames.Should().Contain("Symbols", harness.DebugActiveRibbonChildren);
             harness.CollapsedActiveRibbonGroupsWithoutOverflowMenu.Should().BeEmpty(harness.DebugActiveRibbonChildren);
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Tables", harness.DebugActiveRibbonChildren);
@@ -100,11 +101,11 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.SelectRibbonTab("Insert", 800);
+            harness.SelectRibbonTab("Insert", 900);
 
-            // 2-state truth: at this narrow width the highest-priority Tables group stays expanded with its
-            // implemented commands (PivotTable, Table) directly visible, while the unimplemented
-            // "Recommended PivotTables" command is absent entirely.
+            // At this narrow desktop width the highest-priority Tables group stays expanded with its
+            // implemented commands directly visible, while the unimplemented "Recommended PivotTables"
+            // command is absent entirely. PivotChart makes the previous 800px full-group expectation stale.
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Tables", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().Contain(
                 ["PivotTable", "Table"],

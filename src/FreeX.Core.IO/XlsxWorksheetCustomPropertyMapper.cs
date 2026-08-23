@@ -50,25 +50,11 @@ internal static class XlsxWorksheetCustomPropertyMapper
 
     public static void Save(Stream packageStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        var workbookRels = XlsxRelationshipReader.LoadTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
+        XlsxWorksheetPackageEditTraversal.Edit(packageStream, workbook, (session, sheet, edit) =>
         {
             var properties = sheet.CustomProperties
                 .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
@@ -77,18 +63,12 @@ internal static class XlsxWorksheetCustomPropertyMapper
                 .OrderBy(property => property.Id)
                 .ThenBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            if (properties.Count == 0 || !sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-                continue;
+            if (properties.Count == 0)
+                return;
 
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
+            var archive = session.Archive;
+            var worksheetPath = edit.Path;
+            var root = edit.Root;
             var worksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
             var worksheetRelsEntry = archive.GetEntry(worksheetRelsPath);
             var worksheetRelsXml = worksheetRelsEntry is null
@@ -96,7 +76,7 @@ internal static class XlsxWorksheetCustomPropertyMapper
                 : XlsxPackageXmlEditor.LoadXml(worksheetRelsEntry);
 
             root.Element(workbookNs + "customProperties")?.Remove();
-            InsertCustomPropertiesInOrder(root, workbookNs, new XElement(
+            XlsxWorksheetElementOrder.Insert(root, new XElement(
                 workbookNs + "customProperties",
                 properties.Select(property =>
                 {
@@ -114,9 +94,9 @@ internal static class XlsxWorksheetCustomPropertyMapper
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customProperty");
                     return ToXml(property, workbookNs, relNs, relationshipId);
                 })));
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, root.Document!);
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetRelsPath, worksheetRelsXml);
-        }
+        });
     }
 
     public static HashSet<string> GetModeledNames(Workbook workbook, string sheetName)
@@ -129,45 +109,6 @@ internal static class XlsxWorksheetCustomPropertyMapper
             .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
             .Select(property => property.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static void InsertCustomPropertiesInOrder(
-        XElement worksheetRoot,
-        XNamespace workbookNs,
-        XElement customProperties)
-    {
-        string[] laterWorksheetElements =
-        [
-            "cellWatches",
-            "ignoredErrors",
-            "singleXmlCells",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
-        XElement? insertionPoint = null;
-        foreach (var element in worksheetRoot.Elements())
-        {
-            if (element.Name.Namespace == workbookNs &&
-                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
-            {
-                insertionPoint = element;
-                break;
-            }
-        }
-
-        if (insertionPoint is null)
-            worksheetRoot.Add(customProperties);
-        else
-            insertionPoint.AddBeforeSelf(customProperties);
     }
 
     private static NativeXmlPreserveBag? ReadMetadata(XElement customProperty, string? binPayloadBase64)

@@ -15,36 +15,6 @@ public static class ConsolidateAggregation
     /// <paramref name="function"/>. <paramref name="nonEmptyCount"/> is the number of contributing source
     /// cells that were not blank (used by <see cref="ConsolidateFunction.Count"/>).
     /// </summary>
-    public static double Aggregate(IReadOnlyList<double> values, int nonEmptyCount, ConsolidateFunction function)
-    {
-        ArgumentNullException.ThrowIfNull(values);
-
-        return function switch
-        {
-            ConsolidateFunction.Count => nonEmptyCount,
-            ConsolidateFunction.Average => values.Count == 0 ? 0 : values.Average(),
-            ConsolidateFunction.Max => values.Count == 0 ? 0 : values.Max(),
-            ConsolidateFunction.Min => values.Count == 0 ? 0 : values.Min(),
-            ConsolidateFunction.Product => values.Count == 0 ? 0 : values.Aggregate(1.0, (product, value) => product * value),
-            ConsolidateFunction.CountNumbers => values.Count,
-            ConsolidateFunction.StdDev => StandardDeviation(values, sample: true),
-            ConsolidateFunction.StdDevp => StandardDeviation(values, sample: false),
-            ConsolidateFunction.Var => Variance(values, sample: true),
-            ConsolidateFunction.Varp => Variance(values, sample: false),
-            _ => values.Sum()
-        };
-    }
-
-    private static double StandardDeviation(IReadOnlyList<double> values, bool sample) =>
-        Math.Sqrt(Variance(values, sample));
-
-    private static double Variance(IReadOnlyList<double> values, bool sample)
-    {
-        var denominator = sample ? values.Count - 1 : values.Count;
-        if (denominator <= 0)
-            return 0;
-
-        var average = values.Average();
-        return values.Sum(value => Math.Pow(value - average, 2)) / denominator;
-    }
+    public static double Aggregate(IReadOnlyList<double> values, int nonEmptyCount, ConsolidateFunction function) =>
+        ConsolidationRules.Aggregate(values, nonEmptyCount, function);
 }

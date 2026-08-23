@@ -1,3 +1,5 @@
+using Free.Shared.AppServices;
+
 namespace FreeW.App.Presentation.Shell;
 
 public enum FreeWRecoveryPromptMode
@@ -12,32 +14,21 @@ public sealed record FreeWRecoveryOffer(
     int RemainingCount,
     FreeWRecoveryPromptMode PromptMode)
 {
-    public string Prompt => PromptMode switch
-    {
-        FreeWRecoveryPromptMode.Startup when RemainingCount > 1 =>
-            $"FreeW found unsaved changes to {Recovery.DisplayName} from a previous session ({RemainingCount} unsaved documents found). Recover this one?",
-        FreeWRecoveryPromptMode.Startup =>
-            $"FreeW found unsaved changes to {Recovery.DisplayName} from a previous session. Recover them?",
-        FreeWRecoveryPromptMode.StartupQuotedDisplayName when RemainingCount > 1 =>
-            $"FreeW found unsaved changes to \"{Recovery.DisplayName}\" from a previous session ({RemainingCount} unsaved documents found). Recover this one?",
-        FreeWRecoveryPromptMode.StartupQuotedDisplayName =>
-            $"FreeW found unsaved changes to \"{Recovery.DisplayName}\" from a previous session. Recover them?",
-        FreeWRecoveryPromptMode.Manual when RemainingCount > 1 =>
-            $"Recover unsaved changes to {Recovery.DisplayName}? ({RemainingCount} unsaved documents found.)",
-        FreeWRecoveryPromptMode.Manual =>
-            $"Recover unsaved changes to {Recovery.DisplayName}?",
-        _ => throw new ArgumentOutOfRangeException(nameof(PromptMode), PromptMode, null),
-    };
+    private static readonly AutosaveRecoveryPromptText PromptText =
+        new("FreeW", "documents");
+
+    public string Prompt => AutosaveRecoveryPromptFormatter.Format(
+        Recovery.DisplayName,
+        RemainingCount,
+        FreeWRecoveryWorkflow.MapPromptMode(PromptMode),
+        PromptText);
 }
 
 public readonly record struct FreeWRecoveryWorkflowResult(
     bool AnyAccepted,
     bool AnyRecovered);
 
-/// <summary>
-/// Owns renderer-neutral recovery sequencing. Native hosts supply the modal prompt and restore the
-/// accepted document in the current or a new native window.
-/// </summary>
+/// <summary>FreeW compatibility facade over the shared recovery sequencer.</summary>
 public static class FreeWRecoveryWorkflow
 {
     public static async ValueTask<FreeWRecoveryWorkflowResult> RunAsync(
@@ -46,36 +37,18 @@ public static class FreeWRecoveryWorkflow
         Func<FreeWRecoveryOffer, ValueTask<bool>> promptAsync,
         Func<AutosaveRecoveryPlan, bool, ValueTask<bool>> completeRecoveryAsync)
     {
-        ArgumentNullException.ThrowIfNull(recoveries);
-        ArgumentNullException.ThrowIfNull(promptAsync);
-        ArgumentNullException.ThrowIfNull(completeRecoveryAsync);
+        var result = await AutosaveRecoveryWorkflow.RunAsync(
+            recoveries,
+            MapPromptMode(promptMode),
+            (recovery, remainingCount) =>
+                new FreeWRecoveryOffer(recovery, remainingCount, promptMode),
+            promptAsync,
+            completeRecoveryAsync);
 
-        var anyAccepted = false;
-        var anyRecovered = false;
-        for (var index = 0; index < recoveries.Count; index++)
-        {
-            var recovery = recoveries[index];
-            var offer = new FreeWRecoveryOffer(
-                recovery,
-                RemainingCount: recoveries.Count - index,
-                promptMode);
-            if (!await promptAsync(offer))
-            {
-                // A startup offer is unprompted and repeats on every launch, so a decline here must
-                // stick -- otherwise the same stale snapshot nags forever (matches FreeX's own
-                // startup workflow, which discards a declined snapshot the same way). The manual
-                // "Recover Unsaved Documents" command is opt-in and browsable, so a decline there
-                // leaves the candidate for the user to revisit later.
-                if (promptMode != FreeWRecoveryPromptMode.Manual)
-                    AutosaveRecoveryCandidateProcessor.DiscardDeclined(recovery.Candidate);
-                continue;
-            }
-
-            var useCurrentWindow = !anyAccepted;
-            anyAccepted = true;
-            anyRecovered |= await completeRecoveryAsync(recovery, useCurrentWindow);
-        }
-
-        return new FreeWRecoveryWorkflowResult(anyAccepted, anyRecovered);
+        return new FreeWRecoveryWorkflowResult(result.AnyAccepted, result.AnyRecovered);
     }
+
+    internal static AutosaveRecoveryPromptMode MapPromptMode(
+        FreeWRecoveryPromptMode promptMode) =>
+        (AutosaveRecoveryPromptMode)(int)promptMode;
 }

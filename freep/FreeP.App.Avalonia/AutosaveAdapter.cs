@@ -1,7 +1,4 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Media;
-using Avalonia.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
@@ -21,18 +18,17 @@ namespace FreeP.App.Avalonia;
 /// </summary>
 internal sealed partial class AutosaveAdapter : IDisposable
 {
-    // Process-wide registry of every live window's adapter, so a crash handler (which has no
-    // reference to any particular window) can fan an emergency snapshot out to all of them --
-    // mirrors FreeW's AutosaveAdapter.ActiveAdapters and FreeX's AvaloniaAutosaveCoordinator.
-    private static readonly object ActiveAdaptersGate = new();
-    private static readonly List<AutosaveAdapter> ActiveAdapters = [];
+    private static readonly EmergencySnapshotFanOut<AutosaveAdapter> EmergencySnapshots =
+        new(static adapter => adapter.TryEmergencySnapshot());
+    private static readonly TimeSpan EmergencySnapshotDispatcherTimeout = TimeSpan.FromSeconds(8);
 
     private readonly Action<Presentation, string?> _applyRecoveredPresentation;
+    private readonly IDisposable _emergencySnapshotRegistration;
+    private readonly AutosavePeriodicTaskLoop _periodicLoop;
     private readonly FreePAutosaveSession _session;
     private readonly Func<AutosaveRecoveryCandidate, Task<bool>>? _recoverInNewWindowAsync;
     private readonly Func<Task<bool>>? _confirmDiscardOrSaveAsync;
     private readonly Func<string?> _getCurrentPath;
-    private CancellationTokenSource? _cts;
 
     /// <summary>
     /// Takes the shared <see cref="FileCommandWorkflow"/> rather than FreeP's
@@ -60,21 +56,26 @@ internal sealed partial class AutosaveAdapter : IDisposable
             GetIsDirty: () => workflow.IsDirty,
             GetDirtyGeneration: () => workflow.DirtyGeneration,
             ExecuteWithPresentation: writePresentation =>
-                ExecuteOnUiThreadBounded(getPresentation, writePresentation));
+                writePresentation(getPresentation()));
         _session = sessionFactory?.Invoke(ports) ?? new FreePAutosaveSession(ports);
+        _periodicLoop = new AutosavePeriodicTaskLoop(
+            FreePAutosaveSession.DefaultInterval,
+            () => AvaloniaBoundedDispatcherTransaction.TryExecute(
+                _session.Snapshot,
+                EmergencySnapshotDispatcherTimeout));
         _recoverInNewWindowAsync = recoverInNewWindowAsync;
         _confirmDiscardOrSaveAsync = confirmDiscardOrSaveAsync;
         _getCurrentPath = () => workflow.CurrentPath;
-
-        lock (ActiveAdaptersGate)
-            ActiveAdapters.Add(this);
+        _emergencySnapshotRegistration = EmergencySnapshots.Register(this);
     }
 
     /// <summary>
     /// Best-effort emergency snapshot for this window's presentation. Must never throw -- delegates
     /// to <see cref="FreePAutosaveSession.TryEmergencySnapshot"/>, which is never-throw by design.
     /// </summary>
-    public void TryEmergencySnapshot() => _session.TryEmergencySnapshot();
+    public void TryEmergencySnapshot() => AvaloniaBoundedDispatcherTransaction.TryExecute(
+        _session.TryEmergencySnapshot,
+        EmergencySnapshotDispatcherTimeout);
 
     /// <summary>
     /// Attempts an emergency snapshot for every live window's presentation. Wired as the Avalonia
@@ -82,28 +83,14 @@ internal sealed partial class AutosaveAdapter : IDisposable
     /// best-effort snapshot FreeX's and FreeW's Avalonia hosts do instead of losing every edit since
     /// the last periodic autosave tick.
     /// </summary>
-    public static void TryEmergencySnapshots()
-    {
-        AutosaveAdapter[] adapters;
-        lock (ActiveAdaptersGate)
-            adapters = ActiveAdapters.ToArray();
-
-        foreach (var adapter in adapters)
-            adapter.TryEmergencySnapshot();
-    }
+    public static void TryEmergencySnapshots() => EmergencySnapshots.TrySnapshotAll();
 
     /// <summary>
     /// Start the periodic autosave loop. Safe to call from any thread.
-    /// The snapshot itself runs off the UI thread (file I/O); model reads are marshalled back.
+    /// The shared timer remains renderer-neutral; each complete snapshot transaction is marshalled
+    /// through the bounded Avalonia dispatcher bridge.
     /// </summary>
-    public void Start()
-    {
-        if (_cts is not null)
-            return; // already running
-
-        _cts = new CancellationTokenSource();
-        _ = RunLoopAsync(_cts.Token);
-    }
+    public void Start() => _periodicLoop.Start();
 
     /// <summary>
     /// Stop the loop and delete the current-session snapshot (clean exit). Awaitable so the
@@ -111,13 +98,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
     /// </summary>
     public async Task StopAsync()
     {
-        if (_cts is not null)
-        {
-            await _cts.CancelAsync();
-            _cts.Dispose();
-            _cts = null;
-        }
-
+        await _periodicLoop.StopAsync();
         _session.CompleteCleanExit();
     }
 
@@ -146,35 +127,25 @@ internal sealed partial class AutosaveAdapter : IDisposable
     {
         ArgumentNullException.ThrowIfNull(owner);
 
-        try
-        {
-            var currentWindowHasExplicitDocument = _getCurrentPath() is not null;
-
-            await FreePRecoveryWorkflow.RunAsync(
-                _session.PlanRecoveries(),
-                FreePRecoveryPromptMode.StartupQuotedDisplayName,
-                offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
-                async (recovery, useCurrentWindow) =>
-                {
-                    if (useCurrentWindow && !currentWindowHasExplicitDocument)
-                    {
-                        return _session.CompletePresentationRecovery(
-                            recovery,
-                            accepted: true,
-                            _applyRecoveredPresentation,
-                            FreePRecoveryRestoreExceptionPolicy.QuarantineCandidate);
-                    }
-
-                    var recovered = _recoverInNewWindowAsync is not null &&
-                        await _recoverInNewWindowAsync(recovery.Candidate);
-                    _session.CompleteRecoveryResult(recovery, accepted: true, recovered);
-                    return recovered;
-                });
-        }
-        catch
-        {
-            // Recovery is best-effort; never block startup on it.
-        }
+        await AvaloniaAutosaveRecoveryHost.OfferStartupAsync(
+            owner,
+            currentWindowHasExplicitDocument: () => _getCurrentPath() is not null,
+            _session.PlanRecoveries,
+            createOffer: static (recovery, remainingCount) => new FreePRecoveryOffer(
+                recovery,
+                remainingCount,
+                FreePRecoveryPromptMode.StartupQuotedDisplayName),
+            promptAsync: offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
+            recoverInCurrentWindow: recovery => _session.CompletePresentationRecovery(
+                recovery,
+                accepted: true,
+                _applyRecoveredPresentation,
+                FreePRecoveryRestoreExceptionPolicy.QuarantineCandidate),
+            recoverInNewWindowAsync: recovery => _recoverInNewWindowAsync is null
+                ? Task.FromResult(false)
+                : _recoverInNewWindowAsync(recovery.Candidate),
+            completeRecoveryResult: (recovery, accepted, recovered) =>
+                _session.CompleteRecoveryResult(recovery, accepted, recovered));
     }
 
     /// <summary>
@@ -194,147 +165,34 @@ internal sealed partial class AutosaveAdapter : IDisposable
         ArgumentNullException.ThrowIfNull(owner);
 
         var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
-        try
-        {
-            var recoveries = _session.PlanRecoveries();
-            if (recoveries.Count == 0)
-            {
-                await AvaloniaUserMessageDialog.ShowAsync(owner, text.NoDocumentsMessage, text.Title, UserMessageIcon.Information);
-                return;
-            }
 
-            await FreePRecoveryWorkflow.RunAsync(
-                recoveries,
-                FreePRecoveryPromptMode.Manual,
-                offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
-                async (recovery, useCurrentWindow) =>
-                {
-                    if (useCurrentWindow)
-                        return await RecoverIntoCurrentWindowGatedAsync(recovery);
-
-                    var recovered = _recoverInNewWindowAsync is not null &&
-                        await _recoverInNewWindowAsync(recovery.Candidate);
-                    _session.CompleteRecoveryResult(recovery, accepted: true, recovered);
-                    return recovered;
-                });
-        }
-        catch (Exception ex)
-        {
-            await AvaloniaUserMessageDialog.ShowErrorAsync(
-                owner,
-                string.Format(System.Globalization.CultureInfo.CurrentCulture, text.FailureMessageFormat, ex.Message),
-                text.Title);
-        }
-    }
-
-    /// <summary>
-    /// Restores an accepted recovery into THIS window, gated behind the current presentation's own
-    /// save/discard prompt. If the user cancels that prompt the candidate is left on disk
-    /// (accepted:false -> Keep disposition) so it can be revisited from Backstage later, matching the
-    /// WPF host and the behaviour of declining the initial "Recover unsaved changes?" offer.
-    /// </summary>
-    /// <remarks>
-    /// Passing accepted:true here instead would resolve to Quarantine
-    /// (<see cref="Free.Shared.AppServices.AutosaveRecoveryPolicy.ResolveDisposition"/>: accepted and
-    /// not recovered =&gt; Quarantine), which moves the snapshot out of the directory EnumerateCandidates
-    /// scans -- so declining to discard the CURRENT presentation would permanently destroy access to
-    /// the OLDER unsaved work the user was trying to recover. Declining one thing must not throw away
-    /// the other.
-    /// </remarks>
-    private async Task<bool> RecoverIntoCurrentWindowGatedAsync(AutosaveRecoveryPlan recovery)
-    {
-        if (_confirmDiscardOrSaveAsync is not null && !await _confirmDiscardOrSaveAsync())
-        {
-            _session.CompleteRecoveryResult(recovery, accepted: false, recovered: false);
-            return false;
-        }
-
-        return _session.CompletePresentationRecovery(
-            recovery,
-            accepted: true,
-            _applyRecoveredPresentation,
-            FreePRecoveryRestoreExceptionPolicy.QuarantineCandidate);
+        await AvaloniaAutosaveRecoveryHost.RecoverManuallyAsync(
+            owner,
+            new(text.Title, text.NoDocumentsMessage, text.FailureMessageFormat),
+            _session.PlanRecoveries,
+            createOffer: static (recovery, remainingCount) => new FreePRecoveryOffer(
+                recovery,
+                remainingCount,
+                FreePRecoveryPromptMode.Manual),
+            promptAsync: offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
+            _confirmDiscardOrSaveAsync,
+            recoverInCurrentWindow: recovery => _session.CompletePresentationRecovery(
+                recovery,
+                accepted: true,
+                _applyRecoveredPresentation,
+                FreePRecoveryRestoreExceptionPolicy.QuarantineCandidate),
+            recoverInNewWindowAsync: recovery => _recoverInNewWindowAsync is null
+                ? Task.FromResult(false)
+                : _recoverInNewWindowAsync(recovery.Candidate),
+            completeRecoveryResult: (recovery, accepted, recovered) =>
+                _session.CompleteRecoveryResult(recovery, accepted, recovered));
     }
 
     public void Dispose()
     {
-        _cts?.Cancel();
-        _cts?.Dispose();
-        _cts = null;
+        _emergencySnapshotRegistration.Dispose();
+        _periodicLoop.Dispose();
         _session.Dispose();
-
-        lock (ActiveAdaptersGate)
-            ActiveAdapters.Remove(this);
-    }
-
-    // ── Private ──────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Timeout bound for <see cref="ExecuteOnUiThreadBounded"/>'s off-thread marshal -- mirrors the
-    /// WPF sibling's bounded <c>Dispatcher.Invoke(..., 8s)</c> (see
-    /// <c>FreeP.App.Host/EmergencySnapshotCrashHandler.cs</c>).
-    /// </summary>
-    private static readonly TimeSpan EmergencySnapshotDispatcherTimeout = TimeSpan.FromSeconds(8);
-
-    /// <summary>
-    /// Runs <paramref name="writePresentation"/> against the window's presentation on the Avalonia
-    /// UI thread, bounded so a wedged dispatcher pump degrades to "no snapshot" instead of hanging
-    /// the process.
-    ///
-    /// <para>
-    /// This deliberately reproduces FreeW's R138-remediation shape rather than the naive
-    /// <c>Dispatcher.UIThread.InvokeAsync(...).GetAwaiter().GetResult()</c> it replaced -- FreeW's
-    /// own source carries a note warning FreeP not to reintroduce that form. A crash handler is
-    /// reached from <c>AppDomain.UnhandledException</c>, which fires synchronously on the faulting
-    /// thread and is very often the UI thread itself, reentrant partway through whatever it was
-    /// doing and NOT inside an active dispatcher loop iteration that could service a queued
-    /// continuation. Blocking on posted work from that same pump-less thread is a permanent
-    /// single-thread deadlock: the process hangs forever instead of exiting having lost recent
-    /// edits, which is strictly worse than the data loss the emergency snapshot exists to avoid.
-    /// So we (a) skip the marshal entirely when already on the UI thread, and (b) bound the wait
-    /// when we do have to marshal from a genuinely different thread. The bound uses
-    /// <see cref="ManualResetEventSlim"/> rather than a dispatcher-operation wait so a timeout
-    /// simply stops waiting -- it does not depend on the posted work being cancellable.
-    /// </para>
-    /// </summary>
-    private static void ExecuteOnUiThreadBounded(
-        Func<Presentation> getPresentation,
-        Action<Presentation> writePresentation)
-    {
-        if (Dispatcher.UIThread.CheckAccess())
-        {
-            writePresentation(getPresentation());
-            return;
-        }
-
-        using var completed = new ManualResetEventSlim(initialState: false);
-        Dispatcher.UIThread.Post(
-            () =>
-            {
-                try { writePresentation(getPresentation()); }
-                finally { completed.Set(); }
-            },
-            DispatcherPriority.Send);
-
-        // Timeout => the UI thread's pump is wedged. The posted write may still run later and is
-        // harmless if it does, but the crash handler does not wait on it any further -- "no
-        // snapshot" is the correct best-effort outcome here, not "process never exits".
-        completed.Wait(EmergencySnapshotDispatcherTimeout);
-    }
-
-    private async Task RunLoopAsync(CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            try { await Task.Delay(FreePAutosaveSession.DefaultInterval, ct); }
-            catch (OperationCanceledException) { break; }
-
-            if (ct.IsCancellationRequested)
-                break;
-
-            // The portable session is best-effort and skips unchanged or clean presentations.
-            _session.Snapshot();
-        }
     }
 }
 
@@ -343,35 +201,14 @@ internal sealed partial class AutosaveAdapter : IDisposable
 /// </summary>
 internal sealed partial class RecoveryPromptDialog : FreePDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
-
     private RecoveryPromptDialog(string message)
     {
         var recoveryText = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
-        Title = recoveryText.Title;
-        Width = 420;
-        Height = 160;
-        CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-
-        var text = new TextBlock
-        {
-            Text = message,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(16, 16, 16, 20),
-        };
-
-        var yes = new Button { Content = recoveryText.RecoverButton, MinWidth = 82, IsDefault = true };
-        AvaloniaCompactDialogChrome.ApplyButton(yes, DialogChromeStyle, minWidth: 82, isDefault: true);
-        yes.Click += (_, _) => Close(true);
-
-        var no = new Button { Content = recoveryText.SkipButton, MinWidth = 82, IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(no, DialogChromeStyle, minWidth: 82);
-        no.Click += (_, _) => Close(false);
-
-        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([yes, no], new Thickness(16, 0, 16, 16));
-
-        Content = new StackPanel { Children = { text, buttons } };
+        AvaloniaRecoveryPromptDialogComposer.Compose(
+            this,
+            message,
+            new(recoveryText.Title, recoveryText.RecoverButton, recoveryText.SkipButton),
+            response => Close(response));
     }
 
     /// <summary>Show the prompt and return true if the user chose to recover.</summary>

@@ -194,7 +194,7 @@ internal static class XlsxWorksheetPageLayoutNormalizer
         foreach (var (attributeName, allowedValues) in PageSetupTokenAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetup, attributeName, value => XlsxXmlNormalizationHelpers.NormalizeToken(value, allowedValues));
 
-        changed |= NormalizeRelationshipIdAttribute(pageSetup);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeRelationshipId(pageSetup, RelationshipNs + "id");
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(pageSetup);
         return changed;
     }
@@ -262,26 +262,6 @@ internal static class XlsxWorksheetPageLayoutNormalizer
         }
 
         return changed;
-    }
-
-    private static bool NormalizeRelationshipIdAttribute(XElement pageSetup)
-    {
-        var attribute = pageSetup.Attribute(RelationshipNs + "id");
-        if (attribute is null)
-            return false;
-
-        var normalized = attribute.Value.Trim();
-        if (normalized.Length == 0)
-        {
-            attribute.Remove();
-            return true;
-        }
-
-        if (string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        attribute.Value = normalized;
-        return true;
     }
 
     // Returns the normalized unsigned-int string only when it is >= 1; otherwise null so the caller

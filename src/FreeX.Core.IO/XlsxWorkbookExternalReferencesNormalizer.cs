@@ -121,27 +121,8 @@ internal static class XlsxWorkbookExternalReferencesNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(externalReference, RelationshipNs + "id");
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(externalReference);
-        changed |= NormalizeRelationshipId(externalReference);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeRelationshipId(externalReference, RelationshipNs + "id");
         return changed;
     }
 
-    private static bool NormalizeRelationshipId(XElement externalReference)
-    {
-        var attribute = externalReference.Attribute(RelationshipNs + "id");
-        var trimmed = attribute?.Value.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, trimmed, StringComparison.Ordinal))
-            return false;
-
-        externalReference.SetAttributeValue(RelationshipNs + "id", trimmed);
-        return true;
-    }
 }

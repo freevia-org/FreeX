@@ -167,7 +167,7 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly string _pivotTableName;
-    private PivotViewClearSnapshot? _snapshot;
+    private PivotFilterStateSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
 
     public ClearPivotTableViewCommand(SheetId sheetId, string pivotTableName)
@@ -187,7 +187,7 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
         if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
-        _snapshot = PivotViewClearSnapshot.Capture(pivotTable);
+        _snapshot = PivotFilterStateSnapshot.Capture(pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
         PivotTableCommandCollections.Replace(pivotTable.RowFields, ClearSelections(pivotTable.RowFields));
@@ -200,29 +200,26 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
         // R140-remediation-pivot-refresh-growth-guard-completeness: clearing a filter/selection can
         // grow the pivot's footprint (previously-hidden items reappear) past its previous render -- see
         // PivotTableRefreshService.GrowthGuard.cs.
-        var snapshot = _snapshot;
-        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
-        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable)) is { } failure)
+        if (PivotTableCommandRefreshTransaction.RefreshGuarded(
+                ctx.Workbook, sheet, pivotTable, _snapshot) is { } failure)
         {
             _snapshot = null;
             _targetSnapshot = null;
             return failure;
         }
-        UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
 
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
-        {
-            PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
-            _snapshot.Restore(pivotTable);
-        }
-        AddPivotTableCommand.Restore(sheet, _targetSnapshot);
-        if (pivotTable is not null)
-            UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
+        CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable);
+        PivotTableCommandRefreshTransaction.Revert(
+            ctx.Workbook,
+            sheet,
+            pivotTable,
+            _targetSnapshot,
+            _snapshot);
         _snapshot = null;
         _targetSnapshot = null;
     }
@@ -232,49 +229,6 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
             .Select(field => field with { SelectedItem = null, SelectedItems = null })
             .ToList();
 
-    private sealed record PivotViewClearSnapshot(
-        IReadOnlyList<PivotFieldModel> RowFields,
-        IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields,
-        IReadOnlyList<PivotLabelFilterModel> LabelFilters,
-        IReadOnlyList<PivotValueFilterModel> ValueFilters,
-        IReadOnlyList<PivotSortModel> Sorts,
-        GridRange? LastRenderedRange)
-    {
-        public static PivotViewClearSnapshot Capture(PivotTableModel pivotTable) =>
-            new(
-                pivotTable.RowFields.ToList(),
-                pivotTable.ColumnFields.ToList(),
-                pivotTable.PageFields.ToList(),
-                pivotTable.LabelFilters.ToList(),
-                pivotTable.ValueFilters.ToList(),
-                pivotTable.Sorts.ToList(),
-                pivotTable.LastRenderedRange);
-
-        public void Restore(PivotTableModel pivotTable)
-        {
-            PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
-            PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
-            PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
-            PivotTableCommandCollections.Replace(pivotTable.LabelFilters, LabelFilters);
-            PivotTableCommandCollections.Replace(pivotTable.ValueFilters, ValueFilters);
-            PivotTableCommandCollections.Replace(pivotTable.Sorts, Sorts);
-            pivotTable.LastRenderedRange = LastRenderedRange;
-        }
-    }
-
-    private static void UpdateBoundPivotChartRanges(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
-    {
-        var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
-        foreach (var chartSheet in workbook.Sheets)
-        foreach (var chart in chartSheet.Charts.Where(chart =>
-                     chart.IsPivotChart &&
-                     string.Equals(chart.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)))
-        {
-            chart.DataRange = outputRange;
-            chart.PivotCacheId = pivotTable.CacheId;
-        }
-    }
 }
 
 public sealed class MovePivotTableCommand : IWorkbookCommand
@@ -360,7 +314,7 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
                 return failure;
             }
 
-            UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
+            PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
         }
 
         return new CommandOutcome(true, AffectedCells: [_newTargetRange.Value.Start]);
@@ -390,7 +344,7 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
                 sheet.AddMergedRegion(region);
         }
         if (pivotTable is not null)
-            UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
+            PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
         _oldTargetRange = null;
         _newTargetRange = null;
         _oldLastRenderedRange = null;
@@ -444,16 +398,4 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
             sheet.ClearCell(row, col);
     }
 
-    private static void UpdateBoundPivotChartRanges(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
-    {
-        var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
-        foreach (var chartSheet in workbook.Sheets)
-        foreach (var chart in chartSheet.Charts.Where(chart =>
-                     chart.IsPivotChart &&
-                     string.Equals(chart.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)))
-        {
-            chart.DataRange = outputRange;
-            chart.PivotCacheId = pivotTable.CacheId;
-        }
-    }
 }

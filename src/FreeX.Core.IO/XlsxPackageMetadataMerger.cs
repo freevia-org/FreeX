@@ -228,7 +228,7 @@ internal static class XlsxPackageMetadataMerger
             Dictionary<string, string>? copiedPartRelationshipIdMap = null;
             foreach (var sourceRelationship in sourceRoot.Elements(relationshipNs + "Relationship"))
             {
-                if (!IsStructurallyValidPackageRelationship(sourceRelationship) ||
+                if (!OpcRelationships.IsStructurallyValidRelationship(sourceRelationship) ||
                     !ShouldPreserveRelationship(
                         sourceEntry.FullName,
                         sourceRelationship,
@@ -331,7 +331,7 @@ internal static class XlsxPackageMetadataMerger
         var existingIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var sourceRelationship in sourceRoot.Elements(relationshipNs + "Relationship"))
         {
-            if (!IsStructurallyValidPackageRelationship(sourceRelationship) ||
+            if (!OpcRelationships.IsStructurallyValidRelationship(sourceRelationship) ||
                 !ShouldPreserveRelationship(
                     sourceEntry.FullName,
                     sourceRelationship,
@@ -1695,35 +1695,6 @@ internal static class XlsxPackageMetadataMerger
 
         if (changed)
             WriteXml(targetIndex, sourcePart, xml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
-    }
-
-    private static bool IsStructurallyValidPackageRelationship(XElement relationship)
-    {
-        if (relationship.Attributes().Any(attribute =>
-                !attribute.IsNamespaceDeclaration &&
-                attribute.Name.NamespaceName.Length != 0))
-        {
-            return false;
-        }
-
-        if (relationship.Attributes().Any(attribute =>
-                !attribute.IsNamespaceDeclaration &&
-                attribute.Name.LocalName is not "Id" and not "Type" and not "Target" and not "TargetMode"))
-        {
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value) ||
-            string.IsNullOrWhiteSpace(relationship.Attribute("Type")?.Value) ||
-            string.IsNullOrWhiteSpace(relationship.Attribute("Target")?.Value))
-        {
-            return false;
-        }
-
-        var targetMode = relationship.Attribute("TargetMode")?.Value;
-        return string.IsNullOrWhiteSpace(targetMode) ||
-               string.Equals(targetMode.Trim(), "External", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(targetMode.Trim(), "Internal", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool RelationshipsPartTargetsOnlyExcludedParts(

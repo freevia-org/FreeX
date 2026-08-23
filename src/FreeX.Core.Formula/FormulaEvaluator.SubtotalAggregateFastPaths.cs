@@ -54,7 +54,7 @@ public sealed partial class FormulaEvaluator
         if (baseFunc is 7 or 8 or 10 or 11)
             return false;
 
-        var numeric = new DirectRangeNumericAccumulator();
+        var numeric = new NumericAggregateAccumulator();
         long countA = 0;
 
         foreach (var range in ranges)
@@ -168,7 +168,7 @@ public sealed partial class FormulaEvaluator
             if (rangeState == DirectRangeFastPathState.Error)
                 return true;
 
-            var singleNumeric = new DirectRangeNumericAccumulator();
+            var singleNumeric = new NumericAggregateAccumulator();
             long singleCountA = 0;
             if (!TryAccumulateAggregateDirectRange(
                     context,
@@ -204,7 +204,7 @@ public sealed partial class FormulaEvaluator
             ranges.Add(range);
         }
 
-        var numeric = new DirectRangeNumericAccumulator();
+        var numeric = new NumericAggregateAccumulator();
         long countA = 0;
 
         foreach (var range in ranges)
@@ -238,7 +238,7 @@ public sealed partial class FormulaEvaluator
         bool ignoreErrors,
         bool ignoreHiddenRows,
         bool ignoreNestedAggregates,
-        ref DirectRangeNumericAccumulator numeric,
+        ref NumericAggregateAccumulator numeric,
         ref long countA,
         out ErrorValue? error)
     {
@@ -477,7 +477,7 @@ public sealed partial class FormulaEvaluator
 
     private static ScalarValue EvaluateSubtotalAggregateNumericResult(
         int functionNumber,
-        DirectRangeNumericAccumulator numeric,
+        NumericAggregateAccumulator numeric,
         long countA)
     {
         return functionNumber switch
@@ -534,60 +534,7 @@ public sealed partial class FormulaEvaluator
             ? context.TryGetCell(row, col)
             : context.TryGetCell(range.SheetName, row, col);
 
-        return IsFastSubtotalOrAggregateFormula(cell?.FormulaText);
-    }
-
-    private static bool IsFastSubtotalOrAggregateFormula(string? formulaText)
-    {
-        if (string.IsNullOrWhiteSpace(formulaText))
-            return false;
-
-        // Excel's anti-double-counting rule excludes a cell whose formula contains a nested
-        // SUBTOTAL/AGGREGATE call ANYWHERE in the expression, not just when the whole formula is
-        // literally that call (e.g. "=1+SUBTOTAL(9,A1:A1)" must be recognized as nested too).
-        return ContainsFastSubtotalOrAggregateCall(formulaText, "SUBTOTAL")
-            || ContainsFastSubtotalOrAggregateCall(formulaText, "AGGREGATE");
-    }
-
-    private static bool ContainsFastSubtotalOrAggregateCall(string text, string functionName)
-    {
-        // Scan the raw formula source character-by-character, tracking whether the cursor is
-        // inside a "..." string literal (with Excel's "" doubled-quote escape) so that a
-        // function-name-shaped substring that only occurs INSIDE a quoted string constant
-        // (e.g. ="SUBTOTAL("&"9,B1:B2)") is never mistaken for a real nested call.
-        bool inString = false;
-        for (int i = 0; i < text.Length; i++)
-        {
-            var ch = text[i];
-            if (ch == '"')
-            {
-                if (inString && i + 1 < text.Length && text[i + 1] == '"')
-                {
-                    i++; // escaped "" inside a string literal - stays inside the literal
-                    continue;
-                }
-                inString = !inString;
-                continue;
-            }
-            if (inString) continue;
-
-            if (i + functionName.Length > text.Length) continue;
-            if (string.Compare(text, i, functionName, 0, functionName.Length, StringComparison.OrdinalIgnoreCase) != 0)
-                continue;
-
-            // Reject matches that are part of a longer identifier (e.g. "MYSUBTOTAL(" must not
-            // match "SUBTOTAL(") by requiring the preceding character not be an identifier character.
-            var precededByIdentifierChar = i > 0 &&
-                (char.IsLetterOrDigit(text[i - 1]) || text[i - 1] == '_' || text[i - 1] == '.');
-            if (!precededByIdentifierChar)
-            {
-                var cursor = i + functionName.Length;
-                while (cursor < text.Length && char.IsWhiteSpace(text[cursor])) cursor++;
-                if (cursor < text.Length && text[cursor] == '(') return true;
-            }
-        }
-
-        return false;
+        return FormulaFunctionCallScanner.ContainsSubtotalOrAggregateCall(cell?.FormulaText);
     }
 
     private static ScalarValue GetFastRangeCellValue(
@@ -760,7 +707,7 @@ public sealed partial class FormulaEvaluator
                     (uint)endRow,   (uint)endCol);
 
                 // Run SUBTOTAL(baseFunc) on this single range element.
-                var numeric = new DirectRangeNumericAccumulator();
+                var numeric = new NumericAggregateAccumulator();
                 long countA = 0;
                 bool errorSeen = false;
                 ScalarValue errorVal = BlankValue.Instance;
@@ -809,47 +756,4 @@ public sealed partial class FormulaEvaluator
         Error
     }
 
-    private struct DirectRangeNumericAccumulator
-    {
-        private double _varianceMean;
-
-        public long Count { get; private set; }
-        public double Sum { get; private set; }
-        public double Product { get; private set; }
-        public double Min { get; private set; }
-        public double Max { get; private set; }
-        public double VarianceM2 { get; private set; }
-        public double Average => Sum / Count;
-        public double SampleVariance => VarianceM2 / (Count - 1);
-        public double PopulationVariance => VarianceM2 / Count;
-
-        public void Add(double value, int functionNumber)
-        {
-            Count++;
-            switch (functionNumber)
-            {
-                case 1:
-                case 9:
-                    Sum += value;
-                    break;
-                case 4:
-                    Max = Count == 1 ? value : Math.Max(Max, value);
-                    break;
-                case 5:
-                    Min = Count == 1 ? value : Math.Min(Min, value);
-                    break;
-                case 6:
-                    Product = Count == 1 ? value : Product * value;
-                    break;
-                case 7:
-                case 8:
-                case 10:
-                case 11:
-                    var delta = value - _varianceMean;
-                    _varianceMean += delta / Count;
-                    VarianceM2 += delta * (value - _varianceMean);
-                    break;
-            }
-        }
-    }
 }

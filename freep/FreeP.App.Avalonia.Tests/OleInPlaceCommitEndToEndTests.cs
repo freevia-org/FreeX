@@ -12,9 +12,8 @@ using FreeP.Core.Model;
 namespace FreeP.App.Avalonia.Tests;
 
 /// <summary>
-/// Round 152 remediation gap H3: <see cref="AvaloniaOleInPlaceHostCommitCallbackTests"/> calls
-/// <c>AvaloniaOleInPlaceHost.BuildCommitCallback</c> directly via reflection, so it verifies the
-/// helper composes two delegates correctly but says nothing about whether
+/// Round 152 remediation gap H3: <see cref="AvaloniaOleInPlaceHostCommitCallbackTests"/> verifies
+/// that the native host adopts the shared payload callback policy, but says nothing about whether
 /// <see cref="MainWindow.TryOpenOleInPlace"/> actually passes
 /// <c>onPayloadUpdated: _ =&gt; _fileWorkflow.MarkDirty()</c> at its call site into
 /// <c>AvaloniaOleInPlaceHost.TryShow</c>. Deleting that argument leaves that test green.

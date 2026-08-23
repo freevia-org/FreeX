@@ -79,11 +79,15 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
         _previousAuthors = [];
         _previousShown = [];
         var affected = new List<CellAddress>();
-        foreach (var tileAnchor in EnumerateTileAnchors())
+        foreach (var tileAnchor in PastePlacementPolicy.EnumerateTileAnchors(
+                     _sourceRange,
+                     _destination,
+                     _destinationRange,
+                     _transpose))
         {
             foreach (var (source, comment, author, shown) in sourceComments)
             {
-                var destination = MapDestination(source, _sourceRange, tileAnchor, _transpose);
+                var destination = PastePlacementPolicy.MapAddress(source, _sourceRange, tileAnchor, _transpose);
 
                 // R124-paste-note-vs-thread-parity: real Excel (and every direct-authoring path
                 // here -- SetCommentCommand/SetThreadedCommentCommand via CommentCommandGuards)
@@ -93,7 +97,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
                 // comment thread already sits at the destination rather than unioning with it.
                 if (targetSheet.ThreadedComments.TryGetValue(destination, out var oldThreaded))
                 {
-                    _previousThreaded[destination] = CloneThreadedComment(oldThreaded);
+                    _previousThreaded[destination] = ThreadedCommentCloner.Clone(oldThreaded, ThreadedCommentIdPolicy.Preserve);
                     targetSheet.ThreadedComments.Remove(destination);
                 }
 
@@ -121,7 +125,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
 
             foreach (var (source, comment) in sourceThreadedComments)
             {
-                var destination = MapDestination(source, _sourceRange, tileAnchor, _transpose);
+                var destination = PastePlacementPolicy.MapAddress(source, _sourceRange, tileAnchor, _transpose);
 
                 // R124-paste-note-vs-thread-parity: symmetric to the Note loop above -- pasting a
                 // threaded comment must first clear any legacy Note (and its author/pinned state)
@@ -141,9 +145,9 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
                 }
 
                 _previousThreaded[destination] = targetSheet.ThreadedComments.TryGetValue(destination, out var oldComment)
-                    ? CloneThreadedComment(oldComment)
+                    ? ThreadedCommentCloner.Clone(oldComment, ThreadedCommentIdPolicy.Preserve)
                     : null;
-                targetSheet.ThreadedComments[destination] = ClonedThreadedCommentForNewAddress(comment);
+                targetSheet.ThreadedComments[destination] = ThreadedCommentCloner.Clone(comment, ThreadedCommentIdPolicy.Reset);
                 affected.Add(destination);
             }
         }
@@ -170,7 +174,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             if (comment is null)
                 sheet.ThreadedComments.Remove(address);
             else
-                sheet.ThreadedComments[address] = CloneThreadedComment(comment);
+                sheet.ThreadedComments[address] = ThreadedCommentCloner.Clone(comment, ThreadedCommentIdPolicy.Preserve);
         }
 
         if (_previousAuthors is not null)
@@ -196,26 +200,6 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
         }
     }
 
-    private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
-        comment with { Replies = comment.Replies.ToList() };
-
-    // R80-io-comments-threaded-5-1: pasting a threaded comment onto a new destination cell must
-    // NOT carry over the source's persisted Id or reply Ids -- unlike CloneThreadedComment above
-    // (used only to snapshot/restore a cell's own pre-existing comment in place for undo), this
-    // creates a brand-new, independent thread at the destination. Otherwise the pasted thread's
-    // root serializes with the identical <threadedComment id="..."> as the source
-    // (XlsxWorksheetThreadedCommentMapper.ToThreadedCommentElements reuses comment.Id verbatim),
-    // and reply lookup on reload (grouped globally by parentId string, not scoped per cell)
-    // attaches the source's replies to the pasted thread too. Clearing Id (and each reply's Id)
-    // forces the writer to mint a fresh, address-derived stable guid for the pasted thread
-    // instead. Mirrors CopyRangeCommand.ClonedThreadedCommentForNewAddress.
-    private static ThreadedComment ClonedThreadedCommentForNewAddress(ThreadedComment comment) =>
-        comment with
-        {
-            Id = null,
-            Replies = comment.Replies.Select(reply => reply with { Id = null }).ToList(),
-        };
-
     // R78-commands-paste-special-5-3: when _sourceAreas records a multi-area (Ctrl+click) source,
     // only cells that fall inside one of the ACTUAL copied areas count as "copied" -- a comment
     // living in the gap between disjoint areas must never be picked up. With no (or a single) area
@@ -225,56 +209,4 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             ? areas.SelectMany(area => area.AllCells()).Distinct()
             : _sourceRange.AllCells();
 
-    // R34-commands-paste-special-3-2: when the constructor was given the full destination
-    // selection (not just its top-left anchor) and that selection is larger than the copied
-    // source range in either dimension, repeat the paste at every whole tile of the source range
-    // that fits -- exactly mirroring PasteCommandFactory.CreateInternalPasteCommand's
-    // shouldTileDestinationRange/CreateTiledInternalPasteCommand period-based tiling. A trailing
-    // partial tile (selection size not an exact multiple of the source range) is left untouched,
-    // matching that same tiling behavior. When no destination range was supplied, or the
-    // selection is no larger than the source range, this yields just the single anchor cell so
-    // the original (non-tiled) behavior is unchanged.
-    private IEnumerable<CellAddress> EnumerateTileAnchors()
-    {
-        if (_destinationRange is not { } destinationRange)
-        {
-            yield return _destination;
-            yield break;
-        }
-
-        var pasteRows = _transpose ? _sourceRange.ColCount : _sourceRange.RowCount;
-        var pasteCols = _transpose ? _sourceRange.RowCount : _sourceRange.ColCount;
-        var targetRows = destinationRange.RowCount;
-        var targetCols = destinationRange.ColCount;
-
-        if (targetRows <= pasteRows && targetCols <= pasteCols)
-        {
-            yield return destinationRange.Start;
-            yield break;
-        }
-
-        for (var rowOffset = 0U; rowOffset + pasteRows <= targetRows; rowOffset += pasteRows)
-        {
-            for (var colOffset = 0U; colOffset + pasteCols <= targetCols; colOffset += pasteCols)
-            {
-                yield return new CellAddress(
-                    destinationRange.Start.Sheet,
-                    destinationRange.Start.Row + rowOffset,
-                    destinationRange.Start.Col + colOffset);
-            }
-        }
-    }
-
-    private static CellAddress MapDestination(
-        CellAddress source,
-        GridRange sourceRange,
-        CellAddress destination,
-        bool transpose)
-    {
-        var rowOffset = source.Row - sourceRange.Start.Row;
-        var colOffset = source.Col - sourceRange.Start.Col;
-        return transpose
-            ? new CellAddress(destination.Sheet, destination.Row + colOffset, destination.Col + rowOffset)
-            : new CellAddress(destination.Sheet, destination.Row + rowOffset, destination.Col + colOffset);
-    }
 }

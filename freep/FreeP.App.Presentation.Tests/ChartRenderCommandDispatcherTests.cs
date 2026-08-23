@@ -11,7 +11,7 @@ public sealed class ChartRenderCommandDispatcherTests
                 new ChartPlanRect(1, 2, 3, 4),
                 new ChartFillPlan(SrgbColor.Black, 255),
                 null,
-                RoundedCorners: false),
+                CornerRadius: 0),
             new ChartRenderCommand.Marker(new ChartMarkerRenderPlan([])),
             new ChartRenderCommand.Rectangle(
                 new ChartPlanRect(5, 6, 7, 8),

@@ -77,7 +77,7 @@ internal static partial class ViewportConditionalFormatEvaluator
         Dictionary<CfThresholdFormulaKey, double>? result = null;
         foreach (var (key, ast) in thresholdFormulas)
         {
-            if (HasRelativeReferences(ast) || IsCurrentCellSensitive(ast))
+            if (FormulaAstReferenceShifter.HasRelativeReferences(ast) || IsCurrentCellSensitive(ast))
                 continue;
 
             if (TryEvaluateThresholdFormula(ast, sheet, workbook, key.Rule.AppliesTo.Start, out var value))
@@ -114,38 +114,8 @@ internal static partial class ViewportConditionalFormatEvaluator
 
     private static bool IsCurrentCellSensitiveFunction(FunctionCallNode function)
     {
-        if (function.FunctionName is "NOW" or "TODAY" or "RAND" or "RANDBETWEEN" or "RANDARRAY" or "INDIRECT" or "OFFSET" or "CELL" or "INFO")
-            return !IsNonVolatileCellOrInfoCall(function);
-
-        if (function.Arguments.Count == 0 &&
-            function.FunctionName is "ROW" or "COLUMN")
-        {
-            return true;
-        }
-
-        return false;
+        return FormulaVolatilityPolicy.IsCurrentCellSensitiveCall(function);
     }
-
-    // Mirrors RecalcEngine.IsNonVolatileCellOrInfoCall: CELL("width", ...) and INFO(...) with a
-    // constant info-type in {directory,numfile,origin,osversion,recalc,release,system} are non-
-    // volatile in Excel, so they shouldn't force a conditional format threshold to be treated as
-    // current-cell-sensitive (which would disable the static-value precompute cache for it).
-    private static bool IsNonVolatileCellOrInfoCall(FunctionCallNode func)
-    {
-        if (func.Arguments.Count == 0 || func.Arguments[0] is not StringNode { Value: var infoTypeArg })
-            return false;
-
-        var infoType = infoTypeArg.Trim();
-        return func.FunctionName switch
-        {
-            "CELL" => string.Equals(infoType, "width", StringComparison.OrdinalIgnoreCase),
-            "INFO" => NonVolatileInfoTypes.Contains(infoType.ToLowerInvariant()),
-            _ => false,
-        };
-    }
-
-    private static readonly HashSet<string> NonVolatileInfoTypes =
-        ["directory", "numfile", "origin", "osversion", "recalc", "release", "system"];
 
     private static Dictionary<ConditionalFormat, CfIconSetThresholdCache> PrecomputeIconSetThresholdCaches(
         Sheet sheet,

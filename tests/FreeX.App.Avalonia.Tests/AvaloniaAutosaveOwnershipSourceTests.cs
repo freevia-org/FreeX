@@ -14,12 +14,15 @@ public sealed class AvaloniaAutosaveOwnershipSourceTests
         appSource.Should().Contain("_service.Attach(mainWindow, Guid.NewGuid());");
         appSource.Should().Contain("Interval = AutosaveService.DefaultInterval");
         appSource.Should().Contain("_service.OnTimerTick()");
-        appSource.Should().Contain("coordinator._service.TryEmergencySnapshot()");
+        appSource.Should().Contain("EmergencySnapshotFanOut<AvaloniaAutosaveCoordinator>");
+        appSource.Should().Contain("EmergencySnapshots.Register(this)");
+        appSource.Should().Contain("EmergencySnapshots.TrySnapshotAll()");
+        appSource.Should().Contain("_emergencySnapshotRegistration.Dispose();");
         appSource.Should().Contain("_service.DeleteSnapshot();");
         appSource.Should().Contain("_service.Dispose();");
 
         appSource.Should().Contain("DispatcherTimer");
-        appSource.Should().Contain("ActiveCoordinators");
+        appSource.Should().NotContain("ActiveCoordinatorsGate");
         appSource.Should().NotContain("AutosaveSnapshotCoordinator");
         appSource.Should().NotContain("NativeJsonAdapter");
         appSource.Should().NotContain("IAutosaveSnapshotSource");

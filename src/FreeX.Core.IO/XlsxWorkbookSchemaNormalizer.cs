@@ -15,32 +15,7 @@ internal static class XlsxWorkbookSchemaNormalizer
     public static void Normalize(ZipArchive archive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetSheetPropertiesNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetSheetViewNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetProtectionNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetScenarioNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetSmartTagNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetCustomSheetViewExtensionListNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetConditionalFormatNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetAutoFilterNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetSortStateNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetDataConsolidationNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetDataValidationNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetWebPublishItemsNormalizer.NormalizePackage(archive);
-        XlsxWorksheetOleControlNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheets(archive);
-        XlsxWorksheetPageBreakNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetSinglePassNormalizer.NormalizeSchemaWorksheets(archive);
         XlsxRichTextFontNormalizer.NormalizePackage(archive);
         XlsxDocumentThumbnailPackageGraphNormalizer.NormalizePackage(archive);
         XlsxThemeTypefaceNormalizer.NormalizePackage(archive);

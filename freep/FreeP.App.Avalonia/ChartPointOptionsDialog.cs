@@ -1,46 +1,29 @@
-using Avalonia.Controls;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class ChartPointOptionsDialog : FreePDialogWindow
+internal sealed partial class ChartPointOptionsDialog : ChartOptionsDialogHost<ChartPointOptionsDialogSession>
 {
-    private readonly ChartPointOptionsDialogSession _session;
-    private readonly ChartOptionsDialogForm _form;
-
     internal ChartPointOptionsDialog(
         EditingSession editor,
         int? initialSeriesIndex = null,
         int? initialPointIndex = null)
+        : this(new ChartPointOptionsDialogSession(editor, initialSeriesIndex, initialPointIndex))
     {
-        _session = new ChartPointOptionsDialogSession(editor, initialSeriesIndex, initialPointIndex);
-        var plan = _session.BuildDialogPlan();
-        _form = ChartOptionsDialogChrome.CreateForm(plan, OnOk, () => Close(false), OnValueChanged);
-
-        Title = plan.Title;
-        Width = plan.Width;
-        Height = plan.Height;
-        MinWidth = plan.MinimumWidth;
-        MinHeight = plan.MinimumHeight;
-        CanResize = plan.IsResizable;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Content = _form.Content;
     }
 
-    private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
+    private ChartPointOptionsDialog(ChartPointOptionsDialogSession session)
+        : base(session, session.BuildDialogPlan(), Submit, Replan)
     {
-        if (_session.TryApplySelectionChange(fieldId, _form.SelectedIndex(fieldId), out var plan))
-            _form.ApplyPlan(plan);
     }
 
-    private void OnOk()
-    {
-        var result = _session.TryCommit(ReadInput());
-        if (result.Succeeded)
-            Close(true);
-    }
+    private static ChartOptionsDialogPlan? Replan(
+        ChartPointOptionsDialogSession session,
+        ChartOptionsDialogFieldId fieldId,
+        int selectedIndex) =>
+        session.TryApplySelectionChange(fieldId, selectedIndex, out var plan) ? plan : null;
 
-    private ChartPointOptionsDialogInput ReadInput() =>
-        _session.BuildInput(_form.CaptureValues());
+    private static bool Submit(ChartPointOptionsDialogSession session, ChartOptionsDialogValues values) =>
+        session.TryCommit(session.BuildInput(values)).Succeeded;
 }

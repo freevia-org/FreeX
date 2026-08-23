@@ -48,7 +48,9 @@ public sealed class AppInfoTests
         AppInfo.AboutText.Should().Contain("Help > Legal Notices");
         AppInfo.SourceNotice.Should().Contain("Full project license, legal notice, privacy notice, third-party notices, and bundled third-party license texts");
         AppInfo.AboutText.Should().Contain("ClosedXML");
-        AppInfo.AboutText.Should().Contain("SharpVectors.Wpf");
+        AppInfo.ThirdPartyRuntimeNotice.Should().Contain("LGPL-licensed components");
+        AppInfo.ThirdPartyRuntimeNotice.Should().Contain("distribution requirements");
+        AppInfo.ThirdPartyRuntimeNotice.Should().Contain("Release packaging must preserve those materials.");
         AppInfo.AboutText.Should().Contain("local desktop app");
         AppInfo.AboutText.Should().NotContain("%LOCALAPPDATA%");
         AppInfo.AboutText.Should().NotContain("Claude Code");

@@ -25,12 +25,6 @@ internal static class XlsxWorkbookContainerElementSchemas
 
     // ── shared value normalizers ──────────────────────────────────────────────────────────────
 
-    private static string? NormalizeOptionalText(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
     private static string? NormalizeRelationshipId(string? value)
     {
         var trimmed = value?.Trim();
@@ -80,13 +74,13 @@ internal static class XlsxWorkbookContainerElementSchemas
                 RequiredAttributes = new HashSet<string>(StringComparer.Ordinal) { "name" },
                 AttributeRules = new Dictionary<string, Func<string?, string?>>
                 {
-                    ["name"]             = NormalizeOptionalText,
-                    ["comment"]          = NormalizeOptionalText,
-                    ["customMenu"]       = NormalizeOptionalText,
-                    ["description"]      = NormalizeOptionalText,
-                    ["help"]             = NormalizeOptionalText,
-                    ["statusBar"]        = NormalizeOptionalText,
-                    ["shortcutKey"]      = NormalizeOptionalText,
+                    ["name"]             = XlsxXmlNormalizationHelpers.NormalizeOptionalText,
+                    ["comment"]          = XlsxXmlNormalizationHelpers.NormalizeOptionalText,
+                    ["customMenu"]       = XlsxXmlNormalizationHelpers.NormalizeOptionalText,
+                    ["description"]      = XlsxXmlNormalizationHelpers.NormalizeOptionalText,
+                    ["help"]             = XlsxXmlNormalizationHelpers.NormalizeOptionalText,
+                    ["statusBar"]        = XlsxXmlNormalizationHelpers.NormalizeOptionalText,
+                    ["shortcutKey"]      = XlsxXmlNormalizationHelpers.NormalizeOptionalText,
                     ["hidden"]           = XlsxXmlNormalizationHelpers.NormalizeBoolean,
                     ["function"]         = XlsxXmlNormalizationHelpers.NormalizeBoolean,
                     ["vbProcedure"]      = XlsxXmlNormalizationHelpers.NormalizeBoolean,
@@ -141,7 +135,7 @@ internal static class XlsxWorkbookContainerElementSchemas
                 RequiredAttributes = new HashSet<string>(StringComparer.Ordinal) { "name" },
                 AttributeRules = new Dictionary<string, Func<string?, string?>>
                 {
-                    ["name"] = NormalizeOptionalText
+                    ["name"] = XlsxXmlNormalizationHelpers.NormalizeOptionalText
                 }
             },
             RemoveSelfIfEmpty = false
@@ -176,10 +170,10 @@ internal static class XlsxWorkbookContainerElementSchemas
                 AttributeRules = new Dictionary<string, Func<string?, string?>>
                 {
                     ["id"]              = XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull,
-                    ["divId"]           = NormalizeOptionalText,
-                    ["sourceObject"]    = NormalizeOptionalText,
-                    ["destinationFile"] = NormalizeOptionalText,
-                    ["title"]           = NormalizeOptionalText,
+                    ["divId"]           = XlsxXmlNormalizationHelpers.NormalizeOptionalText,
+                    ["sourceObject"]    = XlsxXmlNormalizationHelpers.NormalizeOptionalText,
+                    ["destinationFile"] = XlsxXmlNormalizationHelpers.NormalizeOptionalText,
+                    ["title"]           = XlsxXmlNormalizationHelpers.NormalizeOptionalText,
                     ["autoRepublish"]   = XlsxXmlNormalizationHelpers.NormalizeBoolean
                 }
             },

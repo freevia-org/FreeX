@@ -24,9 +24,6 @@ namespace FreeX.Core.IO;
 /// </summary>
 internal static class XlsxSourceDrawingGeometryRewriter
 {
-    private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-    private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace SpreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
     private static readonly XNamespace MarkupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
@@ -51,7 +48,12 @@ internal static class XlsxSourceDrawingGeometryRewriter
             if (string.IsNullOrWhiteSpace(worksheetPath))
                 continue;
 
-            var drawingPath = ResolveWorksheetDrawingPath(archive, worksheetPath);
+            var drawingPath = XlsxWorksheetDrawingPartMerger.GetWorksheetDrawingPath(
+                archive,
+                worksheetPath,
+                XNamespace.Get("http://schemas.openxmlformats.org/spreadsheetml/2006/main"),
+                XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships"),
+                OpcRelationships.Namespace);
             if (string.IsNullOrWhiteSpace(drawingPath))
                 continue;
 
@@ -66,30 +68,6 @@ internal static class XlsxSourceDrawingGeometryRewriter
             if (RewriteDrawingGeometry(drawingXml.Root, sheet))
                 XlsxPackageXmlEditor.ReplaceXml(archive, drawingPath, drawingXml);
         }
-    }
-
-    private static string? ResolveWorksheetDrawingPath(ZipArchive archive, string worksheetPath)
-    {
-        var worksheetEntry = archive.GetEntry(worksheetPath);
-        if (worksheetEntry is null)
-            return null;
-
-        var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-        var drawingRelId = worksheetXml.Root?
-            .Element(WorkbookNs + "drawing")?
-            .Attribute(RelNs + "id")?
-            .Value;
-        if (string.IsNullOrWhiteSpace(drawingRelId))
-            return null;
-
-        var worksheetRels = XlsxRelationshipReader.LoadTargets(
-            archive,
-            XlsxPackagePath.GetRelationshipPartPath(worksheetPath),
-            worksheetPath,
-            PackageRelNs);
-        return worksheetRels.TryGetValue(drawingRelId, out var drawingPath)
-            ? XlsxPackagePath.NormalizePackagePath(drawingPath)
-            : null;
     }
 
     /// <summary>
@@ -800,8 +778,8 @@ internal static class XlsxSourceDrawingGeometryRewriter
             // height, using the same column-width/row-height walk the model writer uses for charts
             // (XlsxWorksheetChartWriter.ToAnchorMarker) so a save-then-reload measures the resize
             // identically to how XlsxDrawingAnchorApplier/GetAnchorSize measured it on load.
-            var fromLeft = SumColumnPixels(sheet, 1, fromCol) + offsetXPixels;
-            var fromTop = SumRowPixels(sheet, 1, fromRow) + offsetYPixels;
+            var fromLeft = WorksheetMetricSpanCalculator.SumColumnPixels(sheet, 1, fromCol) + offsetXPixels;
+            var fromTop = WorksheetMetricSpanCalculator.SumRowPixels(sheet, 1, fromRow) + offsetYPixels;
             var (toCol, toColOffset) = ToMarkerIndex(
                 fromLeft + widthPixels,
                 sheet.DefaultColumnWidth * 8,
@@ -1106,29 +1084,4 @@ internal static class XlsxSourceDrawingGeometryRewriter
         return (maxIndex - 1, Math.Min(remaining, Math.Max(0, defaultSize)));
     }
 
-    private static double SumColumnPixels(Sheet sheet, uint firstColumn, uint count)
-    {
-        double width = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var col = firstColumn + offset;
-            if (!sheet.IsColEffectivelyHidden(col))
-                width += sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
-        }
-
-        return width;
-    }
-
-    private static double SumRowPixels(Sheet sheet, uint firstRow, uint count)
-    {
-        double height = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var row = firstRow + offset;
-            if (!sheet.IsRowEffectivelyHidden(row))
-                height += sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
-        }
-
-        return height;
-    }
 }

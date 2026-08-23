@@ -33,6 +33,92 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_ConditionalRgbColorsOverrideThemedBaseColors()
+    {
+        var workbook = new Workbook("Accessibility")
+        {
+            Theme = WorkbookTheme.Office
+                .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 10, 10))
+                .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(250, 250, 250))
+        };
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        var baseStyleId = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(1, 2, 3),
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            FillColor = new CellColor(4, 5, 6),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)
+        });
+        var cell = Cell.FromValue(new TextValue("At risk"));
+        cell.StyleId = baseStyleId;
+        sheet.SetCell(address, cell);
+        var conditionalFont = new CellColor(245, 245, 245);
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            RuleType = CfRuleType.ContainsText,
+            TextRuleText = "risk",
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = conditionalFont,
+                DxfFontColor = conditionalFont,
+                FillColor = new CellColor(250, 250, 250)
+            }
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(issue =>
+                issue.Kind == AccessibilityIssueKind.LowContrastCellText &&
+                issue.Location == "B2");
+    }
+
+    [Fact]
+    public void FindIssues_ConditionalThemeColorsReplaceThemedBaseColors()
+    {
+        var workbook = new Workbook("Accessibility")
+        {
+            Theme = WorkbookTheme.Office
+                .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 10, 10))
+                .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(250, 250, 250))
+                .WithColor(WorkbookThemeColorSlot.Accent3, new CellColor(235, 235, 235))
+                .WithColor(WorkbookThemeColorSlot.Accent4, new CellColor(245, 245, 245))
+        };
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        var baseStyleId = workbook.RegisterStyle(new CellStyle
+        {
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)
+        });
+        var cell = Cell.FromValue(new TextValue("At risk"));
+        cell.StyleId = baseStyleId;
+        sheet.SetCell(address, cell);
+        var conditionalFontTheme = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.1);
+        var conditionalFillTheme = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.05);
+        var conditionalFontFallback = new CellColor(7, 8, 9);
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            RuleType = CfRuleType.ContainsText,
+            TextRuleText = "risk",
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = conditionalFontFallback,
+                DxfFontColor = conditionalFontFallback,
+                FontThemeColor = conditionalFontTheme,
+                FillColor = new CellColor(11, 12, 13),
+                FillThemeColor = conditionalFillTheme
+            }
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(issue =>
+                issue.Kind == AccessibilityIssueKind.LowContrastCellText &&
+                issue.Location == "B2");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromDuplicateValuesConditionalFormat()
     {
         var workbook = new Workbook("Accessibility");
@@ -90,7 +176,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_FlagsLowContrastCellText_FromAboveAverageConditionalFormat()
+    public void FindIssues_DoesNotCoerceNumericTextForAboveAverageConditionalFormat()
     {
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Sales");
@@ -112,14 +198,13 @@ public sealed partial class AccessibilityCheckerServiceTests
             }
         });
 
-        var issue = AccessibilityCheckerService.FindIssues(workbook)
-            .Should().ContainSingle(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
-
-        issue.Location.Should().Be("A3");
+        // Canonical Calc aggregate rules admit numeric/date values, not numeric-looking TextValue cells.
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText);
     }
 
     [Fact]
-    public void FindIssues_FlagsLowContrastCellText_FromBelowAverageConditionalFormat()
+    public void FindIssues_DoesNotCoerceNumericTextForBelowAverageConditionalFormat()
     {
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Sales");
@@ -141,14 +226,12 @@ public sealed partial class AccessibilityCheckerServiceTests
             }
         });
 
-        var issue = AccessibilityCheckerService.FindIssues(workbook)
-            .Should().ContainSingle(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
-
-        issue.Location.Should().Be("A1");
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText);
     }
 
     [Fact]
-    public void FindIssues_FlagsLowContrastCellText_FromTopRankedConditionalFormat()
+    public void FindIssues_DoesNotCoerceNumericTextForTopRankedConditionalFormat()
     {
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Sales");
@@ -175,11 +258,11 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Where(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText)
             .ToList();
 
-        issues.Select(issue => issue.Location).Should().Equal("A2", "A3");
+        issues.Should().BeEmpty();
     }
 
     [Fact]
-    public void FindIssues_FlagsLowContrastCellText_FromBottomPercentConditionalFormat()
+    public void FindIssues_DoesNotCoerceNumericTextForBottomPercentConditionalFormat()
     {
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Sales");
@@ -207,7 +290,7 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Where(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText)
             .ToList();
 
-        issues.Select(issue => issue.Location).Should().Equal("A1", "A2");
+        issues.Should().BeEmpty();
     }
 
     [Fact]
@@ -409,8 +492,8 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIsEvenIsOddReferences()
     {
-        AssertFormulaParityContrastLocations("ISEVEN($A1)", "B1", "B3", "B5");
-        AssertFormulaParityContrastLocations("ISODD($A1)", "B2", "B4");
+        AssertFormulaParityContrastLocations("ISEVEN($A1)", "B1", "B3", "B5", "B6", "B8");
+        AssertFormulaParityContrastLocations("ISODD($A1)", "B2", "B4", "B7");
     }
 
     [Fact]
@@ -426,17 +509,17 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNestedIsEvenIsOddPredicates()
     {
         AssertFormulaParityContrastLocations("AND(ISEVEN($A1),$C1)", "B1", "B5");
-        AssertFormulaParityContrastLocations("OR(ISODD($A1),$C1)", "B1", "B2", "B4", "B5");
-        AssertFormulaParityContrastLocations("NOT(ISODD($A1))", "B1", "B3", "B5");
+        AssertFormulaParityContrastLocations("OR(ISODD($A1),$C1)", "B1", "B2", "B4", "B5", "B7");
+        AssertFormulaParityContrastLocations("NOT(ISODD($A1))", "B1", "B3", "B5", "B6", "B8");
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatIsEvenIsOddForNonNumericOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatIsEvenIsOddNonNumericOperandSemantics()
     {
-        AssertFormulaParityContrastLocations("ISEVEN($D1)");
-        AssertFormulaParityContrastLocations("ISODD($D1)");
-        AssertFormulaParityContrastLocations("ISEVEN(\"2\")");
-        AssertFormulaParityContrastLocations("ISODD(TRUE)");
+        AssertFormulaParityContrastLocations("ISEVEN($D1)", "B3", "B5", "B6", "B7", "B8");
+        AssertFormulaParityContrastLocations("ISODD($D1)", "B2");
+        AssertFormulaParityContrastLocations("ISEVEN(\"2\")", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9");
+        AssertFormulaParityContrastLocations("ISODD(TRUE)", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9");
         AssertFormulaParityContrastLocations("ISEVEN(#VALUE!)");
     }
 
@@ -679,7 +762,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaAggregateContrastLocations("IF(AGGREGATE(9,4,$A1:$A3)>250,TRUE,FALSE)", "B2");
         AssertFormulaAggregateContrastLocations("AGGREGATE(9,6,$A$1:$A$4,NA())=375", "B1", "B2", "B3", "B4");
-        AssertFormulaAggregateContrastLocations("AGGREGATE(9,6,\"25\",$A$1:$A$1)=100", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(9,6,\"25\",$A$1:$A$1)=100");
         AssertFormulaAggregateContrastLocations("ISERROR(AGGREGATE(9,4,$A$1:$A$4,NA()))", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("ISERROR(AGGREGATE(9,6,$A$1:$A$4,NA()))");
     }
@@ -870,7 +953,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaAggregateContrastLocations("SUMPRODUCT(3,4)=12", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("SUMPRODUCT(\"5\",2)=0", "B1", "B2", "B3", "B4");
-        AssertFormulaAggregateContrastLocations("SUMPRODUCT(TRUE,2)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT(TRUE,2)=0");
         AssertFormulaAggregateContrastLocations("SUMPRODUCT(DATE(2023,1,2),1)=44928", "B1", "B2", "B3", "B4");
     }
 
@@ -894,12 +977,12 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatSumProductUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatSumProductOperandCoercionAndErrorSemantics()
     {
         AssertFormulaAggregateContrastLocations("SUMPRODUCT()>0");
         AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1:$A2,$A1:$A3)>0");
         AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1:$B1,$A1:$A2)>0");
-        AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1:$A20000)>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("SUMPRODUCT(A0,$A1)>0");
         AssertFormulaAggregateContrastLocations("SUMPRODUCT(NA(),1)>0");
         AssertFormulaAggregateContrastLocations("SUMPRODUCT(KURT($A1),$A1)>0");
@@ -1017,12 +1100,12 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatRegressionUnsupportedArityShapesAndComparisons()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatRegressionArityShapeAndComparisonSemantics()
     {
         AssertFormulaAggregateContrastLocations("CORREL($A$1:$A$4)>0");
         AssertFormulaAggregateContrastLocations("FORECAST($A1,$A$1:$A$4)>0");
         AssertFormulaAggregateContrastLocations("FORECAST($A$1:$A$2,$A$1:$A$4,$A$1:$A$4)>0");
-        AssertFormulaAggregateContrastLocations("PEARSON($A1:$A20000,$A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("PEARSON($A1:$A20000,$A1:$A20000)>0", "B1", "B2", "B3");
         AssertFormulaAggregateContrastLocations("CORREL(\"n/a\",1)>0");
         AssertFormulaAggregateContrastLocations("CORREL($A$1:$A$3,$A$1:$A$4)>0");
         AssertFormulaAggregateContrastLocations("SLOPE($A$1:$A$4,$A$1:$A$4)>$A$1:$A$2");
@@ -1170,7 +1253,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatShapeAndTrimUnsupportedShapesOrInvalidData()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatShapeAndTrimShapeAndInvalidDataSemantics()
     {
         AssertFormulaAggregateContrastLocations("KURT()>0");
         AssertFormulaAggregateContrastLocations("TRIMMEAN($A$1:$A$4)>0");
@@ -1179,8 +1262,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("SKEW($A1:$A2)>0");
         AssertFormulaAggregateContrastLocations("SKEW.P($A1)>0");
         AssertFormulaAggregateContrastLocations("TRIMMEAN($D3:$D5,0)>0");
-        AssertFormulaAggregateContrastLocations("SKEW($A1:$A20000)>0");
-        AssertFormulaAggregateContrastLocations("TRIMMEAN($A1:$A20000,0)>0");
+        AssertFormulaAggregateContrastLocations("SKEW($A1:$A20000)>0", "B1");
+        AssertFormulaAggregateContrastLocations("TRIMMEAN($A1:$A20000,0)>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("TRIMMEAN($A$1:$A$4,1.1)>0");
         AssertFormulaAggregateContrastLocations("TRIMMEAN($A$1:$A$4,$A$1:$A$2)>0");
         AssertFormulaAggregateContrastLocations("KURT(\"n/a\",$A1,$A2,$A3)>0");
@@ -1228,42 +1311,42 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatAggregateForOversizedRangeOrInvalidDirectText()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatAggregateForOversizedRangeOrInvalidDirectText()
     {
-        AssertFormulaAggregateContrastLocations("SUM($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("SUM($A1:$A20000)>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("SUM(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("MEDIAN()>0");
-        AssertFormulaAggregateContrastLocations("MEDIAN($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("MEDIAN($A1:$A20000)>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("MEDIAN(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("MEDIAN($D3:$D5)>0");
         AssertFormulaAggregateContrastLocations("MEDIAN($A1/0)>0");
         AssertFormulaAggregateContrastLocations("MEDIAN(1E308,1E308)>0");
         AssertFormulaAggregateContrastLocations("MEDIAN(A0)>0");
         AssertFormulaAggregateContrastLocations("DEVSQ()>0");
-        AssertFormulaAggregateContrastLocations("DEVSQ($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("DEVSQ($A1:$A20000)>0", "B1", "B2", "B3");
         AssertFormulaAggregateContrastLocations("DEVSQ(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("DEVSQ($D3:$D5)>0");
         AssertFormulaAggregateContrastLocations("DEVSQ($A1/0)>0");
         AssertFormulaAggregateContrastLocations("DEVSQ(1E308,0)>0");
         AssertFormulaAggregateContrastLocations("DEVSQ(A0)>0");
         AssertFormulaAggregateContrastLocations("AVEDEV()>0");
-        AssertFormulaAggregateContrastLocations("AVEDEV($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("AVEDEV($A1:$A20000)>0", "B1", "B2", "B3");
         AssertFormulaAggregateContrastLocations("AVEDEV(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("AVEDEV($D3:$D5)>0");
         AssertFormulaAggregateContrastLocations("AVEDEV($A1/0)>0");
         AssertFormulaAggregateContrastLocations("AVEDEV(1E308,-1E308)>0");
         AssertFormulaAggregateContrastLocations("AVEDEV(A0)>0");
         AssertFormulaAggregateContrastLocations("GEOMEAN()>0");
-        AssertFormulaAggregateContrastLocations("GEOMEAN($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN($A1:$A20000)>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("GEOMEAN(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("GEOMEAN($D3:$D5)>0");
         AssertFormulaAggregateContrastLocations("GEOMEAN(0,$A1)>0");
         AssertFormulaAggregateContrastLocations("GEOMEAN(-1,$A1)>0");
         AssertFormulaAggregateContrastLocations("GEOMEAN($A1/0)>0");
-        AssertFormulaAggregateContrastLocations("GEOMEAN(1E308,1E308)>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN(1E308,1E308)>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("GEOMEAN(A0)>0");
         AssertFormulaAggregateContrastLocations("HARMEAN()>0");
-        AssertFormulaAggregateContrastLocations("HARMEAN($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("HARMEAN($A1:$A20000)>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("HARMEAN(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("HARMEAN($D3:$D5)>0");
         AssertFormulaAggregateContrastLocations("HARMEAN(0,$A1)>0");
@@ -1273,14 +1356,14 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("HARMEAN(A0)>0");
         AssertFormulaAggregateContrastLocations("STDEV()>0");
         AssertFormulaAggregateContrastLocations("STDEV($A1)>0");
-        AssertFormulaAggregateContrastLocations("STDEV($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("STDEV($A1:$A20000)>0", "B1", "B2", "B3");
         AssertFormulaAggregateContrastLocations("STDEV(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("STDEV($D1:$D3)>0");
         AssertFormulaAggregateContrastLocations("STDEV($A1/0)>0");
         AssertFormulaAggregateContrastLocations("STDEV(1E308,0)>0");
         AssertFormulaAggregateContrastLocations("STDEV(A0)>0");
         AssertFormulaAggregateContrastLocations("STDEVP()>0");
-        AssertFormulaAggregateContrastLocations("STDEVP($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("STDEVP($A1:$A20000)>0", "B1", "B2", "B3");
         AssertFormulaAggregateContrastLocations("STDEVP(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("STDEV.P($D3:$D5)>0");
         AssertFormulaAggregateContrastLocations("STDEV.P($A1/0)>0");
@@ -1292,14 +1375,14 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("STDEVPA($A1/0)>0");
         AssertFormulaAggregateContrastLocations("VAR()>0");
         AssertFormulaAggregateContrastLocations("VAR($A1)>0");
-        AssertFormulaAggregateContrastLocations("VAR($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("VAR($A1:$A20000)>0", "B1", "B2", "B3");
         AssertFormulaAggregateContrastLocations("VAR(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("VAR($D1:$D3)>0");
         AssertFormulaAggregateContrastLocations("VAR($A1/0)>0");
         AssertFormulaAggregateContrastLocations("VAR(1E308,0)>0");
         AssertFormulaAggregateContrastLocations("VAR(A0)>0");
         AssertFormulaAggregateContrastLocations("VARP()>0");
-        AssertFormulaAggregateContrastLocations("VARP($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("VARP($A1:$A20000)>0", "B1", "B2", "B3");
         AssertFormulaAggregateContrastLocations("VARP(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("VAR.P($D3:$D5)>0");
         AssertFormulaAggregateContrastLocations("VAR.P($A1/0)>0");
@@ -1338,7 +1421,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaAggregateContrastLocations("COUNT($A1+1,$D1)>1", "B2");
         AssertFormulaAggregateContrastLocations("COUNTA($D1,$A1+1)>1", "B1", "B2", "B4");
-        AssertFormulaAggregateContrastLocations("COUNTBLANK($D1,$A1+1)=1", "B3");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK($D1,$A1+1)=1");
     }
 
     [Fact]
@@ -1420,22 +1503,22 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatAggregateUnsupportedOperandArguments()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatAggregateArgumentCoercionAndErrorSemantics()
     {
         AssertFormulaAggregateContrastLocations("SUM($D1&\"x\")>0");
-        AssertFormulaAggregateContrastLocations("COUNTA($D1&\"x\")>0");
+        AssertFormulaAggregateContrastLocations("COUNTA($D1&\"x\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("SUM($A1/0)>0");
         AssertFormulaAggregateContrastLocations("SUM(1E308*1E308)>0");
         AssertFormulaAggregateContrastLocations("SUM(KURT($A1)+1)>0");
         AssertFormulaAggregateContrastLocations("SUM(\"n/a\"+$A1)>0");
-        AssertFormulaAggregateContrastLocations("SUM(SUM($A1:$A20000))>0");
-        AssertFormulaAggregateContrastLocations("SUMSQ($A1:$A20000)>0");
-        AssertFormulaAggregateContrastLocations("SUMSQ(\"n/a\",$A1)>0");
+        AssertFormulaAggregateContrastLocations("SUM(SUM($A1:$A20000))>0", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMSQ($A1:$A20000)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMSQ(\"n/a\",$A1)>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("SUMSQ(1E308)>0");
         AssertFormulaAggregateContrastLocations("SUMSQ(KURT($A1))>0");
         AssertFormulaAggregateContrastLocations("SUMSQ($A1/0)>0");
         AssertFormulaAggregateContrastLocations("DEVSQ(KURT($A1))>0");
-        AssertFormulaAggregateContrastLocations("PRODUCT($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("PRODUCT($A1:$A20000)>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("PRODUCT(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT(1E308,1E308)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT(KURT($A1))>0");
@@ -1445,7 +1528,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("VAR(KURT($A1))>0");
         AssertFormulaAggregateContrastLocations("VAR.P(KURT($A1))>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK()>0");
-        AssertFormulaAggregateContrastLocations("COUNTBLANK($D1:$D20000)>0");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK($D1:$D20000)>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("COUNTBLANK($D1&\"x\")>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK($A1/0)>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK(KURT($A1))>0");
@@ -1557,9 +1640,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("CEILING($A1,30)>=120", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("CEILING($A1,0)=0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("CEILING(10,3)=12", "B1", "B2", "B3", "B4");
-        AssertFormulaArithmeticContrastLocations("CEILING(-10,3)=-9", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("CEILING(-10,3)=-9");
         AssertFormulaArithmeticContrastLocations("CEILING(-10,-3)=-12", "B1", "B2", "B3", "B4");
-        AssertFormulaArithmeticContrastLocations("CEILING(-1.5,1)=-1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("CEILING(-1.5,1)=-1");
     }
 
     [Fact]
@@ -1579,12 +1662,12 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatCeilingScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatCeilingScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("CEILING($A1)>0");
         AssertFormulaArithmeticContrastLocations("CEILING($A1,10,1)>0");
-        AssertFormulaArithmeticContrastLocations("CEILING(\"10\",3)>0");
-        AssertFormulaArithmeticContrastLocations("CEILING($A1,\"10\")>0");
+        AssertFormulaArithmeticContrastLocations("CEILING(\"10\",3)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("CEILING($A1,\"10\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("CEILING($A1&\"x\",10)>0");
         AssertFormulaArithmeticContrastLocations("CEILING(KURT($A1),10)>0");
         AssertFormulaArithmeticContrastLocations("CEILING($A1,KURT($A1))>0");
@@ -1625,13 +1708,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatCeilingMathScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatCeilingMathScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("CEILING.MATH()>0");
         AssertFormulaArithmeticContrastLocations("CEILING.MATH($A1,10,1,0)>0");
-        AssertFormulaArithmeticContrastLocations("CEILING.MATH(\"10\",3)>0");
-        AssertFormulaArithmeticContrastLocations("CEILING.MATH($A1,\"10\")>0");
-        AssertFormulaArithmeticContrastLocations("CEILING.MATH($A1,10,\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("CEILING.MATH(\"10\",3)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("CEILING.MATH($A1,\"10\")>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("CEILING.MATH($A1,10,\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("CEILING.MATH($A1&\"x\",10)>0");
         AssertFormulaArithmeticContrastLocations("CEILING.MATH(KURT($A1),10)>0");
         AssertFormulaArithmeticContrastLocations("CEILING.MATH($A1,KURT($A1))>0");
@@ -1672,12 +1755,12 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatIsoCeilingScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatIsoCeilingScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("ISO.CEILING()>0");
         AssertFormulaArithmeticContrastLocations("ISO.CEILING($A1,10,1)>0");
-        AssertFormulaArithmeticContrastLocations("ISO.CEILING(\"10\",3)>0");
-        AssertFormulaArithmeticContrastLocations("ISO.CEILING($A1,\"10\")>0");
+        AssertFormulaArithmeticContrastLocations("ISO.CEILING(\"10\",3)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISO.CEILING($A1,\"10\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ISO.CEILING($A1&\"x\",10)>0");
         AssertFormulaArithmeticContrastLocations("ISO.CEILING(KURT($A1),10)>0");
         AssertFormulaArithmeticContrastLocations("ISO.CEILING($A1,KURT($A1))>0");
@@ -1716,12 +1799,12 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatCeilingPreciseScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatCeilingPreciseScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("CEILING.PRECISE()>0");
         AssertFormulaArithmeticContrastLocations("CEILING.PRECISE($A1,10,1)>0");
-        AssertFormulaArithmeticContrastLocations("CEILING.PRECISE(\"10\",3)>0");
-        AssertFormulaArithmeticContrastLocations("CEILING.PRECISE($A1,\"10\")>0");
+        AssertFormulaArithmeticContrastLocations("CEILING.PRECISE(\"10\",3)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("CEILING.PRECISE($A1,\"10\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("CEILING.PRECISE($A1&\"x\",10)>0");
         AssertFormulaArithmeticContrastLocations("CEILING.PRECISE(KURT($A1),10)>0");
         AssertFormulaArithmeticContrastLocations("CEILING.PRECISE($A1,KURT($A1))>0");
@@ -1759,12 +1842,12 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatFloorScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatFloorScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("FLOOR($A1)>0");
         AssertFormulaArithmeticContrastLocations("FLOOR($A1,10,1)>0");
-        AssertFormulaArithmeticContrastLocations("FLOOR(\"10\",3)>0");
-        AssertFormulaArithmeticContrastLocations("FLOOR($A1,\"10\")>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR(\"10\",3)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FLOOR($A1,\"10\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("FLOOR($A1&\"x\",10)>0");
         AssertFormulaArithmeticContrastLocations("FLOOR(KURT($A1),10)>0");
         AssertFormulaArithmeticContrastLocations("FLOOR($A1,KURT($A1))>0");
@@ -1807,13 +1890,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatFloorMathScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatFloorMathScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("FLOOR.MATH()>0");
         AssertFormulaArithmeticContrastLocations("FLOOR.MATH($A1,10,1,0)>0");
-        AssertFormulaArithmeticContrastLocations("FLOOR.MATH(\"10\",3)>0");
-        AssertFormulaArithmeticContrastLocations("FLOOR.MATH($A1,\"10\")>0");
-        AssertFormulaArithmeticContrastLocations("FLOOR.MATH($A1,10,\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.MATH(\"10\",3)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FLOOR.MATH($A1,\"10\")>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FLOOR.MATH($A1,10,\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("FLOOR.MATH($A1&\"x\",10)>0");
         AssertFormulaArithmeticContrastLocations("FLOOR.MATH(KURT($A1),10)>0");
         AssertFormulaArithmeticContrastLocations("FLOOR.MATH($A1,KURT($A1))>0");
@@ -1855,12 +1938,12 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatFloorPreciseScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatFloorPreciseScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE()>0");
         AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1,10,1)>0");
-        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(\"10\",3)>0");
-        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1,\"10\")>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(\"10\",3)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1,\"10\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1&\"x\",10)>0");
         AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(KURT($A1),10)>0");
         AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1,KURT($A1))>0");
@@ -1897,12 +1980,12 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatQuotientScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatQuotientScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("QUOTIENT($A1)>0");
         AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,2,1)>0");
-        AssertFormulaArithmeticContrastLocations("QUOTIENT(\"5\",2)>0");
-        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(\"5\",2)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,\"2\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("QUOTIENT($A1&\"x\",2)>0");
         AssertFormulaArithmeticContrastLocations("QUOTIENT(KURT($A1),2)>0");
         AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,KURT($A1))>0");
@@ -1942,13 +2025,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatCombinScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatCombinScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("COMBIN()>0");
         AssertFormulaArithmeticContrastLocations("COMBIN($A1)>0");
         AssertFormulaArithmeticContrastLocations("COMBIN($A1,2,1)>0");
-        AssertFormulaArithmeticContrastLocations("COMBIN(\"5\",2)>0");
-        AssertFormulaArithmeticContrastLocations("COMBIN($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(\"5\",2)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1,\"2\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("COMBIN($A1&\"x\",2)>0");
         AssertFormulaArithmeticContrastLocations("COMBIN(KURT($A1),2)>0");
         AssertFormulaArithmeticContrastLocations("COMBIN($A1,KURT($A1))>0");
@@ -1996,13 +2079,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatCombinaScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatCombinaScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("COMBINA()>0");
         AssertFormulaArithmeticContrastLocations("COMBINA($A1)>0");
         AssertFormulaArithmeticContrastLocations("COMBINA($A1,2,1)>0");
-        AssertFormulaArithmeticContrastLocations("COMBINA(\"5\",2)>0");
-        AssertFormulaArithmeticContrastLocations("COMBINA($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("COMBINA(\"5\",2)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBINA($A1,\"2\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("COMBINA($A1&\"x\",2)>0");
         AssertFormulaArithmeticContrastLocations("COMBINA(KURT($A1),2)>0");
         AssertFormulaArithmeticContrastLocations("COMBINA($A1,KURT($A1))>0");
@@ -2017,7 +2100,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("COMBINA(EXP(1000),2)>0");
         AssertFormulaArithmeticContrastLocations("COMBINA($A1,EXP(1000))>0");
         AssertFormulaArithmeticContrastLocations("COMBINA(1E308,2)>0");
-        AssertFormulaArithmeticContrastLocations("COMBINA(1030,2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBINA(1030,2)>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("COMBINA(516,514)>0");
         AssertFormulaArithmeticContrastLocations("COMBINA(2000,1000)>0");
         AssertFormulaArithmeticContrastLocations("COMBINA(100000,50000)>0");
@@ -2052,13 +2135,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatPermutScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatPermutScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("PERMUT()>0");
         AssertFormulaArithmeticContrastLocations("PERMUT($A1)>0");
         AssertFormulaArithmeticContrastLocations("PERMUT($A1,2,1)>0");
-        AssertFormulaArithmeticContrastLocations("PERMUT(\"5\",2)>0");
-        AssertFormulaArithmeticContrastLocations("PERMUT($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(\"5\",2)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1,\"2\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("PERMUT($A1&\"x\",2)>0");
         AssertFormulaArithmeticContrastLocations("PERMUT(KURT($A1),2)>0");
         AssertFormulaArithmeticContrastLocations("PERMUT($A1,KURT($A1))>0");
@@ -2105,13 +2188,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatPermutationAScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatPermutationAScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("PERMUTATIONA()>0");
         AssertFormulaArithmeticContrastLocations("PERMUTATIONA($A1)>0");
         AssertFormulaArithmeticContrastLocations("PERMUTATIONA($A1,2,1)>0");
-        AssertFormulaArithmeticContrastLocations("PERMUTATIONA(\"5\",2)>0");
-        AssertFormulaArithmeticContrastLocations("PERMUTATIONA($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("PERMUTATIONA(\"5\",2)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUTATIONA($A1,\"2\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("PERMUTATIONA($A1&\"x\",2)>0");
         AssertFormulaArithmeticContrastLocations("PERMUTATIONA(KURT($A1),2)>0");
         AssertFormulaArithmeticContrastLocations("PERMUTATIONA($A1,KURT($A1))>0");
@@ -2126,7 +2209,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("PERMUTATIONA(EXP(1000),2)>0");
         AssertFormulaArithmeticContrastLocations("PERMUTATIONA($A1,EXP(1000))>0");
         AssertFormulaArithmeticContrastLocations("PERMUTATIONA(1E308,2)>0");
-        AssertFormulaArithmeticContrastLocations("PERMUTATIONA(2147483648,1)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUTATIONA(2147483648,1)>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("PERMUTATIONA(2,1024)>0");
         AssertFormulaArithmeticContrastLocations("PERMUTATIONA(100000,50000)>0");
     }
@@ -2160,14 +2243,14 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatMultinomialScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatMultinomialScalarFunctionOperandCoercionAndErrorSemantics()
     {
         var tooManyArguments = $"MULTINOMIAL({string.Join(",", Enumerable.Repeat("1", 256))})>0";
 
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL()>0");
         AssertFormulaArithmeticContrastLocations(tooManyArguments);
-        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(\"5\",2)>0");
-        AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(\"5\",2)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,\"2\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1&\"x\",2)>0");
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL(KURT($A1),2)>0");
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,KURT($A1))>0");
@@ -2180,7 +2263,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL(EXP(1000),1)>0");
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,EXP(1000))>0");
-        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(1E308,1)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(1E308,1)>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL(2000,1000)>0");
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL(100000,50000)>0");
     }
@@ -2215,14 +2298,14 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatGcdScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatGcdScalarFunctionOperandCoercionAndErrorSemantics()
     {
         var tooManyArguments = $"GCD({string.Join(",", Enumerable.Repeat("1", 256))})>0";
 
         AssertFormulaArithmeticContrastLocations("GCD()>0");
         AssertFormulaArithmeticContrastLocations(tooManyArguments);
-        AssertFormulaArithmeticContrastLocations("GCD(\"5\",2)>0");
-        AssertFormulaArithmeticContrastLocations("GCD($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("GCD(\"5\",2)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("GCD($A1,\"2\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("GCD($A1&\"x\",2)>0");
         AssertFormulaArithmeticContrastLocations("GCD(KURT($A1),2)>0");
         AssertFormulaArithmeticContrastLocations("GCD($A1,KURT($A1))>0");
@@ -2269,14 +2352,14 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatLcmScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatLcmScalarFunctionOperandCoercionAndErrorSemantics()
     {
         var tooManyArguments = $"LCM({string.Join(",", Enumerable.Repeat("1", 256))})>0";
 
         AssertFormulaArithmeticContrastLocations("LCM()>0");
         AssertFormulaArithmeticContrastLocations(tooManyArguments);
-        AssertFormulaArithmeticContrastLocations("LCM(\"5\",2)>0");
-        AssertFormulaArithmeticContrastLocations("LCM($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("LCM(\"5\",2)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("LCM($A1,\"2\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("LCM($A1&\"x\",2)>0");
         AssertFormulaArithmeticContrastLocations("LCM(KURT($A1),2)>0");
         AssertFormulaArithmeticContrastLocations("LCM($A1,KURT($A1))>0");
@@ -2324,11 +2407,11 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatOddScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatOddScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("ODD()>0");
         AssertFormulaArithmeticContrastLocations("ODD($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("ODD(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ODD(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ODD($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("ODD(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("ODD(1E308*1E308)>0");
@@ -2362,11 +2445,11 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatAcothScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatAcothScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("ACOTH()>0");
         AssertFormulaArithmeticContrastLocations("ACOTH($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("ACOTH(\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH(\"2\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ACOTH($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("ACOTH(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("ACOTH(1)>0");
@@ -2403,11 +2486,11 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatCothScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatCothScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("COTH()>0");
         AssertFormulaArithmeticContrastLocations("COTH($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("COTH(\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("COTH(\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("COTH($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("COTH(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("COTH(0)>0");
@@ -2442,11 +2525,11 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatCschScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatCschScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("CSCH()>0");
         AssertFormulaArithmeticContrastLocations("CSCH($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("CSCH(\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("CSCH(\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("CSCH($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("CSCH(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("CSCH(0)>0");
@@ -2482,11 +2565,11 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatSechScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatSechScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("SECH()>0");
         AssertFormulaArithmeticContrastLocations("SECH($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("SECH(\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("SECH(\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("SECH($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("SECH(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("SECH(1E308)>0");
@@ -2520,17 +2603,17 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatAcotScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatAcotScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("ACOT()>0");
         AssertFormulaArithmeticContrastLocations("ACOT($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("ACOT(\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOT(\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ACOT($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("ACOT(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("ACOT(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("ACOT(EXP(1000))>0");
-        AssertFormulaArithmeticContrastLocations("ACOT(5E-324)>0");
-        AssertFormulaArithmeticContrastLocations("ACOT(-5E-324)>0");
+        AssertFormulaArithmeticContrastLocations("ACOT(5E-324)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ACOT(-5E-324)>0", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -2558,11 +2641,11 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatCotScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatCotScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("COT()>0");
         AssertFormulaArithmeticContrastLocations("COT($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("COT(\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("COT(\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("COT($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("COT(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("COT(0)>0");
@@ -2597,11 +2680,11 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatCscScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatCscScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("CSC()>0");
         AssertFormulaArithmeticContrastLocations("CSC($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("CSC(\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("CSC(\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("CSC($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("CSC(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("CSC(0)>0");
@@ -2636,15 +2719,15 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatSecScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatSecScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("SEC()>0");
         AssertFormulaArithmeticContrastLocations("SEC($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("SEC(\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("SEC(\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("SEC($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("SEC(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("SEC(PI()/2)>0");
-        AssertFormulaArithmeticContrastLocations("SEC(RADIANS(90))>0");
+        AssertFormulaArithmeticContrastLocations("SEC(RADIANS(90))>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("SEC(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("SEC(EXP(1000))>0");
     }
@@ -2848,7 +2931,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatMatrixArrayUnsupportedArityAndShapes()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatMatrixArrayArityAndShapeSemantics()
     {
         AssertFormulaMatrixArrayFunctionContrastLocations("MMULT($I$1:$J$1)>0");
         AssertFormulaMatrixArrayFunctionContrastLocations("MDETERM()>0");
@@ -2861,7 +2944,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaMatrixArrayFunctionContrastLocations("MUNIT()>0");
         AssertFormulaMatrixArrayFunctionContrastLocations("MUNIT(0)>0");
         AssertFormulaMatrixArrayFunctionContrastLocations("MUNIT(\"x\")>0");
-        AssertFormulaMatrixArrayFunctionContrastLocations("SUM(MUNIT(101))>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("SUM(MUNIT(101))>0", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -2935,12 +3018,12 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatDynamicArrayUnsupportedShapesOrDeferredFunctions()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatDynamicArrayShapeAndDeferredFunctionSemantics()
     {
         AssertFormulaDynamicArrayFunctionContrastLocations("SEQUENCE(2)>0");
-        AssertFormulaDynamicArrayFunctionContrastLocations("SUM(SEQUENCE(10001))>0");
+        AssertFormulaDynamicArrayFunctionContrastLocations("SUM(SEQUENCE(10001))>0", "B1", "B2", "B3", "B4");
         AssertFormulaDynamicArrayFunctionContrastLocations("FILTER($P$1:$R$2,$P$1:$R$2>2)>0");
-        AssertFormulaDynamicArrayFunctionContrastLocations("RANDARRAY(1)>0");
+        AssertFormulaDynamicArrayFunctionContrastLocations("RANDARRAY(1)>0", "B1", "B2", "B3", "B4");
         AssertFormulaDynamicArrayFunctionContrastLocations("BYROW($P$1:$R$2,1)>0");
         AssertFormulaDynamicArrayFunctionContrastLocations("MAP($P$1:$Q$1,1)>0");
     }
@@ -3177,15 +3260,15 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatDiscreteStatisticalUnsupportedShapes()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatDiscreteStatisticalShapeAndErrorSemantics()
     {
-        AssertFormulaDiscreteStatisticalFunctionContrastLocations("FISHER($A$1:$A$1)>0");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("FISHER($A$1:$A$1)>0", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("BINOM.DIST($A$1:$A$2,$C1,$D1,TRUE)>0");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("BINOM.DIST($A1,$C1,$D1)>0");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("HYPGEOM.DIST($A1,$C1,2,$H1)>0");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("NEGBINOM.DIST($A1,$C1,$D1)>0");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("POISSON.DIST($A1,$C1,\"TRUE\")>0");
-        AssertFormulaDiscreteStatisticalFunctionContrastLocations("SERIESSUM($A1,$I1,$J1,$K$1:$K$2)>0");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("SERIESSUM($A1,$I1,$J1,$K$1:$K$2)>0", "B1", "B2", "B3", "B6", "B7");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("SERIESSUM($A1,$I1,$J1)>0");
     }
 
@@ -3225,7 +3308,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaFinancialAnnuityFunctionContrastLocations("ISERROR(CUMIPMT($A1,$C1,$D1,1,$I1,$H1))", "B2", "B4", "B5", "B6");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("ISNA(CUMPRINC($A1,$C1,$D1,1,$I1,$H1))", "B5");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("PMT($A$1:$A$2,$C1,$D1)<0");
-        AssertFormulaFinancialAnnuityFunctionContrastLocations("ISERROR(PMT($A$1:$A$1,$C1,$D1))");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("ISERROR(PMT($A$1:$A$1,$C1,$D1))", "B5");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("CUMIPMT($A$1:$A$2,$C1,$D1,1,$I1,$H1)<0");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("CUMPRINC($A1,$C1,$D1,1,$I1)<0");
     }
@@ -3288,7 +3371,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexTextComparisonsAndSuffixes()
     {
-        AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=$A1", "B1", "B2", "B3");
+        AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=$A1", "B1", "B2");
         AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=\"1234+0.5i\"", "B4");
         AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=\"-j\"", "B5");
         AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=\"3\"", "B6");
@@ -3355,9 +3438,9 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexArithmeticComparisons()
     {
         AssertFormulaComplexFunctionContrastLocations("IMSUM($A1,\"1+i\")=\"4+5i\"", "B1");
-        AssertFormulaComplexFunctionContrastLocations("IMSUM($A1,\"1+i\")=\"6-11i\"", "B2");
+        AssertFormulaComplexFunctionContrastLocations("IMSUM($A1,\"1+i\")=\"6-11i\"");
         AssertFormulaComplexFunctionContrastLocations("IMSUB($A1,\"1+i\")=\"2+3i\"", "B1");
-        AssertFormulaComplexFunctionContrastLocations("IMSUB($A1,\"1+i\")=\"4-13j\"", "B2");
+        AssertFormulaComplexFunctionContrastLocations("IMSUB($A1,\"1+i\")=\"4-13j\"");
         AssertFormulaComplexFunctionContrastLocations("IMPRODUCT($A1,\"1+i\")=\"-1+7i\"", "B1");
         AssertFormulaComplexFunctionContrastLocations("IMDIV($A1,\"1+i\")=\"3.5+0.5i\"", "B1");
         AssertFormulaComplexFunctionContrastLocations("IMREAL(IMPOWER($A1,2))=-7", "B1");
@@ -3371,7 +3454,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaComplexFunctionContrastLocations("AND(IMARGUMENT($A1)>0,$F1)", "B1");
         AssertFormulaComplexFunctionContrastLocations("IF(IMAGINARY($A1)<0,TRUE,FALSE)", "B2", "B6");
         AssertFormulaComplexFunctionContrastLocations("ISNUMBER(IMREAL($A1))", "B1", "B2", "B3", "B4", "B5", "B6");
-        AssertFormulaComplexFunctionContrastLocations("ISTEXT(COMPLEX($C1,$D1,$E1))", "B1", "B2", "B3", "B4", "B5", "B6");
+        AssertFormulaComplexFunctionContrastLocations("ISTEXT(COMPLEX($C1,$D1,$E1))", "B1", "B2", "B4", "B5", "B6");
         AssertFormulaComplexFunctionContrastLocations("ISTEXT(IMLN($A1))", "B1", "B2", "B3", "B4", "B5", "B6");
         AssertFormulaComplexFunctionContrastLocations("COMPLEX(0,1,LOWER(\"J\"))=\"j\"", FormulaComplexAllLocations);
         AssertFormulaComplexFunctionContrastLocations("IF(EXACT(IMSQRT($A1),\"3-2j\"),TRUE,FALSE)", "B2");
@@ -3384,27 +3467,19 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexArithmeticWrappersPredicatesAndAggregates()
     {
-        AssertFormulaComplexFunctionContrastLocations("AND(IMABS(IMSUM($A1,\"1+i\"))>10,$F1)", "B2");
+        AssertFormulaComplexFunctionContrastLocations("AND(IMABS(IMSUM($A1,\"1+i\"))>10,$F1)");
         AssertFormulaComplexFunctionContrastLocations("IF(IMREAL(IMDIV($A1,\"1+i\"))>0,TRUE,FALSE)", "B1", "B3", "B4", "B5");
         AssertFormulaComplexFunctionContrastLocations("ISTEXT(IMPOWER($A1,2))", "B1", "B2", "B3", "B4", "B5", "B6");
-        AssertFormulaComplexFunctionContrastLocations("SUM(IMABS(IMPRODUCT($A1,\"1+i\")),1)>14", "B2");
+        AssertFormulaComplexFunctionContrastLocations("SUM(IMABS(IMPRODUCT($A1,\"1+i\")),1)>14");
         AssertFormulaComplexFunctionContrastLocations("ABS(IMAGINARY(IMPOWER($A1,2))-24)<0.000000000001", "B1");
     }
 
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexArithmeticRangeFlattening()
     {
-        AssertFormulaComplexFunctionContrastLocations("IMSUM($A$1:$A$3)=\"8-7i\"", FormulaComplexAllLocations);
-        AssertFormulaComplexFunctionContrastLocations(
-            "AND(IMPRODUCT($A$1:$A$3)=\"16+63i\",$F1)",
-            "B1",
-            "B2",
-            "B4",
-            "B6",
-            "B7",
-            "B8",
-            "B9");
-        AssertFormulaComplexFunctionContrastLocations("IMSUM($A$1:$A$2,\"1+i\")=\"9-7i\"", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("IMSUM($A$1:$A$3)=\"8-7i\"");
+        AssertFormulaComplexFunctionContrastLocations("AND(IMPRODUCT($A$1:$A$3)=\"16+63i\",$F1)");
+        AssertFormulaComplexFunctionContrastLocations("IMSUM($A$1:$A$2,\"1+i\")=\"9-7i\"");
     }
 
     [Fact]
@@ -3414,9 +3489,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaComplexFunctionContrastLocations("ISNA(IMREAL($A1))", "B8");
         AssertFormulaComplexFunctionContrastLocations("ISERR(IMREAL($A1))", "B7", "B9");
         AssertFormulaComplexFunctionContrastLocations("ISERROR(IMLN($A1))", "B7", "B8", "B9");
-        AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX($C1,$D1,$E1))", "B7", "B8", "B9");
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX($C1,$D1,$E1))", "B3", "B7", "B8", "B9");
         AssertFormulaComplexFunctionContrastLocations("ISNA(COMPLEX($C1,$D1,$E1))", "B8");
-        AssertFormulaComplexFunctionContrastLocations("ISERR(COMPLEX($C1,$D1,$E1))", "B7", "B9");
+        AssertFormulaComplexFunctionContrastLocations("ISERR(COMPLEX($C1,$D1,$E1))", "B3", "B7", "B9");
         AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX(1,2,\"x\"))", FormulaComplexAllLocations);
         AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX(1E309,0))", FormulaComplexAllLocations);
         AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX(\"Open\",2))", FormulaComplexAllLocations);
@@ -3743,7 +3818,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatScalarFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatScalarFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("ABS($A1,1)>0");
         AssertFormulaArithmeticContrastLocations("ROUND($A1)>0");
@@ -3755,8 +3830,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("TRUNC($A1,0,1)>0");
         AssertFormulaArithmeticContrastLocations("MROUND($A1)>0");
         AssertFormulaArithmeticContrastLocations("MROUND($A1,10,1)>0");
-        AssertFormulaArithmeticContrastLocations("MROUND(\"10\",3)>0");
-        AssertFormulaArithmeticContrastLocations("MROUND($A1,\"10\")>0");
+        AssertFormulaArithmeticContrastLocations("MROUND(\"10\",3)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MROUND($A1,\"10\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("MROUND($A1&\"x\",10)>0");
         AssertFormulaArithmeticContrastLocations("MROUND(KURT($A1),10)>0");
         AssertFormulaArithmeticContrastLocations("MROUND($A1,-10)>0");
@@ -3765,28 +3840,28 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("MROUND(1E308,0.1)>0");
         AssertFormulaArithmeticContrastLocations("MOD($A1)>0");
         AssertFormulaArithmeticContrastLocations("MOD($A1,0)>0");
-        AssertFormulaArithmeticContrastLocations("ROUND($A1,999999)>0");
-        AssertFormulaArithmeticContrastLocations("ROUNDUP($A1,999999)>0");
-        AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1,999999)>0");
-        AssertFormulaArithmeticContrastLocations("TRUNC($A1,999999)>0");
-        AssertFormulaArithmeticContrastLocations("ROUNDUP(\"5\",0)>0");
-        AssertFormulaArithmeticContrastLocations("ROUNDUP($A1,\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("ROUND($A1,999999)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP($A1,999999)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1,999999)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("TRUNC($A1,999999)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP(\"5\",0)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP($A1,\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ROUNDUP($A1&\"x\",0)>0");
         AssertFormulaArithmeticContrastLocations("ROUNDUP(KURT($A1),0)>0");
         AssertFormulaArithmeticContrastLocations("ROUNDUP(1E308*1E308,0)>0");
-        AssertFormulaArithmeticContrastLocations("ROUNDDOWN(\"5\",0)>0");
-        AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1,\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN(\"5\",0)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1,\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1&\"x\",0)>0");
         AssertFormulaArithmeticContrastLocations("ROUNDDOWN(KURT($A1),0)>0");
         AssertFormulaArithmeticContrastLocations("ROUNDDOWN(1E308*1E308,0)>0");
-        AssertFormulaArithmeticContrastLocations("TRUNC(\"5\",0)>0");
-        AssertFormulaArithmeticContrastLocations("TRUNC($A1,\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("TRUNC(\"5\",0)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("TRUNC($A1,\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("TRUNC($A1&\"x\",0)>0");
         AssertFormulaArithmeticContrastLocations("TRUNC(KURT($A1),0)>0");
         AssertFormulaArithmeticContrastLocations("TRUNC(1E308*1E308,0)>0");
         AssertFormulaArithmeticContrastLocations("FACT()>0");
         AssertFormulaArithmeticContrastLocations("FACT($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("FACT(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("FACT(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("FACT($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("FACT(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("FACT(-1)>0");
@@ -3795,18 +3870,18 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("FACT(171)>0");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE()>0");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE(-1)>0");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE(EXP(1000))>0");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE(301)>0");
-        AssertFormulaArithmeticContrastLocations("ABS(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ABS(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ABS($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("EVEN()>0");
         AssertFormulaArithmeticContrastLocations("EVEN($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("EVEN(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("EVEN(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("EVEN($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("EVEN(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("EVEN(1E308*1E308)>0");
@@ -3814,25 +3889,25 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("SQRT()>0");
         AssertFormulaArithmeticContrastLocations("SQRT($A1,1)>0");
         AssertFormulaArithmeticContrastLocations("SQRT(-$A1)>0");
-        AssertFormulaArithmeticContrastLocations("SQRT(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("SQRT(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("SQRT($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("SQRTPI()>0");
         AssertFormulaArithmeticContrastLocations("SQRTPI($A1,1)>0");
         AssertFormulaArithmeticContrastLocations("SQRTPI(-$A1)>0");
-        AssertFormulaArithmeticContrastLocations("SQRTPI(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("SQRTPI(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("SQRTPI($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("SQRTPI(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("SQRTPI(1E308)>0");
         AssertFormulaArithmeticContrastLocations("SIGN()>0");
         AssertFormulaArithmeticContrastLocations("SIGN($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("SIGN(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("SIGN(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("SIGN($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("SIGN(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("SIGN(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("POWER($A1)>0");
         AssertFormulaArithmeticContrastLocations("POWER($A1,2,3)>0");
-        AssertFormulaArithmeticContrastLocations("POWER(\"5\",2)>0");
-        AssertFormulaArithmeticContrastLocations("POWER($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("POWER(\"5\",2)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("POWER($A1,\"2\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("POWER($A1&\"x\",2)>0");
         AssertFormulaArithmeticContrastLocations("POWER(KURT($A1),2)>0");
         AssertFormulaArithmeticContrastLocations("POWER(1E308,2)>0");
@@ -3840,7 +3915,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("POWER(-$A1,0.5)>0");
         AssertFormulaArithmeticContrastLocations("EXP()>0");
         AssertFormulaArithmeticContrastLocations("EXP($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("EXP(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("EXP(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("EXP($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("EXP(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("EXP(1000)>0");
@@ -3848,7 +3923,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("LN($A1,1)>0");
         AssertFormulaArithmeticContrastLocations("LN(0)>0");
         AssertFormulaArithmeticContrastLocations("LN(-$A1)>0");
-        AssertFormulaArithmeticContrastLocations("LN(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("LN(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("LN($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("LN(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("LN(1E308*1E308)>0");
@@ -3857,7 +3932,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("LOG10($A1,1)>0");
         AssertFormulaArithmeticContrastLocations("LOG10(0)>0");
         AssertFormulaArithmeticContrastLocations("LOG10(-$A1)>0");
-        AssertFormulaArithmeticContrastLocations("LOG10(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("LOG10(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("LOG10($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("LOG10(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("LOG10(1E308*1E308)>0");
@@ -3869,8 +3944,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("LOG($A1,0)>0");
         AssertFormulaArithmeticContrastLocations("LOG($A1,-2)>0");
         AssertFormulaArithmeticContrastLocations("LOG($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("LOG(\"5\")>0");
-        AssertFormulaArithmeticContrastLocations("LOG($A1,\"10\")>0");
+        AssertFormulaArithmeticContrastLocations("LOG(\"5\")>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("LOG($A1,\"10\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("LOG($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("LOG(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("LOG($A1,KURT($A1))>0");
@@ -3879,13 +3954,13 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("LOG($A1,EXP(1000))>0");
         AssertFormulaArithmeticContrastLocations("DEGREES()>0");
         AssertFormulaArithmeticContrastLocations("DEGREES($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("DEGREES(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("DEGREES(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("DEGREES($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("DEGREES(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("DEGREES(1E308)>0");
         AssertFormulaArithmeticContrastLocations("RADIANS()>0");
         AssertFormulaArithmeticContrastLocations("RADIANS($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("RADIANS(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("RADIANS(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("RADIANS($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("RADIANS(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("RADIANS(1E308)>0");
@@ -3897,21 +3972,21 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("SIN(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("SINH()>0");
         AssertFormulaArithmeticContrastLocations("SINH($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("SINH(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("SINH(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("SINH($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("SINH(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("SINH(1E308)>0");
         AssertFormulaArithmeticContrastLocations("SINH(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("ASINH()>0");
         AssertFormulaArithmeticContrastLocations("ASINH($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("ASINH(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ASINH(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ASINH($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("ASINH(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("ASINH(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("ASINH(EXP(1000))>0");
         AssertFormulaArithmeticContrastLocations("ACOSH()>0");
         AssertFormulaArithmeticContrastLocations("ACOSH($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("ACOSH(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOSH(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ACOSH($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("ACOSH(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("ACOSH(0)>0");
@@ -3920,20 +3995,20 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("ACOSH(EXP(1000))>0");
         AssertFormulaArithmeticContrastLocations("COSH()>0");
         AssertFormulaArithmeticContrastLocations("COSH($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("COSH(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("COSH(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("COSH($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("COSH(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("COSH(1E308)>0");
         AssertFormulaArithmeticContrastLocations("COSH(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("TANH()>0");
         AssertFormulaArithmeticContrastLocations("TANH($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("TANH(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("TANH(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("TANH($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("TANH(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("TANH(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("ATANH()>0");
         AssertFormulaArithmeticContrastLocations("ATANH($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("ATANH(\"0.5\")>0");
+        AssertFormulaArithmeticContrastLocations("ATANH(\"0.5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ATANH($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("ATANH(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("ATANH(1)>0");
@@ -3943,7 +4018,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("ATANH(EXP(1000))>0");
         AssertFormulaArithmeticContrastLocations("ASIN()>0");
         AssertFormulaArithmeticContrastLocations("ASIN($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("ASIN(\"0.5\")>0");
+        AssertFormulaArithmeticContrastLocations("ASIN(\"0.5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ASIN($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("ASIN(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("ASIN(2)>0");
@@ -3951,7 +4026,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("ASIN(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("ACOS()>0");
         AssertFormulaArithmeticContrastLocations("ACOS($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("ACOS(\"0.5\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOS(\"0.5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ACOS($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("ACOS(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("ACOS(2)>0");
@@ -3959,15 +4034,15 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("ACOS(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("ATAN()>0");
         AssertFormulaArithmeticContrastLocations("ATAN($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("ATAN(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ATAN(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ATAN($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("ATAN(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("ATAN(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("ATAN2()>0");
         AssertFormulaArithmeticContrastLocations("ATAN2($A1)>0");
         AssertFormulaArithmeticContrastLocations("ATAN2($A1,1,2)>0");
-        AssertFormulaArithmeticContrastLocations("ATAN2(\"5\",$A1)>0");
-        AssertFormulaArithmeticContrastLocations("ATAN2($A1,\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2(\"5\",$A1)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ATAN2($A1,\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ATAN2($A1&\"x\",1)>0");
         AssertFormulaArithmeticContrastLocations("ATAN2(KURT($A1),1)>0");
         AssertFormulaArithmeticContrastLocations("ATAN2($A1,KURT($A1))>0");
@@ -3977,7 +4052,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("ATAN2($A1-$A1,0)>0");
         AssertFormulaArithmeticContrastLocations("COS()>0");
         AssertFormulaArithmeticContrastLocations("COS($A1,1)>0");
-        AssertFormulaArithmeticContrastLocations("COS(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("COS(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("COS($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("COS(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("COS(1E308*1E308)>0");
@@ -3991,16 +4066,16 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("PI($A1)>0");
         AssertFormulaArithmeticContrastLocations("DELTA()>0");
         AssertFormulaArithmeticContrastLocations("DELTA($A1,75,0)>0");
-        AssertFormulaArithmeticContrastLocations("DELTA(\"75\",75)>0");
+        AssertFormulaArithmeticContrastLocations("DELTA(\"75\",75)>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("DELTA(1E308*1E308,0)>0");
         AssertFormulaArithmeticContrastLocations("GESTEP()>0");
         AssertFormulaArithmeticContrastLocations("GESTEP($A1,100,0)>0");
-        AssertFormulaArithmeticContrastLocations("GESTEP(\"100\",100)>0");
+        AssertFormulaArithmeticContrastLocations("GESTEP(\"100\",100)>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("GESTEP($A1,1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("BITAND($A1)>0");
         AssertFormulaArithmeticContrastLocations("BITAND($A1,1,2)>0");
-        AssertFormulaArithmeticContrastLocations("BITAND(1.5,1)>0");
-        AssertFormulaArithmeticContrastLocations("BITAND($A1,1.5)>0");
+        AssertFormulaArithmeticContrastLocations("BITAND(1.5,1)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("BITAND($A1,1.5)>0", "B1", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("BITAND(1E308*1E308,1)>0");
         AssertFormulaArithmeticContrastLocations("BITOR(-1,1)>0");
         AssertFormulaArithmeticContrastLocations("BITOR(281474976710656,1)>0");
@@ -4008,7 +4083,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("BITLSHIFT($A1)>0");
         AssertFormulaArithmeticContrastLocations("BITLSHIFT(281474976710655,1)>0");
         AssertFormulaArithmeticContrastLocations("BITLSHIFT(1,54)>0");
-        AssertFormulaArithmeticContrastLocations("BITLSHIFT(1,1.5)>0");
+        AssertFormulaArithmeticContrastLocations("BITLSHIFT(1,1.5)>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("BITRSHIFT(1,54)>0");
         AssertFormulaArithmeticContrastLocations("BITRSHIFT(1,-54)>0");
         AssertFormulaArithmeticContrastLocations("BITRSHIFT(KURT($A1),1)>0");
@@ -4242,7 +4317,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaTextFunctionContrastLocations("ISERROR(REPT(\"x\",-0.5))", FormulaTextFunctionAllLocations);
         AssertFormulaTextFunctionContrastLocations("ISERROR(REPT(\"x\",32768))", FormulaTextFunctionAllLocations);
         AssertFormulaTextFunctionContrastLocations("ISERROR(REPT(\"\uD83D\uDE00\",32768))", FormulaTextFunctionAllLocations);
-        AssertFormulaTextFunctionContrastLocations("ISTEXT(REPT(\"\uD83D\uDE00\",32767))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISTEXT(REPT(\"\uD83D\uDE00\",32767))");
         AssertFormulaTextFunctionContrastLocations("ISNA(CODE(NA()))", FormulaTextFunctionAllLocations);
         AssertFormulaTextFunctionContrastLocations("ISNA(PROPER(NA()))", FormulaTextFunctionAllLocations);
         AssertFormulaTextFunctionContrastLocations("ISNA(REPT(\"x\",NA()))", FormulaTextFunctionAllLocations);
@@ -4267,24 +4342,24 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatTextFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatTextFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaTextFunctionContrastLocations("LEN($C1,1)>0");
         AssertFormulaTextFunctionContrastLocations("UPPER()=\"OPEN\"");
         AssertFormulaTextFunctionContrastLocations("LEFT($C1,-1)=\"\"");
-        AssertFormulaTextFunctionContrastLocations("LEFT($C1,999999)=\"Closed\"");
-        AssertFormulaTextFunctionContrastLocations("LEFT($C1,1.5)=\"C\"");
+        AssertFormulaTextFunctionContrastLocations("LEFT($C1,999999)=\"Closed\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("LEFT($C1,1.5)=\"C\"", "B1", "B2");
         AssertFormulaTextFunctionContrastLocations("MID($C1,0,1)=\"\"");
         AssertFormulaTextFunctionContrastLocations("MID($C1,1.5,1)=\"\"");
-        AssertFormulaTextFunctionContrastLocations("MID($C1,999999,1)=\"\"");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,999999,1)=\"\"", "B1", "B2", "B3", "B4");
         AssertFormulaTextFunctionContrastLocations("MID($C1,1,-1)=\"\"");
-        AssertFormulaTextFunctionContrastLocations("MID($C1,1,1.5)=\"C\"");
-        AssertFormulaTextFunctionContrastLocations("MID($C1,1,999999)=\"Closed\"");
-        AssertFormulaTextFunctionContrastLocations("MID($A1,1,1)=\"7\"");
-        AssertFormulaTextFunctionContrastLocations("MID($C1&\"x\",1,1)=\"O\"");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,1,1.5)=\"C\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,1,999999)=\"Closed\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("MID($A1,1,1)=\"7\"", "B1", "B3");
+        AssertFormulaTextFunctionContrastLocations("MID($C1&\"x\",1,1)=\"O\"", "B3", "B4");
         AssertFormulaTextFunctionContrastLocations("MID($C1,1)=\"C\"");
-        AssertFormulaTextFunctionContrastLocations("LEN($A1)>0");
-        AssertFormulaTextFunctionContrastLocations("LEFT($C1&\"x\",1)=\"O\"");
+        AssertFormulaTextFunctionContrastLocations("LEN($A1)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("LEFT($C1&\"x\",1)=\"O\"", "B3", "B4");
         AssertFormulaTextFunctionContrastLocations("LEN(A0)>0");
         AssertFormulaTextFunctionContrastLocations("CHAR()>0");
         AssertFormulaTextFunctionContrastLocations("CHAR($A1,1)>0");
@@ -4317,24 +4392,24 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaTextFunctionContrastLocations("TEXTBEFORE($C1,\"s\",0)=\"\"");
         AssertFormulaTextFunctionContrastLocations("TEXTSPLIT($C1,\"e\")=\"Clos\"");
         AssertFormulaTextFunctionContrastLocations("ASC(UNICHAR(65313))=\"A\"");
-        AssertFormulaTextFunctionContrastLocations("DBCS($C1)=$C1");
-        AssertFormulaTextFunctionContrastLocations("JIS($C1)=$C1");
+        AssertFormulaTextFunctionContrastLocations("DBCS($C1)=$C1", "B1", "B2", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("JIS($C1)=$C1", "B1", "B2", "B3", "B4");
         AssertFormulaTextFunctionContrastLocations("REGEXEXTRACT($C1,\"[a-z]\",1)=\"l\"");
         AssertFormulaTextFunctionContrastLocations("FILTERXML(\"<root><item>A</item><item>B</item></root>\",\"/root/item\")=\"A\"");
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatTextSearchFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatTextSearchFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaTextFunctionContrastLocations("FIND(\"x\",$C1)>0");
         AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1,0)>0");
-        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1,1.5)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1,1.5)>0", "B1", "B2", "B3", "B4");
         AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1,999999)>0");
-        AssertFormulaTextFunctionContrastLocations("SEARCH(\"\",$C1)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"\",$C1)>0", "B1", "B2", "B3", "B4");
         AssertFormulaTextFunctionContrastLocations("FIND(\"o\")>0");
         AssertFormulaTextFunctionContrastLocations("EXACT($C1)>0");
         AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$A1)>0");
-        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1&\"x\")>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1&\"x\")>0", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -4351,24 +4426,24 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatValueFunctionWrappersPredicatesAndAggregates()
     {
-        AssertFormulaValueFunctionContrastLocations("IF(VALUE($C1)>0,TRUE,FALSE)", "B1", "B2", "B3");
-        AssertFormulaValueFunctionContrastLocations("AND(VALUE($C1)>0,$A1)", "B1", "B2");
-        AssertFormulaValueFunctionContrastLocations("ISNUMBER(VALUE($C1))", "B1", "B2", "B3", "B4");
+        AssertFormulaValueFunctionContrastLocations("IF(VALUE($C1)>0,TRUE,FALSE)", "B1", "B2", "B3", "B7");
+        AssertFormulaValueFunctionContrastLocations("AND(VALUE($C1)>0,$A1)", "B1", "B2", "B7");
+        AssertFormulaValueFunctionContrastLocations("ISNUMBER(VALUE($C1))", "B1", "B2", "B3", "B4", "B7");
         AssertFormulaValueFunctionContrastLocations("VALUE($C1)+1=100.5", "B1");
         AssertFormulaValueFunctionContrastLocations("SUM(VALUE($C1),1)>1000", "B2");
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatValueFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatValueFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaValueFunctionContrastLocations("VALUE()>0");
         AssertFormulaValueFunctionContrastLocations("VALUE($C1,1)>0");
         AssertFormulaValueFunctionContrastLocations("VALUE($A1)>0");
-        AssertFormulaValueFunctionContrastLocations("VALUE(42)>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE(42)>0", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
         AssertFormulaValueFunctionContrastLocations("VALUE(\"Open\")>0");
         AssertFormulaValueFunctionContrastLocations("VALUE(\"\")>0");
-        AssertFormulaValueFunctionContrastLocations("VALUE(\"1E309\")>0");
-        AssertFormulaValueFunctionContrastLocations("VALUE(\"50%%\")>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"1E309\")>0", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"50%%\")>0", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
         AssertFormulaValueFunctionContrastLocations("VALUE($C1&\"x\")>0");
     }
 
@@ -4443,7 +4518,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTimeValueFunctionOperands()
     {
-        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE($C1)=0", "B1");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE($C1)=0", "B1", "B8");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE($C1)=0.5", "B2", "B6");
         AssertFormulaDateValueTimeValueFunctionContrastLocations(
             "ABS(TIMEVALUE($C1)-0.999988425925926)<0.000000000001",
@@ -4464,7 +4539,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1)+1=45294", "B7");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("SUM(DATEVALUE($A1),1)=45307", "B6");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("IF(TIMEVALUE($C1)>=0.5,TRUE,FALSE)", "B2", "B3", "B5", "B6");
-        AssertFormulaDateValueTimeValueFunctionContrastLocations("AND(ISNUMBER(TIMEVALUE($C1)),TIMEVALUE($C1)<0.5)", "B1", "B4", "B7");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("AND(ISNUMBER(TIMEVALUE($C1)),TIMEVALUE($C1)<0.5)", "B1", "B4", "B7", "B8");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE($C1)*24=6", "B4", "B7");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("SUM(TIMEVALUE($C1),0.75)=1", "B4", "B7");
     }
@@ -4473,7 +4548,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateValueTimeValueErrorPredicates()
     {
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"12:00 PM\"))", FormulaDateValueTimeValueAllLocations);
-        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(TIMEVALUE(\"2024-01-02\"))", FormulaDateValueTimeValueAllLocations);
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(TIMEVALUE(\"2024-01-02\"))");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"Open\"))", FormulaDateValueTimeValueAllLocations);
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISNA(TIMEVALUE(NA()))", FormulaDateValueTimeValueAllLocations);
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISNA(DATEVALUE(NA()))", FormulaDateValueTimeValueAllLocations);
@@ -4526,7 +4601,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatArabicFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatArabicFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArabicRomanFunctionContrastLocations("ARABIC()>0");
         AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1,1)>0");
@@ -4536,7 +4611,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArabicRomanFunctionContrastLocations("ARABIC(\"IIV\")>0");
         AssertFormulaArabicRomanFunctionContrastLocations("ARABIC(\"-   \")>0");
         AssertFormulaArabicRomanFunctionContrastLocations("ARABIC(\"MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\")>0");
-        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1&\"X\")>0");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1&\"X\")>0", "B3");
     }
 
     [Fact]
@@ -4561,14 +4636,14 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatRomanFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatRomanFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArabicRomanFunctionContrastLocations("ROMAN()=\"\"");
         AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,1,1)=\"\"");
         AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($C1)=\"XII\"");
         AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,5)=\"XII\"");
         AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,-1)=\"XII\"");
-        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,\"4\")=\"XII\"");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,\"4\")=\"XII\"", "B1");
         AssertFormulaArabicRomanFunctionContrastLocations("ROMAN(4000)=\"MMMM\"");
         AssertFormulaArabicRomanFunctionContrastLocations("ROMAN(-1)=\"\"");
         AssertFormulaArabicRomanFunctionContrastLocations("ROMAN(1E308*1E308)=\"\"");
@@ -4686,7 +4761,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("TIME(48,0,1)<TIME(0,0,2)", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("TIME(1.9,2.9,3.9)=TIME(1,2,3)", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,3,15),$A1)>30", "B3", "B4");
-        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,2,28),DATE(2023,3,31))=30", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,2,28),DATE(2023,3,31))=30");
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(1900,2,28),DATE(1900,3,31))=33", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(1900,1,30),DATE(1900,2,28))=28", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,1,31),DATE(2023,2,28))=28", "B1", "B2", "B3", "B4");
@@ -4726,7 +4801,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(2023,2,28),DATE(2023,3,31))=0.08333333333333333", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(1900,2,28),DATE(1900,3,31))=0.09166666666666666", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(1900,1,30),DATE(1900,2,28))=0.07777777777777778", "B1", "B2", "B3", "B4");
-        AssertFormulaDateFunctionContrastLocations("YEARFRAC($A1,DATE(2023,3,15),2)<0", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("YEARFRAC($A1,DATE(2023,3,15),2)<0");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(2023,3,15),$A1,1.9)>1", "B3");
         AssertFormulaDateFunctionContrastLocations("DATEDIF($A1,DATE(2024,4,20),\"D\")>365", "B1", "B2", "B4");
         AssertFormulaDateFunctionContrastLocations("DATEDIF($A1,DATE(2024,4,20),\"M\")>=12", "B1", "B2", "B4");
@@ -4814,45 +4889,45 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatDateFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatDateFunctionOperandCoercionAndErrorSemantics()
     {
         AssertFormulaDateFunctionContrastLocations("DATE(2023,2,30)=$A1");
         AssertFormulaDateFunctionContrastLocations("DATE(2023,1.5,1)=$A1");
         AssertFormulaDateFunctionContrastLocations("DATE(2023,3)=$A1");
         AssertFormulaDateFunctionContrastLocations("DATE(10000,1,1)=$A1");
-        AssertFormulaDateFunctionContrastLocations("YEAR(\"2023-03-15\")=2023");
+        AssertFormulaDateFunctionContrastLocations("YEAR(\"2023-03-15\")=2023", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEAR($A1,1)=2023");
         AssertFormulaDateFunctionContrastLocations("YEAR(1E308)>0");
         AssertFormulaDateFunctionContrastLocations("TODAY(1)>0");
         AssertFormulaDateFunctionContrastLocations("NOW(1)>0");
         AssertFormulaDateFunctionContrastLocations("YEAR(A0)>0");
-        AssertFormulaDateFunctionContrastLocations("WEEKDAY(\"2023-03-15\")=4");
+        AssertFormulaDateFunctionContrastLocations("WEEKDAY(\"2023-03-15\")=4", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("WEEKDAY($A1,99)>0");
         AssertFormulaDateFunctionContrastLocations("WEEKDAY($A1,1,1)>0");
         AssertFormulaDateFunctionContrastLocations("WEEKDAY(-1)>0");
         AssertFormulaDateFunctionContrastLocations("WEEKDAY(2958466)>0");
-        AssertFormulaDateFunctionContrastLocations("WEEKNUM(\"2023-03-15\")>0");
+        AssertFormulaDateFunctionContrastLocations("WEEKNUM(\"2023-03-15\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("WEEKNUM($A1,3)>0");
         AssertFormulaDateFunctionContrastLocations("WEEKNUM($A1,1,1)>0");
         AssertFormulaDateFunctionContrastLocations("WEEKNUM(2958466)>0");
-        AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(\"2021-01-01\")>0");
+        AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(\"2021-01-01\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM($A1,1)>0");
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(2958466)>0");
         AssertFormulaDateFunctionContrastLocations("EDATE($A1)>0");
         AssertFormulaDateFunctionContrastLocations("EDATE($A1,1,1)>0");
-        AssertFormulaDateFunctionContrastLocations("EDATE(\"2023-03-15\",1)>0");
+        AssertFormulaDateFunctionContrastLocations("EDATE(\"2023-03-15\",1)>0", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("EDATE($A1,1E308)>0");
         AssertFormulaDateFunctionContrastLocations("EDATE($A1,2147483648)>0");
         AssertFormulaDateFunctionContrastLocations("EDATE(2958466,1)>0");
         AssertFormulaDateFunctionContrastLocations("EDATE(A0,1)>0");
         AssertFormulaDateFunctionContrastLocations("EOMONTH($A1)>0");
         AssertFormulaDateFunctionContrastLocations("EOMONTH($A1,1,1)>0");
-        AssertFormulaDateFunctionContrastLocations("EOMONTH(\"2023-03-15\",1)>0");
+        AssertFormulaDateFunctionContrastLocations("EOMONTH(\"2023-03-15\",1)>0", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("EOMONTH($A1,2147483647)>0");
         AssertFormulaDateFunctionContrastLocations("EOMONTH(2958466,1)>0");
         AssertFormulaDateFunctionContrastLocations("DAYS($A1)>0");
         AssertFormulaDateFunctionContrastLocations("DAYS($A1,DATE(2023,3,15),1)>0");
-        AssertFormulaDateFunctionContrastLocations("DAYS(\"2023-03-16\",DATE(2023,3,15))>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS(\"2023-03-16\",DATE(2023,3,15))>0", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAYS($A1,2958466)>0");
         AssertFormulaDateFunctionContrastLocations("DAYS360($A1)>0");
         AssertFormulaDateFunctionContrastLocations("DAYS360($A1,DATE(2023,3,15),0,1)>0");
@@ -4881,23 +4956,23 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("NETWORKDAYS.INTL(A0,DATE(2023,3,20))>0");
         AssertFormulaDateFunctionContrastLocations("DATEDIF($A1,DATE(2024,4,20))>0");
         AssertFormulaDateFunctionContrastLocations("DATEDIF($A1,DATE(2024,4,20),\"D\",1)>0");
-        AssertFormulaDateFunctionContrastLocations("DATEDIF(\"2023-03-15\",DATE(2024,4,20),\"D\")>0");
+        AssertFormulaDateFunctionContrastLocations("DATEDIF(\"2023-03-15\",DATE(2024,4,20),\"D\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DATEDIF($A1,1E308,\"D\")>0");
         AssertFormulaDateFunctionContrastLocations("DATEDIF(DATE(2024,4,20),$A1,\"D\")>0");
         AssertFormulaDateFunctionContrastLocations("DATEDIF($A1,DATE(2024,4,20),1)>0");
         AssertFormulaDateFunctionContrastLocations("DATEDIF($A1,DATE(2024,4,20),\"Q\")>0");
         AssertFormulaDateFunctionContrastLocations("DATEDIF(A0,DATE(2024,4,20),\"D\")>0");
-        AssertFormulaDateFunctionContrastLocations("DATEDIF(DATE(2020,2,29),DATE(2021,3,1),\"YD\")>0");
+        AssertFormulaDateFunctionContrastLocations("DATEDIF(DATE(2020,2,29),DATE(2021,3,1),\"YD\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC($A1)>0");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC($A1,DATE(2023,3,15),0,1)>0");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(\"2023-03-15\",DATE(2023,3,15))>0");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC($A1,2958466)>0");
-        AssertFormulaDateFunctionContrastLocations("YEARFRAC($A1,DATE(2023,3,15),\"0\")>0");
+        AssertFormulaDateFunctionContrastLocations("YEARFRAC($A1,DATE(2023,3,15),\"0\")>0", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC($A1,DATE(2023,3,15),1E308*1E308)>0");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC($A1,DATE(2023,3,15),5)>0");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC($A1,DATE(2023,3,15),-1)>0");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(A0,DATE(2023,3,15))>0");
-        AssertFormulaDateFunctionContrastLocations("HOUR(\"0.5\")>0");
+        AssertFormulaDateFunctionContrastLocations("HOUR(\"0.5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("MINUTE(-1)>0");
         AssertFormulaDateFunctionContrastLocations("SECOND(2958465.1)>0");
         AssertFormulaDateFunctionContrastLocations("HOUR($D1,1)>0");
@@ -4905,7 +4980,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("SECOND(1E308)>0");
         AssertFormulaDateFunctionContrastLocations("TIME(1,2)>0");
         AssertFormulaDateFunctionContrastLocations("TIME(1,2,3,4)>0");
-        AssertFormulaDateFunctionContrastLocations("TIME(\"1\",2,3)>0");
+        AssertFormulaDateFunctionContrastLocations("TIME(\"1\",2,3)>0", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("TIME(-1,0,0)>0");
         AssertFormulaDateFunctionContrastLocations("TIME(32768,0,0)>0");
         AssertFormulaDateFunctionContrastLocations("TIME(1E308*1E308,0,0)>0");
@@ -5001,14 +5076,14 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatReferenceDimensionFunctionUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatReferenceDimensionFunctionOperandCoercionAndErrorSemantics()
     {
-        AssertFormulaRowColumnFunctionContrastLocations("ROWS(1)>0");
-        AssertFormulaRowColumnFunctionContrastLocations("COLUMNS(\"A1\")>0");
+        AssertFormulaRowColumnFunctionContrastLocations("ROWS(1)>0", "B1", "C1", "D1", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("COLUMNS(\"A1\")>0", "B1", "C1", "D1", "B2", "C2", "D2");
         AssertFormulaRowColumnFunctionContrastLocations("AREAS($A$1,$B$1)>0");
         AssertFormulaRowColumnFunctionContrastLocations("ROWS(Missing!$A$1:$A$2)>0");
         AssertFormulaRowColumnFunctionContrastLocations("COLUMNS(A0:A1)>0");
-        AssertFormulaRowColumnFunctionContrastLocations("ROWS(SEQUENCE(2))>0");
+        AssertFormulaRowColumnFunctionContrastLocations("ROWS(SEQUENCE(2))>0", "B1", "C1", "D1", "B2", "C2", "D2");
     }
 
     [Fact]
@@ -5083,19 +5158,19 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatLookupReferenceUnsupportedShapes()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatLookupReferenceShapeAndErrorSemantics()
     {
         AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($C1,$F$1:$G$4,0)=1");
-        AssertFormulaLookupReferenceFunctionContrastLocations("XMATCH($C1,$F$1:$F$4,0,2)=2");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XMATCH($C1,$F$1:$F$4,0,2)=2", "B2", "B4");
         AssertFormulaLookupReferenceFunctionContrastLocations("VLOOKUP($C1,$F$1:$G$4,3,FALSE)=20");
         AssertFormulaLookupReferenceFunctionContrastLocations("INDEX($G$1:$G$4,0,0)=20");
-        AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($D1,$U$1:$U$4,1)>0");
+        AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($D1,$U$1:$U$4,1)>0", "B2", "B3", "B4", "B5");
         AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$G$4,$G$1:$G$4)=20");
         AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$F$1:$G$4)=20");
-        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,\"Missing\",2)=20");
-        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,\"Missing\",0,2)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,\"Missing\",2)=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,\"Missing\",0,2)=20", "B2", "B4");
         AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($C1,$F$1:$G$4,$G$1:$G$4)=20");
-        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($D1,$U$1:$U$4,$N$1:$N$4)=\"Band3\"");
+        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($D1,$U$1:$U$4,$N$1:$N$4)=\"Band3\"", "B3", "B4");
         AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($A:$A,0,0)>0");
         AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($G$1,0,0,1,2)=20");
         AssertFormulaLookupReferenceFunctionContrastLocations("INDIRECT(\"$G$1:$H$2\")=20");
@@ -5225,7 +5300,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaInfoReferenceParityContrastLocations("CELL(\"contents\",$A1)=2", "B3");
         AssertFormulaInfoReferenceParityContrastLocations("CELL(\"format\",$A1)=\"F0\"", "B5");
         AssertFormulaInfoReferenceParityContrastLocations("CELL(\"protect\",$A1)=0", "B5");
-        AssertFormulaInfoReferenceParityContrastLocations("CELL(\"prefix\",$A1)=\"^\"", "B5");
+        AssertFormulaInfoReferenceParityContrastLocations("CELL(\"prefix\",$A1)=\"^\"");
         AssertFormulaInfoReferenceParityContrastLocations("FORMULATEXT($A1)=\"=SUM(1,1)\"", "B3");
         AssertFormulaInfoReferenceParityContrastLocations("HYPERLINK($C1,$D1)=\"Friendly\"", "B4");
         AssertFormulaInfoReferenceParityContrastLocations("HYPERLINK($C1)=\"https://example.com/friendly\"", "B4");
@@ -5244,10 +5319,10 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatInfoReferenceScalarUnsupportedShapes()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatInfoReferenceScalarShapeAndErrorSemantics()
     {
-        AssertFormulaInfoReferenceParityContrastLocations("INFO(\"directory\")<>\"\"");
-        AssertFormulaInfoReferenceParityContrastLocations("INFO(\"system\")=\"pcdos\"");
+        AssertFormulaInfoReferenceParityContrastLocations("INFO(\"directory\")<>\"\"", "B1", "B2", "B3", "B4", "B5");
+        AssertFormulaInfoReferenceParityContrastLocations("INFO(\"system\")=\"pcdos\"", "B1", "B2", "B3", "B4", "B5");
         AssertFormulaInfoReferenceParityContrastLocations("CELL(\"type\",1)=\"v\"");
         AssertFormulaInfoReferenceParityContrastLocations("FORMULATEXT(42)<>\"\"");
         AssertFormulaInfoReferenceParityContrastLocations("GETPIVOTDATA(\"Missing\",$E$1)>0");
@@ -5599,18 +5674,18 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchFormulaConditionalFormatArithmeticUnsupportedOperands()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatArithmeticOperandCoercionAndErrorSemantics()
     {
         AssertFormulaArithmeticContrastLocations("$A1/0>0");
-        AssertFormulaArithmeticContrastLocations("\"5\"+$A1>80");
+        AssertFormulaArithmeticContrastLocations("\"5\"+$A1>80", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("1E308*1E308>0");
         AssertFormulaArithmeticContrastLocations("KURT($A1)+1>0");
-        AssertFormulaArithmeticContrastLocations("$A1&1>0");
+        AssertFormulaArithmeticContrastLocations("$A1&1>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("A0+1>0");
         AssertFormulaArithmeticContrastLocations("(($A1-$A1)^-1)>0");
         AssertFormulaArithmeticContrastLocations("-\"5\">0");
         AssertFormulaArithmeticContrastLocations("KURT($A1)^2>0");
-        AssertFormulaArithmeticContrastLocations("$A1^\"2\">0");
+        AssertFormulaArithmeticContrastLocations("$A1^\"2\">0", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -5699,17 +5774,17 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideSelectorWrappers()
+    public void FindIssues_UsesCanonicalFormulaConditionalFormatInsideSelectorWrappers()
     {
-        AssertFormulaIfContrastLocations("IFERROR(UNKNOWNFUNC($A1),TRUE)");
+        AssertFormulaIfContrastLocations("IFERROR(UNKNOWNFUNC($A1),TRUE)", "B1", "B2", "B3", "B4");
         AssertFormulaIfContrastLocations("IFNA($A1>=100,TRUE,FALSE)");
-        AssertFormulaIfContrastLocations("IFS($A1>=100,TRUE,UNKNOWNFUNC($A1)>0,TRUE)");
+        AssertFormulaIfContrastLocations("IFS($A1>=100,TRUE,UNKNOWNFUNC($A1)>0,TRUE)", "B2", "B4");
         AssertFormulaIfContrastLocations("IFS($A1>=100)");
-        AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\",TRUE,UNKNOWNFUNC($A1),FALSE)");
+        AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\",TRUE,UNKNOWNFUNC($A1),FALSE)", "B3", "B4");
         AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\")");
-        AssertFormulaIfContrastLocations("IFERROR($A1,0)>0");
-        AssertFormulaIfContrastLocations("IFS($A1>=100,1,TRUE,0)>0");
-        AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\",1,0)>0");
+        AssertFormulaIfContrastLocations("IFERROR($A1,0)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaIfContrastLocations("IFS($A1>=100,1,TRUE,0)>0", "B2", "B4");
+        AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\",1,0)>0", "B3", "B4");
     }
 
     [Fact]
@@ -8715,6 +8790,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 14), fraction);
     }
 
+    // Formula-type CF expectations intentionally follow the canonical Formula/Calc contracts:
+    // errors and non-scalar arrays fail closed; all other coercion and function semantics are shared.
     private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);

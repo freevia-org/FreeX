@@ -117,7 +117,7 @@ internal static class XlsxExternalLinkSchemaNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(externalBook, RelationshipNs + "id");
-        changed |= NormalizeRelationshipId(externalBook);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeRelationshipId(externalBook, RelationshipNs + "id");
 
         foreach (var child in externalBook.Elements().ToList())
         {
@@ -250,26 +250,6 @@ internal static class XlsxExternalLinkSchemaNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(definedName, "sheetId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(definedName);
         return changed;
-    }
-
-    private static bool NormalizeRelationshipId(XElement element)
-    {
-        var attribute = element.Attribute(RelationshipNs + "id");
-        var trimmed = attribute?.Value.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, trimmed, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(RelationshipNs + "id", trimmed);
-        return true;
     }
 
     private static bool NormalizeOptionalTextAttribute(XElement element, string attributeName)

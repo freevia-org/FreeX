@@ -204,6 +204,24 @@ internal static class XlsxXmlNormalizationHelpers
         };
     }
 
+    public static string? NormalizeBooleanAsNumeric(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.Equals(trimmed, "1", StringComparison.Ordinal) ||
+            string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return "1";
+        }
+
+        if (string.Equals(trimmed, "0", StringComparison.Ordinal) ||
+            string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase))
+        {
+            return "0";
+        }
+
+        return null;
+    }
+
     public static string? NormalizeRequiredUnsignedInt(string? value) =>
         NormalizeUnsignedIntOrNull(value) ?? "0";
 
@@ -219,5 +237,43 @@ internal static class XlsxXmlNormalizationHelpers
     {
         var trimmed = value?.Trim();
         return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
+    }
+
+    public static string? NormalizeOptionalText(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    public static bool NormalizeRelationshipId(XElement element, XName relationshipIdName) =>
+        NormalizeAttribute(element, relationshipIdName, NormalizeOptionalText);
+
+    public static string? NormalizeBase64BinaryOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return null;
+
+        try
+        {
+            _ = Convert.FromBase64String(trimmed);
+            return trimmed;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    public static string? NormalizeLegacyPasswordHashOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (trimmed is not { Length: 4 } ||
+            !trimmed.All(static c => char.IsAsciiHexDigit(c)))
+        {
+            return null;
+        }
+
+        return trimmed.ToUpperInvariant();
     }
 }

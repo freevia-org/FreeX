@@ -84,49 +84,14 @@ internal static partial class XlsxWorksheetMetadataPreserver
     private static bool MergeMissingAttributes(
         XElement sourceElement,
         XElement targetElement,
-        IReadOnlyCollection<string> excludedLocalNames)
-    {
-        var changed = false;
-        foreach (var attribute in sourceElement.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                IsOfficeRevisionAttribute(attribute) ||
-                excludedLocalNames.Contains(attribute.Name.LocalName, StringComparer.Ordinal) ||
-                targetElement.Attribute(attribute.Name) is not null)
-            {
-                continue;
-            }
+        IReadOnlyCollection<string> excludedLocalNames) =>
+        XlsxXmlPreservationPolicy.MergeMissingAttributes(sourceElement, targetElement, excludedLocalNames);
 
-            targetElement.SetAttributeValue(attribute.Name, attribute.Value);
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool MergeMissingAttributes(XElement sourceElement, XElement targetElement)
-    {
-        var changed = false;
-        foreach (var attribute in sourceElement.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                IsOfficeRevisionAttribute(attribute) ||
-                targetElement.Attribute(attribute.Name) is not null)
-            {
-                continue;
-            }
-
-            targetElement.SetAttributeValue(attribute.Name, attribute.Value);
-            changed = true;
-        }
-
-        return changed;
-    }
+    private static bool MergeMissingAttributes(XElement sourceElement, XElement targetElement) =>
+        XlsxXmlPreservationPolicy.MergeMissingAttributes(sourceElement, targetElement);
 
     private static bool IsOfficeRevisionAttribute(XAttribute attribute) =>
-        !attribute.IsNamespaceDeclaration &&
-        string.Equals(attribute.Name.LocalName, "uid", StringComparison.Ordinal) &&
-        IsOfficeRevisionNamespace(attribute.Name.NamespaceName);
+        XlsxXmlPreservationPolicy.IsOfficeRevisionAttribute(attribute);
 
     // A source row's `s` style index and its companion `customFormat` flag reference the source
     // stylesheet's cellXfs index space. The full-save path rebuilds styles.xml via ClosedXML, which

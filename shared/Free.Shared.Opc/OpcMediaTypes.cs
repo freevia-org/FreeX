@@ -104,6 +104,17 @@ public static class OpcMediaTypes
             ["audio/x-m4a"] = Rule("m4a", transition: true),
         };
 
+    private static readonly IReadOnlyDictionary<string, string> OfficeEmbeddedObjectExtensionsByContentType =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"] = "xlsx",
+            ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"] = "docx",
+            ["application/vnd.openxmlformats-officedocument.presentationml.presentation"] = "pptx",
+            ["application/vnd.ms-excel"] = "xls",
+            ["application/msword"] = "doc",
+            ["application/vnd.ms-powerpoint"] = "ppt",
+        };
+
     public static bool TryGetDefaultContentType(string extension, out string contentType) =>
         DefaultContentTypes.TryGetValue(extension.TrimStart('.'), out contentType!);
 
@@ -232,6 +243,18 @@ public static class OpcMediaTypes
             },
             _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, null),
         };
+    }
+
+    public static bool TryGetOfficeEmbeddedObjectExtension(string? contentType, out string extension)
+    {
+        if (contentType is not null &&
+            OfficeEmbeddedObjectExtensionsByContentType.TryGetValue(contentType, out extension!))
+        {
+            return true;
+        }
+
+        extension = string.Empty;
+        return false;
     }
 
     public static string GetCaptionTrackExtension(string? contentType, string? source) =>

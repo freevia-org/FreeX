@@ -1,4 +1,5 @@
 using Free.Shared.IO;
+using Free.Shared.Opc;
 using Free.Shared.Shell;
 using FreeW.App.Presentation.Editing;
 using FreeW.Core.IO;
@@ -187,61 +188,25 @@ public sealed class DocumentPersistenceWorkflow
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(target);
 
-        // r137-freew-persistence-external-modification: port of FreeX's WorkbookSaveService.SaveAsync
-        // check. FreeW previously had NO external-modification detection at all (unlike FreeX): if the
-        // caller passes the write time it captured at open (DocumentOpenResult.SourceLastWriteTimeUtc)
-        // and the file on disk now has a different write time, someone else (another FreeW/Word
-        // instance, a sync client, a colleague on a shared path) changed it since we read it, and
-        // writing over it here would silently discard their changes with zero warning. This is a
-        // best-effort check-then-act (not a held file lock, matching FreeX's own caveat), but it
-        // catches the common "someone else saved while I was still editing" case. Callers that don't
-        // pass expectedLastWriteTimeUtc (the default) get the pre-existing unchecked behavior.
-        if (expectedLastWriteTimeUtc is { } expectedWriteTimeUtc &&
-            File.Exists(target.Path) &&
-            File.GetLastWriteTimeUtc(target.Path) != expectedWriteTimeUtc)
-        {
-            throw new DocumentExternallyModifiedException(target.Path);
-        }
+        ExternalFileWriteConflictPolicy.ThrowIfChangedSince(
+            target.Path,
+            expectedLastWriteTimeUtc,
+            static conflictingPath => new DocumentExternallyModifiedException(conflictingPath));
 
         var directory = Path.GetDirectoryName(Path.GetFullPath(target.Path));
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        // r138-freew-persistence-modified-metadata: Word refreshes docProps/core.xml's
-        // dcterms:modified and cp:lastModifiedBy on every save; DocxWriter.BuildCoreProperties has no
-        // "now" concept of its own -- it just round-trips whatever TextDocument.Properties already
-        // holds -- so unless something stamps these here, they stay frozen at whatever they were at
-        // document creation/open forever. The Document Properties dialog and the SAVEDATE/LASTSAVEDBY
-        // complex fields all read this same model, so a stale value here is wrong everywhere at once.
-        // Author resolution mirrors DocumentView.CurrentRevisionAuthor's fallback chain (the same
-        // "who is this" identity the rest of the app already uses for authorship): the existing
-        // document author, else the OS account name, else the shared default.
-        // Stamped only around the actual write and rolled back on any failure (adapter throws, disk
-        // full, etc.) so a failed save never leaves the in-memory model claiming a save that never
-        // reached disk -- matches "update on every successful save, not on failed ones".
-        var previousModified = document.Properties.Modified;
-        var previousLastModifiedBy = document.Properties.LastModifiedBy;
-        document.Properties.Modified = DateTimeOffset.Now;
-        document.Properties.LastModifiedBy = ReviewAuthorIdentityPlanner.ResolveAuthor(
-            revisionAuthor: null,
-            documentAuthor: document.Properties.Author,
-            operatingSystemAuthor: Environment.UserName);
+        using var saveStamp = DocumentPropertiesSaveStampTransaction.Begin(
+            document.Properties,
+            ReviewAuthorIdentityPlanner.DefaultAuthor);
+        using var temporaryFile = AtomicFileWriter.CreateTempLease(target.Path);
+        using (var stream = temporaryFile.OpenWrite())
+            target.Adapter.Save(document, stream);
 
-        try
-        {
-            using var temporaryFile = AtomicFileWriter.CreateTempLease(target.Path);
-            using (var stream = temporaryFile.OpenWrite())
-                target.Adapter.Save(document, stream);
-
-            AtomicFileWriter.ReplaceTarget(temporaryFile.Path, target.Path);
-            temporaryFile.Commit();
-        }
-        catch
-        {
-            document.Properties.Modified = previousModified;
-            document.Properties.LastModifiedBy = previousLastModifiedBy;
-            throw;
-        }
+        AtomicFileWriter.ReplaceTarget(temporaryFile.Path, target.Path);
+        temporaryFile.Commit();
+        saveStamp.Commit();
     }
 
     private static string ResolveSaveExtension(string? currentPath, string? preferredExtension)

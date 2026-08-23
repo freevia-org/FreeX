@@ -1065,43 +1065,12 @@ public static class SmartArtAuthoringPlanner
         {
             ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
             PartPath = partPath,
-            Bytes = Serialize(CreateNativeLayoutDefinition()),
+            Bytes = Serialize(SmartArtNativePartFactory.CreateLayoutDefinition(
+                "urn:freep:smartart:layout:pending")),
         };
         smartArt.Parts[part.PartPath] = part;
         return part;
     }
-
-    private static XDocument CreateNativeLayoutDefinition() =>
-        new(new XElement(
-            Diagram + "layoutDef",
-            new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName),
-            new XAttribute("uniqueId", "urn:freep:smartart:layout:pending"),
-            new XElement(Diagram + "title", new XAttribute("val", "")),
-            new XElement(Diagram + "desc", new XAttribute("val", "")),
-            new XElement(Diagram + "catLst",
-                new XElement(Diagram + "cat", new XAttribute("type", "list"), new XAttribute("pri", "1000"))),
-            new XElement(Diagram + "sampData",
-                new XElement(Diagram + "dataModel",
-                    new XElement(Diagram + "ptLst"),
-                    new XElement(Diagram + "bg"),
-                    new XElement(Diagram + "whole"))),
-            new XElement(Diagram + "styleData",
-                new XElement(Diagram + "dataModel",
-                    new XElement(Diagram + "ptLst"),
-                    new XElement(Diagram + "bg"),
-                    new XElement(Diagram + "whole"))),
-            new XElement(Diagram + "clrData",
-                new XElement(Diagram + "dataModel",
-                    new XElement(Diagram + "ptLst"),
-                    new XElement(Diagram + "bg"),
-                    new XElement(Diagram + "whole"))),
-            new XElement(Diagram + "layoutNode",
-                new XAttribute("name", "root"),
-                new XElement(Diagram + "alg", new XAttribute("type", "lin")),
-                new XElement(Diagram + "shape", new XElement(Diagram + "adjLst")),
-                new XElement(Diagram + "presOf"),
-                new XElement(Diagram + "constrLst"),
-                new XElement(Diagram + "ruleLst"))));
 
     private static void SetLayoutPresentationMetadata(
         XElement layoutDefinition,

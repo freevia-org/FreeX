@@ -18,16 +18,20 @@ public enum FreeWRecoveryRestoreExceptionPolicy
 }
 
 /// <summary>
-/// Owns FreeW's renderer-neutral autosave and recovery lifecycle. Native hosts schedule ticks,
-/// marshal editor access, render prompts, and manage window lifetime.
+/// FreeW's compatibility facade over the shared, renderer-neutral autosave lifecycle.
+/// Native hosts retain scheduling and document access; this adapter supplies DOCX I/O policy.
 /// </summary>
 public sealed class FreeWAutosaveSession : IDisposable
 {
-    public static TimeSpan DefaultInterval { get; } = TimeSpan.FromSeconds(30);
+    private static readonly AutosaveDocumentSessionOptions<TextDocument> SessionOptions = new(
+        Interval: TimeSpan.FromSeconds(30),
+        WriteSnapshot: (document, path) => DocxWriter.Write(document, path),
+        ReadSnapshot: DocxReader.Read);
 
     private readonly AutosaveSnapshotStore _store;
-    private readonly AutosaveSnapshotCoordinator _coordinator;
-    private readonly SnapshotSource _source;
+    private readonly AutosaveDocumentSession<TextDocument> _session;
+
+    public static TimeSpan DefaultInterval => SessionOptions.Interval;
 
     public FreeWAutosaveSession(FreeWAutosavePorts ports)
         : this(
@@ -48,55 +52,30 @@ public sealed class FreeWAutosaveSession : IDisposable
         string snapshotId)
     {
         ArgumentNullException.ThrowIfNull(ports);
-        ArgumentNullException.ThrowIfNull(ports.GetOriginalFilePath);
-        ArgumentNullException.ThrowIfNull(ports.GetDisplayName);
-        ArgumentNullException.ThrowIfNull(ports.GetIsDirty);
-        ArgumentNullException.ThrowIfNull(ports.GetDirtyGeneration);
-        ArgumentNullException.ThrowIfNull(ports.ExecuteWithDocument);
-        ArgumentNullException.ThrowIfNull(store);
-        ArgumentException.ThrowIfNullOrWhiteSpace(snapshotId);
 
         _store = store;
-        _source = new SnapshotSource(ports);
-        _coordinator = new AutosaveSnapshotCoordinator(store, snapshotId);
+        _session = new AutosaveDocumentSession<TextDocument>(
+            new AutosaveDocumentPorts<TextDocument>(
+                ports.GetOriginalFilePath,
+                ports.GetDisplayName,
+                ports.GetIsDirty,
+                ports.GetDirtyGeneration,
+                ports.ExecuteWithDocument),
+            SessionOptions,
+            store,
+            snapshotId);
     }
 
-    public string SnapshotId => _coordinator.SnapshotId;
+    public string SnapshotId => _session.SnapshotId;
 
-    public static string CreateSnapshotId()
-    {
-        var launchTag = AutosaveSnapshotStore.LaunchId.ToString("N")[..8];
-        var windowTag = Guid.NewGuid().ToString("N")[..8];
-        return FormattableString.Invariant(
-            $"recovery-{Environment.ProcessId}-{launchTag}-{windowTag}");
-    }
+    public static string CreateSnapshotId() =>
+        AutosaveDocumentSession<TextDocument>.CreateSnapshotId();
 
-    public void Snapshot() => _coordinator.Snapshot(_source);
+    public void Snapshot() => _session.Snapshot();
 
-    /// <summary>
-    /// Best-effort emergency snapshot for crash handlers. Bypasses the periodic-tick generation
-    /// gate (so it still captures the latest dirty state even when nothing has changed since the
-    /// last periodic tick) but still requires the document to be dirty. Must never throw --
-    /// delegates to <see cref="AutosaveSnapshotCoordinator.TryEmergencySnapshot"/>, which is
-    /// never-throw by design.
-    /// </summary>
-    public void TryEmergencySnapshot() => _coordinator.TryEmergencySnapshot(_source);
+    public void TryEmergencySnapshot() => _session.TryEmergencySnapshot();
 
-    public void CompleteCleanExit()
-    {
-        try
-        {
-            _coordinator.DeleteSnapshot();
-        }
-        catch
-        {
-            // Autosave cleanup must not block a normal close.
-        }
-        finally
-        {
-            _coordinator.Dispose();
-        }
-    }
+    public void CompleteCleanExit() => _session.CompleteCleanExit();
 
     public AutosaveRecoveryPlan? PlanLatestRecovery() =>
         AutosaveRecoveryPlanner.PlanLatest(_store);
@@ -115,72 +94,28 @@ public sealed class FreeWAutosaveSession : IDisposable
         bool accepted,
         Func<string, string?, bool> restoreSnapshot,
         FreeWRecoveryRestoreExceptionPolicy exceptionPolicy =
-            FreeWRecoveryRestoreExceptionPolicy.PreserveCandidate)
-    {
-        ArgumentNullException.ThrowIfNull(plan);
-        ArgumentNullException.ThrowIfNull(restoreSnapshot);
-
-        if (!accepted)
-        {
-            AutosaveRecoveryPlanner.Complete(plan, accepted: false, recovered: false);
-            return false;
-        }
-
-        var candidate = plan.Candidate;
-        bool recovered;
-        try
-        {
-            recovered = restoreSnapshot(
-                candidate.SnapshotPath,
-                candidate.Sidecar.OriginalFilePath);
-        }
-        catch when (exceptionPolicy == FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate)
-        {
-            recovered = false;
-        }
-
-        AutosaveRecoveryPlanner.Complete(plan, accepted: true, recovered: recovered);
-        return recovered;
-    }
+            FreeWRecoveryRestoreExceptionPolicy.PreserveCandidate) =>
+        _session.CompleteRecovery(
+            plan,
+            accepted,
+            restoreSnapshot,
+            MapExceptionPolicy(exceptionPolicy));
 
     public bool CompleteDocumentRecovery(
         AutosaveRecoveryPlan plan,
         bool accepted,
         Action<TextDocument, string?> applyRecoveredDocument,
         FreeWRecoveryRestoreExceptionPolicy exceptionPolicy =
-            FreeWRecoveryRestoreExceptionPolicy.PreserveCandidate)
-    {
-        ArgumentNullException.ThrowIfNull(applyRecoveredDocument);
-
-        return CompleteRecovery(
+            FreeWRecoveryRestoreExceptionPolicy.PreserveCandidate) =>
+        _session.CompleteDocumentRecovery(
             plan,
             accepted,
-            (snapshotPath, originalPath) =>
-            {
-                var document = DocxReader.Read(snapshotPath);
-                applyRecoveredDocument(document, originalPath);
-                return true;
-            },
-            exceptionPolicy);
-    }
+            applyRecoveredDocument,
+            MapExceptionPolicy(exceptionPolicy));
 
-    public void Dispose() => _coordinator.Dispose();
+    public void Dispose() => _session.Dispose();
 
-    private sealed class SnapshotSource : IAutosaveSnapshotSource
-    {
-        private readonly FreeWAutosavePorts _ports;
-
-        public SnapshotSource(FreeWAutosavePorts ports)
-        {
-            _ports = ports;
-        }
-
-        public string? OriginalFilePath => _ports.GetOriginalFilePath();
-        public string DisplayName => _ports.GetDisplayName();
-        public bool IsDirty => _ports.GetIsDirty();
-        public int DirtyGeneration => _ports.GetDirtyGeneration();
-
-        public void WriteSnapshot(string snapshotPath) =>
-            _ports.ExecuteWithDocument(document => DocxWriter.Write(document, snapshotPath));
-    }
+    private static AutosaveRecoveryRestoreExceptionPolicy MapExceptionPolicy(
+        FreeWRecoveryRestoreExceptionPolicy exceptionPolicy) =>
+        (AutosaveRecoveryRestoreExceptionPolicy)(int)exceptionPolicy;
 }
