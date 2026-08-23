@@ -6370,7 +6370,7 @@ PY
 probe_autofilter_mixed_type_persistence_physical() {
     local prefix="autofilter-mixed-type"
     local result_id="autofilter-mixed-type-value-save-reopen-physical"
-    local artifacts="${prefix}-before.png;${prefix}-menu-open.png;${prefix}-menu-cleared.png;${prefix}-target-checked.png;${prefix}-applied.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt;${prefix}-reopen-diagnostics.txt;${prefix}-target-before.png;${prefix}-target-menu-open.png;${prefix}-target-cleared.png;${prefix}-target-selected.png;${prefix}-target-dismissed.png"
+    local artifacts="${prefix}-before.png;${prefix}-menu-open.png;${prefix}-menu-cleared.png;${prefix}-target-checked.png;${prefix}-applied.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt;${prefix}-reopen-diagnostics.txt;${prefix}-target-before.png;${prefix}-target-menu-open.png;${prefix}-target-cleared.png;${prefix}-target-selected.png;${prefix}-target-dismissed.png;${prefix}-screenshots.tar.gz"
     local menu_open=false target_cleared=false target_selected=false popup_dismissed=false
     local save_clean=false dialog_open=false dialog_closed=false
     local popup_route="none"
@@ -6630,6 +6630,13 @@ PY
 
     write_artifact "${prefix}-postcondition.txt" \
         "document-path=$document_path\npopup-route=$popup_route\nmenu-open=$menu_open\ntarget-cleared=$target_cleared\ntarget-selected=$target_selected\npopup-dismissed=$popup_dismissed\ninitial-total=$initial_total\napplied-total=$applied_total\nvisible=$visible\nsemantic=$semantic\nsave-clean=$save_clean\npackage=$package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-total=$reopened_total\nreopened-visible=$reopened_visible\nreopened-semantic=$reopened_semantic"
+
+    tar -czf "$output/${prefix}-screenshots.tar.gz" -C "$output" \
+        "${prefix}-before.png" "${prefix}-menu-open.png" "${prefix}-menu-cleared.png" \
+        "${prefix}-target-checked.png" "${prefix}-applied.png" "${prefix}-reopened.png" \
+        "${prefix}-target-before.png" "${prefix}-target-menu-open.png" \
+        "${prefix}-target-cleared.png" "${prefix}-target-selected.png" \
+        "${prefix}-target-dismissed.png"
 
     if $menu_open && $target_cleared && $target_selected && $popup_dismissed &&
        [[ "$initial_total" == "5" && "$applied_total" == "2" && "$visible" == "$expected_visible" &&
