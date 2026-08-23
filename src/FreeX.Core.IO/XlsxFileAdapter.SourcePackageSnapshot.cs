@@ -1469,7 +1469,7 @@ public sealed partial class XlsxFileAdapter
                 // full-rebuild save path). The fast cell-patch path above never touches
                 // docProps/core.xml itself, so without this the patched file's stamp would
                 // stay frozen at whatever it was when the source package was first captured.
-                UpdatePatchedDocumentPropertiesOnSave(archive, DateTimeOffset.UtcNow);
+                XlsxDocumentPropertiesPreserver.UpdateCorePropertiesOnSave(archive, DateTimeOffset.UtcNow);
             }
 
             patchedPackage.Position = 0;
@@ -2612,76 +2612,6 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchWorksheetSheetProperties(ZipArchive archive) =>
             XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetSheetPropertiesNormalizer.NormalizeWorksheetRoot);
-
-        // Mirrors XlsxDocumentPropertiesPreserver's (private) UpdateModifiedAndRevisionOnSave,
-        // which only runs on the full-ClosedXML-rebuild save path. The fast cell-patch path
-        // (this file) needs the identical dcterms:modified / cp:revision bump on every save, so
-        // the logic is duplicated here against docProps/core.xml directly using the same public
-        // shared-Opc constants/helpers rather than reaching into that internal method.
-        private static void UpdatePatchedDocumentPropertiesOnSave(ZipArchive archive, DateTimeOffset saveTimestamp)
-        {
-            var coreEntry = archive.GetEntry(OpcPackageProperties.CorePropertiesZipEntry);
-            if (coreEntry is null)
-                return;
-
-            var coreXml = XlsxPackageXmlEditor.LoadXml(coreEntry);
-            var coreRoot = coreXml.Root;
-            if (coreRoot is null)
-                return;
-
-            var modifiedName = OpcDocumentProperties.DublinCoreTermsNamespace + "modified";
-            var modifiedValue = OpcPackageProperties.ToW3CDtf(saveTimestamp);
-            var modifiedElement = coreRoot.Element(modifiedName);
-            if (modifiedElement is null)
-            {
-                // The xsi:type value below is a literal QName string ("<prefix>:W3CDTF"), so the
-                // prefix it names must actually be declared in scope -- it cannot rely on
-                // XElement's serializer happening to auto-generate a matching prefix for a
-                // namespace that has never appeared in this document before (e.g. a fixture whose
-                // docProps/core.xml has no pre-existing dcterms:* elements at all).
-                var dcTermsPrefix = EnsureNamespaceDeclared(
-                    coreRoot,
-                    OpcDocumentProperties.DublinCoreTermsNamespace,
-                    "dcterms");
-                coreRoot.Add(new XElement(
-                    modifiedName,
-                    new XAttribute(OpcDocumentProperties.XmlSchemaInstanceNamespace + "type", $"{dcTermsPrefix}:W3CDTF"),
-                    modifiedValue));
-            }
-            else
-            {
-                modifiedElement.SetValue(modifiedValue);
-            }
-
-            var revisionName = OpcDocumentProperties.CorePropertiesNamespace + "revision";
-            var revisionElement = coreRoot.Element(revisionName);
-            var currentRevision = int.TryParse(
-                revisionElement?.Value,
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var parsedRevision)
-                ? parsedRevision
-                : 0;
-            var nextRevision = (currentRevision + 1).ToString(CultureInfo.InvariantCulture);
-            if (revisionElement is null)
-                coreRoot.Add(new XElement(revisionName, nextRevision));
-            else
-                revisionElement.SetValue(nextRevision);
-
-            XlsxPackageXmlEditor.ReplaceXml(archive, OpcPackageProperties.CorePropertiesZipEntry, coreXml);
-        }
-
-        // Returns the prefix already bound (on this element or an ancestor) to the given
-        // namespace, or declares it under preferredPrefix on this element and returns that.
-        private static string EnsureNamespaceDeclared(XElement element, XNamespace ns, string preferredPrefix)
-        {
-            var existingPrefix = element.GetPrefixOfNamespace(ns);
-            if (existingPrefix is not null)
-                return existingPrefix;
-
-            element.SetAttributeValue(XNamespace.Xmlns + preferredPrefix, ns.NamespaceName);
-            return preferredPrefix;
-        }
 
         private static void NormalizePatchWorksheetProtection(ZipArchive archive) =>
             XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetProtectionNormalizer.NormalizeWorksheetRoot);
