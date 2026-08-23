@@ -12,3 +12,9 @@ tests/FreeX.App.Avalonia.Tests/Wave191AutoFilterColorPhysicalSourceTests.cs text
 docs/parity/avalonia-parity-wave191-freex-autofilter-color-20260823.md text eol=lf
 docs/parity/evidence/wave191-freex-autofilter-color-20260823/*.json text eol=lf
 docs/parity/evidence/wave191-freex-autofilter-color-20260823/*.txt text eol=lf
+
+# Wave192 font-color evidence/provenance hashes must be identical across Windows and Linux checkouts.
+tools/LinuxInteractiveDocker/New-FreeXWave192AutoFilterFontColorFixture.ps1 text eol=lf
+tests/FreeX.App.Avalonia.Tests/Wave192AutoFilterFontColorPhysicalSourceTests.cs text eol=lf
+docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/*.json text eol=lf
+docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/*.txt text eol=lf
