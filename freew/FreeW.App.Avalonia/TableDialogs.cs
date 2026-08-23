@@ -251,7 +251,10 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             Content = TablePropertiesDialogPlanner.AllowOverlapLabel,
             IsThreeState = true,
             IsChecked = state.FloatingTableAllowsOverlap,
-            Margin = new Thickness(0, Layout.RowVerticalInset, 0, Layout.RowVerticalInset),
+            // WPF's native Positioning pane leaves the disabled overlap row below the
+            // 560x600 evidence viewport. Preserve that measured ten-DIP bottom cadence
+            // so the row cannot paint into the tab pane's action-row boundary.
+            Margin = new Thickness(0, Layout.RowVerticalInset + 10, 0, Layout.RowVerticalInset),
             IsEnabled = state.WrappingIndex == 1,
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_allowFloatingOverlap, DialogChromeStyle);
@@ -316,7 +319,11 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
 
         _tabs = new TabControl
         {
-            Margin = new Thickness(Layout.OuterInset, Layout.OuterInset, Layout.OuterInset, 0)
+            Margin = new Thickness(Layout.OuterInset, Layout.OuterInset, Layout.OuterInset, 0),
+            // WPF clips the selected tab viewport at the action-row boundary. Without
+            // an explicit Avalonia clip, the Cell tab's long Positioning content paints
+            // over the buttons when the fixed evidence surface is shorter than the tab.
+            ClipToBounds = true,
         };
         _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.TableTabLabel, TablePropertiesDialogPlanner.TableTabAutomationId, BuildTableTab()));
         _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.RowTabLabel, TablePropertiesDialogPlanner.RowTabAutomationId, BuildRowTab()));

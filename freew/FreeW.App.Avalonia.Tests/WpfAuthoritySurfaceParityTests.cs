@@ -362,6 +362,24 @@ public sealed class WpfAuthoritySurfaceParityTests
     }
 
     [Fact]
+    public async Task Table_properties_clips_cell_tab_content_before_the_action_row()
+    {
+        await Session.Dispatch(() =>
+        {
+            var (_, table) = CreateTableEditor();
+            var dialog = new TablePropertiesDialog(
+                new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]),
+                TablePropertiesDialogTabKind.Cell);
+
+            dialog.TabsForTest.ClipToBounds.Should().BeTrue();
+            dialog.GetLogicalDescendants().OfType<CheckBox>()
+                .Single(checkBox =>
+                    AutomationProperties.GetAutomationId(checkBox) == "TablePropertiesAllowOverlapCheckBox")
+                .Margin.Should().Be(new Thickness(0, 14, 0, 4));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Table_properties_keeps_positioning_section_on_the_Wpf_cell_tab()
     {
         await Session.Dispatch(() =>
