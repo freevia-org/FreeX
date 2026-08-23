@@ -228,8 +228,8 @@ public static class GridAutofillPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
-        if (!TryFindRowEndpoints(viewport.RowMetrics, source.Start.Row, source.End.Row, out var srcTopRow, out var srcBottomRow) ||
-            !TryFindColumnEndpoints(viewport.ColMetrics, source.Start.Col, source.End.Col, out var srcLeftCol, out var srcRightCol))
+        if (!ViewportMetricEndpointLookup.TryFindRows(viewport.RowMetrics, source.Start.Row, source.End.Row, out var srcTopRow, out var srcBottomRow) ||
+            !ViewportMetricEndpointLookup.TryFindColumns(viewport.ColMetrics, source.Start.Col, source.End.Col, out var srcLeftCol, out var srcRightCol))
             return null;
 
         var srcTop = srcTopRow.TopOffset + columnHeaderHeight;
@@ -276,74 +276,6 @@ public static class GridAutofillPlanner
         return targetRow.HasValue && targetColumn.HasValue
             ? new CellAddress(default, targetRow.Value, targetColumn.Value)
             : null;
-    }
-
-    private static bool TryFindRowEndpoints(
-        IReadOnlyList<RowMetric> metrics,
-        uint topRow,
-        uint bottomRow,
-        out RowMetric topMetric,
-        out RowMetric bottomMetric)
-    {
-        RowMetric? foundTop = null;
-        RowMetric? foundBottom = null;
-
-        foreach (var metric in metrics)
-        {
-            if (metric.Row > bottomRow)
-                break;
-
-            if (foundTop is null && metric.Row == topRow)
-                foundTop = metric;
-
-            if (foundBottom is null && metric.Row == bottomRow)
-                foundBottom = metric;
-
-            if (foundTop is not null && foundBottom is not null)
-            {
-                topMetric = foundTop;
-                bottomMetric = foundBottom;
-                return true;
-            }
-        }
-
-        topMetric = null!;
-        bottomMetric = null!;
-        return false;
-    }
-
-    private static bool TryFindColumnEndpoints(
-        IReadOnlyList<ColMetric> metrics,
-        uint leftColumn,
-        uint rightColumn,
-        out ColMetric leftMetric,
-        out ColMetric rightMetric)
-    {
-        ColMetric? foundLeft = null;
-        ColMetric? foundRight = null;
-
-        foreach (var metric in metrics)
-        {
-            if (metric.Col > rightColumn)
-                break;
-
-            if (foundLeft is null && metric.Col == leftColumn)
-                foundLeft = metric;
-
-            if (foundRight is null && metric.Col == rightColumn)
-                foundRight = metric;
-
-            if (foundLeft is not null && foundRight is not null)
-            {
-                leftMetric = foundLeft;
-                rightMetric = foundRight;
-                return true;
-            }
-        }
-
-        leftMetric = null!;
-        rightMetric = null!;
-        return false;
     }
 
     public static bool IsOnHandle(

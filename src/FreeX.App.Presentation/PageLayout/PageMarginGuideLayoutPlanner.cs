@@ -1,4 +1,5 @@
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
@@ -34,8 +35,8 @@ public static class PageMarginGuideLayoutPlanner
         WorksheetPageOrientation orientation,
         WorksheetPageMargins margins)
     {
-        if (!TryFindRowMetrics(viewport.RowMetrics, printArea.Start.Row, printArea.End.Row, out var topRow, out var bottomRow) ||
-            !TryFindColumnMetrics(viewport.ColMetrics, printArea.Start.Col, printArea.End.Col, out var leftColumn, out var rightColumn))
+        if (!ViewportMetricEndpointLookup.TryFindRows(viewport.RowMetrics, printArea.Start.Row, printArea.End.Row, out var topRow, out var bottomRow) ||
+            !ViewportMetricEndpointLookup.TryFindColumns(viewport.ColMetrics, printArea.Start.Col, printArea.End.Col, out var leftColumn, out var rightColumn))
             return null;
 
         var guide = WorksheetPageLayout.GetMarginGuideFractions(paperSize, orientation, margins);
@@ -118,71 +119,4 @@ public static class PageMarginGuideLayoutPlanner
             fraction);
     }
 
-    private static bool TryFindRowMetrics(
-        IReadOnlyList<RowMetric> metrics,
-        uint topRow,
-        uint bottomRow,
-        out RowMetric topMetric,
-        out RowMetric bottomMetric)
-    {
-        RowMetric? foundTop = null;
-        RowMetric? foundBottom = null;
-
-        foreach (var metric in metrics)
-        {
-            if (metric.Row > bottomRow)
-                break;
-
-            if (foundTop is null && metric.Row == topRow)
-                foundTop = metric;
-
-            if (foundBottom is null && metric.Row == bottomRow)
-                foundBottom = metric;
-
-            if (foundTop is not null && foundBottom is not null)
-            {
-                topMetric = foundTop;
-                bottomMetric = foundBottom;
-                return true;
-            }
-        }
-
-        topMetric = null!;
-        bottomMetric = null!;
-        return false;
-    }
-
-    private static bool TryFindColumnMetrics(
-        IReadOnlyList<ColMetric> metrics,
-        uint leftColumn,
-        uint rightColumn,
-        out ColMetric leftMetric,
-        out ColMetric rightMetric)
-    {
-        ColMetric? foundLeft = null;
-        ColMetric? foundRight = null;
-
-        foreach (var metric in metrics)
-        {
-            if (metric.Col > rightColumn)
-                break;
-
-            if (foundLeft is null && metric.Col == leftColumn)
-                foundLeft = metric;
-
-            if (foundRight is null && metric.Col == rightColumn)
-                foundRight = metric;
-
-            if (foundLeft is not null && foundRight is not null)
-            {
-                leftMetric = foundLeft;
-                rightMetric = foundRight;
-                return true;
-            }
-        }
-
-        leftMetric = null!;
-        rightMetric = null!;
-        return false;
-    }
 }

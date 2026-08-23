@@ -54,7 +54,7 @@ public sealed partial class FormulaEvaluator
         if (baseFunc is 7 or 8 or 10 or 11)
             return false;
 
-        var numeric = new DirectRangeNumericAccumulator();
+        var numeric = new NumericAggregateAccumulator();
         long countA = 0;
 
         foreach (var range in ranges)
@@ -168,7 +168,7 @@ public sealed partial class FormulaEvaluator
             if (rangeState == DirectRangeFastPathState.Error)
                 return true;
 
-            var singleNumeric = new DirectRangeNumericAccumulator();
+            var singleNumeric = new NumericAggregateAccumulator();
             long singleCountA = 0;
             if (!TryAccumulateAggregateDirectRange(
                     context,
@@ -204,7 +204,7 @@ public sealed partial class FormulaEvaluator
             ranges.Add(range);
         }
 
-        var numeric = new DirectRangeNumericAccumulator();
+        var numeric = new NumericAggregateAccumulator();
         long countA = 0;
 
         foreach (var range in ranges)
@@ -238,7 +238,7 @@ public sealed partial class FormulaEvaluator
         bool ignoreErrors,
         bool ignoreHiddenRows,
         bool ignoreNestedAggregates,
-        ref DirectRangeNumericAccumulator numeric,
+        ref NumericAggregateAccumulator numeric,
         ref long countA,
         out ErrorValue? error)
     {
@@ -477,7 +477,7 @@ public sealed partial class FormulaEvaluator
 
     private static ScalarValue EvaluateSubtotalAggregateNumericResult(
         int functionNumber,
-        DirectRangeNumericAccumulator numeric,
+        NumericAggregateAccumulator numeric,
         long countA)
     {
         return functionNumber switch
@@ -707,7 +707,7 @@ public sealed partial class FormulaEvaluator
                     (uint)endRow,   (uint)endCol);
 
                 // Run SUBTOTAL(baseFunc) on this single range element.
-                var numeric = new DirectRangeNumericAccumulator();
+                var numeric = new NumericAggregateAccumulator();
                 long countA = 0;
                 bool errorSeen = false;
                 ScalarValue errorVal = BlankValue.Instance;
@@ -756,47 +756,4 @@ public sealed partial class FormulaEvaluator
         Error
     }
 
-    private struct DirectRangeNumericAccumulator
-    {
-        private double _varianceMean;
-
-        public long Count { get; private set; }
-        public double Sum { get; private set; }
-        public double Product { get; private set; }
-        public double Min { get; private set; }
-        public double Max { get; private set; }
-        public double VarianceM2 { get; private set; }
-        public double Average => Sum / Count;
-        public double SampleVariance => VarianceM2 / (Count - 1);
-        public double PopulationVariance => VarianceM2 / Count;
-
-        public void Add(double value, int functionNumber)
-        {
-            Count++;
-            switch (functionNumber)
-            {
-                case 1:
-                case 9:
-                    Sum += value;
-                    break;
-                case 4:
-                    Max = Count == 1 ? value : Math.Max(Max, value);
-                    break;
-                case 5:
-                    Min = Count == 1 ? value : Math.Min(Min, value);
-                    break;
-                case 6:
-                    Product = Count == 1 ? value : Product * value;
-                    break;
-                case 7:
-                case 8:
-                case 10:
-                case 11:
-                    var delta = value - _varianceMean;
-                    _varianceMean += delta / Count;
-                    VarianceM2 += delta * (value - _varianceMean);
-                    break;
-            }
-        }
-    }
 }

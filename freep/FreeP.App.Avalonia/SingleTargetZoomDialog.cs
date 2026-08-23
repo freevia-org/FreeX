@@ -5,20 +5,25 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class SlideZoomDialog : FreePDialogWindow
+internal sealed class SingleTargetZoomDialog : FreePDialogWindow
 {
     private readonly ZoomSingleTargetDialogNativeBinding<ComboBox> _binding;
     private ZoomSingleTargetDialogSession _session => _binding.Session;
 
-    internal string? SelectedTargetSlideId => _binding.SelectedTargetId;
+    internal ZoomTargetDialogKind TargetKind => _session.Kind;
+    internal string? SelectedTargetId => _binding.SelectedTargetId;
 
-    internal SlideZoomDialog(
+    internal SingleTargetZoomDialog(
+        ZoomTargetDialogKind kind,
         IReadOnlyList<(string Id, string DisplayName)> options,
         string? title = null,
         string? selectedTargetId = null)
     {
+        if (kind is not ZoomTargetDialogKind.Slide and not ZoomTargetDialogKind.Section)
+            throw new ArgumentOutOfRangeException(nameof(kind));
+
         _binding = new(
-            ZoomTargetDialogKind.Slide,
+            kind,
             options,
             session => new ComboBox
             {
@@ -44,10 +49,7 @@ internal sealed class SlideZoomDialog : FreePDialogWindow
         var ok = ZoomDialogChrome.MakeButton(
             surface.Action(ZoomTargetDialogAction.Accept),
             Apply,
-            _binding.Session.CanAccept);
-        var cancel = ZoomDialogChrome.MakeButton(
-            surface.Action(ZoomTargetDialogAction.Cancel),
-            () => Close(false));
+            _session.CanAccept);
         Content = new StackPanel
         {
             Margin = new Thickness(14),
@@ -72,7 +74,13 @@ internal sealed class SlideZoomDialog : FreePDialogWindow
                     Orientation = Orientation.Horizontal,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     Spacing = 8,
-                    Children = { ok, cancel },
+                    Children =
+                    {
+                        ok,
+                        ZoomDialogChrome.MakeButton(
+                            surface.Action(ZoomTargetDialogAction.Cancel),
+                            () => Close(false)),
+                    },
                 },
             },
         };

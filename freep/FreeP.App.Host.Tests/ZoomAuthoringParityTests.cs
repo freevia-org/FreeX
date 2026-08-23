@@ -111,8 +111,7 @@ public sealed class ZoomAuthoringParityTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         foreach (var file in new[]
                  {
-                     "SlideZoomDialog.cs",
-                     "SectionZoomDialog.cs",
+                     "SingleTargetZoomDialog.cs",
                      "SummaryZoomCoverImageTargetDialog.cs",
                  })
         {
@@ -121,5 +120,20 @@ public sealed class ZoomAuthoringParityTests
             source.Should().NotContain("FindSelectedIndex");
             source.Should().NotContain("record TargetOption");
         }
+    }
+
+    [Fact]
+    public void Wpf_slide_and_section_zoom_commands_adopt_one_parameterized_modal_renderer()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
+
+        source.Should().Contain("new SingleTargetZoomDialog(")
+            .And.Contain("ZoomTargetDialogKind.Slide")
+            .And.Contain("ZoomTargetDialogKind.Section")
+            .And.Contain("dialog.Owner = this")
+            .And.Contain("dialog.ShowDialog() == true")
+            .And.NotContain("new SlideZoomDialog(")
+            .And.NotContain("new SectionZoomDialog(");
     }
 }

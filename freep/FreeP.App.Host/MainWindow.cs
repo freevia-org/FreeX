@@ -3638,14 +3638,15 @@ public sealed partial class MainWindow : Window,
         if (request is null)
             return;
 
-        var dialog = new SlideZoomDialog(
+        var dialog = new SingleTargetZoomDialog(
+            ZoomTargetDialogKind.Slide,
             request.Options,
             request.Title,
             request.SelectedTargetId);
         if (IsVisible)
             dialog.Owner = this;
         if (dialog.ShowDialog() == true)
-            _zoomAuthoringSession.ApplySlideInsertion(dialog.SelectedTargetSlideId);
+            _zoomAuthoringSession.ApplySlideInsertion(dialog.SelectedTargetId);
     }
 
     internal void OpenSectionZoomDialog()
@@ -3654,14 +3655,15 @@ public sealed partial class MainWindow : Window,
         if (request is null)
             return;
 
-        var dialog = new SectionZoomDialog(
+        var dialog = new SingleTargetZoomDialog(
+            ZoomTargetDialogKind.Section,
             request.Options,
             request.Title,
             request.SelectedTargetId);
         if (IsVisible)
             dialog.Owner = this;
         if (dialog.ShowDialog() == true)
-            _zoomAuthoringSession.ApplySectionInsertion(dialog.SelectedTargetSectionId);
+            _zoomAuthoringSession.ApplySectionInsertion(dialog.SelectedTargetId);
     }
 
     internal void OpenSummaryZoomDialog()
@@ -3688,25 +3690,27 @@ public sealed partial class MainWindow : Window,
 
         if (request.Kind == PresentationZoomTargetKind.Slide)
         {
-            var dialog = new SlideZoomDialog(
+            var dialog = new SingleTargetZoomDialog(
+                ZoomTargetDialogKind.Slide,
                 request.Options,
                 request.Title,
                 request.SelectedTargetId);
             if (IsVisible)
                 dialog.Owner = this;
             if (dialog.ShowDialog() == true)
-                _zoomAuthoringSession.ApplySelectedTarget(request, dialog.SelectedTargetSlideId);
+                _zoomAuthoringSession.ApplySelectedTarget(request, dialog.SelectedTargetId);
             return;
         }
 
-        var sectionDialog = new SectionZoomDialog(
+        var sectionDialog = new SingleTargetZoomDialog(
+            ZoomTargetDialogKind.Section,
             request.Options,
             request.Title,
             request.SelectedTargetId);
         if (IsVisible)
             sectionDialog.Owner = this;
         if (sectionDialog.ShowDialog() == true)
-            _zoomAuthoringSession.ApplySelectedTarget(request, sectionDialog.SelectedTargetSectionId);
+            _zoomAuthoringSession.ApplySelectedTarget(request, sectionDialog.SelectedTargetId);
     }
 
     internal void OpenSummaryZoomTargetsDialog()
