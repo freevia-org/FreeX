@@ -1330,6 +1330,23 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard("freex-format-cells-dialog", guard, "before-input");
             }
 
+            if (!TryGetCellBounds(handle, "Cell_A1", out var a1Bounds))
+            {
+                return CaptureResult.Blocked("freex-format-cells-dialog", "uia-cell-bounds-unavailable", "Could not resolve A1 bounds for the Format Cells comparison fixture.", options.OutputRoot, "freex", guard);
+            }
+
+            const string seed = "score\r\n1\r\n2\r\n3";
+            var seedBlocked = PasteCellText(handle, process.Id, a1Bounds, seed);
+            if (seedBlocked is not null)
+            {
+                return seedBlocked;
+            }
+
+            if (!WaitForCellValue(handle, "Cell_A1", "score", TimeSpan.FromSeconds(3), out var observedSeedValue))
+            {
+                return CaptureResult.Blocked("freex-format-cells-dialog", "cell-seed-validation-failed", $"Expected A1 to contain the shared Format Cells fixture value 'score'; observed '{observedSeedValue}'.", options.OutputRoot, "freex", guard);
+            }
+
             SendCtrl1();
             Thread.Sleep(options.AfterInputDelay);
 
@@ -1346,7 +1363,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
-            return CaptureWindow("freex-format-cells-dialog", "freex", dialog, guard, "complete");
+            return CaptureWindow("freex-format-cells-dialog", "freex", dialog, guard, "complete", "Seeded A1:A4 with the shared score/1/2/3 fixture and validated A1 before opening Format Cells.");
         }
         finally
         {
@@ -5105,6 +5122,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return root.FindAll(TreeScope.Descendants, Condition.TrueCondition)
             .Cast<AutomationElement>()
             .Where(IsVisibleElement)
+            .Where(element => Equals(element.Current.ControlType, ControlType.TabItem))
             .Where(element => IsDefaultSheetName(GetSheetTabIdentity(element)))
             .ToList();
     }
@@ -7157,7 +7175,7 @@ internal static class WindowFinder
             var foreground = GetWindowInfo(NativeMethods.GetForegroundWindow());
             if (foreground is not null &&
                 foreground.ProcessId == processId &&
-                foreground.Handle != ownerHandle &&
+                IsDistinctTopLevelWindow(foreground, ownerHandle) &&
                 !foreground.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
                 foreground.Bounds.Width >= minimumWidth &&
                 foreground.Bounds.Height >= minimumHeight)
@@ -7167,7 +7185,7 @@ internal static class WindowFinder
 
             var popup = EnumerateVisibleWindows()
                 .Where(candidate => candidate.ProcessId == processId)
-                .Where(candidate => candidate.Handle != ownerHandle)
+                .Where(candidate => IsDistinctTopLevelWindow(candidate, ownerHandle))
                 .Where(candidate => !candidate.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase))
                 .Where(candidate => candidate.Bounds.Width >= minimumWidth && candidate.Bounds.Height >= minimumHeight)
                 .OrderByDescending(candidate => candidate.Bounds.Width * candidate.Bounds.Height)
@@ -7192,7 +7210,7 @@ internal static class WindowFinder
             var foreground = GetWindowInfo(NativeMethods.GetForegroundWindow());
             if (foreground is not null &&
                 foreground.ProcessId == processId &&
-                foreground.Handle != ownerHandle &&
+                IsDistinctTopLevelWindow(foreground, ownerHandle) &&
                 !foreground.ClassName.Equals("XLMAIN", StringComparison.OrdinalIgnoreCase) &&
                 foreground.Bounds.Width >= minimumWidth &&
                 foreground.Bounds.Height >= minimumHeight)
@@ -7205,6 +7223,10 @@ internal static class WindowFinder
 
         return null;
     }
+
+    private static bool IsDistinctTopLevelWindow(WindowInfo candidate, long ownerHandle) =>
+        candidate.Handle != ownerHandle &&
+        NativeMethods.GetAncestor(new IntPtr(candidate.Handle), NativeMethods.GA_ROOT).ToInt64() != ownerHandle;
 
     public static WindowInfo? FindForegroundWindow(Func<WindowInfo, bool> predicate, TimeSpan timeout)
     {
@@ -7318,6 +7340,7 @@ internal enum MouseButtonKind
 
 internal static class NativeMethods
 {
+    public const uint GA_ROOT = 2;
     public const int SW_RESTORE = 9;
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
@@ -7366,6 +7389,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetAncestor(IntPtr hWnd, uint gaFlags);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

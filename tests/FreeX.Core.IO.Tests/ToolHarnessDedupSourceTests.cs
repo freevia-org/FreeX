@@ -130,6 +130,27 @@ public sealed class ToolHarnessDedupSourceTests
     }
 
     [Fact]
+    public void ForegroundCapture_PopupDiscoveryRejectsFocusedOwnerChildren()
+    {
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundCapture.Should().Contain("IsDistinctTopLevelWindow(foreground, ownerHandle)");
+        foregroundCapture.Should().Contain("NativeMethods.GetAncestor(new IntPtr(candidate.Handle), NativeMethods.GA_ROOT)");
+        foregroundCapture.Should().Contain("public const uint GA_ROOT = 2;");
+        foregroundCapture.Should().Contain(".Where(element => Equals(element.Current.ControlType, ControlType.TabItem))");
+    }
+
+    [Fact]
+    public void ForegroundCapture_FormatCellsUsesTheSharedSeedFixture()
+    {
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundCapture.Should().Contain("const string seed = \"score\\r\\n1\\r\\n2\\r\\n3\";");
+        foregroundCapture.Should().Contain("PasteCellText(handle, process.Id, a1Bounds, seed)");
+        foregroundCapture.Should().Contain("WaitForCellValue(handle, \"Cell_A1\", \"score\", TimeSpan.FromSeconds(3), out var observedSeedValue)");
+    }
+
+    [Fact]
     public void ToolScripts_UseCanonicalSharedSupportEntryPoints()
     {
         var support = TestWorkspaceFiles.ReadRepoText("tools", "ToolScriptSupport.ps1");
