@@ -477,8 +477,14 @@ public sealed class XlsxCoreIoLeafCodecTests
         foreach (var file in new[] { "XlsxDifferentialStyleReader.cs", "XlsxStructuredTableStyleMetadataReader.cs" })
             TestWorkspaceFiles.ReadCoreIoSource(file).Should().Contain("XlsxFillPatternCodec.FromToken");
 
+        var definedNamePolicy = TestWorkspaceFiles.ReadCoreIoSource("XlsxDefinedNamePreservationPolicy.cs");
+        definedNamePolicy.Should().Contain("XlsxPrintSettingNameClassifier.TryClassify");
         foreach (var file in new[] { "XlsxFileAdapter.SourcePackageSnapshot.cs", "XlsxWorkbookMetadataPreserver.cs" })
-            TestWorkspaceFiles.ReadCoreIoSource(file).Should().Contain("XlsxPrintSettingNameClassifier.TryClassify");
+        {
+            var source = TestWorkspaceFiles.ReadCoreIoSource(file);
+            source.Should().Contain("new XlsxDefinedNamePreservationPolicy(");
+            source.Should().NotContain("XlsxPrintSettingNameClassifier.TryClassify");
+        }
 
         foreach (var file in new[] { "XlsxSourceDrawingGeometryRewriter.cs", "XlsxWorksheetDrawingZOrderRewriter.cs" })
         {

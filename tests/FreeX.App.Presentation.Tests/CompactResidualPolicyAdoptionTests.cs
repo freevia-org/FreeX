@@ -67,13 +67,5 @@ public sealed class CompactResidualPolicyAdoptionTests
     }
 
     private static string ReadSource(params string[] relativeParts) =>
-        File.ReadAllText(Path.Combine([RepositoryRoot(), .. relativeParts]));
-
-    private static string RepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-        return directory?.FullName ?? throw new DirectoryNotFoundException("FreeX repository root not found.");
-    }
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }
