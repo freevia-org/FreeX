@@ -2,7 +2,8 @@ param(
     [string]$ProvenancePath = "docs\parity\freew-dialog-harness\freew_font_visual_provenance.json",
     [string]$ComparisonPath = "docs\parity\freew-dialog-harness\freew_dialog_visual_comparison.json",
     [string]$InventoryPath = "docs\parity\freew-dialog-harness\freew_dialog_evidence_inventory.json",
-    [string]$FreshnessPath = "docs\parity\freew-dialog-harness\freew_dialog_visual_freshness.json"
+    [string]$FreshnessPath = "docs\parity\freew-dialog-harness\freew_dialog_visual_freshness.json",
+    [switch]$StrictImprovementContractProbe
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +17,36 @@ function Assert-Condition([bool]$condition, [string]$message) {
     if (-not $condition) {
         throw "FreeW Font visual provenance failed: $message"
     }
+}
+
+function Assert-ChangedPixelRequirement(
+    [string]$schema,
+    [int]$wave,
+    [int]$actual,
+    [int]$baseline,
+    [string]$scenarioId
+) {
+    if ($schema -eq "freew.font-visual-provenance.v1" -and $wave -ge 193) {
+        Assert-Condition ($actual -lt $baseline) "changed pixels did not strictly improve for $scenarioId."
+        return
+    }
+
+    Assert-Condition ($actual -le $baseline) "changed pixels regressed for $scenarioId."
+}
+
+if ($StrictImprovementContractProbe) {
+    $wave193EqualityRejected = $false
+    try {
+        Assert-ChangedPixelRequirement "freew.font-visual-provenance.v1" 193 100 100 "font.probe"
+    }
+    catch {
+        $wave193EqualityRejected = $_.Exception.Message -match 'did not strictly improve'
+    }
+
+    Assert-Condition $wave193EqualityRejected "Wave193 equality was not rejected by the strict-improvement contract."
+    Assert-ChangedPixelRequirement "freew.font-visual-provenance.v1" 192 100 100 "font.legacy-probe"
+    Write-Host "FreeW Font strict-improvement contract probe passed: Wave193 equality rejected; Wave192 equality retained."
+    return
 }
 
 function Get-FileSha256([string]$path) {
@@ -173,7 +204,7 @@ foreach ($expectedState in $expectedStates) {
     }
     $baselineChangedPixels = $provenance.wave192Baseline.changedPixelsByState.$expectedState
     Assert-Equal $baselineRowsByScenario[$bundleRow.scenarioId].metrics.changedPixels $baselineChangedPixels "Wave192 changed pixels for $($bundleRow.scenarioId)"
-    Assert-Condition ($actualRow.metrics.changedPixels -le $baselineChangedPixels) "changed pixels regressed for $($bundleRow.scenarioId)."
+    Assert-ChangedPixelRequirement $provenance.schema $provenance.wave $actualRow.metrics.changedPixels $baselineChangedPixels $bundleRow.scenarioId
     $aggregateChangedPixels += $actualRow.metrics.changedPixels
 
     foreach ($captureHost in @("wpf", "avalonia")) {
