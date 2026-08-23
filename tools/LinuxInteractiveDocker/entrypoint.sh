@@ -178,6 +178,10 @@ JSON
 fi
 
 window_id=""
+expected_document_name=""
+if [[ -n "$app_document" ]]; then
+    expected_document_name="${app_document##*/}"
+fi
 for _ in $(seq 1 60); do
     if ! kill -0 "$app_pid" 2>/dev/null; then
         break
@@ -185,7 +189,10 @@ for _ in $(seq 1 60); do
 
     window_id="$(xdotool search --onlyvisible --name "$app_window_title" 2>/dev/null | tail -1 || true)"
     if [[ -n "$window_id" ]]; then
-        break
+        window_name="$(xdotool getwindowname "$window_id" 2>/dev/null || true)"
+        if [[ -z "$expected_document_name" || "$window_name" == *"$expected_document_name"* ]]; then
+            break
+        fi
     fi
     sleep 1
 done
@@ -194,7 +201,7 @@ if [[ -z "$window_id" ]]; then
     cat > /work/failure.json <<JSON
 {
   "status": "failed",
-  "reason": "No visible $app_window_title window appeared within 60 seconds.",
+  "reason": "No visible $app_window_title window opened the expected document '$expected_document_name' within 60 seconds.",
   "appExecutable": "$app_executable"
 }
 JSON

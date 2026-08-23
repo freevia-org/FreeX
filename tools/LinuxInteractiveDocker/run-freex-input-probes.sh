@@ -15,6 +15,7 @@ clipboard_sentinel_pid=""
 image_tool_timeout_seconds="${FREEX_X11_IMAGE_TOOL_TIMEOUT_SECONDS:-5}"
 selection_color="${FREEX_X11_SELECTION_COLOR:-#217346}"
 document_path="${FREEX_X11_DOCUMENT_PATH:-/documents/linux-interactive-demo.csv}"
+expected_document_name="${document_path##*/}"
 probe_selector="${FREEX_X11_PROBE_SELECTOR:-all}"
 
 mkdir -p "$output"
@@ -148,6 +149,28 @@ focus_app() {
     fi
     xdotool windowfocus "$window_id" 2>/dev/null || true
     sleep 0.12
+}
+
+wait_for_expected_document() {
+    local title=""
+    if [[ -z "$expected_document_name" ]]; then
+        return 0
+    fi
+    for _ in $(seq 1 80); do
+        title="$(xdotool getwindowname "$window_id" 2>/dev/null || true)"
+        if [[ "$title" == *"$expected_document_name"* ]]; then
+            write_artifact "fixture-open-readiness.txt" \
+                "expected-document=$expected_document_name\nobserved-window-title=$title\nstatus=passed"
+            capture "fixture-open-readiness.png"
+            return 0
+        fi
+        sleep 0.25
+    done
+    calibration_reason="The visible FreeX window did not open expected document '$expected_document_name' before calibration (last-title='$title')."
+    write_artifact "fixture-open-readiness.txt" \
+        "expected-document=$expected_document_name\nobserved-window-title=$title\nstatus=failed\nreason=$calibration_reason"
+    capture "fixture-open-readiness.png"
+    return 1
 }
 
 xdotool_mousemove_sync() {
@@ -2283,6 +2306,227 @@ PY
     else
         record "autofilter-text-criteria-equals-save-reopen-physical" "failed" "$available_artifacts" \
             "Equals did not prove the rendered criteria commit, visible East value, clean save, package East customFilter, and exact reopen state." "$available_artifacts"
+    fi
+}
+
+probe_autofilter_numeric_criteria_persistence_physical() {
+    local artifacts="autofilter-numeric-before.png;autofilter-numeric-greater-menu-open.png;autofilter-numeric-greater-applied.png;autofilter-numeric-greater-reopened.png;autofilter-numeric-equals-before.png;autofilter-numeric-equals-menu-open.png;autofilter-numeric-equals-applied.png;autofilter-numeric-equals-reopened.png;autofilter-numeric-postcondition.txt"
+    local greater_menu_open=false equals_menu_open=false greater_save_clean=false greater_dialog_open=false greater_dialog_closed=false
+    local equals_save_clean=false equals_dialog_open=false equals_dialog_closed=false
+    local greater_criteria="" equals_criteria="" greater_visible="" greater_reopened="" equals_visible="" equals_reopened=""
+    local greater_package="" equals_package="" greater_glyph_x=0 greater_glyph_y=0 equals_glyph_x=0 equals_glyph_y=0
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "autofilter-numeric-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path\n"
+        record "autofilter-numeric-criteria-greater-than-save-reopen-physical" "failed" "autofilter-numeric-postcondition.txt" "The physical AutoFilter numeric lane requires an XLSX document path." "$artifacts"
+        record "autofilter-numeric-criteria-equals-save-reopen-physical" "failed" "autofilter-numeric-postcondition.txt" "The physical AutoFilter numeric lane requires an XLSX document path." "$artifacts"
+        return
+    fi
+
+    read_visible_numeric_values() {
+        local address value output_values="" first=true
+        for address in "$@"; do
+            # After filtering, physical row coordinates are not logical row addresses. Read the
+            # expected visible cells through the production Go To/formula-bar clipboard route;
+            # the screenshots prove the rows are visible while this readback avoids collapsed-row
+            # hit geometry and stale clipboard ownership.
+            value="$(copy_cell_formula_by_address "$address" || true)"
+            if [[ "$value" =~ ^[0-9]+([.]0+)?$ ]]; then
+                if $first; then first=false; else output_values+=","; fi
+                output_values+="$value"
+            fi
+        done
+        printf '%s,' "$output_values"
+    }
+
+    package_numeric_signature() {
+        local expected_operator="$1" expected_value="$2"
+        python3 - "$document_path" "$expected_operator" "$expected_value" <<'PY'
+import sys, zipfile, xml.etree.ElementTree as ET
+path, expected_operator, expected_value = sys.argv[1:]
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+with zipfile.ZipFile(path) as package:
+    root = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+auto_filter = root.find(main + "autoFilter")
+if auto_filter is None or auto_filter.attrib.get("ref") != "A1:B5":
+    raise SystemExit(1)
+column = auto_filter.find(main + "filterColumn")
+if column is None or column.attrib.get("colId") != "1":
+    raise SystemExit(1)
+custom = column.find(main + "customFilters")
+if custom is None:
+    raise SystemExit(1)
+filters = custom.findall(main + "customFilter")
+if len(filters) != 1 or filters[0].attrib.get("val") != expected_value:
+    raise SystemExit(1)
+operator = filters[0].attrib.get("operator", "")
+if operator != expected_operator:
+    raise SystemExit(1)
+print(f"ref=A1:B5|colId=1|operator={operator}|value={filters[0].attrib.get('val','')}")
+PY
+    }
+
+    save_numeric_criteria_document() {
+        select_cell 1 0 B1 || return 1
+        send_key ctrl+s
+        if wait_for_document_clean; then return 0; fi
+        send_key shift+F12
+        wait_for_document_clean
+    }
+
+    click_numeric_glyph() {
+        local column_offset=1
+        # The rendered B1 button is right-aligned inside B1. The old Wave187 point
+        # (A1 + cellWidth - 10) landed on B1's left boundary; keep the click nine
+        # pixels inside B1's right edge so the event belongs to AutoFilterButton_1_2.
+        local glyph_x=$((a1_x + (column_offset + 1) * cell_width - 9))
+        local glyph_y=$((a1_y + cell_height / 2))
+        xdotool_mousemove_sync "$glyph_x" "$glyph_y" click 1
+        sleep "$settle_seconds"
+        printf '%s,%s' "$glyph_x" "$glyph_y"
+    }
+
+    apply_numeric_criteria() {
+        local option_index="$1" value="$2"
+        local operator_x=$((cell_width + 130)) operator_y=165 value_x=$((cell_width + 130)) value_y=195 ok_x=$((cell_width + 292)) ok_y=420
+        click_autofilter_control "$operator_x" "$operator_y"
+        send_flyout_key Home
+        for _ in $(seq 1 "$option_index"); do send_flyout_key Down; done
+        send_flyout_key Return
+        click_autofilter_control "$value_x" "$value_y"
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$value"
+        sleep "$settle_seconds"
+        click_autofilter_control "$ok_x" "$ok_y"
+    }
+
+    capture "autofilter-numeric-before.png"
+
+    local greater_glyph_coordinate
+    greater_glyph_coordinate="$(click_numeric_glyph)"
+    greater_glyph_x="${greater_glyph_coordinate%,*}"
+    greater_glyph_y="${greater_glyph_coordinate#*,}"
+    capture "autofilter-numeric-greater-menu-open.png"
+    if screen_changed "$output/autofilter-numeric-before.png" "$output/autofilter-numeric-greater-menu-open.png" 500; then
+        greater_menu_open=true
+        apply_numeric_criteria 2 "50"
+        greater_criteria="greaterThan:50"
+        greater_visible="$(read_visible_numeric_values B4 B5)"
+        capture "autofilter-numeric-greater-applied.png"
+    fi
+
+    if $greater_menu_open && [[ "$greater_visible" == "75,100," ]]; then
+        save_numeric_criteria_document && greater_save_clean=true
+        greater_package="$(package_numeric_signature greaterThan 50 || true)"
+    fi
+
+    if $greater_save_clean && [[ "$greater_package" == *"ref=A1:B5|colId=1|operator=greaterThan|value=50"* ]]; then
+        local before_windows after_windows
+        select_cell 1 0 B1 || true
+        focus_app
+        before_windows="$(visible_window_count)"
+        send_key ctrl+F12
+        for _ in $(seq 1 12); do
+            after_windows="$(visible_window_count)"
+            if (( after_windows > before_windows )); then greater_dialog_open=true; break; fi
+            sleep 0.2
+        done
+        if $greater_dialog_open; then
+            xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+            xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+            xdotool key --clearmodifiers Return
+            sleep "$settle_seconds"
+            xdotool key --clearmodifiers Return
+            for _ in $(seq 1 16); do
+                after_windows="$(visible_window_count)"
+                if (( after_windows <= before_windows )); then greater_dialog_closed=true; break; fi
+                sleep 0.25
+            done
+        fi
+        if $greater_dialog_closed; then
+            capture "autofilter-numeric-greater-reopened.png"
+            greater_reopened="$(read_visible_numeric_values B4 B5)"
+        fi
+    fi
+
+    if [[ "$greater_reopened" == "75,100," ]]; then
+        select_cell 1 0 B1 || true
+        capture "autofilter-numeric-equals-before.png"
+        local equals_glyph_coordinate
+        equals_glyph_coordinate="$(click_numeric_glyph)"
+        equals_glyph_x="${equals_glyph_coordinate%,*}"
+        equals_glyph_y="${equals_glyph_coordinate#*,}"
+        capture "autofilter-numeric-equals-menu-open.png"
+        if screen_changed "$output/autofilter-numeric-equals-before.png" "$output/autofilter-numeric-equals-menu-open.png" 500; then
+            equals_menu_open=true
+            apply_numeric_criteria 0 "50"
+            equals_criteria="equals:50"
+            equals_visible="$(read_visible_numeric_values B3)"
+            capture "autofilter-numeric-equals-applied.png"
+        fi
+    fi
+
+    if $equals_menu_open && [[ "$equals_visible" == "50," ]]; then
+        save_numeric_criteria_document && equals_save_clean=true
+        equals_package="$(package_numeric_signature '' 50 || true)"
+    fi
+
+    if $equals_save_clean && [[ "$equals_package" == *"ref=A1:B5|colId=1|operator=|value=50"* ]]; then
+        local before_windows after_windows
+        select_cell 1 0 B1 || true
+        focus_app
+        before_windows="$(visible_window_count)"
+        send_key ctrl+F12
+        for _ in $(seq 1 12); do
+            after_windows="$(visible_window_count)"
+            if (( after_windows > before_windows )); then equals_dialog_open=true; break; fi
+            sleep 0.2
+        done
+        if $equals_dialog_open; then
+            xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+            xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+            xdotool key --clearmodifiers Return
+            sleep "$settle_seconds"
+            xdotool key --clearmodifiers Return
+            for _ in $(seq 1 16); do
+                after_windows="$(visible_window_count)"
+                if (( after_windows <= before_windows )); then equals_dialog_closed=true; break; fi
+                sleep 0.25
+            done
+        fi
+        if $equals_dialog_closed; then
+            capture "autofilter-numeric-equals-reopened.png"
+            equals_reopened="$(read_visible_numeric_values B3)"
+        fi
+    fi
+
+    local available_artifacts="autofilter-numeric-postcondition.txt"
+    for artifact in ${artifacts//;/ }; do
+        if [[ -f "$output/$artifact" && "$artifact" != "autofilter-numeric-postcondition.txt" ]]; then
+            available_artifacts="$available_artifacts;$artifact"
+        fi
+    done
+    write_artifact "autofilter-numeric-postcondition.txt" \
+        "document-path=$document_path\ngreater-glyph-coordinate=$greater_glyph_x,$greater_glyph_y\ngreater-menu-open=$greater_menu_open\ngreater-criteria=$greater_criteria\ngreater-visible=$greater_visible\ngreater-save-clean=$greater_save_clean\ngreater-package=$greater_package\ngreater-dialog-open=$greater_dialog_open\ngreater-dialog-closed=$greater_dialog_closed\ngreater-reopened=$greater_reopened\nequals-menu-open=$equals_menu_open\nequals-criteria=$equals_criteria\nequals-visible=$equals_visible\nequals-save-clean=$equals_save_clean\nequals-package=$equals_package\nequals-dialog-open=$equals_dialog_open\nequals-dialog-closed=$equals_dialog_closed\nequals-reopened=$equals_reopened\n"
+
+    if $greater_menu_open && [[ "$greater_criteria" == "greaterThan:50" && "$greater_visible" == "75,100," &&
+        "$greater_package" == *"ref=A1:B5|colId=1|operator=greaterThan|value=50"* && $greater_save_clean &&
+        $greater_dialog_open && $greater_dialog_closed && "$greater_reopened" == "75,100," ]]; then
+        record "autofilter-numeric-criteria-greater-than-save-reopen-physical" "passed" \
+            "autofilter-numeric-greater-menu-open.png;autofilter-numeric-greater-applied.png;autofilter-numeric-greater-reopened.png;autofilter-numeric-postcondition.txt" \
+            "Number Filters > Greater Than visibly used the B1 glyph, retained 75 and 100, saved customFilter greaterThan=50, and reopened with the same visible values." "$available_artifacts"
+    else
+        record "autofilter-numeric-criteria-greater-than-save-reopen-physical" "failed" "$available_artifacts" \
+            "Greater Than did not prove the rendered B1 glyph/menu route, exact visible values, clean save, greaterThan=50 package state, and identical reopen state." "$available_artifacts"
+    fi
+    if $equals_menu_open && [[ "$equals_criteria" == "equals:50" && "$equals_visible" == "50," &&
+        "$equals_package" == *"ref=A1:B5|colId=1|operator=|value=50"* && $equals_save_clean &&
+        $equals_dialog_open && $equals_dialog_closed && "$equals_reopened" == "50," ]]; then
+        record "autofilter-numeric-criteria-equals-save-reopen-physical" "passed" \
+            "autofilter-numeric-equals-menu-open.png;autofilter-numeric-equals-applied.png;autofilter-numeric-equals-reopened.png;autofilter-numeric-postcondition.txt" \
+            "Number Filters > Equals visibly used the B1 glyph, retained 50, saved customFilter value 50, and reopened with the same visible value." "$available_artifacts"
+    else
+        record "autofilter-numeric-criteria-equals-save-reopen-physical" "failed" "$available_artifacts" \
+            "Equals did not prove the rendered B1 glyph/menu route, exact visible value, clean save, equals package state, and identical reopen state." "$available_artifacts"
     fi
 }
 
@@ -5063,6 +5307,12 @@ probe_backstage_print_shortcut() {
     fi
 }
 
+if ! wait_for_expected_document; then
+    record "x11-fixture-open-readiness" "failed" "fixture-open-readiness.txt; fixture-open-readiness.png" "$calibration_reason" "fixture-open-readiness.txt;fixture-open-readiness.png"
+    write_manifest
+    exit 2
+fi
+
 if ! calibrate_geometry; then
     record "x11-geometry-calibration" "failed" "calibration-a1.png; calibration-b1.png; calibration-a2.png" "$calibration_reason"
     write_manifest
@@ -5405,6 +5655,19 @@ if [[ "$probe_selector" == "autofilter-text-criteria-persistence" ]]; then
     probe_autofilter_text_criteria_persistence_physical
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the text criteria probe."
+    fi
+    write_manifest
+    probe_failed=false
+    for result in "${results[@]}"; do
+        [[ "$result" == *'"status":"failed"'* ]] && probe_failed=true
+    done
+    if $probe_failed; then exit 3; fi
+    exit 0
+fi
+if [[ "$probe_selector" == "autofilter-numeric-criteria-persistence" ]]; then
+    probe_autofilter_numeric_criteria_persistence_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the numeric criteria probe."
     fi
     write_manifest
     probe_failed=false

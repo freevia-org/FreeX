@@ -106,6 +106,17 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(button, $"AutoFilterButton_{address.Row}_{address.Col}");
         AutomationProperties.SetName(button, UiText.CreateAutomationName(UiText.Get("PivotFieldFilter_Filter")));
         button.Click += (_, _) => OpenAutoFilterFlyout(button, address);
+        // The rendered glyph is the inner Border, and Linux/X11 pointer delivery can terminate at
+        // that visual hit target without synthesizing Button.Click. Keep the direct pointer route
+        // on the glyph while retaining Button.Click for keyboard and accessibility activation.
+        buttonBorder.PointerPressed += (_, e) =>
+        {
+            if (e.Handled)
+                return;
+
+            e.Handled = true;
+            OpenAutoFilterFlyout(button, address);
+        };
 
         var grid = new AvaloniaGrid { ClipToBounds = true };
         if (content is Control existing)
