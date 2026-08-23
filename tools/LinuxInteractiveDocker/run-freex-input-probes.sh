@@ -6377,6 +6377,14 @@ probe_autofilter_mixed_type_persistence_physical() {
     local initial_total="" applied_total="" reopened_total=""
     local visible="" reopened_visible="" semantic="" reopened_semantic="" package=""
     local expected_visible="42,'42,"
+    local mixed_type_target_left_offset=68 mixed_type_target_top_offset=353
+    local mixed_type_target_width=260 mixed_type_target_height=18
+    local mixed_type_target_click_x_offset=74 mixed_type_target_click_y_offset=362
+    local mixed_type_target_left=$((a1_x + mixed_type_target_left_offset))
+    local mixed_type_target_top=$((a1_y + mixed_type_target_top_offset))
+    local mixed_type_target_click_x=$((a1_x + mixed_type_target_click_x_offset))
+    local mixed_type_target_click_y=$((a1_y + mixed_type_target_click_y_offset))
+    local mixed_type_target_geometry="${mixed_type_target_width}x${mixed_type_target_height}+${mixed_type_target_left}+${mixed_type_target_top}"
 
     if [[ "${document_path,,}" != *.xlsx ]]; then
         write_artifact "${prefix}-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path"
@@ -6428,9 +6436,6 @@ PY
 
     verify_mixed_type_popup_gate() {
         local before="$1" opened="$2" cleared="$3" selected="$4" dismissed="$5"
-        local left=$((a1_x + 68)) top=$((a1_y + 353)) width=260 height=18
-        local click_x=$((a1_x + 74)) click_y=$((a1_y + 362))
-        local geometry="${width}x${height}+${left}+${top}"
         local before_crop="$output/${prefix}-target-before.png"
         local open_crop="$output/${prefix}-target-menu-open.png"
         local cleared_crop="$output/${prefix}-target-cleared.png"
@@ -6440,11 +6445,11 @@ PY
         local before_hash open_hash clear_hash selected_hash dismissed_hash gate=failed
         local open_threshold=1000 clear_threshold=20 select_threshold=20 dismiss_threshold=1000 restore_maximum=100
 
-        convert "$before" -crop "$geometry" +repage "$before_crop"
-        convert "$opened" -crop "$geometry" +repage "$open_crop"
-        convert "$cleared" -crop "$geometry" +repage "$cleared_crop"
-        convert "$selected" -crop "$geometry" +repage "$selected_crop"
-        convert "$dismissed" -crop "$geometry" +repage "$dismissed_crop"
+        convert "$before" -crop "$mixed_type_target_geometry" +repage "$before_crop"
+        convert "$opened" -crop "$mixed_type_target_geometry" +repage "$open_crop"
+        convert "$cleared" -crop "$mixed_type_target_geometry" +repage "$cleared_crop"
+        convert "$selected" -crop "$mixed_type_target_geometry" +repage "$selected_crop"
+        convert "$dismissed" -crop "$mixed_type_target_geometry" +repage "$dismissed_crop"
         open_delta="$(compare -metric AE "$before_crop" "$open_crop" null: 2>&1 || true)"
         clear_delta="$(compare -metric AE "$open_crop" "$cleared_crop" null: 2>&1 || true)"
         select_delta="$(compare -metric AE "$cleared_crop" "$selected_crop" null: 2>&1 || true)"
@@ -6461,7 +6466,10 @@ PY
         if [[ "$select_delta" =~ ^[0-9]+$ ]] && (( select_delta >= select_threshold )); then target_selected=true; fi
         if [[ "$dismiss_delta" =~ ^[0-9]+$ ]] && (( dismiss_delta >= dismiss_threshold )) &&
            [[ "$restore_delta" =~ ^[0-9]+$ ]] && (( restore_delta <= restore_maximum )); then popup_dismissed=true; fi
-        if (( click_x >= left && click_x < left + width && click_y >= top && click_y < top + height )) &&
+        if (( mixed_type_target_click_x >= mixed_type_target_left &&
+              mixed_type_target_click_x < mixed_type_target_left + mixed_type_target_width &&
+              mixed_type_target_click_y >= mixed_type_target_top &&
+              mixed_type_target_click_y < mixed_type_target_top + mixed_type_target_height )) &&
            $menu_open && $target_cleared && $target_selected && $popup_dismissed &&
            [[ "$before_hash" != "$open_hash" && "$open_hash" != "$clear_hash" &&
               "$clear_hash" != "$selected_hash" && "$selected_hash" != "$dismissed_hash" ]]; then
@@ -6469,22 +6477,20 @@ PY
         fi
 
         write_artifact "${prefix}-popup-gate.txt" \
-            "schema-version=1\nbefore=${prefix}-before.png\nopened=${prefix}-menu-open.png\ncleared=${prefix}-menu-cleared.png\nselected=${prefix}-target-checked.png\ndismissed=${prefix}-applied.png\ntarget-bounds=${left},${top},${width},${height}\ntarget-click=${click_x},${click_y}\nopen-delta=${open_delta}\nopen-threshold=${open_threshold}\nclear-delta=${clear_delta}\nclear-threshold=${clear_threshold}\nselect-delta=${select_delta}\nselect-threshold=${select_threshold}\ndismiss-delta=${dismiss_delta}\ndismiss-threshold=${dismiss_threshold}\nrestore-delta=${restore_delta}\nrestore-maximum=${restore_maximum}\nbefore-sha256=${before_hash}\nopen-sha256=${open_hash}\nclear-sha256=${clear_hash}\nselected-sha256=${selected_hash}\ndismissed-sha256=${dismissed_hash}\nmenu-open=${menu_open}\ntarget-cleared=${target_cleared}\ntarget-selected=${target_selected}\npopup-dismissed=${popup_dismissed}\ngate=${gate}"
+            "schema-version=1\nbefore=${prefix}-before.png\nopened=${prefix}-menu-open.png\ncleared=${prefix}-menu-cleared.png\nselected=${prefix}-target-checked.png\ndismissed=${prefix}-applied.png\ntarget-bounds=${mixed_type_target_left},${mixed_type_target_top},${mixed_type_target_width},${mixed_type_target_height}\ntarget-click=${mixed_type_target_click_x},${mixed_type_target_click_y}\nopen-delta=${open_delta}\nopen-threshold=${open_threshold}\nclear-delta=${clear_delta}\nclear-threshold=${clear_threshold}\nselect-delta=${select_delta}\nselect-threshold=${select_threshold}\ndismiss-delta=${dismiss_delta}\ndismiss-threshold=${dismiss_threshold}\nrestore-delta=${restore_delta}\nrestore-maximum=${restore_maximum}\nbefore-sha256=${before_hash}\nopen-sha256=${open_hash}\nclear-sha256=${clear_hash}\nselected-sha256=${selected_hash}\ndismissed-sha256=${dismissed_hash}\nmenu-open=${menu_open}\ntarget-cleared=${target_cleared}\ntarget-selected=${target_selected}\npopup-dismissed=${popup_dismissed}\ngate=${gate}"
         [[ "$gate" == "passed" ]]
     }
 
     wait_for_mixed_type_popup_target() {
         local before="$1" destination="$2"
-        local left=$((a1_x + 68)) top=$((a1_y + 353)) width=260 height=18
-        local geometry="${width}x${height}+${left}+${top}"
         local before_crop="$output/${prefix}-popup-wait-before.png"
         local candidate_crop="$output/${prefix}-popup-wait-candidate.png"
         local delta=""
 
-        convert "$before" -crop "$geometry" +repage "$before_crop"
+        convert "$before" -crop "$mixed_type_target_geometry" +repage "$before_crop"
         for _ in $(seq 1 10); do
             capture "$(basename "$destination")"
-            convert "$destination" -crop "$geometry" +repage "$candidate_crop"
+            convert "$destination" -crop "$mixed_type_target_geometry" +repage "$candidate_crop"
             delta="$(compare -metric AE "$before_crop" "$candidate_crop" null: 2>&1 || true)"
             if [[ "$delta" =~ ^[0-9]+$ ]] && (( delta >= 1000 )); then
                 return 0
@@ -6496,13 +6502,11 @@ PY
 
     mixed_type_target_region_changed() {
         local first="$1" second="$2" minimum="$3"
-        local left=$((a1_x + 68)) top=$((a1_y + 353)) width=260 height=18
-        local geometry="${width}x${height}+${left}+${top}"
         local first_crop="$output/${prefix}-target-change-first.png"
         local second_crop="$output/${prefix}-target-change-second.png"
         local delta=""
-        convert "$first" -crop "$geometry" +repage "$first_crop"
-        convert "$second" -crop "$geometry" +repage "$second_crop"
+        convert "$first" -crop "$mixed_type_target_geometry" +repage "$first_crop"
+        convert "$second" -crop "$mixed_type_target_geometry" +repage "$second_crop"
         delta="$(compare -metric AE "$first_crop" "$second_crop" null: 2>&1 || true)"
         [[ "$delta" =~ ^[0-9]+$ ]] && (( delta >= minimum ))
     }
@@ -6591,7 +6595,7 @@ PY
             click_autofilter_control 74 319
             capture "${prefix}-menu-cleared.png"
         fi
-        click_autofilter_control 74 362
+        click_autofilter_control "$mixed_type_target_click_x_offset" "$mixed_type_target_click_y_offset"
         capture "${prefix}-target-checked.png"
         click_autofilter_control 292 433
         sleep "$settle_seconds"

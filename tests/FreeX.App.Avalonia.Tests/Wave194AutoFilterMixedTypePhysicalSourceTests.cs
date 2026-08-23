@@ -31,8 +31,9 @@ public sealed class Wave194AutoFilterMixedTypePhysicalSourceTests
         runner.Should().Contain("autofilter-mixed-type-value-save-reopen-physical");
         runner.Should().Contain("Assert-AutoFilterMixedTypePostcondition");
         probe.Should().Contain("probe_autofilter_mixed_type_persistence_physical");
+        Wave194AutoFilterMixedTypeGeometryAssertions.AssertBoundGeometry(probe);
         probe.Should().Contain("click_autofilter_control 74 319");
-        probe.Should().Contain("click_autofilter_control 74 362");
+        probe.Should().Contain("click_autofilter_control \"$mixed_type_target_click_x_offset\" \"$mixed_type_target_click_y_offset\"");
         probe.Should().Contain("click_autofilter_control 292 433");
         probe.Should().Contain("wait_for_mixed_type_popup_target");
         probe.Should().Contain("xdotool_mousemove_sync \"$((a1_x + 55))\" \"$((a1_y + 14))\" click 1");
