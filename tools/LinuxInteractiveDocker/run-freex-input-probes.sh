@@ -2749,7 +2749,7 @@ PY
             "Date Filters > After visibly retained Mar15, saved customFilter greaterThan=45323, and reopened with the same visible row." "$available_artifacts"
     else
         record "autofilter-date-criteria-after-save-reopen-physical" "failed" "$available_artifacts" \
-            "After did not prove the rendered date criteria commit, exact visible row, clean save, greaterThan=45323 package state, and identical reopen state." "$available_artifacts"
+            "After applied/persisted checks: menu-open=$after_menu_open; criteria=$after_criteria; visible=$after_visible; clean-save=$after_save_clean; package=$after_package; reopen-dialog-open=$after_dialog_open; reopen-dialog-closed=$after_dialog_closed; reopened-visible=$after_reopened. Acceptance requires the exact greaterThan=45323 package and a completed reopen." "$available_artifacts"
     fi
 }
 

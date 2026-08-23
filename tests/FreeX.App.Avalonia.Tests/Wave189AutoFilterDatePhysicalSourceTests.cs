@@ -43,5 +43,10 @@ public sealed class Wave189AutoFilterDatePhysicalSourceTests
         probe.Should().Contain("Date Filters > After");
         probe.Should().Contain("before-dialog-closed");
         probe.Should().Contain("after-dialog-closed");
+        probe.Should().Contain("After applied/persisted checks: menu-open=$after_menu_open;");
+        probe.Should().Contain("clean-save=$after_save_clean; package=$after_package;");
+        probe.Should().Contain("reopen-dialog-open=$after_dialog_open;");
+        probe.Should().Contain("reopen-dialog-closed=$after_dialog_closed; reopened-visible=$after_reopened.");
+        probe.Should().NotContain("After did not prove the rendered date criteria commit");
     }
 }
