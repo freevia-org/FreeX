@@ -25,6 +25,23 @@ public sealed class SlideCanvasAptosRasterPolicyTests
     }
 
     [Fact]
+    public void ImportedIncreasingCircleOriginOffset_RequiresFlaggedAptosOnlyText()
+    {
+        var aptos = CreateLayout(1);
+        var calibri = CreateLayout(1, fontFamily: "Calibri");
+        var mixed = CreateMixedLayout();
+
+        SlideCanvas.ResolveImportedIncreasingCircleAptosOriginOffsetY(true, aptos)
+            .Should().Be(SlideCanvas.ImportedIncreasingCircleAptosOriginOffsetY);
+        SlideCanvas.ResolveImportedIncreasingCircleAptosOriginOffsetY(false, aptos)
+            .Should().Be(0.0);
+        SlideCanvas.ResolveImportedIncreasingCircleAptosOriginOffsetY(true, calibri)
+            .Should().Be(0.0);
+        SlideCanvas.ResolveImportedIncreasingCircleAptosOriginOffsetY(true, mixed)
+            .Should().Be(0.0);
+    }
+
+    [Fact]
     public void UsesFixedSizeAptosBodyFallback_MatchesSemanticRenderingRoute()
     {
         SlideCanvas.UsesFixedSizeAptosBodyFallback(CreateLayout(8)).Should().BeTrue();
@@ -76,5 +93,35 @@ public sealed class SlideCanvasAptosRasterPolicyTests
                     BulletKind = bulletKind
                 })
                 .ToArray()
+        };
+
+    private static ResolvedTextLayout CreateMixedLayout() =>
+        new()
+        {
+            AutoFitKind = TextAutoFitKind.None,
+            ColumnCount = 1,
+            Paragraphs =
+            [
+                new ResolvedParagraph
+                {
+                    Runs =
+                    [
+                        new ResolvedRun
+                        {
+                            Text = "Aptos",
+                            FontFamily = "Aptos",
+                            FontSizePt = 18.0,
+                            Color = SrgbColor.Black
+                        },
+                        new ResolvedRun
+                        {
+                            Text = " mixed",
+                            FontFamily = "Calibri",
+                            FontSizePt = 18.0,
+                            Color = SrgbColor.Black
+                        }
+                    ]
+                }
+            ]
         };
 }

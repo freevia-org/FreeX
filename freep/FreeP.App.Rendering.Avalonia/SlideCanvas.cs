@@ -1522,8 +1522,12 @@ public sealed partial class SlideCanvas : Control
             return;
         }
 
+        bool useImportedIncreasingCircleAptosCalibration =
+            UsesImportedIncreasingCircleAptosCalibration(
+                useImportedIncreasingCircleTextRaster,
+                text);
         double? importedIncreasingCircleFontScale =
-            useImportedIncreasingCircleTextRaster && UsesImportedIncreasingCircleAptosText(text)
+            useImportedIncreasingCircleAptosCalibration
                 ? ImportedIncreasingCircleAptosFontScale
                 : null;
         var plan = TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>(
@@ -1550,10 +1554,22 @@ public sealed partial class SlideCanvas : Control
             plan,
             bounds,
             applyFixedSizeAptosBodyFallback: UsesFixedSizeAptosBodyFallback(text),
-            originOffsetY: useImportedIncreasingCircleTextRaster
-                ? ImportedIncreasingCircleAptosOriginOffsetY
-                : 0.0);
+            originOffsetY: ResolveImportedIncreasingCircleAptosOriginOffsetY(
+                useImportedIncreasingCircleTextRaster,
+                text));
     }
+
+    internal static bool UsesImportedIncreasingCircleAptosCalibration(
+        bool useImportedIncreasingCircleTextRaster,
+        ResolvedTextLayout text) =>
+        useImportedIncreasingCircleTextRaster && UsesImportedIncreasingCircleAptosText(text);
+
+    internal static double ResolveImportedIncreasingCircleAptosOriginOffsetY(
+        bool useImportedIncreasingCircleTextRaster,
+        ResolvedTextLayout text) =>
+        UsesImportedIncreasingCircleAptosCalibration(useImportedIncreasingCircleTextRaster, text)
+            ? ImportedIncreasingCircleAptosOriginOffsetY
+            : 0.0;
 
     internal static bool UsesImportedIncreasingCircleAptosText(ResolvedTextLayout text) =>
         text.Paragraphs.Count > 0
