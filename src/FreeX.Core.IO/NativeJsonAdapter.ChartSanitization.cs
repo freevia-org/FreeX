@@ -163,35 +163,10 @@ public sealed partial class NativeJsonAdapter
         SanitizeChartSurfaceFormat(chart.FloorFormat);
         SanitizeChartSurfaceFormat(chart.SideWallFormat);
         SanitizeChartSurfaceFormat(chart.BackWallFormat);
-        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
-        {
-            chart.ShowLinearTrendline = false;
-            chart.TrendlineName = null;
-            chart.TrendlineType = ChartTrendlineType.Linear;
-            chart.TrendlinePeriod = 2;
-            chart.TrendlineOrder = 2;
-            chart.TrendlineForward = null;
-            chart.TrendlineBackward = null;
-            chart.TrendlineIntercept = null;
-            chart.ShowTrendlineEquation = false;
-            chart.ShowTrendlineRSquared = false;
-            chart.TrendlineLabelNumberFormatCode = null;
-            chart.TrendlineLabelNumberFormatSourceLinked = null;
-            chart.TrendlineLabelLayout = null;
-            chart.TrendlineLabelFillColor = null;
-            chart.TrendlineLabelFillThemeColor = null;
-            chart.TrendlineLabelBorderColor = null;
-            chart.TrendlineLabelBorderThemeColor = null;
-            chart.TrendlineLabelBorderThickness = null;
-            chart.TrendlineLabelTextColor = null;
-            chart.TrendlineLabelTextThemeColor = null;
-            chart.TrendlineLabelFontSize = null;
-            chart.TrendlineLabelAngle = null;
-            chart.TrendlineColor = null;
-            chart.TrendlineThemeColor = null;
-            chart.TrendlineThickness = 1.5;
-            chart.TrendlineDashStyle = ChartLineDashStyle.Dash;
-        }
+        ChartTrendlineSupportPolicy.NormalizeUnsupported(
+            chart,
+            UnsupportedChartTrendlineState.LabelFormatting |
+            UnsupportedChartTrendlineState.ExtendedDefinition);
 
         var dataPointCount = ChartTypeSupport.GetDataPointCount(chart);
         if (chart.ExplodedSliceIndex < 0 || chart.ExplodedSliceIndex >= dataPointCount)

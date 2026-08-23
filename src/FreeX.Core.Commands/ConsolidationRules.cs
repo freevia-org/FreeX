@@ -2,19 +2,19 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
-internal static class ConsolidationRules
+public static class ConsolidationRules
 {
-    public static void AddUnique(List<string> labels, string label)
+    internal static void AddUnique(List<string> labels, string label)
     {
         if (!labels.Contains(label, StringComparer.OrdinalIgnoreCase))
             labels.Add(label);
     }
 
-    public static string RowPositionLabel(uint offset) => $"Row {offset + 1}";
+    internal static string RowPositionLabel(uint offset) => $"Row {offset + 1}";
 
-    public static string ColumnPositionLabel(uint offset) => $"Column {offset + 1}";
+    internal static string ColumnPositionLabel(uint offset) => $"Column {offset + 1}";
 
-    public static string LabelText(ScalarValue value) =>
+    internal static string LabelText(ScalarValue value) =>
         value switch
         {
             TextValue text => text.Value.Trim(),
@@ -25,8 +25,11 @@ internal static class ConsolidationRules
             _ => ""
         };
 
-    public static double Aggregate(IReadOnlyList<double> values, int nonEmptyCount, ConsolidateFunction function) =>
-        function switch
+    public static double Aggregate(IReadOnlyList<double> values, int nonEmptyCount, ConsolidateFunction function)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+
+        return function switch
         {
             ConsolidateFunction.Count => nonEmptyCount,
             ConsolidateFunction.Average => values.Count == 0 ? 0 : values.Average(),
@@ -40,8 +43,9 @@ internal static class ConsolidationRules
             ConsolidateFunction.Varp => Variance(values, sample: false),
             _ => values.Sum()
         };
+    }
 
-    public static string CreateSourceLinkFormula(
+    internal static string CreateSourceLinkFormula(
         Workbook workbook,
         IReadOnlyList<CellAddress> sourceAddresses,
         SheetId destinationSheetId,

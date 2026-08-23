@@ -60,7 +60,7 @@ public static partial class BuiltInFunctions
         if (!PageFieldFiltersMatch(pivotTable, headers, filters))
             return ErrorValue.Ref;
 
-        var materialized = GetPivotMaterializedRange(pivotSheet, pivotTable);
+        var materialized = PivotTableTargetRangeResolver.GetOccupiedRange(pivotSheet, pivotTable);
         var headerRows = (uint)Math.Max(1, pivotTable.ColumnFields.Count);
         var firstDataRow = pivotTable.TargetRange.Start.Row + headerRows;
         var outputRow = ResolveGetPivotDataRow(pivotSheet, pivotTable, headers, filters, firstDataRow, materialized.End.Row);
@@ -574,30 +574,6 @@ public static partial class BuiltInFunctions
         pivotTable.ReportLayout == PivotReportLayout.Compact && pivotTable.RowFields.Count > 1
             ? 1
             : pivotTable.RowFields.Count;
-
-    private static GridRange GetPivotMaterializedRange(Sheet sheet, PivotTableModel pivotTable)
-    {
-        uint? minRow = null;
-        uint? minCol = null;
-        uint? maxRow = null;
-        uint? maxCol = null;
-        for (var row = pivotTable.TargetRange.Start.Row; row <= pivotTable.TargetRange.End.Row; row++)
-        for (var col = pivotTable.TargetRange.Start.Col; col <= pivotTable.TargetRange.End.Col; col++)
-        {
-            if (sheet.GetCell(row, col) is null)
-                continue;
-            minRow = minRow is null ? row : Math.Min(minRow.Value, row);
-            minCol = minCol is null ? col : Math.Min(minCol.Value, col);
-            maxRow = maxRow is null ? row : Math.Max(maxRow.Value, row);
-            maxCol = maxCol is null ? col : Math.Max(maxCol.Value, col);
-        }
-
-        if (minRow is null || minCol is null || maxRow is null || maxCol is null)
-            return new GridRange(pivotTable.TargetRange.Start, pivotTable.TargetRange.Start);
-        return new GridRange(
-            new CellAddress(sheet.Id, minRow.Value, minCol.Value),
-            new CellAddress(sheet.Id, maxRow.Value, maxCol.Value));
-    }
 
     private static bool IsPivotGrandTotalText(PivotTableModel pivotTable, ScalarValue? value) =>
         value is TextValue text && text.Value.StartsWith(PivotGrandTotalCaption(pivotTable), StringComparison.OrdinalIgnoreCase);
