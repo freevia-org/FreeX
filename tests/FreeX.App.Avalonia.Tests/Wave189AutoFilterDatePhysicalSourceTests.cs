@@ -75,6 +75,11 @@ public sealed class Wave189AutoFilterDatePhysicalSourceTests
         probe.Should().Contain("before-dialog-title=$before_dialog_title");
         probe.Should().Contain("after-dialog-title=$after_dialog_title");
         probe.Should().NotContain("if (( after_windows > before_windows )); then before_dialog_open=true");
+        probe.Should().Contain("[[ -n \"$main_pid\" ]] || return 1");
+        probe.Should().Contain("-n \"$main_pid\" && -n \"$active_pid\"");
+        probe.Should().Contain("autofilter-date-after-reopened.png;autofilter-date-after-reopened-grid-read.png;autofilter-date-postcondition.txt");
+        probe.Should().Contain("                    \"$active_id\" \"$active_title\" \"$active_pid\" >> \"$diagnostics_path\"\n                fi\n                sleep 0.2");
+        probe.Should().NotContain("                    \"$active_id\" \"$active_title\" \"$active_pid\" >> \"$diagnostics_path\"\n                    return 1");
         probe.Should().Contain("Date Filters > Before");
         probe.Should().Contain("Date Filters > After");
         probe.Should().Contain("for _ in $(seq 1 3)");

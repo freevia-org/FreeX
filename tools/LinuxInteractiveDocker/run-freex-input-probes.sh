@@ -2680,6 +2680,7 @@ PY
         before_windows="$(visible_window_count)"
         main_pid="$(xdotool getwindowpid "$window_id" 2>/dev/null || true)"
         baseline_ids="$(xdotool search --onlyvisible --name '.*' 2>/dev/null | sort -n | tr '\n' ' ')"
+        [[ -n "$main_pid" ]] || return 1
         : > "$diagnostics_path"
         printf 'expected-dialog-title=Open Workbook\nmain-window-pid=%s\nbaseline-window-ids=%s\n' \
             "$main_pid" "$baseline_ids" >> "$diagnostics_path"
@@ -2696,6 +2697,7 @@ PY
                 write_open_cycle_diagnostics "$diagnostics_path" "after-ctrl-f12-$attempt-$after_windows"
                 if (( after_windows > before_windows )); then
                     if [[ -n "$active_id" && "$active_id" != "$window_id" &&
+                          -n "$main_pid" && -n "$active_pid" &&
                           "$active_title" == "Open Workbook" && "$active_pid" == "$main_pid" &&
                           " $baseline_ids " != *" $active_id "* ]]; then
                         reopen_dialog_open=true
@@ -2706,7 +2708,6 @@ PY
                     fi
                     printf 'rejected-window-id=%s\nrejected-window-title=%s\nrejected-window-pid=%s\n' \
                         "$active_id" "$active_title" "$active_pid" >> "$diagnostics_path"
-                    return 1
                 fi
                 sleep 0.2
             done
@@ -2874,7 +2875,7 @@ PY
         -n "$after_dialog_id" && -n "$after_dialog_pid" && "$after_reopened_visible" == "Mar15" &&
         "$after_reopened_semantic" == "Mar15" ]]; then
         record "autofilter-date-criteria-after-save-reopen-physical" "passed" \
-            "autofilter-date-after-menu-open.png;autofilter-date-after-applied.png;autofilter-date-after-reopened.png;autofilter-date-postcondition.txt" \
+            "autofilter-date-after-menu-open.png;autofilter-date-after-applied.png;autofilter-date-after-reopened.png;autofilter-date-after-reopened-grid-read.png;autofilter-date-postcondition.txt" \
             "Date Filters > After visibly retained Mar15, saved customFilter greaterThan=45323, and reopened with the same visible row." "$available_artifacts"
     else
         record "autofilter-date-criteria-after-save-reopen-physical" "failed" "$available_artifacts" \
