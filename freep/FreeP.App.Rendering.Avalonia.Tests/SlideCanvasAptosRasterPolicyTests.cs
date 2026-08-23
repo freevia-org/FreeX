@@ -7,6 +7,12 @@ namespace FreeP.App.Rendering.Avalonia.Tests;
 public sealed class SlideCanvasAptosRasterPolicyTests
 {
     [Fact]
+    public void FixedSizeAptosBodyFallback_UsesWave185HostCalibration()
+    {
+        SlideCanvas.FixedSizeAptosBodyFontScale.Should().Be(0.930);
+    }
+
+    [Fact]
     public void UsesFixedSizeAptosBodyFallback_MatchesSemanticRenderingRoute()
     {
         SlideCanvas.UsesFixedSizeAptosBodyFallback(CreateLayout(8)).Should().BeTrue();
@@ -22,6 +28,10 @@ public sealed class SlideCanvasAptosRasterPolicyTests
             CreateLayout(8, fontSizePt: 24.0)).Should().BeFalse();
         SlideCanvas.UsesFixedSizeAptosBodyFallback(
             CreateLayout(8, columnCount: 2)).Should().BeFalse();
+        SlideCanvas.UsesFixedSizeAptosBodyFallback(
+            CreateLayout(8, fontFamily: "Aptos Display")).Should().BeFalse();
+        SlideCanvas.UsesFixedSizeAptosBodyFallback(
+            CreateLayout(8, fontSizePt: 18.01)).Should().BeFalse();
         SlideCanvas.UsesFixedSizeAptosBodyFallback(CreateLayout(0)).Should().BeFalse();
     }
 

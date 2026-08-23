@@ -39,7 +39,7 @@ public sealed partial class SlideCanvas : Control
     private const double PowerPointDefaultLineSpacingFactor = 1.18;
     private const double PowerPointFixedTextLineSpacingFactor = 1.20;
     private const double PowerPointAptosBodyCalibrationFontSizePt = 18.0;
-    private const double PowerPointFixedSizeAptosBodyFontScale = 0.945;
+    internal const double FixedSizeAptosBodyFontScale = 0.930;
 
     // ── Styled / direct properties ──────────────────────────────────────────
 
@@ -1506,7 +1506,7 @@ public sealed partial class SlideCanvas : Control
                     request.Text.Wrap,
                     request.Text.AutoFitKind,
                     UsesFixedSizeAptosBodyFallback(request.Text)
-                        ? PowerPointFixedSizeAptosBodyFontScale
+                        ? FixedSizeAptosBodyFontScale
                         : null);
                 return new TextNativeMeasurement<FormattedText>(
                     formattedText,
@@ -1568,9 +1568,9 @@ public sealed partial class SlideCanvas : Control
                 }));
     }
 
-    // Fixed-size Aptos bodies use Arial on this host. Keep their measurement and
-    // grayscale raster policy together while leaving mixed-font and bullet paths
-    // on Avalonia's defaults.
+    // Fixed-size Aptos bodies use Arial on this host. Wave185 keeps their measured
+    // fallback calibration and grayscale raster policy together while leaving
+    // mixed-font and bullet paths on Avalonia's defaults.
     internal static bool UsesFixedSizeAptosBodyFallback(ResolvedTextLayout text) =>
         text.AutoFitKind == TextAutoFitKind.None
         && text.ColumnCount == 1
