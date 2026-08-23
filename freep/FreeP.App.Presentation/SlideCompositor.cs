@@ -1941,6 +1941,19 @@ public static class SlideCompositor
     {
         var data = smart.Data;
 
+        // PowerPoint rematerializes the imported vList6 cache with a longer
+        // arrow shaft and larger rounded-rectangle corners than the generic
+        // DrawingML defaults used by the shared shape builder. Keep the
+        // measured geometry correction on this unsupported cached SmartArt
+        // route so ordinary right arrows and rounded rectangles remain stable.
+        if (data?.LayoutUniqueId.EndsWith("/vList6", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            if (shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+                shape.PresetGeometryAdjustments["adj2"] = 18000;
+            else if (shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+                shape.PresetGeometryAdjustments["adj"] = 18000;
+        }
+
         // PowerPoint's simple1/accent1_2 hierarchy cache uses a distinct
         // connector color from the generic accent1 shade. Keep this correction
         // on the cached-drawing path; the bounded hierarchy3 and grouped-list
