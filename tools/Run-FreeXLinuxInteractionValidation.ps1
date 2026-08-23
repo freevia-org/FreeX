@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "autofilter-text-criteria-persistence", "autofilter-numeric-criteria-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
+    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "autofilter-text-criteria-persistence", "autofilter-numeric-criteria-persistence", "autofilter-date-criteria-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -58,6 +58,7 @@ $nestedOutlineFilterFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractive
 $autoFilterSortFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave185AutoFilterSortFixture.ps1"
 $autoFilterTextFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave186AutoFilterTextFixture.ps1"
 $autoFilterNumericFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave188AutoFilterNumericFixture.ps1"
+$autoFilterDateFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave189AutoFilterDateFixture.ps1"
 $native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
 $gridAutofitSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-grid-autofit-validation.schema.json"
 $nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
@@ -1264,6 +1265,16 @@ try {
             throw "autofilter-numeric-criteria-persistence requires an existing .xlsx PhysicalDocumentPath."
         }
     }
+    if ($PhysicalProbeSelector -eq "autofilter-date-criteria-persistence") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = Join-Path $reportDirectory "fixtures/freex-wave189-autofilter-date.xlsx"
+            & $autoFilterDateFixtureGenerator -OutputPath $PhysicalDocumentPath
+        }
+        if (-not (Test-Path -LiteralPath $PhysicalDocumentPath -PathType Leaf) -or
+            [IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "autofilter-date-criteria-persistence requires an existing .xlsx PhysicalDocumentPath."
+        }
+    }
     if ($PhysicalProbeSelector -in @("pivot-field-list", "pivot-table-details-double-click")) {
         if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
             $PhysicalDocumentPath = $pivotDetailsFixturePath
@@ -1381,6 +1392,8 @@ try {
         @("autofilter-text-criteria-begins-with-save-reopen-physical", "autofilter-text-criteria-equals-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "autofilter-numeric-criteria-persistence") {
         @("autofilter-numeric-criteria-greater-than-save-reopen-physical", "autofilter-numeric-criteria-equals-save-reopen-physical")
+    } elseif ($PhysicalProbeSelector -eq "autofilter-date-criteria-persistence") {
+        @("autofilter-date-criteria-before-save-reopen-physical", "autofilter-date-criteria-after-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "backstage-print") {
         @(
             "backstage-print-ctrl-shift-f12-cancel"
@@ -1526,6 +1539,8 @@ try {
         @("autofilter-text-criteria-begins-with-save-reopen-physical", "autofilter-text-criteria-equals-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "autofilter-numeric-criteria-persistence") {
         @("autofilter-numeric-criteria-greater-than-save-reopen-physical", "autofilter-numeric-criteria-equals-save-reopen-physical")
+    } elseif ($PhysicalProbeSelector -eq "autofilter-date-criteria-persistence") {
+        @("autofilter-date-criteria-before-save-reopen-physical", "autofilter-date-criteria-after-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
         @(
             "formula-bar-point-mode-3d-sheet-range-grip"

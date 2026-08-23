@@ -2530,6 +2530,229 @@ PY
     fi
 }
 
+probe_autofilter_date_criteria_persistence_physical() {
+    local artifacts="autofilter-date-before.png;autofilter-date-before-menu-open.png;autofilter-date-before-applied.png;autofilter-date-before-reopened.png;autofilter-date-after-before.png;autofilter-date-after-menu-open.png;autofilter-date-after-applied.png;autofilter-date-after-reopened.png;autofilter-date-postcondition.txt"
+    local before_menu_open=false after_menu_open=false before_save_clean=false before_dialog_open=false before_dialog_closed=false
+    local after_save_clean=false after_dialog_open=false after_dialog_closed=false
+    local before_criteria="" after_criteria="" before_visible="" before_reopened="" after_visible="" after_reopened=""
+    local before_package="" after_package=""
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "autofilter-date-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path\n"
+        record "autofilter-date-criteria-before-save-reopen-physical" "failed" "autofilter-date-postcondition.txt" "The physical AutoFilter date lane requires an XLSX document path." "$artifacts"
+        record "autofilter-date-criteria-after-save-reopen-physical" "failed" "autofilter-date-postcondition.txt" "The physical AutoFilter date lane requires an XLSX document path." "$artifacts"
+        return
+    fi
+
+    read_visible_date_labels() {
+        local first second third
+        first="$(copy_cell_display 0 1 date-visible-first || true)"
+        second="$(copy_cell_display 0 2 date-visible-second || true)"
+        third="$(copy_cell_display 0 3 date-visible-third || true)"
+        send_key Escape
+        printf '%s,%s,%s' "$first" "$second" "$third"
+    }
+
+    package_date_signature() {
+        local expected_operator="$1" expected_value="$2"
+        python3 - "$document_path" "$expected_operator" "$expected_value" <<'PY'
+import sys, zipfile, xml.etree.ElementTree as ET
+path, expected_operator, expected_value = sys.argv[1:]
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+with zipfile.ZipFile(path) as package:
+    root = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+auto_filter = root.find(main + "autoFilter")
+if auto_filter is None or auto_filter.attrib.get("ref") != "A1:B5":
+    raise SystemExit(1)
+column = auto_filter.find(main + "filterColumn")
+if column is None or column.attrib.get("colId") != "1":
+    raise SystemExit(1)
+custom = column.find(main + "customFilters")
+if custom is None:
+    raise SystemExit(1)
+filters = custom.findall(main + "customFilter")
+if len(filters) != 1 or filters[0].attrib.get("val") != expected_value:
+    raise SystemExit(1)
+operator = filters[0].attrib.get("operator", "")
+if operator != expected_operator:
+    raise SystemExit(1)
+print(f"ref=A1:B5|colId=1|operator={operator}|value={filters[0].attrib.get('val','')}")
+PY
+    }
+
+    save_date_criteria_document() {
+        local expected_operator="$1" expected_value="$2" package_signature=""
+        # Rebuild focus on the typed date column before saving. The numeric criteria lane uses this
+        # same header route, and the production save is asynchronous; wait for its clean title
+        # state before inspecting the host-mounted OOXML package.
+        select_cell 1 0 B1 || true
+        focus_app
+        send_key ctrl+s
+        if ! wait_for_document_clean; then
+            send_key shift+F12
+            wait_for_document_clean || return 1
+        fi
+        for _ in $(seq 1 20); do
+            package_signature="$(package_date_signature "$expected_operator" "$expected_value" || true)"
+            if [[ "$package_signature" == *"operator=$expected_operator|value=$expected_value"* ]]; then
+                return 0
+            fi
+            sleep 0.25
+        done
+        return 1
+    }
+
+    click_date_glyph() {
+        local column_offset=1
+        local glyph_x=$((a1_x + (column_offset + 1) * cell_width - 9))
+        local glyph_y=$((a1_y + cell_height / 2))
+        xdotool_mousemove_sync "$glyph_x" "$glyph_y" click 1
+        sleep "$settle_seconds"
+        printf '%s,%s' "$glyph_x" "$glyph_y"
+    }
+
+    apply_date_criteria() {
+        local option_index="$1" value="$2"
+        # The production date preset selector is collapsed for a custom date criterion, so the
+        # rendered operator/value/OK controls share the same calibrated geometry as Number Filters.
+        local operator_x=$((cell_width + 130)) operator_y=165 value_x=$((cell_width + 130)) value_y=195 ok_x=$((cell_width + 292)) ok_y=420
+        click_autofilter_control "$operator_x" "$operator_y"
+        send_flyout_key Home
+        for _ in $(seq 1 "$option_index"); do send_flyout_key Down; done
+        send_flyout_key Return
+        click_autofilter_control "$value_x" "$value_y"
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$value"
+        sleep "$settle_seconds"
+        click_autofilter_control "$ok_x" "$ok_y"
+    }
+
+    capture "autofilter-date-before.png"
+    select_cell 1 0 B1
+    click_date_glyph >/dev/null
+    capture "autofilter-date-before-menu-open.png"
+    if screen_changed "$output/autofilter-date-before.png" "$output/autofilter-date-before-menu-open.png" 500; then
+        before_menu_open=true
+        # Date Filters > Before is the fifth item after Equals (index 4).
+        apply_date_criteria 4 "2024-02-01"
+        before_criteria="date<:2024-02-01"
+        before_visible="$(read_visible_date_labels)"
+        capture "autofilter-date-before-applied.png"
+    fi
+
+    if $before_menu_open && [[ "$before_visible" == "Jan01,Jan15," ]]; then
+        save_date_criteria_document lessThan 45323 && before_save_clean=true
+        before_package="$(package_date_signature lessThan 45323 || true)"
+    fi
+
+    if $before_save_clean && [[ "$before_package" == *"ref=A1:B5|colId=1|operator=lessThan|value=45323"* ]]; then
+        local before_windows after_windows
+        select_cell 1 0 B1 || true
+        focus_app
+        before_windows="$(visible_window_count)"
+        send_key ctrl+F12
+        for _ in $(seq 1 12); do
+            after_windows="$(visible_window_count)"
+            if (( after_windows > before_windows )); then before_dialog_open=true; break; fi
+            sleep 0.2
+        done
+        if $before_dialog_open; then
+            xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+            xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+            xdotool key --clearmodifiers Return
+            sleep "$settle_seconds"
+            xdotool key --clearmodifiers Return
+            for _ in $(seq 1 16); do
+                after_windows="$(visible_window_count)"
+                if (( after_windows <= before_windows )); then before_dialog_closed=true; break; fi
+                sleep 0.25
+            done
+        fi
+        if $before_dialog_closed; then
+            capture "autofilter-date-before-reopened.png"
+            before_reopened="$(read_visible_date_labels)"
+        fi
+    fi
+
+    if [[ "$before_reopened" == "Jan01,Jan15," ]]; then
+        select_cell 1 0 B1 || true
+        capture "autofilter-date-after-before.png"
+        click_date_glyph >/dev/null
+        capture "autofilter-date-after-menu-open.png"
+        if screen_changed "$output/autofilter-date-after-before.png" "$output/autofilter-date-after-menu-open.png" 500; then
+            after_menu_open=true
+            # Date Filters > After is the third item after Equals (index 2).
+            apply_date_criteria 2 "2024-02-01"
+            after_criteria="date>:2024-02-01"
+            after_visible="$(read_visible_date_labels)"
+            capture "autofilter-date-after-applied.png"
+        fi
+    fi
+
+    if $after_menu_open && [[ "$after_visible" == "Mar15,," ]]; then
+        save_date_criteria_document greaterThan 45323 && after_save_clean=true
+        after_package="$(package_date_signature greaterThan 45323 || true)"
+    fi
+
+    if $after_save_clean && [[ "$after_package" == *"ref=A1:B5|colId=1|operator=greaterThan|value=45323"* ]]; then
+        local before_windows after_windows
+        select_cell 1 0 B1 || true
+        focus_app
+        before_windows="$(visible_window_count)"
+        send_key ctrl+F12
+        for _ in $(seq 1 12); do
+            after_windows="$(visible_window_count)"
+            if (( after_windows > before_windows )); then after_dialog_open=true; break; fi
+            sleep 0.2
+        done
+        if $after_dialog_open; then
+            xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+            xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+            xdotool key --clearmodifiers Return
+            sleep "$settle_seconds"
+            xdotool key --clearmodifiers Return
+            for _ in $(seq 1 16); do
+                after_windows="$(visible_window_count)"
+                if (( after_windows <= before_windows )); then after_dialog_closed=true; break; fi
+                sleep 0.25
+            done
+        fi
+        if $after_dialog_closed; then
+            capture "autofilter-date-after-reopened.png"
+            after_reopened="$(read_visible_date_labels)"
+        fi
+    fi
+
+    local available_artifacts="autofilter-date-postcondition.txt"
+    for artifact in ${artifacts//;/ }; do
+        if [[ -f "$output/$artifact" && "$artifact" != "autofilter-date-postcondition.txt" ]]; then
+            available_artifacts="$available_artifacts;$artifact"
+        fi
+    done
+    write_artifact "autofilter-date-postcondition.txt" \
+        "document-path=$document_path\nbefore-menu-open=$before_menu_open\nbefore-criteria=$before_criteria\nbefore-visible=$before_visible\nbefore-save-clean=$before_save_clean\nbefore-package=$before_package\nbefore-dialog-open=$before_dialog_open\nbefore-dialog-closed=$before_dialog_closed\nbefore-reopened=$before_reopened\nafter-menu-open=$after_menu_open\nafter-criteria=$after_criteria\nafter-visible=$after_visible\nafter-save-clean=$after_save_clean\nafter-package=$after_package\nafter-dialog-open=$after_dialog_open\nafter-dialog-closed=$after_dialog_closed\nafter-reopened=$after_reopened\n"
+
+    if $before_menu_open && [[ "$before_criteria" == "date<:2024-02-01" && "$before_visible" == "Jan01,Jan15," &&
+        "$before_package" == *"ref=A1:B5|colId=1|operator=lessThan|value=45323"* && $before_save_clean &&
+        $before_dialog_open && $before_dialog_closed && "$before_reopened" == "Jan01,Jan15," ]]; then
+        record "autofilter-date-criteria-before-save-reopen-physical" "passed" \
+            "autofilter-date-before-menu-open.png;autofilter-date-before-applied.png;autofilter-date-before-reopened.png;autofilter-date-postcondition.txt" \
+            "Date Filters > Before visibly retained Jan01 and Jan15, saved customFilter lessThan=45323, and reopened with the same visible rows." "$available_artifacts"
+    else
+        record "autofilter-date-criteria-before-save-reopen-physical" "failed" "$available_artifacts" \
+            "Before did not prove the rendered date criteria commit, exact visible rows, clean save, lessThan=45323 package state, and identical reopen state." "$available_artifacts"
+    fi
+    if $after_menu_open && [[ "$after_criteria" == "date>:2024-02-01" && "$after_visible" == "Mar15,," &&
+        "$after_package" == *"ref=A1:B5|colId=1|operator=greaterThan|value=45323"* && $after_save_clean &&
+        $after_dialog_open && $after_dialog_closed && "$after_reopened" == "Mar15,," ]]; then
+        record "autofilter-date-criteria-after-save-reopen-physical" "passed" \
+            "autofilter-date-after-menu-open.png;autofilter-date-after-applied.png;autofilter-date-after-reopened.png;autofilter-date-postcondition.txt" \
+            "Date Filters > After visibly retained Mar15, saved customFilter greaterThan=45323, and reopened with the same visible row." "$available_artifacts"
+    else
+        record "autofilter-date-criteria-after-save-reopen-physical" "failed" "$available_artifacts" \
+            "After did not prove the rendered date criteria commit, exact visible row, clean save, greaterThan=45323 package state, and identical reopen state." "$available_artifacts"
+    fi
+}
+
 sheet_tab_center_x() {
     local index="$1"
     if (( index == 0 )); then
@@ -5668,6 +5891,19 @@ if [[ "$probe_selector" == "autofilter-numeric-criteria-persistence" ]]; then
     probe_autofilter_numeric_criteria_persistence_physical
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the numeric criteria probe."
+    fi
+    write_manifest
+    probe_failed=false
+    for result in "${results[@]}"; do
+        [[ "$result" == *'"status":"failed"'* ]] && probe_failed=true
+    done
+    if $probe_failed; then exit 3; fi
+    exit 0
+fi
+if [[ "$probe_selector" == "autofilter-date-criteria-persistence" ]]; then
+    probe_autofilter_date_criteria_persistence_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the date criteria probe."
     fi
     write_manifest
     probe_failed=false
