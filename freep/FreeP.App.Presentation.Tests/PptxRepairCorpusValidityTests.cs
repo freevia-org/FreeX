@@ -469,9 +469,60 @@ public sealed class PptxRepairCorpusValidityTests
         var shapes = SlideCompositor.Compose(presentation, slide)
             .OfType<DrawOp.Shape>()
             .ToArray();
+        shapes.Where(shape => shape.UseImportedIncreasingCircleTextRaster)
+            .Should().HaveCount(4)
+            .And.OnlyContain(shape =>
+                shape.Text != null
+                && shape.Text.Paragraphs.Any(paragraph =>
+                    paragraph.Runs.Any(run => !string.IsNullOrWhiteSpace(run.Text))));
         shapes.Select(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Where(text => !string.IsNullOrWhiteSpace(text))
             .Should().Contain(["Phase A", "Phase B", "Phase C", "Phase D"]);
+    }
+
+    [Fact]
+    public void OrdinaryAuthoredPhaseLabels_DoNotUseImportedIncreasingCircleTextRaster()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+
+        var phaseLabels = new[] { "Phase A", "Phase B", "Phase C", "Phase D" };
+        for (var index = 0; index < phaseLabels.Length; index++)
+        {
+            var label = phaseLabels[index];
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = (uint)(100 + index),
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = DrawingShapeKind.Rectangle,
+                OffsetXEmu = 400_000 + index * 1_500_000,
+                OffsetYEmu = 600_000,
+                ExtentCxEmu = 1_200_000,
+                ExtentCyEmu = 600_000,
+                TextBody = new TextBody
+                {
+                    Paragraphs =
+                    {
+                        new Paragraph
+                        {
+                            Runs = { new Run { Text = label } }
+                        }
+                    }
+                }
+            });
+        }
+
+        var labels = SlideCompositor.Compose(presentation, slide)
+            .OfType<DrawOp.Shape>()
+            .Where(shape => shape.Text is not null)
+            .ToArray();
+
+        labels.Should().HaveCount(4);
+        labels.Select(shape => shape.Text!.Paragraphs.Single().Runs.Single().Text)
+            .Should().BeEquivalentTo(phaseLabels);
+        labels.Should().OnlyContain(shape => !shape.UseImportedIncreasingCircleTextRaster,
+            "literal phase labels outside an authoritative imported SmartArt cache use ordinary text rasterization");
     }
 
     [Fact]

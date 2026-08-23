@@ -593,6 +593,12 @@ public abstract class DrawOp
         /// <summary>Semantic role assigned while composing an authoritative SmartArt cache.</summary>
         public SmartArtSemanticRole SmartArtRole { get; init; }
 
+        /// <summary>
+        /// Uses the Office-calibrated text raster policy for the richer imported
+        /// IncreasingCircleProcess cache topology.
+        /// </summary>
+        public bool UseImportedIncreasingCircleTextRaster { get; init; }
+
         /// <summary>Resolved shape effects (shadow, glow, soft-edge), or null if none.</summary>
         public ResolvedShapeEffects? Effects { get; init; }
 

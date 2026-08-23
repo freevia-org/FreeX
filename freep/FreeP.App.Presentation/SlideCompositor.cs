@@ -245,6 +245,8 @@ public static class SlideCompositor
                     && IsSmartArtFollowNodeRole(shape, cachedSmartArtContext)
                     ? SmartArtSemanticRole.FollowNode
                     : SmartArtSemanticRole.None;
+                var useImportedIncreasingCircleTextRaster =
+                    UsesImportedIncreasingCircleTextRaster(shape, cachedSmartArtContext);
                 ComposeAutoShape(
                     shape,
                     slide,
@@ -253,7 +255,8 @@ public static class SlideCompositor
                     ops,
                     slideIndex,
                     effectiveClrMap,
-                    smartArtRole);
+                    smartArtRole,
+                    useImportedIncreasingCircleTextRaster);
                 break;
         }
     }
@@ -300,7 +303,8 @@ public static class SlideCompositor
         List<DrawOp> ops,
         int slideIndex = 0,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null,
-        SmartArtSemanticRole smartArtRole = SmartArtSemanticRole.None)
+        SmartArtSemanticRole smartArtRole = SmartArtSemanticRole.None,
+        bool useImportedIncreasingCircleTextRaster = false)
     {
         // An explicit zero-sized slide placeholder is hidden in PowerPoint. Do not let normal
         // placeholder inheritance turn its authored zero transform into visible layout geometry.
@@ -421,6 +425,7 @@ public static class SlideCompositor
             BoundsDip = boundsDip,
             Text = text,
             SmartArtRole = smartArtRole,
+            UseImportedIncreasingCircleTextRaster = useImportedIncreasingCircleTextRaster,
             Effects = ResolveEffects(effectiveEffects),
             ElbowRouteDip = elbowRouteDip,
         });
@@ -2039,6 +2044,31 @@ public static class SlideCompositor
 
         return smart.QuickStyle?.UniqueId.EndsWith("/quickstyle/simple1", StringComparison.OrdinalIgnoreCase) == true
             && smart.Colors?.UniqueId.EndsWith("/colors/accent1_2", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static bool UsesImportedIncreasingCircleTextRaster(
+        SlideShape shape,
+        SmartArtShape? cachedSmartArtContext)
+    {
+        if (cachedSmartArtContext?.Data is not { IsLiveLayoutSupported: false } data
+            || !data.LayoutUniqueId.EndsWith("/IncreasingCircleProcess", StringComparison.OrdinalIgnoreCase)
+            || shape.AutoShapeKind != DrawingShapeKind.Rectangle
+            || !HasVisibleText(shape))
+        {
+            return false;
+        }
+
+        var fallbackShapes = cachedSmartArtContext.FallbackShapes;
+        return fallbackShapes.Count == 12
+            && fallbackShapes.Count(candidate => candidate.AutoShapeKind == DrawingShapeKind.Ellipse) == 3
+            && fallbackShapes.Count(candidate => candidate.AutoShapeKind == DrawingShapeKind.Chord) == 3
+            && fallbackShapes.Count(candidate => candidate.AutoShapeKind == DrawingShapeKind.Rectangle) == 6
+            && fallbackShapes.Count(candidate =>
+                candidate.AutoShapeKind == DrawingShapeKind.Rectangle && HasVisibleText(candidate)) == 4;
+
+        static bool HasVisibleText(SlideShape candidate) =>
+            candidate.TextBody?.Paragraphs.Any(paragraph =>
+                paragraph.Runs.Any(run => !string.IsNullOrWhiteSpace(run.Text))) == true;
     }
 
     private static bool IsSimpleAccentHierarchy(SmartArtShape smart) =>

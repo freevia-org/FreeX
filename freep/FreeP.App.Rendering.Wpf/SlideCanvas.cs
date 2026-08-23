@@ -569,7 +569,8 @@ public sealed partial class SlideCanvas : FrameworkElement
                 dc,
                 shape.Text,
                 bounds,
-                shape.SmartArtRole == SmartArtSemanticRole.FollowNode);
+                shape.SmartArtRole == SmartArtSemanticRole.FollowNode,
+                shape.UseImportedIncreasingCircleTextRaster);
 
             if (hasTextTransform)
                 dc.Pop();
@@ -1293,7 +1294,8 @@ public sealed partial class SlideCanvas : FrameworkElement
         DrawingContext dc,
         ResolvedTextLayout text,
         LayoutRect bounds,
-        bool useNativeBulletMarkerFallback = false)
+        bool useNativeBulletMarkerFallback = false,
+        bool useImportedIncreasingCircleTextRaster = false)
     {
         // Wave 18B: vertical text — rotate the text block around the shape center and swap
         // the effective text-area dimensions so layout uses the rotated extent.
@@ -1315,7 +1317,7 @@ public sealed partial class SlideCanvas : FrameworkElement
                 text,
                 orientation.TextBounds,
                 useNativeBulletMarkerFallback,
-                UsesImportedIncreasingCircleText(text));
+                useImportedIncreasingCircleTextRaster);
             dc.Pop();
             return;
         }
@@ -1325,7 +1327,7 @@ public sealed partial class SlideCanvas : FrameworkElement
             text,
             orientation.TextBounds,
             useNativeBulletMarkerFallback,
-            UsesImportedIncreasingCircleText(text));
+            useImportedIncreasingCircleTextRaster);
     }
 
     private static void RenderStackedVerticalText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
@@ -1560,11 +1562,6 @@ public sealed partial class SlideCanvas : FrameworkElement
         text.Paragraphs
             .SelectMany(paragraph => paragraph.Runs)
             .Any(run => run.FontFamily.StartsWith("Aptos", StringComparison.OrdinalIgnoreCase));
-
-    private static bool UsesImportedIncreasingCircleText(ResolvedTextLayout text) =>
-        text.Paragraphs.Count == 1 &&
-        text.Paragraphs[0].Runs.Count == 1 &&
-        text.Paragraphs[0].Runs[0].Text is "Phase A" or "Phase B" or "Phase C" or "Phase D";
 
     private static bool UsesImportedAptosBodyFont(ResolvedTextLayout text) =>
         text.AutoFitKind == TextAutoFitKind.None
