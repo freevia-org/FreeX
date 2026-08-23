@@ -22,12 +22,60 @@ function Get-FileSha256([string]$path) {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath (Resolve-RepoPath $path)).Hash.ToLowerInvariant()
 }
 
-function Get-NormalizedSourceSha256([string]$path) {
-    $text = [IO.File]::ReadAllText((Resolve-RepoPath $path))
+function Get-NormalizedTextSha256([string]$text) {
     $text = $text.Replace("`r`n", "`n").Replace("`r", "`n")
     $bytes = [Text.Encoding]::UTF8.GetBytes($text)
     $hash = [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
     return (-join ($hash | ForEach-Object { $_.ToString("x2") }))
+}
+
+function Get-NormalizedSourceSha256([string]$path) {
+    $text = [IO.File]::ReadAllText((Resolve-RepoPath $path))
+    return Get-NormalizedTextSha256 $text
+}
+
+function Format-ProcessArg([string]$arg) {
+    if ($null -eq $arg) { $arg = "" }
+    if ($arg -match '[\s"]') {
+        return '"' + ($arg -replace '"', '\"') + '"'
+    }
+    if ($arg -eq "") { return '""' }
+    return $arg
+}
+
+function Get-NormalizedGitBlobSha256([string]$revision, [string]$path) {
+    $objectSpec = "$revision`:$path"
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "git"
+    $psi.WorkingDirectory = $repoRoot
+    $psi.Arguments = ((@("cat-file", "blob", $objectSpec) | ForEach-Object { Format-ProcessArg $_ }) -join " ")
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+
+    $process = [Diagnostics.Process]::Start($psi)
+    $blobBytes = New-Object IO.MemoryStream
+    try {
+        $process.StandardOutput.BaseStream.CopyTo($blobBytes)
+        $diagnostic = $process.StandardError.ReadToEnd().Trim()
+        $process.WaitForExit()
+        $detail = if ([string]::IsNullOrWhiteSpace($diagnostic)) { "no diagnostic output" } else { $diagnostic }
+        Assert-Condition ($process.ExitCode -eq 0) ("source file '{0}' could not be read as a blob at capture source revision '{1}'. git cat-file diagnostic: {2}" -f $path, $revision, $detail)
+
+        $blobBytes.Position = 0
+        $reader = New-Object IO.StreamReader($blobBytes, [Text.Encoding]::UTF8, $true)
+        try {
+            return Get-NormalizedTextSha256 $reader.ReadToEnd()
+        }
+        finally {
+            $reader.Dispose()
+        }
+    }
+    finally {
+        $blobBytes.Dispose()
+        $process.Dispose()
+    }
 }
 
 function Get-CanonicalJsonSha256($value) {
@@ -58,6 +106,8 @@ foreach ($source in @($provenance.sourceFiles)) {
     $sourcePath = Resolve-RepoPath $source.path
     Assert-Condition (Test-Path -LiteralPath $sourcePath) "source file is missing: $($source.path)."
     Assert-Equal (Get-NormalizedSourceSha256 $source.path) $source.sha256 "normalized source hash for $($source.path)"
+    $revisionHash = Get-NormalizedGitBlobSha256 $provenance.generatedAtSourceRevision $source.path
+    Assert-Equal $revisionHash $source.sha256 "normalized source hash at revision '$($provenance.generatedAtSourceRevision)' for $($source.path)"
 }
 
 Assert-Equal (Get-FileSha256 $InventoryPath) $provenance.trackedInputs.inventory.sha256 "inventory hash"
