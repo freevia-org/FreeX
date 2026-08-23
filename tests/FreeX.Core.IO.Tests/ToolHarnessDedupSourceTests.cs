@@ -151,6 +151,16 @@ public sealed class ToolHarnessDedupSourceTests
     }
 
     [Fact]
+    public void ForegroundCapture_SheetTabMenuCapturesTheDetectedPopup()
+    {
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundCapture.Should().Contain("return CaptureWindow(scenario, \"freex\", _lastCaptureWindow ?? refreshedWindow, guard, \"complete\", _lastResultValidation);");
+        foregroundCapture.Should().Contain("_lastCaptureWindow = popup;");
+        foregroundCapture.Should().Contain("_lastCaptureWindow = null;");
+    }
+
+    [Fact]
     public void ToolScripts_UseCanonicalSharedSupportEntryPoints()
     {
         var support = TestWorkspaceFiles.ReadRepoText("tools", "ToolScriptSupport.ps1");

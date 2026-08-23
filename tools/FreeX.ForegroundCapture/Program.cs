@@ -148,6 +148,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     }
 
     private string? _lastResultValidation;
+    private WindowInfo? _lastCaptureWindow;
 
     private CaptureResult RunExcelAutoFilterScenario()
     {
@@ -2967,6 +2968,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     {
         Process? process = null;
         _lastResultValidation = null;
+        _lastCaptureWindow = null;
 
         try
         {
@@ -3019,7 +3021,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard(scenario, guard, "before-capture");
             }
 
-            return CaptureWindow(scenario, "freex", refreshedWindow, guard, "complete", _lastResultValidation);
+            return CaptureWindow(scenario, "freex", _lastCaptureWindow ?? refreshedWindow, guard, "complete", _lastResultValidation);
         }
         finally
         {
@@ -3645,6 +3647,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             var tab = FindVisibleSheetTabElement(handle, "Sheet1") ?? GetVisibleSheetTabElements(handle)
                 .OrderBy(element => element.Current.BoundingRectangle.Left)
                 .FirstOrDefault();
+            WindowInfo? popup;
             if (tab is not null)
             {
                 var blocked = GuardedClickElement(options.Scenario, processId, handle, tab, MouseButtonKind.Right);
@@ -3653,9 +3656,11 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     return blocked;
                 }
 
-                if (WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80) is not null &&
+                popup = WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80);
+                if (popup is not null &&
                     ProcessHasVisibleMenuItems(processId, "Rename", "Move or Copy", "Select All Sheets"))
                 {
+                    _lastCaptureWindow = popup;
                     _lastResultValidation = "Opened the FreeX sheet-tab context menu by physically right-clicking the UIA-discovered sheet tab.";
                     return null;
                 }
@@ -3669,9 +3674,11 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     return blocked;
                 }
 
-                if (WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80) is not null &&
+                popup = WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80);
+                if (popup is not null &&
                     ProcessHasVisibleMenuItems(processId, "Rename", "Move or Copy", "Select All Sheets"))
                 {
+                    _lastCaptureWindow = popup;
                     _lastResultValidation = "Opened the FreeX sheet-tab context menu by focusing the UIA-discovered sheet tab and pressing Shift+F10.";
                     return null;
                 }
@@ -3688,6 +3695,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             if (openedNearAddButton)
             {
+                _lastCaptureWindow = WindowFinder.FindProcessPopup(processId, handle.ToInt64(), TimeSpan.FromMilliseconds(250), 120, 80);
                 _lastResultValidation = "Opened the FreeX sheet-tab context menu by physically right-clicking the Sheet1 tab area immediately left of the Insert Sheet button.";
                 return null;
             }
@@ -3700,6 +3708,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             if (openedByKeyboardCycle)
             {
+                _lastCaptureWindow = WindowFinder.FindProcessPopup(processId, handle.ToInt64(), TimeSpan.FromMilliseconds(250), 120, 80);
                 _lastResultValidation = "Opened the FreeX sheet-tab context menu by cycling focus with F6 and pressing Shift+F10 on the focused sheet tab.";
                 return null;
             }
@@ -3714,9 +3723,11 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                     return blocked;
                 }
 
-                if (WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80) is not null &&
+                popup = WindowFinder.FindProcessPopup(processId, handle.ToInt64(), options.PopupTimeout, 120, 80);
+                if (popup is not null &&
                     ProcessHasVisibleMenuItems(processId, "Rename", "Move or Copy", "Select All Sheets"))
                 {
+                    _lastCaptureWindow = popup;
                     _lastResultValidation = $"Opened the FreeX sheet-tab context menu through guarded tab-strip coordinate fallback ({point.Note}).";
                     return null;
                 }
