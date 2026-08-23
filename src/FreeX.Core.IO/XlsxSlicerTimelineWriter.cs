@@ -13,9 +13,7 @@ internal static class XlsxSlicerTimelineWriter
     private const string SlicerWorksheetExtensionUri = "{A8765BA9-456A-4DAB-B4F3-ACF838C121DE}";
     private const string TimelineWorksheetExtensionUri = "{7E03D99C-DC04-49D9-9315-930204A7B6E9}";
 
-    private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-    private static readonly XNamespace MarkupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private static readonly XNamespace SlicerNs = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
     private static readonly XNamespace TimelineNs = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
 
@@ -140,40 +138,8 @@ internal static class XlsxSlicerTimelineWriter
                 : null,
             element.Size is { } size ? new XAttribute("size", size.ToString(CultureInfo.InvariantCulture)) : null);
 
-    private static HashSet<int> GetUsedSlicerCacheIndices(ZipArchive archive, string directory, string stem)
-    {
-        var used = new HashSet<int>();
-        foreach (var entry in archive.Entries)
-        {
-            var name = entry.FullName;
-            if (name.StartsWith(directory, StringComparison.OrdinalIgnoreCase) &&
-                name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-            {
-                var file = name[directory.Length..^".xml".Length];
-                if (file.StartsWith(stem, StringComparison.OrdinalIgnoreCase) &&
-                    int.TryParse(file[stem.Length..], out var index))
-                {
-                    used.Add(index);
-                }
-            }
-        }
-
-        return used;
-    }
-
-    private static int AllocateNextIndex(HashSet<int> usedIndices)
-    {
-        var index = 1;
-        while (usedIndices.Contains(index))
-            index++;
-        usedIndices.Add(index);
-        return index;
-    }
-
     private static void SaveSlicerTimelines(ZipArchive archive, Workbook workbook)
     {
-        XNamespace freexNs = "https://freex.local/xlsx/slicerTimelineState";
-
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
         if (workbookEntry is null)
             return;
@@ -187,7 +153,7 @@ internal static class XlsxSlicerTimelineWriter
         // Allocate cache indices against existing archive entries so we never overwrite an
         // unrelated pre-existing slicerCache part. Track emitted cache names so a shared cache
         // (multiple slicers pointing at the same CacheName) is written exactly once.
-        var usedSlicerCacheIndices = GetUsedSlicerCacheIndices(archive, "xl/slicerCaches/", "slicerCache");
+        var usedSlicerCacheIndices = XlsxSlicerTimelinePackageAuthoring.GetUsedPartIndices(archive, "xl/slicerCaches/", "slicerCache");
         var emittedSlicerCachesByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var slicerIndex = 1;
@@ -202,100 +168,30 @@ internal static class XlsxSlicerTimelineWriter
             var isNewCache = !emittedSlicerCachesByName.TryGetValue(cacheName, out var cachePath);
             if (isNewCache)
             {
-                var cacheIndex = AllocateNextIndex(usedSlicerCacheIndices);
+                var cacheIndex = XlsxSlicerTimelinePackageAuthoring.AllocateNextPartIndex(usedSlicerCacheIndices);
                 cachePath = $"xl/slicerCaches/slicerCache{cacheIndex}.xml";
                 emittedSlicerCachesByName[cacheName] = cachePath;
             }
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, slicerPath, new XDocument(
-                new XElement(SlicerNs + "slicers",
-                    new XAttribute(XNamespace.Xmlns + "mc", MarkupCompatNs.NamespaceName),
-                    new XAttribute(MarkupCompatNs + "Ignorable", "x"),
-                    new XAttribute(XNamespace.Xmlns + "x", WorkbookNs.NamespaceName),
-                    new XElement(SlicerNs + "slicer",
-                        new XAttribute("name", slicer.Name),
-                        OptionalAttribute("caption", slicer.Caption),
-                        OptionalAttribute("style", slicer.StyleName),
-                        new XAttribute("cache", cacheName),
-                        new XAttribute("rowHeight", "228600"),
-                        // P10: columnCount/showCaption are read by XlsxSlicerTimelineMetadataReader
-                        // (defaults: columnCount=1, showCaption=true when absent) but were never
-                        // emitted here, so a fresh save silently dropped a non-default tile-column
-                        // layout or a hidden caption band on every round trip. Only emit when the
-                        // value differs from Excel's default so an unchanged default-shaped slicer's
-                        // XML stays exactly as before this fix.
-                        slicer.ColumnCount != 1
-                            ? new XAttribute("columnCount", slicer.ColumnCount.ToString(CultureInfo.InvariantCulture))
-                            : null,
-                        !slicer.ShowCaption
-                            ? new XAttribute("showCaption", "0")
-                            : null))));
+            XlsxPackageXmlEditor.ReplaceXml(
+                archive,
+                slicerPath,
+                XlsxSlicerTimelineXmlAuthoring.BuildSlicerPart(slicer, cacheName));
             if (isNewCache)
             {
-                // P11: a table slicer (SourceTableId set, no pivot binding) binds to a structured table via
-                // an x15:tableSlicerCache ext, NOT a <pivotTables> element. A pivot slicer keeps the
-                // <pivotTables> binding. The FreeX selected-item ext (when present) shares the same extLst.
-                var isTableSlicer = slicer.SourceTableId is not null &&
-                                    string.IsNullOrWhiteSpace(slicer.SourcePivotTableName);
-
-                var extensions = new List<XElement>();
-                if (isTableSlicer)
-                {
-                    extensions.Add(new XElement(WorkbookNs + "ext",
-                        new XAttribute("uri", "{2F2917AC-EB37-4324-AD4E-5DD8C200BD13}"),
-                        new XElement(TimelineNs + "tableSlicerCache",
-                            new XAttribute("tableId", slicer.SourceTableId!.Value.ToString(CultureInfo.InvariantCulture)),
-                            slicer.SourceTableColumnId is { } tableColumn
-                                ? new XAttribute("column", tableColumn.ToString(CultureInfo.InvariantCulture))
-                                : null)));
-                }
-
-                if (slicer.SelectedItems.Count > 0)
-                {
-                    extensions.Add(new XElement(WorkbookNs + "ext",
-                        new XAttribute("uri", "{9F2C6F77-9A06-4E1E-AF41-4DB3CB03A6A6}"),
-                        new XElement(freexNs + "selectedItems",
-                            slicer.SelectedItems.Select(item =>
-                                new XElement(freexNs + "selectedItem", new XAttribute("value", item))))));
-                }
-
-                XlsxPackageXmlEditor.ReplaceXml(archive, cachePath!, new XDocument(
-                    new XElement(SlicerNs + "slicerCacheDefinition",
-                        slicer.SelectedItems.Count == 0
-                            ? null
-                            : new XAttribute(XNamespace.Xmlns + "x", WorkbookNs.NamespaceName),
-                        isTableSlicer
-                            ? new XAttribute(XNamespace.Xmlns + "x15", TimelineNs.NamespaceName)
-                            : null,
-                        new XAttribute("name", cacheName),
-                        OptionalAttribute("sourceName", slicer.SourceFieldName),
-                        // R133x-io-slicer-timeline-multipivot-writer: author EVERY connected pivot
-                        // table (Excel's "Report Connections"), not just the primary one, or a
-                        // multi-connection slicer's other connections are silently dropped on a fresh
-                        // (no-source-package) save. See ResolveConnectedPivotTableNames.
-                        isTableSlicer
-                            ? null
-                            : new XElement(SlicerNs + "pivotTables",
-                                ResolveConnectedPivotTableNames(slicer.SourcePivotTableName, slicer.ConnectedPivotTableNames)
-                                    .Select(pivotTableName => new XElement(
-                                        SlicerNs + "pivotTable",
-                                        OptionalAttribute("name", pivotTableName),
-                                        new XAttribute("tabId", XlsxSlicerTimelinePackageAuthoring.ResolvePivotHostTabId(workbook, workbookXml, pivotTableName))))),
-                        // P14 (R44-io-pivot-filter-page-3-2): a pivot slicer's <data><tabular><items>
-                        // list is the ONLY thing real Excel (and FreeX's own reload, via
-                        // XlsxSlicerTimelineMetadataReader.ReadSlicerCacheItems ->
-                        // SlicerModel.CacheItems) draws its item/button tiles from -- the fx:
-                        // selectedItems extLst below is a FreeX-private fallback, not something Excel
-                        // or a fresh reload can see. Without it the just-inserted slicer renders with
-                        // zero buttons. Emit it whenever the bound pivot cache field's shared items can
-                        // be resolved by name; table slicers have no such field and keep relying on the
-                        // x15:tableSlicerCache binding instead.
-                        isTableSlicer
-                            ? null
-                            : XlsxPivotSlicerCacheData.BuildPivotSlicerCacheDataElement(workbook, slicer),
-                        extensions.Count == 0
-                            ? null
-                            : new XElement(SlicerNs + "extLst", extensions))));
+                // Fresh authoring deliberately emits every report connection. The source-preserved
+                // append path supplies its primary-only list to the same XML builder.
+                XlsxPackageXmlEditor.ReplaceXml(
+                    archive,
+                    cachePath!,
+                    XlsxSlicerTimelineXmlAuthoring.BuildSlicerCacheDefinition(
+                        workbook,
+                        workbookXml,
+                        slicer,
+                        cacheName,
+                        ResolveConnectedPivotTableNames(
+                            slicer.SourcePivotTableName,
+                            slicer.ConnectedPivotTableNames)));
             }
             var resolvedCachePath = cachePath!;
             var cacheRelationshipId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
@@ -339,7 +235,7 @@ internal static class XlsxSlicerTimelineWriter
         }
 
         // Allocate timeline cache indices against existing archive entries (same pattern as slicer caches).
-        var usedTimelineCacheIndices = GetUsedSlicerCacheIndices(archive, "xl/timelineCaches/", "timelineCache");
+        var usedTimelineCacheIndices = XlsxSlicerTimelinePackageAuthoring.GetUsedPartIndices(archive, "xl/timelineCaches/", "timelineCache");
         var emittedTimelineCachesByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var timelineIndex = 1;
@@ -354,45 +250,26 @@ internal static class XlsxSlicerTimelineWriter
             var isNewTimelineCache = !emittedTimelineCachesByName.TryGetValue(cacheName, out var cachePath);
             if (isNewTimelineCache)
             {
-                var cacheIndex = AllocateNextIndex(usedTimelineCacheIndices);
+                var cacheIndex = XlsxSlicerTimelinePackageAuthoring.AllocateNextPartIndex(usedTimelineCacheIndices);
                 cachePath = $"xl/timelineCaches/timelineCache{cacheIndex}.xml";
                 emittedTimelineCachesByName[cacheName] = cachePath;
             }
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, timelinePath, new XDocument(
-                new XElement(TimelineNs + "timelines",
-                    new XElement(TimelineNs + "timeline",
-                        new XAttribute("name", timeline.Name),
-                        OptionalAttribute("caption", timeline.Caption),
-                        OptionalAttribute("style", timeline.StyleName),
-                        new XAttribute("cache", cacheName),
-                        timeline.Level is { } lvl
-                            ? new XAttribute("level", lvl.ToString(CultureInfo.InvariantCulture))
-                            : null,
-                        // G9: selectionLevel is independent from level; use SelectionLevel when set,
-                        // fall back to Level so files without a distinct selection level still emit
-                        // a valid selectionLevel attribute (Excel requires it when level is present).
-                        (timeline.SelectionLevel ?? timeline.Level) is { } selLvl
-                            ? new XAttribute("selectionLevel", selLvl.ToString(CultureInfo.InvariantCulture))
-                            : null,
-                        timeline.ScrollPosition is { Length: > 0 } scrollPos
-                            ? new XAttribute("scrollPosition", scrollPos + "T00:00:00")
-                            : null))));
+            XlsxPackageXmlEditor.ReplaceXml(
+                archive,
+                timelinePath,
+                XlsxSlicerTimelineXmlAuthoring.BuildTimelinePart(timeline, cacheName));
             if (isNewTimelineCache)
             {
-                XlsxPackageXmlEditor.ReplaceXml(archive, cachePath!, new XDocument(
-                    new XElement(TimelineNs + "timelineCacheDefinition",
-                        new XAttribute("name", cacheName),
-                        OptionalAttribute("sourceName", timeline.SourceFieldName),
-                        OptionalAttribute("startDate", timeline.StartDate),
-                        OptionalAttribute("endDate", timeline.EndDate),
-                        OptionalAttribute("selectedStartDate", timeline.SelectedStartDate),
-                        OptionalAttribute("selectedEndDate", timeline.SelectedEndDate),
-                        // R133x-io-slicer-timeline-multipivot-writer: author EVERY connected pivot
-                        // table, not just the primary one -- see the sibling slicer-cache comment above.
-                        new XElement(TimelineNs + "pivotTables",
-                            ResolveConnectedPivotTableNames(timeline.SourcePivotTableName, timeline.ConnectedPivotTableNames)
-                                .Select(pivotTableName => new XElement(TimelineNs + "pivotTable", OptionalAttribute("name", pivotTableName)))))));
+                XlsxPackageXmlEditor.ReplaceXml(
+                    archive,
+                    cachePath!,
+                    XlsxSlicerTimelineXmlAuthoring.BuildTimelineCacheDefinition(
+                        timeline,
+                        cacheName,
+                        ResolveConnectedPivotTableNames(
+                            timeline.SourcePivotTableName,
+                            timeline.ConnectedPivotTableNames)));
             }
 
             var resolvedTimelineCachePath = cachePath!;
@@ -471,6 +348,4 @@ internal static class XlsxSlicerTimelineWriter
         return workbook.Sheets.Count == 0 ? "" : "xl/worksheets/sheet1.xml";
     }
 
-    private static XAttribute? OptionalAttribute(string name, string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : new XAttribute(name, value);
 }

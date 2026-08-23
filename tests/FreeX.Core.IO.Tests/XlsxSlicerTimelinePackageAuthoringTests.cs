@@ -137,7 +137,6 @@ public sealed class XlsxSlicerTimelinePackageAuthoringTests
         foreach (var file in files)
         {
             var source = File.ReadAllText(Path.Combine(root, "src", "FreeX.Core.IO", file));
-            source.Should().Contain("XlsxSlicerTimelinePackageAuthoring.ResolvePivotHostTabId(", file);
             source.Should().Contain("XlsxSlicerTimelinePackageAuthoring.EnsurePartRelationship(", file);
             source.Should().Contain("XlsxSlicerTimelinePackageAuthoring.EnsureWorksheetRelationship(", file);
             source.Should().Contain("XlsxSlicerTimelinePackageAuthoring.EnsureWorkbookExtensionRef(", file);
@@ -148,6 +147,14 @@ public sealed class XlsxSlicerTimelinePackageAuthoringTests
             source.Should().NotContain("private static void EnsureWorkbookExtensionRef(", file);
             source.Should().NotContain("private static void EnsureWorksheetExtensionRef(", file);
         }
+
+        var xmlAuthoringSource = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.Core.IO",
+            "XlsxSlicerTimelineXmlAuthoring.cs"));
+        xmlAuthoringSource.Should().Contain("XlsxSlicerTimelinePackageAuthoring.ResolvePivotHostTabId(");
+        xmlAuthoringSource.Should().NotContain("private static string ResolvePivotHostTabId(");
     }
 
     private static MemoryStream CreatePackage(params (string Path, string Xml)[] entries)

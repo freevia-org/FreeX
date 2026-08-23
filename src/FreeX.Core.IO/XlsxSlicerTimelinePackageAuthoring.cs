@@ -11,6 +11,38 @@ internal static class XlsxSlicerTimelinePackageAuthoring
     private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace MarkupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
+    public static HashSet<int> GetUsedPartIndices(ZipArchive archive, string directory, string stem)
+    {
+        var used = new HashSet<int>();
+        foreach (var entry in archive.Entries)
+        {
+            var name = entry.FullName;
+            if (!name.StartsWith(directory, StringComparison.OrdinalIgnoreCase) ||
+                !name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var file = name[directory.Length..^".xml".Length];
+            if (file.StartsWith(stem, StringComparison.OrdinalIgnoreCase) &&
+                int.TryParse(file[stem.Length..], out var index))
+            {
+                used.Add(index);
+            }
+        }
+
+        return used;
+    }
+
+    public static int AllocateNextPartIndex(HashSet<int> usedIndices)
+    {
+        var index = 1;
+        while (usedIndices.Contains(index))
+            index++;
+        usedIndices.Add(index);
+        return index;
+    }
+
     public static string ResolvePivotHostTabId(
         Workbook workbook,
         XDocument workbookXml,
