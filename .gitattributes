@@ -18,3 +18,4 @@ tools/LinuxInteractiveDocker/New-FreeXWave192AutoFilterFontColorFixture.ps1 text
 tests/FreeX.App.Avalonia.Tests/Wave192AutoFilterFontColorPhysicalSourceTests.cs text eol=lf
 docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/*.json text eol=lf
 docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/*.txt text eol=lf
+docs/parity/avalonia-parity-wave192-freex-autofilter-font-color-20260823.md text eol=lf
