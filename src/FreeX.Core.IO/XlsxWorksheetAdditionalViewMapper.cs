@@ -27,57 +27,55 @@ internal static class XlsxWorksheetAdditionalViewMapper
     }
 
     public static void Save(Stream xlsxStream, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap)
-    {
-        if (worksheetPathMap is null)
-            return;
-
-        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
-        Save(session, workbook);
-    }
+        => XlsxWorksheetPackageEditTraversal.Edit(
+            xlsxStream,
+            workbook,
+            worksheetPathMap,
+            SaveWorksheet);
 
     internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+        => XlsxWorksheetPackageEditTraversal.Edit(session, workbook, SaveWorksheet);
+
+    private static void SaveWorksheet(
+        XlsxWorksheetXmlEditSession session,
+        Sheet sheet,
+        XlsxWorksheetXmlEdit edit)
     {
-        foreach (var sheet in workbook.Sheets)
+        var additionalViews = sheet.AdditionalViews;
+        if (additionalViews is null)
+            return;
+
+        var root = edit.Root;
+
+        var changed = false;
+        var sheetViews = root.Element(WorksheetNs + "sheetViews");
+        if (sheetViews is null)
         {
-            var additionalViews = sheet.AdditionalViews;
-            if (additionalViews is null)
-                continue;
-
-            if (!session.TryGetWorksheet(sheet, out var edit))
-                continue;
-
-            var root = edit.Root;
-
-            var changed = false;
-            var sheetViews = root.Element(WorksheetNs + "sheetViews");
-            if (sheetViews is null)
-            {
-                sheetViews = new XElement(WorksheetNs + "sheetViews");
-                root.AddFirst(sheetViews);
-                changed = true;
-            }
-
-            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(sheetViews, additionalViews.NativeAttributes, []);
-            changed |= additionalViews.NativeAttributes.Count > 0;
-            foreach (var view in sheetViews.Elements(WorksheetNs + "sheetView").Where(IsAdditionalView).ToList())
-            {
-                view.Remove();
-                changed = true;
-            }
-
-            foreach (var viewModel in additionalViews.Views)
-            {
-                var view = ToXml(viewModel);
-                if (view is null)
-                    continue;
-
-                sheetViews.Add(view);
-                changed = true;
-            }
-
-            if (changed)
-                session.MarkDirty(edit);
+            sheetViews = new XElement(WorksheetNs + "sheetViews");
+            root.AddFirst(sheetViews);
+            changed = true;
         }
+
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(sheetViews, additionalViews.NativeAttributes, []);
+        changed |= additionalViews.NativeAttributes.Count > 0;
+        foreach (var view in sheetViews.Elements(WorksheetNs + "sheetView").Where(IsAdditionalView).ToList())
+        {
+            view.Remove();
+            changed = true;
+        }
+
+        foreach (var viewModel in additionalViews.Views)
+        {
+            var view = ToXml(viewModel);
+            if (view is null)
+                continue;
+
+            sheetViews.Add(view);
+            changed = true;
+        }
+
+        if (changed)
+            session.MarkDirty(edit);
     }
 
     private static WorksheetAdditionalViewModel ReadView(XElement element)

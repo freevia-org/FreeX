@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -51,25 +50,8 @@ internal static class XlsxWorksheetScenarioMapper
 
     public static void Save(Stream packageStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        var workbookRels = XlsxRelationshipReader.LoadTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
+        XlsxWorksheetPackageEditTraversal.Edit(packageStream, workbook, (session, sheet, edit) =>
         {
             var scenariosForSheet = workbook.Scenarios
                 .Select(scenario => new
@@ -85,21 +67,10 @@ internal static class XlsxWorksheetScenarioMapper
                 })
                 .Where(item => item.Changes.Count > 0)
                 .ToList();
-            if (scenariosForSheet.Count == 0 ||
-                !sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-            {
-                continue;
-            }
+            if (scenariosForSheet.Count == 0)
+                return;
 
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
+            var root = edit.Root;
             root.Element(workbookNs + "scenarios")?.Remove();
             XlsxWorksheetElementOrder.Insert(root, new XElement(
                 workbookNs + "scenarios",
@@ -125,8 +96,8 @@ internal static class XlsxWorksheetScenarioMapper
                     return scenario;
                 })));
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
-        }
+            session.MarkDirty(edit);
+        });
     }
 
     public static HashSet<string> GetModeledNamesForSheet(Workbook workbook, string sheetName)
