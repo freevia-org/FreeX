@@ -22,6 +22,14 @@ function Get-FileSha256([string]$path) {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath (Resolve-RepoPath $path)).Hash.ToLowerInvariant()
 }
 
+function Get-NormalizedSourceSha256([string]$path) {
+    $text = [IO.File]::ReadAllText((Resolve-RepoPath $path))
+    $text = $text.Replace("`r`n", "`n").Replace("`r", "`n")
+    $bytes = [Text.Encoding]::UTF8.GetBytes($text)
+    $hash = [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+    return (-join ($hash | ForEach-Object { $_.ToString("x2") }))
+}
+
 function Get-CanonicalJsonSha256($value) {
     $json = $value | ConvertTo-Json -Depth 20 -Compress
     $bytes = [Text.Encoding]::UTF8.GetBytes($json)
@@ -49,7 +57,7 @@ Assert-Condition ($LASTEXITCODE -eq 0) "capture source revision '$($provenance.g
 foreach ($source in @($provenance.sourceFiles)) {
     $sourcePath = Resolve-RepoPath $source.path
     Assert-Condition (Test-Path -LiteralPath $sourcePath) "source file is missing: $($source.path)."
-    Assert-Equal (Get-FileSha256 $source.path) $source.sha256 "source hash for $($source.path)"
+    Assert-Equal (Get-NormalizedSourceSha256 $source.path) $source.sha256 "normalized source hash for $($source.path)"
 }
 
 Assert-Equal (Get-FileSha256 $InventoryPath) $provenance.trackedInputs.inventory.sha256 "inventory hash"
