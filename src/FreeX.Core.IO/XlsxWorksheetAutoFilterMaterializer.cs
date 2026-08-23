@@ -222,6 +222,20 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             }
 
             var column = range.Start.Col + (uint)filterColumn.ColumnId;
+            if (filterColumn.CustomFilters.Count > 0 &&
+                filterColumn.CustomFiltersAndRaw is null &&
+                filterColumn.NativeCustomFiltersAttributes is null &&
+                XlsxWorksheetAutoFilterCustomFilterMatcher.TryCreate(filterColumn, out var customMatcher))
+            {
+                filters.Add(new WorksheetAutoFilterState(
+                    column,
+                    null,
+                    false,
+                    null,
+                    customMatcher));
+                continue;
+            }
+
             if (filterColumn.CustomFilters.Count > 0 ||
                 filterColumn.CustomFiltersAndRaw is not null ||
                 filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
@@ -384,6 +398,13 @@ internal static class XlsxWorksheetAutoFilterMaterializer
                 continue;
             }
 
+            if (filter.CustomMatcher is not null)
+            {
+                if (!filter.CustomMatcher(sheet.GetValue(row, filter.Column)))
+                    return false;
+                continue;
+            }
+
             var text = XlsxFilterValueTextFormatter.ToFilterText(sheet.GetValue(row, filter.Column));
             if (text.Length == 0 && filter.IncludeBlank)
                 continue;
@@ -398,5 +419,6 @@ internal static class XlsxWorksheetAutoFilterMaterializer
         uint Column,
         HashSet<string>? AllowedValues,
         bool IncludeBlank,
-        HashSet<uint>? AllowedRows);
+        HashSet<uint>? AllowedRows,
+        Func<ScalarValue, bool>? CustomMatcher = null);
 }

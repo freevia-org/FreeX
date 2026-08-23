@@ -2085,6 +2085,207 @@ PY
     fi
 }
 
+probe_autofilter_text_criteria_persistence_physical() {
+    local artifacts="autofilter-text-before.png;autofilter-text-begins-menu-open.png;autofilter-text-begins-applied.png;autofilter-text-begins-reopened.png;autofilter-text-equals-menu-open.png;autofilter-text-equals-applied.png;autofilter-text-postcondition.txt"
+    local begins_menu_open=false equals_menu_open=false begins_save_clean=false begins_dialog_open=false begins_dialog_closed=false
+    local equals_save_clean=false equals_dialog_open=false equals_dialog_closed=false
+    local begins_criteria="" equals_criteria="" begins_visible="" begins_reopened="" equals_visible="" equals_reopened=""
+    local begins_package="" equals_package=""
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "autofilter-text-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path\n"
+        record "autofilter-text-criteria-begins-with-save-reopen-physical" "failed" "autofilter-text-postcondition.txt" "The physical AutoFilter text-criteria lane requires an XLSX document path." "$artifacts"
+        record "autofilter-text-criteria-equals-save-reopen-physical" "failed" "autofilter-text-postcondition.txt" "The physical AutoFilter text-criteria lane requires an XLSX document path." "$artifacts"
+        return
+    fi
+
+    read_visible_pair() {
+        local first second third
+        first="$(copy_cell_display 0 1 A-visible-first || true)"
+        second="$(copy_cell_display 0 2 A-visible-second || true)"
+        third="$(copy_cell_display 0 3 A-visible-third || true)"
+        printf '%s,%s,%s' "$first" "$second" "$third"
+    }
+
+    package_text_signature() {
+        local expected_value="$1"
+        python3 - "$document_path" "$expected_value" <<'PY'
+import sys, zipfile, xml.etree.ElementTree as ET
+path, expected = sys.argv[1:]
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+with zipfile.ZipFile(path) as package:
+    root = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+auto_filter = root.find(main + "autoFilter")
+if auto_filter is None or auto_filter.attrib.get("ref") != "A1:B5":
+    raise SystemExit(1)
+column = auto_filter.find(main + "filterColumn")
+if column is None or column.attrib.get("colId") != "0":
+    raise SystemExit(1)
+custom = column.find(main + "customFilters")
+if custom is None:
+    raise SystemExit(1)
+filters = custom.findall(main + "customFilter")
+if len(filters) != 1 or filters[0].attrib.get("val") != expected:
+    raise SystemExit(1)
+operator = filters[0].attrib.get("operator", "")
+print(f"ref=A1:B5|colId=0|operator={operator}|value={filters[0].attrib.get('val','')}")
+PY
+    }
+
+    save_text_criteria_document() {
+        # Rebuild worksheet focus before saving. This is the same physical save contract used by
+        # Wave185: Ctrl+S is primary, while Shift+F12 is the established production fallback when
+        # the prior clipboard read leaves a non-grid focus owner.
+        select_cell 0 0 A1 || return 1
+        send_key ctrl+s
+        if wait_for_document_clean; then
+            return 0
+        fi
+        send_key shift+F12
+        wait_for_document_clean
+    }
+
+    apply_text_criteria() {
+        local option_index="$1" value="$2" operator_x="$3" operator_y="$4" value_x="$5" value_y="$6" ok_x="$7" ok_y="$8"
+        # The criteria panel is a real production ComboBox/TextBox surface below the Text Filters
+        # family row. Selecting the operator and typing its value proves the renderer route instead
+        # of crediting the free-form hidden criteria textbox or a managed command shortcut.
+        click_autofilter_control "$operator_x" "$operator_y"
+        send_flyout_key Home
+        for _ in $(seq 1 "$option_index"); do send_flyout_key Down; done
+        send_flyout_key Return
+        click_autofilter_control "$value_x" "$value_y"
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$value"
+        sleep "$settle_seconds"
+        click_autofilter_control "$ok_x" "$ok_y"
+    }
+
+    capture "autofilter-text-before.png"
+
+    # Begins With: North and Northwest remain visible, while South and East are hidden.
+    select_cell 0 0 A1
+    open_autofilter_menu 0
+    capture "autofilter-text-begins-menu-open.png"
+    if screen_changed "$output/autofilter-text-before.png" "$output/autofilter-text-begins-menu-open.png" 500; then
+        begins_menu_open=true
+        # ComboBox at the top of the criteria panel: Begins With is the fifth text option (index 4).
+        apply_text_criteria 4 "North" 130 165 130 195 292 420
+        begins_criteria="begins:North"
+        begins_visible="$(read_visible_pair)"
+        capture "autofilter-text-begins-applied.png"
+    fi
+
+    if $begins_menu_open && [[ "$begins_visible" == "North,Northwest," ]]; then
+        save_text_criteria_document && begins_save_clean=true
+        begins_package="$(package_text_signature 'North*' || true)"
+    fi
+
+    if $begins_save_clean && [[ "$begins_package" == *"value=North*"* ]]; then
+        local before_windows after_windows
+        before_windows="$(visible_window_count)"
+        send_key ctrl+F12
+        for _ in $(seq 1 12); do
+            after_windows="$(visible_window_count)"
+            if (( after_windows > before_windows )); then begins_dialog_open=true; break; fi
+            sleep 0.2
+        done
+        if $begins_dialog_open; then
+            xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+            xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+            xdotool key --clearmodifiers Return
+            sleep "$settle_seconds"
+            xdotool key --clearmodifiers Return
+            for _ in $(seq 1 16); do
+                after_windows="$(visible_window_count)"
+                if (( after_windows <= before_windows )); then begins_dialog_closed=true; break; fi
+                sleep 0.25
+            done
+        fi
+        if $begins_dialog_closed; then
+            capture "autofilter-text-begins-reopened.png"
+            begins_reopened="$(read_visible_pair)"
+        fi
+    fi
+
+    # Equals: the same production controls now reduce the visible body to East only.
+    if [[ "$begins_reopened" == "North,Northwest," ]]; then
+        select_cell 0 0 A1
+        open_autofilter_menu 0
+        capture "autofilter-text-equals-menu-open.png"
+        if screen_changed "$output/autofilter-text-begins-reopened.png" "$output/autofilter-text-equals-menu-open.png" 500; then
+            equals_menu_open=true
+            # Equals is the first text option (index 0).
+            apply_text_criteria 0 "East" 130 165 130 195 292 420
+            equals_criteria="text=East"
+            equals_visible="$(read_visible_pair)"
+            capture "autofilter-text-equals-applied.png"
+        fi
+    fi
+
+    if $equals_menu_open && [[ "$equals_visible" == "East,," ]]; then
+        save_text_criteria_document && equals_save_clean=true
+        equals_package="$(package_text_signature 'East' || true)"
+    fi
+
+    if $equals_save_clean && [[ "$equals_package" == *"value=East"* ]]; then
+        local before_windows after_windows
+        before_windows="$(visible_window_count)"
+        send_key ctrl+F12
+        for _ in $(seq 1 12); do
+            after_windows="$(visible_window_count)"
+            if (( after_windows > before_windows )); then equals_dialog_open=true; break; fi
+            sleep 0.2
+        done
+        if $equals_dialog_open; then
+            xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+            xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+            xdotool key --clearmodifiers Return
+            sleep "$settle_seconds"
+            xdotool key --clearmodifiers Return
+            for _ in $(seq 1 16); do
+                after_windows="$(visible_window_count)"
+                if (( after_windows <= before_windows )); then equals_dialog_closed=true; break; fi
+                sleep 0.25
+            done
+        fi
+        if $equals_dialog_closed; then
+            capture "autofilter-text-equals-reopened.png"
+            equals_reopened="$(read_visible_pair)"
+        fi
+    fi
+
+    local available_artifacts="autofilter-text-postcondition.txt"
+    for artifact in ${artifacts//;/ }; do
+        if [[ -f "$output/$artifact" && "$artifact" != "autofilter-text-postcondition.txt" ]]; then
+            available_artifacts="$available_artifacts;$artifact"
+        fi
+    done
+
+    write_artifact "autofilter-text-postcondition.txt" \
+        "document-path=$document_path\nbegins-menu-open=$begins_menu_open\nbegins-criteria=$begins_criteria\nbegins-visible=$begins_visible\nbegins-save-clean=$begins_save_clean\nbegins-package=$begins_package\nbegins-dialog-open=$begins_dialog_open\nbegins-dialog-closed=$begins_dialog_closed\nbegins-reopened=$begins_reopened\nequals-menu-open=$equals_menu_open\nequals-criteria=$equals_criteria\nequals-visible=$equals_visible\nequals-save-clean=$equals_save_clean\nequals-package=$equals_package\nequals-dialog-open=$equals_dialog_open\nequals-dialog-closed=$equals_dialog_closed\nequals-reopened=$equals_reopened\n"
+
+    if $begins_menu_open && [[ "$begins_criteria" == "begins:North" && "$begins_visible" == "North,Northwest," &&
+        "$begins_package" == *"ref=A1:B5|colId=0|operator=|value=North*"* && $begins_save_clean &&
+        $begins_dialog_open && $begins_dialog_closed && "$begins_reopened" == "North,Northwest," ]]; then
+        record "autofilter-text-criteria-begins-with-save-reopen-physical" "passed" \
+            "autofilter-text-begins-menu-open.png;autofilter-text-begins-applied.png;autofilter-text-begins-reopened.png;autofilter-text-postcondition.txt" \
+            "Text Filters > Begins With visibly retained North and Northwest, saved a North* customFilter, and reopened with the same visible rows." "$available_artifacts"
+    else
+        record "autofilter-text-criteria-begins-with-save-reopen-physical" "failed" "$available_artifacts" \
+            "Begins With did not prove the rendered criteria commit, visible rows, clean save, package North* customFilter, and exact reopen state." "$available_artifacts"
+    fi
+    if $equals_menu_open && [[ "$equals_criteria" == "text=East" && "$equals_visible" == "East,," &&
+        "$equals_package" == *"ref=A1:B5|colId=0|operator=|value=East"* && $equals_save_clean &&
+        $equals_dialog_open && $equals_dialog_closed && "$equals_reopened" == "East,," ]]; then
+        record "autofilter-text-criteria-equals-save-reopen-physical" "passed" \
+            "autofilter-text-equals-menu-open.png;autofilter-text-equals-applied.png;autofilter-text-equals-reopened.png;autofilter-text-postcondition.txt" \
+            "Text Filters > Equals visibly retained East, saved an East customFilter, and reopened with the same visible value." "$available_artifacts"
+    else
+        record "autofilter-text-criteria-equals-save-reopen-physical" "failed" "$available_artifacts" \
+            "Equals did not prove the rendered criteria commit, visible East value, clean save, package East customFilter, and exact reopen state." "$available_artifacts"
+    fi
+}
+
 sheet_tab_center_x() {
     local index="$1"
     if (( index == 0 )); then
@@ -5198,6 +5399,19 @@ if [[ "$probe_selector" == "autofilter-sort-persistence" ]]; then
     if (( $(printf '%s\n' "${results[@]}" | grep -c '\"status\":\"failed\"' || true) > 0 )); then
         exit 1
     fi
+    exit 0
+fi
+if [[ "$probe_selector" == "autofilter-text-criteria-persistence" ]]; then
+    probe_autofilter_text_criteria_persistence_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the text criteria probe."
+    fi
+    write_manifest
+    probe_failed=false
+    for result in "${results[@]}"; do
+        [[ "$result" == *'"status":"failed"'* ]] && probe_failed=true
+    done
+    if $probe_failed; then exit 3; fi
     exit 0
 fi
 

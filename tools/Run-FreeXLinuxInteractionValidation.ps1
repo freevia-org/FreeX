@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
+    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "autofilter-text-criteria-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -56,6 +56,7 @@ $native3dFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-
 $gridAutofitFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave164GridAutofitFixture.ps1"
 $nestedOutlineFilterFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave100NestedOutlineFilterFixture.ps1"
 $autoFilterSortFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave185AutoFilterSortFixture.ps1"
+$autoFilterTextFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave186AutoFilterTextFixture.ps1"
 $native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
 $gridAutofitSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-grid-autofit-validation.schema.json"
 $nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
@@ -1242,6 +1243,16 @@ try {
             throw "autofilter-sort-persistence requires an existing .xlsx PhysicalDocumentPath."
         }
     }
+    if ($PhysicalProbeSelector -eq "autofilter-text-criteria-persistence") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = Join-Path $reportDirectory "fixtures/freex-wave186-autofilter-text.xlsx"
+            & $autoFilterTextFixtureGenerator -OutputPath $PhysicalDocumentPath
+        }
+        if (-not (Test-Path -LiteralPath $PhysicalDocumentPath -PathType Leaf) -or
+            [IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "autofilter-text-criteria-persistence requires an existing .xlsx PhysicalDocumentPath."
+        }
+    }
     if ($PhysicalProbeSelector -in @("pivot-field-list", "pivot-table-details-double-click")) {
         if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
             $PhysicalDocumentPath = $pivotDetailsFixturePath
@@ -1355,6 +1366,8 @@ try {
         @(
             "autofilter-recalculation-apply-change-clear-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "autofilter-text-criteria-persistence") {
+        @("autofilter-text-criteria-begins-with-save-reopen-physical", "autofilter-text-criteria-equals-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "backstage-print") {
         @(
             "backstage-print-ctrl-shift-f12-cancel"
@@ -1496,6 +1509,8 @@ try {
         )
     } elseif ($PhysicalProbeSelector -eq "autofilter-sort-persistence") {
         @("autofilter-sort-ascending-descending-save-reopen-physical")
+    } elseif ($PhysicalProbeSelector -eq "autofilter-text-criteria-persistence") {
+        @("autofilter-text-criteria-begins-with-save-reopen-physical", "autofilter-text-criteria-equals-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
         @(
             "formula-bar-point-mode-3d-sheet-range-grip"

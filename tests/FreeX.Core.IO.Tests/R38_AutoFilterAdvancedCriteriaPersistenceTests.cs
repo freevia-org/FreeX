@@ -1,5 +1,7 @@
 using System.IO;
 using System.Linq;
+using System.IO.Compression;
+using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -174,6 +176,82 @@ public sealed class R38_AutoFilterAdvancedCriteriaPersistenceTests
     }
 
     [Fact]
+    public void XlsxLoad_InlineStringEqualityCustomFilter_ReappliesWithoutRowHiddenBits()
+    {
+        var workbook = new Workbook("inline-equality");
+        var sheet = workbook.AddSheet("Sheet1");
+        SetText(sheet, 1, 1, "Region");
+        SetText(sheet, 2, 1, "North");
+        SetText(sheet, 3, 1, "South");
+        SetText(sheet, 4, 1, "West");
+        SetText(sheet, 5, 1, "East");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1));
+        sheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
+        new FilterConditionCommand(sheet.Id, range, 0, new TextEqualsFilterCriterion("East"))
+            .Apply(new TestCommandContext(workbook))
+            .Success.Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, stream);
+        RemoveFilteredRowBitsAndUseInlineStrings(stream, ["Region", "North", "South", "West", "East"]);
+
+        stream.Position = 0;
+        var reloaded = adapter.Load(stream);
+        var reloadedSheet = reloaded.Sheets.Single();
+
+        reloadedSheet.FilterHiddenRows.Should().BeEquivalentTo([2u, 3u, 4u]);
+        reloadedSheet.FilterHiddenRows.Should().NotContain(5u);
+        reloadedSheet.GetValue(5, 1).Should().BeOfType<TextValue>().Which.Value.Should().Be("East");
+    }
+
+    [Fact]
+    public void XlsxLoad_InlineStringBeginsWithCustomFilter_ReappliesWithoutRowHiddenBits()
+    {
+        var workbook = new Workbook("inline-begins");
+        var sheet = workbook.AddSheet("Sheet1");
+        SetText(sheet, 1, 1, "Region");
+        SetText(sheet, 2, 1, "North");
+        SetText(sheet, 3, 1, "Northwest");
+        SetText(sheet, 4, 1, "South");
+        SetText(sheet, 5, 1, "East");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1));
+        sheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
+        new FilterConditionCommand(sheet.Id, range, 0, new TextBeginsWithFilterCriterion("North"))
+            .Apply(new TestCommandContext(workbook))
+            .Success.Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, stream);
+        RemoveFilteredRowBitsAndUseInlineStrings(stream, ["Region", "North", "Northwest", "South", "East"]);
+
+        stream.Position = 0;
+        var reloadedSheet = adapter.Load(stream).Sheets.Single();
+        reloadedSheet.FilterHiddenRows.Should().BeEquivalentTo([4u, 5u]);
+        reloadedSheet.FilterHiddenRows.Should().NotContain(2u);
+        reloadedSheet.FilterHiddenRows.Should().NotContain(3u);
+    }
+
+    [Fact]
+    public void XlsxLoad_NumericCustomFilter_ReappliesWithoutRowHiddenBits()
+    {
+        var (workbook, sheet, _, range) = MakeSheet();
+        new FilterConditionCommand(sheet.Id, range, 0, new NumberGreaterThanFilterCriterion(50))
+            .Apply(new TestCommandContext(workbook))
+            .Success.Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, stream);
+        RemoveFilteredRowBits(stream);
+
+        stream.Position = 0;
+        var reloadedSheet = adapter.Load(stream).Sheets.Single();
+        reloadedSheet.FilterHiddenRows.Should().ContainSingle().Which.Should().Be(4u);
+    }
+
+    [Fact]
     public void FilterConditionCommand_Undo_RestoresPreviousAutoFilterColumns()
     {
         var (_, sheet, ctx, range) = MakeSheet();
@@ -201,5 +279,61 @@ public sealed class R38_AutoFilterAdvancedCriteriaPersistenceTests
         // All 3 data rows have non-blank numeric values, so none are hidden.
         sheet.FilterHiddenRows.Should().BeEmpty();
         sheet.AutoFilter!.FilterColumns.Should().BeEmpty();
+    }
+
+    private static void SetText(Sheet sheet, uint row, uint col, string value) =>
+        sheet.SetCell(new CellAddress(sheet.Id, row, col), new TextValue(value));
+
+    private static void RemoveFilteredRowBits(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        var entry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
+        XDocument document;
+        using (var reader = new StreamReader(entry.Open()))
+            document = XDocument.Parse(reader.ReadToEnd());
+
+        var worksheetNs = XNamespace.Get("http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+        foreach (var row in document.Root!.Element(worksheetNs + "sheetData")!.Elements(worksheetNs + "row"))
+            row.Attribute("hidden")?.Remove();
+
+        entry.Delete();
+        var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
+        using var writer = new StreamWriter(replacement.Open());
+        document.Save(writer, SaveOptions.DisableFormatting);
+    }
+
+    private static void RemoveFilteredRowBitsAndUseInlineStrings(MemoryStream stream, IReadOnlyList<string> values)
+    {
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
+            XDocument document;
+            using (var reader = new StreamReader(entry.Open()))
+                document = XDocument.Parse(reader.ReadToEnd());
+
+            var worksheetNs = XNamespace.Get("http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+            foreach (var row in document.Root!.Element(worksheetNs + "sheetData")!.Elements(worksheetNs + "row"))
+            {
+                row.Attribute("hidden")?.Remove();
+                var rowNumber = int.Parse(row.Attribute("r")!.Value);
+                var cell = row.Element(worksheetNs + "c");
+                if (cell is null || rowNumber > values.Count)
+                    continue;
+
+                cell.Attribute("t")?.Remove();
+                cell.Element(worksheetNs + "v")?.Remove();
+                cell.Add(new XElement(
+                    worksheetNs + "is",
+                    new XElement(worksheetNs + "t", values[rowNumber - 1])));
+                cell.SetAttributeValue("t", "inlineStr");
+            }
+
+            entry.Delete();
+            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
+            using var writer = new StreamWriter(replacement.Open());
+            document.Save(writer, SaveOptions.DisableFormatting);
+        }
     }
 }
