@@ -6056,6 +6056,7 @@ probe_autofilter_color_persistence_physical() {
     local prefix="autofilter-color" result_id="autofilter-color-fill-save-reopen-physical" description="Filter by Cell Color"
     local expected_criteria="${mode}:#00B050" expected_package_mode="1" expected_package_color="fill=FF00B050"
     # Font gate emits criteria=font:#00B050 only after the rendered swatch pixel passes.
+    # Wave191 fill gate emits fill:#00B050 only after the same rendered gate.
     if [[ "$mode" == "font" ]]; then
         prefix="autofilter-font-color"
         result_id="autofilter-color-font-save-reopen-physical"
