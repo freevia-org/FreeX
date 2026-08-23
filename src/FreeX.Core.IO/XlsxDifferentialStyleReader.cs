@@ -136,7 +136,7 @@ internal static class XlsxDifferentialStyleReader
             .Element(workbookNs + "patternFill");
         if (patternFill is not null)
         {
-            style.FillPatternStyle = FromPatternType(patternFill.Attribute("patternType")?.Value);
+            style.FillPatternStyle = XlsxFillPatternCodec.FromToken(patternFill.Attribute("patternType")?.Value);
             if (TryReadColor(patternFill.Element(workbookNs + "bgColor"), theme, indexedColors, out var backgroundColor, out var backgroundThemeColor))
             {
                 style.FillColor = backgroundColor;
@@ -290,27 +290,4 @@ internal static class XlsxDifferentialStyleReader
     private static bool IsSupportedFontSize(double fontSize) =>
         fontSize >= 1 && fontSize <= 409;
 
-    private static CellFillPatternStyle FromPatternType(string? patternType) =>
-        patternType switch
-        {
-            "solid" => CellFillPatternStyle.Solid,
-            "gray0625" => CellFillPatternStyle.Gray0625,
-            "gray125" => CellFillPatternStyle.Gray125,
-            "lightGray" => CellFillPatternStyle.LightGray,
-            "mediumGray" => CellFillPatternStyle.MediumGray,
-            "darkGray" => CellFillPatternStyle.DarkGray,
-            "lightHorizontal" => CellFillPatternStyle.LightHorizontal,
-            "lightVertical" => CellFillPatternStyle.LightVertical,
-            "lightDown" => CellFillPatternStyle.LightDown,
-            "lightUp" => CellFillPatternStyle.LightUp,
-            "lightGrid" => CellFillPatternStyle.LightGrid,
-            "lightTrellis" => CellFillPatternStyle.LightTrellis,
-            "darkHorizontal" => CellFillPatternStyle.DarkHorizontal,
-            "darkVertical" => CellFillPatternStyle.DarkVertical,
-            "darkDown" => CellFillPatternStyle.DarkDown,
-            "darkUp" => CellFillPatternStyle.DarkUp,
-            "darkGrid" => CellFillPatternStyle.DarkGrid,
-            "darkTrellis" => CellFillPatternStyle.DarkTrellis,
-            _ => CellFillPatternStyle.None
-        };
 }

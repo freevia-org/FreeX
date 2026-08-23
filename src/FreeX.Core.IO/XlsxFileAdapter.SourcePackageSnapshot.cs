@@ -2054,15 +2054,15 @@ public sealed partial class XlsxFileAdapter
                     // (Sheet.SetPrintAreas([]) / PrintTitleRows = null) was unconditionally
                     // resurrected from the pristine source snapshot regardless of the sheet's
                     // current state. Mirror XlsxWorkbookMetadataPreserver.MergeDefinedNames'
-                    // TryGetPrintSettingKind liveness check here: only resurrect when the sheet
+                    // print-setting classifier liveness check here: only resurrect when the sheet
                     // this name is (now) scoped to still actually has a print area / print titles
                     // set.
-                    if (TryGetPrintSettingKind(sourceNameAttr, out var printSettingKind) &&
+                    if (XlsxPrintSettingNameClassifier.TryClassify(sourceNameAttr, out var printSettingKind) &&
                         newLocalSheetId >= 0 &&
                         newLocalSheetId < workbook.Sheets.Count)
                     {
                         var scopeSheet = workbook.Sheets[newLocalSheetId];
-                        var isLive = printSettingKind == PrintSettingKind.PrintArea
+                        var isLive = printSettingKind == XlsxPrintSettingKind.PrintArea
                             ? scopeSheet.PrintAreas.Count > 0
                             : scopeSheet.PrintTitleRows is not null || scopeSheet.PrintTitleColumns is not null;
                         if (!isLive)
@@ -2084,48 +2084,6 @@ public sealed partial class XlsxFileAdapter
                 var localSheetId = element.Attribute("localSheetId")?.Value ?? string.Empty;
                 return $"{name}\u001f{localSheetId}";
             }
-        }
-
-        // Mirrors XlsxWorkbookMetadataPreserver's private PrintSettingKind/TryGetPrintSettingKind
-        // (used by MergeDefinedNames for the same print-area/print-titles liveness check on the
-        // full-rebuild-without-source-package path); duplicated here rather than shared because
-        // that preserver's copy is private to its own class and this file's resurrection path
-        // (RestorePatchWorkbookDefinedNames) runs at a different point in the save pipeline.
-        private enum PrintSettingKind
-        {
-            PrintArea,
-            PrintTitles,
-        }
-
-        // Matches the reserved defined-name identifying a sheet's print area or print titles
-        // (repeat rows/columns), whether stored with the standard OOXML "_xlnm." built-in-name
-        // prefix (e.g. "_xlnm.Print_Area") or, for oddly-authored/legacy files, bare
-        // ("Print_Area") - mirroring the two forms XlsxNamedRangeMapper.IsExcelReservedDefinedName
-        // itself recognizes.
-        private static bool TryGetPrintSettingKind(string? name, out PrintSettingKind kind)
-        {
-            kind = default;
-            if (string.IsNullOrWhiteSpace(name))
-                return false;
-
-            var trimmed = name.Trim();
-            var unprefixed = trimmed.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase)
-                ? trimmed["_xlnm.".Length..]
-                : trimmed;
-
-            if (string.Equals(unprefixed, "Print_Area", StringComparison.OrdinalIgnoreCase))
-            {
-                kind = PrintSettingKind.PrintArea;
-                return true;
-            }
-
-            if (string.Equals(unprefixed, "Print_Titles", StringComparison.OrdinalIgnoreCase))
-            {
-                kind = PrintSettingKind.PrintTitles;
-                return true;
-            }
-
-            return false;
         }
 
         // Mirrors XlsxWorkbookSchemaNormalizer.WorkbookChildOrder's CT_Workbook child sequence (the

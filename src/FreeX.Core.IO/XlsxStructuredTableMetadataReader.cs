@@ -1,7 +1,6 @@
 using FreeX.Core.Model;
 using System.IO.Compression;
 using System.Xml.Linq;
-using System.Xml;
 
 namespace FreeX.Core.IO;
 
@@ -97,11 +96,10 @@ internal static class XlsxStructuredTableMetadataReader
             if (worksheetEntry is null)
                 continue;
 
-            var tableRelIds = ReadWorksheetRelationshipIds(
+            var tableRelIds = XlsxWorksheetRelationshipIdReader.ReadAll(
                 worksheetEntry,
-                "tablePart",
-                "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
-                relNs.NamespaceName);
+                workbookNs + "tablePart",
+                relNs + "id");
             if (tableRelIds.Count == 0)
                 continue;
 
@@ -241,39 +239,6 @@ internal static class XlsxStructuredTableMetadataReader
         return XlsxPackageXmlEditor.LoadXml(entry);
     }
 
-    private static List<string> ReadWorksheetRelationshipIds(
-        ZipArchiveEntry worksheetEntry,
-        string localName,
-        string namespaceName,
-        string relationshipNamespaceName)
-    {
-        var result = new List<string>();
-        using var stream = worksheetEntry.Open();
-        using var reader = XmlReader.Create(stream, new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            IgnoreComments = true,
-            IgnoreProcessingInstructions = true,
-            IgnoreWhitespace = true,
-        });
-
-        while (reader.Read())
-        {
-            if (reader.NodeType != XmlNodeType.Element ||
-                !string.Equals(reader.LocalName, localName, StringComparison.Ordinal) ||
-                !string.Equals(reader.NamespaceURI, namespaceName, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var relId = reader.GetAttribute("id", relationshipNamespaceName);
-            if (!string.IsNullOrWhiteSpace(relId))
-                result.Add(relId);
-        }
-
-        return result;
-    }
-
     private static Dictionary<string, string> LoadRelationshipTargets(
         ZipArchive archive,
         string relsPath,
@@ -388,22 +353,22 @@ internal static class XlsxStructuredTableMetadataReader
                     // XlsxStructuredTableWriter.ToFilterColumnXml unconditionally excludes
                     // "colorFilter" from that passthrough (it re-emits ColorFilter itself instead),
                     // so a loaded table whose colorFilter never lands here was silently dropped on
-                    // the very next save. Mirrors XlsxWorksheetAutoFilterXmlMapper.ReadColorFilter,
+                    // the very next save. The shared codec optionally resolves DXF colors when the
                     // minus dxf-color resolution: this reader has no access to the workbook's
                     // resolved differential styles, but Color is purely an informational
                     // convenience (the writer only ever emits dxfId/cellColor), so leaving it null
                     // here does not affect round-trip fidelity.
-                    ColorFilter = ReadColorFilter(colorFilterElement),
+                    ColorFilter = XlsxAutoFilterXmlCodec.ReadColorFilter(colorFilterElement),
                     // R111-io-structured-table-dategroup-roundtrip-1: parse <filters>/<dateGroupItem>
                     // children (Excel's built-in Year/Quarter/Month/Day date-checklist filter) the same
-                    // way XlsxWorksheetAutoFilterXmlMapper.ReadDateGroupItem does for the sheet-level
+                    // way XlsxAutoFilterXmlCodec does for the sheet-level
                     // AutoFilter path -- see StructuredTableFilterColumnModel.DateGroups for the full
                     // rationale. A <filters> element whose only children are dateGroupItem has no
                     // <filter> children at all, so without this the column had Values.Count==0 and
                     // nothing else to keep it, and the inclusion guard below dropped it entirely.
                     DateGroups = filters?
                         .Elements(workbookNs + "dateGroupItem")
-                        .Select(ReadDateGroupItem)
+                        .Select(XlsxAutoFilterXmlCodec.ReadDateGroupItem)
                         .ToList() ?? [],
                 };
             })
@@ -418,55 +383,6 @@ internal static class XlsxStructuredTableMetadataReader
                  column.NativeFilterXmls.Count > 0 ||
                  column.NativeAttributes?.Count > 0))
             .ToList();
-    }
-
-    /// <summary>Mirrors XlsxWorksheetAutoFilterXmlMapper.ReadDateGroupItem exactly (same model type, same attribute set) so a table's &lt;dateGroupItem&gt; parses identically to the sheet-level AutoFilter path.</summary>
-    private static WorksheetAutoFilterDateGroupItemModel ReadDateGroupItem(XElement dateGroup)
-    {
-        var nativeAttributes = dateGroup.Attributes()
-            .Where(attribute =>
-                !IsModeledAttribute(attribute, "year") &&
-                !IsModeledAttribute(attribute, "month") &&
-                !IsModeledAttribute(attribute, "day") &&
-                !IsModeledAttribute(attribute, "hour") &&
-                !IsModeledAttribute(attribute, "minute") &&
-                !IsModeledAttribute(attribute, "second") &&
-                !IsModeledAttribute(attribute, "dateTimeGrouping"))
-            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
-        return new WorksheetAutoFilterDateGroupItemModel(
-            Year: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "year"),
-            Month: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "month"),
-            Day: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "day"),
-            Hour: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "hour"),
-            Minute: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "minute"),
-            Second: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "second"),
-            DateTimeGrouping: dateGroup.Attribute("dateTimeGrouping")?.Value,
-            YearRaw: dateGroup.Attribute("year")?.Value,
-            MonthRaw: dateGroup.Attribute("month")?.Value,
-            DayRaw: dateGroup.Attribute("day")?.Value,
-            HourRaw: dateGroup.Attribute("hour")?.Value,
-            MinuteRaw: dateGroup.Attribute("minute")?.Value,
-            SecondRaw: dateGroup.Attribute("second")?.Value,
-            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
-    }
-
-    private static WorksheetAutoFilterColorFilterModel? ReadColorFilter(XElement? colorFilter)
-    {
-        if (colorFilter is null)
-            return null;
-
-        var nativeAttributes = colorFilter.Attributes()
-            .Where(attribute =>
-                !IsModeledAttribute(attribute, "dxfId") &&
-                !IsModeledAttribute(attribute, "cellColor"))
-            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
-
-        return new WorksheetAutoFilterColorFilterModel(
-            DifferentialFormatId: XlsxXmlAttributeReader.ReadIntAttribute(colorFilter, "dxfId"),
-            CellColor: XlsxXmlAttributeReader.ReadBoolAttribute(colorFilter, "cellColor", defaultValue: true),
-            DifferentialFormatIdRaw: colorFilter.Attribute("dxfId")?.Value,
-            CellColorRaw: colorFilter.Attribute("cellColor")?.Value,
-            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
     }
 
     private static IReadOnlyDictionary<string, string>? ReadCustomFilterNativeAttributes(XElement filter)

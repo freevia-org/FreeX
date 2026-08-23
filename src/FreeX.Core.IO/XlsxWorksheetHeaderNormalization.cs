@@ -144,7 +144,7 @@ internal static class XlsxWorksheetHeaderNormalization
                 return null;
             }
 
-            var root = CreateShallowElement(reader);
+            var root = XmlReaderElementMaterializer.CreateShallowElement(reader);
             if (reader.IsEmptyElement)
                 return root;
 
@@ -166,7 +166,7 @@ internal static class XlsxWorksheetHeaderNormalization
                     string.Equals(reader.NamespaceURI, WorksheetNs.NamespaceName, StringComparison.Ordinal))
                 {
                     // Keep a shallow sheetData placeholder but skip its (potentially huge) row subtree.
-                    root.Add(CreateShallowElement(reader));
+                    root.Add(XmlReaderElementMaterializer.CreateShallowElement(reader));
                     reader.Skip();
                     readNext = false;
                     continue;
@@ -187,31 +187,4 @@ internal static class XlsxWorksheetHeaderNormalization
         }
     }
 
-    private static XElement CreateShallowElement(XmlReader reader)
-    {
-        var element = new XElement(XName.Get(reader.LocalName, reader.NamespaceURI));
-        if (!reader.HasAttributes)
-            return element;
-
-        for (var i = 0; i < reader.AttributeCount; i++)
-        {
-            reader.MoveToAttribute(i);
-            element.Add(new XAttribute(GetAttributeName(reader), reader.Value));
-        }
-
-        reader.MoveToElement();
-        return element;
-    }
-
-    private static XName GetAttributeName(XmlReader reader)
-    {
-        if (reader.Prefix == "xmlns")
-            return XNamespace.Xmlns + reader.LocalName;
-        if (reader.Name == "xmlns")
-            return XName.Get("xmlns");
-        if (reader.NamespaceURI.Length == 0)
-            return XName.Get(reader.LocalName);
-
-        return XName.Get(reader.LocalName, reader.NamespaceURI);
-    }
 }

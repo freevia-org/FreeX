@@ -854,7 +854,7 @@ internal static class XlsxWorkbookMetadataPreserver
                 workbook.ValidateNamedRangeName(sourceNameAttr) is null &&
                 !XlsxNamedRangeMapper.IsUnmodelableDefinedNameRefersTo(candidate.Value);
 
-            if (TryGetPrintSettingKind(sourceNameAttr, out var printSettingKind) &&
+            if (XlsxPrintSettingNameClassifier.TryClassify(sourceNameAttr, out var printSettingKind) &&
                 localSheetIdAttr is not null &&
                 int.TryParse(localSheetIdAttr.Value, out var scopeSheetIndex) &&
                 scopeSheetIndex >= 0 &&
@@ -883,7 +883,7 @@ internal static class XlsxWorkbookMetadataPreserver
                 // happens if that emission is somehow missing, in which case falling through to
                 // resurrect the pristine value (below) is still the safest match to the model.
                 var scopeSheet = workbook.Sheets[scopeSheetIndex];
-                var isLive = printSettingKind == PrintSettingKind.PrintArea
+                var isLive = printSettingKind == XlsxPrintSettingKind.PrintArea
                     ? scopeSheet.PrintAreas.Count > 0
                     : scopeSheet.PrintTitleRows is not null || scopeSheet.PrintTitleColumns is not null;
                 if (!isLive)
@@ -915,43 +915,6 @@ internal static class XlsxWorkbookMetadataPreserver
             var localSheetId = element.Attribute("localSheetId")?.Value ?? string.Empty;
             return $"{name}\u001f{localSheetId}";
         }
-    }
-
-    private enum PrintSettingKind
-    {
-        PrintArea,
-        PrintTitles,
-    }
-
-    // Matches the reserved defined-name identifying a sheet's print area or print titles
-    // (repeat rows/columns), whether stored with the standard OOXML "_xlnm." built-in-name
-    // prefix (e.g. "_xlnm.Print_Area") or, for oddly-authored/legacy files, bare
-    // ("Print_Area") - mirroring the two forms XlsxNamedRangeMapper.IsExcelReservedDefinedName
-    // itself recognizes.
-    private static bool TryGetPrintSettingKind(string? name, out PrintSettingKind kind)
-    {
-        kind = default;
-        if (string.IsNullOrWhiteSpace(name))
-            return false;
-
-        var trimmed = name.Trim();
-        var unprefixed = trimmed.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase)
-            ? trimmed["_xlnm.".Length..]
-            : trimmed;
-
-        if (string.Equals(unprefixed, "Print_Area", StringComparison.OrdinalIgnoreCase))
-        {
-            kind = PrintSettingKind.PrintArea;
-            return true;
-        }
-
-        if (string.Equals(unprefixed, "Print_Titles", StringComparison.OrdinalIgnoreCase))
-        {
-            kind = PrintSettingKind.PrintTitles;
-            return true;
-        }
-
-        return false;
     }
 
     private static void InsertCustomWorkbookViewsInOrder(
