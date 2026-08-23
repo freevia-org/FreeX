@@ -23,12 +23,13 @@ public sealed class SentryCrashAnalytics : ICrashAnalytics
         _sentry = SentrySdk.Init(options =>
         {
             options.Dsn = crashAnalyticsOptions.Dsn;
-            options.Release = metadata.AppVersion;
-            options.Environment = crashAnalyticsOptions.Environment;
+            options.Release = $"FreeX@{metadata.AppVersion}";
+            options.Environment = $"{crashAnalyticsOptions.Environment}-freex";
             options.SendDefaultPii = false;
             options.SetBeforeSend((sentryEvent, _) =>
             {
                 sentryEvent.SetTag("freex.session_id", metadata.SessionId);
+                sentryEvent.SetTag("freeapp.product", "FreeX");
                 sentryEvent.SetTag("freex.runtime", metadata.RuntimeDescription);
                 sentryEvent.SetTag("freex.os", metadata.OperatingSystemDescription);
                 sentryEvent.SetTag("freex.architecture", metadata.ProcessArchitecture);
@@ -64,6 +65,7 @@ public sealed class SentryCrashAnalytics : ICrashAnalytics
             scope.SetTag("freex.crash_source", source);
         });
         SentrySdk.CaptureException(exception);
+        SentrySdk.FlushAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
     }
 
     public void Dispose()

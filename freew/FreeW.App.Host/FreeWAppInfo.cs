@@ -9,6 +9,8 @@ public static class FreeWAppInfo
 
     public static string AboutText => AboutPresentation.AboutText;
 
+    public static string FeedbackUrl => FreeWProductInfo.CreateFeedbackUrl(typeof(FreeWAppInfo).Assembly);
+
     public static string CreateDiagnosticsText(string diagnosticsDirectory, string optionsPath) =>
         FreeWProductInfo.CreateDiagnosticsText(
             typeof(FreeWAppInfo).Assembly,

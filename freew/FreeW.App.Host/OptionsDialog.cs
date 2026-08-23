@@ -34,6 +34,10 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _recentFilesCap = new() { MinWidth = 80, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly ComboBox _defaultFormat = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _uiLanguage = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly CheckBox _crashAnalytics = new()
+    {
+        Content = "Send privacy-filtered crash reports (takes effect next launch)",
+    };
 
     private readonly IReadOnlyDictionary<OptionsDialogToggleKind, CheckBox> _toggles;
     private readonly DataGrid _replacements = new()
@@ -81,6 +85,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _recentFilesCap.Text = _session.InitialState.RecentFilesCapText;
         _uiLanguage.Text = _session.InitialState.UiLanguage;
+        _crashAnalytics.IsChecked = CrashAnalyticsConsentStore.Load().Enabled;
 
         var tabs = new TabControl { Margin = new Thickness(OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, 0) };
         var tabContents = new[] { BuildGeneralTab(), BuildAutoCorrectTab(), BuildAutoFormatTab() };
@@ -128,6 +133,13 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             var field = _surface.General.Fields[index];
             AddRow(grid, index, field.Label, GeneralControlFor(field.Kind), field.Hint);
         }
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        AddRow(
+            grid,
+            _surface.General.Fields.Count,
+            "Crash analytics:",
+            _crashAnalytics,
+            "Off by default. Reports are sent only when a release endpoint is configured; document contents and paths are not intentionally collected.");
         return grid;
     }
 
@@ -286,6 +298,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         }
 
         Result = plan.Result!;
+        _ = CrashAnalyticsConsentStore.Save(_crashAnalytics.IsChecked == true);
         DialogResult = true;
     }
 

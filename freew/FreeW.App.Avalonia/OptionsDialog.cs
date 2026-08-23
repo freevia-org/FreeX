@@ -32,6 +32,10 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
     private readonly TextBox _recentFilesCap = new() { Width = 72, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly ComboBox _defaultFormat = new() { Width = 180, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _uiLanguage = new() { Width = 180, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly CheckBox _crashAnalytics = new()
+    {
+        Content = "Send privacy-filtered crash reports (takes effect next launch)",
+    };
     private readonly IReadOnlyDictionary<OptionsDialogToggleKind, CheckBox> _toggles;
     private readonly Border _replacements = new()
     {
@@ -67,6 +71,7 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
         if (_defaultFormat.SelectedIndex < 0)
             _defaultFormat.SelectedIndex = 0;
         _uiLanguage.Text = _session.InitialState.UiLanguage;
+        _crashAnalytics.IsChecked = CrashAnalyticsConsentStore.Load().Enabled;
         BuildReplacementTable();
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_recentFilesCap, DialogChromeStyle);
@@ -167,6 +172,7 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
         }
 
         Result = plan.Result!;
+        _ = CrashAnalyticsConsentStore.Save(_crashAnalytics.IsChecked == true);
         Close();
     }
 
@@ -190,6 +196,12 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
             var field = _surface.General.Fields[index];
             AvaloniaLabeledFormRow.Add(grid, index, field.Label, GeneralControlFor(field.Kind), field.Hint);
         }
+        AvaloniaLabeledFormRow.Add(
+            grid,
+            _surface.General.Fields.Count,
+            "Crash analytics:",
+            _crashAnalytics,
+            "Off by default. Reports are sent only when a release endpoint is configured; document contents and paths are not intentionally collected.");
         return grid;
     }
 

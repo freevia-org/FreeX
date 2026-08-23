@@ -8,16 +8,21 @@ namespace Free.Shared.AppServices;
 /// launch, save, or shutdown. UI hosts pass their dispatcher subscription into
 /// <see cref="RegisterCrashHandlers"/> so this neutral tier does not reference WPF or Avalonia.
 /// </summary>
-public class LocalAppDiagnostics
+public class LocalAppDiagnostics : IDisposable
 {
     private readonly AppDiagnosticsFileStore _fileStore;
     private readonly AppDiagnosticsMetadata _metadata;
+    private readonly IAppCrashAnalytics _crashAnalytics;
 
     /// <summary>Builds a diagnostics service over a file store and this build's metadata.</summary>
-    public LocalAppDiagnostics(AppDiagnosticsFileStore fileStore, AppDiagnosticsMetadata metadata)
+    public LocalAppDiagnostics(
+        AppDiagnosticsFileStore fileStore,
+        AppDiagnosticsMetadata metadata,
+        IAppCrashAnalytics? crashAnalytics = null)
     {
         _fileStore = fileStore;
         _metadata = metadata;
+        _crashAnalytics = crashAnalytics ?? DisabledAppCrashAnalytics.Instance;
     }
 
     protected LocalAppDiagnostics(LocalAppDiagnostics other)
@@ -25,6 +30,7 @@ public class LocalAppDiagnostics
         ArgumentNullException.ThrowIfNull(other);
         _fileStore = other._fileStore;
         _metadata = other._metadata;
+        _crashAnalytics = other._crashAnalytics;
     }
 
     public AppDiagnosticsMetadata Metadata => _metadata;
@@ -33,7 +39,8 @@ public class LocalAppDiagnostics
 
     public static LocalAppDiagnostics Create(
         string appVersion,
-        string? diagnosticsDirectory = null)
+        string? diagnosticsDirectory = null,
+        bool? remoteAnalyticsConsent = null)
     {
         var defaults = AppDiagnosticsOptions.CreateDefault();
         var options = new AppDiagnosticsOptions(
@@ -41,22 +48,19 @@ public class LocalAppDiagnostics
                 ? defaults.DiagnosticsDirectory
                 : diagnosticsDirectory,
             defaults.IsEnabled);
-        return new LocalAppDiagnostics(
-            new AppDiagnosticsFileStore(options),
-            AppDiagnosticsMetadata.Create(appVersion));
+        return CreateWithRemoteAnalytics(options, appVersion, remoteAnalyticsConsent);
     }
 
     /// <summary>Builds the default local diagnostics service for the current <see cref="AppProduct"/>.</summary>
     public static LocalAppDiagnostics CreateDefault(
         string appVersion,
-        IAppDiagnosticsPathProvider? pathProvider = null)
+        IAppDiagnosticsPathProvider? pathProvider = null,
+        bool? remoteAnalyticsConsent = null)
     {
         var options = pathProvider is null
             ? AppDiagnosticsOptions.CreateDefault()
             : AppDiagnosticsOptions.CreateDefault(pathProvider);
-        return new LocalAppDiagnostics(
-            new AppDiagnosticsFileStore(options),
-            AppDiagnosticsMetadata.Create(appVersion));
+        return CreateWithRemoteAnalytics(options, appVersion, remoteAnalyticsConsent);
     }
 
     /// <summary>
@@ -75,7 +79,10 @@ public class LocalAppDiagnostics
     {
         try
         {
-            _fileStore.RecordEvent(eventName, _metadata, properties);
+            var safeProperties = AppDiagnosticsFileStore.SanitizeProperties(properties)
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            _fileStore.RecordEvent(eventName, _metadata, safeProperties);
+            _crashAnalytics.RecordBreadcrumb(eventName, safeProperties);
         }
         catch
         {
@@ -86,14 +93,39 @@ public class LocalAppDiagnostics
     /// <summary>Writes a local crash report + a crash event; returns the report path (empty on failure).</summary>
     public string RecordCrash(Exception exception, string source)
     {
+        var reportPath = string.Empty;
         try
         {
-            return _fileStore.RecordCrash(exception, source, _metadata);
+            reportPath = _fileStore.RecordCrash(exception, source, _metadata);
         }
         catch
         {
             // Local crash reporting is best-effort; preserve the original failure path.
-            return string.Empty;
         }
+
+        try
+        {
+            _crashAnalytics.CaptureCrash(exception, source);
+        }
+        catch
+        {
+            // Remote crash reporting must never suppress the local report or original failure.
+        }
+
+        return reportPath;
+    }
+
+    public void Dispose() => _crashAnalytics.Dispose();
+
+    private static LocalAppDiagnostics CreateWithRemoteAnalytics(
+        AppDiagnosticsOptions options,
+        string appVersion,
+        bool? remoteAnalyticsConsent)
+    {
+        var metadata = AppDiagnosticsMetadata.Create(appVersion);
+        return new LocalAppDiagnostics(
+            new AppDiagnosticsFileStore(options),
+            metadata,
+            SentryAppCrashAnalytics.CreateDefault(metadata, remoteAnalyticsConsent));
     }
 }

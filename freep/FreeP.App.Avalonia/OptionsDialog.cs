@@ -24,6 +24,10 @@ internal sealed partial class OptionsDialog : FreePDialogWindow
     private readonly TextBox _recentFilesCap = new() { Width = 120, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly ComboBox _defaultFormat = new() { Width = 200, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _uiLanguage = new() { Width = 200, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly CheckBox _crashAnalytics = new()
+    {
+        Content = "Send privacy-filtered crash reports (takes effect next launch)",
+    };
     private readonly TextBlock _status = new();
 
     public FreePOptions? Result { get; private set; }
@@ -44,6 +48,7 @@ internal sealed partial class OptionsDialog : FreePDialogWindow
         _defaultFormat.ItemsSource = _surface.FormatChoices;
         _defaultFormat.SelectedIndex = 0;
         _uiLanguage.Text = _session.InitialState.UiLanguage;
+        _crashAnalytics.IsChecked = CrashAnalyticsConsentStore.Load().Enabled;
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_recentFilesCap, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_defaultFormat, DialogChromeStyle);
@@ -82,6 +87,12 @@ internal sealed partial class OptionsDialog : FreePDialogWindow
         AvaloniaLabeledFormRow.Add(grid, 0, _surface.RecentFilesLabel, _recentFilesCap);
         AvaloniaLabeledFormRow.Add(grid, 1, _surface.DefaultSaveFormatLabel, _defaultFormat);
         AvaloniaLabeledFormRow.Add(grid, 2, _surface.UiLanguageLabel, _uiLanguage, _surface.UiLanguageHint);
+        AvaloniaLabeledFormRow.Add(
+            grid,
+            3,
+            "Crash analytics:",
+            _crashAnalytics,
+            "Off by default. Reports are sent only when a release endpoint is configured; document contents and paths are not intentionally collected.");
 
         var ok = new Button { Content = _surface.AcceptLabel };
         ok.Click += (_, _) => Accept();
@@ -124,6 +135,7 @@ internal sealed partial class OptionsDialog : FreePDialogWindow
         }
 
         Result = commit.Result;
+        _ = CrashAnalyticsConsentStore.Save(_crashAnalytics.IsChecked == true);
         if (IsVisible)
             Close();
     }

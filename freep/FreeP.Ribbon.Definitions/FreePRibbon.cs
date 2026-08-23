@@ -28,9 +28,19 @@ public static class FreePRibbon
                 tab => AddAnimationGroups(tab, profile))
             .Tab("view", FreePRibbonText.ViewTab.Label, FreePRibbonText.ViewTab.KeyTip,
                 AddViewGroups)
+            .Tab("help", "Help", "Y", AddHelpGroups)
             .Build();
 
         return RibbonDefinitionKeyTipUniquifier.Normalize(definition);
+    }
+
+    private static void AddHelpGroups(RibbonTabBuilder tab)
+    {
+        tab.Group("support", "Support", "S", 100, group =>
+        {
+            group.Large("freep.help-online", "Help Online", RibbonCommandIconKind.Help, "H");
+            group.Large("freep.feedback", "Send Feedback", RibbonCommandIconKind.Feedback, "F");
+        });
     }
 
     private static void AddHomeGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)

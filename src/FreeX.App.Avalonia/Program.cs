@@ -44,7 +44,8 @@ internal static partial class Program
             {
                 diagnostics = LocalAppDiagnostics.Create(
                     AppHelpInfo.GetVersionText(typeof(Program).Assembly),
-                    diagnosticsDirectory);
+                    diagnosticsDirectory,
+                    remoteAnalyticsConsent: new FreeXOptionsRuntimeSession().LiveOptions.CrashAnalyticsEnabled);
                 return new SisterAvaloniaProgramDiagnostics(
                     () => diagnostics.RegisterCrashHandlers(),
                     (exception, source) => diagnostics.RecordCrash(exception, source));

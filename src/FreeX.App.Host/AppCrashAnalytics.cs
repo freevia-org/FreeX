@@ -21,7 +21,12 @@ public sealed record AppCrashAnalyticsOptions(
             global::System.Environment.GetEnvironmentVariable("FREEX_CRASH_ANALYTICS"),
             "0",
             StringComparison.OrdinalIgnoreCase);
+        var sharedOptions = Free.Shared.AppServices.AppCrashAnalyticsOptions.CreateDefault(
+            userConsent: crashAnalyticsEnabled);
         var dsn = sentryDsnProvider();
+        var usesSharedBuildConfiguration = string.IsNullOrWhiteSpace(dsn);
+        if (usesSharedBuildConfiguration)
+            dsn = sharedOptions.Dsn;
         var enabled = crashAnalyticsEnabled
             && !disabledByEnvironment
             && !string.IsNullOrWhiteSpace(dsn);
@@ -29,6 +34,7 @@ public sealed record AppCrashAnalyticsOptions(
         return new AppCrashAnalyticsOptions(
             string.IsNullOrWhiteSpace(dsn) ? null : dsn,
             enabled,
+            usesSharedBuildConfiguration ? sharedOptions.Environment : "tester",
             IsDisabledByEnvironment: disabledByEnvironment);
     }
 }

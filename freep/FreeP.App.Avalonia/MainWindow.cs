@@ -2405,7 +2405,21 @@ public sealed partial class MainWindow : Window,
                     return true;
                 },
             },
+            SupportCommands = new FreePRibbonSupportCommandEndpoints
+            {
+                OpenHelpOnline = () => _ = OpenSupportUriAsync(FreePProductInfo.HelpUrl, "FreeP Help"),
+                OpenFeedback = () => _ = OpenSupportUriAsync(
+                    FreePProductInfo.CreateFeedbackUrl(typeof(MainWindow).Assembly),
+                    "FreeP Feedback"),
+            },
         });
+
+    private async Task OpenSupportUriAsync(string uri, string title)
+    {
+        var result = DesktopExternalUriLauncher.Open(uri);
+        if (result != ExternalUriLaunchResult.Launched)
+            await AvaloniaUserMessageDialog.ShowWarningAsync(this, $"Could not open the link.\n\n{uri}", title);
+    }
 
     private FreePRibbonTextActionTargets CreateRibbonTextActionTargets() => new()
     {
