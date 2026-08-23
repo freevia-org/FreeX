@@ -904,14 +904,14 @@ function Assert-AutoFilterMixedTypePostcondition {
         "popup-dismissed=true",
         "initial-total=5",
         "applied-total=2",
-        "visible=42,42,",
+        "visible=42,'42,",
         "semantic=Number,NumericText",
         "save-clean=true",
         "package=ref=A1:B7|colId=0|filters=42|blank=|hidden=4,5,6,7|A2-type=n|A2=42|A3-type=inlineStr|A3=42|A6-style=1|A6=45292|C1-formula=SUBTOTAL(103,A2:A7)|C1=2",
         "dialog-open=true",
         "dialog-closed=true",
         "reopened-total=2",
-        "reopened-visible=42,42,",
+        "reopened-visible=42,'42,",
         "reopened-semantic=Number,NumericText"
     )
     $missingPostconditions = @($expectedPostconditions | Where-Object { $_ -notin $postconditionLines })

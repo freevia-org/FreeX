@@ -6376,6 +6376,7 @@ probe_autofilter_mixed_type_persistence_physical() {
     local popup_route="none"
     local initial_total="" applied_total="" reopened_total=""
     local visible="" reopened_visible="" semantic="" reopened_semantic="" package=""
+    local expected_visible="42,'42,"
 
     if [[ "${document_path,,}" != *.xlsx ]]; then
         write_artifact "${prefix}-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path"
@@ -6610,7 +6611,7 @@ PY
         applied_total="$(copy_cell_display 2 0 C1-applied-total || true)"
     fi
 
-    if [[ "$visible" == "42,42," && "$semantic" == "Number,NumericText" &&
+    if [[ "$visible" == "$expected_visible" && "$semantic" == "Number,NumericText" &&
           "$initial_total" == "5" && "$applied_total" == "2" ]]; then
         save_mixed_type_document && save_clean=true
         package="$(package_mixed_type_signature || true)"
@@ -6631,10 +6632,10 @@ PY
         "document-path=$document_path\npopup-route=$popup_route\nmenu-open=$menu_open\ntarget-cleared=$target_cleared\ntarget-selected=$target_selected\npopup-dismissed=$popup_dismissed\ninitial-total=$initial_total\napplied-total=$applied_total\nvisible=$visible\nsemantic=$semantic\nsave-clean=$save_clean\npackage=$package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-total=$reopened_total\nreopened-visible=$reopened_visible\nreopened-semantic=$reopened_semantic"
 
     if $menu_open && $target_cleared && $target_selected && $popup_dismissed &&
-       [[ "$initial_total" == "5" && "$applied_total" == "2" && "$visible" == "42,42," &&
+       [[ "$initial_total" == "5" && "$applied_total" == "2" && "$visible" == "$expected_visible" &&
           "$semantic" == "Number,NumericText" && $save_clean && "$package" == "$expected_package" &&
           $dialog_open && $dialog_closed && "$reopened_total" == "2" &&
-          "$reopened_visible" == "42,42," && "$reopened_semantic" == "Number,NumericText" ]]; then
+          "$reopened_visible" == "$expected_visible" && "$reopened_semantic" == "Number,NumericText" ]]; then
         record "$result_id" "passed" \
             "${prefix}-menu-open.png;${prefix}-target-checked.png;${prefix}-applied.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt" \
             "The rendered mixed-type checklist grouped number 42 and text 42, acknowledged the fixed checkbox click and popup dismissal, recalculated 5 to 2, saved exact filter/hidden/type state, and reopened through the production picker with matching rendered and semantic values." "$artifacts"

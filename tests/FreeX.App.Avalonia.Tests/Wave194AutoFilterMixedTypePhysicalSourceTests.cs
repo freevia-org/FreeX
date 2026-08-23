@@ -41,7 +41,8 @@ public sealed class Wave194AutoFilterMixedTypePhysicalSourceTests
         probe.Should().Contain("$output/${prefix}-menu-open.png\" \"$output/${prefix}-menu-cleared.png\" 20");
         probe.Should().Contain("target-selected=${target_selected}");
         probe.Should().Contain("popup-dismissed=${popup_dismissed}");
-        probe.Should().Contain("$visible\" == \"42,42,\"");
+        probe.Should().Contain("expected_visible=\"42,'42,\"");
+        probe.Should().Contain("$visible\" == \"$expected_visible\"");
         probe.Should().Contain("C1-formula=SUBTOTAL(103,A2:A7)|C1=2");
         fixture.Should().Contain("<c r=\"A2\"><v>42</v></c>");
         fixture.Should().Contain("New-InlineStringCell -Address \"A3\" -Value \"42\"");
