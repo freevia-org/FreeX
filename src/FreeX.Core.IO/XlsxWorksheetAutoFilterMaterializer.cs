@@ -222,7 +222,12 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             }
 
             var column = range.Start.Col + (uint)filterColumn.ColumnId;
+            // Re-evaluate only the unambiguous recovery case: one supported custom-filter column
+            // and no persisted row visibility. Existing row bits and mixed-column criteria retain
+            // the native fallback ownership used by Clear Filter and save/load/save round trips.
             if (filterColumn.CustomFilters.Count > 0 &&
+                autoFilter.FilterColumns.Count == 1 &&
+                !HasRawHiddenRows(sheet, range) &&
                 filterColumn.CustomFiltersAndRaw is null &&
                 filterColumn.NativeCustomFiltersAttributes is null &&
                 XlsxWorksheetAutoFilterCustomFilterMatcher.TryCreate(filterColumn, out var customMatcher))
@@ -304,6 +309,9 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             : null;
         return filters;
     }
+
+    private static bool HasRawHiddenRows(Sheet sheet, GridRange range) =>
+        sheet.HiddenRows.Any(row => row > range.Start.Row && row <= range.End.Row);
 
     private static bool IsAverageDynamicFilter(WorksheetAutoFilterDynamicFilterModel dynamicFilter, out bool above)
     {
