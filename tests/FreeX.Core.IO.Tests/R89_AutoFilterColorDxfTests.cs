@@ -79,7 +79,7 @@ public class R89_AutoFilterColorDxfTests
             .Element(WorksheetNs + "colorFilter")!;
         var dxfIdText = colorFilterXml.Attribute("dxfId")?.Value;
         dxfIdText.Should().NotBeNullOrEmpty("a fill-colour filter must allocate a dxfId, not omit it like 'No Fill' does");
-        colorFilterXml.Attribute("cellColor").Should().BeNull("cellColor defaults true and is only written when false");
+        colorFilterXml.Attribute("cellColor")!.Value.Should().Be("1", "fill-colour filters must explicitly declare cellColor=1 for Excel/WPF-compatible OOXML");
 
         var stylesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/styles.xml", "xl/styles.xml");
         var dxfs = stylesXml.Root!.Element(WorksheetNs + "dxfs")!.Elements(WorksheetNs + "dxf").ToArray();

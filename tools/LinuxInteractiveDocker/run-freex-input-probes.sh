@@ -6050,10 +6050,182 @@ if [[ "$probe_selector" == "autofilter-numeric-criteria-persistence" ]]; then
     if $probe_failed; then exit 3; fi
     exit 0
 fi
+probe_autofilter_color_persistence_physical() {
+    local artifacts="autofilter-color-before.png;autofilter-color-menu-open.png;autofilter-color-applied.png;autofilter-color-reopened.png;autofilter-color-reopen-diagnostics.txt;autofilter-color-postcondition.txt"
+    local menu_open=false save_clean=false dialog_open=false dialog_closed=false
+    local criteria="" visible="" reopened_visible="" reopened_semantic="" package=""
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "autofilter-color-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path\n"
+        record "autofilter-color-fill-save-reopen-physical" "failed" "autofilter-color-postcondition.txt" "The physical AutoFilter color lane requires an XLSX document path." "$artifacts"
+        return
+    fi
+
+    read_visible_color_values() {
+        local first second
+        first="$(copy_cell_display 0 1 color-visible-first || true)"
+        second="$(copy_cell_display 0 2 color-visible-second || true)"
+        send_key Escape
+        printf '%s,%s,' "$first" "$second"
+    }
+
+    package_fill_color_signature() {
+        python3 - "$document_path" <<'PY'
+import sys, zipfile, xml.etree.ElementTree as ET
+path = sys.argv[1]
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+with zipfile.ZipFile(path) as package:
+    sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+    styles = ET.fromstring(package.read("xl/styles.xml"))
+auto_filter = sheet.find(main + "autoFilter")
+column = auto_filter.find(main + "filterColumn") if auto_filter is not None else None
+color = column.find(main + "colorFilter") if column is not None else None
+if auto_filter is None or auto_filter.attrib.get("ref") != "A1:B5" or column is None or column.attrib.get("colId") != "0":
+    raise SystemExit(1)
+if color is None or color.attrib.get("cellColor") != "1" or color.attrib.get("dxfId") is None:
+    raise SystemExit(1)
+dxfs = styles.find(main + "dxfs")
+if dxfs is None:
+    raise SystemExit(1)
+dxf = list(dxfs.findall(main + "dxf"))[int(color.attrib["dxfId"])]
+fg = dxf.find(main + "fill/" + main + "patternFill/" + main + "fgColor")
+if fg is None or fg.attrib.get("rgb") != "FF00B050":
+    raise SystemExit(1)
+print(f"ref=A1:B5|colId=0|cellColor=1|dxfId={color.attrib['dxfId']}|fill={fg.attrib['rgb']}")
+PY
+    }
+
+    save_color_document() {
+        select_cell 0 0 A1 || return 1
+        send_key ctrl+s
+        if wait_for_document_clean; then return 0; fi
+        send_key shift+F12
+        wait_for_document_clean
+    }
+
+    reopen_color_document() {
+        local before_windows after_windows main_pid baseline_ids active_id active_title active_pid visible_dialog_id shortcut
+        local diagnostics_path="$output/autofilter-color-reopen-diagnostics.txt"
+        : > "$diagnostics_path"
+        wait_for_document_idle || true
+        select_cell 0 0 A1 || true
+        focus_app
+        before_windows="$(visible_window_count)"
+        main_pid="$(xdotool getwindowpid "$window_id" 2>/dev/null || true)"
+        baseline_ids="$(xdotool search --onlyvisible --name '.*' 2>/dev/null | sort -n | tr '\n' ' ')"
+        [[ -n "$main_pid" ]] || return 1
+        printf 'before-windows=%s\nmain-window-id=%s\nmain-window-pid=%s\nbaseline-window-ids=%s\n' \
+            "$before_windows" "$window_id" "$main_pid" "$baseline_ids" >> "$diagnostics_path"
+        for shortcut in ctrl+F12 ctrl+o ctrl+F12; do
+            send_key "$shortcut"
+            for _ in $(seq 1 12); do
+                after_windows="$(visible_window_count)"
+                active_id="$(xdotool getactivewindow 2>/dev/null || true)"
+                active_title="$(xdotool getwindowname "$active_id" 2>/dev/null || true)"
+                active_pid="$(xdotool getwindowpid "$active_id" 2>/dev/null || true)"
+                printf 'shortcut=%s|windows=%s|active-id=%s|active-title=%s|active-pid=%s\n' \
+                    "$shortcut" "$after_windows" "$active_id" "$active_title" "$active_pid" >> "$diagnostics_path"
+                if [[ "$active_id" != "$window_id" && "$active_title" == "Open Workbook" &&
+                      "$active_pid" == "$main_pid" && " $baseline_ids " != *" $active_id "* ]]; then
+                    dialog_open=true
+                    break 2
+                fi
+                sleep 0.2
+            done
+            sleep 0.5
+        done
+        if ! $dialog_open; then
+            wmctrl -lG >> "$diagnostics_path" 2>&1 || true
+            x11_window_snapshot "$output/autofilter-color-reopen-x11.txt"
+            return 1
+        fi
+        xdotool windowactivate --sync "$active_id" 2>/dev/null || return 1
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+        xdotool key --clearmodifiers Return
+        sleep "$settle_seconds"
+        xdotool key --clearmodifiers Return
+        for _ in $(seq 1 20); do
+            visible_dialog_id="$(xdotool search --onlyvisible --name '^Open Workbook$' 2>/dev/null | awk -v target="$active_id" '$1 == target { print $1; exit }')"
+            if [[ "$visible_dialog_id" != "$active_id" ]]; then
+                dialog_closed=true
+                break
+            fi
+            sleep 0.25
+        done
+        $dialog_closed || return 1
+        wait_for_expected_document || return 1
+        sleep "$dialog_settle_seconds"
+        focus_app
+        wait_for_document_idle || true
+    }
+
+    capture "autofilter-color-before.png"
+    select_cell 0 0 A1
+    open_autofilter_menu 0
+    capture "autofilter-color-menu-open.png"
+    if screen_changed "$output/autofilter-color-before.png" "$output/autofilter-color-menu-open.png" 500; then
+        menu_open=true
+        # The first Filter-by-Color swatch is the green fill authored by the fixture.
+        click_autofilter_control 110 220
+        criteria="fill:#00B050"
+        visible="$(read_visible_color_values)"
+        capture "autofilter-color-applied.png"
+    fi
+
+    if $menu_open && [[ "$visible" == "North,East," ]]; then
+        save_color_document && save_clean=true
+        package="$(package_fill_color_signature || true)"
+    fi
+
+    if $save_clean && [[ "$package" == *"ref=A1:B5|colId=0|cellColor=1"* &&
+        "$package" == *"|fill=FF00B050"* ]]; then
+        reopen_color_document || true
+        if $dialog_closed; then
+            capture "autofilter-color-reopened.png"
+            reopened_visible="$(read_visible_color_values)"
+            reopened_semantic="$(copy_cell_formula_by_address A4 || true)"
+        fi
+    fi
+
+    local available_artifacts="autofilter-color-postcondition.txt"
+    for artifact in ${artifacts//;/ }; do
+        if [[ -f "$output/$artifact" && "$artifact" != "autofilter-color-postcondition.txt" ]]; then
+            available_artifacts="$available_artifacts;$artifact"
+        fi
+    done
+    write_artifact "autofilter-color-postcondition.txt" \
+        "document-path=$document_path\nmenu-open=$menu_open\ncriteria=$criteria\nvisible=$visible\nsave-clean=$save_clean\npackage=$package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-visible=$reopened_visible\nreopened-semantic-a4=$reopened_semantic\n"
+
+    if $menu_open && [[ "$criteria" == "fill:#00B050" && "$visible" == "North,East," && $save_clean &&
+        "$package" == *"ref=A1:B5|colId=0|cellColor=1"* && "$package" == *"|fill=FF00B050"* && $dialog_open && $dialog_closed &&
+        "$reopened_visible" == "North,East," && "$reopened_semantic" == "East" ]]; then
+        record "autofilter-color-fill-save-reopen-physical" "passed" \
+            "autofilter-color-menu-open.png;autofilter-color-applied.png;autofilter-color-reopened.png;autofilter-color-postcondition.txt" \
+            "Filter by Cell Color used the rendered fill swatch, retained North and East, saved the exact colorFilter/DXF color, and reopened with matching rendered and semantic state." "$available_artifacts"
+    else
+        record "autofilter-color-fill-save-reopen-physical" "failed" "$available_artifacts" \
+            "Fill-color filtering did not prove the rendered swatch route, exact visible values, clean save, exact colorFilter/DXF package state, and matching production reopen state." "$available_artifacts"
+    fi
+}
+
 if [[ "$probe_selector" == "autofilter-date-criteria-persistence" ]]; then
     probe_autofilter_date_criteria_persistence_physical
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the date criteria probe."
+    fi
+    write_manifest
+    probe_failed=false
+    for result in "${results[@]}"; do
+        [[ "$result" == *'"status":"failed"'* ]] && probe_failed=true
+    done
+    if $probe_failed; then exit 3; fi
+    exit 0
+fi
+if [[ "$probe_selector" == "autofilter-color-persistence" ]]; then
+    probe_autofilter_color_persistence_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the color persistence probe."
     fi
     write_manifest
     probe_failed=false

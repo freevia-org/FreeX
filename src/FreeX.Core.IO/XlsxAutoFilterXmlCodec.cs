@@ -21,8 +21,8 @@ internal static class XlsxAutoFilterXmlCodec
 
         if (colorFilter.CellColorRaw is not null)
             element.SetAttributeValue("cellColor", colorFilter.CellColorRaw);
-        else if (!colorFilter.CellColor)
-            element.SetAttributeValue("cellColor", "0");
+        else
+            element.SetAttributeValue("cellColor", colorFilter.CellColor ? "1" : "0");
 
         XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, colorFilter.NativeAttributes);
         return element;
