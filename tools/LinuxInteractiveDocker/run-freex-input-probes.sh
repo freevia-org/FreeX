@@ -2680,7 +2680,6 @@ PY
         before_windows="$(visible_window_count)"
         main_pid="$(xdotool getwindowpid "$window_id" 2>/dev/null || true)"
         baseline_ids="$(xdotool search --onlyvisible --name '.*' 2>/dev/null | sort -n | tr '\n' ' ')"
-        baseline_ids="${baseline_ids% }"
         [[ -n "$main_pid" ]] || return 1
         : > "$diagnostics_path"
         printf 'expected-dialog-title=Open Workbook\nmain-window-pid=%s\nbaseline-window-ids=%s\n' \
@@ -6246,6 +6245,7 @@ PY
         before_windows="$(visible_window_count)"
         main_pid="$(xdotool getwindowpid "$window_id" 2>/dev/null || true)"
         baseline_ids="$(xdotool search --onlyvisible --name '.*' 2>/dev/null | sort -n | tr '\n' ' ')"
+        baseline_ids="${baseline_ids% }"
         [[ -n "$main_pid" ]] || return 1
         printf 'before-windows=%s\nmain-window-id=%s\nmain-window-pid=%s\nbaseline-window-ids=%s\n' \
             "$before_windows" "$window_id" "$main_pid" "$baseline_ids" >> "$diagnostics_path"
