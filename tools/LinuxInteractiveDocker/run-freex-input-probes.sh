@@ -6072,6 +6072,15 @@ probe_autofilter_color_persistence_physical() {
         expected_package_mode="1"
         expected_package_color="dxf=empty"
     fi
+    # Keep the rendered swatch bounds, sampled pixel, and real click in one
+    # mode-selected geometry contract. The outer click must use these values.
+    local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27
+    local sample_x_offset=84 sample_y_offset=216 click_x_offset=110 click_y_offset=220
+    if [[ "$mode" == "nofill" ]]; then
+        button_left_offset=148
+        sample_x_offset=164
+        click_x_offset=190
+    fi
     local artifacts="${prefix}-before.png;${prefix}-menu-open.png;${prefix}-swatch-gate.txt;${prefix}-applied.png;${prefix}-reopened.png;${prefix}-reopen-diagnostics.txt;${prefix}-postcondition.txt"
     if [[ "$mode" == "nofill" ]]; then
         artifacts+=";${prefix}-target-before.png;${prefix}-target-menu-open.png;${prefix}-target-dismissed.png"
@@ -6136,13 +6145,6 @@ PY
     verify_rendered_color_swatch() {
         local before_screenshot="$1" screenshot="$2"
         local swatch_mode="$3"
-        local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27
-        local sample_x_offset=84 sample_y_offset=216 click_x_offset=110 click_y_offset=220
-        if [[ "$swatch_mode" == "nofill" ]]; then
-            button_left_offset=148
-            sample_x_offset=164
-            click_x_offset=190
-        fi
         local button_left=$((a1_x + button_left_offset)) button_top=$((a1_y + button_top_offset))
         local button_right=$((button_left + button_width - 1)) button_bottom=$((button_top + button_height - 1))
         local sample_x=$((a1_x + sample_x_offset)) sample_y=$((a1_y + sample_y_offset))
@@ -6173,10 +6175,10 @@ PY
 
     verify_no_fill_popup_transition() {
         local before_screenshot="$1" open_screenshot="$2" dismissed_screenshot="$3"
-        local button_left=$((a1_x + 148)) button_top=$((a1_y + 203)) button_width=75 button_height=27
+        local button_left=$((a1_x + button_left_offset)) button_top=$((a1_y + button_top_offset))
         local button_right=$((button_left + button_width - 1)) button_bottom=$((button_top + button_height - 1))
-        local sample_x=$((a1_x + 164)) sample_y=$((a1_y + 216))
-        local click_x=$((a1_x + 190)) click_y=$((a1_y + 220))
+        local sample_x=$((a1_x + sample_x_offset)) sample_y=$((a1_y + sample_y_offset))
+        local click_x=$((a1_x + click_x_offset)) click_y=$((a1_y + click_y_offset))
         local before_crop="$output/${prefix}-target-before.png"
         local open_crop="$output/${prefix}-target-menu-open.png"
         local dismissed_crop="$output/${prefix}-target-dismissed.png"
@@ -6293,10 +6295,9 @@ PY
         wait_for_document_idle || true
     }
 
-    local expected_visible="North,East," click_x_offset=110
+    local expected_visible="North,East,"
     if [[ "$mode" == "nofill" ]]; then
         expected_visible="South,West,"
-        click_x_offset=190
     fi
 
     capture "${prefix}-before.png"
@@ -6311,7 +6312,7 @@ PY
             criteria="$(verify_rendered_fill_swatch "$output/${prefix}-before.png" "$output/${prefix}-menu-open.png" || true)"
         fi
         if [[ "$criteria" == "$expected_criteria" ]]; then
-            click_autofilter_control "$click_x_offset" 220
+            click_autofilter_control "$click_x_offset" "$click_y_offset"
             if [[ "$mode" == "nofill" ]]; then
                 capture "${prefix}-applied.png"
                 if verify_no_fill_popup_transition \
