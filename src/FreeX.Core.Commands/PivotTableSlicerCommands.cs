@@ -369,20 +369,14 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
     private sealed record SlicerSelectionSnapshot(
         IReadOnlyList<string> SelectedItems,
         bool SelectionCaptured,
-        IReadOnlyList<PivotTableFieldsSnapshot> PivotTables)
+        IReadOnlyList<PivotTableTargetStateSnapshot> PivotTables)
     {
         public static SlicerSelectionSnapshot Capture(
             SlicerModel slicer, IReadOnlyList<(Sheet Sheet, PivotTableModel PivotTable, int SourceFieldIndex)> targets) =>
             new(
                 slicer.SelectedItems.ToList(),
                 slicer.SelectionCaptured,
-                targets.Select(t => new PivotTableFieldsSnapshot(
-                    t.Sheet,
-                    t.PivotTable,
-                    t.PivotTable.RowFields.ToList(),
-                    t.PivotTable.ColumnFields.ToList(),
-                    t.PivotTable.PageFields.ToList(),
-                    t.PivotTable.LastRenderedRange)).ToList());
+                targets.Select(t => PivotTableTargetStateSnapshot.Capture(t.Sheet, t.PivotTable)).ToList());
 
         public void Restore(SlicerModel slicer)
         {
@@ -391,23 +385,9 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             slicer.SelectionCaptured = SelectionCaptured;
 
             foreach (var snapshot in PivotTables)
-            {
-                var pivotTable = snapshot.PivotTable;
-                PivotTableCommandCollections.Replace(pivotTable.RowFields, snapshot.RowFields);
-                PivotTableCommandCollections.Replace(pivotTable.ColumnFields, snapshot.ColumnFields);
-                PivotTableCommandCollections.Replace(pivotTable.PageFields, snapshot.PageFields);
-                pivotTable.LastRenderedRange = snapshot.LastRenderedRange;
-            }
+                snapshot.Restore();
         }
     }
-
-    private sealed record PivotTableFieldsSnapshot(
-        Sheet Sheet,
-        PivotTableModel PivotTable,
-        IReadOnlyList<PivotFieldModel> RowFields,
-        IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields,
-        GridRange? LastRenderedRange);
 }
 
 public sealed class AddSlicerCommand : IWorkbookCommand

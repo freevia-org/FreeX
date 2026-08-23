@@ -68,38 +68,7 @@ public sealed class CustomSortOrder
             return 1;
 
         return caseSensitive
-            ? CompareCaseSensitiveText(a ?? "", b ?? "")
+            ? CaseSensitiveSortComparison.Compare(a ?? "", b ?? "")
             : string.Compare(a ?? "", b ?? "", StringComparison.OrdinalIgnoreCase);
-    }
-
-    // R51-commands-sort-custom-multilevel-3-2: Excel's "Case sensitive" sort does NOT switch to raw
-    // ordinal/codepoint order (which would clump all uppercase-leading words ahead of all lowercase
-    // ones). It sorts alphabetically first; case only breaks a tie between otherwise letter-for-letter
-    // identical strings, and in that tiebreak lowercase sorts before uppercase (MS: "in a case-sensitive
-    // sort, lowercase letters sort before uppercase"). Mirrors SortCommand.CompareCaseSensitiveText
-    // (not reachable from here — different, more narrowly-scoped source file).
-    private static int CompareCaseSensitiveText(string a, string b)
-    {
-        var primary = string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
-        if (primary != 0)
-            return primary;
-
-        var len = Math.Min(a.Length, b.Length);
-        for (var i = 0; i < len; i++)
-        {
-            var ca = a[i];
-            var cb = b[i];
-            if (ca == cb)
-                continue;
-
-            var aLower = char.IsLower(ca);
-            var bLower = char.IsLower(cb);
-            if (aLower != bLower)
-                return aLower ? -1 : 1; // lowercase before uppercase, same-letter tiebreak only
-
-            return ca.CompareTo(cb);
-        }
-
-        return a.Length.CompareTo(b.Length);
     }
 }

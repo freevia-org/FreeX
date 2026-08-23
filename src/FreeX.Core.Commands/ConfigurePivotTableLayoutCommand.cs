@@ -10,7 +10,7 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
     private readonly IReadOnlyList<PivotFieldModel> _columnFields;
     private readonly IReadOnlyList<PivotFieldModel> _pageFields;
     private readonly IReadOnlyList<PivotDataFieldModel> _dataFields;
-    private PivotLayoutSnapshot? _snapshot;
+    private PivotLayoutStateSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
     // meta-F2 (round154): merged regions (e.g. from MergeAndCenterLabels) that overlapped the pivot's
     // OLD footprint before this command's RefreshGuarded call re-renders it, stripping them via
@@ -49,7 +49,7 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
         if (_dataFields.Count == 0)
             return CommandGuards.RejectPivotTableRequiresDataField();
 
-        _snapshot = PivotLayoutSnapshot.Capture(pivotTable);
+        _snapshot = PivotLayoutStateSnapshot.Capture(pivotTable);
         var oldFootprint = pivotTable.LastRenderedRange ?? pivotTable.TargetRange;
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, oldFootprint);
         // meta-F2 (round154): capture before RefreshGuarded (below) re-renders the pivot and strips any
@@ -71,9 +71,8 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
         // through this command. Without this guard a layout change that needs more rows/columns than
         // the pivot's previous render occupied could silently overwrite adjacent user content with no
         // way to recover it via Undo (the snapshot above is bounded to the OLD footprint).
-        var snapshot = _snapshot;
         if (PivotTableCommandRefreshTransaction.RefreshGuarded(
-                ctx.Workbook, sheet, pivotTable, () => snapshot!.Restore(pivotTable)) is { } failure)
+                ctx.Workbook, sheet, pivotTable, _snapshot) is { } failure)
         {
             _snapshot = null;
             _targetSnapshot = null;
@@ -86,12 +85,14 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
-        {
-            PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
-            _snapshot.Restore(pivotTable);
-        }
-        AddPivotTableCommand.Restore(sheet, _targetSnapshot);
+        CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable);
+        PivotTableCommandRefreshTransaction.Revert(
+            ctx.Workbook,
+            sheet,
+            pivotTable,
+            _targetSnapshot,
+            _snapshot,
+            updateBoundPivotCharts: false);
         // meta-F2 (round154): put back the old footprint's merged regions the re-render in Apply
         // stripped -- AddPivotTableCommand.Restore above only replays cell values, never MergedRegions.
         // ClearRenderedRange above only touched the CURRENT (post-Apply) rendered range, so the old
@@ -106,40 +107,6 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
         _snapshot = null;
         _targetSnapshot = null;
         _oldMergedRegions = null;
-    }
-
-    private sealed record PivotLayoutSnapshot(
-        IReadOnlyList<PivotFieldModel> RowFields,
-        IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields,
-        IReadOnlyList<PivotDataFieldModel> DataFields,
-        IReadOnlyList<PivotLabelFilterModel> LabelFilters,
-        IReadOnlyList<PivotValueFilterModel> ValueFilters,
-        IReadOnlyList<PivotSortModel> Sorts,
-        GridRange? LastRenderedRange)
-    {
-        public static PivotLayoutSnapshot Capture(PivotTableModel pivotTable) =>
-            new(
-                pivotTable.RowFields.ToList(),
-                pivotTable.ColumnFields.ToList(),
-                pivotTable.PageFields.ToList(),
-                pivotTable.DataFields.ToList(),
-                pivotTable.LabelFilters.ToList(),
-                pivotTable.ValueFilters.ToList(),
-                pivotTable.Sorts.ToList(),
-                pivotTable.LastRenderedRange);
-
-        public void Restore(PivotTableModel pivotTable)
-        {
-            PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
-            PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
-            PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
-            PivotTableCommandCollections.Replace(pivotTable.DataFields, DataFields);
-            PivotTableCommandCollections.Replace(pivotTable.LabelFilters, LabelFilters);
-            PivotTableCommandCollections.Replace(pivotTable.ValueFilters, ValueFilters);
-            PivotTableCommandCollections.Replace(pivotTable.Sorts, Sorts);
-            pivotTable.LastRenderedRange = LastRenderedRange;
-        }
     }
 
     private sealed record PivotViewState(

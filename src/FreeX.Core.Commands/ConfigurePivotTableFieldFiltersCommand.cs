@@ -12,7 +12,7 @@ public sealed class ConfigurePivotTableFieldFiltersCommand : IWorkbookCommand
     private readonly IReadOnlyList<PivotLabelFilterModel> _labelFilters;
     private readonly IReadOnlyList<PivotValueFilterModel> _valueFilters;
     private readonly IReadOnlyList<PivotSortModel> _sorts;
-    private PivotFilterSnapshot? _snapshot;
+    private PivotFilterStateSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
 
     public ConfigurePivotTableFieldFiltersCommand(
@@ -46,7 +46,7 @@ public sealed class ConfigurePivotTableFieldFiltersCommand : IWorkbookCommand
         if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
-        _snapshot = PivotFilterSnapshot.Capture(pivotTable);
+        _snapshot = PivotFilterStateSnapshot.Capture(pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
         PivotTableCommandCollections.Replace(pivotTable.RowFields, _rowFields);
@@ -59,9 +59,8 @@ public sealed class ConfigurePivotTableFieldFiltersCommand : IWorkbookCommand
         // R140-remediation-pivot-refresh-growth-guard-completeness: a filter/sort change can change
         // which distinct row/column items are visible, which can grow the pivot's footprint past its
         // previous render -- see PivotTableRefreshService.GrowthGuard.cs.
-        var snapshot = _snapshot;
         if (PivotTableCommandRefreshTransaction.RefreshGuarded(
-                ctx.Workbook, sheet, pivotTable, () => snapshot!.Restore(pivotTable)) is { } failure)
+                ctx.Workbook, sheet, pivotTable, _snapshot) is { } failure)
         {
             _snapshot = null;
             _targetSnapshot = null;
@@ -75,45 +74,14 @@ public sealed class ConfigurePivotTableFieldFiltersCommand : IWorkbookCommand
     {
         var sheet = ctx.GetSheet(_sheetId);
         CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable);
-        var snapshot = _snapshot;
         PivotTableCommandRefreshTransaction.Revert(
             ctx.Workbook,
             sheet,
             pivotTable,
             _targetSnapshot,
-            snapshot is null ? null : table => snapshot.Restore(table));
+            _snapshot);
         _snapshot = null;
         _targetSnapshot = null;
     }
 
-    private sealed record PivotFilterSnapshot(
-        IReadOnlyList<PivotFieldModel> RowFields,
-        IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields,
-        IReadOnlyList<PivotLabelFilterModel> LabelFilters,
-        IReadOnlyList<PivotValueFilterModel> ValueFilters,
-        IReadOnlyList<PivotSortModel> Sorts,
-        GridRange? LastRenderedRange)
-    {
-        public static PivotFilterSnapshot Capture(PivotTableModel pivotTable) =>
-            new(
-                pivotTable.RowFields.ToList(),
-                pivotTable.ColumnFields.ToList(),
-                pivotTable.PageFields.ToList(),
-                pivotTable.LabelFilters.ToList(),
-                pivotTable.ValueFilters.ToList(),
-                pivotTable.Sorts.ToList(),
-                pivotTable.LastRenderedRange);
-
-        public void Restore(PivotTableModel pivotTable)
-        {
-            PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
-            PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
-            PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
-            PivotTableCommandCollections.Replace(pivotTable.LabelFilters, LabelFilters);
-            PivotTableCommandCollections.Replace(pivotTable.ValueFilters, ValueFilters);
-            PivotTableCommandCollections.Replace(pivotTable.Sorts, Sorts);
-            pivotTable.LastRenderedRange = LastRenderedRange;
-        }
-    }
 }

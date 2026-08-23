@@ -11,7 +11,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
     private readonly IReadOnlyList<PivotFieldModel> _pageFields;
     private readonly IReadOnlyList<PivotCalculatedFieldModel> _calculatedFields;
     private readonly IReadOnlyList<PivotCalculatedItemModel> _calculatedItems;
-    private PivotCalculatedItemsSnapshot? _snapshot;
+    private PivotCalculatedItemsStateSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
 
     public ConfigurePivotTableCalculatedItemsCommand(
@@ -57,7 +57,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
             return new CommandOutcome(false, "Calculated field and item names and formulas are required.");
         }
 
-        _snapshot = PivotCalculatedItemsSnapshot.Capture(pivotTable);
+        _snapshot = PivotCalculatedItemsStateSnapshot.Capture(pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
         PivotTableCommandCollections.Replace(pivotTable.RowFields, _rowFields);
@@ -69,9 +69,8 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
         // R140-remediation-pivot-refresh-growth-guard-completeness: a calculated item/field can add a
         // new row/column item, which can grow the pivot's footprint past its previous render -- see
         // PivotTableRefreshService.GrowthGuard.cs.
-        var snapshot = _snapshot;
         if (PivotTableCommandRefreshTransaction.RefreshGuarded(
-                ctx.Workbook, sheet, pivotTable, () => snapshot!.Restore(pivotTable)) is { } failure)
+                ctx.Workbook, sheet, pivotTable, _snapshot) is { } failure)
         {
             _snapshot = null;
             _targetSnapshot = null;
@@ -85,44 +84,16 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
     {
         var sheet = ctx.GetSheet(_sheetId);
         CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable);
-        var snapshot = _snapshot;
         PivotTableCommandRefreshTransaction.Revert(
             ctx.Workbook,
             sheet,
             pivotTable,
             _targetSnapshot,
-            snapshot is null ? null : table => snapshot.Restore(table));
+            _snapshot);
         _snapshot = null;
         _targetSnapshot = null;
     }
 
-    private sealed record PivotCalculatedItemsSnapshot(
-        IReadOnlyList<PivotFieldModel> RowFields,
-        IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields,
-        IReadOnlyList<PivotCalculatedFieldModel> CalculatedFields,
-        IReadOnlyList<PivotCalculatedItemModel> CalculatedItems,
-        GridRange? LastRenderedRange)
-    {
-        public static PivotCalculatedItemsSnapshot Capture(PivotTableModel pivotTable) =>
-            new(
-                pivotTable.RowFields.ToList(),
-                pivotTable.ColumnFields.ToList(),
-                pivotTable.PageFields.ToList(),
-                pivotTable.CalculatedFields.ToList(),
-                pivotTable.CalculatedItems.ToList(),
-                pivotTable.LastRenderedRange);
-
-        public void Restore(PivotTableModel pivotTable)
-        {
-            PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
-            PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
-            PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
-            PivotTableCommandCollections.Replace(pivotTable.CalculatedFields, CalculatedFields);
-            PivotTableCommandCollections.Replace(pivotTable.CalculatedItems, CalculatedItems);
-            pivotTable.LastRenderedRange = LastRenderedRange;
-        }
-    }
 }
 
 public sealed class ChangePivotTableSourceCommand : IWorkbookCommand

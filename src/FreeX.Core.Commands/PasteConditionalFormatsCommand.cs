@@ -321,7 +321,7 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
 
             var remaining = new List<GridRange>();
             foreach (var range in allRanges)
-                remaining.AddRange(Subtract(range, footprint));
+                remaining.AddRange(GridRangeSubtraction.Subtract(range, footprint));
 
             if (remaining.Count == 0)
                 continue; // whole rule range is inside the paste footprint -- drop the rule entirely
@@ -336,46 +336,5 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         sheet.ConditionalFormats.AddRange(newRules);
     }
 
-    /// <summary>
-    /// Returns the rectangle(s) that remain from <paramref name="source"/> after removing every
-    /// cell also covered by <paramref name="cut"/>. Disjoint ranges are returned unchanged; a
-    /// partial overlap yields up to four non-overlapping rectangles (above/below/left/right of the
-    /// intersection); full containment yields nothing. Mirrors
-    /// ClearConditionalFormatsCommand.SubtractRange / PasteDataValidationCommand.Subtract.
-    /// </summary>
-    private static IEnumerable<GridRange> Subtract(GridRange source, GridRange cut)
-    {
-        if (!source.Overlaps(cut))
-        {
-            yield return source;
-            yield break;
-        }
-
-        var top = Math.Max(source.Start.Row, cut.Start.Row);
-        var bottom = Math.Min(source.End.Row, cut.End.Row);
-        var left = Math.Max(source.Start.Col, cut.Start.Col);
-        var right = Math.Min(source.End.Col, cut.End.Col);
-        var sheet = source.Start.Sheet;
-
-        if (source.Start.Row < top)
-            yield return new GridRange(
-                new CellAddress(sheet, source.Start.Row, source.Start.Col),
-                new CellAddress(sheet, top - 1, source.End.Col));
-
-        if (bottom < source.End.Row)
-            yield return new GridRange(
-                new CellAddress(sheet, bottom + 1, source.Start.Col),
-                new CellAddress(sheet, source.End.Row, source.End.Col));
-
-        if (source.Start.Col < left)
-            yield return new GridRange(
-                new CellAddress(sheet, top, source.Start.Col),
-                new CellAddress(sheet, bottom, left - 1));
-
-        if (right < source.End.Col)
-            yield return new GridRange(
-                new CellAddress(sheet, top, right + 1),
-                new CellAddress(sheet, bottom, source.End.Col));
-    }
 }
 

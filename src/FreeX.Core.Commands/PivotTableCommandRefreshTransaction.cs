@@ -9,7 +9,28 @@ internal static class PivotTableCommandRefreshTransaction
         Sheet sheet,
         PivotTableModel pivotTable,
         Action restorePivotState,
-        bool rescanCacheSharedItems = false)
+        bool rescanCacheSharedItems = false) =>
+        RefreshGuardedCore(workbook, sheet, pivotTable, restorePivotState, rescanCacheSharedItems);
+
+    internal static CommandOutcome? RefreshGuarded(
+        Workbook workbook,
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        IPivotTableCommandStateSnapshot pivotState,
+        bool rescanCacheSharedItems = false) =>
+        RefreshGuardedCore(
+            workbook,
+            sheet,
+            pivotTable,
+            () => pivotState.Restore(pivotTable),
+            rescanCacheSharedItems);
+
+    private static CommandOutcome? RefreshGuardedCore(
+        Workbook workbook,
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        Action restorePivotState,
+        bool rescanCacheSharedItems)
     {
         var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
         var failure = PivotTableRefreshService.RefreshGuarded(
@@ -31,7 +52,32 @@ internal static class PivotTableCommandRefreshTransaction
         Sheet sheet,
         PivotTableModel? pivotTable,
         IReadOnlyList<(CellAddress Address, Cell? Cell)>? targetSnapshot,
-        Action<PivotTableModel>? restorePivotState)
+        IPivotTableCommandStateSnapshot? pivotState,
+        bool updateBoundPivotCharts = true) =>
+        RevertCore(
+            workbook,
+            sheet,
+            pivotTable,
+            targetSnapshot,
+            pivotState is null ? null : table => pivotState.Restore(table),
+            updateBoundPivotCharts);
+
+    internal static void Revert(
+        Workbook workbook,
+        Sheet sheet,
+        PivotTableModel? pivotTable,
+        IReadOnlyList<(CellAddress Address, Cell? Cell)>? targetSnapshot,
+        Action<PivotTableModel>? restorePivotState,
+        bool updateBoundPivotCharts = true) =>
+        RevertCore(workbook, sheet, pivotTable, targetSnapshot, restorePivotState, updateBoundPivotCharts);
+
+    private static void RevertCore(
+        Workbook workbook,
+        Sheet sheet,
+        PivotTableModel? pivotTable,
+        IReadOnlyList<(CellAddress Address, Cell? Cell)>? targetSnapshot,
+        Action<PivotTableModel>? restorePivotState,
+        bool updateBoundPivotCharts)
     {
         if (pivotTable is not null && restorePivotState is not null)
         {
@@ -40,7 +86,7 @@ internal static class PivotTableCommandRefreshTransaction
         }
 
         AddPivotTableCommand.Restore(sheet, targetSnapshot);
-        if (pivotTable is not null)
+        if (pivotTable is not null && updateBoundPivotCharts)
             PivotTableRefreshService.UpdateBoundPivotCharts(workbook, sheet, pivotTable);
     }
 }
