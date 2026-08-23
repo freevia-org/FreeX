@@ -27,6 +27,10 @@ internal sealed partial class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private readonly TextBox _recentFilesCap = new() { MinWidth = 80, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly ComboBox _defaultFormat = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _uiLanguage = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly CheckBox _crashAnalytics = new()
+    {
+        Content = "Send privacy-filtered crash reports (takes effect next launch)",
+    };
     private readonly TextBlock _status = new() { Foreground = System.Windows.Media.Brushes.Firebrick, Visibility = Visibility.Collapsed };
 
     /// <summary>The normalized options produced on OK; equals the input options on Cancel.</summary>
@@ -49,6 +53,7 @@ internal sealed partial class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _defaultFormat.ItemsSource = _surface.FormatChoices;
         _defaultFormat.SelectedIndex = 0;
         _uiLanguage.Text = _session.InitialState.UiLanguage;
+        _crashAnalytics.IsChecked = CrashAnalyticsConsentStore.Load().Enabled;
 
         var grid = new Grid
         {
@@ -66,6 +71,8 @@ internal sealed partial class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         AddRow(grid, 0, _surface.RecentFilesLabel, _recentFilesCap);
         AddRow(grid, 1, _surface.DefaultSaveFormatLabel, _defaultFormat);
         AddRow(grid, 2, _surface.UiLanguageLabel, _uiLanguage, _surface.UiLanguageHint);
+        AddRow(grid, 3, "Crash analytics:", _crashAnalytics,
+            "Off by default. Reports are sent only when a release endpoint is configured; document contents and paths are not intentionally collected.");
 
         _status.Margin = new Thickness(OptionsDialogPlanner.ContentMargin, 0, OptionsDialogPlanner.ContentMargin, 0);
 
@@ -105,6 +112,7 @@ internal sealed partial class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         }
 
         Result = commit.Result!;
+        _ = CrashAnalyticsConsentStore.Save(_crashAnalytics.IsChecked == true);
         if (IsLoaded)
         {
             DialogResult = true;

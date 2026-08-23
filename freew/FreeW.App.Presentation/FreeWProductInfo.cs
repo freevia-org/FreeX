@@ -34,6 +34,11 @@ public static class FreeWProductInfo
             version.AssemblyVersion);
     }
 
+    public static string CreateFeedbackUrl(Assembly assembly) =>
+        AppFeedbackReporter.CreateIssueUrl(
+            ProductName,
+            AppDiagnosticsMetadata.Create(GetBuildVersionText(assembly)));
+
     public static string CreateAboutText(Assembly assembly)
     {
         ArgumentNullException.ThrowIfNull(assembly);

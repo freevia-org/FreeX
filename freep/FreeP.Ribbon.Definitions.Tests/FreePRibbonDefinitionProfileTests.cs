@@ -21,10 +21,10 @@ public sealed class FreePRibbonDefinitionProfileTests
 
         wpf.Tabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "transitions", "animations", "view");
+            .Equal("home", "insert", "design", "transitions", "animations", "view", "help");
         avalonia.Tabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "transitions", "animations", "view");
+            .Equal("home", "insert", "design", "transitions", "animations", "view", "help");
 
         RibbonDefinitionValidator.Validate(wpf).HasErrors.Should().BeFalse();
         RibbonDefinitionValidator.Validate(avalonia).HasErrors.Should().BeFalse();

@@ -30,7 +30,21 @@ public sealed partial class MainWindow
                 TryOpenInlineEmbeddedObject = () =>
                     SlideCanvas?.TextEditor?.TryActivateInlineOleObject() == true,
             },
+            SupportCommands = new FreePRibbonSupportCommandEndpoints
+            {
+                OpenHelpOnline = () => OpenSupportUri(FreePProductInfo.HelpUrl, "FreeP Help"),
+                OpenFeedback = () => OpenSupportUri(
+                    FreePProductInfo.CreateFeedbackUrl(typeof(MainWindow).Assembly),
+                    "FreeP Feedback"),
+            },
         });
+
+    private void OpenSupportUri(string uri, string title)
+    {
+        var result = DesktopExternalUriLauncher.Open(uri);
+        if (result != ExternalUriLaunchResult.Launched)
+            DialogMessageHelper.ShowWarning(this, $"Could not open the link.\n\n{uri}", title);
+    }
 
     private FreePRibbonTextActionTargets CreateRibbonTextActionTargets() => new()
     {

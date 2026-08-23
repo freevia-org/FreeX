@@ -2035,7 +2035,7 @@ public sealed partial class MainWindow : Window
                 FreeWProductInfo.HelpUrl,
                 FreeWApplicationFrameTextCatalog.HelpOnlineCommandName),
             OpenFeedback: () => _ = OpenExternalHelpLinkAsync(
-                FreeWProductInfo.FeedbackUrl,
+                FreeWProductInfo.CreateFeedbackUrl(typeof(MainWindow).Assembly),
                 FreeWApplicationFrameTextCatalog.FeedbackCommandName),
             CopyDiagnostics: () => _ = CopyDiagnosticsAsync(),
             CheckForUpdates: () => _ = OpenExternalHelpLinkAsync(

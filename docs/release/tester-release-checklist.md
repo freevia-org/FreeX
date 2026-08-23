@@ -2,6 +2,11 @@
 
 Use this checklist before promoting a tester build beyond internal validation. Paste the completed gate summary into the `Tester Release` workflow `release_notes` input when the build is intended as a public-preview candidate, set `public_preview_candidate` to true, and complete every accessibility evidence input.
 
+This FreeX-specific checklist is complemented by the suite-wide
+[public-preview readiness gate](public-preview-readiness.md), including crash
+analytics, feedback intake, per-app and suite installers, legal materials, and
+the explicitly deferred certificate gate.
+
 ## Required Release Gate
 
 - Repository preflight, build, and test completed in the release workflow.

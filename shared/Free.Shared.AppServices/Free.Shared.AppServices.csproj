@@ -6,6 +6,16 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- The Sentry DSN is a public ingestion identifier, not a signing secret. Release automation can
+       inject it with /p:FreeFamilySentryDsn=... without a source edit. Environment variables remain
+       runtime overrides. No value is embedded in ordinary developer builds. -->
+  <ItemGroup Condition="'$(FreeFamilySentryDsn)' != ''">
+    <AssemblyMetadata Include="FreeFamilySentryDsn" Value="$(FreeFamilySentryDsn)" />
+    <AssemblyMetadata Include="FreeFamilySentryEnvironment"
+                      Value="$(FreeFamilySentryEnvironment)"
+                      Condition="'$(FreeFamilySentryEnvironment)' != ''" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Free.Shared.IO\Free.Shared.IO.csproj" />
     <ProjectReference Include="..\Free.Shared.Localization\Free.Shared.Localization.csproj" />
@@ -17,6 +27,7 @@
          Logging.Abstractions supplies the optional ILogger diagnostics sink for that orchestration. -->
     <PackageReference Include="Velopack" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Sentry" />
   </ItemGroup>
 
   <ItemGroup>

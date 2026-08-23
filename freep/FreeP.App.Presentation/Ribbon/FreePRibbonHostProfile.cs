@@ -45,6 +45,13 @@ public sealed class FreePRibbonOleCommandEndpoints
     public Func<OleObjectInfo, bool>? TryOpenSelectedEmbeddedObject { get; init; }
 }
 
+/// <summary>Native help and feedback endpoints supplied by a renderer host.</summary>
+public sealed class FreePRibbonSupportCommandEndpoints
+{
+    public Action? OpenHelpOnline { get; init; }
+    public Action? OpenFeedback { get; init; }
+}
+
 /// <summary>Renderer-owned native ports consumed by the Presentation profile factory.</summary>
 public sealed class FreePRibbonHostPorts
 {
@@ -55,6 +62,7 @@ public sealed class FreePRibbonHostPorts
     public FreePRibbonDesignCommandEndpoints DesignCommands { get; init; } = new();
     public FreePRibbonFileCommandEndpoints? FileCommands { get; init; }
     public FreePRibbonOleCommandEndpoints? OleCommands { get; init; }
+    public FreePRibbonSupportCommandEndpoints? SupportCommands { get; init; }
 }
 
 /// <summary>
@@ -71,6 +79,7 @@ public sealed class FreePRibbonHostProfile
         DesignCommands = ports.DesignCommands;
         FileCommands = ports.FileCommands;
         OleCommands = ports.OleCommands;
+        SupportCommands = ports.SupportCommands;
     }
 
     internal FreePRibbonHostActionEndpoints ActionEndpoints { get; }
@@ -79,6 +88,7 @@ public sealed class FreePRibbonHostProfile
     internal FreePRibbonDesignCommandEndpoints DesignCommands { get; }
     internal FreePRibbonFileCommandEndpoints? FileCommands { get; }
     internal FreePRibbonOleCommandEndpoints? OleCommands { get; }
+    internal FreePRibbonSupportCommandEndpoints? SupportCommands { get; }
 
     internal FreePRibbonCommandHostAdapter CreateCommandHostAdapter(EditingSession editor) => new()
     {
@@ -170,6 +180,12 @@ public static class FreePRibbonHostRegistryComposer
         OleActivationPlanner.OpenEmbeddedObjectCommandId,
     ];
 
+    private static readonly RibbonCommandId[] SupportIds =
+    [
+        "freep.help-online",
+        "freep.feedback",
+    ];
+
     public static IReadOnlyList<RibbonCommandId> FileCommandIds => FileIds;
     public static IReadOnlyList<RibbonCommandId> OleCommandIds => OleIds;
 
@@ -249,6 +265,12 @@ public static class FreePRibbonHostRegistryComposer
                         ole.TryOpenInlineEmbeddedObject,
                         () => TryOpenSelectedEmbeddedObject(editor, ole)));
             }
+        }
+
+        if (profile.SupportCommands is { } support)
+        {
+            Register(registry, registered, SupportIds[0], support.OpenHelpOnline);
+            Register(registry, registered, SupportIds[1], support.OpenFeedback);
         }
 
         return registered.ToArray();

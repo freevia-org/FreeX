@@ -1,15 +1,51 @@
-name: FreeX user test report
-description: Report a problem found while testing a FreeX release build.
+name: FreeX user test report (Free-family)
+description: Report a crash or problem in FreeX, FreeW, or FreeP.
 title: "[User test]: "
 labels:
   - user-testing
   - needs-triage
 body:
+  - type: dropdown
+    id: app
+    attributes:
+      label: App
+      options:
+        - FreeX
+        - FreeW
+        - FreeP
+        - Suite installer or shared component
+    validations:
+      required: true
   - type: input
     id: build
     attributes:
       label: App version/build
-      description: Paste the full file name or build label, for example freex-0-5-tester-release-20260524-123456-abcdef12-win-x64-singlefile.
+      description: Paste the version shown in the app and, if possible, the downloaded artifact name (for example, a tester-release asset).
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows x64
+        - Linux x64
+        - Linux arm64
+        - macOS Apple silicon
+        - macOS Intel
+        - Other or unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation type
+      options:
+        - Standalone executable or extracted archive
+        - Individual-app installer
+        - Suite installer
+        - MSIX
+        - Other or unknown
     validations:
       required: true
   - type: dropdown
@@ -38,7 +74,7 @@ body:
     id: expected
     attributes:
       label: Expected result
-      description: What did you expect FreeX to do?
+      description: What did you expect the app to do?
     validations:
       required: true
   - type: textarea
@@ -52,7 +88,7 @@ body:
     id: diagnostics
     attributes:
       label: Optional diagnostics and crash reports
-      description: FreeX writes local tester diagnostics to %LOCALAPPDATA%\FreeX\Diagnostics. If there was a crash, attach the relevant file from CrashReports. Please remove any private information before uploading.
+      description: Each app can write local diagnostics (for example, %LOCALAPPDATA%\FreeX\Diagnostics on Windows, with FreeW or FreeP replacing FreeX). Attach only files you have reviewed and sanitized; do not upload a private document, path, account detail, credential, or other sensitive information.
       placeholder: Attach events.jsonl, logs, screenshots, or CrashReports/*.json when useful.
     validations:
       required: false
@@ -60,6 +96,13 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Windows version, .NET Desktop Runtime version if known, display scaling, and anything unusual about the test machine.
+      description: OS version, desktop environment where relevant, display scaling, and anything unusual about the test machine.
     validations:
       required: false
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I reviewed the text and attachments and removed information I do not want posted publicly.
+          required: true

@@ -34,9 +34,11 @@ public sealed class SentryCrashAnalyticsSourceTests
 
         source.Should().Contain("options.SendDefaultPii = false");
         source.Should().Contain("options.Dsn = crashAnalyticsOptions.Dsn");
-        source.Should().Contain("options.Release = metadata.AppVersion");
-        source.Should().Contain("options.Environment = crashAnalyticsOptions.Environment");
+        source.Should().Contain("options.Release = $\"FreeX@{metadata.AppVersion}\"");
+        source.Should().Contain("options.Environment = $\"{crashAnalyticsOptions.Environment}-freex\"");
+        source.Should().Contain("sentryEvent.SetTag(\"freeapp.product\", \"FreeX\")");
         source.Should().Contain("SentrySdk.CaptureException(exception)");
+        source.Should().Contain("SentrySdk.FlushAsync(TimeSpan.FromSeconds(2))");
         source.Should().Contain("SentrySdk.AddBreadcrumb");
     }
 }
