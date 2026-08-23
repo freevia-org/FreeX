@@ -23,6 +23,17 @@ public sealed class CrossAppParityDashboardTests
         root.GetProperty("schema").GetString().Should().Be("freex.parity.cross-app-dashboard.v3");
         root.GetProperty("scopeBoundary").GetString().Should().Contain("do not prove visual parity");
 
+        var integrationEvidence = root.GetProperty("integrationGateEvidence");
+        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("615b53f474dfa1849ae965018d890cba4a138d42");
+        integrationEvidence.TryGetProperty("integrationHead", out _).Should().BeFalse();
+        integrationEvidence.GetProperty("acceptanceRefreshNote").GetString().Should().Be(
+            "This dashboard/report is a later docs-only acceptance refresh; it does not alter the tested source commit.");
+        integrationEvidence.GetProperty("repositoryPreflight").GetString().Should().Be(
+            "Passed at tested source commit 615b53f474dfa1849ae965018d890cba4a138d42: 288 JSON, 306 XML-backed, and 13,845 text files conflict scanned.");
+        integrationEvidence.GetProperty("fullReleaseBuild").GetString().Should().Be(
+            "Passed at tested source commit 615b53f474dfa1849ae965018d890cba4a138d42: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors.");
+        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("Avalonia 2,182 passed");
+
         var freeX = root.GetProperty("apps")[0];
         var visualEvidence = freeX.GetProperty("dialogVisualEvidence");
         visualEvidence.GetProperty("pairedCapturedSurfaceIds").GetInt32().Should().BeGreaterThan(0);
