@@ -2551,11 +2551,14 @@ PY
 }
 
 probe_autofilter_date_criteria_persistence_physical() {
-    local artifacts="autofilter-date-before.png;autofilter-date-before-menu-open.png;autofilter-date-before-applied.png;autofilter-date-before-reopened.png;autofilter-date-after-before.png;autofilter-date-after-menu-open.png;autofilter-date-after-applied.png;autofilter-date-after-reopened.png;autofilter-date-after-open-cycle.txt;autofilter-date-postcondition.txt"
+    local artifacts="autofilter-date-before.png;autofilter-date-before-menu-open.png;autofilter-date-before-applied.png;autofilter-date-before-reopened.png;autofilter-date-before-open-cycle.txt;autofilter-date-after-before.png;autofilter-date-after-menu-open.png;autofilter-date-after-applied.png;autofilter-date-after-reopened.png;autofilter-date-after-reopened-grid-read.png;autofilter-date-after-open-cycle.txt;autofilter-date-postcondition.txt"
     local before_menu_open=false after_menu_open=false before_save_clean=false before_dialog_open=false before_dialog_closed=false
-    local after_save_clean=false after_dialog_open=false after_dialog_closed=false after_open_attempts=0
-    local before_criteria="" after_criteria="" before_visible="" before_reopened="" after_visible="" after_reopened=""
+    local after_save_clean=false after_dialog_open=false after_dialog_closed=false before_open_attempts=0 after_open_attempts=0
+    local before_dialog_id="" before_dialog_title="" before_dialog_pid="" after_dialog_id="" after_dialog_title="" after_dialog_pid=""
+    local before_criteria="" after_criteria="" before_visible="" before_reopened="" after_visible="" after_reopened_visible="" after_reopened_semantic=""
     local before_package="" after_package=""
+    local reopen_dialog_open=false reopen_dialog_closed=false reopen_open_attempts=0
+    local reopen_dialog_id="" reopen_dialog_title="" reopen_dialog_pid=""
 
     if [[ "${document_path,,}" != *.xlsx ]]; then
         write_artifact "autofilter-date-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path\n"
@@ -2573,12 +2576,42 @@ probe_autofilter_date_criteria_persistence_physical() {
         printf '%s,%s,%s' "$first" "$second" "$third"
     }
 
-    read_filtered_visible_date_labels() {
-        local first
-        # Filtered worksheet row 5 is rendered in the first visible data-row slot (screen row 2),
-        # while Ctrl+G plus the production formula-bar route reads its hidden worksheet address.
-        first="$(copy_cell_formula_by_address A5 || true)"
-        printf '%s,,' "$first"
+    read_first_rendered_date_label() {
+        local expected="$1" evidence="$2" value="" anti_stale="" copied=false
+        for attempt in $(seq 1 5); do
+            # Seed through FreeX itself so a missed data-row Copy remains distinguishable without
+            # introducing an external X11 clipboard owner that can contend with Avalonia. This A1
+            # formula-field read is only an anti-stale value; A5 is asserted separately below.
+            anti_stale="$(copy_cell_formula_by_address A1 || true)"
+            if [[ "$anti_stale" != "Region" ]]; then
+                sleep 0.2
+                continue
+            fi
+
+            # A filtered worksheet row is rendered in the first data-row screen slot even when
+            # its worksheet address is A5. Click and Copy that visible grid cell as independent
+            # evidence; the address-based formula-bar read remains a separate semantic assertion.
+            select_cell 0 1 date-grid-first-rendered-row || continue
+            capture "$evidence"
+            xdotool_mousemove_sync "$(cell_center_x 0)" "$(cell_center_y 1)" click 3
+            sleep "$settle_seconds"
+            send_active_key Home Down Return
+            for _ in $(seq 1 10); do
+                value="$(clipboard_text || true)"
+                if [[ "$value" == "$expected" ]]; then
+                    copied=true
+                    break
+                fi
+                sleep 0.12
+            done
+            if $copied; then
+                printf '%s' "$value"
+                return 0
+            fi
+            sleep 0.25
+        done
+        printf '%s' "$value"
+        return 1
     }
 
     package_date_signature() {
@@ -2631,6 +2664,90 @@ PY
         return 1
     }
 
+    reopen_date_document_with_retry() {
+        local diagnostics_path="$1" before_windows=0 after_windows=0 main_pid="" baseline_ids=""
+        local active_id="" active_title="" active_pid="" visible_dialog_id=""
+        reopen_dialog_open=false
+        reopen_dialog_closed=false
+        reopen_open_attempts=0
+        reopen_dialog_id=""
+        reopen_dialog_title=""
+        reopen_dialog_pid=""
+
+        wait_for_document_idle || return 1
+        select_cell 1 0 B1 || true
+        focus_app
+        before_windows="$(visible_window_count)"
+        main_pid="$(xdotool getwindowpid "$window_id" 2>/dev/null || true)"
+        baseline_ids="$(xdotool search --onlyvisible --name '.*' 2>/dev/null | sort -n | tr '\n' ' ')"
+        : > "$diagnostics_path"
+        printf 'expected-dialog-title=Open Workbook\nmain-window-pid=%s\nbaseline-window-ids=%s\n' \
+            "$main_pid" "$baseline_ids" >> "$diagnostics_path"
+        write_open_cycle_diagnostics "$diagnostics_path" "before-ctrl-f12"
+
+        for attempt in $(seq 1 4); do
+            reopen_open_attempts="$attempt"
+            send_key ctrl+F12
+            for _ in $(seq 1 12); do
+                after_windows="$(visible_window_count)"
+                active_id="$(xdotool getactivewindow 2>/dev/null || true)"
+                active_title="$(xdotool getwindowname "$active_id" 2>/dev/null || true)"
+                active_pid="$(xdotool getwindowpid "$active_id" 2>/dev/null || true)"
+                write_open_cycle_diagnostics "$diagnostics_path" "after-ctrl-f12-$attempt-$after_windows"
+                if (( after_windows > before_windows )); then
+                    if [[ -n "$active_id" && "$active_id" != "$window_id" &&
+                          "$active_title" == "Open Workbook" && "$active_pid" == "$main_pid" &&
+                          " $baseline_ids " != *" $active_id "* ]]; then
+                        reopen_dialog_open=true
+                        reopen_dialog_id="$active_id"
+                        reopen_dialog_title="$active_title"
+                        reopen_dialog_pid="$active_pid"
+                        break 2
+                    fi
+                    printf 'rejected-window-id=%s\nrejected-window-title=%s\nrejected-window-pid=%s\n' \
+                        "$active_id" "$active_title" "$active_pid" >> "$diagnostics_path"
+                    return 1
+                fi
+                sleep 0.2
+            done
+            sleep 0.5
+        done
+        $reopen_dialog_open || return 1
+
+        printf 'accepted-dialog-window-id=%s\naccepted-dialog-title=%s\naccepted-dialog-pid=%s\n' \
+            "$reopen_dialog_id" "$reopen_dialog_title" "$reopen_dialog_pid" >> "$diagnostics_path"
+        xdotool windowactivate --sync "$reopen_dialog_id" 2>/dev/null || return 1
+        active_id="$(xdotool getactivewindow 2>/dev/null || true)"
+        active_title="$(xdotool getwindowname "$active_id" 2>/dev/null || true)"
+        active_pid="$(xdotool getwindowpid "$active_id" 2>/dev/null || true)"
+        if [[ "$active_id" != "$reopen_dialog_id" || "$active_title" != "Open Workbook" ||
+              "$active_pid" != "$main_pid" ]]; then
+            printf 'pre-input-identity-rejected=true\n' >> "$diagnostics_path"
+            return 1
+        fi
+        write_open_cycle_diagnostics "$diagnostics_path" "before-path-input"
+        # GTK routes text entry through the focused child widget. The exact active dialog identity
+        # was rechecked above, so deliver path input through that active focus owner.
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+        xdotool key --clearmodifiers Return
+        sleep "$settle_seconds"
+        xdotool key --clearmodifiers Return
+        for _ in $(seq 1 20); do
+            visible_dialog_id="$(xdotool search --onlyvisible --name '^Open Workbook$' 2>/dev/null | awk -v target="$reopen_dialog_id" '$1 == target { print $1; exit }')"
+            if [[ "$visible_dialog_id" != "$reopen_dialog_id" ]]; then
+                reopen_dialog_closed=true
+                break
+            fi
+            sleep 0.25
+        done
+        $reopen_dialog_closed || return 1
+        wait_for_expected_document || return 1
+        sleep "$dialog_settle_seconds"
+        focus_app
+        return 0
+    }
+
     click_date_glyph() {
         local column_offset=1
         local glyph_x=$((a1_x + (column_offset + 1) * cell_width - 9))
@@ -2674,28 +2791,13 @@ PY
     fi
 
     if $before_save_clean && [[ "$before_package" == *"ref=A1:B5|colId=1|operator=lessThan|value=45323"* ]]; then
-        local before_windows after_windows
-        select_cell 1 0 B1 || true
-        focus_app
-        before_windows="$(visible_window_count)"
-        send_key ctrl+F12
-        for _ in $(seq 1 12); do
-            after_windows="$(visible_window_count)"
-            if (( after_windows > before_windows )); then before_dialog_open=true; break; fi
-            sleep 0.2
-        done
-        if $before_dialog_open; then
-            xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
-            xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
-            xdotool key --clearmodifiers Return
-            sleep "$settle_seconds"
-            xdotool key --clearmodifiers Return
-            for _ in $(seq 1 16); do
-                after_windows="$(visible_window_count)"
-                if (( after_windows <= before_windows )); then before_dialog_closed=true; break; fi
-                sleep 0.25
-            done
-        fi
+        reopen_date_document_with_retry "$output/autofilter-date-before-open-cycle.txt" || true
+        before_dialog_open="$reopen_dialog_open"
+        before_dialog_closed="$reopen_dialog_closed"
+        before_open_attempts="$reopen_open_attempts"
+        before_dialog_id="$reopen_dialog_id"
+        before_dialog_title="$reopen_dialog_title"
+        before_dialog_pid="$reopen_dialog_pid"
         if $before_dialog_closed; then
             capture "autofilter-date-before-reopened.png"
             before_reopened="$(read_visible_date_labels)"
@@ -2732,41 +2834,17 @@ PY
     fi
 
     if $after_save_clean && [[ "$after_package" == *"ref=A1:B5|colId=1|operator=greaterThan|value=45323"* ]]; then
-        local before_windows after_windows
-        select_cell 1 0 B1 || true
-        focus_app
-        before_windows="$(visible_window_count)"
-        : > "$output/autofilter-date-after-open-cycle.txt"
-        write_open_cycle_diagnostics "$output/autofilter-date-after-open-cycle.txt" "before-ctrl-f12"
-        for attempt in $(seq 1 4); do
-            after_open_attempts="$attempt"
-            send_key ctrl+F12
-            for _ in $(seq 1 12); do
-                after_windows="$(visible_window_count)"
-                write_open_cycle_diagnostics "$output/autofilter-date-after-open-cycle.txt" "after-ctrl-f12-$attempt-$after_windows"
-                if (( after_windows > before_windows )); then after_dialog_open=true; break 2; fi
-                sleep 0.2
-            done
-            sleep 0.5
-        done
-        if $after_dialog_open; then
-            xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
-            xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
-            xdotool key --clearmodifiers Return
-            sleep "$settle_seconds"
-            xdotool key --clearmodifiers Return
-            for _ in $(seq 1 16); do
-                after_windows="$(visible_window_count)"
-                if (( after_windows <= before_windows )); then after_dialog_closed=true; break; fi
-                sleep 0.25
-            done
-        fi
+        reopen_date_document_with_retry "$output/autofilter-date-after-open-cycle.txt" || true
+        after_dialog_open="$reopen_dialog_open"
+        after_dialog_closed="$reopen_dialog_closed"
+        after_open_attempts="$reopen_open_attempts"
+        after_dialog_id="$reopen_dialog_id"
+        after_dialog_title="$reopen_dialog_title"
+        after_dialog_pid="$reopen_dialog_pid"
         if $after_dialog_closed; then
-            sleep "$dialog_settle_seconds"
             capture "autofilter-date-after-reopened.png"
-            # After >February 1 hides rows 2-4, so read the first rendered data-row slot after
-            # the native dialog closes instead of applying the unfiltered selection geometry.
-            after_reopened="$(read_filtered_visible_date_labels)"
+            after_reopened_visible="$(read_first_rendered_date_label Mar15 autofilter-date-after-reopened-grid-read.png || true)"
+            after_reopened_semantic="$(copy_cell_formula_by_address A5 || true)"
         fi
     fi
 
@@ -2777,11 +2855,12 @@ PY
         fi
     done
     write_artifact "autofilter-date-postcondition.txt" \
-        "document-path=$document_path\nbefore-menu-open=$before_menu_open\nbefore-criteria=$before_criteria\nbefore-visible=$before_visible\nbefore-save-clean=$before_save_clean\nbefore-package=$before_package\nbefore-dialog-open=$before_dialog_open\nbefore-dialog-closed=$before_dialog_closed\nbefore-reopened=$before_reopened\nafter-menu-open=$after_menu_open\nafter-criteria=$after_criteria\nafter-visible=$after_visible\nafter-save-clean=$after_save_clean\nafter-package=$after_package\nafter-open-attempts=$after_open_attempts\nafter-dialog-open=$after_dialog_open\nafter-dialog-closed=$after_dialog_closed\nafter-reopened=$after_reopened\n"
+        "document-path=$document_path\nbefore-menu-open=$before_menu_open\nbefore-criteria=$before_criteria\nbefore-visible=$before_visible\nbefore-save-clean=$before_save_clean\nbefore-package=$before_package\nbefore-open-attempts=$before_open_attempts\nbefore-dialog-open=$before_dialog_open\nbefore-dialog-closed=$before_dialog_closed\nbefore-dialog-id=$before_dialog_id\nbefore-dialog-title=$before_dialog_title\nbefore-dialog-pid=$before_dialog_pid\nbefore-reopened=$before_reopened\nafter-menu-open=$after_menu_open\nafter-criteria=$after_criteria\nafter-visible=$after_visible\nafter-save-clean=$after_save_clean\nafter-package=$after_package\nafter-open-attempts=$after_open_attempts\nafter-dialog-open=$after_dialog_open\nafter-dialog-closed=$after_dialog_closed\nafter-dialog-id=$after_dialog_id\nafter-dialog-title=$after_dialog_title\nafter-dialog-pid=$after_dialog_pid\nafter-reopened-visible=$after_reopened_visible\nafter-reopened-semantic-a5=$after_reopened_semantic\n"
 
     if $before_menu_open && [[ "$before_criteria" == "date<:2024-02-01" && "$before_visible" == "Jan01,Jan15," &&
         "$before_package" == *"ref=A1:B5|colId=1|operator=lessThan|value=45323"* && $before_save_clean &&
-        $before_dialog_open && $before_dialog_closed && "$before_reopened" == "Jan01,Jan15," ]]; then
+        $before_dialog_open && $before_dialog_closed && "$before_dialog_title" == "Open Workbook" &&
+        -n "$before_dialog_id" && -n "$before_dialog_pid" && "$before_reopened" == "Jan01,Jan15," ]]; then
         record "autofilter-date-criteria-before-save-reopen-physical" "passed" \
             "autofilter-date-before-menu-open.png;autofilter-date-before-applied.png;autofilter-date-before-reopened.png;autofilter-date-postcondition.txt" \
             "Date Filters > Before visibly retained Jan01 and Jan15, saved customFilter lessThan=45323, and reopened with the same visible rows." "$available_artifacts"
@@ -2791,13 +2870,15 @@ PY
     fi
     if $after_menu_open && [[ "$after_criteria" == "date>:2024-02-01" && "$after_visible" == "Mar15,," &&
         "$after_package" == *"ref=A1:B5|colId=1|operator=greaterThan|value=45323"* && $after_save_clean &&
-        $after_dialog_open && $after_dialog_closed && "$after_reopened" == "Mar15,," ]]; then
+        $after_dialog_open && $after_dialog_closed && "$after_dialog_title" == "Open Workbook" &&
+        -n "$after_dialog_id" && -n "$after_dialog_pid" && "$after_reopened_visible" == "Mar15" &&
+        "$after_reopened_semantic" == "Mar15" ]]; then
         record "autofilter-date-criteria-after-save-reopen-physical" "passed" \
             "autofilter-date-after-menu-open.png;autofilter-date-after-applied.png;autofilter-date-after-reopened.png;autofilter-date-postcondition.txt" \
             "Date Filters > After visibly retained Mar15, saved customFilter greaterThan=45323, and reopened with the same visible row." "$available_artifacts"
     else
         record "autofilter-date-criteria-after-save-reopen-physical" "failed" "$available_artifacts" \
-            "After applied/persisted checks: menu-open=$after_menu_open; criteria=$after_criteria; visible=$after_visible; clean-save=$after_save_clean; package=$after_package; reopen-dialog-open=$after_dialog_open; reopen-dialog-closed=$after_dialog_closed; reopened-visible=$after_reopened. Acceptance requires the exact greaterThan=45323 package and a completed reopen." "$available_artifacts"
+            "After applied/persisted checks: menu-open=$after_menu_open; criteria=$after_criteria; visible=$after_visible; clean-save=$after_save_clean; package=$after_package; reopen-dialog-open=$after_dialog_open; reopen-dialog-title=$after_dialog_title; reopen-dialog-closed=$after_dialog_closed; reopened-grid=$after_reopened_visible; reopened-semantic-a5=$after_reopened_semantic. Acceptance requires the exact greaterThan=45323 package, the identity-checked Open Workbook dialog, and matching visible-grid plus semantic readback." "$available_artifacts"
     fi
 }
 
