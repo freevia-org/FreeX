@@ -72,7 +72,11 @@ public sealed class PasteChartsCommand : IWorkbookCommand
 
         _added = [];
         var affected = new List<CellAddress>();
-        foreach (var tileAnchor in EnumerateTileAnchors())
+        foreach (var tileAnchor in PastePlacementPolicy.EnumerateTileAnchors(
+                     _sourceRange,
+                     _destination,
+                     _destinationRange,
+                     _transpose))
         {
             var destLeft = CumulativeColumnLeft(targetSheet, tileAnchor.Col);
             var destTop = CumulativeRowTop(targetSheet, tileAnchor.Row);
@@ -109,38 +113,6 @@ public sealed class PasteChartsCommand : IWorkbookCommand
         foreach (var chart in _added)
             sheet.Charts.Remove(chart);
         _added = null;
-    }
-
-    // Mirrors PastePicturesCommand.EnumerateTileAnchors.
-    private IEnumerable<CellAddress> EnumerateTileAnchors()
-    {
-        if (_destinationRange is not { } destinationRange)
-        {
-            yield return _destination;
-            yield break;
-        }
-
-        var pasteRows = _transpose ? _sourceRange.ColCount : _sourceRange.RowCount;
-        var pasteCols = _transpose ? _sourceRange.RowCount : _sourceRange.ColCount;
-        var targetRows = destinationRange.RowCount;
-        var targetCols = destinationRange.ColCount;
-
-        if (targetRows <= pasteRows && targetCols <= pasteCols)
-        {
-            yield return destinationRange.Start;
-            yield break;
-        }
-
-        for (var rowOffset = 0U; rowOffset + pasteRows <= targetRows; rowOffset += pasteRows)
-        {
-            for (var colOffset = 0U; colOffset + pasteCols <= targetCols; colOffset += pasteCols)
-            {
-                yield return new CellAddress(
-                    destinationRange.Start.Sheet,
-                    destinationRange.Start.Row + rowOffset,
-                    destinationRange.Start.Col + colOffset);
-            }
-        }
     }
 
     /// <summary>

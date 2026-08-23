@@ -57,7 +57,7 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
         // When a full destination selection was supplied, clear overlapping rules across the
         // whole selection (matching the tiled-paste footprint below); otherwise fall back to the
         // single-anchor footprint sized to the copied source range, as before.
-        var clearFootprint = _destinationRange ?? GetDestinationRange(_sourceRange, _destination, _transpose);
+        var clearFootprint = _destinationRange ?? PastePlacementPolicy.GetDestinationRange(_sourceRange, _destination, _transpose);
         // R52-commands-data-validation-apply-3-1/-3-2: a real Excel paste only supersedes
         // validation on the destination cells themselves -- a pre-existing rule whose AppliesTo
         // (or AdditionalRanges, per -3-2) merely overlaps the paste footprint must be shrunk to
@@ -65,7 +65,11 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
         // paste destination silently lose validation they were never part of pasting over.
         ClearOverlappingValidationRanges(targetSheet, clearFootprint);
 
-        foreach (var tileAnchor in EnumerateTileAnchors())
+        foreach (var tileAnchor in PastePlacementPolicy.EnumerateTileAnchors(
+                     _sourceRange,
+                     _destination,
+                     _destinationRange,
+                     _transpose))
         {
             foreach (var rule in sourceRules)
             {
@@ -78,7 +82,7 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
                 {
                     foreach (var intersection in IntersectWithSource(sourceRuleRange))
                     {
-                        var mappedRange = MapRange(intersection, _sourceRange, tileAnchor, _transpose);
+                        var mappedRange = PastePlacementPolicy.MapRange(intersection, _sourceRange, tileAnchor, _transpose);
                         // Transpose swaps each relative reference's own (row,col) offset from the
                         // rule's own AppliesTo anchor onto the pasted rule's new anchor -- it is NOT
                         // the uniform per-cell translation PasteOffsetOp applies. Mirrors
@@ -116,55 +120,6 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
         sheet.DataValidations.Clear();
         foreach (var rule in _previous)
             sheet.DataValidations.Add(DataValidationCopySupport.CloneValidation(rule));
-    }
-
-    // R34-commands-paste-special-3-2: when the constructor was given the full destination
-    // selection (not just its top-left anchor) and that selection is larger than the copied
-    // source range in either dimension, repeat the paste at every whole tile of the source range
-    // that fits -- exactly mirroring PasteCommandFactory.CreateInternalPasteCommand's
-    // shouldTileDestinationRange/CreateTiledInternalPasteCommand period-based tiling. A trailing
-    // partial tile (selection size not an exact multiple of the source range) is left untouched,
-    // matching that same tiling behavior. When no destination range was supplied, or the
-    // selection is no larger than the source range, this yields just the single anchor cell so
-    // the original (non-tiled) behavior is unchanged.
-    private IEnumerable<CellAddress> EnumerateTileAnchors()
-    {
-        if (_destinationRange is not { } destinationRange)
-        {
-            yield return _destination;
-            yield break;
-        }
-
-        var pasteRows = _transpose ? _sourceRange.ColCount : _sourceRange.RowCount;
-        var pasteCols = _transpose ? _sourceRange.RowCount : _sourceRange.ColCount;
-        var targetRows = destinationRange.RowCount;
-        var targetCols = destinationRange.ColCount;
-
-        if (targetRows <= pasteRows && targetCols <= pasteCols)
-        {
-            yield return destinationRange.Start;
-            yield break;
-        }
-
-        for (var rowOffset = 0U; rowOffset + pasteRows <= targetRows; rowOffset += pasteRows)
-        {
-            for (var colOffset = 0U; colOffset + pasteCols <= targetCols; colOffset += pasteCols)
-            {
-                yield return new CellAddress(
-                    destinationRange.Start.Sheet,
-                    destinationRange.Start.Row + rowOffset,
-                    destinationRange.Start.Col + colOffset);
-            }
-        }
-    }
-
-    private static GridRange GetDestinationRange(GridRange sourceRange, CellAddress destination, bool transpose)
-    {
-        var rowCount = transpose ? sourceRange.ColCount : sourceRange.RowCount;
-        var colCount = transpose ? sourceRange.RowCount : sourceRange.ColCount;
-        return new GridRange(
-            destination,
-            new CellAddress(destination.Sheet, destination.Row + rowCount - 1, destination.Col + colCount - 1));
     }
 
     private static GridRange? Intersect(GridRange first, GridRange second) =>
@@ -255,22 +210,6 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
         yield return rule.AppliesTo;
         foreach (var range in rule.AdditionalRanges)
             yield return range;
-    }
-
-    private static GridRange MapRange(GridRange range, GridRange sourceRange, CellAddress destination, bool transpose)
-    {
-        var first = MapAddress(range.Start, sourceRange, destination, transpose);
-        var second = MapAddress(range.End, sourceRange, destination, transpose);
-        return new GridRange(first, second);
-    }
-
-    private static CellAddress MapAddress(CellAddress source, GridRange sourceRange, CellAddress destination, bool transpose)
-    {
-        var rowOffset = source.Row - sourceRange.Start.Row;
-        var colOffset = source.Col - sourceRange.Start.Col;
-        return transpose
-            ? new CellAddress(destination.Sheet, destination.Row + colOffset, destination.Col + rowOffset)
-            : new CellAddress(destination.Sheet, destination.Row + rowOffset, destination.Col + colOffset);
     }
 
 }

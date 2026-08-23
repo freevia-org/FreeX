@@ -79,11 +79,15 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
         _previousAuthors = [];
         _previousShown = [];
         var affected = new List<CellAddress>();
-        foreach (var tileAnchor in EnumerateTileAnchors())
+        foreach (var tileAnchor in PastePlacementPolicy.EnumerateTileAnchors(
+                     _sourceRange,
+                     _destination,
+                     _destinationRange,
+                     _transpose))
         {
             foreach (var (source, comment, author, shown) in sourceComments)
             {
-                var destination = MapDestination(source, _sourceRange, tileAnchor, _transpose);
+                var destination = PastePlacementPolicy.MapAddress(source, _sourceRange, tileAnchor, _transpose);
 
                 // R124-paste-note-vs-thread-parity: real Excel (and every direct-authoring path
                 // here -- SetCommentCommand/SetThreadedCommentCommand via CommentCommandGuards)
@@ -121,7 +125,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
 
             foreach (var (source, comment) in sourceThreadedComments)
             {
-                var destination = MapDestination(source, _sourceRange, tileAnchor, _transpose);
+                var destination = PastePlacementPolicy.MapAddress(source, _sourceRange, tileAnchor, _transpose);
 
                 // R124-paste-note-vs-thread-parity: symmetric to the Note loop above -- pasting a
                 // threaded comment must first clear any legacy Note (and its author/pinned state)
@@ -225,56 +229,4 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             ? areas.SelectMany(area => area.AllCells()).Distinct()
             : _sourceRange.AllCells();
 
-    // R34-commands-paste-special-3-2: when the constructor was given the full destination
-    // selection (not just its top-left anchor) and that selection is larger than the copied
-    // source range in either dimension, repeat the paste at every whole tile of the source range
-    // that fits -- exactly mirroring PasteCommandFactory.CreateInternalPasteCommand's
-    // shouldTileDestinationRange/CreateTiledInternalPasteCommand period-based tiling. A trailing
-    // partial tile (selection size not an exact multiple of the source range) is left untouched,
-    // matching that same tiling behavior. When no destination range was supplied, or the
-    // selection is no larger than the source range, this yields just the single anchor cell so
-    // the original (non-tiled) behavior is unchanged.
-    private IEnumerable<CellAddress> EnumerateTileAnchors()
-    {
-        if (_destinationRange is not { } destinationRange)
-        {
-            yield return _destination;
-            yield break;
-        }
-
-        var pasteRows = _transpose ? _sourceRange.ColCount : _sourceRange.RowCount;
-        var pasteCols = _transpose ? _sourceRange.RowCount : _sourceRange.ColCount;
-        var targetRows = destinationRange.RowCount;
-        var targetCols = destinationRange.ColCount;
-
-        if (targetRows <= pasteRows && targetCols <= pasteCols)
-        {
-            yield return destinationRange.Start;
-            yield break;
-        }
-
-        for (var rowOffset = 0U; rowOffset + pasteRows <= targetRows; rowOffset += pasteRows)
-        {
-            for (var colOffset = 0U; colOffset + pasteCols <= targetCols; colOffset += pasteCols)
-            {
-                yield return new CellAddress(
-                    destinationRange.Start.Sheet,
-                    destinationRange.Start.Row + rowOffset,
-                    destinationRange.Start.Col + colOffset);
-            }
-        }
-    }
-
-    private static CellAddress MapDestination(
-        CellAddress source,
-        GridRange sourceRange,
-        CellAddress destination,
-        bool transpose)
-    {
-        var rowOffset = source.Row - sourceRange.Start.Row;
-        var colOffset = source.Col - sourceRange.Start.Col;
-        return transpose
-            ? new CellAddress(destination.Sheet, destination.Row + colOffset, destination.Col + rowOffset)
-            : new CellAddress(destination.Sheet, destination.Row + rowOffset, destination.Col + colOffset);
-    }
 }
