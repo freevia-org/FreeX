@@ -225,8 +225,29 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Locate Inno Setup
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $compiler = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $compiler) {
+            choco install innosetup --version 6.4.3 --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Could not install the Inno Setup compiler." }
+            $compiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path -LiteralPath $compiler)) { throw "Inno Setup compiler not found." }
+          "INNO_SETUP_COMPILER=$compiler" >> $env:GITHUB_ENV
+
       - name: Publish self-contained tester package
         shell: pwsh
+        env:
+          # Optional public ingestion identifier embedded as assembly metadata.
+          # An absent value keeps diagnostics local and does not block packaging.
+          FreeFamilySentryDsn: ${{ secrets.FREE_FAMILY_SENTRY_DSN }}
+          FreeFamilySentryEnvironment: tester-release
         run: |
           $version = "${{ inputs.release_version }}".Trim()
           if ([string]::IsNullOrWhiteSpace($version) -or $version -match "[`r`n]") {
@@ -240,13 +261,100 @@ jobs:
             -WindowsPackageMode SingleFile `
             -OutputDir artifacts\release
 
+          tools/packaging/New-AppInstallers.ps1 `
+            -Apps "${{ matrix.app }}" `
+            -Platform "${{ matrix.platform }}" `
+            -Version $version `
+            -Runtime "${{ matrix.runtime }}" `
+            -InputRoot artifacts\release `
+            -OutputDir artifacts\release
+
       - name: Upload package
         uses: actions/upload-artifact@v7
         with:
           name: tester-${{ matrix.app }}-${{ inputs.release_version }}-${{ matrix.runtime }}
           path: |
             artifacts/release/${{ matrix.app }}-v${{ inputs.release_version }}-${{ matrix.runtime }}.*
+            artifacts/release/${{ matrix.app }}-v${{ inputs.release_version }}-${{ matrix.runtime }}-*
             artifacts/release/${{ matrix.app }}-${{ inputs.release_version }}-*-manifest.csv
+          if-no-files-found: error
+          retention-days: 14
+
+  suite-package:
+    name: Package Free Suite ${{ matrix.runtime }}
+    needs: [prepare, package]
+    if: inputs.app == 'all'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runtime: win-x64
+            runner: windows-latest
+          - platform: linux
+            runtime: linux-x64
+            runner: ubuntu-latest
+          - platform: linux
+            runtime: linux-arm64
+            runner: ubuntu-24.04-arm
+          - platform: macos
+            runtime: osx-x64
+            runner: macos-15-intel
+          - platform: macos
+            runtime: osx-arm64
+            runner: macos-15
+    steps:
+      - name: Checkout
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download portable app packages
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        uses: actions/download-artifact@v7
+        with:
+          pattern: tester-*-${{ inputs.release_version }}-${{ matrix.runtime }}
+          path: downloaded-artifacts
+          merge-multiple: false
+
+      - name: Locate Inno Setup
+        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $compiler = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $compiler) {
+            choco install innosetup --version 6.4.3 --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Could not install the Inno Setup compiler." }
+            $compiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path -LiteralPath $compiler)) { throw "Inno Setup compiler not found." }
+          "INNO_SETUP_COMPILER=$compiler" >> $env:GITHUB_ENV
+
+      - name: Build unsigned suite installer
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        shell: pwsh
+        run: |
+          tools/packaging/New-AppInstallers.ps1 `
+            -Apps FreeX,FreeW,FreeP `
+            -Suite `
+            -Platform "${{ matrix.platform }}" `
+            -Version "${{ inputs.release_version }}" `
+            -Runtime "${{ matrix.runtime }}" `
+            -InputRoot downloaded-artifacts `
+            -OutputDir artifacts\suite
+
+      - name: Upload suite installer
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        uses: actions/upload-artifact@v7
+        with:
+          name: tester-FreeSuite-${{ inputs.release_version }}-${{ matrix.runtime }}
+          path: artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}-*
           if-no-files-found: error
           retention-days: 14
 
@@ -324,11 +432,55 @@ jobs:
           4. Run `chmod +x ~/{{APP}}/{{APP}}` once, then start it with `~/{{APP}}/{{APP}}`. To update, close the app and replace the extracted directory.
 
           These tester packages are self-contained. Do not run them from inside the archive; keep the extracted Linux or macOS directory intact. The macOS assets are unsigned portable archives, not signed or notarized `.app` bundles.
+
+          Each platform also includes an installable package: `-setup.exe` on Windows, `-installer.zip` on Linux, and `-apps.zip` containing an unsigned/unnotarized `.app` bundle on macOS. The original portable executable or archive remains available.
           '@
           $notes = $notes.
             Replace("{{APP}}", $app).
             Replace("{{VERSION}}", $version).
             Replace("{{SHA}}", $env:GITHUB_SHA)
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber
+            $notes | gh release edit $tag --title $title --notes-file -
+          } else {
+            $releaseArgs = @()
+            if ("${{ inputs.prerelease }}" -eq "true") { $releaseArgs += "--prerelease" }
+            $notes | gh release create $tag @assets --target $env:GITHUB_SHA --title $title --notes-file - @releaseArgs
+          }
+
+  publish-suite:
+    name: Publish Free Suite release
+    needs: suite-package
+    if: inputs.app == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download suite packages
+        uses: actions/download-artifact@v7
+        with:
+          pattern: tester-FreeSuite-${{ inputs.release_version }}-*
+          path: downloaded-artifacts
+          merge-multiple: true
+
+      - name: Create or update suite release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ inputs.release_version }}".Trim()
+          $tag = "free-suite-v$version"
+          $title = "Free Suite v$version Tester Release"
+          $assets = @(Get-ChildItem -LiteralPath downloaded-artifacts -File | ForEach-Object { $_.FullName })
+          if ($assets.Count -eq 0) { throw "No suite packages were downloaded." }
+          $notes = @'
+          # Free Suite v{{VERSION}} Tester Release
+
+          This release installs FreeX, FreeW, and FreeP together by invoking the same per-app installers shipped on each app's release page. It does not create separate suite-owned copies, so suite-to-individual upgrades and individual-to-suite upgrades keep the same installation and uninstaller identities. Portable artifacts remain available on the individual release pages.
+
+          Windows uses an unsigned per-user setup executable. Linux uses an installer bundle whose `install.sh` defaults to `~/.local`. macOS contains all three `.app` bundles and an `install.sh` helper; those bundles are currently unsigned and unnotarized.
+          '@.Replace("{{VERSION}}", $version)
 
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {

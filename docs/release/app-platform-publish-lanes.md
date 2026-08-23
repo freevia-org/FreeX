@@ -6,11 +6,14 @@ Every tester release uses one predictable app/version tag and independently runn
 
 | App | Tag | Windows | Linux | macOS |
 | --- | --- | --- | --- | --- |
-| FreeX | `freex-v<version>` | `FreeX-v<version>-win-x64.exe` | `FreeX-v<version>-linux-{x64,arm64}.zip` | `FreeX-v<version>-osx-{x64,arm64}.zip` |
-| FreeW | `freew-v<version>` | `FreeW-v<version>-win-x64.exe` | `FreeW-v<version>-linux-{x64,arm64}.zip` | `FreeW-v<version>-osx-{x64,arm64}.zip` |
-| FreeP | `freep-v<version>` | `FreeP-v<version>-win-x64.exe` | `FreeP-v<version>-linux-{x64,arm64}.zip` | `FreeP-v<version>-osx-{x64,arm64}.zip` |
+| FreeX | `freex-v<version>` | portable `.exe` and `-setup.exe` | portable `.zip` and `-installer.zip` | portable `.zip` and `-apps.zip` |
+| FreeW | `freew-v<version>` | portable `.exe` and `-setup.exe` | portable `.zip` and `-installer.zip` | portable `.zip` and `-apps.zip` |
+| FreeP | `freep-v<version>` | portable `.exe` and `-setup.exe` | portable `.zip` and `-installer.zip` | portable `.zip` and `-apps.zip` |
+| Free Suite | `free-suite-v<version>` | suite `-setup.exe` | suite `-installer.zip` per architecture | suite `-apps.zip` per architecture |
 
-Every release asset has an adjacent `.sha256` file. Windows artifacts are self-contained single-file WPF executables. Linux and macOS artifacts are self-contained Avalonia archives. This is a packaging distinction, not a release-lane distinction: all three platforms belong to the same app/version release.
+Every release asset has an adjacent `.sha256` file. The original self-contained Windows executables and Linux/macOS archives remain available beside the installers. Installer hashes are calculated after the installer is built. While release certificates are pending, Windows installers are unsigned and macOS app bundles are unsigned and unnotarized; the workflow does not pretend otherwise or require signing credentials.
+
+The Free Suite release is created only for `app=all`. Its package is a bootstrapper over the exact individual installers: Windows invokes the three per-app setups, while Linux and macOS invoke the embedded per-app install scripts. Consequently each app keeps one installation destination and one upgrade/uninstall identity whether installation started from the suite or an individual download.
 
 ## Tester Installation
 
@@ -18,11 +21,13 @@ Use the matching app name (`FreeX`, `FreeW`, or `FreeP`) and release version in 
 
 | Platform | Select | Verify | Deploy and run |
 | --- | --- | --- | --- |
-| Windows | `win-x64.exe` | `Get-FileHash .\\<app>-v<version>-win-x64.exe -Algorithm SHA256` and compare it to the `.sha256` file | Move the single `.exe` to the user's chosen program directory and run it. It is self-contained; no .NET runtime or installer is required. Close it before replacing the file for an update. |
-| Linux | `linux-x64.zip` for Intel/AMD, `linux-arm64.zip` for 64-bit ARM | `sha256sum -c <app>-v<version>-linux-<architecture>.zip.sha256` | Extract into a stable user directory, run `chmod +x <directory>/<app>` once, then launch `<directory>/<app>`. Replace the extracted directory after closing the app to update. |
-| macOS | `osx-x64.zip` for Intel, `osx-arm64.zip` for Apple silicon | `shasum -a 256 -c <app>-v<version>-osx-<architecture>.zip.sha256` | Extract into a stable user directory, run `chmod +x <directory>/<app>` once, then launch `<directory>/<app>`. Replace the extracted directory after closing the app to update. |
+| Windows | `win-x64-setup.exe` for installation, or `win-x64.exe` for portable use | `Get-FileHash <download> -Algorithm SHA256` and compare it to the adjacent `.sha256` file | The installer is per-user and needs no elevation. The standalone executable remains self-contained. Both are unsigned until the Windows certificate is available. |
+| Linux | `linux-<architecture>-installer.zip`, or the portable archive | `sha256sum -c <download>.sha256` | Extract the installer bundle and run `./install.sh`; it defaults to `~/.local`, accepts another prefix as its first argument, and includes `uninstall.sh`. |
+| macOS | `osx-<architecture>-apps.zip`, or the portable archive | `shasum -a 256 -c <download>.sha256` | Extract the app package and run `./install.sh` or drag the `.app` to `~/Applications`. Current app packages are explicitly unsigned and unnotarized. |
 
 Linux and macOS packages must be extracted before first launch; do not run them from inside the zip file. The canonical workflow repeats these same instructions in every GitHub release body.
+
+For all three applications together, use the matching artifact on the `free-suite-v<version>` release. Installing an individual app after the suite (or running the suite after an individual install) updates the same app installation rather than creating another copy. Uninstall remains per app; the Windows suite bootstrapper intentionally does not register a fourth uninstaller.
 
 ## Dispatching A Lane
 
