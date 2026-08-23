@@ -773,8 +773,8 @@ try {
         testedSourceCommit = $wave193TestedSourceCommit
         acceptanceRefreshNote = $wave193AcceptanceRefreshNote
         independentReview = "Passed: independent review found no findings after dashboard and source-guard remediations."
-        repositoryPreflight = "Passed: 288 JSON, 306 XML-backed, and 13,843 text files conflict scanned."
-        fullReleaseBuild = "Passed: the first full Release build passed before remediation; the post-remediation normal rebuild hit transient shared compiler locks; the prescribed retry dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors."
+        repositoryPreflight = "Passed at tested source commit ${wave193TestedSourceCommit}: 288 JSON, 306 XML-backed, and 13,845 text files conflict scanned."
+        fullReleaseBuild = "Passed at tested source commit ${wave193TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors."
         defaultNonUiTestLane = "Passed: final default lane exit 0 with Core.IO 5,839 passed/56 skipped, Avalonia 2,182 passed, Host Logic 1,490 passed/4 skipped, FreeP Presentation 5,466 passed, and FreeP Avalonia 724 passed."
         sourceTestRemediation = "The initial default lane exposed three source-test regressions; remediation fixed all three, and focused reruns passed."
     }
