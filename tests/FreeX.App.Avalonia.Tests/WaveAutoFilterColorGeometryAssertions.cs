@@ -37,15 +37,44 @@ internal static class WaveAutoFilterColorGeometryAssertions
             "the shared default geometry must not be redeclared inside a helper");
         Count(body, "click_autofilter_control \"$click_x_offset\" \"$click_y_offset\"").Should().Be(1,
             "the actual click must consume the validated mode-selected geometry");
-        body.Should().Contain(
-            "local click_x=$((a1_x + click_x_offset)) click_y=$((a1_y + click_y_offset))",
+        var renderedSwatchBody = ExtractFunctionBody(body, "verify_rendered_color_swatch");
+        var transitionBody = ExtractFunctionBody(body, "verify_no_fill_popup_transition");
+        const string clickGeometry = "local click_x=$((a1_x + click_x_offset)) click_y=$((a1_y + click_y_offset))";
+        renderedSwatchBody.Should().Contain(
+            clickGeometry,
             "the rendered swatch guard must validate the same click target used by the probe");
-        body.Should().Contain(
-            "local click_x=$((a1_x + click_x_offset)) click_y=$((a1_y + click_y_offset))\n" +
+        transitionBody.Should().Contain(
+            clickGeometry + "\n" +
             "        local before_crop=",
             "the No Fill popup transition guard must validate the same click target");
         body.Should().NotContain("click_autofilter_control \"$click_x_offset\" 220",
             "the real click must not hide a second hard-coded y coordinate");
+    }
+
+    private static string ExtractFunctionBody(string source, string functionName)
+    {
+        var marker = $"{functionName}() {{";
+        var start = source.IndexOf(marker, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"the probe must retain the {functionName} helper");
+
+        var bodyStart = start + marker.Length;
+        var braceDepth = 1;
+        for (var index = bodyStart; index < source.Length; index++)
+        {
+            switch (source[index])
+            {
+                case '{':
+                    braceDepth++;
+                    break;
+                case '}':
+                    braceDepth--;
+                    if (braceDepth == 0)
+                        return source[bodyStart..index];
+                    break;
+            }
+        }
+
+        throw new InvalidOperationException($"the probe must retain a bounded {functionName} helper body");
     }
 
     private static int Count(string source, string value) =>

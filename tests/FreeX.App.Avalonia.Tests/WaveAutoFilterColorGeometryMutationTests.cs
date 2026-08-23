@@ -12,6 +12,9 @@ public sealed class WaveAutoFilterColorGeometryMutationTests
     [InlineData(
         "click_autofilter_control \"$click_x_offset\" \"$click_y_offset\"",
         "click_autofilter_control \"$click_x_offset\" 221")]
+    [InlineData(
+        "local click_x=$((a1_x + click_x_offset)) click_y=$((a1_y + click_y_offset)) before_pixel=\"\" pixel=\"\"",
+        "local click_x=110 click_y=220 before_pixel=\"\" pixel=\"\"")]
     public void GeometryContractRejectsClickTargetMutations(string original, string mutation)
     {
         var probe = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
