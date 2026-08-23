@@ -520,5 +520,8 @@ internal static class Ooxml
 
     /// <summary>Reads a WordprocessingML <c>ST_OnOff</c> lexical value, keeping a caller-provided absent default.</summary>
     public static bool ReadOnOffValue(string? value, bool defaultValue = false) =>
-        value is null ? defaultValue : value is "1" or "true" or "on";
+        OoxmlOnOffLexical.Parse(
+            value,
+            absentDefault: defaultValue,
+            invalidDefault: false);
 }

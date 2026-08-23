@@ -6441,14 +6441,10 @@ public static class PptxPackageReader
         var value = element.Attribute(M + "val")?.Value
             ?? element.Attribute("val")?.Value
             ?? element.Value;
-        if (string.IsNullOrWhiteSpace(value))
-            return true;
-
-        return value.Trim().ToLowerInvariant() switch
-        {
-            "0" or "false" or "off" => false,
-            _ => true
-        };
+        return OoxmlOnOffLexical.Parse(
+            value?.Trim().ToLowerInvariant(),
+            absentDefault: true,
+            invalidDefault: true);
     }
 
     private static Run ReadFieldRun(XElement fldEl, PresentationColorScheme scheme)
@@ -7449,8 +7445,8 @@ public static class PptxPackageReader
             : (null, false);
     }
 
-    private static bool ReadBoolean(string? value)
-        => value is "1" or "true" or "on";
+    private static bool ReadBoolean(string? value) =>
+        OoxmlOnOffLexical.Parse(value, absentDefault: false, invalidDefault: false);
 
     private static int? ReadTimingPercentage(string? value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)

@@ -50,6 +50,19 @@ public sealed class FreePRendererPolicyDedupSourceTests
         }
     }
 
+    [Fact]
+    public void AvaloniaRichTextEditor_UsesPortableInlineTableLookup()
+    {
+        var source = Read(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaRichTextEditor.cs");
+
+        source.Should().Contain("InCanvasRichTextEditBuffer.FindInlineTableAt(");
+        source.Should().NotContain("private static bool TryFindInlineTable(");
+        source.Should().NotContain("run.InlineTable is { } inlineTable");
+    }
+
     private static string Read(params string[] pathParts) =>
         TestWorkspaceFileLocator.ReadAllText(pathParts);
 }

@@ -793,7 +793,11 @@ internal sealed class AvaloniaRichTextEditor : Grid
     {
         foreach (var pending in _pendingInlineTableRows)
         {
-            if (!TryFindInlineTable(body, pending.LogicalPosition, out var table))
+            if (!InCanvasRichTextEditBuffer.FindInlineTableAt(
+                    body,
+                    pending.LogicalPosition,
+                    out var table)
+                || table is null)
                 continue;
 
             for (int index = 0; index < pending.Rows.Count; index++)
@@ -805,35 +809,6 @@ internal sealed class AvaloniaRichTextEditor : Grid
                 table.Rows.Add(pending.Rows[index].Clone());
             }
         }
-    }
-
-    private static bool TryFindInlineTable(
-        TextBody body,
-        int logicalPosition,
-        out TableShape table)
-    {
-        int position = 0;
-        foreach (var paragraph in body.Paragraphs)
-        {
-            foreach (var run in paragraph.Runs)
-            {
-                int length = Math.Max(1, run.Text?.Length ?? 0);
-                if (run.InlineTable is { } inlineTable
-                    && logicalPosition >= position
-                    && logicalPosition < position + length)
-                {
-                    table = inlineTable.Table;
-                    return true;
-                }
-
-                position += run.Text?.Length ?? 0;
-            }
-
-            position++;
-        }
-
-        table = null!;
-        return false;
     }
 
     private sealed class PendingInlineTableRows(int logicalPosition, int firstRowIndex)

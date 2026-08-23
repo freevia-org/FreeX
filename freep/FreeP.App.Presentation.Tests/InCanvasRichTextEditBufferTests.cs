@@ -110,6 +110,36 @@ public sealed class InCanvasRichTextEditBufferTests
         InCanvasTextEditPlanner.ExtractPlainText(updated.Rows[0].Cells[1].TextBody).Should().Be("Edited");
     }
 
+    [Fact]
+    public void InlineTableLookupPreservesLogicalMarkerIndexAndReturnsLiveModel()
+    {
+        var table = new TableShape();
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "AB" },
+                        new Run { Text = "", InlineTable = new InlineTableInfo { Table = table } },
+                        new Run { Text = "Z" },
+                    },
+                },
+            },
+        };
+
+        InCanvasRichTextEditBuffer.FindInlineTableAt(body, 2, out var found)
+            .Should()
+            .BeTrue();
+        found.Should().BeSameAs(table);
+        InCanvasRichTextEditBuffer.FindInlineTableAt(body, 1, out _).Should().BeFalse();
+        InCanvasRichTextEditBuffer.FindInlineTableAt(body, 3, out _).Should().BeFalse();
+        InCanvasRichTextEditBuffer.FindInlineTableAt(null, 2, out found).Should().BeFalse();
+        found.Should().BeNull();
+    }
+
     private static TextBody BodyWithText(string text) => new()
     {
         Paragraphs =
