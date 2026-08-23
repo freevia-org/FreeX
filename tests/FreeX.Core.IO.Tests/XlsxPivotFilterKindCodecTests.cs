@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -177,6 +178,70 @@ public sealed class XlsxPivotFilterKindCodecTests
         }
     }
 
+    public static IEnumerable<object[]> PreservedNativeTopFilterCases()
+    {
+        yield return ["count", false, PivotValueFilterKind.Bottom, 7, false];
+        yield return ["percent", true, PivotValueFilterKind.Top, 25, true];
+        yield return ["sum", false, PivotValueFilterKind.Bottom, 125, false];
+    }
+
+    [Theory]
+    [MemberData(nameof(PreservedNativeTopFilterCases))]
+    public void PreservedSave_RetainsUntouchedNativeTopFilterRepresentation(
+        string nativeType,
+        bool top,
+        PivotValueFilterKind expectedKind,
+        int value,
+        bool percent)
+    {
+        var workbook = CreatePivotWorkbook(expectedKind, value);
+        using var source = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        XlsxPackageTestHelper.PatchPackageXml(source, "xl/pivotTables/pivotTable1.xml", document =>
+        {
+            var filter = document.Root!
+                .Element(WorkbookNs + "filters")!
+                .Element(WorkbookNs + "filter")!;
+            filter.SetAttributeValue("type", nativeType);
+
+            var top10 = filter.Element(WorkbookNs + "autoFilter")!
+                .Element(WorkbookNs + "filterColumn")!
+                .Element(WorkbookNs + "top10")!;
+            top10.SetAttributeValue("top", top ? "1" : "0");
+            top10.SetAttributeValue("val", value.ToString(CultureInfo.InvariantCulture));
+            top10.SetAttributeValue("percent", percent ? "1" : null);
+        });
+        var expectedFilter = ReadNativeFilter(source);
+        expectedFilter.Attribute("count").Should().BeNull();
+        expectedFilter.Attribute("val").Should().BeNull();
+        expectedFilter.Descendants(WorkbookNs + "top10").Single()
+            .Attribute("val")!.Value.Should().Be(value.ToString(CultureInfo.InvariantCulture));
+
+        var adapter = new XlsxFileAdapter();
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedFilter = loaded.GetSheetAt(0).PivotTables.Single().ValueFilters.Single();
+        loadedFilter.Kind.Should().Be(expectedKind);
+        loadedFilter.Count.Should().Be(value);
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        var savedFilter = ReadNativeFilter(saved);
+        XNode.DeepEquals(savedFilter, expectedFilter).Should().BeTrue(
+            "an untouched source-native pivot filter must not be canonicalized on preserved save");
+        savedFilter.Attribute("type")!.Value.Should().Be(nativeType);
+        var savedTop10 = savedFilter.Descendants(WorkbookNs + "top10").Single();
+        savedTop10.Attribute("top")!.Value.Should().Be(top ? "1" : "0");
+        savedTop10.Attribute("val")!.Value.Should().Be(value.ToString(CultureInfo.InvariantCulture));
+        savedTop10.Attribute("percent")?.Value.Should().Be(percent ? "1" : null);
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedFilter = reloaded.GetSheetAt(0).PivotTables.Single().ValueFilters.Single();
+        reloadedFilter.Kind.Should().Be(expectedKind);
+        reloadedFilter.Count.Should().Be(value);
+    }
+
     [Fact]
     public void ReaderPreservedSaveAndWriter_UseTheSharedCodec()
     {
@@ -210,6 +275,53 @@ public sealed class XlsxPivotFilterKindCodecTests
                     new XElement(
                         WorkbookNs + "top10",
                         top is null ? null : new XAttribute("top", top)))));
+
+    private static XElement ReadNativeFilter(MemoryStream package) =>
+        new(XlsxPackageTestHelper.ReadPackageXml(package, "xl/pivotTables/pivotTable1.xml")
+            .Root!
+            .Element(WorkbookNs + "filters")!
+            .Element(WorkbookNs + "filter")!);
+
+    private static Workbook CreatePivotWorkbook(PivotValueFilterKind kind, int count)
+    {
+        var workbook = new Workbook("PivotFilterPreservation");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = "A1:B3",
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Region"));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount"));
+        workbook.PivotCaches.Add(cache);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            TargetRange = new GridRange(
+                new CellAddress(sheet.Id, 5, 1),
+                new CellAddress(sheet.Id, 8, 2)),
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(0, kind, count, SourceFieldIndex: 0));
+        sheet.PivotTables.Add(pivot);
+
+        return workbook;
+    }
 
     private static readonly IReadOnlyDictionary<PivotLabelFilterKind, string> LabelCanonicalTokens =
         new Dictionary<PivotLabelFilterKind, string>
