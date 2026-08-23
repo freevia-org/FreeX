@@ -52,7 +52,7 @@ internal static partial class XlsxPivotTableReader
             .Elements(workbookNs + "filter")
             .Select(filter =>
             {
-                var kind = ReadNativePivotValueFilterKind(filter, workbookNs);
+                var kind = XlsxPivotFilterKindCodec.DecodeValue(filter, workbookNs);
                 if (kind is null)
                     return null;
 
@@ -93,7 +93,7 @@ internal static partial class XlsxPivotTableReader
             .Elements(workbookNs + "filter")
             .Select(filter =>
             {
-                var kind = ReadNativePivotLabelFilterKind(filter.Attribute("type")?.Value);
+                var kind = XlsxPivotFilterKindCodec.DecodeLabel(filter.Attribute("type")?.Value);
                 if (kind is null)
                     return null;
 
@@ -102,7 +102,7 @@ internal static partial class XlsxPivotTableReader
                 // YearToDate/etc.) carry no value attribute at all -- the period is implied entirely by
                 // the type token, computed dynamically from the current date. Only the value-bearing
                 // kinds (caption*, dateEqual..dateNotBetween) require a non-empty value to be captured.
-                if (string.IsNullOrEmpty(value) && !PivotDateFilterKindsWithoutValue.Contains(kind.Value))
+                if (string.IsNullOrEmpty(value) && !XlsxPivotFilterKindCodec.AllowsEmptyLabelValue(kind.Value))
                     return null;
 
                 return new PivotLabelFilterModel(
@@ -115,106 +115,6 @@ internal static partial class XlsxPivotTableReader
             .Select(filter => filter!)
             .ToList();
     }
-
-    // ST_PivotFilterType's relative-period date-filter tokens (Excel's Date Filters > ... submenu items
-    // that need no explicit date, e.g. "This Quarter"/"Year to Date") -- see ReadNativePivotLabelFilters.
-    private static readonly HashSet<PivotLabelFilterKind> PivotDateFilterKindsWithoutValue =
-    [
-        PivotLabelFilterKind.Yesterday,
-        PivotLabelFilterKind.Today,
-        PivotLabelFilterKind.Tomorrow,
-        PivotLabelFilterKind.LastWeek,
-        PivotLabelFilterKind.ThisWeek,
-        PivotLabelFilterKind.NextWeek,
-        PivotLabelFilterKind.LastMonth,
-        PivotLabelFilterKind.ThisMonth,
-        PivotLabelFilterKind.NextMonth,
-        PivotLabelFilterKind.LastQuarter,
-        PivotLabelFilterKind.ThisQuarter,
-        PivotLabelFilterKind.NextQuarter,
-        PivotLabelFilterKind.LastYear,
-        PivotLabelFilterKind.ThisYear,
-        PivotLabelFilterKind.NextYear,
-        PivotLabelFilterKind.YearToDate,
-    ];
-
-    // R82-io-pivot-layout-5-2: real ST_PivotFilterType has no separate "bottom" token at all -- a
-    // count/percent/sum ("Top 10"-style) filter's direction lives on the nested
-    // <autoFilter><filterColumn><top10 top="0|1"/></filterColumn></autoFilter>'s own "top" attribute
-    // (schema default true = Top), written by XlsxPivotTableWriter.cs's
-    // ToPivotValueFilterAutoFilterFillerXml. "topcount"/"bottomcount"/"top"/"bottom" are kept for
-    // back-compat with files saved by FreeX's own earlier (non-native) writer output.
-    private static PivotValueFilterKind? ReadNativePivotValueFilterKind(XElement filter, XNamespace workbookNs) =>
-        filter.Attribute("type")?.Value?.Trim().ToLowerInvariant() switch
-        {
-            "count" or "percent" or "sum" or "topcount" or "top" => ReadNativeTopFilterIsBottom(filter, workbookNs)
-                ? PivotValueFilterKind.Bottom
-                : PivotValueFilterKind.Top,
-            "bottomcount" or "bottom" => PivotValueFilterKind.Bottom,
-            "valueequal" or "valueequals" => PivotValueFilterKind.Equals,
-            "valuenotequal" or "valuedoesnotequal" => PivotValueFilterKind.DoesNotEqual,
-            "valuegreaterthan" => PivotValueFilterKind.GreaterThan,
-            "valuegreaterthanorequal" => PivotValueFilterKind.GreaterThanOrEqual,
-            "valuelessthan" => PivotValueFilterKind.LessThan,
-            "valuelessthanorequal" => PivotValueFilterKind.LessThanOrEqual,
-            "valuebetween" => PivotValueFilterKind.Between,
-            "valuenotbetween" => PivotValueFilterKind.NotBetween,
-            _ => null
-        };
-
-    // See ReadNativePivotValueFilterKind's comment -- an absent <top10> or an absent/true "top" attribute
-    // both mean Top (the schema default); only an explicit top="0" means Bottom.
-    private static bool ReadNativeTopFilterIsBottom(XElement filter, XNamespace workbookNs)
-    {
-        var top10 = filter.Element(workbookNs + "autoFilter")?
-            .Element(workbookNs + "filterColumn")?
-            .Element(workbookNs + "top10");
-        return top10 is not null && !XlsxXmlAttributeReader.ReadBoolAttribute(top10, "top", defaultValue: true);
-    }
-
-    private static PivotLabelFilterKind? ReadNativePivotLabelFilterKind(string? value) =>
-        value?.Trim().ToLowerInvariant() switch
-        {
-            "captionequal" or "captionequals" => PivotLabelFilterKind.Equals,
-            "captionnotequal" or "captiondoesnotequal" => PivotLabelFilterKind.DoesNotEqual,
-            "captionbeginswith" => PivotLabelFilterKind.BeginsWith,
-            "captionendswith" => PivotLabelFilterKind.EndsWith,
-            "captioncontains" => PivotLabelFilterKind.Contains,
-            "captionnotcontains" or "captiondoesnotcontain" => PivotLabelFilterKind.DoesNotContain,
-            "captiongreaterthan" => PivotLabelFilterKind.GreaterThan,
-            "captiongreaterthanorequal" => PivotLabelFilterKind.GreaterThanOrEqual,
-            "captionlessthan" => PivotLabelFilterKind.LessThan,
-            "captionlessthanorequal" => PivotLabelFilterKind.LessThanOrEqual,
-            "captionbetween" => PivotLabelFilterKind.Between,
-            // Excel's Row/Column Label "Date Filters" submenu (ST_PivotFilterType date* and
-            // relative-period tokens, R36-io-pivot-cache-2-3). Previously unrecognized here, so the
-            // whole <filter> was dropped by both ReadNativePivotValueFilters and ReadNativePivotLabelFilters.
-            "dateequal" => PivotLabelFilterKind.DateEqual,
-            "datenotequal" => PivotLabelFilterKind.DateNotEqual,
-            "dateolderthan" => PivotLabelFilterKind.DateOlderThan,
-            "dateolderthanorequal" => PivotLabelFilterKind.DateOlderThanOrEqual,
-            "datenewerthan" => PivotLabelFilterKind.DateNewerThan,
-            "datenewerthanorequal" => PivotLabelFilterKind.DateNewerThanOrEqual,
-            "datebetween" => PivotLabelFilterKind.DateBetween,
-            "datenotbetween" => PivotLabelFilterKind.DateNotBetween,
-            "yesterday" => PivotLabelFilterKind.Yesterday,
-            "today" => PivotLabelFilterKind.Today,
-            "tomorrow" => PivotLabelFilterKind.Tomorrow,
-            "lastweek" => PivotLabelFilterKind.LastWeek,
-            "thisweek" => PivotLabelFilterKind.ThisWeek,
-            "nextweek" => PivotLabelFilterKind.NextWeek,
-            "lastmonth" => PivotLabelFilterKind.LastMonth,
-            "thismonth" => PivotLabelFilterKind.ThisMonth,
-            "nextmonth" => PivotLabelFilterKind.NextMonth,
-            "lastquarter" => PivotLabelFilterKind.LastQuarter,
-            "thisquarter" => PivotLabelFilterKind.ThisQuarter,
-            "nextquarter" => PivotLabelFilterKind.NextQuarter,
-            "lastyear" => PivotLabelFilterKind.LastYear,
-            "thisyear" => PivotLabelFilterKind.ThisYear,
-            "nextyear" => PivotLabelFilterKind.NextYear,
-            "yeartodate" => PivotLabelFilterKind.YearToDate,
-            _ => null
-        };
 
     private static string? ReadNativePivotFilterTextValue(XElement filter, params string[] attributeNames)
     {

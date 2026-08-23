@@ -397,7 +397,7 @@ internal static partial class XlsxPivotTableWriter
                 new XAttribute("showColStripes", pivot.ShowColumnStripes ? "1" : "0"),
                 new XAttribute("showLastColumn", "1")),
             // R82-io-pivot-layout-5-2: AboveAverage/BelowAverage value filters have no representation in
-            // the real <filters> mechanism at all (see ToNativePivotValueFilterKindText) -- reuse the
+            // the real <filters> mechanism at all (see XlsxPivotFilterKindCodec.EncodeValue) -- reuse the
             // FreeX-authored <valueFilters> shape (unchanged, still used by XlsxFileAdapter.
             // SavePostProcessing.cs's RewritePreservedPivotValueAndLabelFilters on the preserved-part save
             // path) purely so those two kinds still round-trip through FreeX itself.
@@ -883,7 +883,7 @@ internal static partial class XlsxPivotTableWriter
 
         foreach (var filter in valueFilters)
         {
-            var nativeType = ToNativePivotValueFilterKindText(filter.Kind);
+            var nativeType = XlsxPivotFilterKindCodec.EncodeValue(filter.Kind);
             if (nativeType is null)
                 continue; // AboveAverage/BelowAverage: no real ST_PivotFilterType token -- see the converter.
 
@@ -903,7 +903,7 @@ internal static partial class XlsxPivotTableWriter
             filterElements.Add(new XElement(
                 workbookNs + "filter",
                 new XAttribute("fld", filter.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
-                new XAttribute("type", ToNativePivotLabelFilterKindText(filter.Kind)),
+                new XAttribute("type", XlsxPivotFilterKindCodec.EncodeLabel(filter.Kind)),
                 new XAttribute("id", (nextId++).ToString(CultureInfo.InvariantCulture)),
                 new XAttribute("stringValue1", filter.Value),
                 string.IsNullOrWhiteSpace(filter.Value2) ? null : new XAttribute("stringValue2", filter.Value2),
@@ -929,7 +929,7 @@ internal static partial class XlsxPivotTableWriter
         var filterColumn = new XElement(workbookNs + "filterColumn", new XAttribute("colId", "0"));
         if (filter.Kind is PivotValueFilterKind.Top or PivotValueFilterKind.Bottom)
         {
-            // Real ST_PivotFilterType has no separate "bottom" token (see ToNativePivotValueFilterKindText)
+            // Real ST_PivotFilterType has no separate "bottom" token (see XlsxPivotFilterKindCodec.EncodeValue)
             // -- direction lives on <top10>'s own "top" attribute (schema default true = Top).
             filterColumn.Add(new XElement(
                 workbookNs + "top10",

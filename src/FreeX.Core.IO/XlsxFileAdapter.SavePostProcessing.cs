@@ -1384,7 +1384,7 @@ public sealed partial class XlsxFileAdapter
     // every single save.
     // R83-order-guard-invented-sweep-1: mirrors XlsxPivotTableWriter's own fresh-part fix
     // (R82-io-pivot-layout-5-2) -- only AboveAverage/BelowAverage value filters (which have no real
-    // ST_PivotFilterType token, see ToNativePivotValueFilterKindText) still go through the invented
+    // ST_PivotFilterType token, see XlsxPivotFilterKindCodec.EncodeValue) still go through the invented
     // <valueFilters> shape; every other value-filter kind, plus every label-filter kind, now goes
     // through the real CT_PivotFilters <filters> shape via ToPivotFiltersXml instead of the invented
     // <labelFilters> element, which is never written by this path any more.
@@ -1467,7 +1467,7 @@ public sealed partial class XlsxFileAdapter
             .Elements(workbookNs + "filter")
             .Select(filter =>
             {
-                var kind = DecodeNativePivotValueFilterKind(filter.Attribute("type")?.Value);
+                var kind = XlsxPivotFilterKindCodec.DecodeValue(filter, workbookNs);
                 if (kind is null)
                     return null;
 
@@ -1506,12 +1506,12 @@ public sealed partial class XlsxFileAdapter
             .Elements(workbookNs + "filter")
             .Select(filter =>
             {
-                var kind = DecodeNativePivotLabelFilterKind(filter.Attribute("type")?.Value);
+                var kind = XlsxPivotFilterKindCodec.DecodeLabel(filter.Attribute("type")?.Value);
                 if (kind is null)
                     return null;
 
                 var value = ReadNativePivotFilterTextValueLocal(filter, "stringValue1", "value1", "val");
-                if (string.IsNullOrEmpty(value) && !PreservedPivotDateFilterKindsWithoutValue.Contains(kind.Value))
+                if (string.IsNullOrEmpty(value) && !XlsxPivotFilterKindCodec.AllowsEmptyLabelValue(kind.Value))
                     return null;
 
                 return new PivotLabelFilterModel(
@@ -1527,26 +1527,6 @@ public sealed partial class XlsxFileAdapter
 
         return invented.Concat(native).ToList();
     }
-
-    private static readonly HashSet<PivotLabelFilterKind> PreservedPivotDateFilterKindsWithoutValue =
-    [
-        PivotLabelFilterKind.Yesterday,
-        PivotLabelFilterKind.Today,
-        PivotLabelFilterKind.Tomorrow,
-        PivotLabelFilterKind.LastWeek,
-        PivotLabelFilterKind.ThisWeek,
-        PivotLabelFilterKind.NextWeek,
-        PivotLabelFilterKind.LastMonth,
-        PivotLabelFilterKind.ThisMonth,
-        PivotLabelFilterKind.NextMonth,
-        PivotLabelFilterKind.LastQuarter,
-        PivotLabelFilterKind.ThisQuarter,
-        PivotLabelFilterKind.NextQuarter,
-        PivotLabelFilterKind.LastYear,
-        PivotLabelFilterKind.ThisYear,
-        PivotLabelFilterKind.NextYear,
-        PivotLabelFilterKind.YearToDate,
-    ];
 
     // Mirrors XlsxPivotTableReader.Converters.cs's ReadPivotValueFilterKind (the invented-format token
     // decode) -- duplicated locally because that method is private to XlsxPivotTableReader.
@@ -1582,67 +1562,6 @@ public sealed partial class XlsxFileAdapter
             "lessthanorequal" or "less_than_or_equal" => PivotLabelFilterKind.LessThanOrEqual,
             "between" => PivotLabelFilterKind.Between,
             _ => PivotLabelFilterKind.Equals
-        };
-
-    // Mirrors XlsxPivotTableReader.FiltersAndSorts.cs's ReadNativePivotValueFilterKind (the real
-    // ST_PivotFilterType token decode) -- duplicated locally because that method is private to
-    // XlsxPivotTableReader.
-    private static PivotValueFilterKind? DecodeNativePivotValueFilterKind(string? value) =>
-        value?.Trim().ToLowerInvariant() switch
-        {
-            "count" or "topcount" or "top" => PivotValueFilterKind.Top,
-            "bottomcount" or "bottom" => PivotValueFilterKind.Bottom,
-            "valueequal" or "valueequals" => PivotValueFilterKind.Equals,
-            "valuenotequal" or "valuedoesnotequal" => PivotValueFilterKind.DoesNotEqual,
-            "valuegreaterthan" => PivotValueFilterKind.GreaterThan,
-            "valuegreaterthanorequal" => PivotValueFilterKind.GreaterThanOrEqual,
-            "valuelessthan" => PivotValueFilterKind.LessThan,
-            "valuelessthanorequal" => PivotValueFilterKind.LessThanOrEqual,
-            "valuebetween" => PivotValueFilterKind.Between,
-            "valuenotbetween" => PivotValueFilterKind.NotBetween,
-            _ => null
-        };
-
-    // Mirrors XlsxPivotTableReader.FiltersAndSorts.cs's ReadNativePivotLabelFilterKind.
-    private static PivotLabelFilterKind? DecodeNativePivotLabelFilterKind(string? value) =>
-        value?.Trim().ToLowerInvariant() switch
-        {
-            "captionequal" or "captionequals" => PivotLabelFilterKind.Equals,
-            "captionnotequal" or "captiondoesnotequal" => PivotLabelFilterKind.DoesNotEqual,
-            "captionbeginswith" => PivotLabelFilterKind.BeginsWith,
-            "captionendswith" => PivotLabelFilterKind.EndsWith,
-            "captioncontains" => PivotLabelFilterKind.Contains,
-            "captionnotcontains" or "captiondoesnotcontain" => PivotLabelFilterKind.DoesNotContain,
-            "captiongreaterthan" => PivotLabelFilterKind.GreaterThan,
-            "captiongreaterthanorequal" => PivotLabelFilterKind.GreaterThanOrEqual,
-            "captionlessthan" => PivotLabelFilterKind.LessThan,
-            "captionlessthanorequal" => PivotLabelFilterKind.LessThanOrEqual,
-            "captionbetween" => PivotLabelFilterKind.Between,
-            "dateequal" => PivotLabelFilterKind.DateEqual,
-            "datenotequal" => PivotLabelFilterKind.DateNotEqual,
-            "dateolderthan" => PivotLabelFilterKind.DateOlderThan,
-            "dateolderthanorequal" => PivotLabelFilterKind.DateOlderThanOrEqual,
-            "datenewerthan" => PivotLabelFilterKind.DateNewerThan,
-            "datenewerthanorequal" => PivotLabelFilterKind.DateNewerThanOrEqual,
-            "datebetween" => PivotLabelFilterKind.DateBetween,
-            "datenotbetween" => PivotLabelFilterKind.DateNotBetween,
-            "yesterday" => PivotLabelFilterKind.Yesterday,
-            "today" => PivotLabelFilterKind.Today,
-            "tomorrow" => PivotLabelFilterKind.Tomorrow,
-            "lastweek" => PivotLabelFilterKind.LastWeek,
-            "thisweek" => PivotLabelFilterKind.ThisWeek,
-            "nextweek" => PivotLabelFilterKind.NextWeek,
-            "lastmonth" => PivotLabelFilterKind.LastMonth,
-            "thismonth" => PivotLabelFilterKind.ThisMonth,
-            "nextmonth" => PivotLabelFilterKind.NextMonth,
-            "lastquarter" => PivotLabelFilterKind.LastQuarter,
-            "thisquarter" => PivotLabelFilterKind.ThisQuarter,
-            "nextquarter" => PivotLabelFilterKind.NextQuarter,
-            "lastyear" => PivotLabelFilterKind.LastYear,
-            "thisyear" => PivotLabelFilterKind.ThisYear,
-            "nextyear" => PivotLabelFilterKind.NextYear,
-            "yeartodate" => PivotLabelFilterKind.YearToDate,
-            _ => null
         };
 
     private static string? ReadNativePivotFilterTextValueLocal(XElement filter, params string[] attributeNames)
