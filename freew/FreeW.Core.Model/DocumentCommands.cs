@@ -251,15 +251,49 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
 
     /// <summary>
     /// Reverts every command already applied in the current undo group, closes the group, and leaves no
-    /// history entry. Use this when a multi-step operation fails after partially mutating the document.
+    /// history entry. Every revert is attempted even when an earlier one fails. A complete restoration is
+    /// silent; an incomplete restoration raises <see cref="Changed"/> so renderers can show the surviving
+    /// state. Returned exceptions are ordered by rollback attempt, followed by notification failures.
     /// </summary>
-    public void RollbackUndoGroup()
+    public IReadOnlyList<Exception> RollbackUndoGroup()
     {
         var batch = _batch ?? throw new InvalidOperationException("No undo group is open.");
         _batch = null;
+        var failures = new List<Exception>();
         for (var i = batch.Count - 1; i >= 0; i--)
-            batch[i].Revert(_context);
-        Changed?.Invoke();
+        {
+            try
+            {
+                batch[i].Revert(_context);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(exception);
+            }
+        }
+
+        if (failures.Count > 0)
+            NotifyChangedBestEffort(failures);
+
+        return failures;
+    }
+
+    private void NotifyChangedBestEffort(List<Exception> failures)
+    {
+        if (Changed is not { } changed)
+            return;
+
+        foreach (var subscriber in changed.GetInvocationList().Cast<Action>())
+        {
+            try
+            {
+                subscriber();
+            }
+            catch (Exception exception)
+            {
+                failures.Add(exception);
+            }
+        }
     }
 
     public bool Undo()
