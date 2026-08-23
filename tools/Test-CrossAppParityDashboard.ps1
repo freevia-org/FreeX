@@ -22,6 +22,10 @@ $resolvedDashboardPath = Resolve-ToolRepoPath -Path $DashboardPath -RepoRoot $re
 $dashboard = Read-ToolJson -Path $DashboardPath -RepoRoot $repoRoot -MissingMessage "Required generated cross-app dashboard is missing"
 
 Assert-DashboardCondition ($dashboard.schema -eq "freex.parity.cross-app-dashboard.v3") "Cross-app dashboard schema must be v3."
+Assert-DashboardCondition ($dashboard.wave -eq 193) "Cross-app dashboard must describe Wave193."
+Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 579) "Wave193 cumulative app-slice count must be 579."
+Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "pending-final-integration-gates") "Wave193 app-slice count must remain contingent on final integration gates."
+Assert-DashboardCondition ((@($dashboard.pendingIntegrationGates) -join ",") -eq "independent review,repository preflight,full Release build,default non-UI test lane") "Wave193 pending integration gates must remain explicit."
 Assert-DashboardCondition ($dashboard.scopeBoundary -match "visual parity") "Cross-app dashboard scope boundary must retain the no-visual-parity claim."
 
 $requiredSources = @(
@@ -38,7 +42,11 @@ $requiredSources = @(
     "tools/screenshots_avalonia_ribbon/screenshot_manifest.json",
     "docs/parity/avalonia-parity-wave192-freex-autofilter-font-color-20260823.md",
     "docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/manifest.json",
+    "docs/parity/avalonia-parity-wave193-freex-autofilter-no-fill-20260823.md",
+    "docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/physical-result.json",
+    "docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/manifest.json",
     "docs/parity/avalonia-parity-wave192-freew-font-checkbox-20260823.md",
+    "docs/parity/avalonia-parity-wave193-freew-font-checkbox-glyph-20260823.md",
     "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
     "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json",
     "docs/parity/freep-whole-window-visual-evidence/summary.json",
@@ -51,7 +59,11 @@ $requiredSources = @(
     "docs/parity/freep-responsive-chrome-2026-08-16/README.md",
     "docs/parity/freep-responsive-chrome-2026-08-16/manifest.json",
     "docs/parity/avalonia-parity-wave192-freep-render-residual-20260823.md",
-    "docs/parity/evidence/avalonia-parity-wave192-freep-evidence-20260823/metrics.json"
+    "docs/parity/evidence/avalonia-parity-wave192-freep-evidence-20260823/metrics.json",
+    "docs/parity/avalonia-parity-wave193-freep-render-residual-20260823.md",
+    "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/metrics.json",
+    "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/references.json",
+    "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/images.json"
 )
 foreach ($source in $requiredSources) {
     Assert-DashboardCondition (@($dashboard.sources) -contains $source) "Cross-app dashboard is missing authoritative source '$source'."
@@ -104,6 +116,14 @@ Assert-DashboardCondition ($freeX.renderedEvidence.gridCorpus.totalAvaloniaCaptu
 Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterFontColorPassed -eq 1) "FreeX must report its passing production font-color AutoFilter lane."
 Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterFontColorTotal -eq 1) "FreeX font-color AutoFilter total must remain explicit."
 Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.linuxAutoFilterFontColorStatus -eq "passed-production-x11") "FreeX font-color AutoFilter status must remain production-X11."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillPassed -eq 1) "FreeX No Fill AutoFilter lane must pass 1/1."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillTotal -eq 1) "FreeX No Fill AutoFilter total must remain explicit."
+Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillStatus -eq "passed-production-x11") "FreeX No Fill AutoFilter status must remain production-X11."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave193FocusedAvaloniaGuardPassed -eq 3) "FreeX Wave193 Avalonia guard count must remain 3/3."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave193FocusedCoreIoGuardPassed -eq 8) "FreeX Wave193 Core.IO guard count must remain 8/8."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave193EvidenceArtifactCount -eq 15) "FreeX Wave193 evidence artifact count must remain 15/15."
+Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.wave193EvidenceProvenanceFileCount -eq 9) "FreeX Wave193 provenance count must remain 9/9."
+Assert-DashboardCondition ([string]$freeX.renderedEvidence.physicalEvidence.wave193PackageSemantics -match "SourcePatch.*no-row-delta") "FreeX Wave193 package semantics must retain SourcePatch/no-row-delta coverage."
 
 $freeP = $apps["FreeP"]
 $freePLanes = @($freeP.renderedEvidence.routeCoverage.laneEntries)
@@ -123,7 +143,18 @@ Assert-DashboardCondition ($freeP.renderedEvidence.responsiveAppChrome.capturedP
 Assert-DashboardCondition ($freeP.renderedEvidence.responsiveAppChrome.wpfCaptureCount -eq 24) "FreeP must report its 24 WPF responsive app-chrome captures."
 Assert-DashboardCondition ($freeP.renderedEvidence.responsiveAppChrome.avaloniaCaptureCount -eq 24) "FreeP must report its 24 Avalonia responsive app-chrome captures."
 Assert-DashboardCondition ([string]$freeP.renderedEvidence.responsiveAppChrome.captureStatus -eq "complete") "FreeP responsive app-chrome evidence must be complete."
-Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.avaloniaAverageMeanPercent -eq 0.9962) "FreeP Wave192 Avalonia/Office aggregate must remain explicit."
-Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.avaloniaMaximumMeanPercent -eq 2.5815) "FreeP Wave192 Avalonia/Office maximum must remain explicit."
+Assert-DashboardCondition ($freeW.renderedEvidence.wave193.aggregateChangedPixels -eq 32861) "FreeW Wave193 Font aggregate must remain 32,861 changed pixels."
+Assert-DashboardCondition ($freeW.renderedEvidence.wave193.aggregateDelta -eq -1335) "FreeW Wave193 Font delta must remain -1,335 changed pixels."
+Assert-DashboardCondition ($freeW.renderedEvidence.wave193.relativeImprovement -eq 0.0390396537606738) "FreeW Wave193 Font relative improvement must remain 3.9040%."
+Assert-DashboardCondition ($freeW.renderedEvidence.wave193.nonFontRowsCompared -eq 288 -and $freeW.renderedEvidence.wave193.nonFontRowsChanged -eq 0) "FreeW Wave193 non-Font row stability must remain 0/288 changes."
+Assert-DashboardCondition ([string]$freeW.renderedEvidence.wave193.paintedBounds -eq "421 x 321") "FreeW Wave193 painted bounds must remain exact."
+Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.status -eq "no-runtime-change-retained") "FreeP Wave193 must retain the no-runtime-change result."
+Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.retainedRowCount -eq 53) "FreeP Wave193 retained row count must remain 53."
+Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.retainedOfficeReferenceCount -eq 53) "FreeP Wave193 retained Office reference count must remain 53."
+Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.retainedImageCount -eq 6) "FreeP Wave193 retained image count must remain 6."
+Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.workerRunWpfAvaloniaRenderCount -eq 106 -and $freeP.renderedEvidence.wave193Integrity.workerRunComparisonCount -eq 159) "FreeP Wave193 worker-run full-render counts must remain explicit."
+Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.fullRenderArtifactsRetained -eq $false) "FreeP Wave193 must distinguish worker-run renders from retained artifacts."
+Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.avaloniaAverageMeanPercent -eq 0.9962) "FreeP Wave193 Avalonia/Office aggregate must remain explicit."
+Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.avaloniaMaximumMeanPercent -eq 2.5815) "FreeP Wave193 Avalonia/Office maximum must remain explicit."
 
 Write-Host "Cross-app parity dashboard schema and evidence aggregation guards passed."
