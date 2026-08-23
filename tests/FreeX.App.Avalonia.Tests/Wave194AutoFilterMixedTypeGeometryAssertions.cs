@@ -52,6 +52,11 @@ internal static class Wave194AutoFilterMixedTypeGeometryAssertions
         CountMatchingLines(body, "click_autofilter_control 74 362").Should().Be(0,
             "the real target click must not retain hard-coded accepted coordinates");
 
+        var targetAction = ExtractTargetActionBlock(body);
+        targetAction.Should().Be(
+            "        click_autofilter_control \"$mixed_type_target_click_x_offset\" \"$mixed_type_target_click_y_offset\"\n",
+            "the bounded live target action must contain exactly one authoritative click and no control-flow decoy or alternate click expression");
+
         var gate = ExtractFunctionBody(body, "verify_mixed_type_popup_gate");
         var readiness = ExtractFunctionBody(body, "wait_for_mixed_type_popup_target");
         var transition = ExtractFunctionBody(body, "mixed_type_target_region_changed");
@@ -106,6 +111,23 @@ internal static class Wave194AutoFilterMixedTypeGeometryAssertions
         }
 
         throw new InvalidOperationException($"the probe must retain a bounded {functionName} helper body");
+    }
+
+    private static string ExtractTargetActionBlock(string source)
+    {
+        const string startMarker =
+            "            capture \"${prefix}-menu-cleared.png\"\n" +
+            "        fi\n";
+        const string endMarker = "        capture \"${prefix}-target-checked.png\"";
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0,
+            "the target action must follow the bounded clear-transition block");
+
+        var bodyStart = start + startMarker.Length;
+        var end = source.IndexOf(endMarker, bodyStart, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(bodyStart,
+            "the target action must end at the target-check capture");
+        return source[bodyStart..end];
     }
 
     private static int Count(string source, string value) =>

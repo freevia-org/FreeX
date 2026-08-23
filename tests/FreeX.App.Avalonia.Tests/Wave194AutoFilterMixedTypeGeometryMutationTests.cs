@@ -22,6 +22,17 @@ public sealed class Wave194AutoFilterMixedTypeGeometryMutationTests
     }
 
     [Fact]
+    public void GeometryContractRejectsDeadBranchCorrectClickFollowedByLiveWrongClick()
+    {
+        AssertMutationRejected(
+            "click_autofilter_control \"$mixed_type_target_click_x_offset\" \"$mixed_type_target_click_y_offset\"",
+            "if false; then\n" +
+            "            click_autofilter_control \"$mixed_type_target_click_x_offset\" \"$mixed_type_target_click_y_offset\"\n" +
+            "        fi\n" +
+            "        click_autofilter_control \"$mixed_type_target_click_x_offset\" \"$((mixed_type_target_click_y_offset + 1))\"");
+    }
+
+    [Fact]
     public void GeometryContractRejectsWrongCropConsumerMaskedByDeadComment()
     {
         AssertMutationRejected(
