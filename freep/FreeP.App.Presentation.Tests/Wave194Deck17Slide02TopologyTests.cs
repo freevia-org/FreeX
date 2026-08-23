@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace FreeP.App.Compositor.Tests;
@@ -17,11 +18,20 @@ public sealed class Wave194Deck17Slide02TopologyTests
         var root = topology.RootElement;
 
         root.GetProperty("schema").GetString()
-            .Should().Be("freep.parity.wave194.deck17-slide02.topology.v2");
+            .Should().Be("freep.parity.wave194.deck17-slide02.topology.v3");
         root.GetProperty("sourceRevision").GetString().Should()
             .Be("bb454fbc7d4d8b4588a4d2ed0adec678527e3936");
         root.GetProperty("deck").GetString().Should().Be("17-bullets-autofit");
         root.GetProperty("slide").GetString().Should().Be("slide-02");
+
+        var sourceCorpus = root.GetProperty("sourceCorpus");
+        sourceCorpus.GetProperty("path").GetString().Should()
+            .Be("tools/FreeP.RenderCompare/corpus/17-bullets-autofit.pptx");
+        sourceCorpus.GetProperty("hashAlgorithm").GetString().Should().Be("SHA-256");
+        sourceCorpus.GetProperty("hashScope").GetString().Should().Be("entire raw file bytes");
+        var expectedCorpusSha256 = sourceCorpus.GetProperty("sha256").GetString();
+        expectedCorpusSha256.Should()
+            .Be("f4fc0c9e3d048cac3e0c7fe3d929029238448ff05281be542df105a46c6c88ea");
 
         root.GetProperty("officeReference").GetProperty("sourceRevision").GetString().Should()
             .Be("62fa14b152e3318c09b8696e9edd778c5eb1ab18");
@@ -48,6 +58,13 @@ public sealed class Wave194Deck17Slide02TopologyTests
 
         var corpusPptx = TestWorkspaceFileLocator.FindFromWorkspaceRoot(
             "tools", "FreeP.RenderCompare", "corpus", "17-bullets-autofit.pptx");
+        using (var corpusStream = File.OpenRead(corpusPptx))
+        {
+            var actualCorpusSha256 = Convert.ToHexString(SHA256.HashData(corpusStream))
+                .ToLowerInvariant();
+            actualCorpusSha256.Should().Be(expectedCorpusSha256);
+        }
+
         var presentation = FreeP.Core.IO.PptxPackageReader.Read(corpusPptx);
         presentation.Theme.FontScheme.MajorLatinFont.Should().Be(majorLatin);
         presentation.Theme.FontScheme.MinorLatinFont.Should().Be(minorLatin);
