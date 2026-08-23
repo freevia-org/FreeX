@@ -343,7 +343,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         var saveSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.Save.cs");
         var batchSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetNativeMetadataBatchWriter.cs");
         var sourceIndependentBatchSource =
-            TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetSourceIndependentMetadataBatchWriter.cs");
+            TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetSourceIndependentMetadataBatchWriter.cs")
+                .Replace("\r\n", "\n", StringComparison.Ordinal);
         var dataValidationNativeSource =
             TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDataValidationNativeMetadataMapper.cs");
         var sessionSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetXmlEditSession.cs");
