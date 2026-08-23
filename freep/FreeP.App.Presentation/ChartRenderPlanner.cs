@@ -5077,7 +5077,7 @@ public static partial class ChartRenderPlanner
         [
             Facet(
                 new SrgbColor(0xDB, 0x74, 0x2C),
-                (32, 104), (165, 50), (200, 58), (283, 133), (263, 154)),
+                (32, 104), (165, 50), (200, 58), (247, 133), (263, 154)),
             Facet(
                 new SrgbColor(0x34, 0x56, 0x95),
                 (115, 150), (153, 104), (167, 153)),
