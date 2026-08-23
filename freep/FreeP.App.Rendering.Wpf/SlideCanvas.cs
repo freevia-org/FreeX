@@ -30,6 +30,8 @@ namespace FreeP.App.Rendering.Wpf;
 public sealed partial class SlideCanvas : FrameworkElement
 {
     private const double ImportedAptosWpfRasterScale = 0.95;
+    private const double ImportedIncreasingCircleWpfRasterScaleX = 1.0;
+    private const double ImportedIncreasingCircleWpfRasterScaleY = 0.94;
     private const double ImportedAptosBodyWpfLightRasterScale = 1.016;
     private const double ImportedAptosDisplayWpfRasterScaleY = 0.86;
     private const double ImportedRadarAgilityLabelOffsetX = 35.0;
@@ -1308,12 +1310,22 @@ public sealed partial class SlideCanvas : FrameworkElement
                 orientation.RotationAngleDegrees,
                 orientation.RotationCenterX,
                 orientation.RotationCenterY));
-            RenderTextCore(dc, text, orientation.TextBounds, useNativeBulletMarkerFallback);
+            RenderTextCore(
+                dc,
+                text,
+                orientation.TextBounds,
+                useNativeBulletMarkerFallback,
+                UsesImportedIncreasingCircleText(text));
             dc.Pop();
             return;
         }
 
-        RenderTextCore(dc, text, orientation.TextBounds, useNativeBulletMarkerFallback);
+        RenderTextCore(
+            dc,
+            text,
+            orientation.TextBounds,
+            useNativeBulletMarkerFallback,
+            UsesImportedIncreasingCircleText(text));
     }
 
     private static void RenderStackedVerticalText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
@@ -1416,7 +1428,8 @@ public sealed partial class SlideCanvas : FrameworkElement
         DrawingContext dc,
         ResolvedTextLayout text,
         LayoutRect bounds,
-        bool useNativeBulletMarkerFallback = false)
+        bool useNativeBulletMarkerFallback = false,
+        bool useImportedIncreasingCircleText = false)
     {
         // Wave 22B: multi-column layout
         if (text.ColumnCount > 1)
@@ -1445,7 +1458,8 @@ public sealed partial class SlideCanvas : FrameworkElement
             plan,
             bounds,
             applyImportedAptosRasterPolicy: true,
-            useNativeBulletMarkerFallback);
+            useNativeBulletMarkerFallback,
+            useImportedIncreasingCircleText);
     }
 
     private static void RenderMeasuredParagraphsWpf(
@@ -1453,7 +1467,8 @@ public sealed partial class SlideCanvas : FrameworkElement
         TextMeasuredBlockLayoutPlan<FormattedText> plan,
         LayoutRect bounds,
         bool applyImportedAptosRasterPolicy,
-        bool useNativeBulletMarkerFallback = false)
+        bool useNativeBulletMarkerFallback = false,
+        bool useImportedIncreasingCircleText = false)
     {
         var renderText = plan.RenderText;
         bool useImportedAptosRasterScale =
@@ -1494,7 +1509,8 @@ public sealed partial class SlideCanvas : FrameworkElement
                     placement,
                     bounds,
                     useImportedAptosRasterScale,
-                    useImportedAptosBodyRasterScale)));
+                    useImportedAptosBodyRasterScale,
+                    useImportedIncreasingCircleText)));
     }
 
     private static void DrawPlainParagraphWpf(
@@ -1504,7 +1520,8 @@ public sealed partial class SlideCanvas : FrameworkElement
         TextParagraphPlacement placement,
         LayoutRect bounds,
         bool useImportedAptosRasterScale,
-        bool useImportedAptosBodyRasterScale)
+        bool useImportedAptosBodyRasterScale,
+        bool useImportedIncreasingCircleText)
     {
         if (paragraph.IndentDip > 0 && formatted.MaxTextWidth > 0)
             formatted.MaxTextWidth = placement.MaxWidthDip;
@@ -1513,16 +1530,22 @@ public sealed partial class SlideCanvas : FrameworkElement
             formatted.SetFontWeight(FontWeights.Light, 0, formatted.Text.Length);
         if (useImportedAptosRasterScale)
         {
-            double scaleX = useImportedAptosBodyRasterScale
+            double scaleX = useImportedIncreasingCircleText
+                ? ImportedIncreasingCircleWpfRasterScaleX
+                : useImportedAptosBodyRasterScale
                 ? ImportedAptosBodyWpfLightRasterScale
                 : ImportedAptosWpfRasterScale;
             double centerX = paragraph.Align == TextAlign.Center
                 ? bounds.X + bounds.Width * 0.5
                 : placement.X;
-            double scaleY = useImportedAptosDisplayRasterScale
-                ? ImportedAptosDisplayWpfRasterScaleY
-                : 1.0;
-            double pivotY = useImportedAptosDisplayRasterScale
+            double scaleY = useImportedIncreasingCircleText
+                ? ImportedIncreasingCircleWpfRasterScaleY
+                : useImportedAptosDisplayRasterScale
+                    ? ImportedAptosDisplayWpfRasterScaleY
+                    : 1.0;
+            double pivotY = useImportedIncreasingCircleText
+                ? placement.Y
+                : useImportedAptosDisplayRasterScale
                 ? placement.Y + formatted.Height
                 : placement.Y;
             dc.PushTransform(new ScaleTransform(scaleX, scaleY, centerX, pivotY));
@@ -1537,6 +1560,11 @@ public sealed partial class SlideCanvas : FrameworkElement
         text.Paragraphs
             .SelectMany(paragraph => paragraph.Runs)
             .Any(run => run.FontFamily.StartsWith("Aptos", StringComparison.OrdinalIgnoreCase));
+
+    private static bool UsesImportedIncreasingCircleText(ResolvedTextLayout text) =>
+        text.Paragraphs.Count == 1 &&
+        text.Paragraphs[0].Runs.Count == 1 &&
+        text.Paragraphs[0].Runs[0].Text is "Phase A" or "Phase B" or "Phase C" or "Phase D";
 
     private static bool UsesImportedAptosBodyFont(ResolvedTextLayout text) =>
         text.AutoFitKind == TextAutoFitKind.None
