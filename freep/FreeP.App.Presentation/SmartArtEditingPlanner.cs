@@ -992,7 +992,9 @@ public static class SmartArtEditingPlanner
         if (addedEntries.Count > 0)
         {
             var cacheShapesInOrder = drawing.Descendants().Where(IsDrawingShapeElement).ToArray();
-            var fallbackShapesInOrder = EnumerateShapes(smartArt.FallbackShapes).ToArray();
+            var fallbackShapesInOrder = SlideShapeTraversal
+                .EnumerateDepthFirst(smartArt.FallbackShapes)
+                .ToArray();
             foreach (var (node, shape, _, _, _) in addedEntries)
             {
                 var shapeIndex = Array.IndexOf(cacheShapesInOrder, shape);
@@ -1001,7 +1003,7 @@ public static class SmartArtEditingPlanner
             }
         }
 
-        var fallbackPictures = EnumerateShapes(smartArt.FallbackShapes)
+        var fallbackPictures = SlideShapeTraversal.EnumerateDepthFirst(smartArt.FallbackShapes)
             .Where(shape => shape.Kind == SlideShapeKind.Picture
                 || shape.Fill is ShapeFill.Picture)
             .ToArray();
@@ -1040,16 +1042,6 @@ public static class SmartArtEditingPlanner
     private static bool ImagesEqual(ImagePart left, ImagePart right) =>
         StringComparer.OrdinalIgnoreCase.Equals(left.ContentType, right.ContentType)
         && left.Bytes.AsSpan().SequenceEqual(right.Bytes);
-
-    private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
-    {
-        foreach (var shape in shapes)
-        {
-            yield return shape;
-            foreach (var child in EnumerateShapes(shape.Children))
-                yield return child;
-        }
-    }
 
     private static bool RemovePictureAtOrdinal(
         IList<SlideShape> shapes,
