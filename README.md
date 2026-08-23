@@ -41,6 +41,12 @@ This monorepo also hosts **FreeW**, a sibling `.docx` word processor built on th
 - [Third-party license texts](THIRD_PARTY_LICENSES.md)
 - [Project license](LICENSE)
 
+## Feedback And Security
+
+- [Feedback and support](docs/support/feedback.md)
+- [Private vulnerability reporting policy](SECURITY.md)
+- [Public-preview release gate](docs/release/public-preview-readiness.md)
+
 ## Development
 
 Run the default agent verification path for routine repo changes. It uses normal .NET restore/build caching and parallelism, builds the full solution, then tests only the non-UI lane:
