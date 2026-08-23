@@ -60,7 +60,7 @@ public sealed partial class ChartRendererTests
         // two clustered Budget/Actual columns and the two invisible combo line series.
         var deviationBars = model.Series.OfType<RectangleBarSeries>()
             .SelectMany(s => s.Items)
-            .Where(item => Math.Abs(item.X1 - item.X0) < 0.2) // thin bars centered on category
+            .Where(IsBudgetActualDeviationBar)
             .ToList();
         deviationBars.Should().HaveCount(2, "one deviation bar per category");
 
@@ -104,10 +104,14 @@ public sealed partial class ChartRendererTests
 
         var model = BuildPlotModel(chart, BudgetActualViewport());
 
-        var thinBars = model.Series.OfType<RectangleBarSeries>()
+        var deviationBars = model.Series.OfType<RectangleBarSeries>()
             .SelectMany(s => s.Items)
-            .Where(item => Math.Abs(item.X1 - item.X0) < 0.2)
+            .Where(IsBudgetActualDeviationBar)
             .ToList();
-        thinBars.Should().BeEmpty("deviation overlay only renders when upDownBars are present");
+        deviationBars.Should().BeEmpty("deviation overlay only renders when upDownBars are present");
     }
+
+    private static bool IsBudgetActualDeviationBar(RectangleBarItem item) =>
+        item.Color == OxyColor.FromRgb(0x21, 0x96, 0xF3) ||
+        item.Color == OxyColor.FromRgb(0x4C, 0xAF, 0x50);
 }
