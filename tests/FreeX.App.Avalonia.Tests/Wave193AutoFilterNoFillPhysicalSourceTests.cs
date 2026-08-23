@@ -28,6 +28,7 @@ public sealed class Wave193AutoFilterNoFillPhysicalSourceTests
         var command = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
             "src", "FreeX.Core.Commands", "FilterCommand.cs");
 
+        WaveAutoFilterColorGeometryAssertions.AssertBoundGeometry(probe);
         runner.Should().Contain("autofilter-no-fill-persistence");
         runner.Should().Contain("autofilter-color-no-fill-save-reopen-physical");
         runner.Should().Contain("New-FreeXWave193AutoFilterNoFillFixture.ps1");
@@ -38,7 +39,6 @@ public sealed class Wave193AutoFilterNoFillPhysicalSourceTests
         probe.Should().Contain("local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27");
         probe.Should().Contain("button_left_offset=148");
         probe.Should().Contain("click_x_offset=190");
-        probe.Should().Contain("click_autofilter_control \"$click_x_offset\" 220");
         probe.Should().Contain("open-changed-pixels=${open_changed}");
         probe.Should().Contain("dismissed-changed-pixels=${dismissed_changed}");
         probe.Should().Contain("restored-change-maximum=${restored_change_maximum}");
