@@ -347,6 +347,14 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
                 LegalNoticesDialogMetrics.TextLineHeight,
                 basePadding * 2))
             {
+                // The overflowing WPF document host retains one additional trailing
+                // pixel for its scrollbar/content registration. Keep short notices on
+                // the existing margin so their compact baseline remains unchanged.
+                textBox.Margin = new Thickness(
+                    textBox.Margin.Left,
+                    textBox.Margin.Top,
+                    textBox.Margin.Right + 1,
+                    textBox.Margin.Bottom);
                 // Reserving the WPF-sized overflow estimate makes Auto expose its
                 // scrollbar lane; the realized line box remains the shared correction.
                 textBox.LineHeight = OverflowDocumentLineHeightCompensation;

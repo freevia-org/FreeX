@@ -265,11 +265,13 @@ public sealed class LegalNoticesDialogVisualParityTests
 
                 textBoxes[0].LineHeight.Should().Be(14.6);
                 textBoxes[0].Padding.Top.Should().BeGreaterThanOrEqualTo(LegalNoticesDialogMetrics.TextPadding);
+                textBoxes[0].Margin.Right.Should().Be(2);
 
                 tabs.SelectedIndex = 1;
                 dialog.UpdateLayout();
                 textBoxes[1].LineHeight.Should().Be(15.0);
                 textBoxes[1].Padding.Top.Should().Be(LegalNoticesDialogMetrics.TextPadding);
+                textBoxes[1].Margin.Right.Should().Be(3);
                 textBoxes[1].GetVisualDescendants().OfType<ScrollViewer>().Single()
                     .Extent.Height.Should().BeGreaterThan(textBoxes[1].Bounds.Height);
             }
