@@ -24,8 +24,10 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public double? ComboBoxHeight { get; init; }
     public double? TabHeight { get; init; }
     public double CompactRadioButtonHeight { get; init; } = 20;
-    public double CheckBoxCheckMarkStrokeThickness { get; init; } =
-        CompactDialogVisualTokens.CheckBoxCheckMarkStrokeThickness;
+    public double CheckBoxIndicatorHeight { get; init; } = CompactDialogVisualTokens.CheckBoxIndicatorHeight;
+    public double CheckBoxIndicatorVerticalOffset { get; init; }
+    public IBrush? CheckBoxIndicatorTopLeftInsetBrush { get; init; }
+    public IBrush? CheckBoxIndicatorBottomRightInsetBrush { get; init; }
     public double ButtonHeight { get; init; } = CompactDialogVisualTokens.ButtonHeight;
     public double ButtonMinWidth { get; init; } = CompactDialogVisualTokens.ButtonMinWidth;
     public double FontSize { get; init; } = CompactDialogVisualTokens.FontSize;
@@ -986,7 +988,7 @@ public static class AvaloniaCompactDialogChrome
             {
                 Data = Geometry.Parse("M 2 6 L 5 9 L 12 2"),
                 Stroke = foreground,
-                StrokeThickness = style.CheckBoxCheckMarkStrokeThickness,
+                StrokeThickness = 1.4,
                 Width = CompactDialogVisualTokens.CheckBoxCheckMarkWidth,
                 Height = CompactDialogVisualTokens.CheckBoxCheckMarkHeight,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -1020,22 +1022,58 @@ public static class AvaloniaCompactDialogChrome
                     Converter = ObjectConverters.IsNull,
                 });
 
+            var indicatorContent = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+            };
+            if (style.CheckBoxIndicatorTopLeftInsetBrush is { } topLeftInset &&
+                style.CheckBoxIndicatorBottomRightInsetBrush is { } bottomRightInset)
+            {
+                indicatorContent.Children.Add(new Border
+                {
+                    Height = 1,
+                    Background = topLeftInset,
+                    VerticalAlignment = VerticalAlignment.Top,
+                });
+                indicatorContent.Children.Add(new Border
+                {
+                    Width = 1,
+                    Background = topLeftInset,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                });
+                indicatorContent.Children.Add(new Border
+                {
+                    Height = 1,
+                    Background = bottomRightInset,
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                });
+                indicatorContent.Children.Add(new Border
+                {
+                    Width = 1,
+                    Background = bottomRightInset,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                });
+            }
+            indicatorContent.Children.Add(new Panel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children = { checkMark, indeterminateMark },
+            });
+
             var indicator = new Border
             {
                 // WPF's native compact checkbox paints a 14 x 13 device-pixel frame at 96 DPI.
                 // Keep the separately configured interaction row height while sharing that authority
                 // geometry across FreeX, FreeW, and FreeP dialog renderers.
                 Width = CompactDialogVisualTokens.CheckBoxIndicatorWidth,
-                Height = CompactDialogVisualTokens.CheckBoxIndicatorHeight,
+                Height = style.CheckBoxIndicatorHeight,
                 Background = white,
                 BorderBrush = border,
                 BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness),
-                Child = new Panel
-                {
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Children = { checkMark, indeterminateMark },
-                },
+                RenderTransform = new TranslateTransform(0, style.CheckBoxIndicatorVerticalOffset),
+                Child = indicatorContent,
             };
 
             void UpdateEnabledChrome()

@@ -28,7 +28,6 @@ public static class CompactDialogVisualTokens
     public const double CheckBoxIndicatorHeight = 13;
     public const double CheckBoxCheckMarkWidth = 12;
     public const double CheckBoxCheckMarkHeight = 10;
-    public const double CheckBoxCheckMarkStrokeThickness = 1.4;
     public const double CheckBoxIndeterminateMarkWidth = 7;
     public const double CheckBoxIndeterminateMarkHeight = 2;
     public const double RadioButtonIndicatorSize = 13;

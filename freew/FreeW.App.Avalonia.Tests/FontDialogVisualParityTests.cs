@@ -140,16 +140,21 @@ public sealed class FontDialogVisualParityTests
                 var indicators = dialog.GetVisualDescendants()
                     .OfType<CheckBox>()
                     .SelectMany(check => check.GetVisualDescendants().OfType<Border>())
-                    .Where(border => border.Bounds.Width == 14 && border.Bounds.Height == 13)
+                    .Where(border => border.Bounds.Width == 14 && border.Bounds.Height == 14)
                     .ToArray();
                 indicators.Should().HaveCount(10);
-
-                var checkMarks = dialog.GetVisualDescendants()
-                    .OfType<global::Avalonia.Controls.Shapes.Path>()
-                    .Where(path => path.Width == 12 && path.Height == 10)
-                    .ToArray();
-                checkMarks.Should().HaveCount(10);
-                checkMarks.Should().OnlyContain(path => path.StrokeThickness == 1);
+                foreach (var indicator in indicators)
+                {
+                    var transform = indicator.RenderTransform.Should().BeOfType<TranslateTransform>().Subject;
+                    transform.Y.Should().Be(1);
+                    var bevels = indicator.GetVisualDescendants()
+                        .OfType<Border>()
+                        .Where(border => border.Background is SolidColorBrush)
+                        .Select(border => ((SolidColorBrush)border.Background!).Color)
+                        .ToArray();
+                    bevels.Should().Contain(Color.FromRgb(0xEB, 0xEB, 0xEB));
+                    bevels.Should().Contain(Color.FromRgb(0xF6, 0xF6, 0xF6));
+                }
             }
             finally
             {
