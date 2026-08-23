@@ -30,12 +30,12 @@ public sealed class FontDialogVisualParityTests
                 .ToArray();
 
             family.Height.Should().Be(25);
-            FontDialogPlanner.VisualMetrics.AvaloniaLabelLineHeight.Should().Be(16);
+            FontDialogPlanner.VisualMetrics.AvaloniaLabelLineHeight.Should().Be(17);
             family.FocusAdorner.Should().BeNull();
             size.Height.Should().Be(24);
             color.Height.Should().Be(24);
             buttons.Should().HaveCount(2);
-            buttons.Should().OnlyContain(button => button.Height == 24);
+            buttons.Should().OnlyContain(button => button.Height == 26);
             ((ISolidColorBrush)buttons.Single(button => button.IsCancel).BorderBrush!).Color
                 .Should().Be(Color.FromRgb(0x70, 0x70, 0x70));
         }, CancellationToken.None);

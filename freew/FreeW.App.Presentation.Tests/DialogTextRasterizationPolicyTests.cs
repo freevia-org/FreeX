@@ -41,18 +41,29 @@ public sealed class DialogTextRasterizationPolicyTests
         avalonia.Should().NotContain("TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias)");
     }
 
-    [Theory]
-    [InlineData("FontDialog.cs")]
-    [InlineData("ParagraphDialog.cs")]
-    public void FreeWDialogsDoNotOverrideTheSharedRasterizationPolicy(string fileName)
+    [Fact]
+    public void FreeWParagraphDialogInheritsTheSharedRasterizationPolicy()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(
             root,
             "freew",
             "FreeW.App.Avalonia",
-            fileName));
+            "ParagraphDialog.cs"));
 
         source.Should().NotContain("TextOptions.SetTextRenderingMode(this");
+    }
+
+    [Fact]
+    public void FreeWFontDialogUsesItsWpfAuthorityRasterizationPolicy()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "FontDialog.cs"));
+
+        source.Should().Contain("TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias)");
     }
 }

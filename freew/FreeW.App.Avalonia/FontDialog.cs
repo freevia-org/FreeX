@@ -30,7 +30,7 @@ public sealed class FontDialog : FreeWDialogWindow
             TextBoxHeight = 25,
             ComboBoxHeight = 24,
             TabHeight = 20,
-            ButtonHeight = 24,
+            ButtonHeight = 26,
             ForegroundBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
             FocusedInputBorderBrush = new SolidColorBrush(Color.FromRgb(0x56, 0x9D, 0xE5)),
             ButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
@@ -409,7 +409,7 @@ public sealed class FontDialog : FreeWDialogWindow
             0,
             0,
             trailingMargin ?? Layout.EffectTrailingMargin,
-            Layout.EffectBottomMargin),
+            Layout.AvaloniaEffectBottomMargin),
     };
 
     private static Thickness ToThickness(FontDialogThickness value) =>
