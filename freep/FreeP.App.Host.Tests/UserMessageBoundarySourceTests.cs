@@ -4,7 +4,7 @@ namespace FreeP.App.Host.Tests;
 
 public sealed class UserMessageBoundarySourceTests
 {
-    private static readonly string[] BoundedDialogFiles =
+    private static readonly string[] ChartOptionsDialogFiles =
     [
         "Chart3DViewOptionsDialog.cs",
         "ChartAreaOptionsDialog.cs",
@@ -16,17 +16,41 @@ public sealed class UserMessageBoundarySourceTests
         "ChartLayoutOptionsDialog.cs",
         "ChartPieOptionsDialog.cs",
         "ChartPointOptionsDialog.cs",
+        "ChartPlotStyleOptionsDialog.cs",
+        "ChartProtectionOptionsDialog.cs",
         "ChartSeriesOptionsDialog.cs",
         "ChartTextOptionsDialog.cs",
+    ];
+
+    private static readonly string[] DirectWarningDialogFiles =
+    [
         "MotionPathEditorDialog.cs",
         "RotationOptionsDialog.cs",
         "ZoomObjectPropertiesDialog.cs",
     ];
 
     [Fact]
-    public void Bounded_FreeP_dialogs_use_the_shared_owned_warning_realizer()
+    public void Chart_options_host_owns_native_warning_realization()
     {
-        foreach (var fileName in BoundedDialogFiles)
+        var host = ReadWorkspaceSource("freep", "FreeP.App.Host", "ChartOptionsDialogHost.cs");
+        host.Should().Contain("DialogMessageHelper.ShowWarning(this, result.ValidationMessage, Title)");
+        host.Should().NotContain("MessageBox.Show(");
+
+        foreach (var fileName in ChartOptionsDialogFiles)
+        {
+            var source = ReadWorkspaceSource("freep", "FreeP.App.Host", fileName);
+            source.Should().Contain("ChartOptionsDialogHost<", fileName);
+            source.Should().NotContain("DialogMessageHelper.ShowWarning(", fileName);
+            source.Should().NotContain("MessageBox.Show(", fileName);
+            source.Should().NotContain("MessageBoxButton", fileName);
+            source.Should().NotContain("MessageBoxImage", fileName);
+        }
+    }
+
+    [Fact]
+    public void Direct_warning_dialogs_use_the_shared_owned_warning_realizer()
+    {
+        foreach (var fileName in DirectWarningDialogFiles)
         {
             var source = ReadWorkspaceSource("freep", "FreeP.App.Host", fileName);
             source.Should().Contain("DialogMessageHelper.ShowWarning(", fileName);

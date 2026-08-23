@@ -13,9 +13,12 @@ public sealed class ChartPointSeriesOptionsDialogSessionOwnershipTests
             var testSupport = ReadChartOptionsTestSupport();
 
             source.Should().Contain($"new {session}(", family);
-            source.Should().Contain("_session.TryCommit(", family);
-            source.Should().Contain("ReadInput()", family);
-            source.Should().Contain("ChartOptionsDialogChrome.", family);
+            source.Should().Contain($"ChartOptionsDialogHost<{session}>", family);
+            source.Should().Contain("session.TryCommit(session.BuildInput(values)", family);
+            source.Should().Contain(": base(session, session.BuildDialogPlan(", family);
+            source.Should().NotContain("ReadInput()", family);
+            source.Should().NotContain("ChartOptionsDialogChrome.", family);
+            source.Should().NotContain("DialogMessageHelper.ShowWarning(", family);
             source.Should().NotContain("ForTests", family);
             testSupport.Should().Contain($"partial class {family}Dialog", family);
             testSupport.Should().Contain("BuildCommitPlanForTests()", family);
