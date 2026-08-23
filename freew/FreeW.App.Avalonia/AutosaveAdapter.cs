@@ -114,36 +114,21 @@ internal sealed partial class AutosaveAdapter : IDisposable
     {
         ArgumentNullException.ThrowIfNull(owner);
 
-        try
-        {
-            var currentWindowHasExplicitDocument = _workflow.CurrentPath is not null;
-
-            await FreeWRecoveryWorkflow.RunAsync(
-                _session.PlanRecoveries(),
-                FreeWRecoveryPromptMode.StartupQuotedDisplayName,
-                offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
-                async (recovery, useCurrentWindow) =>
-                {
-                    if (useCurrentWindow && !currentWindowHasExplicitDocument)
-                    {
-                        var recoveredInCurrentWindow = _session.CompleteDocumentRecovery(recovery, accepted: true, (document, originalPath) =>
-                        {
-                            _editor.LoadDocument(document);
-                            _workflow.MarkDirtyWithPath(originalPath);
-                        }, FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
-                        return recoveredInCurrentWindow;
-                    }
-
-                    var recovered = _recoverInNewWindowAsync is not null &&
-                        await _recoverInNewWindowAsync(recovery.Candidate);
-                    _session.CompleteRecoveryResult(recovery, accepted: true, recovered);
-                    return recovered;
-                });
-        }
-        catch
-        {
-            // Recovery is best-effort; never block startup on it.
-        }
+        await AvaloniaAutosaveRecoveryHost.OfferStartupAsync(
+            owner,
+            currentWindowHasExplicitDocument: () => _workflow.CurrentPath is not null,
+            _session.PlanRecoveries,
+            createOffer: static (recovery, remainingCount) => new FreeWRecoveryOffer(
+                recovery,
+                remainingCount,
+                FreeWRecoveryPromptMode.StartupQuotedDisplayName),
+            promptAsync: offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
+            recoverInCurrentWindow: CompleteDocumentRecovery,
+            recoverInNewWindowAsync: recovery => _recoverInNewWindowAsync is null
+                ? Task.FromResult(false)
+                : _recoverInNewWindowAsync(recovery.Candidate),
+            completeRecoveryResult: (recovery, accepted, recovered) =>
+                _session.CompleteRecoveryResult(recovery, accepted, recovered));
     }
 
     /// <summary>
@@ -162,67 +147,31 @@ internal sealed partial class AutosaveAdapter : IDisposable
         ArgumentNullException.ThrowIfNull(owner);
 
         var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
-        try
-        {
-            var recoveries = _session.PlanRecoveries();
-            if (recoveries.Count == 0)
-            {
-                await AvaloniaUserMessageDialog.ShowAsync(owner, text.NoDocumentsMessage, text.Title, UserMessageIcon.Information);
-                return;
-            }
 
-            await FreeWRecoveryWorkflow.RunAsync(
-                recoveries,
-                FreeWRecoveryPromptMode.Manual,
-                offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
-                async (recovery, useCurrentWindow) =>
-                {
-                    if (useCurrentWindow)
-                        return await RecoverIntoCurrentWindowGatedAsync(recovery);
-
-                    var recovered = _recoverInNewWindowAsync is not null &&
-                        await _recoverInNewWindowAsync(recovery.Candidate);
-                    _session.CompleteRecoveryResult(recovery, accepted: true, recovered);
-                    return recovered;
-                });
-        }
-        catch (Exception ex)
-        {
-            await AvaloniaUserMessageDialog.ShowErrorAsync(
-                owner,
-                string.Format(System.Globalization.CultureInfo.CurrentCulture, text.FailureMessageFormat, ex.Message),
-                text.Title);
-        }
+        await AvaloniaAutosaveRecoveryHost.RecoverManuallyAsync(
+            owner,
+            new(text.Title, text.NoDocumentsMessage, text.FailureMessageFormat),
+            _session.PlanRecoveries,
+            createOffer: static (recovery, remainingCount) => new FreeWRecoveryOffer(
+                recovery,
+                remainingCount,
+                FreeWRecoveryPromptMode.Manual),
+            promptAsync: offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
+            _confirmDiscardOrSaveAsync,
+            recoverInCurrentWindow: CompleteDocumentRecovery,
+            recoverInNewWindowAsync: recovery => _recoverInNewWindowAsync is null
+                ? Task.FromResult(false)
+                : _recoverInNewWindowAsync(recovery.Candidate),
+            completeRecoveryResult: (recovery, accepted, recovered) =>
+                _session.CompleteRecoveryResult(recovery, accepted, recovered));
     }
 
-    /// <summary>
-    /// Restores an accepted recovery into THIS window, gated behind the current document's own
-    /// save/discard prompt. If the user cancels that prompt the candidate is left on disk
-    /// (accepted:false -> Keep disposition) so it can be revisited from Backstage later, matching the
-    /// WPF host and the behaviour of declining the initial "Recover unsaved changes?" offer.
-    /// </summary>
-    /// <remarks>
-    /// Passing accepted:true here instead would resolve to Quarantine
-    /// (<see cref="Free.Shared.AppServices.AutosaveRecoveryPolicy.ResolveDisposition"/>: accepted and
-    /// not recovered =&gt; Quarantine), which moves the snapshot out of the directory EnumerateCandidates
-    /// scans -- so declining to discard the CURRENT document would permanently destroy access to the
-    /// OLDER unsaved work the user was trying to recover. Declining one thing must not throw away the
-    /// other.
-    /// </remarks>
-    private async Task<bool> RecoverIntoCurrentWindowGatedAsync(AutosaveRecoveryPlan recovery)
-    {
-        if (_confirmDiscardOrSaveAsync is not null && !await _confirmDiscardOrSaveAsync())
-        {
-            _session.CompleteRecoveryResult(recovery, accepted: false, recovered: false);
-            return false;
-        }
-
-        return _session.CompleteDocumentRecovery(recovery, accepted: true, (document, originalPath) =>
+    private bool CompleteDocumentRecovery(AutosaveRecoveryPlan recovery) =>
+        _session.CompleteDocumentRecovery(recovery, accepted: true, (document, originalPath) =>
         {
             _editor.LoadDocument(document);
             _workflow.MarkDirtyWithPath(originalPath);
         }, FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
-    }
 
     public void Dispose()
     {
