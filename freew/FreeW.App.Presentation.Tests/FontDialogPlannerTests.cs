@@ -76,6 +76,7 @@ public sealed class FontDialogPlannerTests
         metrics.AvaloniaAdvancedTabContentMargin.Should().Be(new FontDialogThickness(10, 12, 10, 10));
         metrics.AvaloniaTabPaneMargin.Should().Be(new FontDialogThickness(-12, -1, -12, 0));
         metrics.FieldLabelMargin.Should().Be(new FontDialogThickness(0, 0, 0, 2));
+        metrics.AvaloniaColorControlMargin.Should().Be(new FontDialogThickness(0, -1, 0, 9));
         metrics.AvaloniaLabelLineHeight.Should().Be(17);
         metrics.FieldControlMargin.Should().Be(new FontDialogThickness(0, 0, 0, 8));
         metrics.ActionRowMargin.Should().Be(new FontDialogThickness(0, 10, 0, 0));

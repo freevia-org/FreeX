@@ -31,6 +31,12 @@ public sealed class FontDialogVisualParityTests
 
             family.Height.Should().Be(25);
             FontDialogPlanner.VisualMetrics.AvaloniaLabelLineHeight.Should().Be(17);
+            var colorBrush = color.Background;
+            colorBrush.Should().BeOfType<LinearGradientBrush>();
+            ((LinearGradientBrush)colorBrush!).GradientStops.Select(stop => stop.Color)
+                .Should().Equal(Color.FromRgb(240, 240, 240), Color.FromRgb(229, 229, 229));
+            ((SolidColorBrush)color.BorderBrush!)
+                .Color.Should().Be(Color.FromRgb(172, 172, 172));
             family.FocusAdorner.Should().BeNull();
             size.Height.Should().Be(24);
             color.Height.Should().Be(24);

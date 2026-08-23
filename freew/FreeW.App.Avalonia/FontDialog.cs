@@ -33,6 +33,20 @@ public sealed class FontDialog : FreeWDialogWindow
             ButtonHeight = 26,
             ForegroundBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
             FocusedInputBorderBrush = new SolidColorBrush(Color.FromRgb(0x56, 0x9D, 0xE5)),
+            // WPF's selected combo template uses the standard compact-dialog vertical
+            // gradient and neutral border. Keep this correction local to Font so shared
+            // compact dialogs retain their existing chrome contract.
+            ComboBoxBackgroundBrush = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new global::Avalonia.Media.GradientStop(Color.FromRgb(240, 240, 240), 0),
+                    new global::Avalonia.Media.GradientStop(Color.FromRgb(229, 229, 229), 1),
+                },
+            },
+            InputBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
             ButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
             DialogTabPaneBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
             DialogInactiveTabBorderBrush = new SolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC)),
@@ -170,6 +184,10 @@ public sealed class FontDialog : FreeWDialogWindow
         var fontPanel = new StackPanel { Margin = ToThickness(Layout.AvaloniaFontTabContentMargin) };
         foreach (var kind in Surface.Tabs.First(tab => tab.Kind == FontDialogTabKind.Font).Fields)
             AddField(fontPanel, Surface.Field(kind).Label, fieldControls[kind]);
+        // The WPF selected-combo template registers this field one DIP earlier than
+        // Avalonia's template. Preserve the shared field cadence with a compensating
+        // bottom margin so later Font controls keep their established positions.
+        _colorBox.Margin = ToThickness(Layout.AvaloniaColorControlMargin);
         fontPanel.Children.Add(new TextBlock
         {
             Text = Surface.EffectsSectionLabel,

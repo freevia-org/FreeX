@@ -129,6 +129,7 @@ public sealed record FontDialogVisualMetrics
     public FontDialogThickness AvaloniaAdvancedTabContentMargin { get; init; } = new(10, 12, 10, 10);
     public FontDialogThickness AvaloniaTabPaneMargin { get; init; } = new(-12, -1, -12, 0);
     public FontDialogThickness FieldLabelMargin { get; init; } = new(0, 0, 0, 2);
+    public FontDialogThickness AvaloniaColorControlMargin { get; init; } = new(0, -1, 0, 9);
     public double AvaloniaLabelLineHeight { get; init; } = 17;
     public FontDialogThickness FieldControlMargin { get; init; } = new(0, 0, 0, 8);
     public FontDialogThickness WpfEffectsLabelMargin { get; init; } = new(0, 4, 0, 2);
