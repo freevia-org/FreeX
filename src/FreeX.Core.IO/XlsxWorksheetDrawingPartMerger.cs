@@ -203,6 +203,7 @@ internal static class XlsxWorksheetDrawingPartMerger
         while (reader.Read())
         {
             if (reader.NodeType != XmlNodeType.Element ||
+                reader.Depth != 1 ||
                 !string.Equals(reader.LocalName, "drawing", StringComparison.Ordinal) ||
                 !string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal))
             {

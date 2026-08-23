@@ -10,6 +10,7 @@ namespace FreeX.Core.IO.Tests;
 public sealed class XlsxAutoFilterXmlCodecTests
 {
     private static readonly XNamespace SpreadsheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace StrictSpreadsheetNs = "http://purl.oclc.org/ooxml/spreadsheetml/main";
 
     [Fact]
     public void WriteColorFilter_PreservesRawPrecedenceDefaultsNamespaceAndNativeAttributes()
@@ -159,6 +160,70 @@ public sealed class XlsxAutoFilterXmlCodecTests
     }
 
     [Fact]
+    public void StrictSpreadsheetMl_WorksheetAndTablePackageParts_RoundTripSharedFilterXml()
+    {
+        XNamespace nativeNs = "urn:freex:test";
+        var worksheet = CreateStrictAutoFilterPart("worksheet", nativeNs);
+        var table = CreateStrictAutoFilterPart("table", nativeNs);
+        using var package = XlsxCoreIoLeafCodecTests.CreatePackage(
+            ("xl/worksheets/sheet1.xml", worksheet.ToString(SaveOptions.DisableFormatting)),
+            ("xl/tables/table1.xml", table.ToString(SaveOptions.DisableFormatting)));
+
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            foreach (var path in new[] { "xl/worksheets/sheet1.xml", "xl/tables/table1.xml" })
+            {
+                var part = XlsxPackageXmlEditor.LoadXml(archive.GetEntry(path)!);
+                var filterColumns = part.Root!
+                    .Element(StrictSpreadsheetNs + "autoFilter")!
+                    .Elements(StrictSpreadsheetNs + "filterColumn")
+                    .ToArray();
+                var dateColumn = filterColumns.Single(column => column.Attribute("colId")?.Value == "0");
+                var colorColumn = filterColumns.Single(column => column.Attribute("colId")?.Value == "1");
+                var colorFilter = XlsxAutoFilterXmlCodec.ReadColorFilter(
+                    colorColumn.Element(StrictSpreadsheetNs + "colorFilter"))!;
+                var dateGroup = XlsxAutoFilterXmlCodec.ReadDateGroupItem(
+                    dateColumn
+                        .Element(StrictSpreadsheetNs + "filters")!
+                        .Element(StrictSpreadsheetNs + "dateGroupItem")!);
+
+                colorColumn.Element(StrictSpreadsheetNs + "colorFilter")!
+                    .ReplaceWith(XlsxAutoFilterXmlCodec.WriteColorFilter(colorFilter, StrictSpreadsheetNs));
+                dateColumn
+                    .Element(StrictSpreadsheetNs + "filters")!
+                    .Element(StrictSpreadsheetNs + "dateGroupItem")!
+                    .ReplaceWith(XlsxAutoFilterXmlCodec.WriteDateGroupItem(dateGroup, StrictSpreadsheetNs));
+                XlsxPackageXmlEditor.ReplaceXml(archive, path, part);
+            }
+        }
+
+        package.Position = 0;
+        using var roundTripArchive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        foreach (var path in new[] { "xl/worksheets/sheet1.xml", "xl/tables/table1.xml" })
+        {
+            var part = XlsxPackageXmlEditor.LoadXml(roundTripArchive.GetEntry(path)!);
+            var filterColumns = part.Root!
+                .Element(StrictSpreadsheetNs + "autoFilter")!
+                .Elements(StrictSpreadsheetNs + "filterColumn")
+                .ToArray();
+            var dateColumn = filterColumns.Single(column => column.Attribute("colId")?.Value == "0");
+            var colorColumn = filterColumns.Single(column => column.Attribute("colId")?.Value == "1");
+            var colorFilter = colorColumn.Element(StrictSpreadsheetNs + "colorFilter")!;
+            var dateGroup = dateColumn
+                .Element(StrictSpreadsheetNs + "filters")!
+                .Element(StrictSpreadsheetNs + "dateGroupItem")!;
+
+            colorFilter.Attribute("dxfId")!.Value.Should().Be("04");
+            colorFilter.Attribute("cellColor")!.Value.Should().Be("0");
+            colorFilter.Attribute(nativeNs + "colorFlag")!.Value.Should().Be("keep");
+            dateGroup.Attribute("year")!.Value.Should().Be("02024");
+            dateGroup.Attribute("month")!.Value.Should().Be("03");
+            dateGroup.Attribute("dateTimeGrouping")!.Value.Should().Be("month");
+            dateGroup.Attribute(nativeNs + "dateFlag")!.Value.Should().Be("keep");
+        }
+    }
+
+    [Fact]
     public void AutoFilterCallSites_UseSharedCodec()
     {
         foreach (var file in new[]
@@ -175,6 +240,44 @@ public sealed class XlsxAutoFilterXmlCodecTests
             source.Should().NotContain("private static WorksheetAutoFilterColorFilterModel? ReadColorFilter");
             source.Should().NotContain("private static WorksheetAutoFilterDateGroupItemModel ReadDateGroupItem");
         }
+    }
+
+    private static XDocument CreateStrictAutoFilterPart(string rootName, XNamespace nativeNs)
+    {
+        var root = new XElement(
+            StrictSpreadsheetNs + rootName,
+            new XElement(
+                StrictSpreadsheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A8"),
+                new XElement(
+                    StrictSpreadsheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        StrictSpreadsheetNs + "filters",
+                        new XElement(
+                            StrictSpreadsheetNs + "dateGroupItem",
+                            new XAttribute("year", "02024"),
+                            new XAttribute("month", "03"),
+                            new XAttribute("dateTimeGrouping", "month"),
+                            new XAttribute(nativeNs + "dateFlag", "keep")))),
+                new XElement(
+                    StrictSpreadsheetNs + "filterColumn",
+                    new XAttribute("colId", "1"),
+                    new XElement(
+                        StrictSpreadsheetNs + "colorFilter",
+                        new XAttribute("dxfId", "04"),
+                        new XAttribute("cellColor", "0"),
+                        new XAttribute(nativeNs + "colorFlag", "keep")))));
+
+        if (rootName == "table")
+        {
+            root.SetAttributeValue("id", "1");
+            root.SetAttributeValue("name", "Table1");
+            root.SetAttributeValue("displayName", "Table1");
+            root.SetAttributeValue("ref", "A1:A8");
+        }
+
+        return new XDocument(root);
     }
 }
 
@@ -226,6 +329,26 @@ public sealed class XlsxCoreIoLeafCodecTests
         element.HasElements.Should().BeFalse();
         reader.NodeType.Should().Be(XmlNodeType.Element);
         reader.LocalName.Should().Be("root");
+    }
+
+    [Fact]
+    public void ShallowElementMaterializer_PreservesNamespaceUndeclarationAndXmlAttributes()
+    {
+        const string xml = "<outer xmlns=\"urn:outer\"><child xmlns=\"\" xml:lang=\"uk\" xml:space=\"preserve\" plain=\"v\" /></outer>";
+        using var reader = XmlReader.Create(new StringReader(xml));
+        reader.MoveToContent();
+        reader.ReadToDescendant("child", "").Should().BeTrue();
+
+        var element = XmlReaderElementMaterializer.CreateShallowElement(reader);
+
+        element.Name.Should().Be(XName.Get("child"));
+        element.Attribute("xmlns")!.Value.Should().BeEmpty();
+        element.Attribute(XNamespace.Xml + "lang")!.Value.Should().Be("uk");
+        element.Attribute(XNamespace.Xml + "space")!.Value.Should().Be("preserve");
+        element.Attribute("plain")!.Value.Should().Be("v");
+        element.ToString(SaveOptions.DisableFormatting).Should().Contain("xmlns=\"\"");
+        reader.NodeType.Should().Be(XmlNodeType.Element);
+        reader.LocalName.Should().Be("child");
     }
 
     public static TheoryData<string?, CellFillPatternStyle> FillPatternCases => new()
@@ -308,6 +431,41 @@ public sealed class XlsxCoreIoLeafCodecTests
     }
 
     [Fact]
+    public void ExistingDrawingPathResolver_UsesDirectWorksheetMarkerWhenNestedMarkersCompete()
+    {
+        using var package = CreatePackage(
+            ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                           xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                           xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">
+                  <mc:AlternateContent>
+                    <mc:Choice Requires="x14"><drawing r:id="rIdChoice" /></mc:Choice>
+                    <mc:Fallback><drawing r:id="rIdFallback" /></mc:Fallback>
+                  </mc:AlternateContent>
+                  <drawing r:id="rIdDirect" />
+                </worksheet>
+                """),
+            ("xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdChoice" Type="drawing" Target="../drawings/choice.xml" />
+                  <Relationship Id="rIdFallback" Type="drawing" Target="../drawings/fallback.xml" />
+                  <Relationship Id="rIdDirect" Type="drawing" Target="../drawings/direct.xml" />
+                </Relationships>
+                """));
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var path = XlsxWorksheetDrawingPartMerger.GetWorksheetDrawingPath(
+            archive,
+            "xl/worksheets/sheet1.xml",
+            SpreadsheetNs,
+            RelNs,
+            PackageRelNs);
+
+        path.Should().Be("xl/drawings/direct.xml");
+    }
+
+    [Fact]
     public void LeafCallSites_UseSharedMechanics()
     {
         foreach (var file in new[] { "XlsxPivotTableReader.cs", "XlsxStructuredTableMetadataReader.cs" })
@@ -330,7 +488,7 @@ public sealed class XlsxCoreIoLeafCodecTests
         }
     }
 
-    private static MemoryStream CreatePackage(params (string Path, string Xml)[] entries)
+    internal static MemoryStream CreatePackage(params (string Path, string Xml)[] entries)
     {
         var package = new MemoryStream();
         using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
