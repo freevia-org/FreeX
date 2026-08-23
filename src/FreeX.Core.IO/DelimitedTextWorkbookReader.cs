@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Free.Shared.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -729,100 +730,13 @@ internal static partial class DelimitedTextWorkbookReader
     {
         if (double.TryParse(field, styles, formatProvider, out value) &&
             double.IsFinite(value) &&
-            HasValidGroupingShape(field, styles, formatProvider))
+            NumericTextGroupingValidator.HasValidGroupingShape(field, styles, formatProvider))
         {
             return true;
         }
 
         value = default;
         return false;
-    }
-
-    // .NET's NumberStyles.AllowThousands parsing does not validate that group separators actually
-    // fall on 3-digit boundaries — e.g. under en-US, double.TryParse("1234,56", NumberStyles.Any, ...)
-    // happily returns 123456, silently treating the fractional "56" as a malformed trailing group.
-    // Under a culture whose decimal separator differs from '.', a genuine decimal-comma value like
-    // "1234,56" would otherwise be misread as the grouped integer 123456 — a silent, severe data
-    // corruption. Reject that shape here so the caller falls through to try the next culture/format
-    // (see the two-culture TryParseFiniteNumber overload above) instead of accepting a bogus parse.
-    private static bool HasValidGroupingShape(ReadOnlySpan<char> field, NumberStyles styles, IFormatProvider formatProvider)
-    {
-        if ((styles & NumberStyles.AllowThousands) == 0)
-            return true;
-
-        var numberFormat = NumberFormatInfo.GetInstance(formatProvider);
-        var groupSeparator = numberFormat.NumberGroupSeparator;
-        if (string.IsNullOrEmpty(groupSeparator))
-            return true;
-
-        var groupIndex = field.IndexOf(groupSeparator, StringComparison.Ordinal);
-        if (groupIndex < 0)
-            return true; // No grouping separator present — nothing to validate.
-
-        var decimalSeparator = numberFormat.NumberDecimalSeparator;
-        var decimalIndex = string.IsNullOrEmpty(decimalSeparator)
-            ? -1
-            : field.IndexOf(decimalSeparator, StringComparison.Ordinal);
-
-        var integerPart = decimalIndex >= 0 ? field[..decimalIndex] : field;
-
-        // Strip a parenthesized-negative wrapper, a leading sign, and (when the style allows one) a
-        // leading currency symbol before scanning for digit groups. Without this, the symbol/paren is
-        // the very first character the loop below sees, which is neither a digit nor the group
-        // separator and so hits the "let styles decide" bailout further down — silently skipping
-        // grouping validation for every currency string (e.g. "$1,2" would otherwise never be
-        // checked and would parse as 12).
-        integerPart = integerPart.Trim();
-        if (integerPart.Length >= 2 && integerPart[0] == '(' && integerPart[^1] == ')')
-            integerPart = integerPart[1..^1].Trim();
-        if (integerPart.Length > 0 && (integerPart[0] == '+' || integerPart[0] == '-'))
-            integerPart = integerPart[1..];
-
-        if ((styles & NumberStyles.AllowCurrencySymbol) != 0)
-        {
-            var currencySymbol = numberFormat.CurrencySymbol;
-            if (!string.IsNullOrEmpty(currencySymbol))
-            {
-                var symbolIndex = integerPart.IndexOf(currencySymbol, StringComparison.Ordinal);
-                if (symbolIndex >= 0 && integerPart[..symbolIndex].Trim().Length == 0)
-                    integerPart = integerPart[(symbolIndex + currencySymbol.Length)..].TrimStart();
-            }
-        }
-
-        var groups = new List<int>();
-        var currentGroupDigits = 0;
-        var index = 0;
-        while (index < integerPart.Length)
-        {
-            if (integerPart[index..].StartsWith(groupSeparator, StringComparison.Ordinal))
-            {
-                groups.Add(currentGroupDigits);
-                currentGroupDigits = 0;
-                index += groupSeparator.Length;
-                continue;
-            }
-
-            if (!char.IsDigit(integerPart[index]))
-                return true; // Not a plain grouped-digit shape (e.g. currency symbols) — let styles decide.
-
-            currentGroupDigits++;
-            index++;
-        }
-
-        groups.Add(currentGroupDigits);
-
-        // Valid Excel/`.NET`-style grouping: every group except the first has exactly 3 digits, and
-        // the first group has 1-3 digits.
-        if (groups[0] is < 1 or > 3)
-            return false;
-
-        for (var i = 1; i < groups.Count; i++)
-        {
-            if (groups[i] != 3)
-                return false;
-        }
-
-        return true;
     }
 
     private static bool TryParseCurrency(ReadOnlySpan<char> field, out double value)
@@ -838,9 +752,9 @@ internal static partial class DelimitedTextWorkbookReader
             currencyCulture,
             out value) &&
             double.IsFinite(value) &&
-            // Same shape check the plain-number path applies (HasValidGroupingShape strips the
+            // Same shape check the plain-number path applies (the shared validator strips the
             // currency symbol/parens itself before scanning), so a malformed grouping like "$1,2"
             // is rejected here instead of silently parsing as 12.
-            HasValidGroupingShape(field, NumberStyles.Currency, currencyCulture);
+            NumericTextGroupingValidator.HasValidGroupingShape(field, NumberStyles.Currency, currencyCulture);
     }
 }

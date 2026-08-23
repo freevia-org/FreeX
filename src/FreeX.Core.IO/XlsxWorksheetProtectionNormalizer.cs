@@ -83,7 +83,7 @@ internal static class XlsxWorksheetProtectionNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "saltValue", NormalizeBase64BinaryOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "spinCount", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         foreach (var attributeName in BooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, attributeName, XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
         changed |= RemoveLegacyPasswordWhenAdvancedHashExists(protection);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(protection);
         return changed;
@@ -126,24 +126,6 @@ internal static class XlsxWorksheetProtectionNormalizer
 
         password.Remove();
         return true;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.Equals(trimmed, "1", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase))
-        {
-            return "1";
-        }
-
-        if (string.Equals(trimmed, "0", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase))
-        {
-            return "0";
-        }
-
-        return null;
     }
 
     private static string? NormalizeOptionalText(string? value)

@@ -61,7 +61,7 @@ internal static class XlsxWorksheetSheetFormatNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, X14AcNs + "dyDescent", NormalizeNonNegativeDouble);
 
         foreach (var attributeName in BooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, attributeName, XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
 
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(sheetFormat);
         return changed;
@@ -79,24 +79,6 @@ internal static class XlsxWorksheetSheetFormatNormalizer
             if (NormalizeWorksheetRoot(root))
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
         }
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.Equals(trimmed, "1", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase))
-        {
-            return "1";
-        }
-
-        if (string.Equals(trimmed, "0", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase))
-        {
-            return "0";
-        }
-
-        return null;
     }
 
     private static string? NormalizeNonNegativeDouble(string? value)

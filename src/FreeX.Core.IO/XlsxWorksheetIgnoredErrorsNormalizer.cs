@@ -106,7 +106,7 @@ internal static class XlsxWorksheetIgnoredErrorsNormalizer
                 continue;
             }
 
-            var normalized = NormalizeBoolean(attribute.Value);
+            var normalized = XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric(attribute.Value);
             if (normalized is null)
             {
                 attribute.Remove();
@@ -122,24 +122,6 @@ internal static class XlsxWorksheetIgnoredErrorsNormalizer
         }
 
         return changed;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.Equals(trimmed, "1", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase))
-        {
-            return "1";
-        }
-
-        if (string.Equals(trimmed, "0", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase))
-        {
-            return "0";
-        }
-
-        return null;
     }
 
     private static bool HasTruthyFlag(XElement ignoredError) =>

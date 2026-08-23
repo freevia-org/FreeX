@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.IO;
 using FreeX.Core.Model;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
@@ -633,81 +634,16 @@ internal static class PdfTableReader
     {
         if (double.TryParse(field, NumberStyles.Any, CultureInfo.CurrentCulture, out value) &&
             double.IsFinite(value) &&
-            HasValidGroupingShape(field, CultureInfo.CurrentCulture))
+            NumericTextGroupingValidator.HasValidGroupingShape(field, CultureInfo.CurrentCulture))
             return true;
 
         if (double.TryParse(field, NumberStyles.Any, CultureInfo.InvariantCulture, out value) &&
             double.IsFinite(value) &&
-            HasValidGroupingShape(field, CultureInfo.InvariantCulture))
+            NumericTextGroupingValidator.HasValidGroupingShape(field, CultureInfo.InvariantCulture))
             return true;
 
         value = default;
         return false;
-    }
-
-    // .NET's NumberStyles.Any (which includes AllowThousands) does not validate that group separators
-    // actually fall on 3-digit boundaries — e.g. under de-DE (group separator '.', decimal separator
-    // ','), double.TryParse("12.34", NumberStyles.Any, ...) happily returns 1234, silently treating the
-    // fractional ".34" as a malformed trailing group and dropping the decimal point (a 100x magnitude
-    // corruption). Reject that shape here so the caller falls through to try the next culture
-    // (InvariantCulture, above) instead of silently accepting a bogus parse. Ported from
-    // DelimitedTextWorkbookReader's identical HasValidGroupingShape guard.
-    private static bool HasValidGroupingShape(ReadOnlySpan<char> field, CultureInfo culture)
-    {
-        var numberFormat = NumberFormatInfo.GetInstance(culture);
-        var groupSeparator = numberFormat.NumberGroupSeparator;
-        if (string.IsNullOrEmpty(groupSeparator))
-            return true;
-
-        var groupIndex = field.IndexOf(groupSeparator, StringComparison.Ordinal);
-        if (groupIndex < 0)
-            return true; // No grouping separator present — nothing to validate.
-
-        var decimalSeparator = numberFormat.NumberDecimalSeparator;
-        var decimalIndex = string.IsNullOrEmpty(decimalSeparator)
-            ? -1
-            : field.IndexOf(decimalSeparator, StringComparison.Ordinal);
-
-        var integerPart = decimalIndex >= 0 ? field[..decimalIndex] : field;
-
-        // Strip a single leading sign so it doesn't get counted as part of the first digit group.
-        if (integerPart.Length > 0 && (integerPart[0] == '+' || integerPart[0] == '-'))
-            integerPart = integerPart[1..];
-
-        var groups = new List<int>();
-        var currentGroupDigits = 0;
-        var index = 0;
-        while (index < integerPart.Length)
-        {
-            if (integerPart[index..].StartsWith(groupSeparator, StringComparison.Ordinal))
-            {
-                groups.Add(currentGroupDigits);
-                currentGroupDigits = 0;
-                index += groupSeparator.Length;
-                continue;
-            }
-
-            if (!char.IsDigit(integerPart[index]))
-                return true; // Not a plain grouped-digit shape (e.g. currency symbols) — let styles decide.
-
-            currentGroupDigits++;
-            index++;
-        }
-
-        groups.Add(currentGroupDigits);
-
-        // Valid Excel/.NET-style grouping: every group except the first has exactly 3 digits, and
-        // the first group has 1-3 digits.
-        if (groups[0] is < 1 or > 3)
-            return false;
-
-        for (var i = 1; i < groups.Count; i++)
-        {
-            if (groups[i] != 3)
-                return false;
-        }
-
-        return true;
     }
 
     // ISO-8601 formats tried before falling back to culture-specific parsing.

@@ -204,6 +204,24 @@ internal static class XlsxXmlNormalizationHelpers
         };
     }
 
+    public static string? NormalizeBooleanAsNumeric(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.Equals(trimmed, "1", StringComparison.Ordinal) ||
+            string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return "1";
+        }
+
+        if (string.Equals(trimmed, "0", StringComparison.Ordinal) ||
+            string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase))
+        {
+            return "0";
+        }
+
+        return null;
+    }
+
     public static string? NormalizeRequiredUnsignedInt(string? value) =>
         NormalizeUnsignedIntOrNull(value) ?? "0";
 

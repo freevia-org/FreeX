@@ -84,8 +84,8 @@ internal static class XlsxWorksheetScenarioNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(scenario, ScenarioAttributes);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "name", NormalizeRequiredText);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "locked", NormalizeBooleanOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "hidden", NormalizeBooleanOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "locked", XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "hidden", XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "user", NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "comment", NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(scenario, WorksheetNs + "inputCells");
@@ -113,8 +113,8 @@ internal static class XlsxWorksheetScenarioNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(inputCell, InputCellAttributes);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(inputCell, "r", NormalizeCellReference);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(inputCell, "deleted", NormalizeBooleanOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(inputCell, "undone", NormalizeBooleanOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(inputCell, "deleted", XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(inputCell, "undone", XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(inputCell, "numFmtId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(inputCell);
         return changed;
@@ -138,24 +138,6 @@ internal static class XlsxWorksheetScenarioNormalizer
     {
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private static string? NormalizeBooleanOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.Equals(trimmed, "1", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase))
-        {
-            return "1";
-        }
-
-        if (string.Equals(trimmed, "0", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase))
-        {
-            return "0";
-        }
-
-        return null;
     }
 
     private static string? NormalizeCellReference(string? value)

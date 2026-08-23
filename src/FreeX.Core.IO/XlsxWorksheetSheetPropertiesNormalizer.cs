@@ -76,7 +76,7 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(sheetProperties, SheetPropertiesAttributes);
 
         foreach (var attributeName in SheetPropertiesBooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetProperties, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetProperties, attributeName, XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetProperties, "syncRef", NormalizeReference);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetProperties, "codeName", NormalizeOptionalText);
 
@@ -134,7 +134,7 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(tabColor, ColorAttributes);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "auto", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "auto", XlsxXmlNormalizationHelpers.NormalizeBooleanAsNumeric);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "indexed", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "theme", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "rgb", NormalizeRgbHex);
@@ -204,24 +204,6 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
         foreach (var node in nodes)
             node.Remove();
         return true;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.Equals(trimmed, "1", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase))
-        {
-            return "1";
-        }
-
-        if (string.Equals(trimmed, "0", StringComparison.Ordinal) ||
-            string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase))
-        {
-            return "0";
-        }
-
-        return null;
     }
 
     private static string? NormalizeOptionalText(string? value)
