@@ -52,8 +52,8 @@ public static class RevisionEditPlanner
             HyperlinkTooltip = options.HyperlinkTooltip,
         };
 
-        InsertRunAtOffset(paragraph, target, insertion);
-        return target + text.Length;
+        var insertionOffset = InsertRunAtOffset(paragraph, target, insertion);
+        return insertionOffset + text.Length;
     }
 
     public static int InsertTrackedText(
@@ -336,7 +336,7 @@ public static class RevisionEditPlanner
         return paragraph.Runs.LastOrDefault();
     }
 
-    public static void InsertRunAtOffset(Paragraph paragraph, int offset, Run insertedRun)
+    public static int InsertRunAtOffset(Paragraph paragraph, int offset, Run insertedRun)
     {
         var targetOffset = Math.Clamp(offset, 0, paragraph.PlainText.Length);
         var consumed = 0;
@@ -368,6 +368,7 @@ public static class RevisionEditPlanner
                 // or discard the phonetic payload. XE fields are page anchors, so placing the hidden mark
                 // after the intact ruby run preserves both the annotation and the same page identity.
                 paragraph.Runs.Insert(i + 1, insertedRun);
+                return consumed + runLength;
             }
             else
             {
@@ -378,9 +379,10 @@ public static class RevisionEditPlanner
                 paragraph.Runs.Insert(i + 1, insertedRun);
                 paragraph.Runs.Insert(i + 2, after);
             }
-            return;
+            return targetOffset;
         }
 
         paragraph.Runs.Add(insertedRun);
+        return targetOffset;
     }
 }

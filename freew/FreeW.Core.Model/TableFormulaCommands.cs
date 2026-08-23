@@ -19,6 +19,7 @@ public sealed class InsertTableCellFormulaCommand(
     public string Label => "Insert Formula";
 
     public int InsertedTextLength => _formulaRun?.Text.Length ?? 0;
+    public int EffectiveInsertionOffset { get; private set; }
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -27,7 +28,7 @@ public sealed class InsertTableCellFormulaCommand(
 
         _previousRuns = [.. paragraph.Runs];
         _formulaRun ??= TableLayoutOperations.BuildFormulaRun(table, rowIndex, cellIndex, formula);
-        RevisionEditPlanner.InsertRunAtOffset(paragraph, textOffset, _formulaRun);
+        EffectiveInsertionOffset = RevisionEditPlanner.InsertRunAtOffset(paragraph, textOffset, _formulaRun);
         _applied = true;
     }
 

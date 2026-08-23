@@ -545,7 +545,7 @@ public sealed class DocumentTableEditingCoordinator
             true,
             address,
             paragraphIndex,
-            textOffset + command.InsertedTextLength);
+            command.EffectiveInsertionOffset + command.InsertedTextLength);
     }
 
     public DocumentTableTextEditResult InsertNote(
@@ -561,7 +561,7 @@ public sealed class DocumentTableEditingCoordinator
         var id = footnote
             ? _session.Document.NextFootnoteId()
             : _session.Document.NextEndnoteId();
-        _session.Commands.Execute(new InsertTableCellNoteCommand(
+        var command = new InsertTableCellNoteCommand(
             id,
             footnote,
             text ?? string.Empty,
@@ -569,13 +569,14 @@ public sealed class DocumentTableEditingCoordinator
             address.RowIndex,
             cellIndex,
             paragraphIndex,
-            textOffset));
+            textOffset);
+        _session.Commands.Execute(command);
         var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
         return new DocumentTableTextEditResult(
             true,
             address,
             paragraphIndex,
-            textOffset + markerLength);
+            command.EffectiveInsertionOffset + markerLength);
     }
 
     public DocumentTableEditResult UpdateFormatting(

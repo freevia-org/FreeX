@@ -16,6 +16,7 @@ public sealed class InsertNoteCommand(
     private bool _applied;
 
     public string Label => footnote ? "Insert Footnote" : "Insert Endnote";
+    public int EffectiveInsertionOffset { get; private set; }
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -34,7 +35,7 @@ public sealed class InsertNoteCommand(
             context.Document.Endnotes[id] = new Endnote(id, text ?? string.Empty);
 
         var marker = footnote ? Run.FootnoteReference(id) : Run.EndnoteReference(id);
-        RevisionEditPlanner.InsertRunAtOffset(paragraph, textOffset, marker);
+        EffectiveInsertionOffset = RevisionEditPlanner.InsertRunAtOffset(paragraph, textOffset, marker);
         _applied = true;
     }
 
@@ -82,6 +83,7 @@ public sealed class InsertTableCellNoteCommand(
     private bool _applied;
 
     public string Label => footnote ? "Insert Footnote" : "Insert Endnote";
+    public int EffectiveInsertionOffset { get; private set; }
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -95,7 +97,7 @@ public sealed class InsertTableCellNoteCommand(
             context.Document.Endnotes[id] = new Endnote(id, text ?? string.Empty);
 
         var marker = footnote ? Run.FootnoteReference(id) : Run.EndnoteReference(id);
-        RevisionEditPlanner.InsertRunAtOffset(paragraph, textOffset, marker);
+        EffectiveInsertionOffset = RevisionEditPlanner.InsertRunAtOffset(paragraph, textOffset, marker);
         _applied = true;
     }
 

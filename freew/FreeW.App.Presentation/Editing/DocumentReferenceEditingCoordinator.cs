@@ -641,18 +641,23 @@ public sealed class DocumentReferenceEditingCoordinator
         var id = footnote
             ? _session.Document.NextFootnoteId()
             : _session.Document.NextEndnoteId();
-        commands.Add(new InsertNoteCommand(
+        var noteCommand = new InsertNoteCommand(
             id,
             footnote,
             text ?? string.Empty,
             blockIndex,
-            offset));
+            offset);
+        commands.Add(noteCommand);
         DocumentUndoGroupExecutor.Execute(
             _session.Commands,
             commands,
             footnote ? "Insert Footnote" : "Insert Endnote");
         var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
-        return new DocumentReferenceTextEditResult(true, blockIndex, offset + markerLength, id);
+        return new DocumentReferenceTextEditResult(
+            true,
+            blockIndex,
+            noteCommand.EffectiveInsertionOffset + markerLength,
+            id);
     }
 
     public void DeleteNote(int id, bool footnote) =>
@@ -725,9 +730,10 @@ public sealed class DocumentReferenceEditingCoordinator
         }
 
         var offset = Math.Clamp(textOffset, 0, paragraph.PlainText.Length);
+        var effectiveOffset = offset;
         _session.Commands.Execute(new ReplaceParagraphRunsCommand(blockIndex, target =>
-            RevisionEditPlanner.InsertRunAtOffset(target, offset, markRun)));
-        return new DocumentReferenceTextEditResult(true, blockIndex, offset, 0);
+            effectiveOffset = RevisionEditPlanner.InsertRunAtOffset(target, offset, markRun)));
+        return new DocumentReferenceTextEditResult(true, blockIndex, effectiveOffset, 0);
     }
 
     public int MarkAllIndexEntries(string sourceText, IndexMark mark)
@@ -770,9 +776,13 @@ public sealed class DocumentReferenceEditingCoordinator
             return new DocumentReferenceTextEditResult(false, blockIndex, textOffset, 0);
 
         var offset = Math.Clamp(textOffset, 0, paragraph.PlainText.Length);
+        var effectiveOffset = offset;
         _session.Commands.Execute(new ReplaceParagraphRunsCommand(blockIndex, target =>
-            RevisionEditPlanner.InsertRunAtOffset(target, offset, Run.CitationMark(citation))));
-        return new DocumentReferenceTextEditResult(true, blockIndex, offset, 0);
+            effectiveOffset = RevisionEditPlanner.InsertRunAtOffset(
+                target,
+                offset,
+                Run.CitationMark(citation))));
+        return new DocumentReferenceTextEditResult(true, blockIndex, effectiveOffset, 0);
     }
 
     public DocumentReferenceRegionEditResult RefreshGeneratedRegion(
