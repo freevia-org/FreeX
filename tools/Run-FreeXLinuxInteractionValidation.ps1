@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "autofilter-text-criteria-persistence", "autofilter-numeric-criteria-persistence", "autofilter-date-criteria-persistence", "autofilter-color-persistence", "autofilter-font-color-persistence", "autofilter-no-fill-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
+    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "autofilter-text-criteria-persistence", "autofilter-numeric-criteria-persistence", "autofilter-date-criteria-persistence", "autofilter-color-persistence", "autofilter-font-color-persistence", "autofilter-no-fill-persistence", "autofilter-mixed-type-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -62,6 +62,7 @@ $autoFilterDateFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocke
 $autoFilterColorFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave191AutoFilterColorFixture.ps1"
 $autoFilterFontColorFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave192AutoFilterFontColorFixture.ps1"
 $autoFilterNoFillFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave193AutoFilterNoFillFixture.ps1"
+$autoFilterMixedTypeFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave194AutoFilterMixedTypeFixture.ps1"
 $native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
 $gridAutofitSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-grid-autofit-validation.schema.json"
 $nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
@@ -829,6 +830,96 @@ function Assert-AutoFilterNoFillPostcondition {
     }
 }
 
+function Assert-AutoFilterMixedTypePostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    $gatePath = Join-Path $EvidenceDirectory "autofilter-mixed-type-popup-gate.txt"
+    $postconditionPath = Join-Path $EvidenceDirectory "autofilter-mixed-type-postcondition.txt"
+    if (-not (Test-Path -LiteralPath $gatePath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $postconditionPath -PathType Leaf)) {
+        throw "Mixed-type AutoFilter probe did not emit its popup gate and postcondition."
+    }
+
+    $gateLines = @(Get-Content -LiteralPath $gatePath)
+    $expectedGate = @(
+        "schema-version=1",
+        "before=autofilter-mixed-type-before.png",
+        "opened=autofilter-mixed-type-menu-open.png",
+        "cleared=autofilter-mixed-type-menu-cleared.png",
+        "selected=autofilter-mixed-type-target-checked.png",
+        "dismissed=autofilter-mixed-type-applied.png",
+        "open-threshold=1000",
+        "clear-threshold=20",
+        "select-threshold=20",
+        "dismiss-threshold=1000",
+        "restore-maximum=100",
+        "menu-open=true",
+        "target-cleared=true",
+        "target-selected=true",
+        "popup-dismissed=true",
+        "gate=passed"
+    )
+    $missingGate = @($expectedGate | Where-Object { $_ -notin $gateLines })
+    if ($missingGate.Count -ne 0) {
+        throw "Mixed-type AutoFilter popup gate failed: $($missingGate -join '; ')."
+    }
+
+    $gateValues = @{}
+    foreach ($line in $gateLines) {
+        $separator = $line.IndexOf('=')
+        if ($separator -gt 0) {
+            $gateValues[$line.Substring(0, $separator)] = $line.Substring($separator + 1)
+        }
+    }
+    foreach ($metric in @(
+        @{ Name = "open-delta"; Minimum = 1000 },
+        @{ Name = "clear-delta"; Minimum = 20 },
+        @{ Name = "select-delta"; Minimum = 20 },
+        @{ Name = "dismiss-delta"; Minimum = 1000 }
+    )) {
+        $value = 0
+        if (-not [int]::TryParse($gateValues[$metric.Name], [ref]$value) -or $value -lt $metric.Minimum) {
+            throw "Mixed-type AutoFilter popup metric '$($metric.Name)' did not meet $($metric.Minimum)."
+        }
+    }
+    $restoreDelta = 0
+    if (-not [int]::TryParse($gateValues["restore-delta"], [ref]$restoreDelta) -or $restoreDelta -gt 100) {
+        throw "Mixed-type AutoFilter dismissed region did not restore within 100 changed pixels."
+    }
+    $hashes = @("before-sha256", "open-sha256", "clear-sha256", "selected-sha256", "dismissed-sha256") |
+        ForEach-Object { [string]$gateValues[$_] }
+    if (@($hashes | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -ne 0 -or
+        $gateValues["before-sha256"] -eq $gateValues["open-sha256"] -or
+        $gateValues["open-sha256"] -eq $gateValues["clear-sha256"] -or
+        $gateValues["clear-sha256"] -eq $gateValues["selected-sha256"] -or
+        $gateValues["selected-sha256"] -eq $gateValues["dismissed-sha256"]) {
+        throw "Mixed-type AutoFilter popup state signatures do not prove each transition."
+    }
+
+    $postconditionLines = @(Get-Content -LiteralPath $postconditionPath)
+    $expectedPostconditions = @(
+        "menu-open=true",
+        "target-cleared=true",
+        "target-selected=true",
+        "popup-dismissed=true",
+        "initial-total=5",
+        "applied-total=2",
+        "visible=42,42,",
+        "semantic=Number,NumericText",
+        "save-clean=true",
+        "package=ref=A1:B7|colId=0|filters=42|blank=|hidden=4,5,6,7|A2-type=n|A2=42|A3-type=inlineStr|A3=42|A6-style=1|A6=45292|C1-formula=SUBTOTAL(103,A2:A7)|C1=2",
+        "dialog-open=true",
+        "dialog-closed=true",
+        "reopened-total=2",
+        "reopened-visible=42,42,",
+        "reopened-semantic=Number,NumericText"
+    )
+    $missingPostconditions = @($expectedPostconditions | Where-Object { $_ -notin $postconditionLines })
+    if ($missingPostconditions.Count -ne 0) {
+        throw "Mixed-type AutoFilter postcondition failed: $($missingPostconditions -join '; ')."
+    }
+}
+
 function Start-ValidationSession {
     param(
         [string[]]$AppArgument = @(),
@@ -1482,6 +1573,16 @@ try {
             throw "autofilter-no-fill-persistence requires an existing .xlsx PhysicalDocumentPath."
         }
     }
+    if ($PhysicalProbeSelector -eq "autofilter-mixed-type-persistence") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = Join-Path $reportDirectory "fixtures/freex-wave194-autofilter-mixed-type.xlsx"
+            & $autoFilterMixedTypeFixtureGenerator -OutputPath $PhysicalDocumentPath
+        }
+        if (-not (Test-Path -LiteralPath $PhysicalDocumentPath -PathType Leaf) -or
+            [IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "autofilter-mixed-type-persistence requires an existing .xlsx PhysicalDocumentPath."
+        }
+    }
     if ($PhysicalProbeSelector -in @("pivot-field-list", "pivot-table-details-double-click")) {
         if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
             $PhysicalDocumentPath = $pivotDetailsFixturePath
@@ -1607,6 +1708,8 @@ try {
         @("autofilter-color-font-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "autofilter-no-fill-persistence") {
         @("autofilter-color-no-fill-save-reopen-physical")
+    } elseif ($PhysicalProbeSelector -eq "autofilter-mixed-type-persistence") {
+        @("autofilter-mixed-type-value-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "backstage-print") {
         @(
             "backstage-print-ctrl-shift-f12-cancel"
@@ -1760,6 +1863,8 @@ try {
         @("autofilter-color-font-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "autofilter-no-fill-persistence") {
         @("autofilter-color-no-fill-save-reopen-physical")
+    } elseif ($PhysicalProbeSelector -eq "autofilter-mixed-type-persistence") {
+        @("autofilter-mixed-type-value-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
         @(
             "formula-bar-point-mode-3d-sheet-range-grip"
@@ -1914,6 +2019,9 @@ try {
     }
     if ($PhysicalProbeSelector -eq "autofilter-no-fill-persistence") {
         Assert-AutoFilterNoFillPostcondition -EvidenceDirectory $x11EvidenceDirectory
+    }
+    if ($PhysicalProbeSelector -eq "autofilter-mixed-type-persistence") {
+        Assert-AutoFilterMixedTypePostcondition -EvidenceDirectory $x11EvidenceDirectory
     }
     if ($PhysicalProbeSelector -eq "grid-autofit") {
         Assert-GridAutofitPostcondition -EvidenceDirectory $x11EvidenceDirectory
