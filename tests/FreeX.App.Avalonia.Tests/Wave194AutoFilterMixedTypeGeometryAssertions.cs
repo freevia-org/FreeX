@@ -118,7 +118,14 @@ internal static class Wave194AutoFilterMixedTypeGeometryAssertions
         const string startMarker =
             "            capture \"${prefix}-menu-cleared.png\"\n" +
             "        fi\n";
-        const string endMarker = "        capture \"${prefix}-target-checked.png\"";
+        const string endMarker =
+            "        capture \"${prefix}-target-checked.png\"\n" +
+            "        click_autofilter_control 292 433\n";
+        Count(source, startMarker).Should().Be(1,
+            "the bounded clear-transition marker must identify one live target action context");
+        Count(source, endMarker).Should().Be(1,
+            "the target-check and OK continuation must terminate one live target action context");
+
         var start = source.IndexOf(startMarker, StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0,
             "the target action must follow the bounded clear-transition block");
