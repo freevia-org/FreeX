@@ -10,6 +10,12 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
+# Keep acceptance evidence anchored to the source that was actually built and tested.
+# The generated docs are committed afterward, so deriving this from the current HEAD
+# would make the evidence self-referential and would change the claim on every refresh.
+$wave193TestedSourceCommit = "615b53f474dfa1849ae965018d890cba4a138d42"
+$wave193AcceptanceRefreshNote = "This dashboard/report is a later docs-only acceptance refresh; it does not alter the tested source commit."
+
 function Get-JsonPropertyValue {
     param(
         [Parameter(Mandatory = $true)]$InputObject,
@@ -764,14 +770,15 @@ try {
     }
 
     $wave193IntegrationGateEvidence = [ordered]@{
-        integrationHead = "5296d9a47a"
+        testedSourceCommit = $wave193TestedSourceCommit
+        acceptanceRefreshNote = $wave193AcceptanceRefreshNote
         independentReview = "Passed: independent review found no findings after dashboard and source-guard remediations."
         repositoryPreflight = "Passed: 288 JSON, 306 XML-backed, and 13,843 text files conflict scanned."
         fullReleaseBuild = "Passed: the first full Release build passed before remediation; the post-remediation normal rebuild hit transient shared compiler locks; the prescribed retry dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors."
-        defaultNonUiTestLane = "Passed: final default lane exit 0 with Core.IO 5,839 passed/56 skipped, Avalonia 2,178 passed, Host Logic 1,490 passed/4 skipped, FreeP Presentation 5,466 passed, and FreeP Avalonia 724 passed."
+        defaultNonUiTestLane = "Passed: final default lane exit 0 with Core.IO 5,839 passed/56 skipped, Avalonia 2,182 passed, Host Logic 1,490 passed/4 skipped, FreeP Presentation 5,466 passed, and FreeP Avalonia 724 passed."
         sourceTestRemediation = "The initial default lane exposed three source-test regressions; remediation fixed all three, and focused reruns passed."
     }
-    $wave193IntegrationHead = [string]$wave193IntegrationGateEvidence["integrationHead"]
+    $wave193TestedSourceCommit = [string]$wave193IntegrationGateEvidence["testedSourceCommit"]
 
     $dashboard = [ordered]@{
         schema = "freex.parity.cross-app-dashboard.v3"
@@ -878,7 +885,7 @@ try {
         "",
         "> Generated counts prove command/profile routing, route and artifact coverage, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates, physical/no-COM limitations, and authoritative Microsoft Office baseline availability remain explicitly separate from coverage metrics.",
         "",
-        "> Wave193 records an accepted cumulative **$($dashboard.cumulativeAppSlices)** app slices. Final integration gates passed at HEAD ``$wave193IntegrationHead``; no pending gates remain.",
+        "> Wave193 records an accepted cumulative **$($dashboard.cumulativeAppSlices)** app slices. Final integration gates passed against tested source commit ``$wave193TestedSourceCommit``; no pending gates remain. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
         "",
         "## Summary",
         "",
@@ -904,10 +911,12 @@ try {
         "",
         "## Integration Gates",
         "",
-        "Wave193's cumulative 579 app-slice count is **accepted**. All final integration gates passed at integration HEAD ``$wave193IntegrationHead``.",
+        "Wave193's cumulative 579 app-slice count is **accepted**. All final integration gates passed against tested source commit ``$wave193TestedSourceCommit``. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
         "",
         "- Independent review: $($dashboard.integrationGateEvidence.independentReview)",
         "- Repository preflight: $($dashboard.integrationGateEvidence.repositoryPreflight)",
+        "- Tested source commit: ``$($dashboard.integrationGateEvidence.testedSourceCommit)``",
+        "- Acceptance refresh: $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
         "- Full Release build: $($dashboard.integrationGateEvidence.fullReleaseBuild)",
         "- Final default non-UI test lane: $($dashboard.integrationGateEvidence.defaultNonUiTestLane)",
         "- Remediation: $($dashboard.integrationGateEvidence.sourceTestRemediation)",
