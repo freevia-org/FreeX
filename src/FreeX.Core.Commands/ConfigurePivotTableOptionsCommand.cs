@@ -232,8 +232,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         // can grow the pivot's footprint past its previous render -- see
         // PivotTableRefreshService.GrowthGuard.cs.
         var snapshot = _snapshot;
-        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
-        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable, cache)) is { } failure)
+        if (PivotTableCommandRefreshTransaction.RefreshGuarded(
+                ctx.Workbook, sheet, pivotTable, () => snapshot!.Restore(pivotTable, cache)) is { } failure)
         {
             _snapshot = null;
             _targetSnapshot = null;
@@ -243,8 +243,6 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         // options can all change the pivot's row/column geometry on refresh -- without this, a
         // PivotChart bound to this pivot table keeps rendering the cells the pivot occupied under the
         // OLD options, silently inconsistent with the pivot right next to it.
-        PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
-
         // R45-roundtrip-not-consumed-sweep-4: AutofitColumnsOnUpdate round-tripped through this
         // dialog/XLSX but no refresh path ever consulted it, so toggling "Autofit column widths on
         // update" had no observable effect. This command's own trigger of PivotTableRefreshService.Refresh

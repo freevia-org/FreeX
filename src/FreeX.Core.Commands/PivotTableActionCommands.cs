@@ -201,28 +201,27 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
         // grow the pivot's footprint (previously-hidden items reappear) past its previous render -- see
         // PivotTableRefreshService.GrowthGuard.cs.
         var snapshot = _snapshot;
-        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
-        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable)) is { } failure)
+        if (PivotTableCommandRefreshTransaction.RefreshGuarded(
+                ctx.Workbook, sheet, pivotTable, () => snapshot!.Restore(pivotTable)) is { } failure)
         {
             _snapshot = null;
             _targetSnapshot = null;
             return failure;
         }
-        UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
 
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
-        {
-            PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
-            _snapshot.Restore(pivotTable);
-        }
-        AddPivotTableCommand.Restore(sheet, _targetSnapshot);
-        if (pivotTable is not null)
-            UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
+        CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable);
+        var snapshot = _snapshot;
+        PivotTableCommandRefreshTransaction.Revert(
+            ctx.Workbook,
+            sheet,
+            pivotTable,
+            _targetSnapshot,
+            snapshot is null ? null : table => snapshot.Restore(table));
         _snapshot = null;
         _targetSnapshot = null;
     }
@@ -263,18 +262,6 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
         }
     }
 
-    private static void UpdateBoundPivotChartRanges(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
-    {
-        var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
-        foreach (var chartSheet in workbook.Sheets)
-        foreach (var chart in chartSheet.Charts.Where(chart =>
-                     chart.IsPivotChart &&
-                     string.Equals(chart.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)))
-        {
-            chart.DataRange = outputRange;
-            chart.PivotCacheId = pivotTable.CacheId;
-        }
-    }
 }
 
 public sealed class MovePivotTableCommand : IWorkbookCommand
@@ -360,7 +347,7 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
                 return failure;
             }
 
-            UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
+            PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
         }
 
         return new CommandOutcome(true, AffectedCells: [_newTargetRange.Value.Start]);
@@ -390,7 +377,7 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
                 sheet.AddMergedRegion(region);
         }
         if (pivotTable is not null)
-            UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
+            PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
         _oldTargetRange = null;
         _newTargetRange = null;
         _oldLastRenderedRange = null;
@@ -444,16 +431,4 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
             sheet.ClearCell(row, col);
     }
 
-    private static void UpdateBoundPivotChartRanges(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
-    {
-        var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
-        foreach (var chartSheet in workbook.Sheets)
-        foreach (var chart in chartSheet.Charts.Where(chart =>
-                     chart.IsPivotChart &&
-                     string.Equals(chart.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)))
-        {
-            chart.DataRange = outputRange;
-            chart.PivotCacheId = pivotTable.CacheId;
-        }
-    }
 }
