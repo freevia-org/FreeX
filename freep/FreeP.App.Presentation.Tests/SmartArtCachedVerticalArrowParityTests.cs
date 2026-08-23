@@ -7,9 +7,12 @@ public sealed class SmartArtCachedVerticalArrowParityTests
     [Fact]
     public void VerticalArrowListCachedFallbackUsesMeasuredOfficeGeometry()
     {
-        var presentation = PptxPackageReader.Read(Path.Combine(
-            FindCorpusDirectory(),
-            "15-smartart-grouped-list.pptx"));
+        var presentation = PptxPackageReader.Read(
+            TestWorkspaceFileLocator.FindFileFromBaseDirectory(
+                "tools",
+                "FreeP.RenderCompare",
+                "corpus",
+                "15-smartart-grouped-list.pptx"));
 
         var shapes = SlideCompositor.Compose(
                 presentation,
@@ -41,21 +44,4 @@ public sealed class SmartArtCachedVerticalArrowParityTests
         }
     }
 
-    private static string FindCorpusDirectory()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(
-                directory.FullName,
-                "tools",
-                "FreeP.RenderCompare",
-                "corpus");
-            if (File.Exists(Path.Combine(candidate, "15-smartart-grouped-list.pptx")))
-                return candidate;
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("FreeP RenderCompare corpus was not found.");
-    }
 }
