@@ -1472,6 +1472,27 @@ public sealed partial class XlsxFileAdapter
                 XlsxDocumentPropertiesPreserver.UpdateCorePropertiesOnSave(archive, DateTimeOffset.UtcNow);
             }
 
+            // A cell-patch save preserves the source package and only rewrites the small set of
+            // parts covered by the patch baseline. AutoFilter criteria are modeled workbook state,
+            // however, and a newly applied color/value criterion is not a cell patch. Re-emit the
+            // source-independent worksheet metadata after the patch so a loaded XLSX cannot show a
+            // live filter in memory while silently dropping its filterColumn/colorFilter on save.
+            patchedPackage.Position = 0;
+            XlsxWorkbookWorksheetPathMap? patchedWorksheetPathMap;
+            using (var patchedArchive = new ZipArchive(patchedPackage, ZipArchiveMode.Read, leaveOpen: true))
+            {
+                patchedWorksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(patchedArchive);
+            }
+
+            if (patchedWorksheetPathMap is not null)
+            {
+                patchedPackage.Position = 0;
+                XlsxWorksheetSourceIndependentMetadataBatchWriter.Save(
+                    patchedPackage,
+                    workbook,
+                    patchedWorksheetPathMap);
+            }
+
             patchedPackage.Position = 0;
             if (stream.CanSeek)
             {
