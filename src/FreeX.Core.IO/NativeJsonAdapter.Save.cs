@@ -14,13 +14,13 @@ public sealed partial class NativeJsonAdapter
     internal static JsonSerializerOptions SaveOptionsForTest => SaveOptions;
 
     public void Save(Workbook workbook, Stream stream) =>
-        Save(workbook, stream, includeCells: true, includeStyleOnlyCells: true, includeCellStyles: true);
+        Save(workbook, stream, includeCells: true, includeStyleOnlyCells: true, includeCellStyles: true, includeWorksheetFilterState: true);
 
     internal void SaveForFingerprint(Workbook workbook, Stream stream) =>
-        Save(workbook, stream, includeCells: true, includeStyleOnlyCells: false, includeCellStyles: true);
+        Save(workbook, stream, includeCells: true, includeStyleOnlyCells: false, includeCellStyles: true, includeWorksheetFilterState: true);
 
     internal void SaveForPatchValidationFingerprint(Workbook workbook, Stream stream) =>
-        Save(workbook, stream, includeCells: false, includeStyleOnlyCells: false, includeCellStyles: false);
+        Save(workbook, stream, includeCells: false, includeStyleOnlyCells: false, includeCellStyles: false, includeWorksheetFilterState: false);
 
     /// <summary>
     /// Returns the stored representation of a protection password for the .fxl format.
@@ -46,7 +46,8 @@ public sealed partial class NativeJsonAdapter
         Stream stream,
         bool includeCells,
         bool includeStyleOnlyCells,
-        bool includeCellStyles)
+        bool includeCellStyles,
+        bool includeWorksheetFilterState)
     {
         SaveStreamPreparer.TruncateFromCurrentPosition(stream);
 
@@ -157,18 +158,26 @@ public sealed partial class NativeJsonAdapter
                     .Select(pair => new UIntDoubleDto { Index = pair.Key, Value = pair.Value })
                     .ToList(),
                 HiddenRows = s.HiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
-                FilterHiddenRows = s.FilterHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
+                FilterHiddenRows = includeWorksheetFilterState
+                    ? s.FilterHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList()
+                    : [],
                 // G32: persist alongside FilterHiddenRows so a reload can reconstruct the same
                 // AND-across-columns picture (see FreeX.Core.Commands.FilterCommand, findings F8/G7).
-                ActiveValueFilterColumns = s.ActiveValueFilterColumns
+                ActiveValueFilterColumns = (includeWorksheetFilterState
+                    ? s.ActiveValueFilterColumns
+                    : [])
                     .Where(pair => NativeJsonValueSanitizer.IsValidColumnIndex(pair.Key))
                     .OrderBy(pair => pair.Key)
                     .Select(pair => new UIntStringListDto { Index = pair.Key, Values = [.. pair.Value] })
                     .ToList(),
-                ValueFilterHiddenRows = s.ValueFilterHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
+                ValueFilterHiddenRows = includeWorksheetFilterState
+                    ? s.ValueFilterHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList()
+                    : [],
                 // R14-meta-1: persist alongside the siblings above so a reload can reconstruct which
                 // rows each column-owned filter mechanism owns (see FilterCommand.cs, finding R14-meta-1).
-                ColumnFilterOwnedRows = s.ColumnFilterOwnedRows
+                ColumnFilterOwnedRows = (includeWorksheetFilterState
+                    ? s.ColumnFilterOwnedRows
+                    : [])
                     .Where(pair => NativeJsonValueSanitizer.IsValidColumnIndex(pair.Key))
                     .OrderBy(pair => pair.Key)
                     .Select(pair => new UIntUintListDto
@@ -219,7 +228,9 @@ public sealed partial class NativeJsonAdapter
                 SplitColumn = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(s.FrozenRows) > 0 || NativeJsonValueSanitizer.ValidFrozenColumnsOrZero(s.FrozenCols) > 0
                     ? null
                     : NativeJsonValueSanitizer.ValidColumnPaneOrNull(s.SplitColumn),
-                AutoFilter = ToWorksheetAutoFilterDto(s.AutoFilter, s.Id),
+                AutoFilter = includeWorksheetFilterState
+                    ? ToWorksheetAutoFilterDto(s.AutoFilter, s.Id)
+                    : null,
                 SmartTags = ToWorksheetSmartTagsDto(s.SmartTags),
                 DataConsolidation = ToWorksheetDataConsolidationDto(s.DataConsolidation),
                 SortState = ToWorksheetSortStateDto(s.SortState, s.Id),

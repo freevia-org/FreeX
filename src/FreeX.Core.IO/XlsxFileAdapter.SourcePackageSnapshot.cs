@@ -1472,11 +1472,10 @@ public sealed partial class XlsxFileAdapter
                 XlsxDocumentPropertiesPreserver.UpdateCorePropertiesOnSave(archive, DateTimeOffset.UtcNow);
             }
 
-            // A cell-patch save preserves the source package and only rewrites the small set of
-            // parts covered by the patch baseline. AutoFilter criteria are modeled workbook state,
-            // however, and a newly applied color/value criterion is not a cell patch. Re-emit the
-            // source-independent worksheet metadata after the patch so a loaded XLSX cannot show a
-            // live filter in memory while silently dropping its filterColumn/colorFilter on save.
+            // A newly applied AutoFilter criterion is modeled state rather than a cell patch. Write
+            // only AutoFilter metadata here: the broader source-independent batch also rewrites
+            // dimensions and primary views, which must remain under the patch path's existing
+            // sanitization/preservation rules.
             patchedPackage.Position = 0;
             XlsxWorkbookWorksheetPathMap? patchedWorksheetPathMap;
             using (var patchedArchive = new ZipArchive(patchedPackage, ZipArchiveMode.Read, leaveOpen: true))
@@ -1487,7 +1486,7 @@ public sealed partial class XlsxFileAdapter
             if (patchedWorksheetPathMap is not null)
             {
                 patchedPackage.Position = 0;
-                XlsxWorksheetSourceIndependentMetadataBatchWriter.Save(
+                XlsxWorksheetSourceIndependentMetadataBatchWriter.SaveAutoFilters(
                     patchedPackage,
                     workbook,
                     patchedWorksheetPathMap);
@@ -7610,7 +7609,7 @@ public sealed partial class XlsxFileAdapter
             uint row)
         {
             var hasHeight = TryGetFinitePositiveDimension(current.RowHeights, row, out var height);
-            var hidden = current.HiddenRows.Contains(row);
+            var hidden = current.HiddenRows.Contains(row) || current.FilterHiddenRows.Contains(row);
             if (!hasHeight && !hidden)
             {
                 var existingRow = FindRow(sheetData, worksheetNs, row);
@@ -9266,7 +9265,6 @@ public sealed partial class XlsxFileAdapter
         public bool UnsupportedFieldsMatch(XlsxWorksheetDimensionBaseline current) =>
             DefaultColumnWidth.Equals(current.DefaultColumnWidth) &&
             DefaultRowHeight.Equals(current.DefaultRowHeight) &&
-            SetEquals(FilterHiddenRows, current.FilterHiddenRows) &&
             DictionaryEquals(RowOutlineLevels, current.RowOutlineLevels) &&
             DictionaryEquals(ColOutlineLevels, current.ColOutlineLevels) &&
             SetEquals(GroupHiddenRows, current.GroupHiddenRows) &&
@@ -9326,6 +9324,7 @@ public sealed partial class XlsxFileAdapter
                 !HasValidRowHeights(current.RowHeights) ||
                 !HasValidColumnWidths(current.ColumnWidths) ||
                 !HasValidRows(current.HiddenRows) ||
+                !HasValidRows(current.FilterHiddenRows) ||
                 !HasValidColumns(current.HiddenCols))
             {
                 return false;
@@ -9354,6 +9353,8 @@ public sealed partial class XlsxFileAdapter
                 .Concat(current.RowHeights.Keys)
                 .Concat(original.HiddenRows)
                 .Concat(current.HiddenRows)
+                .Concat(original.FilterHiddenRows)
+                .Concat(current.FilterHiddenRows)
                 .Where(IsValidWorksheetRow)
                 .Distinct()
                 .OrderBy(row => row)
@@ -9363,9 +9364,12 @@ public sealed partial class XlsxFileAdapter
                 TryGetFinitePositive(original.RowHeights, row, out var originalHeight) ==
                 TryGetFinitePositive(current.RowHeights, row, out var currentHeight) &&
                 originalHeight.Equals(currentHeight) &&
-                original.HiddenRows.Contains(row) == current.HiddenRows.Contains(row));
+                IsEffectivelyHidden(original, row) == IsEffectivelyHidden(current, row));
             return rows;
         }
+
+        private static bool IsEffectivelyHidden(XlsxWorksheetDimensionBaseline dimensions, uint row) =>
+            dimensions.HiddenRows.Contains(row) || dimensions.FilterHiddenRows.Contains(row);
 
         private static List<uint> GetChangedColumns(
             XlsxWorksheetDimensionBaseline original,

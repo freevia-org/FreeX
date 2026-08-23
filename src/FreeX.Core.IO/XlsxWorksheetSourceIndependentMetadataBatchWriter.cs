@@ -47,24 +47,45 @@ internal static class XlsxWorksheetSourceIndependentMetadataBatchWriter
 
         using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
         if (hasAutoFilter)
-        {
-            // R89-io-autofilter-color-dxf-1-1: allocate any missing colour-filter dxfs into
-            // xl/styles.xml BEFORE writing the autoFilter XML, so the filterColumn writer below can
-            // reference the freshly allocated dxfId.
-            IReadOnlyDictionary<(SheetId, int), int>? colorFilterDxfIds = null;
-            if (XlsxAutoFilterColorFilterDxfWriter.HasUnallocatedColorFilters(workbook))
-            {
-                XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-                colorFilterDxfIds = XlsxAutoFilterColorFilterDxfWriter.Save(session.Archive, workbook, workbookNs);
-            }
-
-            XlsxWorksheetAutoFilterMapper.Save(session, workbook, colorFilterDxfIds);
-        }
+            SaveAutoFilters(session, workbook, removeMissingAutoFilters: false);
         if (hasDataValidationNativeMetadata)
             XlsxDataValidationNativeMetadataMapper.Save(session, workbook);
         if (hasWorksheetNativeMetadata)
             XlsxWorksheetNativeMetadataBatchWriter.Save(session, workbook);
         else if (hasWorksheetPageBreaks)
             XlsxWorksheetPageBreaksMetadataWriter.Save(session, workbook);
+    }
+
+    public static void SaveAutoFilters(
+        Stream xlsxStream,
+        Workbook workbook,
+        XlsxWorkbookWorksheetPathMap? worksheetPathMap)
+    {
+        if (worksheetPathMap is null)
+            return;
+
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        SaveAutoFilters(session, workbook, removeMissingAutoFilters: true);
+    }
+
+    private static void SaveAutoFilters(
+        XlsxWorksheetXmlEditSession session,
+        Workbook workbook,
+        bool removeMissingAutoFilters)
+    {
+        // Allocate any missing colour-filter dxfs before writing AutoFilter XML so the
+        // filterColumn can reference the freshly allocated dxfId.
+        IReadOnlyDictionary<(SheetId, int), int>? colorFilterDxfIds = null;
+        if (XlsxAutoFilterColorFilterDxfWriter.HasUnallocatedColorFilters(workbook))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            colorFilterDxfIds = XlsxAutoFilterColorFilterDxfWriter.Save(session.Archive, workbook, workbookNs);
+        }
+
+        XlsxWorksheetAutoFilterMapper.Save(
+            session,
+            workbook,
+            colorFilterDxfIds,
+            removeMissingAutoFilters);
     }
 }

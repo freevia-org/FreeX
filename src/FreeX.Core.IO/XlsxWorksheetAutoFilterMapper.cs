@@ -19,6 +19,11 @@ internal static class XlsxWorksheetAutoFilterMapper
     internal static void Save(
         XlsxWorksheetXmlEditSession session,
         Workbook workbook,
-        IReadOnlyDictionary<(SheetId, int), int>? colorFilterDxfIds = null) =>
-        XlsxWorksheetAutoFilterXmlMapper.Save(session, workbook, colorFilterDxfIds);
+        IReadOnlyDictionary<(SheetId, int), int>? colorFilterDxfIds = null,
+        bool removeMissingAutoFilters = false) =>
+        XlsxWorksheetAutoFilterXmlMapper.Save(
+            session,
+            workbook,
+            colorFilterDxfIds,
+            removeMissingAutoFilters);
 }
