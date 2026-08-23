@@ -22,7 +22,7 @@ public static class FreeXRibbonDefinition
                 .Large("Recommended Charts", "Recommended Charts", Ico.ChartColumn, "RC")
                 .Medium("Column Chart", "Column", Ico.ChartColumn, "CC")
                 .Medium("Stacked Column Chart", "Stacked Column", Ico.ChartColumn, "SC")
-                .Medium("100% Stacked Column Chart", "100% Stacked Column", Ico.ChartColumn, "PC")
+                .Medium("100% Stacked Column Chart", "100% Stacked Column", Ico.ChartColumn, "PCC")
                 .Medium("Bar Chart", "Bar", Ico.ChartColumn, "BC")
                 .Medium("Stacked Bar Chart", "Stacked Bar", Ico.ChartColumn, "SB")
                 .Medium("100% Stacked Bar Chart", "100% Stacked Bar", Ico.ChartColumn, "PB")
