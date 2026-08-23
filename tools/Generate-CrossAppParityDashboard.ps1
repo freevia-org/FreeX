@@ -252,7 +252,9 @@ try {
             "docs/parity/avalonia-parity-wave186-freex-autofilter-text-20260823.md",
             "docs/parity/avalonia-parity-wave187-freex-autofilter-numeric-20260823.md",
             "docs/parity/avalonia-parity-wave188-freex-autofilter-numeric-20260823.md",
-            "docs/parity/avalonia-parity-wave189-freex-autofilter-date-20260823.md"
+            "docs/parity/avalonia-parity-wave189-freex-autofilter-date-20260823.md",
+            "docs/parity/avalonia-parity-wave190-freex-autofilter-date-20260823.md",
+            "docs/parity/evidence/wave190-freex-autofilter-date-20260823/manifest.json"
         )
         routeCoverage = [ordered]@{
             inventoryRouteCount = $freeXDialogRoutes.totalRoutes
@@ -310,9 +312,9 @@ try {
             linuxAutoFilterNumericCriteriaPassed = 2
             linuxAutoFilterNumericCriteriaTotal = 2
             linuxAutoFilterNumericCriteriaStatus = "passed-production-x11"
-            linuxAutoFilterDateCriteriaPassed = 1
+            linuxAutoFilterDateCriteriaPassed = 2
             linuxAutoFilterDateCriteriaTotal = 2
-            linuxAutoFilterDateCriteriaStatus = "partial-production-x11-reopen-blocked"
+            linuxAutoFilterDateCriteriaStatus = "passed-production-x11"
             limitations = @(
                 "The 2026-08-16 interactive run captured 36 foreground ribbon states for each of Excel, WPF, and Avalonia, including Draw at all four widths, plus six guarded Excel popup/dialog surfaces. The 27 fixed-viewport triage rows average 13.937% RGB delta for WPF and 15.639% for Avalonia versus Excel; nine maximized rows are coverage-only, not an acceptance threshold.",
                 "The ribbon harness creates a blank workbook before tab discovery so the enabled Draw tab is materialized; the current manifest records no unavailable-tab skips.",
@@ -321,7 +323,7 @@ try {
                 "The production Linux X11 AutoFilter sort/save/reopen workflow passes 1/1 with exact ascending and descending visible-order and package-state postconditions.",
                 "The production Linux X11 AutoFilter text-criteria save/reopen workflows pass 2/2 for Begins With and Equals with exact visible-row and package-state postconditions.",
                 "The production Linux X11 numeric AutoFilter save/reopen workflows pass 2/2 for Greater Than 50 and Equals 50 through the rendered non-first-column B1 glyph, with exact visible-row and package-state postconditions. Wave188 also makes fixture readiness deterministic and restricts the glyph bridge to left-click while retaining Button.Click for keyboard/accessibility activation.",
-                "The production Linux X11 date AutoFilter lane passes 1/2 end to end. Before February 1 retains Jan01/Jan15, saves lessThan=45323, and reopens identically. After February 1 retains Mar15 and saves greaterThan=45323, but the second production Open dialog did not appear, so reopen parity remains uncredited.",
+                "The production Linux X11 date AutoFilter lane passes 2/2 end to end. Before February 1 retains Jan01/Jan15 and saves lessThan=45323; After February 1 retains Mar15 and saves greaterThan=45323. Both use identity-checked Open Workbook dialogs and reopen with matching rendered-grid and semantic state, with a compact committed evidence bundle.",
                 "The current-source range corpus retains 35 Avalonia grid captures: eight charts, seven cell styles, and 20 native PivotTable surfaces. These are renderer coverage evidence, not raw-pixel Office acceptance rows.",
                 [string]$freeXOfficeBaseline.limitation
             )
@@ -355,7 +357,7 @@ try {
             -DialogRoutes $freeXDialogRoutes `
             -DialogVisualEvidence $freeXDialogVisualEvidence
     }
-    $freeX.nextSlice = "$($freeX.nextSlice) Production Linux evidence now covers Name Box (1/1 visual, 8/8 interaction), AutoFilter apply/change/clear recalculation (1/1), sort/save/reopen persistence (1/1), text-criteria save/reopen persistence (2/2), numeric Greater Than/Equals persistence (2/2), and date criteria (1/2 full reopen passes). Resolve the second-cycle Open/modal blocker, then extend physical verification to color, mixed-type, multi-column, and criteria clear/reapply workflows."
+    $freeX.nextSlice = "$($freeX.nextSlice) Production Linux evidence now covers Name Box (1/1 visual, 8/8 interaction), AutoFilter apply/change/clear recalculation (1/1), sort/save/reopen persistence (1/1), text-criteria save/reopen persistence (2/2), numeric Greater Than/Equals persistence (2/2), and date criteria (2/2). Extend physical verification to color, mixed-type, multi-column, and criteria clear/reapply workflows."
 
     $freeWComparisonRows = @($freeWVisualComparison.rows)
     $freeWPairedComparisonRows = @($freeWComparisonRows | Where-Object { $_.captureStatus -eq "captured/captured" })
@@ -375,7 +377,8 @@ try {
             "freew/docs/parity/avalonia-parity-wave186-freew-table-properties-text-raster-20260823.md",
             "docs/parity/avalonia-parity-wave187-freew-legal-notices-20260823.md",
             "docs/parity/avalonia-parity-wave188-freew-font-20260823.md",
-            "docs/parity/avalonia-parity-wave189-freew-font-antialias-20260823.md"
+            "docs/parity/avalonia-parity-wave189-freew-font-antialias-20260823.md",
+            "docs/parity/avalonia-parity-wave190-freew-visual-20260823.md"
         )
         canonicalComparison = [ordered]@{
             kind = [string]$freeWVisualComparison.scope.kind
@@ -431,6 +434,7 @@ try {
                 "Fresh current-source Legal Notices captures improved from 326094 to 324936 aggregate changed pixels; all four overflowing states improved, both short states were unchanged, and all six remain genuine visual mismatches.",
                 "Fresh current-source Font dialog captures improved from 61396 to 58705 aggregate changed pixels across three states, a 4.383% relative reduction; WPF and Avalonia painted bounds now both measure 421 x 321, and all three states remain genuine visual mismatches.",
                 "Wave189's route-local grayscale text raster reduces the three-state Font dialog aggregate from 58705 to 57620 changed pixels, a further 1.848% reduction; all three states improve and remain genuine visual mismatches.",
+                "Wave190 aligns the Font dialog's Avalonia-only vertical cadence and reduces the three-state aggregate from 57620 to 44687 changed pixels, a 22.4453% relative reduction; all three states improve in both changed pixels and mean channel delta while retaining exact 421 x 321 painted bounds and genuine-mismatch classification.",
                 "Avalonia-only route/state rows are reported separately and are outside the WPF-authority pairing set.",
                 [string]$freeWOfficeBaseline.limitation
             )
@@ -464,7 +468,7 @@ try {
             classifiedRows = $true
         }
         renderedEvidence = $freeWRenderedEvidence
-        nextSlice = "A committed current-source Word PNG baseline bundle is available for $($freeWOfficeBaseline.comparison.comparableRows) comparable rows, but $($freeWOfficeBaseline.comparison.failedRows) comparisons remain outside tolerance. Font dialog captures now improve from 61396 to 57620 aggregate changed pixels across Waves188-189 and match WPF painted bounds; continue with its control-template tail, the Legal Notices glyph/template tail, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
+        nextSlice = "A committed current-source Word PNG baseline bundle is available for $($freeWOfficeBaseline.comparison.comparableRows) comparable rows, but $($freeWOfficeBaseline.comparison.failedRows) comparisons remain outside tolerance. Font dialog captures now improve from 61396 to 44687 aggregate changed pixels across Waves188-190 and match WPF painted bounds; continue with the remaining native raster tail, the Legal Notices glyph/template tail, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
     }
 
     $freePExternalPowerPointResidual = Get-ResidualById -Residuals $freePRenderParity.Residuals -Id "external-powerpoint-baseline"
@@ -518,7 +522,9 @@ try {
             "docs/parity/freep-wave186-surface3d-smartart-20260823.md",
             "docs/parity/avalonia-parity-wave187-freep-surface3d-20260823.md",
             "docs/parity/avalonia-parity-wave188-freep-smartart-text-20260823.md",
-            "docs/parity/avalonia-parity-wave189-freep-smartart-text-20260823.md"
+            "docs/parity/avalonia-parity-wave189-freep-smartart-text-20260823.md",
+            "docs/parity/avalonia-parity-wave190-freep-smartart-text-origin-20260823.md",
+            "docs/parity/avalonia-parity-wave190-freep-evidence-20260823/metrics.json"
         )
         routeCoverage = [ordered]@{
             laneEntries = @(
@@ -584,6 +590,7 @@ try {
                 "The directly measured Wave187 authored-camera Surface3D target improved from 2.7438% to 2.7032% WPF/Office, 2.6220% to 2.5815% Avalonia/Office, and 1.0805% to 1.0804% WPF/Avalonia; deck26 and four ordinary-chart controls were preserved. Diagnostic reconstructed corpus estimates remain outside the canonical recalibration summary.",
                 "The directly measured Wave188 imported IncreasingCircleProcess slide-09 target improved from 1.6516% to 0.9662% WPF/Office and from 1.6609% to 1.6009% WPF/Avalonia; Avalonia/Office remained 1.6879%. The WPF raster compensation is gated by an explicit imported-cache semantic flag and exact 12-shape topology, with ordinary authored phase-label controls excluded.",
                 "Wave189 consumes the same semantic IncreasingCircle cache flag on Avalonia and improves slide-09 Avalonia/Office from 1.6879% to 1.5440% and WPF/Avalonia from 1.6009% to 1.3657%; WPF/Office remains 0.9662%, and neighboring SmartArt plus Surface3D controls are unchanged.",
+                "Wave190 adds an exact source-signature-gated Avalonia text-origin correction for the same imported IncreasingCircle target. Slide-09 Avalonia/Office improves from 1.5440% to 0.8675% and WPF/Avalonia from 1.3657% to 0.8540%; WPF/Office remains 0.9662%, measured controls are unchanged, and target PNG/metric evidence is committed.",
                 [string]$freePRecordingHardwareResidual.Description,
                 [string]$freePRecordingHardwareResidual.ArtifactStatus,
                 [string]$freePNativePickerEvidence.reason
@@ -609,7 +616,7 @@ try {
         claimBoundary = "Route/scenario coverage, committed PNG manifests, and local WPF/Avalonia comparison results only; no PowerPoint visual-parity claim is made."
     }
 
-    $freePNextSlice = "The tracked PowerPoint corpus now has $($freePOfficeBaseline.artifactCount) COM-exported reference slides across $($freePOfficeBaseline.comparison.referenceReadyDecks) ready decks, with $($freePOfficeBaseline.comparison.missingReferenceDecks) deck missing references. The canonical recalibration covers $($freePOfficeRecalibration.summary.officeReferenceSlides) paired Office slides and averages $($freePOfficeRecalibration.summary.wpfAverageMeanPercent)% for WPF and $($freePOfficeRecalibration.summary.avaloniaAverageMeanPercent)% for Avalonia, with maxima of $($freePOfficeRecalibration.summary.wpfMaximumMeanPercent)% / $($freePOfficeRecalibration.summary.avaloniaMaximumMeanPercent)%. Waves188-189 improve both WPF and Avalonia imported IncreasingCircleProcess slide-09 text against Office under the same semantic topology gate; continue with the remaining target residual or a genuinely new Surface3D/SmartArt topology."
+    $freePNextSlice = "The tracked PowerPoint corpus now has $($freePOfficeBaseline.artifactCount) COM-exported reference slides across $($freePOfficeBaseline.comparison.referenceReadyDecks) ready decks, with $($freePOfficeBaseline.comparison.missingReferenceDecks) deck missing references. The canonical recalibration covers $($freePOfficeRecalibration.summary.officeReferenceSlides) paired Office slides and averages $($freePOfficeRecalibration.summary.wpfAverageMeanPercent)% for WPF and $($freePOfficeRecalibration.summary.avaloniaAverageMeanPercent)% for Avalonia, with maxima of $($freePOfficeRecalibration.summary.wpfMaximumMeanPercent)% / $($freePOfficeRecalibration.summary.avaloniaMaximumMeanPercent)%. Waves188-190 improve both WPF and Avalonia imported IncreasingCircleProcess slide-09 text against Office; the Wave190 Avalonia result is 0.8675% under an exact semantic source-signature gate. Continue with the remaining target residual or a genuinely new Surface3D/SmartArt topology."
 
     $freeP = [ordered]@{
         app = "FreeP"
@@ -654,6 +661,8 @@ try {
                     "docs/parity/avalonia-parity-wave187-freex-autofilter-numeric-20260823.md",
                     "docs/parity/avalonia-parity-wave188-freex-autofilter-numeric-20260823.md",
                     "docs/parity/avalonia-parity-wave189-freex-autofilter-date-20260823.md",
+                    "docs/parity/avalonia-parity-wave190-freex-autofilter-date-20260823.md",
+                    "docs/parity/evidence/wave190-freex-autofilter-date-20260823/manifest.json",
             "docs/parity/freew-command-inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
@@ -666,6 +675,7 @@ try {
             "docs/parity/avalonia-parity-wave187-freew-legal-notices-20260823.md",
             "docs/parity/avalonia-parity-wave188-freew-font-20260823.md",
             "docs/parity/avalonia-parity-wave189-freew-font-antialias-20260823.md",
+            "docs/parity/avalonia-parity-wave190-freew-visual-20260823.md",
             "docs/parity/freep-command-parity-inventory.json",
             "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
             "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json",
@@ -684,7 +694,9 @@ try {
             "docs/parity/freep-wave186-surface3d-smartart-20260823.md",
             "docs/parity/avalonia-parity-wave187-freep-surface3d-20260823.md",
             "docs/parity/avalonia-parity-wave188-freep-smartart-text-20260823.md",
-            "docs/parity/avalonia-parity-wave189-freep-smartart-text-20260823.md"
+            "docs/parity/avalonia-parity-wave189-freep-smartart-text-20260823.md",
+            "docs/parity/avalonia-parity-wave190-freep-smartart-text-origin-20260823.md",
+            "docs/parity/avalonia-parity-wave190-freep-evidence-20260823/metrics.json"
         )
         apps = @($freeX, $freeW, $freeP)
     }
@@ -755,6 +767,8 @@ try {
         '- `docs/parity/avalonia-parity-wave187-freex-autofilter-numeric-20260823.md`',
         '- `docs/parity/avalonia-parity-wave188-freex-autofilter-numeric-20260823.md`',
         '- `docs/parity/avalonia-parity-wave189-freex-autofilter-date-20260823.md`',
+        '- `docs/parity/avalonia-parity-wave190-freex-autofilter-date-20260823.md`',
+        '- `docs/parity/evidence/wave190-freex-autofilter-date-20260823/manifest.json`',
         '- `docs/parity/freew-command-inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json`',
@@ -767,6 +781,7 @@ try {
         '- `docs/parity/avalonia-parity-wave187-freew-legal-notices-20260823.md`',
         '- `docs/parity/avalonia-parity-wave188-freew-font-20260823.md`',
         '- `docs/parity/avalonia-parity-wave189-freew-font-antialias-20260823.md`',
+        '- `docs/parity/avalonia-parity-wave190-freew-visual-20260823.md`',
         '- `docs/parity/freep-command-parity-inventory.json`',
         '- `docs/parity/freep-dialog-pane-visual-evidence/summary.json`',
         '- `docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json`',
@@ -785,7 +800,9 @@ try {
         '- `docs/parity/freep-wave186-surface3d-smartart-20260823.md`',
         '- `docs/parity/avalonia-parity-wave187-freep-surface3d-20260823.md`',
         '- `docs/parity/avalonia-parity-wave188-freep-smartart-text-20260823.md`',
-        '- `docs/parity/avalonia-parity-wave189-freep-smartart-text-20260823.md`'
+        '- `docs/parity/avalonia-parity-wave189-freep-smartart-text-20260823.md`',
+        '- `docs/parity/avalonia-parity-wave190-freep-smartart-text-origin-20260823.md`',
+        '- `docs/parity/avalonia-parity-wave190-freep-evidence-20260823/metrics.json`'
     ) -join "`n"
     Set-Content -LiteralPath $tempMarkdownPath -Value ($md + "`n") -NoNewline -Encoding UTF8
 
