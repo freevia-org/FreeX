@@ -62,11 +62,15 @@ public sealed class FontDialog : FreeWDialogWindow
     private readonly ComboBox _colorBox;
     private readonly CheckBox _boldChk = Check(Surface.Effect(FontDialogEffectKind.Bold));
     private readonly CheckBox _italicChk = Check(Surface.Effect(FontDialogEffectKind.Italic));
-    private readonly CheckBox _underlineChk = Check(Surface.Effect(FontDialogEffectKind.Underline));
+    private readonly CheckBox _underlineChk = Check(
+        Surface.Effect(FontDialogEffectKind.Underline),
+        trailingMargin: Layout.EffectTrailingMargin - 1);
     private readonly CheckBox _strikeChk = Check(Surface.Effect(FontDialogEffectKind.Strikethrough));
     private readonly CheckBox _doubleStrikeChk = Check(Surface.Effect(FontDialogEffectKind.DoubleStrikethrough));
     private readonly CheckBox _hiddenChk = Check(Surface.Effect(FontDialogEffectKind.Hidden));
-    private readonly CheckBox _smallCapsChk = Check(Surface.Effect(FontDialogEffectKind.SmallCaps));
+    private readonly CheckBox _smallCapsChk = Check(
+        Surface.Effect(FontDialogEffectKind.SmallCaps),
+        trailingMargin: Layout.EffectTrailingMargin + 1);
     private readonly CheckBox _allCapsChk = Check(Surface.Effect(FontDialogEffectKind.AllCaps));
     private readonly CheckBox _superChk = Check(Surface.Effect(FontDialogEffectKind.Superscript));
     private readonly CheckBox _subChk = Check(Surface.Effect(FontDialogEffectKind.Subscript), trailingMargin: 0);
@@ -194,7 +198,7 @@ public sealed class FontDialog : FreeWDialogWindow
             LineHeight = Layout.AvaloniaLabelLineHeight,
             Margin = ToThickness(Layout.AvaloniaEffectsLabelMargin),
         });
-        var effects = new WrapPanel();
+        var effects = new WrapPanel { Margin = new Thickness(1, 0, 0, 0) };
         foreach (var spec in Surface.Effects)
             effects.Children.Add(EffectControlFor(spec.Kind));
         fontPanel.Children.Add(effects);
