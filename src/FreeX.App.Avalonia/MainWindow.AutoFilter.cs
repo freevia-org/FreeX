@@ -24,7 +24,6 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private Flyout? _autoFilterFlyout;
-    private string? _autoFilterPlacementTargetAutomationIdForTest;
 
     private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);
 
@@ -403,7 +402,7 @@ public sealed partial class MainWindow
         };
         flyout.Content = new Border { Padding = new Thickness(8), Child = panel };
         _autoFilterFlyout = flyout;
-        _autoFilterPlacementTargetAutomationIdForTest = AutomationProperties.GetAutomationId(anchor);
+        RecordOptionalAutoFilterPlacementTarget(AutomationProperties.GetAutomationId(anchor));
         flyout.Closed += (_, _) =>
         {
             if (ReferenceEquals(_autoFilterFlyout, flyout))

@@ -17,6 +17,8 @@ public sealed partial class MainWindow
 
     partial void RecordOptionalNameBoxPopupOpened(string host, int x, int y, int width, int height);
 
+    partial void RecordOptionalAutoFilterPlacementTarget(string? automationId);
+
     partial void AttachOptionalTextBoxInlineObservation();
 
     partial void RequestOptionalTextBoxInlineLayoutObservation();

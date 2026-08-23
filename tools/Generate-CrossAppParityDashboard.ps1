@@ -246,7 +246,8 @@ try {
             "tools/screenshots_avalonia_ribbon/screenshot_manifest.json",
             "docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json",
             "docs/parity/freex-avalonia-grid-corpus-2026-08-16/manifest.json",
-            "docs/parity/avalonia-parity-wave183-freex-namebox-overlay-20260823.md"
+            "docs/parity/avalonia-parity-wave183-freex-namebox-overlay-20260823.md",
+            "docs/parity/avalonia-parity-wave184-freex-autofilter-20260823.md"
         )
         routeCoverage = [ordered]@{
             inventoryRouteCount = $freeXDialogRoutes.totalRoutes
@@ -295,10 +296,13 @@ try {
             linuxNameBoxParityTotal = 1
             linuxNameBoxInteractionPassed = 8
             linuxNameBoxInteractionTotal = 8
+            linuxAutoFilterRecalculationPassed = 1
+            linuxAutoFilterRecalculationTotal = 1
             limitations = @(
                 "The 2026-08-16 interactive run captured 36 foreground ribbon states for each of Excel, WPF, and Avalonia, including Draw at all four widths, plus six guarded Excel popup/dialog surfaces. The 27 fixed-viewport triage rows average 13.937% RGB delta for WPF and 15.639% for Avalonia versus Excel; nine maximized rows are coverage-only, not an acceptance threshold.",
                 "The ribbon harness creates a blank workbook before tab discovery so the enabled Draw tab is materialized; the current manifest records no unavailable-tab skips.",
-                "WPF captured 116/116 app-host surfaces and Avalonia captured 180/181; the managed popup.nameBoxDropdown surface remains diagnostic-only, while the production Linux X11 crop and interaction lanes now pass 1/1 and 8/8 respectively.",
+                "WPF captured 116/116 app-host surfaces and Avalonia captured 180/181; the managed popup.nameBoxDropdown surface remains diagnostic-only, while the production Linux X11 Name Box crop and interaction lanes pass 1/1 and 8/8 respectively.",
+                "The production Linux X11 AutoFilter apply/change/clear workflow passes 1/1 with exact SUBTOTAL postconditions 30 -> 10 -> 20 -> 30.",
                 "The current-source range corpus retains 35 Avalonia grid captures: eight charts, seven cell styles, and 20 native PivotTable surfaces. These are renderer coverage evidence, not raw-pixel Office acceptance rows.",
                 [string]$freeXOfficeBaseline.limitation
             )
@@ -332,7 +336,7 @@ try {
             -DialogRoutes $freeXDialogRoutes `
             -DialogVisualEvidence $freeXDialogVisualEvidence
     }
-    $freeX.nextSlice = "$($freeX.nextSlice) The production Linux Name Box now passes its 1/1 crop and 8/8 interaction selectors; move physical verification to the next unproven workbook workflow."
+    $freeX.nextSlice = "$($freeX.nextSlice) Production Linux evidence now covers Name Box (1/1 visual, 8/8 interaction) and AutoFilter apply/change/clear recalculation (1/1); extend physical verification to broader AutoFilter criteria, sort, color, or persistence workflows."
 
     $freeWComparisonRows = @($freeWVisualComparison.rows)
     $freeWPairedComparisonRows = @($freeWComparisonRows | Where-Object { $_.captureStatus -eq "captured/captured" })
@@ -346,7 +350,8 @@ try {
             "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
             "docs/parity/freew-word-baseline-2026-08-16/manifest.json",
             "docs/parity/freew-shell-visual-2026-08-16/freew_shell_visual_evidence.json",
-            "docs/parity/freew-word-chrome-2026-08-16/manifest.json"
+            "docs/parity/freew-word-chrome-2026-08-16/manifest.json",
+            "docs/parity/avalonia-parity-wave184-freew-table-properties-cell-20260823.md"
         )
         canonicalComparison = [ordered]@{
             kind = [string]$freeWVisualComparison.scope.kind
@@ -396,6 +401,7 @@ try {
             limitations = @(
                 "The committed shell matrix contains $($freeWShellVisualEvidence.counts.pairedStaticChrome) paired static and $($freeWShellVisualEvidence.counts.pairedContextualChrome) paired contextual WPF/Avalonia captures; no contextual Avalonia gap remains.",
                 "Native Word chrome references are complete at $($freeWShellVisualEvidence.counts.wordOfficeChromeReferences) states; they are semantic review references, not raw Office-to-FreeW pixel-equivalence results.",
+                "The focused table-properties.tab-cell pair improved from 12.240179% to 12.100893% changed pixels; it remains classified as a genuine visual mismatch.",
                 "Avalonia-only route/state rows are reported separately and are outside the WPF-authority pairing set.",
                 [string]$freeWOfficeBaseline.limitation
             )
@@ -429,7 +435,7 @@ try {
             classifiedRows = $true
         }
         renderedEvidence = $freeWRenderedEvidence
-        nextSlice = "A committed current-source Word PNG baseline bundle is available for $($freeWOfficeBaseline.comparison.comparableRows) comparable rows, but $($freeWOfficeBaseline.comparison.failedRows) comparisons remain outside tolerance. Triage font metrics, pagination, drawing/object, chart, table, and WordArt deltas against the captured references before the next Word baseline refresh."
+        nextSlice = "A committed current-source Word PNG baseline bundle is available for $($freeWOfficeBaseline.comparison.comparableRows) comparable rows, but $($freeWOfficeBaseline.comparison.failedRows) comparisons remain outside tolerance. The focused Table Properties Cell tab improved from 12.240179% to 12.100893% changed pixels and remains a genuine mismatch; continue with the next classified font, pagination, drawing/object, chart, table, or WordArt residual."
     }
 
     $freePExternalPowerPointResidual = Get-ResidualById -Residuals $freePRenderParity.Residuals -Id "external-powerpoint-baseline"
@@ -477,7 +483,8 @@ try {
             "docs/parity/freep-powerpoint-chrome-2026-08-16/README.md",
             "docs/parity/freep-powerpoint-chrome-2026-08-16/manifest.json",
             "docs/parity/freep-responsive-chrome-2026-08-16/README.md",
-            "docs/parity/freep-responsive-chrome-2026-08-16/manifest.json"
+            "docs/parity/freep-responsive-chrome-2026-08-16/manifest.json",
+            "docs/parity/freep-wave184-smartart-2026-08-23.md"
         )
         routeCoverage = [ordered]@{
             laneEntries = @(
@@ -604,12 +611,14 @@ try {
                     "docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json",
                     "docs/parity/freex-avalonia-grid-corpus-2026-08-16/manifest.json",
                     "docs/parity/avalonia-parity-wave183-freex-namebox-overlay-20260823.md",
+                    "docs/parity/avalonia-parity-wave184-freex-autofilter-20260823.md",
             "docs/parity/freew-command-inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
             "docs/parity/freew-word-baseline-2026-08-16/manifest.json",
             "docs/parity/freew-shell-visual-2026-08-16/freew_shell_visual_evidence.json",
             "docs/parity/freew-word-chrome-2026-08-16/manifest.json",
+            "docs/parity/avalonia-parity-wave184-freew-table-properties-cell-20260823.md",
             "docs/parity/freep-command-parity-inventory.json",
             "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
             "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json",
@@ -622,7 +631,8 @@ try {
             "docs/parity/freep-powerpoint-chrome-2026-08-16/README.md",
             "docs/parity/freep-powerpoint-chrome-2026-08-16/manifest.json",
             "docs/parity/freep-responsive-chrome-2026-08-16/README.md",
-            "docs/parity/freep-responsive-chrome-2026-08-16/manifest.json"
+            "docs/parity/freep-responsive-chrome-2026-08-16/manifest.json",
+            "docs/parity/freep-wave184-smartart-2026-08-23.md"
         )
         apps = @($freeX, $freeW, $freeP)
     }
@@ -659,7 +669,7 @@ try {
         "",
         "| App | Route coverage | Artifact coverage | Paired WPF/Avalonia evidence | Physical/no-COM limitation | Authoritative Microsoft Office baseline |",
         "|---|---|---|---|---|---|",
-        "| FreeX | $($freeX.renderedEvidence.routeCoverage.inventoryRouteCount) inventoried dialog routes; $($freeX.renderedEvidence.routeCoverage.pairedRouteEvidenceCount) paired route evidence rows | $($freeX.renderedEvidence.artifactCoverage.wpfManifestSurfaceCount) WPF + $($freeX.renderedEvidence.artifactCoverage.avaloniaManifestSurfaceCount) Avalonia dialog surfaces; complete $($freeX.renderedEvidence.chromeCapture.excelReferenceCount)/$($freeX.renderedEvidence.chromeCapture.wpfCaptureCount)/$($freeX.renderedEvidence.chromeCapture.avaloniaCaptureCount) Excel/WPF/Avalonia ribbon matrices; $($freeX.renderedEvidence.gridCorpus.totalAvaloniaCaptureCount) Avalonia grid-corpus captures | $($freeX.renderedEvidence.pairedEvidence.pairedSurfaceCount) paired dialog surfaces; $($freeX.renderedEvidence.chromeCapture.fixedViewportComparisonCount) fixed-width chrome triage rows per host | $($freeX.renderedEvidence.physicalEvidence.status); Linux Name Box $($freeX.renderedEvidence.physicalEvidence.linuxNameBoxParityPassed)/$($freeX.renderedEvidence.physicalEvidence.linuxNameBoxParityTotal) visual and $($freeX.renderedEvidence.physicalEvidence.linuxNameBoxInteractionPassed)/$($freeX.renderedEvidence.physicalEvidence.linuxNameBoxInteractionTotal) interaction; app-owned render manifests, complete foreground chrome matrices, and committed Excel range references | $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.product): $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.status); $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount) artifacts. $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.limitation) |",
+        "| FreeX | $($freeX.renderedEvidence.routeCoverage.inventoryRouteCount) inventoried dialog routes; $($freeX.renderedEvidence.routeCoverage.pairedRouteEvidenceCount) paired route evidence rows | $($freeX.renderedEvidence.artifactCoverage.wpfManifestSurfaceCount) WPF + $($freeX.renderedEvidence.artifactCoverage.avaloniaManifestSurfaceCount) Avalonia dialog surfaces; complete $($freeX.renderedEvidence.chromeCapture.excelReferenceCount)/$($freeX.renderedEvidence.chromeCapture.wpfCaptureCount)/$($freeX.renderedEvidence.chromeCapture.avaloniaCaptureCount) Excel/WPF/Avalonia ribbon matrices; $($freeX.renderedEvidence.gridCorpus.totalAvaloniaCaptureCount) Avalonia grid-corpus captures | $($freeX.renderedEvidence.pairedEvidence.pairedSurfaceCount) paired dialog surfaces; $($freeX.renderedEvidence.chromeCapture.fixedViewportComparisonCount) fixed-width chrome triage rows per host | $($freeX.renderedEvidence.physicalEvidence.status); Linux Name Box $($freeX.renderedEvidence.physicalEvidence.linuxNameBoxParityPassed)/$($freeX.renderedEvidence.physicalEvidence.linuxNameBoxParityTotal) visual and $($freeX.renderedEvidence.physicalEvidence.linuxNameBoxInteractionPassed)/$($freeX.renderedEvidence.physicalEvidence.linuxNameBoxInteractionTotal) interaction; AutoFilter recalculation $($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterRecalculationPassed)/$($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterRecalculationTotal); app-owned render manifests, complete foreground chrome matrices, and committed Excel range references | $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.product): $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.status); $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount) artifacts. $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.limitation) |",
         "| FreeW | $($freeW.renderedEvidence.routeCoverage.inventoryRouteCount) inventoried route families; $($freeW.renderedEvidence.routeCoverage.comparedRouteCount) represented in comparison rows; $($freeW.renderedEvidence.routeCoverage.pairedRouteCount) paired and $($freeW.renderedEvidence.routeCoverage.avaloniaOnlyRouteCount) Avalonia-only | $($freeW.renderedEvidence.artifactCoverage.evidenceRowCount) dialog comparison rows; $($freeW.renderedEvidence.shellChrome.pairedStaticCaptureCount) paired static and $($freeW.renderedEvidence.shellChrome.pairedContextualCaptureCount) paired contextual shell captures; $($freeW.renderedEvidence.shellChrome.wordOfficeChromeReferenceCount) native Word ribbon references | $($freeW.renderedEvidence.pairedEvidence.pairedScenarioCount) paired dialog rows; $($freeW.renderedEvidence.pairedEvidence.passCount) pass classifications; $($freeW.renderedEvidence.pairedEvidence.mismatchCount) genuine visual mismatch classifications; shell captures review-required | $($freeW.renderedEvidence.physicalEvidence.status); app-owned dialog/full-window shell captures plus committed Word canvas and ribbon references | $($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.product): $($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.status); $($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount) artifacts. $($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.limitation) |",
         "| FreeP | Dialog lane: $($freeP.renderedEvidence.routeCoverage.laneEntries[0].routeInventoryCount) routes/$($freeP.renderedEvidence.routeCoverage.laneEntries[0].renderedScenarioCount) scenarios; whole-window lane: $($freeP.renderedEvidence.routeCoverage.laneEntries[1].renderedScenarioCount) scenarios without a separate route inventory | $($freeP.renderedEvidence.artifactCoverage.wpfPngCount) WPF PNGs; $($freeP.renderedEvidence.artifactCoverage.avaloniaPngCount) Avalonia PNGs; $($freeP.renderedEvidence.artifactCoverage.diffPngCount) diff PNGs; $($freeP.renderedEvidence.nativeOfficeChrome.capturedReferenceCount) native PowerPoint ribbon refs; $($freeP.renderedEvidence.responsiveAppChrome.capturedPairCount) responsive WPF/Avalonia pairs | $($freeP.renderedEvidence.pairedEvidence.pairedScenarioCount) paired scenarios; $($freeP.renderedEvidence.pairedEvidence.passCount) local comparison passes; $($freeP.renderedEvidence.pairedEvidence.mismatchCount) mismatches; native Office/app chrome $($freeP.renderedEvidence.nativeOfficeChrome.captureStatus)/$($freeP.renderedEvidence.responsiveAppChrome.captureStatus) | $($freeP.renderedEvidence.physicalEvidence.status); visible app-owned render targets, complete responsive app and Office ribbon lanes, and a committed PowerPoint COM corpus | $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.product): $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.status); $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount) tracked artifacts across $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.referenceReadyDecks) decks, with $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.missingReferenceDecks) deck missing references. Current-source WPF/Avalonia averages: $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.wpfAverageMeanPercent)% / $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.avaloniaAverageMeanPercent)%. $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.limitation) |",
         "",
@@ -687,12 +697,14 @@ try {
         '- `docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json`',
         '- `docs/parity/freex-avalonia-grid-corpus-2026-08-16/manifest.json`',
         '- `docs/parity/avalonia-parity-wave183-freex-namebox-overlay-20260823.md`',
+        '- `docs/parity/avalonia-parity-wave184-freex-autofilter-20260823.md`',
         '- `docs/parity/freew-command-inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json`',
         '- `docs/parity/freew-word-baseline-2026-08-16/manifest.json`',
         '- `docs/parity/freew-shell-visual-2026-08-16/freew_shell_visual_evidence.json`',
         '- `docs/parity/freew-word-chrome-2026-08-16/manifest.json`',
+        '- `docs/parity/avalonia-parity-wave184-freew-table-properties-cell-20260823.md`',
         '- `docs/parity/freep-command-parity-inventory.json`',
         '- `docs/parity/freep-dialog-pane-visual-evidence/summary.json`',
         '- `docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json`',
@@ -705,7 +717,8 @@ try {
         '- `docs/parity/freep-powerpoint-chrome-2026-08-16/README.md`',
         '- `docs/parity/freep-powerpoint-chrome-2026-08-16/manifest.json`',
         '- `docs/parity/freep-responsive-chrome-2026-08-16/README.md`',
-        '- `docs/parity/freep-responsive-chrome-2026-08-16/manifest.json`'
+        '- `docs/parity/freep-responsive-chrome-2026-08-16/manifest.json`',
+        '- `docs/parity/freep-wave184-smartart-2026-08-23.md`'
     ) -join "`n"
     Set-Content -LiteralPath $tempMarkdownPath -Value ($md + "`n") -NoNewline -Encoding UTF8
 

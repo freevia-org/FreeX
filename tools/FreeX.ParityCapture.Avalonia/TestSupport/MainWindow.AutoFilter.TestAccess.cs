@@ -22,10 +22,15 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private string? _autoFilterPlacementTargetAutomationIdForTest;
+
     internal bool AutoFilterFlyoutOpenForTest => _autoFilterFlyout is not null;
 
     internal string? AutoFilterFlyoutPlacementTargetAutomationIdForTest =>
         _autoFilterPlacementTargetAutomationIdForTest;
+
+    partial void RecordOptionalAutoFilterPlacementTarget(string? automationId) =>
+        _autoFilterPlacementTargetAutomationIdForTest = automationId;
 
     internal void RunAutoFilterForTest(
         GridRange range,
