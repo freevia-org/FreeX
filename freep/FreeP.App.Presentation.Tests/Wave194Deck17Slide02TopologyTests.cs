@@ -16,6 +16,8 @@ public sealed class Wave194Deck17Slide02TopologyTests
         using var topology = JsonDocument.Parse(File.ReadAllText(topologyPath));
         var root = topology.RootElement;
 
+        root.GetProperty("schema").GetString()
+            .Should().Be("freep.parity.wave194.deck17-slide02.topology.v2");
         root.GetProperty("sourceRevision").GetString().Should()
             .Be("bb454fbc7d4d8b4588a4d2ed0adec678527e3936");
         root.GetProperty("deck").GetString().Should().Be("17-bullets-autofit");
@@ -26,12 +28,29 @@ public sealed class Wave194Deck17Slide02TopologyTests
         root.GetProperty("officeReference").GetProperty("slide02PngSha256").GetString().Should()
             .Be("2828a7a3ced739e6b5b36f53aa7309df35ceb8c7f898b7bf8fb29480ab012ee5");
 
-        root.GetProperty("theme").GetProperty("majorLatin").GetString().Should().Be("Aptos Display");
-        root.GetProperty("theme").GetProperty("minorLatin").GetString().Should().Be("Aptos");
+        var themeEvidence = root.GetProperty("theme");
+        var majorLatin = themeEvidence.GetProperty("majorLatin").GetString();
+        var minorLatin = themeEvidence.GetProperty("minorLatin").GetString();
+        majorLatin.Should().Be("Aptos Display");
+        minorLatin.Should().Be("Aptos");
+
+        var modelEvidence = root.GetProperty("model");
+        var titleEvidence = modelEvidence.GetProperty("title");
+        var bodyEvidence = modelEvidence.GetProperty("body");
+        titleEvidence.GetProperty("rawRunFontFamily").ValueKind.Should().Be(JsonValueKind.Null);
+        titleEvidence.GetProperty("effectiveFontFamily").GetString().Should().Be(majorLatin);
+        titleEvidence.GetProperty("fontFamilySource").GetString().Should().Be("theme.majorLatin");
+        titleEvidence.GetProperty("effectiveFontSizePt").GetDouble().Should().BeApproximately(28.0, 0.01);
+        bodyEvidence.GetProperty("rawRunFontFamily").ValueKind.Should().Be(JsonValueKind.Null);
+        bodyEvidence.GetProperty("effectiveFontFamily").GetString().Should().Be(minorLatin);
+        bodyEvidence.GetProperty("fontFamilySource").GetString().Should().Be("theme.minorLatin");
+        bodyEvidence.GetProperty("effectiveFontSizePt").GetDouble().Should().BeApproximately(18.0, 0.01);
 
         var corpusPptx = TestWorkspaceFileLocator.FindFromWorkspaceRoot(
             "tools", "FreeP.RenderCompare", "corpus", "17-bullets-autofit.pptx");
         var presentation = FreeP.Core.IO.PptxPackageReader.Read(corpusPptx);
+        presentation.Theme.FontScheme.MajorLatinFont.Should().Be(majorLatin);
+        presentation.Theme.FontScheme.MinorLatinFont.Should().Be(minorLatin);
         var slide = presentation.Slides[1];
         var textShapes = slide.Shapes.Where(shape => shape.TextBody is not null).ToList();
         textShapes.Should().HaveCount(2);
@@ -52,7 +71,7 @@ public sealed class Wave194Deck17Slide02TopologyTests
         titleParagraph.Runs.Should().ContainSingle();
         var titleRun = titleParagraph.Runs[0];
         titleRun.Text.Should().Be("Autofit Shrink Demo");
-        titleRun.FontFamily.Should().BeNull();
+        titleRun.FontFamily.Should().BeNull("the effective title face is inherited from theme.majorLatin");
         titleRun.FontSizePt.Should().BeApproximately(28.0, 0.01);
         titleRun.Bold.Should().BeTrue();
         titleRun.Italic.Should().BeFalse();
@@ -80,6 +99,8 @@ public sealed class Wave194Deck17Slide02TopologyTests
             && paragraph.Runs[0].FontSizePt == null
             && !paragraph.Runs[0].Bold
             && !paragraph.Runs[0].Italic);
+        body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().OnlyContain(run => run.FontFamily == null);
     }
 
     [Fact]
