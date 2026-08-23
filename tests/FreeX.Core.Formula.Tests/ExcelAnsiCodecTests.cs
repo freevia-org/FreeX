@@ -46,27 +46,15 @@ public sealed class ExcelAnsiCodecTests
     [Fact]
     public void FormulaOwnsExcelAnsiCodec_AndAccessibilityDelegatesFormulaEvaluation()
     {
-        var root = FindRepositoryRoot();
-        var formulaSource = File.ReadAllText(Path.Combine(
-            root, "src", "FreeX.Core.Formula", "BuiltInFunctions.TextAdvanced.cs"));
-        var accessibilitySource = File.ReadAllText(Path.Combine(
-            root, "src", "FreeX.Core.Commands", "AccessibilityCheckerService.Contrast.cs"));
+        var formulaSource = TestWorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.Core.Formula", "BuiltInFunctions.TextAdvanced.cs");
+        var accessibilitySource = TestWorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.Core.Commands", "AccessibilityCheckerService.Contrast.cs");
 
         formulaSource.Should().Contain("ExcelAnsiCodec.Decode(code)");
         formulaSource.Should().Contain("ExcelAnsiCodec.Encode(text[0])");
         accessibilitySource.Should().Contain("ConditionalFormatEvaluationSession");
         accessibilitySource.Should().NotContain("ExcelAnsiCodec");
         formulaSource.Should().NotContain("ExcelAnsiCodeToChar");
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the FreeX repository root.");
     }
 }

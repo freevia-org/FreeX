@@ -86,12 +86,6 @@ public sealed class CrossCoreResidualPolicyTests
             .Should().Contain("BorderStylePrecedence.ResolveWinner(");
     }
 
-    private static string Read(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-        directory.Should().NotBeNull();
-        return File.ReadAllText(Path.Combine([directory!.FullName, .. parts]));
-    }
+    private static string Read(params string[] parts) =>
+        TestWorkspaceFileLocator.ReadAllText(parts);
 }

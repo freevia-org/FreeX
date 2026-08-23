@@ -82,9 +82,10 @@ public sealed class XlsxCorePropertiesSaveMetadataTests
     [Fact]
     public void FullAndPatchSavePaths_AdoptSharedUpdater()
     {
-        var root = FindRepositoryRoot();
-        var preserver = File.ReadAllText(Path.Combine(root, "src", "FreeX.Core.IO", "XlsxDocumentPropertiesPreserver.cs"));
-        var patchPath = File.ReadAllText(Path.Combine(root, "src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
+        var preserver = TestWorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.Core.IO", "XlsxDocumentPropertiesPreserver.cs");
+        var patchPath = TestWorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs");
 
         preserver.Should().Contain("UpdateCorePropertiesOnSave(targetArchive");
         patchPath.Should().Contain("XlsxDocumentPropertiesPreserver.UpdateCorePropertiesOnSave(archive");
@@ -143,14 +144,4 @@ public sealed class XlsxCorePropertiesSaveMetadataTests
         writer.Write(content);
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the FreeX repository root.");
-    }
 }
