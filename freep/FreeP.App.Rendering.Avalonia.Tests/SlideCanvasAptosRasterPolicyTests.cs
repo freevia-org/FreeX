@@ -16,6 +16,7 @@ public sealed class SlideCanvasAptosRasterPolicyTests
     public void ImportedIncreasingCircleText_UsesDedicatedAptosCalibrationOnly()
     {
         SlideCanvas.ImportedIncreasingCircleAptosFontScale.Should().Be(0.930);
+        SlideCanvas.ImportedIncreasingCircleAptosOriginOffsetY.Should().Be(-4.0);
         SlideCanvas.UsesImportedIncreasingCircleAptosText(CreateLayout(1)).Should().BeTrue();
         SlideCanvas.UsesImportedIncreasingCircleAptosText(
             CreateLayout(1, fontFamily: "Aptos Display")).Should().BeFalse();

@@ -44,6 +44,8 @@ public sealed partial class SlideCanvas : Control
     // but the cached Office text raster is optically smaller on the Avalonia host. Keep this
     // calibration semantic and scoped to the compositor's authoritative cache flag.
     internal const double ImportedIncreasingCircleAptosFontScale = 0.930;
+    // Avalonia's FormattedText origin for this imported cache sits lower than Office's raster.
+    internal const double ImportedIncreasingCircleAptosOriginOffsetY = -4.0;
 
     // ── Styled / direct properties ──────────────────────────────────────────
 
@@ -1547,7 +1549,10 @@ public sealed partial class SlideCanvas : Control
             dc,
             plan,
             bounds,
-            applyFixedSizeAptosBodyFallback: UsesFixedSizeAptosBodyFallback(text));
+            applyFixedSizeAptosBodyFallback: UsesFixedSizeAptosBodyFallback(text),
+            originOffsetY: useImportedIncreasingCircleTextRaster
+                ? ImportedIncreasingCircleAptosOriginOffsetY
+                : 0.0);
     }
 
     internal static bool UsesImportedIncreasingCircleAptosText(ResolvedTextLayout text) =>
@@ -1561,7 +1566,8 @@ public sealed partial class SlideCanvas : Control
         DrawingContext dc,
         TextMeasuredBlockLayoutPlan<FormattedText> plan,
         LayoutRect bounds,
-        bool applyFixedSizeAptosBodyFallback = false)
+        bool applyFixedSizeAptosBodyFallback = false,
+        double originOffsetY = 0.0)
     {
         var renderText = plan.RenderText;
         using IDisposable? textOptionsScope = applyFixedSizeAptosBodyFallback
@@ -1601,7 +1607,7 @@ public sealed partial class SlideCanvas : Control
                 {
                     if (paragraph.IndentDip > 0 && formatted.MaxTextWidth > 0)
                         formatted.MaxTextWidth = placement.MaxWidthDip;
-                    dc.DrawText(formatted, new Point(placement.X, placement.Y));
+                    dc.DrawText(formatted, new Point(placement.X, placement.Y + originOffsetY));
                 }));
     }
 
