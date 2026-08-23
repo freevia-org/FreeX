@@ -380,11 +380,9 @@ public sealed class GridCaptureTests
             captureResult.HeightPx.Should().BeGreaterThan(0, "at least 5 rows of row-height");
             captureResult.SheetName.Should().NotBeNullOrEmpty();
 
-            // Assert the PNG file was written. Under the headless drawing platform
-            // (UseHeadlessDrawing=true) a detached visual produces a 0-byte frame, so we only require the
-            // file to exist here; the real Win32+Skia backend (exercised via the --parity-grid CLI)
-            // produces the actual non-empty cropped PNG.
+            // Assert the same non-empty artifact contract enforced by the runtime capture guard.
             File.Exists(captureResult.PngPath).Should().BeTrue($"PNG should exist at {captureResult.PngPath}");
+            new FileInfo(captureResult.PngPath).Length.Should().BeGreaterThan(0);
 
             // Assert JSON log was written alongside the PNG
             var jsonPath = Path.ChangeExtension(captureResult.PngPath, ".json");

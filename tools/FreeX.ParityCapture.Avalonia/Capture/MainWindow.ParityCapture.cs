@@ -4287,8 +4287,29 @@ public sealed partial class MainWindow
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
             Directory.CreateDirectory(directory);
-        using var stream = File.Create(path);
-        bitmap.Save(stream);
+        using (var stream = File.Create(path))
+            bitmap.Save(stream);
+
+        if (new FileInfo(path).Length > 0)
+            return;
+
+        // Avalonia's headless encoder can occasionally return without writing under parallel test-host
+        // pressure. The rendered pixels are still available, so encode that same frame deterministically.
+        var pixelSize = bitmap.PixelSize;
+        using var pixels = new SKBitmap(
+            pixelSize.Width,
+            pixelSize.Height,
+            SKColorType.Bgra8888,
+            SKAlphaType.Premul);
+        bitmap.CopyPixels(
+            new PixelRect(0, 0, pixelSize.Width, pixelSize.Height),
+            pixels.GetPixels(),
+            checked(pixels.RowBytes * pixelSize.Height),
+            pixels.RowBytes);
+        using var image = SKImage.FromBitmap(pixels);
+        using var encoded = image.Encode(SKEncodedImageFormat.Png, quality: 100)
+            ?? throw new InvalidDataException("The captured bitmap could not be encoded as PNG.");
+        File.WriteAllBytes(path, encoded.ToArray());
     }
 
     private static RenderTargetBitmap RenderVisualToBitmap(Visual visual, int width, int height)
