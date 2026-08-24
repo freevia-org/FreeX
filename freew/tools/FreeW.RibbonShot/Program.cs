@@ -17,9 +17,10 @@ using FreeW.App.Host;
 // at a given size, and rasterises it.
 //
 // Usage: FreeW.RibbonShot <outDir> [tabIndex|all] [width] [height]
-//   tabIndex: 0=File/Backstage 1=Home 2=Insert 3=Design 4=Layout 5=References 6=Mailings 7=Review 8=View,
-//             9=Developer 10=Picture Format 11=Table Design 12=Table Layout; "all" captures content/contextual
-//             tabs (skipping File), "backstage" captures File, and "backstage:<entry label>" selects one
+//   tabIndex: live TabControl index (normally 0=File/Backstage, 1=Home, 2=Insert, 3=Design, 4=Layout,
+//             5=References, 6=Mailings, 7=Review, 8=View); use the manifest from "all" for the current
+//             contextual-tab indices. "all" captures content/contextual tabs (skipping File), "backstage"
+//             captures File, and "backstage:<entry label>" selects one
 //             Backstage rail entry before capture.
 //   Each run also writes freew_ribbonshot_manifest.json beside the PNGs so shell-parity evidence can be
 //   traced to the requested mode, render size, tab/backstage entry, and generated files.

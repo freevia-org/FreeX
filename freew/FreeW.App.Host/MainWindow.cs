@@ -3536,31 +3536,31 @@ public sealed partial class MainWindow : Window
             if (tab.Id == "home")
                 // The gallery owns visible quick-style selection; Clear/New/Manage stay reachable from
                 // its More popup, so duplicate width-heavy style buttons need not evict core Font/Paragraph.
-                InjectGallery(content, "styles", StylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "styles", () => StylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
             if (tab.Id == "design")
                 // Replace the rendered Document Formatting controls with the live-preview Word-style
                 // gallery/menu strip so backed commands do not appear twice beside their custom previews.
-                InjectGallery(content, "themes", ThemeGallery.BuildDocumentFormatting(_editor), removeKind: RemoveKind.All);
+                InjectGallery(content, "themes", () => ThemeGallery.BuildDocumentFormatting(_editor), removeKind: RemoveKind.All);
             if (tab.Id == "table-design")
                 // Table Styles gallery: inject a live-preview style picker into the Table Style group,
                 // replacing the Shading button placeholder so the gallery owns that lane.
-                InjectGallery(content, "table-style", TableStylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "table-style", () => TableStylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
 
             if (tab.Id == "chart-design")
             {
                 // Inject the three Chart Design galleries (Quick Layout, Chart Styles, Change Colors)
                 // into the corresponding groups on the chart contextual tab. Each gallery replaces the
                 // group's placeholder ribbon commands with live-preview swatches.
-                InjectGallery(content, "chart-quick-layout", ChartDesignGallery.BuildQuickLayouts(registry), removeKind: RemoveKind.All);
-                InjectGallery(content, "chart-style", ChartDesignGallery.BuildChartStyles(registry), removeKind: RemoveKind.All);
-                InjectGallery(content, "chart-colors", ChartDesignGallery.BuildChangeColors(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-quick-layout", () => ChartDesignGallery.BuildQuickLayouts(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-style", () => ChartDesignGallery.BuildChartStyles(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-colors", () => ChartDesignGallery.BuildChangeColors(registry), removeKind: RemoveKind.All);
             }
 
             if (tab.Id == "smartart-design")
             {
                 // Inject the three SmartArt gallery strips: Layouts, Change Colors, Styles.
-                InjectGallery(content, "smartart-layouts", SmartArtGallery.BuildLayouts(registry), removeKind: RemoveKind.All);
-                InjectGallery(content, "smartart-colors", SmartArtGallery.BuildColors(registry), removeKind: RemoveKind.All, extra: SmartArtGallery.BuildStyles(registry));
+                InjectGallery(content, "smartart-layouts", () => SmartArtGallery.BuildLayouts(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "smartart-colors", () => SmartArtGallery.BuildColors(registry), removeKind: RemoveKind.All, extra: () => SmartArtGallery.BuildStyles(registry));
             }
 
             }
@@ -3586,37 +3586,58 @@ public sealed partial class MainWindow : Window
     // Combos drops only ComboBox columns (so a placeholder combo the gallery supersedes goes away while
     // command buttons like New Style / Manage Styles remain). An optional `extra` gallery is appended
     // after the first (e.g. the Design Colors strip).
-    private static void InjectGallery(DependencyObject content, string groupId, FrameworkElement gallery, RemoveKind removeKind, FrameworkElement? extra = null)
+    private static void InjectGallery(
+        DependencyObject content,
+        string groupId,
+        Func<FrameworkElement> createGallery,
+        RemoveKind removeKind,
+        Func<FrameworkElement>? extra = null)
     {
-        var grid = FindGroupGrid(content, groupId);
-        if (grid is null)
+        var groupHost = FindGroupHost(content, groupId);
+        if (groupHost is null)
             return;
 
-        // Row 0 of the group grid holds the content lane (a horizontal StackPanel of columns/controls).
-        var lane = grid.Children.OfType<FrameworkElement>().FirstOrDefault(c => Grid.GetRow(c) == 0) as Panel;
-        if (lane is null)
-            return;
-
-        if (removeKind == RemoveKind.All)
+        // Compact group presentations are built lazily by RibbonGroupHost. A FrameworkElement can only
+        // have one WPF parent, so each rebuilt presentation must receive its own gallery instance.
+        var injectedLanes = new HashSet<Panel>();
+        void InjectInto(FrameworkElement presentation)
         {
-            lane.Children.Clear();
-        }
-        else if (removeKind == RemoveKind.Combos)
-        {
-            // Each lane column is its own StackPanel; the renderer packs combos into combo-only columns,
-            // so a column whose children are all ComboBoxes is a placeholder-combo column to drop.
-            var toRemove = lane.Children.OfType<Panel>()
-                .Where(col => col.Children.Count > 0 && col.Children.OfType<UIElement>().All(c => c is ComboBox))
-                .ToList();
-            foreach (var col in toRemove)
-                lane.Children.Remove(col);
+            if (presentation is not Grid grid)
+                return;
+
+            // Row 0 of the group grid holds the content lane (a horizontal StackPanel of columns/controls).
+            var lane = grid.Children.OfType<FrameworkElement>().FirstOrDefault(c => Grid.GetRow(c) == 0) as Panel;
+            if (lane is null || !injectedLanes.Add(lane))
+                return;
+
+            if (removeKind == RemoveKind.All)
+            {
+                lane.Children.Clear();
+            }
+            else if (removeKind == RemoveKind.Combos)
+            {
+                // Each lane column is its own StackPanel; the renderer packs combos into combo-only columns,
+                // so a column whose children are all ComboBoxes is a placeholder-combo column to drop.
+                var toRemove = lane.Children.OfType<Panel>()
+                    .Where(col => col.Children.Count > 0 && col.Children.OfType<UIElement>().All(c => c is ComboBox))
+                    .ToList();
+                foreach (var col in toRemove)
+                    lane.Children.Remove(col);
+            }
+
+            var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 2, 2, 0) };
+            host.Children.Add(createGallery());
+            if (extra is not null)
+                host.Children.Add(extra());
+            lane.Children.Insert(0, host);
         }
 
-        var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 2, 2, 0) };
-        host.Children.Add(gallery);
-        if (extra is not null)
-            host.Children.Add(extra);
-        lane.Children.Insert(0, host);
+        InjectInto(groupHost.GroupContent);
+        groupHost.LayoutUpdated += (_, _) =>
+        {
+            if (groupHost.Content is FrameworkElement presentation)
+                InjectInto(presentation);
+        };
     }
 
     // Find the group content grid stamped with the given catalog id, walking the renderer's known
@@ -3624,7 +3645,7 @@ public sealed partial class MainWindow : Window
     // RibbonGroupHosts. Each host's Content is the group grid (which carries the catalog id). This walks
     // the logical structure the renderer built eagerly, so it works before the visual tree is realized
     // (unlike VisualTreeHelper, which would see nothing until the ribbon is measured/rendered).
-    private static Grid? FindGroupGrid(DependencyObject root, string groupId)
+    private static RibbonGroupHost? FindGroupHost(DependencyObject root, string groupId)
     {
         var panel = (root as Border)?.Child as Panel;
         if (panel is null)
@@ -3632,9 +3653,9 @@ public sealed partial class MainWindow : Window
 
         foreach (var child in panel.Children)
         {
-            if (child is RibbonGroupHost host && host.Content is Grid grid
+            if (child is RibbonGroupHost host && host.GroupContent is Grid grid
                 && RibbonMetadata.GetCatalogId(grid) == groupId)
-                return grid;
+                return host;
         }
         return null;
     }
