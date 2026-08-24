@@ -797,6 +797,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         // It applies a BCP-47 language tag to the selected runs (rPr/w:lang) so the built-in
                         // spell checker uses the correct dictionary per run.
                         g.Medium("freew.set-proofing-language", "Set Proofing Language", RibbonCommandIconKind.Language);
+                        g.Sizing(RibbonGroupSizing.OfficeAdaptive);
                     }),
                 tab => tab.Group("proofing", "Proofing", null, 110, g =>
                     {
@@ -812,6 +813,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("speech", "Speech", "S", 97, g =>
                     {
                         g.MediumToggle("freew.read-aloud", "Read Aloud", RibbonCommandIconKind.ReadAloud);
+                        g.Sizing(RibbonGroupSizing.OfficeAdaptive);
                     }),
                 tab => tab.Group("speech", "Speech", null, 105, g =>
                     {
@@ -823,6 +825,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("accessibility", "Accessibility", "A", 92, g =>
                     {
                         g.Medium("freew.check-accessibility", "Check Accessibility", RibbonCommandIconKind.Accessibility);
+                        g.Sizing(RibbonGroupSizing.OfficeAdaptive);
                     }),
                 tab => tab.Group("accessibility", "Accessibility", null, 92, g =>
                     {
@@ -842,6 +845,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.Medium("freew.reply-comment", "Reply", RibbonCommandIconKind.Comment);
                         g.Medium("freew.resolve-comment", "Resolve", RibbonCommandIconKind.AcceptChange);
                         g.Medium("freew.show-comments", "Show Comments", RibbonCommandIconKind.Comment);
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("comments", "Comments", null, 100, g =>
                     {
@@ -886,6 +890,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                             // Balloons: toggle right-margin balloon display mode for comments and revisions.
                             m.Item("freew.show-markup-balloons", "Show Revisions in Balloons", "B");
                         });
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("tracking", "Tracking", null, 90, g =>
                     {
@@ -913,6 +918,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.RowBreak();
                         g.Medium("freew.previous-change", "Previous", RibbonCommandIconKind.History);
                         g.Medium("freew.next-change", "Next", RibbonCommandIconKind.History);
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("changes", "Changes", null, 80, g =>
                     {
@@ -930,6 +936,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     {
                         g.MediumToggle("freew.mark-as-final", "Mark as Final", RibbonCommandIconKind.Protect);
                         g.MediumToggle("freew.restrict-editing", "Restrict Editing", RibbonCommandIconKind.Protect);
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("compare", "Compare", null, 78, g =>
                     {
@@ -943,6 +950,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     {
                         g.Medium("freew.compare", "Compare", RibbonCommandIconKind.Compare);
                         g.Medium("freew.combine", "Combine", RibbonCommandIconKind.Compare);
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("protect", "Protect", null, 85, g =>
                     {
@@ -955,6 +963,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("inspect", "Inspect", "I", 75, g =>
                     {
                         g.Medium("freew.inspect-document", "Inspect Document", RibbonCommandIconKind.Search);
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("inspect", "Inspect", null, 75, g =>
                     {

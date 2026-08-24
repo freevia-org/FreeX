@@ -926,6 +926,12 @@ public sealed class FreeWRibbonParityTests
             .Should()
             .Equal("proofing", "speech", "accessibility", "comments", "tracking", "changes", "protect", "compare", "inspect");
 
+        review.FindGroup("proofing")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+        review.FindGroup("speech")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+        review.FindGroup("accessibility")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+        foreach (var groupId in new[] { "comments", "tracking", "changes", "protect", "compare", "inspect" })
+            review.FindGroup(groupId)!.Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+
         CommandIds(review.FindGroup("accessibility")!)
             .Should()
             .Equal("freew.check-accessibility");
