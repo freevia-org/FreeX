@@ -31,6 +31,8 @@ public static class FreePRibbon
                 tab => AddTransitionGroups(tab, profile))
             .Tab("animations", FreePRibbonText.AnimationsTab.Label, FreePRibbonText.AnimationsTab.KeyTip,
                 tab => AddAnimationGroups(tab, profile))
+            .Tab("slide-show", FreePRibbonText.SlideShowTab.Label, FreePRibbonText.SlideShowTab.KeyTip,
+                tab => AddSlideShowGroups(tab, profile))
             .Tab("view", FreePRibbonText.ViewTab.Label, FreePRibbonText.ViewTab.KeyTip,
                 AddViewGroups)
             .Tab("help", "Help", "Y", AddHelpGroups)
@@ -367,6 +369,19 @@ public static class FreePRibbon
             RibbonCommandIconKind.More, FreePRibbonText.SlideShowSetupKeyTip);
         group.Medium("freep.slideshow.custom-shows", FreePRibbonText.SlideShowCustomShowsLabel,
             RibbonCommandIconKind.List, FreePRibbonText.SlideShowCustomShowsKeyTip);
+    }
+
+    private static void AddSlideShowGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
+    {
+        // These controls were previously reachable only through a low-priority Transitions group.
+        // PowerPoint gives the presentation route its own normal tab, so keep the complete supported
+        // slide-show surface together and allow the standard Office adaptation at narrow widths.
+        tab.Group("slide-show", FreePRibbonText.SlideShowGroupLabel,
+            profile.SlideShowGroupKeyTip(), 100, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                AddSlideShowControls(group, profile);
+            });
     }
 
     private static void AddArrangeControls(RibbonGroupBuilder group)
@@ -1269,8 +1284,6 @@ public static class FreePRibbon
             group.MediumToggle("freep.transition.sound-loop", FreePRibbonText.TransitionSoundLoopCommand.Label,
                 RibbonCommandIconKind.Refresh, FreePRibbonText.TransitionSoundLoopCommand.KeyTip);
         });
-        tab.Group("slideshow-from-transitions", FreePRibbonText.SlideShowGroupLabel,
-            profile.SlideShowGroupKeyTip(), 80, group => AddSlideShowControls(group, profile));
     }
 
     private static void AddAnimationGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)

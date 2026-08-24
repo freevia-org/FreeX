@@ -8,7 +8,7 @@
 | 2. Feedback intake | Complete | The old May 24 user-test and retest reports were retired after their findings were resolved and absorbed into regression coverage/status history; GitHub issues now include a structured user-test report template for new feedback. |
 | 3. Local diagnostics | Complete | Test builds record local JSONL usage events and crash reports under `%LOCALAPPDATA%\FreeX\Diagnostics`. Those files are not automatically uploaded; the separate Phase 5 transport may send an opt-in crash event. |
 | 4. Hosted release channel | Complete | GitHub Actions publishes latest builds through GitHub Releases with versioned artifacts, a stable latest test build link, and an MSIX package that is signed when release certificate secrets are configured. |
-| 5. Crash analytics | Complete | Opt-in Sentry crash upload is wired behind tester consent and `FREEX_SENTRY_DSN`; local diagnostics remain available without network upload. |
+| 5. Crash analytics | Complete | Opt-in Sentry crash upload is wired across the suite behind tester consent and the publish-time `FREE_FAMILY_SENTRY_DSN`; local diagnostics remain available without network upload. FreeX still accepts the legacy runtime-only `FREEX_SENTRY_DSN` override for compatibility. |
 | 6. Lightweight usage analytics | Complete | Stabilization-only app usage events are recorded through the existing diagnostics pipeline and safe crash breadcrumbs. |
 | 7. Auto-update readiness | Complete | Help exposes the stable latest release page, and Velopack-managed installs can check, download, apply, and restart into an update; plain single-file and MSIX builds retain the manual latest-download path. |
 | 8. Accessibility validation | Complete | UIA AutomationProperties audit completed; `GridView`/`SheetGrid` exposes grid, selection, visible cell grid-item, value, and selection-item provider contracts; `TabChrome` name binding is fixed; automated UIA property and `GridViewAutomationPeerTests` guards cover the current contracts. Every public-preview candidate still needs a live keyboard-only smoke pass, screen-reader smoke pass, and UI Automation catalog review recorded in release notes. |
@@ -195,7 +195,7 @@ upload the local JSON/JSONL files.
 
 Remote crash analytics are off by default. They activate only when all of these are true:
 
-- A Sentry DSN is present through the release build configuration or the `FREEX_SENTRY_DSN` environment override.
+- A Sentry DSN is present through the suite release build configuration (`FREE_FAMILY_SENTRY_DSN`). FreeX also accepts the legacy runtime-only `FREEX_SENTRY_DSN` override for compatibility; release artifacts should use the shared publish-time setting.
 - The tester opts in from the first-launch crash report prompt or later through `Options > Trust Center`.
 - `FREEX_CRASH_ANALYTICS` is not set to `0`.
 
@@ -216,7 +216,7 @@ Lightweight usage analytics reuse the same local diagnostics pipeline and, when 
 - File-access grant evidence is limited to redacted lifecycle metadata such as `grantKind` and `payloadRedacted`; it does not include workbook file paths, filenames, contents, formulas, or bookmark payloads.
 - These events do not intentionally collect workbook contents, formulas, filenames, or paths.
 - Crash-linked exception messages and stack traces can occasionally contain sensitive values; review local crash reports before sharing them.
-- Set `FREEX_DIAGNOSTICS=0` before launching FreeX to disable local usage diagnostics for that run. Remote crash breadcrumbs remain gated by Phase 5 crash analytics consent and `FREEX_SENTRY_DSN`.
+- Set `FREEX_DIAGNOSTICS=0` before launching FreeX to disable local usage diagnostics for that run. Remote crash breadcrumbs remain gated by Phase 5 crash analytics consent and a configured shared release endpoint; FreeX's legacy `FREEX_SENTRY_DSN` runtime override does not bypass consent.
 
 ## Phase 7 Auto-Update Readiness Contract
 

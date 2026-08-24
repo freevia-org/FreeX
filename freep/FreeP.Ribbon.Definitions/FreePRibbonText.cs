@@ -147,6 +147,7 @@ internal static class FreePRibbonText
     public static string SlideShowGroupLabel => Get("Ribbon_Group_SlideShow_Label");
     public static string SlideShowGroupWpfKeyTip => Get("Ribbon_Group_SlideShow_WpfKeyTip");
     public static string SlideShowGroupAvaloniaKeyTip => Get("Ribbon_Group_SlideShow_AvaloniaKeyTip");
+    public static RibbonText SlideShowTab { get; } = new("Ribbon_Group_SlideShow_Label", "Ribbon_Tab_SlideShow_KeyTip");
     public static string SlideShowFromBeginningLabel => Get("Ribbon_Command_SlideShowFromBeginning_Label");
     public static string SlideShowFromBeginningKeyTip => Get("Ribbon_Command_SlideShowFromBeginning_KeyTip");
     public static string SlideShowFromCurrentSlideLabel => Get("Ribbon_Command_SlideShowFromCurrentSlide_Label");

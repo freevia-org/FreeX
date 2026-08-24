@@ -334,6 +334,9 @@
   <data name="Ribbon_Group_SlideShow_Label" xml:space="preserve">
     <value>Slide Show</value>
   </data>
+  <data name="Ribbon_Tab_SlideShow_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
   <data name="Ribbon_Group_SlideShow_WpfKeyTip" xml:space="preserve">
     <value>L</value>
   </data>
