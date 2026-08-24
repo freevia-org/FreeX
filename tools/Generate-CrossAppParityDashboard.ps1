@@ -865,10 +865,10 @@ try {
         acceptanceRefreshNote = $wave194AcceptanceRefreshNote
         initialIndependentReview = "Recorded: the initial independent review found two P2 findings: FreeX crop/readiness/transition and physical click geometry were duplicated instead of consuming one contract; FreeP topology evidence did not pin the complete source PPTX and initially over-attributed the residual."
         reviewRemediation = "Completed at prior source: FreeX uses one authoritative mixed-type geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved. Reopened after source advancement because the color-geometry guard required remediation."
-        independentReview = "Pending: final independent review after the f2aab99324 source-guard remediation; the prior no-findings review is superseded by the tested-source change."
+        independentReview = "Passed: final independent review found no findings. Reviewer verified f2a structurally scopes the color function before the mixed-type function, accepts the later decoy, rejects the internal assignment, verifies Wave191-193 retained hashes 11/11, 11/11, and 18/18, verifies Wave194 20 evidence plus 12 provenance/validation, and found FreeP and FreeW clean."
         repositoryPreflight = "Pending: final repository preflight result at tested source commit ${wave194TestedSourceCommit}."
-        fullReleaseBuild = "Pending: final dotnet build FreeX.slnx --configuration Release result at tested source commit ${wave194TestedSourceCommit}."
-        defaultNonUiTestLane = "Pending: final default non-UI test lane result and authoritative project totals at tested source commit ${wave194TestedSourceCommit}."
+        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors; elapsed 00:13:58.57."
+        defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --no-restore --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 --logger `"trx;LogFileName=default-tests-wave194-final.trx`" exited 0 with 43,427 passed, 134 skipped/not-run, 0 failed, 43,561 total. 25 unique TRX files plus 31 additional passed captures overwritten into the shared capture TRX path across seven capture assemblies. Key totals: FreeP Avalonia 724/0; FreeP Host 2,409/0; FreeP Presentation 5,468/0; FreeX Avalonia 2,193/0; Host Logic 1,490 passed/4 skipped; Presentation 5,465/1; Core.IO 5,841/56; Core Model 6,317/41; Formula 5,199/7; Calc 1,982/24; Integration 661/1. Initial failed lane and remediation remain documented."
         initialDefaultLane = "Exited 1 solely because the Wave191/192/193 color-geometry guard was bounded through a later selector and counted Wave194 mixed_type_target_click_x_offset; at that pre-remediation source FreeX Avalonia reported 2,188 passed, 3 failed, 2,191 total."
         sourceTestRemediation = "Remediation commit f2aab993242fa6a6cc49d67c4b7770c23ce4c067 structurally scopes the old guard to probe_autofilter_color_persistence_physical and adds isolation and inside-function mutation tests."
         workerVerification = "Passed: failing classes 11/11, full color lane 17/17, Wave194 9/9, full Avalonia project 2,193/2,193, focused project build 0/0; no runtime harness or evidence change."
@@ -881,9 +881,6 @@ try {
         cumulativeAppSlicesStatus = "pending-final-integration-gates"
         integrationGateStatus = "pending"
         pendingIntegrationGates = @(
-            "final-independent-review",
-            "full-release-build",
-            "default-non-ui-test-lane",
             "repository-preflight"
         )
         integrationGateEvidence = $wave194IntegrationGateEvidence
