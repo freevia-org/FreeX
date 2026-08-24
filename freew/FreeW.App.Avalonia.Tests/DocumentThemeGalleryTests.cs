@@ -9,7 +9,7 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class DocumentThemeGalleryTests
 {
     [Fact]
-    public void Theme_gallery_exposes_every_builtin_thumbnail_and_routes_its_command()
+    public void Theme_gallery_uses_a_compact_chooser()
     {
         var registry = new RibbonCommandRegistry();
         var commands = new Dictionary<string, RecordingPreviewCommand>();
@@ -22,16 +22,19 @@ public sealed class DocumentThemeGalleryTests
                 command);
         }
 
-        var gallery = DocumentThemeGallery.Build(registry).Should().BeOfType<StackPanel>().Subject;
-        var buttons = gallery.Children.OfType<Button>().ToArray();
-        buttons.Should().HaveCount(DocumentTheme.Catalog.Count);
-        buttons.Select(AutomationProperties.GetName).Should().Equal(DocumentTheme.Catalog.Select(theme => theme.Name));
+        var gallery = DocumentThemeGallery.Build(registry).Should().BeOfType<Button>().Subject;
+        AutomationProperties.GetName(gallery).Should().Be("Themes");
+    }
 
-        var berlin = buttons.Single(button => AutomationProperties.GetName(button) == "Berlin");
-        berlin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    [Fact]
+    public void Document_formatting_exposes_style_sets_as_the_visible_gallery()
+    {
+        var gallery = DocumentThemeGallery.BuildDocumentFormatting(new RibbonCommandRegistry())
+            .Should().BeOfType<StackPanel>().Subject;
 
-        commands["Berlin"].ExecuteCount.Should().Be(1);
-        commands["Office"].ExecuteCount.Should().Be(0);
+        gallery.Children.OfType<Button>().Select(AutomationProperties.GetName).Should().Contain([
+            "Office", "Simple", "Elegant", "Formal", "Lines (Simple)", "Minimalist", "Shadow", "Shaded",
+            "More Style Sets", "Colors", "Fonts", "Paragraph\nSpacing", "Effects"]);
     }
 
     private sealed class RecordingPreviewCommand : IRibbonPreviewCommand
