@@ -2178,7 +2178,7 @@ function Test-SourceWiring {
                 "var result = _session.SetShowFormulas(showFormulas);",
                 "e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift",
                 "_helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get(`"MainWindow_Content_HelpOnline`"));",
-                "_sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get(`"MainWindow_Content_Feedback`"));",
+                "AppIssueReporter.CreateIssueUrl(CreateIssueReportContext()),",
                 "_checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get(`"MainWindow_Content_CheckForUpdates`"));",
                 "_aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();",
                 "_legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();",
