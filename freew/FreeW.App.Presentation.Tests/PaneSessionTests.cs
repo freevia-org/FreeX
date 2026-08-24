@@ -77,6 +77,33 @@ public sealed class NavigationPaneSessionTests
         new((index, _) => index, _ => { }, _ => { }, _ => { }, _ => { }, _ => false);
 }
 
+public sealed class SelectionPaneProjectionTests
+{
+    [Fact]
+    public void Build_includes_only_floating_objects_and_orders_frontmost_first()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(new InlineImage([], 24, 18)));
+        paragraph.Runs.Add(Run.FromImage(new InlineImage([], 48, 36)
+        {
+            Wrapping = ImageWrapping.Square
+        }));
+        paragraph.Runs.Add(Run.FromShape(new Shape(ShapeKind.Rectangle, 60, 40)
+        {
+            Placement = new FloatingPlacement { Wrapping = ImageWrapping.Square }
+        }));
+        document.Blocks.Add(paragraph);
+
+        var items = SelectionPaneProjection.Build(document);
+
+        items.Select(item => (item.Kind, item.Name, item.RunIndex)).Should().Equal(
+            ("Shape", "Shape 1", 2),
+            ("Picture", "Picture 1", 1));
+    }
+}
+
 public sealed class ReviewingPaneSessionTests
 {
     [Fact]

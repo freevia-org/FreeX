@@ -64,6 +64,11 @@ public sealed partial class MainWindow : Window
     private ListBox _navList = null!;
     private bool _navPaneVisible;
     private NavigationPaneSession _navigationPaneSession = null!;
+    private Border _selectionPane = null!;
+    private ListBox _selectionList = null!;
+    private Button _selectionBringForward = null!;
+    private Button _selectionSendBackward = null!;
+    private bool _selectionPaneVisible;
 
     // Reveal Formatting pane (Word's Shift+F1): a read-only side pane, docked on the right (Word's side),
     // that mirrors the effective FONT / PARAGRAPH / SECTION formatting of the current selection. It updates
@@ -257,6 +262,7 @@ public sealed partial class MainWindow : Window
             Backstage = ShowBackstage,
             NewDocument = () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
             ToggleNavigationPane = ToggleNavPane,
+            ToggleSelectionPane = ToggleSelectionPane,
             IsNavigationPaneVisible = () => _navPaneVisible,
             ToggleReviewingPane = ToggleReviewPane,
             IsReviewingPaneVisible = () => _reviewPaneVisible,
@@ -477,6 +483,7 @@ public sealed partial class MainWindow : Window
             _file.MarkDirty();
             UpdateCounts();
             RefreshOutline();
+            RefreshSelectionPane();
             RefreshContextualTabs();
             RefreshReviewPane();
             RefreshNotesPane();
@@ -544,6 +551,10 @@ public sealed partial class MainWindow : Window
         var navPane = BuildNavPane();
         DockPanel.SetDock(navPane, Dock.Left);
         body.Children.Add(navPane);
+
+        var selectionPane = BuildSelectionPane();
+        DockPanel.SetDock(selectionPane, Dock.Right);
+        body.Children.Add(selectionPane);
 
         // Reveal Formatting pane docks on the RIGHT (Word's side for the Shift+F1 pane), opposite the
         // left navigation pane. Added before the fill child so the DockPanel reserves its edge first.
@@ -1400,6 +1411,85 @@ public sealed partial class MainWindow : Window
         return area;
     }
 
+    // Layout > Arrange > Selection Pane. Rows are projected from the actual floating-object model;
+    // selecting a row activates that exact object, while the two buttons use the editor's undoable
+    // z-order command route instead of keeping a separate visual-only ordering.
+    private UIElement BuildSelectionPane()
+    {
+        _selectionList = new ListBox
+        {
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent
+        };
+        _selectionList.SelectionChanged += OnSelectionPaneSelected;
+
+        _selectionBringForward = new Button { Content = "Bring Forward", Margin = new Thickness(8, 4, 4, 8) };
+        _selectionBringForward.Click += (_, _) => MoveSelectionPaneObject(ZOrderOperation.BringForward);
+        _selectionSendBackward = new Button { Content = "Send Backward", Margin = new Thickness(4, 4, 8, 8) };
+        _selectionSendBackward.Click += (_, _) => MoveSelectionPaneObject(ZOrderOperation.SendBackward);
+        var controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+        controls.Children.Add(_selectionBringForward);
+        controls.Children.Add(_selectionSendBackward);
+
+        var header = new TextBlock
+        {
+            Text = "Selection Pane",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 8, 10, 6)
+        };
+        var layout = new DockPanel { Width = 240 };
+        DockPanel.SetDock(header, Dock.Top);
+        DockPanel.SetDock(controls, Dock.Bottom);
+        layout.Children.Add(header);
+        layout.Children.Add(controls);
+        layout.Children.Add(_selectionList);
+
+        _selectionPane = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Visibility = Visibility.Collapsed,
+            Child = layout
+        };
+        UpdateSelectionPaneButtons();
+        return _selectionPane;
+    }
+
+    private void OnSelectionPaneSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_selectionList.SelectedItem is SelectionPaneItem item)
+            _editor.SelectFloating(item.BlockIndex, item.RunIndex);
+        UpdateSelectionPaneButtons();
+    }
+
+    private void MoveSelectionPaneObject(ZOrderOperation operation)
+    {
+        if (_editor.ChangeSelectedFloatingZOrder(operation))
+            RefreshSelectionPane();
+    }
+
+    private void RefreshSelectionPane()
+    {
+        if (!_selectionPaneVisible || _selectionList is null)
+            return;
+        _selectionList.SelectionChanged -= OnSelectionPaneSelected;
+        _selectionList.Items.Clear();
+        foreach (var item in SelectionPaneProjection.Build(CurrentPaneDocument()))
+            _selectionList.Items.Add(item);
+        _selectionList.SelectionChanged += OnSelectionPaneSelected;
+        UpdateSelectionPaneButtons();
+    }
+
+    private void UpdateSelectionPaneButtons()
+    {
+        var enabled = _selectionList?.SelectedItem is SelectionPaneItem;
+        if (_selectionBringForward is not null)
+            _selectionBringForward.IsEnabled = enabled;
+        if (_selectionSendBackward is not null)
+            _selectionSendBackward.IsEnabled = enabled;
+    }
+
     // Recompute the set of body blocks that contain the search term (reusing the pure TextSearch helper),
     // jump to the first hit, filter the outline to relevant headings, and refresh the Prev/Next/count row.
     // An empty term clears the search and shows the full outline again.
@@ -1443,6 +1533,14 @@ public sealed partial class MainWindow : Window
         _stateStore.SetChecked("freew.nav-pane", _navPaneVisible);
         if (_navPaneVisible)
             RefreshOutline();
+    }
+
+    private void ToggleSelectionPane()
+    {
+        _selectionPaneVisible = !_selectionPaneVisible;
+        _selectionPane.Visibility = _selectionPaneVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (_selectionPaneVisible)
+            RefreshSelectionPane();
     }
 
     // View > Show > Ruler: Word exposes this as a simple visibility toggle. FreeW's ruler is currently
