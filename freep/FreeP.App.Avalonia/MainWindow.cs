@@ -2341,23 +2341,27 @@ public sealed partial class MainWindow : Window,
     {
         _viewModeState = state;
         var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
+        var isNotesPage = state.Mode == PresentationViewMode.NotesPage;
         if (_bodyGrid is null || _slidePaneHost is null || _canvasHost is null)
             return;
 
         _bodyGrid.ColumnDefinitions[0].Width = isSlideSorter
             ? new GridLength(1, GridUnitType.Star)
-            : GridLength.Auto;
+            : isNotesPage ? new GridLength(0) : GridLength.Auto;
         _bodyGrid.ColumnDefinitions[1].Width = isSlideSorter
             ? new GridLength(0)
             : new GridLength(1, GridUnitType.Star);
-        _slidePaneHost.Width = isSlideSorter ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
-        _slidePaneList.Width = isSlideSorter ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
+        _slidePaneHost.Width = isSlideSorter || isNotesPage ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
+        _slidePaneList.Width = isSlideSorter || isNotesPage ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
         _slidePaneList.MaxHeight = isSlideSorter ? double.PositiveInfinity : 520;
         _slidePaneList.ItemsPanel = isSlideSorter
             ? new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = Orientation.Horizontal })
             : new FuncTemplate<Panel?>(() => new StackPanel { Orientation = Orientation.Vertical });
         _canvasHost.IsVisible = !isSlideSorter;
         _notesBox.IsVisible = !isSlideSorter && _viewShowState.ShowNotesPane;
+        _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
+        _notesBox.MaxHeight = isNotesPage ? 300 : 120;
+        _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
         RefreshSlidePane();
         SyncRibbonCommandStates();
     }

@@ -1439,6 +1439,9 @@ public static class FreePRibbon
             group.Large(PresentationViewModePlanner.SlideSorterCommandId,
                 FreePRibbonText.ViewSlideSorterCommand.Label, RibbonCommandIconKind.Sort,
                 FreePRibbonText.ViewSlideSorterCommand.KeyTip);
+            group.Large(PresentationViewModePlanner.NotesPageCommandId,
+                FreePRibbonText.ViewNotesPageCommand.Label, RibbonCommandIconKind.OnePage,
+                FreePRibbonText.ViewNotesPageCommand.KeyTip);
         });
         tab.Group("show", FreePRibbonText.ViewShowGroup.Label, FreePRibbonText.ViewShowGroup.KeyTip, 100, group =>
         {
