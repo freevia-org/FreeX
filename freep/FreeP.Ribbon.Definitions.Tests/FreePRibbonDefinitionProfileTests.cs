@@ -21,10 +21,10 @@ public sealed class FreePRibbonDefinitionProfileTests
 
         wpf.VisibleTabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "transitions", "animations", "slide-show", "view", "help");
+            .Equal("home", "insert", "design", "transitions", "animations", "slide-show", "review", "view", "help");
         avalonia.VisibleTabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "transitions", "animations", "slide-show", "view", "help");
+            .Equal("home", "insert", "design", "transitions", "animations", "slide-show", "review", "view", "help");
 
         foreach (var definition in new[] { wpf, avalonia })
         {
@@ -36,12 +36,42 @@ public sealed class FreePRibbonDefinitionProfileTests
 
             definition.FindTab("design")!.Groups.Select(group => group.Id)
                 .Should().Equal("themes", "customize");
+            definition.FindTab("review")!.Groups.Select(group => group.Id)
+                .Should().Equal("comments", "accessibility", "proofing");
             definition.FindTab("smartart-design")!.Groups.Select(group => group.Id)
                 .Should().Contain("smartart-colors");
         }
 
         RibbonDefinitionValidator.Validate(wpf).HasErrors.Should().BeFalse();
         RibbonDefinitionValidator.Validate(avalonia).HasErrors.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Review_tab_exposes_existing_comments_accessibility_and_proofing_routes_in_both_profiles()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var review = definition.FindTab("review")!;
+            review.Groups.SelectMany(group => group.Controls)
+                .Select(control => control.CommandId.Value)
+                .Should()
+                .Contain([
+                    PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
+                    PresentationReviewWorkflowPlanner.AddCommentCommandId,
+                    PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
+                    PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
+                    PresentationReviewWorkflowPlanner.PreviousCommentCommandId,
+                    PresentationReviewWorkflowPlanner.NextCommentCommandId,
+                    PresentationReviewWorkflowPlanner.AccessibilityCommandId,
+                    PresentationReviewWorkflowPlanner.AltTextCommandId,
+                    PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
+                    PresentationReviewWorkflowPlanner.ProofingCommandId,
+                ]);
+        }
     }
 
     [Fact]
