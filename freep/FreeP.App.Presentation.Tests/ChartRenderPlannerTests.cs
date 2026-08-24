@@ -1670,8 +1670,8 @@ public sealed class ChartRenderPlannerTests
         legend.Select(item => item.Label.Text).Should().Equal(
             "0-10", "10-20", "20-30", "30-40", "40-50",
             "50-60", "60-70", "70-80", "80-90", "90-100");
-        legend[0].Fill.Color.Should().Be(legend[9].Fill.Color,
-            "interval semantics remain explicit while the deterministic Office palette is reused");
+        legend.Select(item => item.Fill.Alpha).Should().OnlyContain(alpha => alpha == 255,
+            "every authored interval must use an opaque palette entry");
     }
 
     [Fact]
@@ -1688,6 +1688,88 @@ public sealed class ChartRenderPlannerTests
         frame.Plot.HasPositiveArea.Should().BeTrue();
         geometry.RenderFacets.Should().NotBeEmpty(
             "a narrow tall imported surface must use a drawable fallback envelope");
+    }
+
+    [Theory]
+    [InlineData(120)]
+    [InlineData(80)]
+    [InlineData(1)]
+    public void BuildFramePlan_NarrowImportedSurfaceKeepsPositivePlotEnvelope(double width)
+    {
+        var chart = MakeImportedLargeSurfaceChart();
+
+        var frame = ChartRenderPlanner.BuildFramePlan(
+            chart,
+            new ChartPlanRect(0, 0, width, 500));
+
+        frame.Plot.HasPositiveArea.Should().BeTrue();
+        frame.Plot.Width.Should().BeGreaterThan(0);
+        frame.Plot.Height.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void BuildImportedSurfaceElevationBands_CoverTwelveAuthoredIntervalsWithDeterministicPalette()
+    {
+        var chart = MakeImportedLargeSurfaceChart();
+        chart.Legend = LegendPosition.Right;
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 120;
+        chart.ValueAxis.MajorUnit = 10;
+        chart.Series[^1].Values[^1] = 120;
+
+        var frame = ChartRenderPlanner.BuildFramePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        var legend = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, seriesColors: null);
+        var repeatedLegend = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, seriesColors: null);
+
+        legend.Should().HaveCount(12);
+        legend.Select(item => item.Fill.Color).Should().Equal(
+            repeatedLegend.Select(item => item.Fill.Color),
+            "palette assignment must be deterministic across plans");
+        legend.Select(item => item.Fill.Alpha).Should().OnlyContain(alpha => alpha == 255);
+
+        for (int bandIndex = 0; bandIndex < legend.Count; bandIndex++)
+        {
+            double lower = bandIndex * 10;
+            double upper = (bandIndex + 1) * 10;
+            var bandFacets = geometry.RenderFacets
+                .Where(facet => facet.AverageValue >= lower && facet.AverageValue <= upper)
+                .ToArray();
+
+            bandFacets.Should().NotBeEmpty($"authored interval {lower}-{upper} needs mesh coverage");
+            bandFacets.Select(facet => facet.Fill.Color).Should().Contain(
+                legend[bandIndex].Fill.Color,
+                $"authored interval {lower}-{upper} must use its legend palette entry");
+        }
+    }
+
+    [Fact]
+    public void BuildImportedSurfaceElevationBands_PreserveTinyAuthoredFinalPartialInterval()
+    {
+        const double authoredMaximum = 120.0000000005;
+        var chart = MakeImportedLargeSurfaceChart();
+        chart.Legend = LegendPosition.Right;
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = authoredMaximum;
+        chart.ValueAxis.MajorUnit = 10;
+        chart.Series[^1].Values[^1] = authoredMaximum;
+
+        var frame = ChartRenderPlanner.BuildFramePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        var legend = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, seriesColors: null);
+
+        legend.Should().HaveCount(13,
+            "a representable partial interval must not be removed by an absolute epsilon");
+        var finalBandFacets = geometry.RenderFacets
+            .Where(facet => facet.AverageValue > 120 && facet.AverageValue <= authoredMaximum)
+            .ToArray();
+        finalBandFacets.Should().NotBeEmpty(
+            "the tiny final authored interval must retain drawable mesh coverage");
+        finalBandFacets.Select(facet => facet.Fill.Color).Should().Contain(legend[^1].Fill.Color);
     }
 
     [Fact]

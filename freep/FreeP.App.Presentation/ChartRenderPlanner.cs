@@ -922,6 +922,30 @@ public static partial class ChartRenderPlanner
     private static bool HasFullImportedSurfaceProjectionWidth(ChartPlanRect bounds) =>
         bounds.Width > ImportedFullSurfacePlotLeftInset + ImportedFullSurfacePlotRightReduction;
 
+    private static bool UsesFullImportedSurfaceFrame(
+        ChartShape chart,
+        ChartPlanRect bounds) =>
+        UsesLargeImportedSurfaceGrid(chart) &&
+        bounds.Height > ImportedSurfaceFullScalePlotHeightLimit &&
+        HasFullImportedSurfaceProjectionWidth(bounds);
+
+    private static (double Offset, double Length) ResolvePositiveImportedSurfaceDimension(
+        double boundLength,
+        double offset,
+        double reduction)
+    {
+        if (boundLength > reduction)
+            return (offset, boundLength - reduction);
+
+        // Keep the compact projection inside a narrow chart when the measured
+        // right/bottom reservation is larger than the available dimension.
+        // A one-point envelope is preferable to dropping the imported mesh.
+        double clampedOffset = Math.Min(
+            Math.Max(0.0, offset),
+            Math.Max(0.0, boundLength - 1.0));
+        return (clampedOffset, Math.Max(1.0, boundLength - clampedOffset));
+    }
+
     private static bool UsesDefaultSurface3DView(Chart3DView view) =>
         (view.RotationX ?? 15) == 15 &&
         (view.RotationY ?? 20) == 20 &&
@@ -1520,20 +1544,31 @@ public static partial class ChartRenderPlanner
             // PowerPoint's classic 3-D surface view reserves an explicit right
             // series-axis band and a deep lower projection band.
             bool usesTallImportedFrame = UsesImportedTallSurfaceTitleWrap(chart, bounds);
-            bool usesFullImportedSurfaceFrame = UsesLargeImportedSurfaceGrid(chart) &&
-                bounds.Height > ImportedSurfaceFullScalePlotHeightLimit &&
-                HasFullImportedSurfaceProjectionWidth(bounds);
-            plot = usesFullImportedSurfaceFrame
-                ? new ChartPlanRect(
+            bool usesFullImportedSurfaceFrame = UsesFullImportedSurfaceFrame(chart, bounds);
+            if (usesFullImportedSurfaceFrame)
+            {
+                plot = new ChartPlanRect(
                     bounds.X + ImportedFullSurfacePlotLeftInset,
                     bounds.Y + ImportedFullSurfacePlotTopInset,
                     bounds.Width - ImportedFullSurfacePlotRightReduction,
-                    bounds.Height - ImportedFullSurfacePlotBottomReduction)
-                : new ChartPlanRect(
-                    bounds.X + (usesTallImportedFrame ? ImportedTallSurfacePlotLeftInset : 44.0),
-                    bounds.Y + (usesTallImportedFrame ? 95.0 : 57.0),
-                    bounds.Width - (usesTallImportedFrame ? ImportedTallSurfacePlotRightReduction : 120.0),
-                    bounds.Height - (usesTallImportedFrame ? 149.0 : 99.0));
+                    bounds.Height - ImportedFullSurfacePlotBottomReduction);
+            }
+            else
+            {
+                var (leftInset, plotWidth) = ResolvePositiveImportedSurfaceDimension(
+                    bounds.Width,
+                    usesTallImportedFrame ? ImportedTallSurfacePlotLeftInset : 44.0,
+                    usesTallImportedFrame ? ImportedTallSurfacePlotRightReduction : 120.0);
+                var (topInset, plotHeight) = ResolvePositiveImportedSurfaceDimension(
+                    bounds.Height,
+                    usesTallImportedFrame ? 95.0 : 57.0,
+                    usesTallImportedFrame ? 149.0 : 99.0);
+                plot = new ChartPlanRect(
+                    bounds.X + leftInset,
+                    bounds.Y + topInset,
+                    plotWidth,
+                    plotHeight);
+            }
         }
         else if (chart.ChartType == ChartType.ColumnStacked100 && UsesImportedTextMetrics(chart))
         {
@@ -3485,9 +3520,8 @@ public static partial class ChartRenderPlanner
             }
             else
             {
-                bool usesFullImportedSurfaceFrame = chart.ChartType == ChartType.Surface3D &&
-                    UsesLargeImportedSurfaceGrid(chart) &&
-                    plot.Height > ImportedSurfaceFullScalePlotHeightLimit;
+                bool usesFullImportedSurfaceFrame =
+                    UsesFullImportedSurfaceFrame(chart, frame.Bounds);
                 double axisY = UsesImportedThreeDColumnDefaults(chart)
                     ? plot.Bottom - (ImportedThreeDBarBaseLift - 8.0)
                     : plot.Bottom;
@@ -3543,8 +3577,8 @@ public static partial class ChartRenderPlanner
         }
 
         var plot = frame.Plot;
-        bool usesFullImportedSurfaceFrame = UsesLargeImportedSurfaceGrid(chart) &&
-            plot.Height > ImportedSurfaceFullScalePlotHeightLimit;
+        bool usesFullImportedSurfaceFrame =
+            UsesFullImportedSurfaceFrame(chart, frame.Bounds);
         double depthX = Math.Min(plot.Width * 0.12, 44.0);
         double depthY = Math.Min(plot.Height * 0.44, 88.0);
         double scaleX = plot.Width / 360.0;
@@ -6002,7 +6036,21 @@ public static partial class ChartRenderPlanner
             return 0;
 
         double intervalCount = (maximum - minimum) / majorUnit;
-        return Math.Max(1, (int)Math.Ceiling(intervalCount - 0.000000001));
+        if (!double.IsFinite(intervalCount))
+            return int.MaxValue;
+
+        double ceiling = Math.Ceiling(intervalCount);
+        if (ceiling > 1.0)
+        {
+            // Compare the authored endpoint with the preceding constructed
+            // boundary. This removes a division-rounding phantom interval for
+            // exact multiples while preserving every representable partial one.
+            double precedingBoundary = minimum + (ceiling - 1.0) * majorUnit;
+            if (precedingBoundary >= maximum)
+                ceiling--;
+        }
+
+        return Math.Max(1, ceiling >= int.MaxValue ? int.MaxValue : (int)ceiling);
     }
 
     private static SrgbColor ResolveImportedSurfaceElevationBandColor(int bandIndex) =>
