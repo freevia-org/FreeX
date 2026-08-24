@@ -17,24 +17,27 @@ public sealed record AppCrashAnalyticsOptions(
         Func<string?> sentryDsnProvider,
         bool crashAnalyticsEnabled)
     {
-        var disabledByEnvironment = string.Equals(
-            global::System.Environment.GetEnvironmentVariable("FREEX_CRASH_ANALYTICS"),
-            "0",
-            StringComparison.OrdinalIgnoreCase);
+        var consentOverride = global::System.Environment.GetEnvironmentVariable("FREEX_CRASH_ANALYTICS");
+        var disabledByEnvironment =
+            string.Equals(consentOverride, "0", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(consentOverride, "false", StringComparison.OrdinalIgnoreCase);
+        var enabledByEnvironment =
+            string.Equals(consentOverride, "1", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(consentOverride, "true", StringComparison.OrdinalIgnoreCase);
         var sharedOptions = Free.Shared.AppServices.AppCrashAnalyticsOptions.CreateDefault(
             userConsent: crashAnalyticsEnabled);
         var dsn = sentryDsnProvider();
         var usesSharedBuildConfiguration = string.IsNullOrWhiteSpace(dsn);
         if (usesSharedBuildConfiguration)
             dsn = sharedOptions.Dsn;
-        var enabled = crashAnalyticsEnabled
+        var enabled = (crashAnalyticsEnabled || enabledByEnvironment)
             && !disabledByEnvironment
             && !string.IsNullOrWhiteSpace(dsn);
 
         return new AppCrashAnalyticsOptions(
             string.IsNullOrWhiteSpace(dsn) ? null : dsn,
             enabled,
-            usesSharedBuildConfiguration ? sharedOptions.Environment : "tester",
+            sharedOptions.Environment,
             IsDisabledByEnvironment: disabledByEnvironment);
     }
 }
@@ -46,6 +49,8 @@ public interface ICrashAnalytics : IDisposable
     void RecordBreadcrumb(string eventName, IReadOnlyDictionary<string, string?>? properties = null);
 
     void CaptureCrash(Exception exception, string source);
+
+    bool SendTestReport();
 }
 
 public sealed class DisabledCrashAnalytics : ICrashAnalytics
@@ -61,6 +66,8 @@ public sealed class DisabledCrashAnalytics : ICrashAnalytics
     public void CaptureCrash(Exception exception, string source)
     {
     }
+
+    public bool SendTestReport() => false;
 
     public void Dispose()
     {

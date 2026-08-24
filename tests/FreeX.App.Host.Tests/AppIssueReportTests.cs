@@ -24,13 +24,10 @@ public sealed class AppIssueReportTests
 
         url.Should().StartWith("https://github.com/tony-xmelon/FreeX/issues/new?");
         var unescaped = Uri.UnescapeDataString(url);
-        unescaped.Should().Contain("title=Tester issue: ");
-        unescaped.Should().Contain("App version: Version Test");
-        unescaped.Should().Contain("Commit: abcdef12");
-        unescaped.Should().Contain("OS: Windows Test");
-        unescaped.Should().Contain(".NET runtime: .NET Test");
-        unescaped.Should().Contain("Diagnostics enabled: yes");
-        unescaped.Should().Contain("Session ID: session-123");
+        unescaped.Should().Contain("template=user-test-report.yml");
+        unescaped.Should().Contain("title=[FreeX Version Test | Windows Test | X64]");
+        unescaped.Should().NotContain("session-123");
+        unescaped.Should().NotContain("body=");
         unescaped.Should().NotContain("Book1.xlsx");
         unescaped.Should().NotContain("C:\\");
         unescaped.Should().NotContain("=SUM(");

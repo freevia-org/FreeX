@@ -165,7 +165,7 @@ public sealed class FreeWRibbonParityTests
 
         Labels(help)
             .Should()
-            .Equal("Help Online", "Feedback", "Copy Diagnostics", "Check for Updates", "About FreeW", "Legal Notices");
+            .Equal("Help Online", "Feedback", "Copy Diagnostics", "Test Crash Reporting", "Check for Updates", "About FreeW", "Legal Notices");
 
         foreach (var commandId in CommandIds(help))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be backed before it appears on the Help tab");

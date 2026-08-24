@@ -50,6 +50,8 @@ public sealed class FreePRibbonSupportCommandEndpoints
 {
     public Action? OpenHelpOnline { get; init; }
     public Action? OpenFeedback { get; init; }
+    public Action? CopyDiagnostics { get; init; }
+    public Action? TestCrashReporting { get; init; }
 }
 
 /// <summary>Renderer-owned native ports consumed by the Presentation profile factory.</summary>
@@ -184,6 +186,8 @@ public static class FreePRibbonHostRegistryComposer
     [
         "freep.help-online",
         "freep.feedback",
+        "freep.copy-diagnostics",
+        "freep.test-crash-reporting",
     ];
 
     public static IReadOnlyList<RibbonCommandId> FileCommandIds => FileIds;
@@ -271,6 +275,8 @@ public static class FreePRibbonHostRegistryComposer
         {
             Register(registry, registered, SupportIds[0], support.OpenHelpOnline);
             Register(registry, registered, SupportIds[1], support.OpenFeedback);
+            Register(registry, registered, SupportIds[2], support.CopyDiagnostics);
+            Register(registry, registered, SupportIds[3], support.TestCrashReporting);
         }
 
         return registered.ToArray();

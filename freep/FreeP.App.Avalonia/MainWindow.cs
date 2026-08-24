@@ -2411,6 +2411,8 @@ public sealed partial class MainWindow : Window,
                 OpenFeedback = () => _ = OpenSupportUriAsync(
                     FreePProductInfo.CreateFeedbackUrl(typeof(MainWindow).Assembly),
                     "FreeP Feedback"),
+                CopyDiagnostics = () => _ = CopySupportDiagnosticsAsync(),
+                TestCrashReporting = () => _ = ShowCrashAnalyticsTestResultAsync(),
             },
         });
 
@@ -2419,6 +2421,36 @@ public sealed partial class MainWindow : Window,
         var result = DesktopExternalUriLauncher.Open(uri);
         if (result != ExternalUriLaunchResult.Launched)
             await AvaloniaUserMessageDialog.ShowWarningAsync(this, $"Could not open the link.\n\n{uri}", title);
+    }
+
+    private async Task CopySupportDiagnosticsAsync()
+    {
+        try
+        {
+            var clipboard = new AvaloniaPlatformClipboard(() => TopLevel.GetTopLevel(this)?.Clipboard);
+            var write = await clipboard.WriteAsync(new PlatformClipboardContent(
+                Text: FreePProductInfo.CreateDiagnosticsText(typeof(MainWindow).Assembly)));
+            if (!write.IsSuccess)
+                throw new InvalidOperationException(write.ErrorMessage ?? "Clipboard is unavailable on this platform.");
+            await AvaloniaUserMessageDialog.ShowAsync(
+                this,
+                "FreeP diagnostics were copied to the clipboard.",
+                "Copy Diagnostics",
+                UserMessageIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            await AvaloniaUserMessageDialog.ShowWarningAsync(this, $"Could not copy diagnostics: {ex.Message}", "Copy Diagnostics");
+        }
+    }
+
+    private Task ShowCrashAnalyticsTestResultAsync()
+    {
+        var result = AppCrashAnalyticsRuntime.SendTestReport();
+        var message = AppCrashAnalyticsRuntime.UserMessage(result);
+        return result == CrashAnalyticsTestReportResult.Sent
+            ? AvaloniaUserMessageDialog.ShowAsync(this, message, "Test Crash Reporting", UserMessageIcon.Information)
+            : AvaloniaUserMessageDialog.ShowWarningAsync(this, message, "Test Crash Reporting");
     }
 
     private FreePRibbonTextActionTargets CreateRibbonTextActionTargets() => new()

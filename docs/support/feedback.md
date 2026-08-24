@@ -5,6 +5,12 @@ Feedback for FreeX, FreeW, and FreeP is accepted through the repository's
 Use the user-test report for a crash or defect and the family feedback form for
 a suggestion, usability concern, or general comment.
 
+The in-app Feedback command opens the structured user-test form with app,
+version, operating system, and architecture in the proposed title. Select the
+actual installation type in the required form field; the app cannot reliably
+infer whether an executable came from an individual installer, suite installer,
+or manually copied portable package.
+
 ## A Useful Defect Report
 
 Include:

@@ -6,6 +6,7 @@ namespace Free.Shared.AppServices;
 public static class AppFeedbackReporter
 {
     public const string DefaultIssueBaseUrl = "https://github.com/tony-xmelon/FreeX/issues/new";
+    public const string DefectIssueForm = "user-test-report.yml";
 
     public static string CreateIssueUrl(
         string productName,
@@ -17,11 +18,14 @@ public static class AppFeedbackReporter
         ArgumentException.ThrowIfNullOrWhiteSpace(issueBaseUrl);
 
         var separator = issueBaseUrl.Contains('?', StringComparison.Ordinal) ? "&" : "?";
+        var title = $"[{productName} {metadata.AppVersion} | {metadata.OperatingSystemDescription} | {metadata.ProcessArchitecture}] ";
+        var templateQuery = issueBaseUrl.Contains("template=", StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : "template=" + Uri.EscapeDataString(DefectIssueForm) + "&";
         return issueBaseUrl
             + separator
-            + "title=" + Uri.EscapeDataString($"{productName} feedback: ")
-            + "&body=" + Uri.EscapeDataString(CreateIssueBody(productName, metadata))
-            + "&labels=" + Uri.EscapeDataString("user-testing,needs-triage");
+            + templateQuery
+            + "title=" + Uri.EscapeDataString(title);
     }
 
     public static string CreateDiagnosticsText(string productName, AppDiagnosticsMetadata metadata)
@@ -43,24 +47,6 @@ public static class AppFeedbackReporter
         builder.AppendLine();
         builder.AppendLine("Privacy note: do not include document contents, filenames, file paths, or private data unless you choose to share them.");
         return builder.ToString().TrimEnd();
-    }
-
-    private static string CreateIssueBody(string productName, AppDiagnosticsMetadata metadata)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine("## App information");
-        AppendSafeMetadata(builder, productName, metadata);
-        builder.AppendLine();
-        builder.AppendLine("## What happened?");
-        builder.AppendLine();
-        builder.AppendLine("## What did you expect?");
-        builder.AppendLine();
-        builder.AppendLine("## Steps to reproduce");
-        builder.AppendLine("1. ");
-        builder.AppendLine();
-        builder.AppendLine("## Privacy");
-        builder.AppendLine("Please do not include document contents, filenames, file paths, or private data unless you choose to share them.");
-        return builder.ToString();
     }
 
     private static void AppendSafeMetadata(

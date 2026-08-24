@@ -166,6 +166,7 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Action? OpenHelpOnline = null,
     Action? OpenFeedback = null,
     Action? CopyDiagnostics = null,
+    Action? TestCrashReporting = null,
     Action? CheckForUpdates = null,
     Action? ToggleReadMode = null,
     Func<bool>? IsReadModeActive = null,

@@ -409,6 +409,7 @@ public enum FreeWRibbonCommandAction
     Watermark,
     WidowControl,
     Wordart,
+    TestCrashReporting,
 }
 
 public sealed record FreeWRibbonCommandRoute(
@@ -485,6 +486,7 @@ public static class FreeWRibbonCommandWorkflow
         new("freew.compare", FreeWRibbonCommandAction.Compare),
         new("freew.copy", FreeWRibbonCommandAction.Copy),
         new("freew.copy-diagnostics", FreeWRibbonCommandAction.CopyDiagnostics),
+        new("freew.test-crash-reporting", FreeWRibbonCommandAction.TestCrashReporting),
         new("freew.cover-page", FreeWRibbonCommandAction.CoverPage),
         new("freew.cross-reference", FreeWRibbonCommandAction.CrossReference),
         new("freew.customize-colors", FreeWRibbonCommandAction.CustomizeColors),

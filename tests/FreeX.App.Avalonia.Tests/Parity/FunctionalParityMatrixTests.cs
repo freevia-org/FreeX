@@ -127,6 +127,7 @@ public sealed class FunctionalParityMatrixTests
         var prioritizedRows = new[]
         {
             FreeXRibbonCommandIds.HelpCopyDiagnostics,
+            FreeXRibbonCommandIds.HelpTestCrashReporting,
             FreeXRibbonCommandIds.HelpLegalNotices,
             "Convert to Comments",
         };

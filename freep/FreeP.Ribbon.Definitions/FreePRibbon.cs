@@ -40,6 +40,8 @@ public static class FreePRibbon
         {
             group.Large("freep.help-online", "Help Online", RibbonCommandIconKind.Help, "H");
             group.Large("freep.feedback", "Send Feedback", RibbonCommandIconKind.Feedback, "F");
+            group.Large("freep.copy-diagnostics", "Copy Diagnostics", RibbonCommandIconKind.Info, "D");
+            group.Large("freep.test-crash-reporting", "Test Crash Reporting", RibbonCommandIconKind.Info, "T");
         });
     }
 

@@ -475,6 +475,8 @@ internal static partial class FreeWCanonicalRibbonTabs
                     RibbonCommandIconKind.Feedback, "F");
                 AddHelpButton(group, avalonia, "freew.copy-diagnostics", "Copy Diagnostics",
                     RibbonCommandIconKind.Info, "D");
+                AddHelpButton(group, avalonia, "freew.test-crash-reporting", "Test Crash Reporting",
+                    RibbonCommandIconKind.Info, "T");
             });
             tab.Group("product", "Product", "P", 90, group =>
             {
