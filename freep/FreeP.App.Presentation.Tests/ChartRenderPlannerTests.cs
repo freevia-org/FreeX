@@ -1626,8 +1626,13 @@ public sealed class ChartRenderPlannerTests
         chart.Series.Add(new ChartSeries { Name = "Peak Band", Values = { 33, 39, 45, 37 } });
         chart.View3D = new Chart3DView { RotationX = 15, RotationY = 20, RightAngleAxes = false };
         var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 960, 540));
+        frame.Plot.Should().Be(new ChartPlanRect(62, 16, 653, 462),
+            "a full-size imported 4x4 Surface3D chart uses Office's separate projection envelope");
         frame.LegendAreaWidth.Should().Be(105.6,
             "the larger grid retains the standard imported legend width when that width is already sufficient");
+        var fullGeometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        fullGeometry.RenderFacets.Should().HaveCountGreaterThan(18,
+            "the full-size imported mesh is clipped at its elevation bands instead of painting one average color per triangle");
         ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 640, 400)).LegendAreaWidth.Should().Be(96,
             "a compact large grid needs enough legend width for its elevation interval labels");
 
