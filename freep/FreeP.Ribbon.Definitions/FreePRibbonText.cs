@@ -62,6 +62,9 @@ internal static class FreePRibbonText
     public static string TableLayoutTabLabel => Get("Ribbon_Tab_TableLayout_Label");
     public static string TableLayoutTabKeyTip => Get("Ribbon_Tab_TableLayout_KeyTip");
     public static string TableToolsContextLabel => Get("Ribbon_Context_TableTools_Label");
+    public static string SmartArtDesignTabLabel => Get("Ribbon_Tab_SmartArtDesign_Label");
+    public static string SmartArtDesignTabKeyTip => Get("Ribbon_Tab_SmartArtDesign_KeyTip");
+    public static string SmartArtToolsContextLabel => Get("Ribbon_Context_SmartArtTools_Label");
     public static string TableCellFillLabel => Get("Ribbon_Command_TableCellFill_Label");
     public static string TableCellFillKeyTip => Get("Ribbon_Command_TableCellFill_KeyTip");
     public static string TableCellAnchorLabel => Get("Ribbon_Command_TableCellAnchor_Label");
