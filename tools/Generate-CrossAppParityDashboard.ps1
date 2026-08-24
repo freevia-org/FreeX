@@ -866,7 +866,7 @@ try {
         initialIndependentReview = "Recorded: the initial independent review found two P2 findings: FreeX crop/readiness/transition and physical click geometry were duplicated instead of consuming one contract; FreeP topology evidence did not pin the complete source PPTX and initially over-attributed the residual."
         reviewRemediation = "Completed at prior source: FreeX uses one authoritative mixed-type geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved. Reopened after source advancement because the color-geometry guard required remediation."
         independentReview = "Passed: final independent review found no findings. Reviewer verified f2a structurally scopes the color function before the mixed-type function, accepts the later decoy, rejects the internal assignment, verifies Wave191-193 retained hashes 11/11, 11/11, and 18/18, verifies Wave194 20 evidence plus 12 provenance/validation, and found FreeP and FreeW clean."
-        repositoryPreflight = "Pending: final repository preflight result at tested source commit ${wave194TestedSourceCommit}."
+        repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 exited 0. Validated 292 JSON files, 306 XML-backed files, and 13,862 text files for conflict markers; 117 PowerShell scripts, 10 workflows, 160 project files, 124 solution entries, 32 default-test entries, 51 FreeW entries, and 42 FreeP entries; Linux packaging passed; generated docs/dashboard and FreeW/FreeP inventories/evidence all current."
         fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors; elapsed 00:13:58.57."
         defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --no-restore --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 --logger `"trx;LogFileName=default-tests-wave194-final.trx`" exited 0 with 43,427 passed, 134 skipped/not-run, 0 failed, 43,561 total. 25 unique TRX files plus 31 additional passed captures overwritten into the shared capture TRX path across seven capture assemblies. Key totals: FreeP Avalonia 724/0; FreeP Host 2,409/0; FreeP Presentation 5,468/0; FreeX Avalonia 2,193/0; Host Logic 1,490 passed/4 skipped; Presentation 5,465/1; Core.IO 5,841/56; Core Model 6,317/41; Formula 5,199/7; Calc 1,982/24; Integration 661/1. Initial failed lane and remediation remain documented."
         initialDefaultLane = "Exited 1 solely because the Wave191/192/193 color-geometry guard was bounded through a later selector and counted Wave194 mixed_type_target_click_x_offset; at that pre-remediation source FreeX Avalonia reported 2,188 passed, 3 failed, 2,191 total."
@@ -878,11 +878,9 @@ try {
         schema = "freex.parity.cross-app-dashboard.v3"
         wave = 194
         cumulativeAppSlices = 582
-        cumulativeAppSlicesStatus = "pending-final-integration-gates"
-        integrationGateStatus = "pending"
-        pendingIntegrationGates = @(
-            "repository-preflight"
-        )
+        cumulativeAppSlicesStatus = "accepted-final-integration-gates"
+        integrationGateStatus = "accepted"
+        pendingIntegrationGates = @()
         integrationGateEvidence = $wave194IntegrationGateEvidence
         scopeBoundary = "Generated counts prove command/profile routing, route and artifact coverage, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates, physical/no-COM limitations, and authoritative Microsoft Office baseline availability remain explicitly separate from coverage metrics."
         sources = @(
@@ -987,7 +985,7 @@ try {
         "",
         "> Generated counts prove command/profile routing, route and artifact coverage, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates, physical/no-COM limitations, and authoritative Microsoft Office baseline availability remain explicitly separate from coverage metrics.",
         "",
-        "> Wave194 records **$($dashboard.cumulativeAppSlices)** cumulative app slices provisionally, pending final integration gates, against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
+        "> Wave194 records an accepted cumulative **$($dashboard.cumulativeAppSlices)** app slices. All final integration gates passed against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
         "",
         "## Summary",
         "",
@@ -1014,7 +1012,7 @@ try {
         "",
         "## Integration Gates",
         "",
-        "Wave194's cumulative 582 app-slice count is **provisional**. Final integration gates remain pending against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
+        "Wave194's cumulative 582 app-slice count is **accepted**. All final integration gates passed against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
         "",
         "- Initial independent review: $($dashboard.integrationGateEvidence.initialIndependentReview)",
         "- Review remediation: $($dashboard.integrationGateEvidence.reviewRemediation)",
