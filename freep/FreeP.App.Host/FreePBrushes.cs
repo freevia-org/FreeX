@@ -9,6 +9,8 @@ internal abstract class FreePBrushes : FreePVisualBrushCatalog<Brush, WpfFreePVi
 {
     internal static Color AccentColor => ResolveThemeColor("Accent", BrandThemes.FreeP.Colors.Accent);
     internal static Color AccentDarkColor => ResolveThemeColor("AccentDark", BrandThemes.FreeP.Colors.AccentDark);
+    internal static Color TitleBarColor => ResolveThemeColor("TitleBar", BrandThemes.FreeP.Colors.TitleBar);
+    internal static Color TitleBarForegroundColor => ResolveThemeColor("TitleBarForeground", BrandThemes.FreeP.Colors.TitleBarForeground);
 
     private static Color ResolveThemeColor(string role, ThemeColor fallback) =>
         WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
