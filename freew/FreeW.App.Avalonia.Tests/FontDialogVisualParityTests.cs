@@ -56,7 +56,7 @@ public sealed class FontDialogVisualParityTests
             buttons.Should().HaveCount(2);
             buttons.Should().OnlyContain(button => button.Height == 26);
             ((ISolidColorBrush)buttons.Single(button => button.IsCancel).BorderBrush!).Color
-                .Should().Be(Color.FromRgb(0x70, 0x70, 0x70));
+                .Should().Be(Color.FromRgb(0xC8, 0xC8, 0xC8));
         }, CancellationToken.None);
     }
 

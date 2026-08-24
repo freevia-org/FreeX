@@ -126,7 +126,7 @@ $inventory = Get-Content -LiteralPath (Resolve-RepoPath $InventoryPath) -Raw | C
 $freshness = Get-Content -LiteralPath (Resolve-RepoPath $FreshnessPath) -Raw | ConvertFrom-Json
 
 Assert-Equal $provenance.schema "freew.font-visual-provenance.v1" "schema"
-Assert-Equal $provenance.wave 193 "wave"
+Assert-Equal $provenance.wave 194 "wave"
 Assert-Equal $provenance.routeId "font" "route"
 Assert-Condition ([string]$provenance.generatedAtSourceRevision -match '^[0-9a-f]{40}$') "capture source revision is not a commit SHA."
 
@@ -184,8 +184,8 @@ $changedNonFontRows = @($nonFontRows | Where-Object {
     -not $baselineRowsByScenario.ContainsKey($_.scenarioId) -or
     (Get-CanonicalJsonSha256 $_) -ne (Get-CanonicalJsonSha256 $baselineRowsByScenario[$_.scenarioId])
 })
-Assert-Equal $nonFontRows.Count $provenance.wave193Result.nonFontRowsCompared "non-Font row count"
-Assert-Equal $changedNonFontRows.Count $provenance.wave193Result.nonFontRowsChanged "changed non-Font row count"
+Assert-Equal $nonFontRows.Count $provenance.wave194Result.nonFontRowsCompared "non-Font row count"
+Assert-Equal $changedNonFontRows.Count $provenance.wave194Result.nonFontRowsChanged "changed non-Font row count"
 Assert-Equal $changedNonFontRows.Count 0 "changed non-Font row count contract"
 
 $aggregateChangedPixels = 0
@@ -202,8 +202,8 @@ foreach ($expectedState in $expectedStates) {
     foreach ($property in @("comparedPixels", "changedPixels", "changedRatio", "meanAbsoluteChannelDelta", "p95AbsoluteChannelDelta", "luminanceSimilarity", "perceptualHashDistance")) {
         Assert-Equal $actualRow.metrics.$property $bundleRow.metrics.$property "metric $property for $($bundleRow.scenarioId)"
     }
-    $baselineChangedPixels = $provenance.wave192Baseline.changedPixelsByState.$expectedState
-    Assert-Equal $baselineRowsByScenario[$bundleRow.scenarioId].metrics.changedPixels $baselineChangedPixels "Wave192 changed pixels for $($bundleRow.scenarioId)"
+    $baselineChangedPixels = $provenance.wave193Baseline.changedPixelsByState.$expectedState
+    Assert-Equal $baselineRowsByScenario[$bundleRow.scenarioId].metrics.changedPixels $baselineChangedPixels "Wave193 changed pixels for $($bundleRow.scenarioId)"
     Assert-ChangedPixelRequirement $provenance.schema $provenance.wave $actualRow.metrics.changedPixels $baselineChangedPixels $bundleRow.scenarioId
     $aggregateChangedPixels += $actualRow.metrics.changedPixels
 
@@ -245,11 +245,12 @@ foreach ($expectedState in $expectedStates) {
     }
 }
 
-Assert-Equal $aggregateChangedPixels $provenance.wave193Result.aggregateChangedPixels "Wave193 aggregate changed pixels"
+Assert-Equal $aggregateChangedPixels $provenance.wave194Result.aggregateChangedPixels "Wave194 aggregate changed pixels"
 Assert-Equal (@($provenance.wave192Baseline.changedPixelsByState.PSObject.Properties | ForEach-Object { [int]$_.Value } | Measure-Object -Sum).Sum) $provenance.wave192Baseline.aggregateChangedPixels "Wave192 aggregate changed pixels"
-Assert-Equal ($aggregateChangedPixels - $provenance.wave192Baseline.aggregateChangedPixels) $provenance.wave193Result.aggregateDelta "aggregate changed-pixel delta"
+Assert-Equal (@($provenance.wave193Baseline.changedPixelsByState.PSObject.Properties | ForEach-Object { [int]$_.Value } | Measure-Object -Sum).Sum) $provenance.wave193Baseline.aggregateChangedPixels "Wave193 aggregate changed pixels"
+Assert-Equal ($aggregateChangedPixels - $provenance.wave193Baseline.aggregateChangedPixels) $provenance.wave194Result.aggregateDelta "aggregate changed-pixel delta"
 
-Write-Host "FreeW Font visual provenance passed: 3 improved states, 6 exact 421x321 host captures, 0/288 non-Font row changes, 32,861 aggregate changed pixels."
+Write-Host "FreeW Font visual provenance passed: 3 improved states, 6 exact 421x321 host captures, 0/288 non-Font row changes, 32,312 aggregate changed pixels."
 if (@($provenance.captures | Where-Object { -not (Test-Path -LiteralPath (Resolve-RepoPath $_.captureArtifact.path)) }).Count -gt 0) {
     Write-Host "External capture manifests are absent locally; repository-backed row summaries and source hashes are current, as documented."
 }
