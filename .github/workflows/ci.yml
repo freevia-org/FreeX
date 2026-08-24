@@ -85,9 +85,9 @@ jobs:
         shell: pwsh
         run: dotnet build FreeX.PortableTests.slnx --configuration Release -m:1
 
-      - name: Test portable tests
+      - name: Test platform-neutral contracts
         shell: pwsh
-        run: dotnet test FreeX.PortableTests.slnx --configuration Release --no-build
+        run: dotnet test FreeX.PortableSmokeTests.slnx --configuration Release --no-build
 
   ui-tests:
     name: UI test lane

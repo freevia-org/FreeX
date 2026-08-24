@@ -35,7 +35,8 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("name: macOS portable lane");
         workflow.Should().Contain("dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release");
         workflow.Should().Contain("dotnet build FreeX.PortableTests.slnx --configuration Release -m:1");
-        workflow.Should().Contain("dotnet test FreeX.PortableTests.slnx --configuration Release --no-build");
+        workflow.Should().Contain("name: Test platform-neutral contracts");
+        workflow.Should().Contain("dotnet test FreeX.PortableSmokeTests.slnx --configuration Release --no-build");
         workflow.Should().Contain("name: UI test lane");
         workflow.Should().Contain("run_ui_tests:");
         workflow.Should().Contain("if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests == true }}");
@@ -54,6 +55,17 @@ public sealed class GitHubWorkflowPreflightTests
         portableTests.Should().NotContain("Free.Shared.Shell.Wpf.Tests");
         portableTests.Should().NotContain("FreeP.App.Host.Tests");
         portableTests.Should().NotContain("net10.0-windows");
+
+        var portableSmokeTests = WorkspaceFileLocator.ReadAllText("FreeX.PortableSmokeTests.slnx");
+        portableSmokeTests.Should().Contain("Free.Shared.Theme.Tests");
+        portableSmokeTests.Should().Contain("Free.Shared.Shell.Avalonia.Tests");
+        portableSmokeTests.Should().Contain("FreeX.Core.Model.Tests");
+        portableSmokeTests.Should().Contain("FreeX.Integration.Tests");
+        portableSmokeTests.Should().Contain("FreeP.App.Localization.Tests");
+        portableSmokeTests.Should().NotContain("CaptureTests");
+        portableSmokeTests.Should().NotContain("FreeX.App.Avalonia.Tests");
+        portableSmokeTests.Should().NotContain("FreeP.App.Avalonia.Tests");
+        portableSmokeTests.Should().NotContain("FreeX.Core.IO.Tests");
 
         var freePPortableTests = WorkspaceFileLocator.ReadAllText(
             "freep", "FreeP.App.Avalonia.Tests", "FreeP.App.Avalonia.Tests.csproj");
