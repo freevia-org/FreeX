@@ -28,6 +28,8 @@ public static class FreePRibbon
                 tab => AddAnimationGroups(tab, profile))
             .Tab("slide-show", FreePRibbonText.SlideShowTab.Label, FreePRibbonText.SlideShowTab.KeyTip,
                 tab => AddSlideShowGroups(tab, profile))
+            .Tab("review", FreePRibbonText.ReviewTab.Label, FreePRibbonText.ReviewTab.KeyTip,
+                AddReviewGroups)
             .Tab("view", FreePRibbonText.ViewTab.Label, FreePRibbonText.ViewTab.KeyTip,
                 AddViewGroups)
             .Tab("help", "Help", "Y", AddHelpGroups)
@@ -376,6 +378,57 @@ public static class FreePRibbon
             {
                 group.Sizing(RibbonGroupSizing.OfficeAdaptive);
                 AddSlideShowControls(group, profile);
+            });
+    }
+
+    private static void AddReviewGroups(RibbonTabBuilder tab)
+    {
+        tab.Group("comments", FreePRibbonText.ReviewCommentsGroup.Label,
+            FreePRibbonText.ReviewCommentsGroup.KeyTip, 100, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Large(PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
+                    FreePRibbonText.ReviewCommentsCommand.Label, RibbonCommandIconKind.Comment,
+                    FreePRibbonText.ReviewCommentsCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.AddCommentCommandId,
+                    FreePRibbonText.ReviewNewCommentCommand.Label, RibbonCommandIconKind.Insert,
+                    FreePRibbonText.ReviewNewCommentCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
+                    FreePRibbonText.ReviewReplyCommand.Label, RibbonCommandIconKind.Comment,
+                    FreePRibbonText.ReviewReplyCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
+                    FreePRibbonText.ReviewDeleteCommentCommand.Label, RibbonCommandIconKind.Delete,
+                    FreePRibbonText.ReviewDeleteCommentCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.PreviousCommentCommandId,
+                    FreePRibbonText.ReviewPreviousCommentCommand.Label, RibbonCommandIconKind.Previous,
+                    FreePRibbonText.ReviewPreviousCommentCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.NextCommentCommandId,
+                    FreePRibbonText.ReviewNextCommentCommand.Label, RibbonCommandIconKind.Next,
+                    FreePRibbonText.ReviewNextCommentCommand.KeyTip);
+            });
+
+        tab.Group("accessibility", FreePRibbonText.ReviewAccessibilityGroup.Label,
+            FreePRibbonText.ReviewAccessibilityGroup.KeyTip, 90, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Large(PresentationReviewWorkflowPlanner.AccessibilityCommandId,
+                    FreePRibbonText.ReviewCheckAccessibilityCommand.Label, RibbonCommandIconKind.Accessibility,
+                    FreePRibbonText.ReviewCheckAccessibilityCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.AltTextCommandId,
+                    FreePRibbonText.ReviewAltTextCommand.Label, RibbonCommandIconKind.TextBox,
+                    FreePRibbonText.ReviewAltTextCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
+                    FreePRibbonText.ReviewReadingOrderCommand.Label, RibbonCommandIconKind.List,
+                    FreePRibbonText.ReviewReadingOrderCommand.KeyTip);
+            });
+
+        tab.Group("proofing", FreePRibbonText.ReviewProofingGroup.Label,
+            FreePRibbonText.ReviewProofingGroup.KeyTip, 80, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Large(PresentationReviewWorkflowPlanner.ProofingCommandId,
+                    FreePRibbonText.ReviewSpellingCommand.Label, RibbonCommandIconKind.Spelling,
+                    FreePRibbonText.ReviewSpellingCommand.KeyTip);
             });
     }
 

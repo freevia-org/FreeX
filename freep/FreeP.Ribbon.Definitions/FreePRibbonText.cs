@@ -161,6 +161,21 @@ internal static class FreePRibbonText
     public static string SlideShowSetupLabel => Get("Ribbon_Command_SlideShowSetup_Label");
     public static string SlideShowSetupKeyTip => Get("Ribbon_Command_SlideShowSetup_KeyTip");
 
+    public static RibbonText ReviewTab { get; } = new("Ribbon_Tab_Review_Label", "Ribbon_Tab_Review_KeyTip");
+    public static RibbonText ReviewCommentsGroup { get; } = new("Ribbon_Group_ReviewComments_Label", "Ribbon_Group_ReviewComments_KeyTip");
+    public static RibbonText ReviewAccessibilityGroup { get; } = new("Ribbon_Group_ReviewAccessibility_Label", "Ribbon_Group_ReviewAccessibility_KeyTip");
+    public static RibbonText ReviewProofingGroup { get; } = new("Ribbon_Group_ReviewProofing_Label", "Ribbon_Group_ReviewProofing_KeyTip");
+    public static RibbonText ReviewCommentsCommand { get; } = new("Ribbon_Command_ReviewComments_Label", "Ribbon_Command_ReviewComments_KeyTip");
+    public static RibbonText ReviewNewCommentCommand { get; } = new("Ribbon_Command_ReviewNewComment_Label", "Ribbon_Command_ReviewNewComment_KeyTip");
+    public static RibbonText ReviewReplyCommand { get; } = new("Ribbon_Command_ReviewReply_Label", "Ribbon_Command_ReviewReply_KeyTip");
+    public static RibbonText ReviewDeleteCommentCommand { get; } = new("Ribbon_Command_ReviewDeleteComment_Label", "Ribbon_Command_ReviewDeleteComment_KeyTip");
+    public static RibbonText ReviewPreviousCommentCommand { get; } = new("Ribbon_Command_ReviewPreviousComment_Label", "Ribbon_Command_ReviewPreviousComment_KeyTip");
+    public static RibbonText ReviewNextCommentCommand { get; } = new("Ribbon_Command_ReviewNextComment_Label", "Ribbon_Command_ReviewNextComment_KeyTip");
+    public static RibbonText ReviewCheckAccessibilityCommand { get; } = new("Ribbon_Command_ReviewCheckAccessibility_Label", "Ribbon_Command_ReviewCheckAccessibility_KeyTip");
+    public static RibbonText ReviewAltTextCommand { get; } = new("Ribbon_Command_ReviewAltText_Label", "Ribbon_Command_ReviewAltText_KeyTip");
+    public static RibbonText ReviewReadingOrderCommand { get; } = new("Ribbon_Command_ReviewReadingOrder_Label", "Ribbon_Command_ReviewReadingOrder_KeyTip");
+    public static RibbonText ReviewSpellingCommand { get; } = new("Ribbon_Command_ReviewSpelling_Label", "Ribbon_Command_ReviewSpelling_KeyTip");
+
     public static string InsertTabLabel => Get("Common_Insert");
     public static string InsertTabKeyTip => Get("Ribbon_Tab_Insert_KeyTip");
 
