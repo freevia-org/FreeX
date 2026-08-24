@@ -159,6 +159,7 @@ public sealed class FreeWRibbonParityTests
                 "freew.help-online",
                 "freew.feedback",
                 "freew.copy-diagnostics",
+                "freew.test-crash-reporting",
                 "freew.check-updates",
                 "freew.about",
                 "freew.legal-notices");
