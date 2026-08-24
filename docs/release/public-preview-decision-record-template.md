@@ -11,7 +11,15 @@ all artifact hashes and test evidence must identify the candidate commit below.
 - Full commit SHA:
 - Release workflow run:
 - Artifact manifest filename and SHA-256:
+- Release-notes draft location and SHA-256:
 - Candidate owner:
+- Acceptance owner:
+- Distribution owner:
+- Security contact:
+- Privacy contact:
+- Dependency/license reviewer:
+- Rollback owner and stop authority:
+- Evidence location, access owner, and retention policy:
 - Decision date (UTC):
 
 ## Automated Verification
@@ -20,6 +28,10 @@ all artifact hashes and test evidence must identify the candidate commit below.
 - Release build result/link:
 - Non-UI test result/link:
 - Dependency/security scan result/link:
+- Dependency-alert review result/link:
+- Private vulnerability-reporting route verification:
+- Feedback issue forms and required-label verification:
+- Protected public-preview environment, reviewer, and branch-policy evidence:
 - SBOM filenames and SHA-256 values:
 - Artifact inventory and checksum validation result/link:
 
@@ -43,6 +55,9 @@ uninstall for every applicable row. Include the OS build and machine or VM ID.
 - Suite/individual installer transition evidence:
 - User data retained after upgrade/uninstall:
 - Rollback package and tested rollback procedure:
+- Clean-machine snapshot/machine identifiers and reset evidence:
+- Offline launch and offline Legal Notices evidence:
+- Public-facing artifact re-download and checksum verification:
 
 ## Diagnostics and Feedback Evidence
 
@@ -69,7 +84,10 @@ Do not attach real crash dumps or logs containing user data to this record.
 
 - Project license reviewed for this distribution scope by:
 - Privacy notice owner/contact and effective date reviewed by:
+- If remote crash reporting is enabled: responsible operator, Sentry region,
+  retention period, privacy link, and configuration approval:
 - Third-party notices and corresponding source/relinking materials reviewed by:
+- Exact SBOM/runtime dependency set matched to the notice and legal bundle by:
 - Trademark/product wording review recorded by:
 - Store/repository listing text reviewed by:
 
@@ -92,6 +110,9 @@ as signed, trusted, notarized, or production-ready.
 - Decision: **Go for internal testing / Go for unsigned public preview / No-go**
 - Open blockers:
 - Accepted risks and approver:
-- Rollback owner and contact route:
+- Rollback triggers and tested action:
+- Incident contacts and restricted record location:
+- Staged-observation period and promotion criteria:
+- Withdrawal/correction status URL:
 - Final approver:
 

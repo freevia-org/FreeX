@@ -48,6 +48,14 @@ Complete these items before freezing a public-preview candidate:
   non-infringement.
 - [ ] Keyboard-only, screen-reader, update/rollback, crash-recovery, and clean
   machine smoke evidence is attached to the release decision.
+- [ ] The candidate has a named rollback owner, stop authority, rollback
+  triggers, incident contacts, and an evidence-retention location. The
+  clean-machine matrix and staged-promotion checks in the
+  [operations runbook](public-preview-operations.md) are complete.
+- [ ] Release notes were prepared from the
+  [public-preview release-notes template](public-preview-release-notes-template.md)
+  and identify exact versioned artifacts, signing/notarization status, known
+  limitations, privacy configuration, support routes, and correction status.
 
 ## Crash-Reporting Contract
 
@@ -173,4 +181,7 @@ claim of support.
 
 Use the
 [public-preview decision record template](public-preview-decision-record-template.md)
-so every candidate is assessed against the same evidence fields.
+so every candidate is assessed against the same evidence fields. Execute the
+[acceptance, rollback, and incident runbook](public-preview-operations.md) and
+draft user-facing text from the
+[public-preview release-notes template](public-preview-release-notes-template.md).
