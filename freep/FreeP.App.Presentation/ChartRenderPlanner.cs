@@ -790,6 +790,7 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceReferencePlotWidth = 360.0;
     private const double ImportedSurfaceCompactLiftCap = 170.0;
     private const double ImportedSurfaceCompactPlotHeightLimit = 200.0;
+    private const double ImportedSurfaceFullScalePlotHeightLimit = 400.0;
     private const double ImportedSurfaceDepthWallX = 124.0;
     private const double ImportedSurfaceFrontCategoryWidth = 301.5;
     private const double ImportedSurfaceFrameFrontLeftX = 8.0;
@@ -848,14 +849,18 @@ public static partial class ChartRenderPlanner
     ];
 
     // PowerPoint's varying Surface3D legend describes elevation intervals,
-    // not source series. Keep the ordered bands shared between both hosts.
+    // not source series. Keep the low-to-high bands shared between both hosts.
     private static readonly SrgbColor[] ImportedSurfaceElevationLegendColors =
     [
-        new(0x14, 0x5A, 0x7A),
-        new(0xC6, 0x5A, 0x1F),
-        new(0x0E, 0x5A, 0x1D),
-        new(0x0F, 0x8A, 0xC1),
-        new(0x7F, 0x1D, 0x80)
+        new(0x11, 0x54, 0x72),
+        new(0xCE, 0x63, 0x2B),
+        new(0x15, 0x5E, 0x1F),
+        new(0x0C, 0x8B, 0xBC),
+        new(0x8D, 0x25, 0x82),
+        new(0x44, 0x93, 0x28),
+        new(0x85, 0x99, 0xAA),
+        new(0xEE, 0xA1, 0x8A),
+        new(0x86, 0x9E, 0x87)
     ];
 
     // Office chart imports reserve a larger in-frame area for the inherited 18pt
@@ -2753,7 +2758,7 @@ public static partial class ChartRenderPlanner
         if (chart.ChartType == ChartType.Surface3D &&
             UsesImportedSurfaceGeometry(chart))
         {
-            return BuildImportedSurfaceElevationLegend(chart, legendBounds);
+            return BuildImportedSurfaceElevationLegend(chart, frame, legendBounds);
         }
 
         var automaticLegendBounds = ResolveAutomaticLegendBounds(chart, frame);
@@ -2953,9 +2958,10 @@ public static partial class ChartRenderPlanner
 
     private static IReadOnlyList<ChartLegendItemPlan> BuildImportedSurfaceElevationLegend(
         ChartShape chart,
+        ChartFramePlan frame,
         ChartPlanRect legendBounds)
     {
-        var (minimum, maximum, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        var (minimum, maximum, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot);
         if (!(majorUnit > 0) || maximum <= minimum)
             return Array.Empty<ChartLegendItemPlan>();
 
@@ -3132,7 +3138,7 @@ public static partial class ChartRenderPlanner
         if (!frame.HasPlot || frame.IsPie || frame.IsRadar || frame.IsScatterLike || !chart.ValueAxis.HasMajorGridlines)
             return EmptyMajorGridLinePrimitivePlan();
 
-        var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        var (minValue, maxValue, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot);
         double steps = (maxValue - minValue) / majorUnit;
         if (steps <= 0)
             return EmptyMajorGridLinePrimitivePlan();
@@ -3212,7 +3218,7 @@ public static partial class ChartRenderPlanner
             !chart.ValueAxis.HasMinorGridlines)
             return EmptyMinorGridLinePrimitivePlan();
 
-        var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        var (minValue, maxValue, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot);
         double minorUnit = chart.ValueAxis.MinorUnit is > 0
             ? chart.ValueAxis.MinorUnit.Value
             : majorUnit / 5.0;
@@ -3433,7 +3439,7 @@ public static partial class ChartRenderPlanner
         if (chart.ValueAxis.TickLabelPosition == ChartTickLabelPosition.None)
             return Array.Empty<ChartTextPlan>();
 
-        var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        var (minValue, maxValue, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot);
         double steps = (maxValue - minValue) / majorUnit;
         if (steps <= 0)
             return Array.Empty<ChartTextPlan>();
@@ -3620,7 +3626,7 @@ public static partial class ChartRenderPlanner
         ChartShape chart,
         ChartFramePlan frame)
     {
-        var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        var (minValue, maxValue, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot);
         double steps = (maxValue - minValue) / majorUnit;
         if (steps <= 0)
             return Array.Empty<ChartGridLinePlan>();
@@ -4908,7 +4914,7 @@ public static partial class ChartRenderPlanner
         if (categoryCount < 2 || seriesCount < 2 || !plot.HasPositiveArea)
             return EmptySurfaceGeometryPlan(cells);
 
-        var (valueAxisMin, valueAxisMax, _) = ComputePrimaryValueAxisRange(chart);
+        var (valueAxisMin, valueAxisMax, _) = ResolvePrimaryValueAxisRange(chart, plot);
         double valueAxisRange = valueAxisMax - valueAxisMin;
         var pointsByKey = new Dictionary<(int Series, int Category), ChartSurfacePointPrimitive>();
         foreach (var cell in cells)
@@ -7871,6 +7877,35 @@ public static partial class ChartRenderPlanner
             return ComputeNiceRange(min, max, targetIntervals: 6);
         }
         return ComputeNiceRange(min, max);
+    }
+
+    private static (double min, double max, double majorUnit) ResolvePrimaryValueAxisRange(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        var range = ComputePrimaryValueAxisRange(chart);
+        if (!UsesLargeImportedSurfaceGrid(chart) ||
+            chart.ValueAxis.Min is not null ||
+            chart.ValueAxis.Max is not null ||
+            chart.ValueAxis.MajorUnit is > 0 ||
+            plot.Height <= ImportedSurfaceFullScalePlotHeightLimit ||
+            range.majorUnit <= 0)
+        {
+            return range;
+        }
+
+        double denseUnit = range.majorUnit / 2.0;
+        double denseMax = range.max - denseUnit;
+        double dataMax = chart.Series
+            .Where(series => !series.OnSecondaryAxis)
+            .SelectMany(series => series.Values)
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .DefaultIfEmpty(double.NegativeInfinity)
+            .Max();
+        return denseUnit > 0 && denseMax >= dataMax && denseMax > range.min
+            ? (range.min, denseMax, denseUnit)
+            : range;
     }
 
     public static (double min, double max, double majorUnit) ComputeSecondaryValueAxisRange(
