@@ -1630,7 +1630,8 @@ public sealed class ChartRenderPlannerTests
             "a full-size imported 4x4 Surface3D chart uses Office's separate projection envelope");
         frame.LegendAreaWidth.Should().Be(105.6,
             "the larger grid retains the standard imported legend width when that width is already sufficient");
-        var fullGeometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        var fullGeometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart, frame.Plot, renderingContext: frame.Surface3DContext);
         fullGeometry.RenderFacets.Should().HaveCountGreaterThan(18,
             "the full-size imported mesh is clipped at its elevation bands instead of painting one average color per triangle");
         ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 640, 400)).LegendAreaWidth.Should().Be(96,
@@ -1649,6 +1650,81 @@ public sealed class ChartRenderPlannerTests
         compactLegend.Select(item => item.Label.Text).Should().Equal("0-10", "10-20", "20-30", "30-40", "40-50");
     }
 
+    [Theory]
+    [InlineData(500, true)]
+    [InlineData(280, false)]
+    [InlineData(960, true)]
+    public void BuildImportedSurface_UsesOneBoundsDerivedProjectionMode(double width, bool expectedFullSize)
+    {
+        var chart = MakeImportedLargeSurfaceChart();
+        var bounds = new ChartPlanRect(0, 0, width, width == 960 ? 540 : 500);
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, bounds);
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, bounds);
+
+        frame.Surface3DContext.UsesFullSizeProjection.Should().Be(expectedFullSize);
+        scene.Frame.Surface3DContext.Should().Be(frame.Surface3DContext);
+        scene.Surface.Should().NotBeNull();
+        if (expectedFullSize)
+            scene.Surface!.Value.RenderFacets.Should().Contain(facet => facet.Points.Count > 3);
+        else
+            scene.Surface!.Value.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
+    }
+
+    [Fact]
+    public void BuildImportedSurface_PathologicalAuthoredRangeCoalescesWithEndpointCoverage()
+    {
+        var chart = MakeImportedLargeSurfaceChart();
+        chart.Legend = LegendPosition.Right;
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 1_000_000_000;
+        chart.ValueAxis.MajorUnit = 1e-9;
+        chart.Series[^1].Values[^1] = 1_000_000_000;
+
+        var bounds = new ChartPlanRect(0, 0, 960, 540);
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, bounds);
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, bounds);
+        var legend = scene.LegendItems;
+
+        legend.Should().HaveCount(256);
+        legend[0].Label.Text.Should().StartWith("0-");
+        legend[^1].Label.Text.Should().Contain("1E+06K");
+        scene.ValueAxisLabels.Should().HaveCount(257);
+        scene.ValueAxisLabels[0].Text.Should().Be("0");
+        scene.ValueAxisLabels[^1].Text.Should().Contain("1E+06K");
+        var firstBandColor = legend[0].Fill.Color;
+        var lastBandColor = legend[legend.Count - 1].Fill.Color;
+        scene.Surface!.Value.RenderFacets.Should().Contain(facet =>
+            facet.Fill.Color == firstBandColor,
+            "the minimum endpoint must retain the first bounded elevation band");
+        scene.Surface!.Value.RenderFacets.Should().Contain(facet =>
+            facet.Fill.Color == lastBandColor,
+            "the maximum endpoint must retain the final bounded elevation band");
+        frame.Surface3DContext.UsesFullSizeProjection.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildImportedSurface_FiniteOverflowingSpanKeepsCoalescedOutputsFinite()
+    {
+        var chart = MakeImportedLargeSurfaceChart();
+        chart.Legend = LegendPosition.Right;
+        chart.ValueAxis.Min = -1e308;
+        chart.ValueAxis.Max = 1e308;
+        chart.ValueAxis.MajorUnit = 1e-9;
+        chart.Series[0].Values[0] = -1e308;
+        chart.Series[^1].Values[^1] = 1e308;
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+
+        scene.LegendItems.Should().HaveCount(256);
+        scene.Surface!.Value.RenderFacets.Should().NotBeEmpty();
+        scene.Surface.Value.RenderFacets.SelectMany(facet => facet.Points)
+            .Should().OnlyContain(point => double.IsFinite(point.X) && double.IsFinite(point.Y));
+        scene.ValueAxisLabels.SelectMany(label => new[] { label.Bounds.X, label.Bounds.Y })
+            .Should().OnlyContain(value => double.IsFinite(value));
+    }
+
     [Fact]
     public void BuildImportedSurfaceElevationBands_PreserveAuthoredTenIntervalsAcross4xNGrid()
     {
@@ -1661,7 +1737,8 @@ public sealed class ChartRenderPlannerTests
         var frame = ChartRenderPlanner.BuildFramePlan(
             chart,
             new ChartPlanRect(0, 0, 960, 540));
-        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart, frame.Plot, renderingContext: frame.Surface3DContext);
         var legend = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, seriesColors: null);
 
         geometry.RenderFacets.Should().Contain(facet =>
@@ -1682,7 +1759,8 @@ public sealed class ChartRenderPlannerTests
         var frame = ChartRenderPlanner.BuildFramePlan(
             chart,
             new ChartPlanRect(0, 0, 280, 500));
-        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart, frame.Plot, renderingContext: frame.Surface3DContext);
 
         frame.Plot.Should().Be(new ChartPlanRect(44, 57, 160, 401));
         frame.Plot.HasPositiveArea.Should().BeTrue();
@@ -1703,7 +1781,8 @@ public sealed class ChartRenderPlannerTests
         var frame = ChartRenderPlanner.BuildFramePlan(
             chart,
             new ChartPlanRect(0, 0, 280, 500));
-        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart, frame.Plot, renderingContext: frame.Surface3DContext);
         var valueLabels = ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame);
 
         geometry.RenderFacets.Should().OnlyContain(
@@ -1744,7 +1823,8 @@ public sealed class ChartRenderPlannerTests
         var frame = ChartRenderPlanner.BuildFramePlan(
             chart,
             new ChartPlanRect(0, 0, 960, 540));
-        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart, frame.Plot, renderingContext: frame.Surface3DContext);
         var legend = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, seriesColors: null);
         var repeatedLegend = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, seriesColors: null);
 
@@ -1783,7 +1863,8 @@ public sealed class ChartRenderPlannerTests
         var frame = ChartRenderPlanner.BuildFramePlan(
             chart,
             new ChartPlanRect(0, 0, 960, 540));
-        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart, frame.Plot, renderingContext: frame.Surface3DContext);
         var legend = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, seriesColors: null);
 
         legend.Should().HaveCount(13,
