@@ -32,6 +32,9 @@ Complete these items before freezing a public-preview candidate:
   project with app, version, environment, platform, and architecture tags.
 - [ ] Consent-off and missing-configuration tests prove that no remote event is
   sent. Redaction is checked with synthetic user-name and profile-path values.
+- [ ] Each final publish directory or standalone executable passes the offline
+  crash-analytics configuration check; its output is retained without exposing
+  the DSN.
 - [ ] Production alert routing, issue ownership, retention, release health, and
   symbol/debug-file handling are configured in the crash backend.
 - [ ] Help/Feedback and Copy Diagnostics work in every shipped app and renderer.
@@ -69,6 +72,25 @@ it does not throw an exception, open a document, or attach local diagnostic
 files. Use this command for backend acceptance evidence instead of deliberately
 crashing an installed app. A disabled result is expected when consent or the
 release endpoint is absent.
+
+Before packaging, verify each of the six publish outputs (FreeX, FreeW, and
+FreeP on WPF and Avalonia) without contacting Sentry. Set
+`FREE_FAMILY_SENTRY_DSN` only in the release job, then run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-CrashAnalyticsArtifactConfiguration.ps1 `
+  -ArtifactPath artifacts\publish\FreeX-Wpf `
+  -ExpectedEnvironment tester-release `
+  -OutputPath artifacts\release-evidence\freex-wpf-crash-analytics.json
+```
+
+Repeat for every publish directory or retained standalone executable. The
+validator reads the expected endpoint from the named environment variable,
+does not make a network request, and never writes the DSN to its output. Run it
+on publish output before installer compression; passing proves configuration
+was embedded, not that consent was granted or that the backend received an
+event. Backend receipt remains a separate manual check using **Help > Test Crash
+Reporting** after opting in.
 
 ## Feedback Gate
 
