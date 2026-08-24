@@ -317,6 +317,13 @@ foreach ($workflow in $workflows) {
         }
     }
 
+    foreach ($jobBlock in @(Get-WorkflowJobBlocks -Lines $lines)) {
+        if ($jobBlock -match "(?m)\bgh\s+release\s+(?:create|edit|upload)\b" -and
+            $jobBlock -notmatch "(?m)^\s*environment:\s*public-preview\s*(?:#.*)?$") {
+            $errors.Add("$($workflow.Name): every GitHub release publication job must use the protected public-preview environment.")
+        }
+    }
+
     $permissionsMatch = [regex]::Match($content, "(?m)^permissions:\s*(?<value>[^\r\n#]*)")
     if (-not $permissionsMatch.Success) {
         $errors.Add("$($workflow.Name): workflow must declare top-level permissions explicitly.")

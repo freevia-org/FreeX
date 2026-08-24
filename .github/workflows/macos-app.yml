@@ -1546,6 +1546,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: public-preview
 
     permissions:
       actions: read
