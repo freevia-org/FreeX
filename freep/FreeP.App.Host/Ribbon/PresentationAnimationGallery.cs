@@ -100,20 +100,22 @@ internal static class PresentationAnimationGallery
         IRibbonCommandRegistry registry,
         IRibbonStateStore stateStore)
     {
+        var moreEffectsLabel = UiText.Get("Ribbon_Command_AnimationMoreEffects_Label");
         var button = new Button
         {
             Content = new TextBlock
             {
-                Text = "More\nEffects ▾",
+                Text = moreEffectsLabel + " ▾",
                 TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
                 FontSize = 10,
             },
             Width = 62,
             Height = 50,
             Margin = new Thickness(2, 0, 1, 0),
-            ToolTip = "More Effects",
+            ToolTip = moreEffectsLabel,
         };
-        AutomationProperties.SetName(button, "More Effects");
+        AutomationProperties.SetName(button, moreEffectsLabel);
         var menu = BuildMoreMenu(controls, registry, stateStore);
         button.Click += (_, _) =>
         {
@@ -130,9 +132,9 @@ internal static class PresentationAnimationGallery
         IRibbonStateStore stateStore)
     {
         var menu = new ContextMenu();
-        AddCategory(menu, "Entrance", controls, ".entrance.", registry, stateStore);
-        AddCategory(menu, "Emphasis", controls, ".emphasis.", registry, stateStore);
-        AddCategory(menu, "Exit", controls, ".exit.", registry, stateStore);
+        AddCategory(menu, UiText.Get("Ribbon_Category_AnimationEntrance_Label"), controls, ".entrance.", registry, stateStore);
+        AddCategory(menu, UiText.Get("Ribbon_Category_AnimationEmphasis_Label"), controls, ".emphasis.", registry, stateStore);
+        AddCategory(menu, UiText.Get("Ribbon_Category_AnimationExit_Label"), controls, ".exit.", registry, stateStore);
         return menu;
     }
 

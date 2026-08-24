@@ -2389,6 +2389,18 @@
   <data name="Ribbon_Group_AnimationEffects_KeyTip" xml:space="preserve">
     <value>N</value>
   </data>
+  <data name="Ribbon_Command_AnimationMoreEffects_Label" xml:space="preserve">
+    <value>More Effects</value>
+  </data>
+  <data name="Ribbon_Category_AnimationEntrance_Label" xml:space="preserve">
+    <value>Entrance</value>
+  </data>
+  <data name="Ribbon_Category_AnimationEmphasis_Label" xml:space="preserve">
+    <value>Emphasis</value>
+  </data>
+  <data name="Ribbon_Category_AnimationExit_Label" xml:space="preserve">
+    <value>Exit</value>
+  </data>
   <data name="Ribbon_Command_AnimationEntranceAppear_Label" xml:space="preserve">
     <value>Appear</value>
   </data>

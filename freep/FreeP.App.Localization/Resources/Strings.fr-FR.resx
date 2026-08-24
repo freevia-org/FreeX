@@ -236,4 +236,8 @@
   <data name="Print_Host_UnavailableFormat" xml:space="preserve"><value>{0} n'est pas disponible sur cette plateforme.</value></data>
   <data name="Print_Host_WpfWindowsOnly" xml:space="preserve"><value>L'impression WPF native est disponible uniquement sous Windows.</value></data>
   <data name="Renderer_InlineOleObjectFallback" xml:space="preserve"><value>Objet OLE</value></data>
+  <data name="Ribbon_Command_AnimationMoreEffects_Label" xml:space="preserve"><value>Autres effets</value></data>
+  <data name="Ribbon_Category_AnimationEntrance_Label" xml:space="preserve"><value>Ouverture</value></data>
+  <data name="Ribbon_Category_AnimationEmphasis_Label" xml:space="preserve"><value>Emphase</value></data>
+  <data name="Ribbon_Category_AnimationExit_Label" xml:space="preserve"><value>Fermeture</value></data>
 </root>
