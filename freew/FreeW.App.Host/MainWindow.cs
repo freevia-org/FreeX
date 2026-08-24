@@ -144,6 +144,10 @@ public sealed partial class MainWindow : Window
             ThemeResources.TitleBarBrush,
             brush => brush.Color,
             WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBar)),
+        TitleBarForegroundColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
+            ThemeResources.Brush("TitleBarForeground"),
+            brush => brush.Color,
+            WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBarForeground)),
         BadgeColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
             ThemeResources.BadgeBrush,
             brush => brush.Color,
@@ -1065,7 +1069,11 @@ public sealed partial class MainWindow : Window
             new SisterQuickAccessToolbarActions(
                 Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
                 Undo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Undo),
-                Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)));
+                Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)),
+            new QuickAccessToolbarRenderOptions
+            {
+                ForegroundResourceKey = ThemeResources.Brush("TitleBarForeground").PrimaryKey
+            });
 
     private void DisposeReadAloud()
     {

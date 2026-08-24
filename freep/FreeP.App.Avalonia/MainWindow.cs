@@ -737,8 +737,10 @@ public sealed partial class MainWindow : Window,
             Body: clientRoot,
             TitleBarBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
                 ThemeResources.TitleBarBrush,
-                FreePBrushes.Accent),
-            TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeP.Colors.TitleBar))),
+            TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.Brush("TitleBarForeground"),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeP.Colors.TitleBarForeground))),
             TitleBarHeight: FreePShellVisualMetrics.TitleBarHeight));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
@@ -747,7 +749,9 @@ public sealed partial class MainWindow : Window,
                 Save: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.SavePresentation),
                 Undo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Undo),
                 Redo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)),
-            AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White));
+            AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.Brush("TitleBarForeground"),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeP.Colors.TitleBarForeground))));
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
