@@ -864,6 +864,33 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void Surface3DExplicitDefaultCameraCorpus_UsesImportedDefaultProjection()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "27-chart-surface3d-4x4.pptx");
+        var surface = PptxPackageReader.Read(deckPath).Slides
+            .SelectMany(slide => slide.Shapes)
+            .Single(shape => shape.Chart?.ChartType == ChartType.Surface3D).Chart!;
+
+        surface.View3D.Should().NotBeNull();
+        surface.View3D!.RotationX.Should().Be(15);
+        surface.View3D.RotationY.Should().Be(20);
+        surface.View3D.RightAngleAxes.Should().BeFalse();
+        surface.Categories.Should().HaveCount(4);
+        surface.Series.Should().HaveCount(4);
+        surface.Series.SelectMany(series => series.Values).Should().OnlyContain(value => value.HasValue);
+
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            surface,
+            new ChartPlanRect(0, 0, 720, 378));
+        geometry.Points.Should().HaveCount(16);
+        geometry.RenderFacets.Should().HaveCount(18,
+            "a default camera renders the 4x4 grid as two facets per complete cell");
+        geometry.FrameSegments.Select(segment => segment.Stroke.Alpha)
+            .Should().OnlyContain(alpha => alpha == 255,
+                "explicit default view3D retains the imported projected frame");
+    }
+
+    [Fact]
     public void ChartLabelsCorpusDeck_InfersPowerPointPieValueAndPercentDefaults()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");

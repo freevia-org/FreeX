@@ -788,6 +788,8 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceOrangeBandUpperBound = 0.53;
     private const double ImportedSurfaceGreenBandUpperBound = 0.75;
     private const double ImportedSurfaceReferencePlotWidth = 360.0;
+    private const double ImportedSurfaceCompactLiftCap = 170.0;
+    private const double ImportedSurfaceCompactPlotHeightLimit = 200.0;
     private const double ImportedSurfaceDepthWallX = 124.0;
     private const double ImportedSurfaceFrontCategoryWidth = 301.5;
     private const double ImportedSurfaceFrameFrontLeftX = 8.0;
@@ -878,12 +880,22 @@ public static partial class ChartRenderPlanner
         chart.Series[2].Values.SequenceEqual(new double?[] { 28, 24, 35 });
 
     // The imported 3x3 surface fixture has a measured PowerPoint frame and
-    // facet registration. Authored view3D settings must use the general
-    // projection path instead of inheriting those fixture-specific offsets.
+    // facet registration. PowerPoint may serialize its default 15/20-degree
+    // camera explicitly, though; that is semantically equivalent to omitting
+    // c:view3D and must retain the default projected path. Non-default camera
+    // settings use the general projection path instead.
     private static bool UsesImportedSurfaceGeometry(ChartShape chart) =>
         chart.ChartType == ChartType.Surface3D &&
         UsesImportedTextMetrics(chart) &&
-        chart.View3D is null;
+        (chart.View3D is null || UsesDefaultSurface3DView(chart.View3D));
+
+    private static bool UsesDefaultSurface3DView(Chart3DView view) =>
+        (view.RotationX ?? 15) == 15 &&
+        (view.RotationY ?? 20) == 20 &&
+        (view.Perspective ?? 30) == 30 &&
+        (view.HeightPercent ?? 100) == 100 &&
+        (view.DepthPercent ?? 100) == 100 &&
+        (view.RightAngleAxes ?? false) == false;
 
     private static bool UsesImportedTallSurfaceTitleWrap(
         ChartShape chart,
@@ -5382,9 +5394,12 @@ public static partial class ChartRenderPlanner
             : Math.Min(plot.Width * 0.18, 72.0);
         double depthY = Math.Min(plot.Height * 0.26, 52.0);
         double categorySlopeY = Math.Min(plot.Height * 0.20, 40.0);
-        double lift = Math.Min(
-            plot.Height * (usesImportedSurfaceGeometry ? 0.90 : 0.50),
-            usesImportedSurfaceGeometry ? 170.0 : 88.0);
+        // Preserve the calibrated compact Surface3D envelope, then allow the
+        // default camera to scale with larger plots. A global 170-DIP cap
+        // compresses full-slide PowerPoint meshes into the category-axis band.
+        double lift = usesImportedSurfaceGeometry
+            ? ResolveImportedSurfaceLift(plot.Height)
+            : Math.Min(plot.Height * 0.50, 88.0);
         ApplySurfaceView3DScales(
             view3D,
             ref depthX,
@@ -5435,6 +5450,12 @@ public static partial class ChartRenderPlanner
             Math.Round(x + (usesImportedSurfaceGeometry ? ImportedSurfacePointOffsetX : 0.0), 4),
             Math.Round(y + (usesImportedSurfaceGeometry ? ImportedSurfacePointOffsetY : 0.0), 4));
     }
+
+    private static double ResolveImportedSurfaceLift(double plotHeight) =>
+        plotHeight <= ImportedSurfaceCompactPlotHeightLimit
+            ? Math.Min(plotHeight * 0.90, ImportedSurfaceCompactLiftCap)
+            : ImportedSurfaceCompactLiftCap +
+                (plotHeight - ImportedSurfaceCompactPlotHeightLimit) * 0.90;
 
     private static void ApplySurfaceView3DScales(
         Chart3DView? view3D,
