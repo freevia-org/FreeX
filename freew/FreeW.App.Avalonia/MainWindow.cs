@@ -2160,6 +2160,10 @@ public sealed partial class MainWindow : Window
             () => DocumentThemeGallery.Build(registry));
         AvaloniaRibbonRenderer.TryInjectGroupContent(
             _ribbonControl,
+            "document-formatting",
+            () => DocumentThemeGallery.BuildDocumentFormatting(registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
             "styles",
             () => DocumentStylesGallery.Build(_editor, registry));
         AvaloniaRibbonRenderer.TryInjectGroupContent(
