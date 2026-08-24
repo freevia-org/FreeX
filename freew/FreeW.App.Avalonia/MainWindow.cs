@@ -2170,6 +2170,10 @@ public sealed partial class MainWindow : Window
             _ribbonControl,
             "chart-styles",
             () => ChartStylesGallery.Build(registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "smartart-styles",
+            () => SmartArtStylesGallery.Build(registry));
 
         HasToolbar = true;
         _ribbonHost = new Border
