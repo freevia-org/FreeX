@@ -3970,6 +3970,8 @@ public sealed partial class MainWindow : Window,
             {
                 if (tab.Id == "design")
                     InjectRibbonGallery(content, "themes", PresentationThemeGallery.Build(registry));
+                else if (tab.Id == "transitions")
+                    InjectRibbonGallery(content, "transition-gallery", PresentationTransitionGallery.Build(registry));
             },
         });
 
@@ -3980,9 +3982,9 @@ public sealed partial class MainWindow : Window,
         return result.Root;
     }
 
-    // The shared renderer stamps group content with its canonical catalog id. Replace the Design > Themes
-    // command lane with the native PowerPoint-style preview strip while preserving the underlying commands
-    // for non-WPF hosts and for contextual command routing.
+    // The shared renderer stamps group content with its canonical catalog id. Replace selected WPF command
+    // lanes with native Office-style previews while preserving underlying commands for non-WPF hosts and
+    // contextual command routing.
     private static void InjectRibbonGallery(DependencyObject content, string groupId, FrameworkElement gallery)
     {
         var panel = (content as Border)?.Child as Panel;
