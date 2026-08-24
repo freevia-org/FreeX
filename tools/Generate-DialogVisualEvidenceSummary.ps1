@@ -320,9 +320,21 @@ function Get-RouteFamily {
 }
 
 function Get-PngMetrics {
-    param([Parameter(Mandatory = $true)][string]$Path)
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][ValidateSet("wpf", "avalonia")][string]$CaptureHost
+    )
 
-    [DialogPngAnalyzer]::Analyze($Path)
+    $metrics = [DialogPngAnalyzer]::Analyze($Path)
+    # Avalonia's headless encoder currently emits 120-DPI PNG metadata while
+    # its dialog harness captures a 96-DPI logical surface. Preserve the raw
+    # metadata for diagnostics, but compare its logical dimensions using the
+    # harness contract rather than treating the encoder tag as UI scaling.
+    if ($CaptureHost -eq "avalonia") {
+        $metrics.LogicalWidth = $metrics.Width
+        $metrics.LogicalHeight = $metrics.Height
+    }
+    $metrics
 }
 
 function Get-OptionalStringProperty {
@@ -874,7 +886,8 @@ function Compare-PngMetrics {
 function New-PngEvidence {
     param(
         [Parameter(Mandatory = $true)]$Surface,
-        [Parameter(Mandatory = $true)][string]$ManifestPath
+        [Parameter(Mandatory = $true)][string]$ManifestPath,
+        [Parameter(Mandatory = $true)][ValidateSet("wpf", "avalonia")][string]$CaptureHost
     )
 
     $pngPath = Resolve-ManifestPngPath -Surface $Surface -ManifestPath $ManifestPath
@@ -882,7 +895,7 @@ function New-PngEvidence {
         throw "Captured surface '$($Surface.id)' does not declare a PNG path."
     }
 
-    $metrics = Get-PngMetrics $pngPath
+    $metrics = Get-PngMetrics -Path $pngPath -CaptureHost $CaptureHost
 
     [pscustomobject]@{
         id = [string]$Surface.id
@@ -905,12 +918,12 @@ $avaloniaSurfaces = @(Get-CapturedSurfaces -Manifest $avaloniaManifest -Manifest
 
 $wpfById = [ordered]@{}
 foreach ($surface in $wpfSurfaces) {
-    $wpfById[[string]$surface.id] = New-PngEvidence -Surface $surface -ManifestPath $WpfManifestPath
+    $wpfById[[string]$surface.id] = New-PngEvidence -Surface $surface -ManifestPath $WpfManifestPath -CaptureHost "wpf"
 }
 
 $avaloniaById = [ordered]@{}
 foreach ($surface in $avaloniaSurfaces) {
-    $avaloniaById[[string]$surface.id] = New-PngEvidence -Surface $surface -ManifestPath $AvaloniaManifestPath
+    $avaloniaById[[string]$surface.id] = New-PngEvidence -Surface $surface -ManifestPath $AvaloniaManifestPath -CaptureHost "avalonia"
 }
 
 $pairedIds = @($wpfById.Keys | Where-Object { $avaloniaById.Contains($_) } | Sort-Object)
