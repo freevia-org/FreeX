@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -167,6 +168,8 @@ public sealed partial class MainWindow : Window,
 
     private readonly SlideCanvas _slideCanvas;
     private Border _canvasHost = null!;
+    private Grid _bodyGrid = null!;
+    private Grid _slidePaneHost = null!;
     private Canvas _oleOverlay = null!;
     private Canvas _commentOverlay = null!;
 #if FREEP_WINDOWS_CAPTURE
@@ -350,6 +353,10 @@ public sealed partial class MainWindow : Window,
     private FlyoutBase? _ribbonKeyTipFlyout;
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
+    private PresentationViewModeState _viewModeState = PresentationViewModeState.Normal;
+    private int _slideSorterDragSourceIndex = -1;
+    private Point _slideSorterDragStart;
+    private bool _slideSorterDragging;
 
     private bool _notesRefreshing;
     private bool _slidePaneRefreshing;
@@ -1142,7 +1149,7 @@ public sealed partial class MainWindow : Window,
         // Wire interaction after the overlay panel is built.
         WireInteraction(textOverlay);
 
-        var slidePaneHost = new Grid
+        var slidePaneHost = _slidePaneHost = new Grid
         {
             Width = FreePShellVisualMetrics.SlidePaneWidth,
             Background = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
@@ -1160,7 +1167,7 @@ public sealed partial class MainWindow : Window,
         slidePaneHost.Children.Add(_slidePaneNewSlideButton);
 
         // Left (slide pane) + right split.
-        var body = new Grid();
+        var body = _bodyGrid = new Grid();
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -2317,7 +2324,7 @@ public sealed partial class MainWindow : Window,
     private void ApplyPresentationViewShowState(PresentationViewShowState state)
     {
         _viewShowState = state;
-        _notesBox.IsVisible = state.ShowNotesPane;
+        _notesBox.IsVisible = _viewModeState.Mode != PresentationViewMode.SlideSorter && state.ShowNotesPane;
         if (_gestureHandler is null)
             return;
 
@@ -2329,6 +2336,31 @@ public sealed partial class MainWindow : Window,
     {
         _viewZoomState = state;
         _slideCanvas.ApplyViewZoomState(state);
+    }
+
+    private void ApplyPresentationViewModeState(PresentationViewModeState state)
+    {
+        _viewModeState = state;
+        var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
+        if (_bodyGrid is null || _slidePaneHost is null || _canvasHost is null)
+            return;
+
+        _bodyGrid.ColumnDefinitions[0].Width = isSlideSorter
+            ? new GridLength(1, GridUnitType.Star)
+            : GridLength.Auto;
+        _bodyGrid.ColumnDefinitions[1].Width = isSlideSorter
+            ? new GridLength(0)
+            : new GridLength(1, GridUnitType.Star);
+        _slidePaneHost.Width = isSlideSorter ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
+        _slidePaneList.Width = isSlideSorter ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
+        _slidePaneList.MaxHeight = isSlideSorter ? double.PositiveInfinity : 520;
+        _slidePaneList.ItemsPanel = isSlideSorter
+            ? new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = Orientation.Horizontal })
+            : new FuncTemplate<Panel?>(() => new StackPanel { Orientation = Orientation.Vertical });
+        _canvasHost.IsVisible = !isSlideSorter;
+        _notesBox.IsVisible = !isSlideSorter && _viewShowState.ShowNotesPane;
+        RefreshSlidePane();
+        SyncRibbonCommandStates();
     }
 
     private Control BuildRibbon()
@@ -2382,6 +2414,7 @@ public sealed partial class MainWindow : Window,
                 AnimationPaneVisible = () => IsAnimationPaneVisible,
                 ViewShowState = () => _viewShowState,
                 ViewZoomState = () => _viewZoomState,
+                ViewModeState = () => _viewModeState,
             },
             TextActionTargets = CreateRibbonTextActionTargets(),
             DesignCommands = new FreePRibbonDesignCommandEndpoints
@@ -6381,11 +6414,39 @@ public sealed partial class MainWindow : Window,
         if (!point.Properties.IsLeftButtonPressed)
             return;
 
+        if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
+        {
+            _slideSorterDragSourceIndex = sourceSlideIndex;
+            _slideSorterDragStart = e.GetPosition(_slidePaneList);
+            _slideSorterDragging = false;
+            return;
+        }
+
         _workareaSession.BeginSlidePaneDrag(sourceSlideIndex, e.GetPosition(item).Y);
     }
 
     private void OnSlidePaneItemPointerMoved(object? sender, PointerEventArgs e)
     {
+        if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
+        {
+            if (sender is not ListBoxItem sorterItem || _slideSorterDragSourceIndex < 0)
+                return;
+
+            var sorterPoint = e.GetCurrentPoint(sorterItem);
+            if (!sorterPoint.Properties.IsLeftButtonPressed)
+                return;
+
+            var pointer = e.GetPosition(_slidePaneList);
+            if (!_slideSorterDragging &&
+                Math.Abs(pointer.X - _slideSorterDragStart.X) < SlidePanePlanner.DefaultDragStartThreshold &&
+                Math.Abs(pointer.Y - _slideSorterDragStart.Y) < SlidePanePlanner.DefaultDragStartThreshold)
+                return;
+
+            _slideSorterDragging = true;
+            e.Pointer.Capture(sorterItem);
+            e.Handled = true;
+            return;
+        }
         if (sender is not ListBoxItem item ||
             !_workareaSession.SlidePaneSession.Projection.Layout.DragSession.IsTracking)
             return;
@@ -6410,6 +6471,23 @@ public sealed partial class MainWindow : Window,
 
     private void OnSlidePaneItemPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
+        if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
+        {
+            if (_slideSorterDragging && _slideSorterDragSourceIndex >= 0)
+            {
+                var target = FindSlideSorterInsertionIndex(e.GetPosition(_slidePaneList));
+                _workareaSession.ExecuteSlidePaneAction(
+                    SlidePaneActionKind.MoveSlide,
+                    _slideSorterDragSourceIndex,
+                    target);
+                e.Pointer.Capture(null);
+            }
+
+            _slideSorterDragSourceIndex = -1;
+            _slideSorterDragging = false;
+            e.Handled = true;
+            return;
+        }
         _workareaSession.CompleteSlidePaneDrag(out var shouldReleaseCapture);
         if (!shouldReleaseCapture)
         {
@@ -6424,8 +6502,40 @@ public sealed partial class MainWindow : Window,
 
     private void OnSlidePaneItemPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
+        if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
+        {
+            _slideSorterDragSourceIndex = -1;
+            _slideSorterDragging = false;
+            return;
+        }
         _workareaSession.CancelSlidePaneDrag();
         HideSlidePaneInsertionIndicator();
+    }
+
+    private int FindSlideSorterInsertionIndex(Point pointer)
+    {
+        var items = _slidePaneList.Items.OfType<ListBoxItem>()
+            .Where(item => item.Tag is int)
+            .Select(item => new
+            {
+                Item = item,
+                SlideIndex = item.Tag is int slideIndex ? slideIndex : -1,
+            })
+            .OrderBy(item => item.Item.TranslatePoint(new Point(), _slidePaneList)?.Y ?? 0)
+            .ThenBy(item => item.Item.TranslatePoint(new Point(), _slidePaneList)?.X ?? 0)
+            .ToArray();
+        foreach (var candidate in items)
+        {
+            var origin = candidate.Item.TranslatePoint(new Point(), _slidePaneList);
+            if (origin is null)
+                continue;
+            if (pointer.Y < origin.Value.Y + candidate.Item.Bounds.Height / 2 ||
+                (pointer.Y < origin.Value.Y + candidate.Item.Bounds.Height &&
+                 pointer.X < origin.Value.X + candidate.Item.Bounds.Width / 2))
+                return candidate.SlideIndex;
+        }
+
+        return _presentation.Slides.Count;
     }
 
     internal bool TryApplySlidePaneMove(int sourceSlideIndex, int targetInsertionIndex)

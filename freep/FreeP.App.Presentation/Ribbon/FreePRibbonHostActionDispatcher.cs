@@ -65,6 +65,7 @@ public sealed class FreePRibbonHostActionEndpoints
     public Action? ReopenComment { get; init; }
     public Action<PresentationViewShowState>? ApplyViewShowState { get; init; }
     public Action<PresentationViewZoomState>? ApplyViewZoomState { get; init; }
+    public Action<PresentationViewModeState>? ApplyViewModeState { get; init; }
     public Action? PickTransitionSound { get; init; }
     public Action<PresentationAnimationCommandPlan>? ToggleAnimationPane { get; init; }
     public Action? StartSlideShowFromBeginning { get; init; }
@@ -244,6 +245,7 @@ public static class FreePRibbonHostActionDispatcher
             FreePRibbonHostActionKind.ReopenComment => Invoke(endpoints.ReopenComment),
             FreePRibbonHostActionKind.ApplyViewShowState => Invoke(action.Argument, endpoints.ApplyViewShowState),
             FreePRibbonHostActionKind.ApplyViewZoomState => Invoke(action.Argument, endpoints.ApplyViewZoomState),
+            FreePRibbonHostActionKind.ApplyViewModeState => Invoke(action.Argument, endpoints.ApplyViewModeState),
             FreePRibbonHostActionKind.PickTransitionSound => Invoke(endpoints.PickTransitionSound),
             FreePRibbonHostActionKind.ToggleAnimationPane => Invoke(action.Argument, endpoints.ToggleAnimationPane),
             FreePRibbonHostActionKind.StartSlideShowFromBeginning => Invoke(endpoints.StartSlideShowFromBeginning),

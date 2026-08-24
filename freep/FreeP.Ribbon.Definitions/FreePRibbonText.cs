@@ -752,6 +752,9 @@ internal static class FreePRibbonText
     public static string AnimationTriggerAfterPreviousOption => Get("Ribbon_Option_AnimationTriggerAfterPrevious_Label");
 
     public static RibbonText ViewTab { get; } = new("Ribbon_Tab_View_Label", "Ribbon_Tab_View_KeyTip");
+    public static RibbonText ViewPresentationViewsGroup { get; } = new("Ribbon_Group_ViewPresentationViews_Label", "Ribbon_Group_ViewPresentationViews_KeyTip");
+    public static RibbonText ViewNormalCommand { get; } = new("Ribbon_Command_ViewNormal_Label", "Ribbon_Command_ViewNormal_KeyTip");
+    public static RibbonText ViewSlideSorterCommand { get; } = new("Ribbon_Command_ViewSlideSorter_Label", "Ribbon_Command_ViewSlideSorter_KeyTip");
     public static RibbonText ViewShowGroup { get; } = new("Ribbon_Group_ViewShow_Label", "Ribbon_Group_ViewShow_KeyTip");
     public static RibbonText ViewGridlinesCommand { get; } = new("Ribbon_Command_ViewGridlines_Label", "Ribbon_Command_ViewGridlines_KeyTip");
     public static RibbonText ViewGuidesCommand { get; } = new("Ribbon_Command_ViewGuides_Label", "Ribbon_Command_ViewGuides_KeyTip");

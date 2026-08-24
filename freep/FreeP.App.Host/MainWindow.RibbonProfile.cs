@@ -20,6 +20,7 @@ public sealed partial class MainWindow
                 AnimationPaneVisible = () => IsAnimationPaneVisible,
                 ViewShowState = () => _viewShowState,
                 ViewZoomState = () => _viewZoomState,
+                ViewModeState = () => _viewModeState,
             },
             TextActionTargets = CreateRibbonTextActionTargets(),
             DesignCommands = new FreePRibbonDesignCommandEndpoints

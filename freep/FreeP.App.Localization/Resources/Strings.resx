@@ -3073,6 +3073,24 @@
   <data name="Ribbon_Tab_View_KeyTip" xml:space="preserve">
     <value>W</value>
   </data>
+  <data name="Ribbon_Group_ViewPresentationViews_Label" xml:space="preserve">
+    <value>Presentation Views</value>
+  </data>
+  <data name="Ribbon_Group_ViewPresentationViews_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_ViewNormal_Label" xml:space="preserve">
+    <value>Normal</value>
+  </data>
+  <data name="Ribbon_Command_ViewNormal_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Command_ViewSlideSorter_Label" xml:space="preserve">
+    <value>Slide Sorter</value>
+  </data>
+  <data name="Ribbon_Command_ViewSlideSorter_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
   <data name="Ribbon_Group_ViewShow_Label" xml:space="preserve">
     <value>Show</value>
   </data>
