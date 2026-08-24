@@ -3436,9 +3436,9 @@ public sealed partial class MainWindow : Window
             // so we find the target group and prepend a custom gallery control into its content lane. This
             // keeps the galleries entirely app-side (custom WPF content) without a shared RibbonGallery type.
             if (tab.Id == "home")
-                // Drop the placeholder Style combo (the gallery supersedes it) but keep the group's
-                // New Style / Manage Styles buttons, prepending the live-preview gallery before them.
-                InjectGallery(content, "styles", StylesGallery.Build(_editor), removeKind: RemoveKind.Combos);
+                // The gallery owns visible quick-style selection; Clear/New/Manage stay reachable from
+                // its More popup, so duplicate width-heavy style buttons need not evict core Font/Paragraph.
+                InjectGallery(content, "styles", StylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
             if (tab.Id == "design")
                 // Replace the rendered Document Formatting controls with the live-preview Word-style
                 // gallery/menu strip so backed commands do not appear twice beside their custom previews.

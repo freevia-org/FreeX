@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation;
 using FreeW.Core.Model;
@@ -36,13 +37,18 @@ internal sealed class StylesGallery : Control
     ];
 
     private readonly DocumentView _editor;
+    private readonly IRibbonCommandRegistry? _registry;
 
-    private StylesGallery(DocumentView editor) => _editor = editor;
+    private StylesGallery(DocumentView editor, IRibbonCommandRegistry? registry)
+    {
+        _editor = editor;
+        _registry = registry;
+    }
 
     /// <summary>Build the gallery strip (visible swatches + a "more" expander) for the Home > Styles group.</summary>
-    public static FrameworkElement Build(DocumentView editor)
+    public static FrameworkElement Build(DocumentView editor, IRibbonCommandRegistry? registry = null)
     {
-        var gallery = new StylesGallery(editor);
+        var gallery = new StylesGallery(editor, registry);
         var root = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 
         var strip = new Border
@@ -59,7 +65,10 @@ internal sealed class StylesGallery : Control
         // strip so the group stays compact (and doesn't force the adaptive panel to collapse it).
         strip.Child = new ScrollViewer
         {
-            MaxWidth = 300,
+            // A 1280-DIP Word window keeps Font, Paragraph, and a three-swatch Styles strip visible.
+            // Reserve only that compact lane here; remaining styles stay in the More popup instead of
+            // triggering the adaptive renderer to collapse the whole group.
+            Width = 180,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = swatches
@@ -121,6 +130,17 @@ internal sealed class StylesGallery : Control
         foreach (var (name, id) in Entries())
             list.Children.Add(BuildSwatch(name, id, large: false));
 
+        // The compact ribbon lane intentionally shows only the visual style swatches. Keep the
+        // non-style commands that previously occupied the same group reachable from this overflow,
+        // matching Office's gallery-more affordance without spending three full-width buttons beside it.
+        if (_registry is not null)
+        {
+            list.Children.Add(new Separator { Margin = new Thickness(4, 5, 4, 4) });
+            AddCommandButton(list, "Clear Style", "freew.style-clear");
+            AddCommandButton(list, "New Style…", "freew.new-style");
+            AddCommandButton(list, "Manage Styles…", "freew.manage-styles");
+        }
+
         return new Popup
         {
             PlacementTarget = anchor,
@@ -142,6 +162,22 @@ internal sealed class StylesGallery : Control
                 Child = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 320, Content = list }
             }
         };
+    }
+
+    private void AddCommandButton(Panel host, string label, string commandId)
+    {
+        if (_registry is null || !_registry.TryGet(new RibbonCommandId(commandId), out var command) || command is null)
+            return;
+
+        var button = new Button
+        {
+            Content = label,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(8, 4, 8, 4),
+            MinWidth = 220
+        };
+        button.Click += (_, _) => command.Execute(RibbonCommandContext.Empty);
+        host.Children.Add(button);
     }
 
     // One swatch: a button whose content is the style name rendered in the style's own formatting.
