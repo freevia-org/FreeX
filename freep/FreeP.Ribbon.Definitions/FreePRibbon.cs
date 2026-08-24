@@ -53,6 +53,13 @@ public static class FreePRibbon
                         group.Sizing(RibbonGroupSizing.OfficeAdaptive);
                         AddTableCellControls(group);
                     }))
+            .ContextualTab("smartart-design", FreePRibbonText.SmartArtDesignTabLabel,
+                new RibbonTabContext(
+                    "smartart",
+                    FreePRibbonText.SmartArtToolsContextLabel,
+                    RibbonContextColor.Orange,
+                    FreePRibbonText.SmartArtDesignTabKeyTip),
+                AddSmartArtGroups)
             .Build();
 
         return RibbonDefinitionKeyTipUniquifier.Normalize(definition);
@@ -857,6 +864,13 @@ public static class FreePRibbon
             group.Medium("freep.background-blue", FreePRibbonText.BackgroundBlueCommand.Label, RibbonCommandIconKind.Fill, FreePRibbonText.BackgroundBlueCommand.KeyTip);
             group.Medium("freep.background-reset", FreePRibbonText.BackgroundResetCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.BackgroundResetCommand.KeyTip);
         });
+    }
+
+    // PowerPoint exposes these editing controls only while a SmartArt graphic is selected.
+    // Keeping them out of the blank Design tab makes the normal presentation surface match the
+    // native ribbon while preserving every existing SmartArt command on its contextual tab.
+    private static void AddSmartArtGroups(RibbonTabBuilder tab)
+    {
         tab.Group("smartart-colors", FreePRibbonText.SmartArtColorsGroup.Label, FreePRibbonText.SmartArtColorsGroup.KeyTip, 80, group =>
         {
             group.Dropdown(

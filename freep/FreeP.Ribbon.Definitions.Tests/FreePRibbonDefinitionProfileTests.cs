@@ -29,9 +29,15 @@ public sealed class FreePRibbonDefinitionProfileTests
         foreach (var definition in new[] { wpf, avalonia })
         {
             definition.ContextualTabs.Select(tab => tab.Id)
-                .Should().Equal("text-format", "table-layout");
+                .Should().Equal("text-format", "table-layout", "smartart-design");
             definition.FindTab("text-format")!.Context!.ActivationKey.Should().Be("text");
             definition.FindTab("table-layout")!.Context!.ActivationKey.Should().Be("table");
+            definition.FindTab("smartart-design")!.Context!.ActivationKey.Should().Be("smartart");
+
+            definition.FindTab("design")!.Groups.Select(group => group.Id)
+                .Should().Equal("themes", "customize");
+            definition.FindTab("smartart-design")!.Groups.Select(group => group.Id)
+                .Should().Contain("smartart-colors");
         }
 
         RibbonDefinitionValidator.Validate(wpf).HasErrors.Should().BeFalse();

@@ -403,6 +403,15 @@
   <data name="Ribbon_Context_TableTools_Label" xml:space="preserve">
     <value>Table Tools</value>
   </data>
+  <data name="Ribbon_Tab_SmartArtDesign_Label" xml:space="preserve">
+    <value>SmartArt Design</value>
+  </data>
+  <data name="Ribbon_Tab_SmartArtDesign_KeyTip" xml:space="preserve">
+    <value>SD</value>
+  </data>
+  <data name="Ribbon_Context_SmartArtTools_Label" xml:space="preserve">
+    <value>SmartArt Tools</value>
+  </data>
   <data name="Ribbon_Command_TextBox_Label" xml:space="preserve">
     <value>Text Box</value>
   </data>
