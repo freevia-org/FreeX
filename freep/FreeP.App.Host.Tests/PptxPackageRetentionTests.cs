@@ -38,6 +38,14 @@ public sealed class PptxPackageRetentionTests
         "24-run-baseline-wrap.pptx",
         "25-chart-surface3d-view3d.pptx",
         "26-chart-surface3d-default-tall-frame.pptx",
+        "27-chart-surface3d-4x4.pptx",
+        "28-chart-surface3d-4x4-compact.pptx",
+    ];
+
+    private static readonly (string DeckName, string ReferenceFileName)[] NewSurface3DCorpusReferences =
+    [
+        ("27-chart-surface3d-4x4.pptx", "slide-01.png"),
+        ("28-chart-surface3d-4x4-compact.pptx", "slide-01.png"),
     ];
 
     private static readonly string[] WriterOwnedPackagePartPaths =
@@ -149,6 +157,45 @@ public sealed class PptxPackageRetentionTests
             .Order(StringComparer.OrdinalIgnoreCase)
             .Should()
             .Equal(ExpectedCorpusDeckNames.Order(StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void NewSurface3DCorpusDecks_RequireOfficeReferenceCompanionsAndFourByFourTopology()
+    {
+        var corpusDirectory = FindCorpusDirectory();
+        var referenceRoot = Path.Combine(corpusDirectory, "pptx-ref");
+
+        foreach (var (deckName, referenceFileName) in NewSurface3DCorpusReferences)
+        {
+            var sourcePath = Path.Combine(corpusDirectory, deckName);
+            File.Exists(sourcePath).Should().BeTrue($"{deckName} must remain a committed corpus source");
+
+            var referencePath = Path.Combine(
+                referenceRoot,
+                Path.GetFileNameWithoutExtension(deckName),
+                referenceFileName);
+            File.Exists(referencePath).Should().BeTrue(
+                $"{deckName} must retain its committed Office-rendered companion reference {referencePath}");
+            new FileInfo(referencePath).Length.Should().BeGreaterThan(8,
+                $"{deckName} companion reference must be a non-empty rendered PNG");
+
+            var presentation = PptxPackageReader.Read(sourcePath);
+            presentation.Slides.Should().ContainSingle(
+                $"{deckName} is an Office-authored one-slide Surface3D control fixture");
+            var surface = presentation.Slides
+                .SelectMany(slide => slide.Shapes)
+                .Select(shape => shape.Chart)
+                .Single(chart => chart?.ChartType == ChartType.Surface3D)!;
+
+            surface.View3D.Should().NotBeNull($"{deckName} must preserve its authored default camera");
+            surface.View3D!.RotationX.Should().Be(15);
+            surface.View3D.RotationY.Should().Be(20);
+            surface.View3D.RightAngleAxes.Should().BeFalse();
+            surface.Categories.Should().HaveCount(4);
+            surface.Series.Should().HaveCount(4);
+            surface.Series.Should().OnlyContain(series => series.Values.Count == 4 &&
+                series.Values.All(value => value.HasValue));
+        }
     }
 
     [Fact]
