@@ -29,6 +29,30 @@ public static class FreePRibbon
             .Tab("view", FreePRibbonText.ViewTab.Label, FreePRibbonText.ViewTab.KeyTip,
                 AddViewGroups)
             .Tab("help", "Help", "Y", AddHelpGroups)
+            .ContextualTab("text-format", FreePRibbonText.TextFormatTabLabel,
+                new RibbonTabContext(
+                    "text",
+                    FreePRibbonText.TextToolsContextLabel,
+                    RibbonContextColor.Blue,
+                    FreePRibbonText.TextFormatTabKeyTip),
+                tab => tab.Group("text-layout", FreePRibbonText.TextGroupLabel, FreePRibbonText.TextGroupKeyTip, 100,
+                    group =>
+                    {
+                        group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                        AddTextLayoutControls(group);
+                    }))
+            .ContextualTab("table-layout", FreePRibbonText.TableLayoutTabLabel,
+                new RibbonTabContext(
+                    "table",
+                    FreePRibbonText.TableToolsContextLabel,
+                    RibbonContextColor.Teal,
+                    FreePRibbonText.TableLayoutTabKeyTip),
+                tab => tab.Group("table-layout", FreePRibbonText.TablesGroupLabel, FreePRibbonText.TablesGroupKeyTip, 100,
+                    group =>
+                    {
+                        group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                        AddTableCellControls(group);
+                    }))
             .Build();
 
         return RibbonDefinitionKeyTipUniquifier.Normalize(definition);
@@ -109,22 +133,6 @@ public static class FreePRibbon
                         {
                             group.Sizing(RibbonGroupSizing.OfficeAdaptive);
                             AddEditingControls(group);
-                        });
-                    break;
-                case FreePRibbonHomeGroupId.TextLayout:
-                    tab.Group("text-layout", FreePRibbonText.TextGroupLabel, FreePRibbonText.TextGroupKeyTip, priority,
-                        group =>
-                        {
-                            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
-                            AddTextLayoutControls(group);
-                        });
-                    break;
-                case FreePRibbonHomeGroupId.TableLayout:
-                    tab.Group("table-layout", FreePRibbonText.TablesGroupLabel, FreePRibbonText.TablesGroupKeyTip, priority,
-                        group =>
-                        {
-                            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
-                            AddTableCellControls(group);
                         });
                     break;
                 default:

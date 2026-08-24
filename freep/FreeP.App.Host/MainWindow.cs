@@ -7,6 +7,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.Drawing;
+using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
@@ -100,6 +101,7 @@ public sealed partial class MainWindow : Window,
     private TabControl _ribbonTabs = null!;
     private TabItem _fileTab = null!;
     private RibbonFileTabRouter? _fileTabRouter;
+    private RibbonContextualTabController? _contextualTabs;
     private readonly RibbonStateStore _ribbonStateStore = new();
     private FreePRibbonBindingSession? _ribbonBindingSession;
 
@@ -454,6 +456,9 @@ public sealed partial class MainWindow : Window,
             FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf),
             _ribbonBindingSession.Registry,
             _ribbonBindingSession.StateStore);
+        Editor.SelectionChanged += (_, _) => RefreshContextualTabs();
+        Editor.CurrentSlideChanged += (_, _) => RefreshContextualTabs();
+        RefreshContextualTabs();
 
         // Body: slide pane + stage.
         var body = BuildBody();
@@ -3958,12 +3963,42 @@ public sealed partial class MainWindow : Window,
             FileTabHeader:  UiText.Get("Ribbon_Group_File_Label"),
             FileTabAccent:  FreePBrushes.AccentColor,
             FileTabHover:   FreePBrushes.AccentDarkColor,
-            ShowBackstage));
+            ShowBackstage)
+        {
+            EnableContextualTabs = true,
+        });
 
         _ribbonTabs    = result.Tabs;
         _fileTab       = result.FileTab;
         _fileTabRouter = result.FileTabRouter;
+        _contextualTabs = result.ContextualTabs;
         return result.Root;
+    }
+
+    // FreeP's format and table authoring controls belong in contextual Office tabs, not in the
+    // ordinary Home ribbon. Keep the tab-strip in sync with the model selection so a blank slide
+    // stays focused on the PowerPoint-equivalent Home groups, while text shapes and tables expose
+    // their dedicated surfaces as soon as they are selected.
+    private void RefreshContextualTabs()
+    {
+        if (_contextualTabs is null || Editor.CurrentSlide is not { } slide)
+            return;
+
+        var state = RibbonContextState.None;
+        foreach (var shapeId in Editor.SelectedShapeIds)
+        {
+            var shape = SlideShapeTraversal.FindById(slide, shapeId);
+            if (shape?.Table is not null)
+            {
+                state = state.With("table");
+                continue;
+            }
+
+            if (shape?.TextBody is not null)
+                state = state.With("text");
+        }
+
+        _contextualTabs.Apply(state);
     }
 
     // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the
