@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using FreeP.App.Compositor;
 using Free.Shared.Ribbon;
 
 namespace FreeP.App.Host;

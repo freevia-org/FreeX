@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using FreeP.App.Compositor;
 using Free.Shared.Ribbon;
 
 namespace FreeP.App.Avalonia;
