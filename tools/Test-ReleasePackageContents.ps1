@@ -8,7 +8,7 @@ param(
     [Parameter(Mandatory)][string]$InputRoot
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $Apps = @($Apps | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if ($Scope -eq 'App' -and $Apps.Count -ne 1) { throw 'App scope requires exactly one app.' }
