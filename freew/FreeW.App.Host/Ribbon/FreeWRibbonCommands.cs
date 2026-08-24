@@ -1446,7 +1446,14 @@ internal static class FreeWRibbonCommands
             ShowFeedback: feedback => DialogMessageHelper.ShowInfo(
                 Window.GetWindow(editor),
                 feedback.Message,
-                feedback.Title));
+                feedback.Title),
+            ApplyPosition: (target, position) =>
+            {
+                if (target == ObjectFormatTarget.Picture)
+                    editor.SetSelectedImagePosition(position.HorizontalOffsetPt, position.VerticalOffsetPt, position.HorizontalAnchor, position.VerticalAnchor);
+                else
+                    editor.SetSelectedShapePosition(position.HorizontalOffsetPt, position.VerticalOffsetPt, position.HorizontalAnchor, position.VerticalAnchor);
+            });
 
     private static FreeWRibbonImageExecutionPorts CreateImageExecutionPorts(DocumentView editor) =>
         new(
