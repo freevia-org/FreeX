@@ -30,6 +30,10 @@ public sealed class FreePRendererLocalizationExhaustionTests
                 "Backstage route identifier",
             [Literal("FreeP.App.Host/MainWindow.cs", "Print")] =
                 "Backstage route identifier",
+            [Literal("FreeP.App.Host/MainWindow.cs", "table")] =
+                "contextual ribbon state identifier",
+            [Literal("FreeP.App.Host/MainWindow.cs", "text")] =
+                "contextual ribbon state identifier",
             [Literal("FreeP.App.Host/OsClipboardService.cs", "N")] =
                 "Guid format specifier",
             [Literal("FreeP.App.Rendering.Avalonia/SlideCanvas.cs", "ellipse")] =

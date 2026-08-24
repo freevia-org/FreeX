@@ -75,8 +75,11 @@ public sealed partial class MainWindow
             AttachCanvasEditing();
     }
 
-    private void SyncRibbonCommandStates() =>
+    private void SyncRibbonCommandStates()
+    {
         _ribbonBindingSession?.SyncCommandStates();
+        RefreshContextualTabs();
+    }
 
     private void RefreshSlidePane() =>
         (SlidePaneHost?.Child as SlidePane)?.RefreshProjection();
