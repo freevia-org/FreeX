@@ -11,6 +11,7 @@ public sealed class PresentationWorkareaOperationEndpoints
     public Action? MarkDirty { get; init; }
     public Action? AfterEditorMarkedDirty { get; init; }
     public Action? RefreshCommandStates { get; init; }
+    public Action? RefreshContextualTabs { get; init; }
     public Action? RefreshSlidePane { get; init; }
     public Action? RefreshCanvas { get; init; }
     public Action? RefreshNotesPane { get; init; }
@@ -106,6 +107,7 @@ public static class PresentationWorkareaEndpointDispatcher
             PresentationWorkareaOperation.MarkDirty => Invoke(endpoints.MarkDirty),
             PresentationWorkareaOperation.AfterEditorMarkedDirty => Invoke(endpoints.AfterEditorMarkedDirty),
             PresentationWorkareaOperation.RefreshCommandStates => Invoke(endpoints.RefreshCommandStates),
+            PresentationWorkareaOperation.RefreshContextualTabs => Invoke(endpoints.RefreshContextualTabs),
             PresentationWorkareaOperation.RefreshSlidePane => Invoke(endpoints.RefreshSlidePane),
             PresentationWorkareaOperation.RefreshCanvas => Invoke(endpoints.RefreshCanvas),
             PresentationWorkareaOperation.RefreshNotesPane => Invoke(endpoints.RefreshNotesPane),

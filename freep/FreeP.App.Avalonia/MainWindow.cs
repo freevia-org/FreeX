@@ -339,6 +339,7 @@ public sealed partial class MainWindow : Window,
     private RibbonDefinition? _ribbonDefinition;
     private RibbonCommandRegistry? _ribbonCommandRegistry;
     private readonly RibbonStateStore _ribbonStateStore = new();
+    private readonly PresentationRibbonContextSource _ribbonContextSource = new();
     private FreePRibbonBindingSession? _ribbonBindingSession;
     private bool _ribbonKeyTipsVisible;
     private string? _ribbonKeyTipTabId;
@@ -2339,6 +2340,7 @@ public sealed partial class MainWindow : Window,
         _ribbonControl = AvaloniaRibbonRenderer.BuildRibbon(
             definition,
             registry,
+            contextSource: _ribbonContextSource,
             afterExecute: null,
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
             onFileTabSelected: ShowBackstage,
@@ -2355,6 +2357,9 @@ public sealed partial class MainWindow : Window,
             Child           = _ribbonControl,
         };
     }
+
+    private void RefreshContextualTabs() =>
+        _ribbonContextSource.Apply(PresentationContextualRibbonPlanner.BuildContext(Editor));
 
     internal RibbonCommandRegistry BuildCommandRegistry()
     {

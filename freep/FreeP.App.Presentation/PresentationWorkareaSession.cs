@@ -23,6 +23,7 @@ public enum PresentationWorkareaOperation
     MarkDirty,
     AfterEditorMarkedDirty,
     RefreshCommandStates,
+    RefreshContextualTabs,
     RefreshSlidePane,
     RefreshCanvas,
     RefreshNotesPane,
@@ -197,6 +198,7 @@ public static class PresentationWorkareaOperationPlanner
             PresentationWorkareaOperation.RefreshDocumentStatusBeforeReview,
             PresentationWorkareaOperation.RefreshSlidePane,
             PresentationWorkareaOperation.RefreshCanvas,
+            PresentationWorkareaOperation.RefreshContextualTabs,
             PresentationWorkareaOperation.RefreshNotesPane,
             PresentationWorkareaOperation.RefreshReviewPaneBeforePlans,
             PresentationWorkareaOperation.RefreshReviewWorkflowPlans,
@@ -214,6 +216,7 @@ public static class PresentationWorkareaOperationPlanner
             PresentationWorkareaOperation.RefreshCanvas,
             PresentationWorkareaOperation.RefreshDocumentStatusBeforeReview,
             PresentationWorkareaOperation.RefreshNotesPane,
+            PresentationWorkareaOperation.RefreshContextualTabs,
             PresentationWorkareaOperation.RefreshReviewPaneBeforePlans,
             PresentationWorkareaOperation.RefreshReviewWorkflowPlans,
             PresentationWorkareaOperation.RefreshReviewPaneAfterPlans,
@@ -228,6 +231,7 @@ public static class PresentationWorkareaOperationPlanner
             PresentationWorkareaOperation.MarkDirty,
             PresentationWorkareaOperation.AfterEditorMarkedDirty,
             PresentationWorkareaOperation.RefreshCommandStates,
+            PresentationWorkareaOperation.RefreshContextualTabs,
             PresentationWorkareaOperation.RefreshSlidePane,
             PresentationWorkareaOperation.RefreshCanvas,
             PresentationWorkareaOperation.RefreshNotesPane,
@@ -254,6 +258,7 @@ public static class PresentationWorkareaOperationPlanner
             PresentationWorkareaOperation.ResetAnimationSelection,
             PresentationWorkareaOperation.ClearMediaSelection,
             PresentationWorkareaOperation.RefreshCommandStates,
+            PresentationWorkareaOperation.RefreshContextualTabs,
             PresentationWorkareaOperation.SyncSlidePaneSelection,
             PresentationWorkareaOperation.RefreshSlidePaneChrome,
             PresentationWorkareaOperation.RefreshCanvas,
@@ -274,6 +279,7 @@ public static class PresentationWorkareaOperationPlanner
         var operations = new List<PresentationWorkareaOperation>
         {
             PresentationWorkareaOperation.RefreshCommandStates,
+            PresentationWorkareaOperation.RefreshContextualTabs,
             PresentationWorkareaOperation.RefreshAltTextRequest,
             PresentationWorkareaOperation.RefreshReadingOrder,
         };

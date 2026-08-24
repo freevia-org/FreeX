@@ -11,6 +11,11 @@ namespace FreeP.Ribbon.Definitions;
 /// </summary>
 public static class FreePRibbon
 {
+    public const string DesignTabId = "design";
+    public const string TransitionsTabId = "transitions";
+    public const string ThemesGroupId = "themes";
+    public const string TransitionGalleryGroupId = "transition-gallery";
+
     public static RibbonDefinition Build(FreePRibbonCapabilities? capabilities = null)
     {
         var profile = (capabilities ?? FreePRibbonCapabilities.Wpf).Profile;
@@ -31,7 +36,7 @@ public static class FreePRibbon
             .Tab("help", "Help", "Y", AddHelpGroups)
             .ContextualTab("text-format", FreePRibbonText.TextFormatTabLabel,
                 new RibbonTabContext(
-                    "text",
+                    PresentationContextualRibbonPlanner.TextContextKey,
                     FreePRibbonText.TextToolsContextLabel,
                     RibbonContextColor.Blue,
                     FreePRibbonText.TextFormatTabKeyTip),
@@ -43,7 +48,7 @@ public static class FreePRibbon
                     }))
             .ContextualTab("table-layout", FreePRibbonText.TableLayoutTabLabel,
                 new RibbonTabContext(
-                    "table",
+                    PresentationContextualRibbonPlanner.TableContextKey,
                     FreePRibbonText.TableToolsContextLabel,
                     RibbonContextColor.Teal,
                     FreePRibbonText.TableLayoutTabKeyTip),
@@ -55,7 +60,7 @@ public static class FreePRibbon
                     }))
             .ContextualTab("smartart-design", FreePRibbonText.SmartArtDesignTabLabel,
                 new RibbonTabContext(
-                    "smartart",
+                    PresentationContextualRibbonPlanner.SmartArtContextKey,
                     FreePRibbonText.SmartArtToolsContextLabel,
                     RibbonContextColor.Orange,
                     FreePRibbonText.SmartArtDesignTabKeyTip),

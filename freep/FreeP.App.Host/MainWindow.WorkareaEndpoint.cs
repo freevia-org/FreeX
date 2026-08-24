@@ -15,6 +15,7 @@ public sealed partial class MainWindow
                 HideTransientPickers = HideTransientPickers,
                 MarkDirty = () => _fileSession.MarkDirty(),
                 RefreshCommandStates = SyncRibbonCommandStates,
+                RefreshContextualTabs = RefreshContextualTabs,
                 RefreshSlidePane = RefreshSlidePane,
                 RefreshCanvas = RefreshCanvas,
                 RefreshNotesPane = RefreshNotesPane,

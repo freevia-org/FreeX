@@ -456,8 +456,6 @@ public sealed partial class MainWindow : Window,
             FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf),
             _ribbonBindingSession.Registry,
             _ribbonBindingSession.StateStore);
-        RefreshContextualTabs();
-
         // Body: slide pane + stage.
         var body = BuildBody();
         _wpfMediaPaneHostView = BuildWpfMediaPaneHostView();
@@ -3966,10 +3964,16 @@ public sealed partial class MainWindow : Window,
             EnableContextualTabs = true,
             CustomizeTabContent = (tab, content) =>
             {
-                if (tab.Id == "design")
-                    InjectRibbonGallery(content, "themes", PresentationThemeGallery.Build(registry));
-                else if (tab.Id == "transitions")
-                    InjectRibbonGallery(content, "transition-gallery", PresentationTransitionGallery.Build(registry));
+                if (tab.Id == FreeP.Ribbon.Definitions.FreePRibbon.DesignTabId)
+                    InjectRibbonGallery(
+                        content,
+                        FreeP.Ribbon.Definitions.FreePRibbon.ThemesGroupId,
+                        PresentationThemeGallery.Build(registry));
+                else if (tab.Id == FreeP.Ribbon.Definitions.FreePRibbon.TransitionsTabId)
+                    InjectRibbonGallery(
+                        content,
+                        FreeP.Ribbon.Definitions.FreePRibbon.TransitionGalleryGroupId,
+                        PresentationTransitionGallery.Build(registry));
                 else if (tab.Id == "animations")
                     InjectRibbonGallery(content, "animation-effects", PresentationAnimationGallery.Build(tab, registry, stateStore));
             },
@@ -4011,30 +4015,10 @@ public sealed partial class MainWindow : Window,
     // their dedicated surfaces as soon as they are selected.
     private void RefreshContextualTabs()
     {
-        if (_contextualTabs is null || Editor.CurrentSlide is not { } slide)
+        if (_contextualTabs is null)
             return;
 
-        var state = RibbonContextState.None;
-        foreach (var shapeId in Editor.SelectedShapeIds)
-        {
-            var shape = SlideShapeTraversal.FindById(slide, shapeId);
-            if (shape?.Table is not null)
-            {
-                state = state.With("table");
-                continue;
-            }
-
-            if (shape?.Kind == SlideShapeKind.SmartArt && shape.SmartArt is not null)
-            {
-                state = state.With("smartart");
-                continue;
-            }
-
-            if (shape?.TextBody is not null)
-                state = state.With("text");
-        }
-
-        _contextualTabs.Apply(state);
+        _contextualTabs.Apply(PresentationContextualRibbonPlanner.BuildContext(Editor));
     }
 
     // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the

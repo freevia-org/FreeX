@@ -56,12 +56,14 @@ public sealed class PresentationWorkareaOwnershipSourceTests
             .And.Contain("ShowDomainDialog(createDialog())")
             .And.Contain("_workareaSession.CanOpenDomainDialog(kind)");
         wpfEndpoint.Should().Contain("Copy = () => _osClipboard.Copy(")
+            .And.Contain("RefreshContextualTabs = RefreshContextualTabs")
             .And.Contain("RefreshSlidePane = RefreshSlidePane")
             .And.Contain("RefreshCurrentSlideStatus = UpdateSlideCount")
             .And.NotContain("SlidePaneHost.Child = new SlidePane(context.Snapshot.Editor)");
         avaloniaEndpoint.Should().Contain(
                 "Copy = QueueClipboardCopy")
-            .And.Contain("RewireInteractionToEditor();")
+             .And.Contain("RefreshContextualTabs = RefreshContextualTabs")
+             .And.Contain("RewireInteractionToEditor();")
             .And.Contain("RefreshCurrentSlideStatus = UpdateStatus")
             .And.NotContain("SlidePanePlanner.SetSelectedSlide(");
     }
