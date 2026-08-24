@@ -259,6 +259,7 @@ jobs:
             -Version $version `
             -Runtimes "${{ matrix.runtime }}" `
             -WindowsPackageMode SingleFile `
+            -Configuration Release `
             -OutputDir artifacts\release
 
           tools/packaging/New-AppInstallers.ps1 `
@@ -268,6 +269,13 @@ jobs:
             -Runtime "${{ matrix.runtime }}" `
             -InputRoot artifacts\release `
             -OutputDir artifacts\release
+
+          tools/Test-ReleasePackageContents.ps1 `
+            -Scope App `
+            -Apps "${{ matrix.app }}" `
+            -Version $version `
+            -Runtime "${{ matrix.runtime }}" `
+            -InputRoot artifacts\release
 
       - name: Generate SBOM and validate package inventory
         shell: pwsh
@@ -415,6 +423,13 @@ jobs:
             -InputRoot downloaded-artifacts `
             -OutputDir artifacts\suite
 
+          tools/Test-ReleasePackageContents.ps1 `
+            -Scope Suite `
+            -Apps FreeX,FreeW,FreeP `
+            -Version "${{ inputs.release_version }}" `
+            -Runtime "${{ matrix.runtime }}" `
+            -InputRoot artifacts\suite
+
       - name: Generate suite SBOM and validate inventory
         if: inputs.platform == 'all' || inputs.platform == matrix.platform
         shell: pwsh
@@ -476,6 +491,7 @@ jobs:
     name: Publish ${{ matrix.app }} release
     needs: [prepare, package]
     runs-on: ubuntu-latest
+    environment: public-preview
     timeout-minutes: 20
     permissions:
       contents: write
@@ -599,6 +615,7 @@ jobs:
     needs: suite-package
     if: inputs.app == 'all'
     runs-on: ubuntu-latest
+    environment: public-preview
     timeout-minutes: 20
     permissions:
       contents: write

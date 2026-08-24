@@ -26,6 +26,7 @@ param(
     [ValidateSet("SingleFile", "FolderZip")]
     [string]$WindowsPackageMode = "SingleFile",
 
+    [ValidateSet("Release")]
     [string]$Configuration = "Release",
 
     [string]$OutputDir
@@ -126,6 +127,9 @@ foreach ($runtime in $Runtimes) {
         "--self-contained", "true",
         "-p:UseAppHost=true",
         "-p:PublishSingleFile=$($isWindowsSingleFile.ToString().ToLowerInvariant())",
+        "-p:DebugType=None",
+        "-p:DebugSymbols=false",
+        "-p:Optimize=true",
         "-p:Version=$Version",
         "-p:InformationalVersion=$Version+$informationalSha",
         "--output", $publishDir
@@ -145,6 +149,9 @@ foreach ($runtime in $Runtimes) {
             "--self-contained", "true",
             "-p:UseAppHost=true",
             "-p:PublishSingleFile=false",
+            "-p:DebugType=None",
+            "-p:DebugSymbols=false",
+            "-p:Optimize=true",
             "-p:Version=$Version",
             "-p:InformationalVersion=$Version+$informationalSha",
             "--output", $publishDir
@@ -185,6 +192,9 @@ foreach ($runtime in $Runtimes) {
             "--self-contained", "true",
             "-p:UseAppHost=true",
             "-p:PublishSingleFile=false",
+            "-p:DebugType=None",
+            "-p:DebugSymbols=false",
+            "-p:Optimize=true",
             "-p:Version=$Version",
             "-p:InformationalVersion=$Version+$informationalSha",
             "--output", $validationPublishDir
@@ -216,6 +226,9 @@ foreach ($runtime in $Runtimes) {
             --configuration $Configuration `
             --runtime $runtime `
             --self-contained false `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -p:Optimize=true `
             --output $smokeToolDir
         if ($LASTEXITCODE -ne 0) {
             throw "$App $runtime tester-release smoke tool publish failed with exit code $LASTEXITCODE."
