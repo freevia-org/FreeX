@@ -2162,6 +2162,10 @@ public sealed partial class MainWindow : Window
             _ribbonControl,
             "styles",
             () => DocumentStylesGallery.Build(_editor, registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "table-styles",
+            () => TableStylesGallery.Build(registry));
 
         HasToolbar = true;
         _ribbonHost = new Border

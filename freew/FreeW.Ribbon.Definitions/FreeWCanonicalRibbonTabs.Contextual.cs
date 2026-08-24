@@ -728,12 +728,18 @@ internal static partial class FreeWCanonicalRibbonTabs
                                 accent: RibbonCommandIconAccent.Fill);
                             group.Medium("freew.table-borders", "Borders", RibbonCommandIconKind.Grid);
                         }),
-                    tab => tab.Group("table-style", "Table Style", null, 90, group =>
+                    tab =>
+                    {
+                        // Keep the gallery as its own adaptive group. Avalonia hosts a thumbnail
+                        // picker here; Shading and Borders remain independently reachable beside it.
+                        tab.Group("table-styles", "Table Styles", null, 90, group =>
+                            group.Dropdown("freew.table-styles", "Table Styles", BuildTableStylesMenu()));
+                        tab.Group("table-style", "Table Style", null, 70, group =>
                         {
-                            group.Dropdown("freew.table-styles", "Table Styles", BuildTableStylesMenu());
                             group.Button("freew.table-shading", "Shading");
                             group.Dropdown("freew.table-borders", "Borders", BuildTableBordersMenu());
-                        }));
+                        });
+                    });
 
                 topology.Section(
                     "table.borders",
