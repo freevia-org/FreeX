@@ -102,7 +102,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Sample.Valid.png"), width: 5, height: 2, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Sample.Extra.png"), width: 2, height: 3, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -173,7 +173,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         paired.GetProperty("comparison").GetProperty("dimensionMismatchNextAction").GetString().Should().Contain("layout target");
         paired.GetProperty("comparison").GetProperty("policyAcceptance").ValueKind.Should().Be(JsonValueKind.Null);
 
-        var checkResult = PowerShellScriptRunner.RunToolScript(
+        var checkResult = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\" -Check");
@@ -257,7 +257,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.ScenarioManager.png"), width: 3, height: 2, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.ScenarioManager.png"), width: 5, height: 2, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -374,7 +374,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.Scaled.png"), width: 6, height: 4, nonBlank: true, dpiX: 192, dpiY: 192);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Scaled.png"), width: 3, height: 2, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -486,7 +486,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.OpenWorkbook.png"), width: 1280, height: 800, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.OpenWorkbook.png"), width: 640, height: 420, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -597,7 +597,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.InsertHyperlink.png"), width: 560, height: 300, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.InsertHyperlink.png"), width: 560, height: 360, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -694,7 +694,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.ShapeGradient.png"), width: 420, height: 280, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.ShapeGradient.png"), width: 500, height: 300, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -793,7 +793,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.SymbolPicker.png"), width: 620, height: 500, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.SymbolPicker.png"), width: 840, height: 620, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -892,7 +892,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.Sort.png"), width: 640, height: 420, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Sort.png"), width: 760, height: 500, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -991,7 +991,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.ConditionalFormatNewRule.png"), width: 634, height: 334, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.ConditionalFormatNewRule.png"), width: 640, height: 380, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -1083,7 +1083,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.Consolidate.png"), width: 380, height: 420, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Consolidate.png"), width: 420, height: 450, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -1175,7 +1175,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.PivotTableOptions.png"), width: 520, height: 676, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.PivotTableOptions.png"), width: 520, height: 610, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -1419,7 +1419,7 @@ public sealed class DialogVisualEvidenceSummaryTests
             WritePng(Path.Combine(avaloniaManifestDirectory, $"{id}.png"), width, height, nonBlank: true);
         }
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -1526,7 +1526,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.WorkbookStatistics.png"), width: 360, height: 260, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.WorkbookStatistics.png"), width: 380, height: 320, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
@@ -1624,7 +1624,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.Blank.png"), width: 3, height: 3, nonBlank: false);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Blank.png"), width: 3, height: 3, nonBlank: true);
 
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-DialogVisualEvidenceSummary.ps1",
             WorkspaceFileLocator.FindWorkspaceRoot(),
             $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");

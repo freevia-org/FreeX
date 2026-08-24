@@ -22,6 +22,8 @@ public static class DocxReader
     private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
     /// <summary>Maximum nesting of block wrappers (w:sdt / w:customXml) followed when reading a body.</summary>
     private const int MaxContentControlNestingDepth = 64;
+    /// <summary>Maximum nested w:tbl depth followed inside table cells while reading a document.</summary>
+    private const int MaxTableNestingDepth = 64;
 
     private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
     private const string LegacyFreeWChartDesignExtensionUri = "{FW-ChartDesign-2026}";
@@ -4238,8 +4240,14 @@ public static class DocxReader
         NumberingRestartState startOverrides,
         TextDocument? preservedDrawingTarget = null,
         ContentControl? inheritedControl = null,
-        IReadOnlyDictionary<string, string>? subDocumentRelationships = null)
+        IReadOnlyDictionary<string, string>? subDocumentRelationships = null,
+        int tableDepth = 0)
     {
+        // w:tbl can nest arbitrarily through table-cell content. A crafted document can therefore
+        // exhaust the process stack before the normal malformed-document handling runs.
+        if (tableDepth > MaxTableNestingDepth)
+            return new Table();
+
         var table = new Table();
 
         var tblPr = tbl.Element(W + "tblPr");
@@ -4558,10 +4566,11 @@ public static class DocxReader
                             imageRelationships,
                             hyperlinkRelationships,
                             numbering,
-                            startOverrides,
-                            preservedDrawingTarget: preservedDrawingTarget,
-                            inheritedControl: inheritedControl,
-                            subDocumentRelationships: subDocumentRelationships));
+                             startOverrides,
+                             preservedDrawingTarget: preservedDrawingTarget,
+                             inheritedControl: inheritedControl,
+                            subDocumentRelationships: subDocumentRelationships,
+                            tableDepth: tableDepth + 1));
                     }
                 }
                 if (cell.Paragraphs.Count == 0)
@@ -6331,7 +6340,11 @@ public static class DocxReader
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
             or OpcPackageProperties.CorePropertiesRelationshipType
             or OpcPackageProperties.CustomPropertiesRelationshipType
-            or OpcPackageProperties.ExtendedPropertiesRelationshipType;
+            or OpcPackageProperties.ExtendedPropertiesRelationshipType
+        || relationshipType.EndsWith("/officeDocument", StringComparison.Ordinal)
+        || relationshipType.EndsWith("/metadata/core-properties", StringComparison.Ordinal)
+        || relationshipType.EndsWith("/custom-properties", StringComparison.Ordinal)
+        || relationshipType.EndsWith("/extended-properties", StringComparison.Ordinal);
 
     /// <summary>
     /// Follows a part's own <c>_rels</c> (e.g. <c>word/charts/_rels/chart1.xml.rels</c>), capturing the rels

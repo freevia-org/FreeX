@@ -340,9 +340,9 @@ public sealed class CommonDialogChromeParityTests
                     .OfType<ContentPresenter>()
                     .Single(presenter => presenter.Name == "PART_SelectedContentHost");
 
-                editableTextBox.Bounds.Width.Should().BeGreaterThan(300);
+                  editableTextBox.Bounds.Width.Should().BeGreaterThan(300);
                 editableCombo.Bounds.Height.Should().Be(24);
-                editableTextBox.Bounds.Height.Should().Be(25);
+                  editableTextBox.Bounds.Height.Should().Be(25);
                 selectedPane.Bounds.X.Should().Be(0);
                 selectedPane.Bounds.Width.Should().BeGreaterThanOrEqualTo(420);
             }

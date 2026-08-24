@@ -33,6 +33,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="..\TestSupport\HostAccessOwnershipAssertions.cs"
              Link="TestSupport\HostAccessOwnershipAssertions.cs" />
     <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />

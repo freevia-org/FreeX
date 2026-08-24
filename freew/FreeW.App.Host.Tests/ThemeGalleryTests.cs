@@ -38,14 +38,16 @@ public sealed class ThemeGalleryTests
     }
 
     [StaFact]
-    public void Compact_document_formatting_keeps_theme_previews_and_every_remaining_catalog_menu()
+    public void Document_formatting_uses_style_sets_as_the_visible_primary_gallery()
     {
         var formatting = ThemeGallery.BuildDocumentFormatting(new DocumentView());
 
-        Captions(formatting).Should().Contain(["Themes", "Office", "Slate", "Berlin", "Ion"]);
+        Captions(formatting).Should().Contain([
+            "Style Sets",
+            "Office", "Simple", "Elegant", "Formal", "Lines (Simple)", "Minimalist", "Shadow", "Shaded"]);
         Descendants<Button>(formatting)
             .Select(AutomationProperties.GetName)
-            .Should().Contain(["Style Sets", "Colors", "Fonts", "Paragraph Spacing", "Effects"]);
+            .Should().Contain(["Themes", "More Style Sets", "Colors", "Fonts", "Paragraph Spacing", "Effects"]);
     }
 
     private static IReadOnlyList<string> Captions(DependencyObject root)

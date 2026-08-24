@@ -8,7 +8,7 @@
 | 2. Feedback intake | Complete | The old May 24 user-test and retest reports were retired after their findings were resolved and absorbed into regression coverage/status history; GitHub issues now include a structured user-test report template for new feedback. |
 | 3. Local diagnostics | Complete | Test builds record local JSONL usage events and crash reports under `%LOCALAPPDATA%\FreeX\Diagnostics`. Those files are not automatically uploaded; the separate Phase 5 transport may send an opt-in crash event. |
 | 4. Hosted release channel | Complete | GitHub Actions publishes latest builds through GitHub Releases with versioned artifacts, a stable latest test build link, and an MSIX package that is signed when release certificate secrets are configured. |
-| 5. Crash analytics | Complete | Opt-in Sentry crash upload is wired across the suite behind tester consent and the publish-time `FREE_FAMILY_SENTRY_DSN`; local diagnostics remain available without network upload. FreeX still accepts the legacy runtime-only `FREEX_SENTRY_DSN` override for compatibility. |
+| 5. Crash analytics | Complete | Opt-in Sentry crash upload is wired behind tester consent and `FREEX_SENTRY_DSN`; local diagnostics remain available without network upload. |
 | 6. Lightweight usage analytics | Complete | Stabilization-only app usage events are recorded through the existing diagnostics pipeline and safe crash breadcrumbs. |
 | 7. Auto-update readiness | Complete | Help exposes the stable latest release page, and Velopack-managed installs can check, download, apply, and restart into an update; plain single-file and MSIX builds retain the manual latest-download path. |
 | 8. Accessibility validation | Complete | UIA AutomationProperties audit completed; `GridView`/`SheetGrid` exposes grid, selection, visible cell grid-item, value, and selection-item provider contracts; `TabChrome` name binding is fixed; automated UIA property and `GridViewAutomationPeerTests` guards cover the current contracts. Every public-preview candidate still needs a live keyboard-only smoke pass, screen-reader smoke pass, and UI Automation catalog review recorded in release notes. |
@@ -37,7 +37,7 @@ Latest verified tester release:
 - Asset check: versioned Windows `.exe`, stable-name Windows `.exe`, versioned MSIX, stable-name MSIX, stable macOS arm64/x64 preview zips, Velopack-style assets, and matching checksum assets were published by the workflow after successful hosted release-gate verification. GitHub marked this non-prerelease as latest, so the stable latest Windows and macOS download links resolve through this release.
 - Prior reference point: the older v0.8.114/run 114 release remains a June 12 historical baseline. Current release decisions should use v0.8.127/run 127 unless a later successful tester release supersedes it.
 
-The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. Windows tester releases are standalone by default: `include_macos_preview=false` means the workflow does not require or query macOS App Preview artifacts. When `include_macos_preview=true`, it finds or uses the requested successful `macOS App Preview` run for the same commit, downloads both runtime app artifacts, and attaches stable macOS internal-preview assets to the same GitHub Release. It uses normal .NET restore/build caching and parallelism for speed, preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
+The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, and the manifest-defined FreeX release gate before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. The release gate inherits the FreeX commit suites and adds release-only render evidence; it is distinct from commit gates, which exclude visual evidence, packaging, signing, and publication. Windows tester releases are standalone by default: `include_macos_preview=false` means the workflow does not require or query macOS App Preview artifacts. When `include_macos_preview=true`, it finds or uses the requested successful `macOS App Preview` run for the same commit, downloads both runtime app artifacts, and attaches stable macOS internal-preview assets to the same GitHub Release. It uses normal .NET restore/build caching and parallelism for speed and uploads the gate TRX results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
 
 - `FreeX-latest-win-x64.exe`
 - `FreeX-latest-win-x64.exe.sha256`
@@ -78,7 +78,7 @@ Tester-facing warning for both platforms: this is an internal preview while sign
 
 Default tester versions come from `release/progress.json`: the current `overallCompletion` value maps to a minor-version band, and the GitHub run number becomes the patch number. At 95% completion, default tester releases use the `v0.8.<run>` stream. Manual `release_version` overrides remain available for special validation builds.
 
-Current release gate: do not treat a new tester release as available until the workflow completes successfully through repository preflight, build, default tests, UI tests, test-result artifact collection, release metadata, artifact upload, optional macOS preview artifact bundling when requested, and GitHub release publication.
+Current release gate: do not treat a new tester release as available until the workflow completes successfully through repository preflight, build, the manifest-defined release test gate, test-result artifact collection, release metadata, artifact upload, optional macOS preview artifact bundling when requested, and GitHub release publication. See [testing/test-gates.md](../testing/test-gates.md) for the commit versus release gate contract.
 
 Before dispatching a candidate, run `tools/Test-TesterReleaseReadiness.ps1` from the repo root to preflight `release/progress.json`, workflow accessibility inputs, release docs, and checklist alignment. For a public-preview candidate, include `-PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues`; otherwise the preflight reports the build as internal-only.
 
@@ -86,29 +86,21 @@ Use [release/tester-release-checklist.md](tester-release-checklist.md) as the op
 
 For the full suite release map across FreeX, FreeW, and FreeP, see [app-platform-publish-lanes.md](app-platform-publish-lanes.md). Each app/platform lane is independent so Windows, Linux, and macOS packages can be built or rerun separately.
 
-## Default Agent Build Verification
+## Commit Gate Verification
 
-Run these commands from the repository root when validating routine agent work or a non-UI build-lane slice. The default path intentionally allows the .NET SDK to perform restore as needed and keeps build servers, shared compilation, node reuse, and MSBuild parallelism enabled:
+Run the manifest-driven commit gate from the repository root. It selects only the projects assigned
+to an app and platform, serializes project execution for UI/resource isolation, and writes a
+separate TRX result per project:
 
-0. `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1`
-1. `dotnet build FreeX.slnx --configuration Release`
-2. `dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx"`
+0. `pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1`
+1. `pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform windows`
+2. `pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeW -Platform linux`
+3. `pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeP -Platform macos`
 
-Default agent verification does not run the UI lane and does not use `dotnet test FreeX.slnx`. Success means the repository preflight validates tracked JSON/XML-backed files, tool scripts, workflows, local .NET SDK readiness against the tester-release SDK band, .NET project references, solution membership, macOS app readiness, and generated docs; the Release solution build reports zero errors; and the default Release test lane reports zero failed tests. If output files are locked by a stale `dotnet`, `MSBuild`, `VBCSCompiler`, or `testhost` process from another local run, clear the stale process and rerun the same command before treating the build as failed.
-
-## UI Lane Verification
-
-Run the UI lane separately only when a task explicitly requests UI tests, touches WPF app/host behavior or UI test infrastructure, changes UI documentation/inventory, or prepares a tester-release/public-preview candidate:
-
-0. `dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"`
-
-Success means the UI Release test lane reports zero failed tests. The `Tester Release` workflow remains a full release gate and still runs both the default and UI test lanes before publishing.
-
-## macOS Portable Lane
-
-The CI workflow also runs a macOS portable lane on GitHub-hosted macOS runners. It builds the Avalonia app and every project in `FreeX.PortableTests.slnx`, then runs the explicitly platform-neutral contract set in `FreeX.PortableSmokeTests.slnx`. The split keeps Windows-path assertions, Windows-host ownership checks, and renderer capture tests out of the macOS smoke lane without weakening the portable compile gate.
-
-Success means the macOS Avalonia and portable-project Release builds succeed and the platform-neutral contract set reports zero failed tests. This lane does not build `FreeX.slnx`, `FreeX.UiTests.slnx`, `App.Host`, `App.UI`, WPF UI tests, renderer capture tests, Excel COM tools, tester-release artifacts, or macOS app packages. See [planning/multiplatform-macos-port.md](../planning/multiplatform-macos-port.md) for the macOS-first port plan.
+CI runs each app's commit gate on Windows, Linux, and macOS. Windows includes desktop WPF coverage;
+Linux and macOS include only portable core, contract, and Avalonia projects. The separate
+`FreeX.DefaultTests.slnx` and `FreeX.UiTests.slnx` files remain build-grouping aids, not executable
+test gates. See [testing/test-gates.md](../testing/test-gates.md) for the complete ownership map.
 
 A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Avalonia` on architecture-specific hosted macOS runners for `osx-arm64` and `osx-x64`, wraps the output in `FreeX.app` with `FreeX.icns`, verifies bundle metadata, ad-hoc signs by default, optionally Developer ID signs/notarizes when secrets are configured, self-checks each SHA-256 file with `shasum -a 256 -c`, records `zip_sha256` in evidence, and uploads zipped app artifacts, checksum files, tester instructions, smoke evidence, separate diagnostics artifacts, and a post-matrix aggregate readiness artifact. The Windows-runnable `tools/Test-MacOsAppReadiness.ps1` preflight statically checks the app project, `Info.plist`, icon asset, workflow markers, source wiring, and portable-source hygiene. After hosted artifacts are downloaded and unzipped, the Windows-runnable `tools/Test-MacOsPublicPreviewReadiness.ps1` preflight validates both runtime evidence bundles, checksum files, LaunchServices/Open-With/default-open smoke, startup smoke, command key smoke, hosted dialog smoke, Format Cells roundtrip evidence, diagnostics artifact file sets, tester instructions, distribution-candidate signing/notarization/stapler evidence, and release publication artifacts when required for promotion. File-access grant diagnostics in those artifacts are instrumentation/readiness evidence only; hosted CI must not be treated as proof of real macOS security-scoped access to user-selected workbook files.
 
@@ -195,7 +187,7 @@ upload the local JSON/JSONL files.
 
 Remote crash analytics are off by default. They activate only when all of these are true:
 
-- A Sentry DSN is present through the suite release build configuration (`FREE_FAMILY_SENTRY_DSN`). FreeX also accepts the legacy runtime-only `FREEX_SENTRY_DSN` override for compatibility; release artifacts should use the shared publish-time setting.
+- A Sentry DSN is present through the release build configuration or the `FREEX_SENTRY_DSN` environment override.
 - The tester opts in from the first-launch crash report prompt or later through `Options > Trust Center`.
 - `FREEX_CRASH_ANALYTICS` is not set to `0`.
 
@@ -216,7 +208,7 @@ Lightweight usage analytics reuse the same local diagnostics pipeline and, when 
 - File-access grant evidence is limited to redacted lifecycle metadata such as `grantKind` and `payloadRedacted`; it does not include workbook file paths, filenames, contents, formulas, or bookmark payloads.
 - These events do not intentionally collect workbook contents, formulas, filenames, or paths.
 - Crash-linked exception messages and stack traces can occasionally contain sensitive values; review local crash reports before sharing them.
-- Set `FREEX_DIAGNOSTICS=0` before launching FreeX to disable local usage diagnostics for that run. Remote crash breadcrumbs remain gated by Phase 5 crash analytics consent and a configured shared release endpoint; FreeX's legacy `FREEX_SENTRY_DSN` runtime override does not bypass consent.
+- Set `FREEX_DIAGNOSTICS=0` before launching FreeX to disable local usage diagnostics for that run. Remote crash breadcrumbs remain gated by Phase 5 crash analytics consent and `FREEX_SENTRY_DSN`.
 
 ## Phase 7 Auto-Update Readiness Contract
 

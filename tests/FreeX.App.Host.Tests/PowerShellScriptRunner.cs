@@ -26,6 +26,15 @@ internal static class PowerShellScriptRunner
         return Run(WorkspaceFileLocator.FindToolScript(scriptName), workingDirectory, arguments);
     }
 
+    public static PowerShellResult RunToolScriptWithPwsh(string scriptName, string workingDirectory, string arguments)
+    {
+        var scriptPath = WorkspaceFileLocator.FindToolScript(scriptName);
+        return TestProcessRunner.Run(
+            "pwsh",
+            $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
+            workingDirectory);
+    }
+
     public static PowerShellResult RunToolScriptFromTemporaryWorkingDirectory(string scriptName)
     {
         using var workingDirectory = new TestTemporaryDirectory();

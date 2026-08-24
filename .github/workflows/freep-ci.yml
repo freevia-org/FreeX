@@ -1,18 +1,14 @@
 name: FreeP CI
 
-# Dedicated build + test gate for the FreeP presentations app (freep/, FreeP.slnx).
-# Manual-only: dispatch via the Actions tab (workflow_dispatch), or it runs as part of
-# app-tester-release.yml's FreeP test lane on every tester release.
-#
-# History: this was manual-only (workflow_dispatch-only) from scaffold-time through 2026-08-06,
-# then R124 restored automatic push/PR triggers (mirroring freew-ci.yml) because manual-only had
-# made a FreeP.slnx build/test break invisible to anything automated. As of this change, every
-# push/PR to main was triggering a full FreeP build that reliably failed, which is pure waste
-# rather than a useful gate - reverted to manual-only DELIBERATELY, not by accident. Coverage is
-# not lost: app-tester-release.yml already runs the FreeP test lane (freep-tests) on every
-# manual tester release, so a FreeP-breaking change is still caught before it ships, just not on
-# every individual commit.
+# Dedicated app-scoped commit gate. It avoids duplicate FreeX solution runs while ensuring a
+# FreeP or shared-library change is validated before a tester-release workflow can publish it.
 on:
+  push:
+    branches: [main]
+    paths: ["freep/**", "shared/**", "eng/test-gates.json", "tools/Invoke-TestGate.ps1", ".github/workflows/freep-ci.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["freep/**", "shared/**", "eng/test-gates.json", "tools/Invoke-TestGate.ps1", ".github/workflows/freep-ci.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -24,9 +20,19 @@ permissions:
 
 jobs:
   freep-tests:
-    name: FreeP test lane
-    runs-on: windows-latest
-    timeout-minutes: 30
+    name: FreeP ${{ matrix.platform }} commit gate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runner: windows-latest
+          - platform: linux
+            runner: ubuntu-latest
+          - platform: macos
+            runner: macos-15-intel
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
@@ -45,9 +51,10 @@ jobs:
           dotnet-version: 10.0.111
 
       - name: Build (Release, 0 warnings enforced)
+        if: matrix.platform == 'windows'
         shell: pwsh
         run: dotnet build FreeP.slnx --configuration Release
 
-      - name: Test
+      - name: Commit gate
         shell: pwsh
-        run: dotnet test FreeP.slnx --configuration Release --no-build
+        run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeP -Platform ${{ matrix.platform }} ${{ matrix.platform == 'windows' && '-NoBuild' || '' }}

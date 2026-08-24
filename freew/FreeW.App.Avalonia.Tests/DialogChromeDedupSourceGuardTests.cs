@@ -21,12 +21,12 @@ public sealed class DialogChromeDedupSourceGuardTests
         var expectations = new (string FileName, string[] RequiredSnippets)[]
         {
             ("AutosaveAdapter.cs",
-            [
-                "using Free.Shared.Shell.Avalonia;",
-                "AvaloniaRecoveryPromptDialogComposer.Compose(",
+              [
+                  "using Free.Shared.Shell.Avalonia;",
+                  "AvaloniaRecoveryPromptDialogComposer.Compose(",
                 "new(recoveryText.Title, recoveryText.RecoverButton, recoveryText.SkipButton),",
                 "response => Close(response));",
-            ]),
+              ]),
             ("DesignDialogs.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",

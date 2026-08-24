@@ -200,9 +200,9 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
         AvaloniaLabeledFormRow.Add(
             grid,
             _surface.General.Fields.Count,
-            "Crash analytics:",
+            UiText.Get("Options_CrashAnalytics_FieldLabel"),
             _crashAnalytics,
-            "Off by default. Reports are sent only when a release endpoint is configured; document contents and paths are not intentionally collected.");
+            UiText.Get("Options_CrashAnalytics_Hint"));
         return grid;
     }
 

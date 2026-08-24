@@ -35,7 +35,10 @@ $resolvedScriptPath = Resolve-ToolRepoPath -Path $ScriptPath -RepoRoot $repoRoot
     }
 
     Write-Host "Checking $Label generated docs..."
-    & $resolvedScriptPath -Check
+    & pwsh -NoProfile -File $resolvedScriptPath -Check
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Label generated-docs check failed with exit code $LASTEXITCODE."
+    }
 }
 
 Invoke-GeneratedDocsCheck -ScriptPath $CommandInventoryScriptPath -Label "command inventory"

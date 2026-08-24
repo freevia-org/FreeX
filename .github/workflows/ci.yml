@@ -7,13 +7,6 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
-    inputs:
-      run_ui_tests:
-        description: Run the explicitly requested UI test lane
-        required: true
-        default: false
-        type: boolean
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -23,10 +16,10 @@ permissions:
   contents: read
 
 jobs:
-  default-tests:
-    name: Default test lane
+  freex-commit:
+    name: FreeX commit gate
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
@@ -46,20 +39,20 @@ jobs:
 
       - name: Repository preflight
         shell: pwsh
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1
+        run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1
 
       - name: Build
         shell: pwsh
         run: dotnet build FreeX.slnx --configuration Release
 
-      - name: Test
+      - name: Commit gate
         shell: pwsh
-        run: dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build
+        run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform windows -NoBuild
 
-  portable-macos:
-    name: macOS portable lane
-    runs-on: macos-latest
-    timeout-minutes: 60
+  portable-linux:
+    name: Linux portable lane
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
@@ -83,17 +76,16 @@ jobs:
 
       - name: Build portable tests
         shell: pwsh
-        run: dotnet build FreeX.PortableTests.slnx --configuration Release -m:1
+        run: dotnet build FreeX.DefaultTests.slnx --configuration Release
 
-      - name: Test platform-neutral contracts
+      - name: Commit gate
         shell: pwsh
-        run: dotnet test FreeX.PortableSmokeTests.slnx --configuration Release --no-build
+        run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux -NoBuild
 
-  ui-tests:
-    name: UI test lane
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests == true }}
-    runs-on: windows-latest
-    timeout-minutes: 60
+  portable-macos:
+    name: macOS portable lane
+    runs-on: macos-latest
+    timeout-minutes: 120
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
@@ -111,14 +103,14 @@ jobs:
         with:
           dotnet-version: 10.0.111
 
-      - name: Repository preflight
+      - name: Build Avalonia project
         shell: pwsh
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1
+        run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
 
-      - name: Build
+      - name: Build portable tests
         shell: pwsh
-        run: dotnet build FreeX.UiTests.slnx --configuration Release
+        run: dotnet build FreeX.DefaultTests.slnx --configuration Release
 
-      - name: Test
+      - name: Commit gate
         shell: pwsh
-        run: dotnet test FreeX.UiTests.slnx --configuration Release --no-build
+        run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform macos -NoBuild

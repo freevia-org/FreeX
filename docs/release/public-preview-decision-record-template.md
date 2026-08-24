@@ -115,4 +115,3 @@ as signed, trusted, notarized, or production-ready.
 - Staged-observation period and promotion criteria:
 - Withdrawal/correction status URL:
 - Final approver:
-

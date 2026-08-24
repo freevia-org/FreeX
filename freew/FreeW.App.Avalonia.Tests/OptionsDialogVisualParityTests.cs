@@ -215,9 +215,9 @@ public sealed class OptionsDialogVisualParityTests
             var dialog = new OptionsDialog(new FreeWOptions());
             try
             {
-                var checks = dialog.GetLogicalDescendants().OfType<CheckBox>().ToArray();
-                var master = checks.Single(check => check.Content?.ToString() == "Enable AutoCorrect (smart typing) as you type");
-                var autoFormatPanel = master.Parent as StackPanel;
+                  var checks = dialog.GetLogicalDescendants().OfType<CheckBox>().ToArray();
+                  var master = checks.Single(check => check.Content?.ToString() == "Enable AutoCorrect (smart typing) as you type");
+                  var autoFormatPanel = master.Parent as StackPanel;
                 var rules = autoFormatPanel?.GetLogicalDescendants()
                     .OfType<CheckBox>()
                     .Where(check => check != master)

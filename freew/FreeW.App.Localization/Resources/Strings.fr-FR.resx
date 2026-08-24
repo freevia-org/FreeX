@@ -232,6 +232,9 @@
   <data name="Layout_BringForward_Label" xml:space="preserve"><value>Avancer</value></data>
   <data name="Layout_SendBackward_Label" xml:space="preserve"><value>Reculer</value></data>
   <data name="Help_TestCrashReporting_Title" xml:space="preserve"><value>Tester les rapports de plantage</value></data>
+  <data name="Options_CrashAnalytics_Label" xml:space="preserve"><value>Envoyer des rapports de blocage filtres pour la confidentialite (prend effet au prochain lancement)</value></data>
+  <data name="Options_CrashAnalytics_FieldLabel" xml:space="preserve"><value>Analytique des blocages :</value></data>
+  <data name="Options_CrashAnalytics_Hint" xml:space="preserve"><value>Desactive par defaut. Les rapports sont envoyes uniquement lorsqu'un point de terminaison de publication est configure ; le contenu et les chemins des documents ne sont pas intentionnellement collectes.</value></data>
   <data name="Options_SaveFailed_Status" xml:space="preserve"><value>Les options FreeW n'ont pas pu être enregistrées.</value></data>
   <data name="Options_Saved_Status" xml:space="preserve"><value>Options FreeW enregistrées.</value></data>
   <data name="Shell_OpenFolderFailed_Status_Format" xml:space="preserve"><value>Impossible d'ouvrir le dossier : {0}</value></data>

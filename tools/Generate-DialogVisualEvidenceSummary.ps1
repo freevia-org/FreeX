@@ -13,7 +13,12 @@ $ErrorActionPreference = "Stop"
 $visualReviewTriageThreshold = 0.4
 $visualReviewTriageThresholdRationale = "This is a deterministic review-prioritization cutoff over the triage score (normalized sample, luma, non-background, and logical-size deltas); it is not a pass/fail or visual-parity acceptance threshold. Rows at or above it remain unresolved review candidates until a human compares the paired evidence."
 
-Add-Type -ReferencedAssemblies "System.Drawing.dll" -TypeDefinition @"
+Add-Type -AssemblyName System.Drawing.Common
+Add-Type -AssemblyName System.Private.Windows.GdiPlus
+Add-Type -AssemblyName System.Private.Windows.Core
+Add-Type -AssemblyName System.Drawing.Primitives
+$imageAnalyzerReferences = [AppContext]::GetData("TRUSTED_PLATFORM_ASSEMBLIES").Split([IO.Path]::PathSeparator)
+Add-Type -ReferencedAssemblies $imageAnalyzerReferences -TypeDefinition @"
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -78,7 +83,7 @@ public static class DialogPngAnalyzer
                 int bgR = bytes[bgOffset + 2];
                 int bgA = bytes[bgOffset + 3];
 
-                var distinctColors = new HashSet<int>();
+                var distinctColors = new System.Collections.Hashtable();
                 long opaquePixels = 0;
                 long nonBackgroundPixels = 0;
                 long alphaTotal = 0;
@@ -98,7 +103,7 @@ public static class DialogPngAnalyzer
                         int a = bytes[offset + 3];
                         int argb = unchecked((int)(((uint)a << 24) | ((uint)r << 16) | ((uint)g << 8) | (uint)b));
 
-                        distinctColors.Add(argb);
+                        distinctColors[argb] = true;
                         alphaTotal += a;
                         redTotal += r;
                         greenTotal += g;

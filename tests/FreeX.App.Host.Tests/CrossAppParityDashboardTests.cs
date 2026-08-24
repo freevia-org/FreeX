@@ -10,7 +10,7 @@ public sealed class CrossAppParityDashboardTests
     public void CrossAppParityDashboard_DistinguishesCoverageFromVisualReview()
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
-        var result = PowerShellScriptRunner.RunToolScript(
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-CrossAppParityDashboard.ps1",
             repoRoot,
             "-Check");

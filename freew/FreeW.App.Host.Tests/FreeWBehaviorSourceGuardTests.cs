@@ -157,11 +157,11 @@ public sealed class FreeWBehaviorSourceGuardTests
         wpf.Should().Contain("editor.CommitToModel()");
         sharedWpfHost.Should().Contain("AutosaveRecoveryWorkflow.RunAsync(");
         sharedWpfHost.Should().Contain("DialogMessageHelper.AskYesNo(");
-        avalonia.Should().Contain("_session.PlanRecoveries,");
-        avalonia.Should().Contain("AvaloniaAutosaveRecoveryHost.OfferStartupAsync(");
-        avalonia.Should().Contain("AvaloniaAutosaveRecoveryHost.RecoverManuallyAsync(");
+          avalonia.Should().Contain("_session.PlanRecoveries,");
+          avalonia.Should().Contain("AvaloniaAutosaveRecoveryHost.OfferStartupAsync(");
+          avalonia.Should().Contain("AvaloniaAutosaveRecoveryHost.RecoverManuallyAsync(");
         avalonia.Should().NotContain("FreeWRecoveryWorkflow.RunAsync(");
-        avalonia.Should().Contain("RecoveryPromptDialog.ShowAsync(");
+          avalonia.Should().Contain("RecoveryPromptDialog.ShowAsync(");
         avalonia.Should().Contain("AvaloniaBoundedDispatcherTransaction.TryExecute(");
         avalonia.Should().Contain("_session.CompleteDocumentRecovery(");
         avalonia.Should().Contain("_editor.LoadDocument(document)");

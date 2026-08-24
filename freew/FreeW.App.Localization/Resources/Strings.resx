@@ -676,6 +676,9 @@
   <data name="Layout_BringForward_Label" xml:space="preserve"><value>Bring Forward</value></data>
   <data name="Layout_SendBackward_Label" xml:space="preserve"><value>Send Backward</value></data>
   <data name="Help_TestCrashReporting_Title" xml:space="preserve"><value>Test Crash Reporting</value></data>
+  <data name="Options_CrashAnalytics_Label" xml:space="preserve"><value>Send privacy-filtered crash reports (takes effect next launch)</value></data>
+  <data name="Options_CrashAnalytics_FieldLabel" xml:space="preserve"><value>Crash analytics:</value></data>
+  <data name="Options_CrashAnalytics_Hint" xml:space="preserve"><value>Off by default. Reports are sent only when a release endpoint is configured; document contents and paths are not intentionally collected.</value></data>
   <data name="Options_SaveFailed_Status" xml:space="preserve"><value>FreeW Options could not be saved.</value></data>
   <data name="Options_Saved_Status" xml:space="preserve"><value>FreeW Options saved.</value></data>
   <data name="Shell_OpenFolderFailed_Status_Format" xml:space="preserve"><value>Could not open folder: {0}</value></data>
