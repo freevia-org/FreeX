@@ -3992,6 +3992,12 @@ public sealed partial class MainWindow : Window,
                 continue;
             }
 
+            if (shape?.Kind == SlideShapeKind.SmartArt && shape.SmartArt is not null)
+            {
+                state = state.With("smartart");
+                continue;
+            }
+
             if (shape?.TextBody is not null)
                 state = state.With("text");
         }

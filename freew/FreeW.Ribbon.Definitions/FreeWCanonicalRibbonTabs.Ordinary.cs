@@ -463,7 +463,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 "insert.links",
                 tab => tab.Group("links", "Links", "K", 70, g =>
                     {
-                        g.Icon("freew.hyperlink", "Link", RibbonCommandIconKind.Link);
+                        g.Medium("freew.hyperlink", "Link", RibbonCommandIconKind.Link);
                         g.Icon("freew.bookmark", "Bookmark", RibbonCommandIconKind.Bookmark);
                         g.Icon("freew.cross-reference", "Cross-reference", RibbonCommandIconKind.CrossReference);
                         g.Icon("freew.edit-hyperlink", "Edit Hyperlink", RibbonCommandIconKind.Link);
@@ -521,7 +521,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         // Text Box gallery: Simple (plain), Sidebar/Banded (accent fill), and Quote (indented
                         // italic) presets — each inserts a pre-styled Shape.TextBox at the caret. The top-level
                         // id falls through to Simple (same as the existing plain text-box insert).
-                        g.Icon("freew.shape-textbox", "Text Box", RibbonCommandIconKind.TextBox, menu: m =>
+                        g.Large("freew.shape-textbox", "Text Box", RibbonCommandIconKind.TextBox, menu: m =>
                         {
                             m.Item("freew.textbox-simple", "Simple Text Box", "S");
                             m.Item("freew.textbox-sidebar", "Sidebar (Banded)", "B");
@@ -537,6 +537,9 @@ internal static partial class FreeWCanonicalRibbonTabs
                             m.Separator();
                             m.Item("freew.save-quickpart", "Save Selection to Quick Part Gallery…", "V");
                             m.Item("freew.building-blocks-organizer", "Building Blocks Organizer…", "B");
+                            m.Separator();
+                            m.Item("freew.update-fields", "Update Fields", "U");
+                            m.Item("freew.toggle-field-codes", "Toggle Field Codes", "G");
                         });
                         g.Icon("freew.insert-file", "Text from File", RibbonCommandIconKind.TextFromFile);
                         g.Icon("freew.wordart", "WordArt", RibbonCommandIconKind.WordArt);
@@ -551,12 +554,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                             m.Item("freew.drop-cap-options", "Drop Cap Options…", "O");
                         });
                         g.Icon("freew.datetime", "Date & Time", RibbonCommandIconKind.Date);
-                        g.Icon("freew.field", "Field", RibbonCommandIconKind.Field);
-                        g.Icon("freew.update-fields", "Update Fields", RibbonCommandIconKind.Refresh);
-                        g.Icon("freew.toggle-field-codes", "Toggle Field Codes", RibbonCommandIconKind.Field);
                         g.Icon("freew.object", "Object", RibbonCommandIconKind.Object);
-                        g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
-                        g.Icon("freew.building-blocks-organizer", "Building Blocks Organizer", RibbonCommandIconKind.QuickParts);
                     }),
                 tab => tab.Group("text", "Text", null, 93, g =>
                     {
