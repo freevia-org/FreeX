@@ -123,12 +123,14 @@ public sealed partial class MainWindow : Window,
     internal SlideCanvas SlideCanvas { get; private set; } = null!;
 
     private Border _canvasHost = null!;
+    private Grid _bodySplitter = null!;
     private Canvas _textOverlay = null!;
     private Canvas _oleOverlay = null!;
     private WpfOleInPlaceHost? _activeOleHost;
     private TextBlock _slideCountText = null!;
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
+    private PresentationViewModeState _viewModeState = PresentationViewModeState.Normal;
 
     // Notes pane (Wave 7B)
     private TextBox _notesBox = null!;
@@ -685,7 +687,9 @@ public sealed partial class MainWindow : Window,
     {
         _viewShowState = state;
         if (_notesBox is not null)
-            _notesBox.Visibility = state.ShowNotesPane ? Visibility.Visible : Visibility.Collapsed;
+            _notesBox.Visibility = _viewModeState.Mode == PresentationViewMode.SlideSorter || !state.ShowNotesPane
+                ? Visibility.Collapsed
+                : Visibility.Visible;
         if (SlideCanvas is not null)
             SlideCanvas.ApplyViewShowState(state);
     }
@@ -695,6 +699,28 @@ public sealed partial class MainWindow : Window,
         _viewZoomState = state;
         if (SlideCanvas is not null)
             SlideCanvas.ApplyViewZoomState(state);
+    }
+
+    private void ApplyPresentationViewModeState(PresentationViewModeState state)
+    {
+        _viewModeState = state;
+        var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
+        if (SlidePaneHost is null || _canvasHost is null || _bodySplitter is null)
+            return;
+
+        SlidePaneHost.Width = isSlideSorter ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
+        _bodySplitter.ColumnDefinitions[0].Width = isSlideSorter
+            ? new GridLength(1, GridUnitType.Star)
+            : GridLength.Auto;
+        _bodySplitter.ColumnDefinitions[1].Width = isSlideSorter
+            ? new GridLength(0)
+            : new GridLength(1, GridUnitType.Star);
+        _canvasHost.Visibility = isSlideSorter ? Visibility.Collapsed : Visibility.Visible;
+        _notesBox.Visibility = !isSlideSorter && _viewShowState.ShowNotesPane
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        (SlidePaneHost.Child as SlidePane)?.SetSlideSorterMode(isSlideSorter);
+        SyncRibbonCommandStates();
     }
 
     private void LoadModel(Presentation presentation)
@@ -900,7 +926,7 @@ public sealed partial class MainWindow : Window,
         _mediaCaptionPaneHost = BuildMediaCaptionPaneHost();
         _smartArtTextPaneHost = BuildSmartArtTextPaneHost();
 
-        var splitter = new Grid();
+        var splitter = _bodySplitter = new Grid();
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

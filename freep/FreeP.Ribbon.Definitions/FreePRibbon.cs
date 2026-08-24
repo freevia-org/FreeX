@@ -1430,6 +1430,16 @@ public static class FreePRibbon
 
     private static void AddViewGroups(RibbonTabBuilder tab)
     {
+        tab.Group("presentation-views", FreePRibbonText.ViewPresentationViewsGroup.Label,
+            FreePRibbonText.ViewPresentationViewsGroup.KeyTip, 110, group =>
+        {
+            group.Large(PresentationViewModePlanner.NormalCommandId,
+                FreePRibbonText.ViewNormalCommand.Label, RibbonCommandIconKind.View,
+                FreePRibbonText.ViewNormalCommand.KeyTip);
+            group.Large(PresentationViewModePlanner.SlideSorterCommandId,
+                FreePRibbonText.ViewSlideSorterCommand.Label, RibbonCommandIconKind.Sort,
+                FreePRibbonText.ViewSlideSorterCommand.KeyTip);
+        });
         tab.Group("show", FreePRibbonText.ViewShowGroup.Label, FreePRibbonText.ViewShowGroup.KeyTip, 100, group =>
         {
             group.MediumToggle("freep.view.show.gridlines", FreePRibbonText.ViewGridlinesCommand.Label,

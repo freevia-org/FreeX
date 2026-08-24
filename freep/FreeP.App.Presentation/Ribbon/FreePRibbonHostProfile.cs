@@ -11,6 +11,7 @@ public sealed class FreePRibbonHostQueryEndpoints
     public Func<bool?>? AnimationPaneVisible { get; init; }
     public Func<PresentationViewShowState?>? ViewShowState { get; init; }
     public Func<PresentationViewZoomState?>? ViewZoomState { get; init; }
+    public Func<PresentationViewModeState?>? ViewModeState { get; init; }
 
     internal object? Query(FreePRibbonHostQuery query) => query.Kind switch
     {
@@ -19,6 +20,7 @@ public sealed class FreePRibbonHostQueryEndpoints
         FreePRibbonHostQueryKind.AnimationPaneVisible => AnimationPaneVisible?.Invoke(),
         FreePRibbonHostQueryKind.ViewShowState => ViewShowState?.Invoke(),
         FreePRibbonHostQueryKind.ViewZoomState => ViewZoomState?.Invoke(),
+        FreePRibbonHostQueryKind.ViewModeState => ViewModeState?.Invoke(),
         _ => null,
     };
 }
