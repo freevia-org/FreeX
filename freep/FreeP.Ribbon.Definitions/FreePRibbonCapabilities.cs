@@ -35,6 +35,8 @@ internal enum FreePRibbonHomeGroupId
     Arrange,
     Edit,
     Editing,
+    TextLayout,
+    TableLayout,
 }
 
 internal sealed record FreePRibbonProfile(
@@ -55,6 +57,8 @@ internal sealed record FreePRibbonProfile(
             FreePRibbonHomeGroupId.Arrange,
             FreePRibbonHomeGroupId.Edit,
             FreePRibbonHomeGroupId.Editing,
+            FreePRibbonHomeGroupId.TextLayout,
+            FreePRibbonHomeGroupId.TableLayout,
         ],
         HomeGroupPriorities: new Dictionary<FreePRibbonHomeGroupId, int>
         {
@@ -65,6 +69,8 @@ internal sealed record FreePRibbonProfile(
             [FreePRibbonHomeGroupId.Arrange] = 70,
             [FreePRibbonHomeGroupId.Edit] = 75,
             [FreePRibbonHomeGroupId.Editing] = 70,
+            [FreePRibbonHomeGroupId.TextLayout] = 20,
+            [FreePRibbonHomeGroupId.TableLayout] = 10,
         },
         SlideShowGroupKeyTip: () => FreePRibbonText.SlideShowGroupWpfKeyTip,
         SlideShowFromCurrentSlideIcon: RibbonCommandIconKind.Previous,
@@ -81,6 +87,8 @@ internal sealed record FreePRibbonProfile(
             FreePRibbonHomeGroupId.Arrange,
             FreePRibbonHomeGroupId.Edit,
             FreePRibbonHomeGroupId.Editing,
+            FreePRibbonHomeGroupId.TextLayout,
+            FreePRibbonHomeGroupId.TableLayout,
         ],
         HomeGroupPriorities: new Dictionary<FreePRibbonHomeGroupId, int>
         {
@@ -91,6 +99,8 @@ internal sealed record FreePRibbonProfile(
             [FreePRibbonHomeGroupId.Arrange] = 85,
             [FreePRibbonHomeGroupId.Edit] = 80,
             [FreePRibbonHomeGroupId.Editing] = 75,
+            [FreePRibbonHomeGroupId.TextLayout] = 20,
+            [FreePRibbonHomeGroupId.TableLayout] = 10,
         },
         SlideShowGroupKeyTip: () => FreePRibbonText.SlideShowGroupWpfKeyTip,
         SlideShowFromCurrentSlideIcon: RibbonCommandIconKind.Previous,

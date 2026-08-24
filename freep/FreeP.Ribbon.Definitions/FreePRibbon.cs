@@ -111,6 +111,22 @@ public static class FreePRibbon
                             AddEditingControls(group);
                         });
                     break;
+                case FreePRibbonHomeGroupId.TextLayout:
+                    tab.Group("text-layout", FreePRibbonText.TextGroupLabel, FreePRibbonText.TextGroupKeyTip, priority,
+                        group =>
+                        {
+                            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                            AddTextLayoutControls(group);
+                        });
+                    break;
+                case FreePRibbonHomeGroupId.TableLayout:
+                    tab.Group("table-layout", FreePRibbonText.TablesGroupLabel, FreePRibbonText.TablesGroupKeyTip, priority,
+                        group =>
+                        {
+                            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                            AddTableCellControls(group);
+                        });
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(groupId), groupId, "Unknown FreeP ribbon group.");
             }
@@ -161,6 +177,23 @@ public static class FreePRibbon
             KeyTip = FreePRibbonText.FontColorKeyTip,
             Width = 96
         });
+        group.IconToggle("freep.bold", FreePRibbonText.BoldLabel, RibbonCommandIconKind.Bold, FreePRibbonText.BoldKeyTip);
+        group.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
+        group.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline,
+            FreePRibbonText.UnderlineKeyTip);
+        group.IconToggle("freep.strikethrough", FreePRibbonText.StrikethroughLabel,
+            RibbonCommandIconKind.Strikethrough, FreePRibbonText.StrikethroughKeyTip);
+        group.IconToggle("freep.superscript", FreePRibbonText.SuperscriptLabel, RibbonCommandIconKind.Superscript,
+            FreePRibbonText.SuperscriptKeyTip);
+        group.IconToggle("freep.subscript", FreePRibbonText.SubscriptLabel, RibbonCommandIconKind.Subscript,
+            FreePRibbonText.SubscriptKeyTip);
+    }
+
+    // Text-box and table-cell authoring are real commands, but they are not part of PowerPoint's
+    // ordinary Home > Font lane. Separate low-priority groups keep them reachable through adaptive
+    // overflow without forcing core Font and Paragraph into category tiles.
+    private static void AddTextLayoutControls(RibbonGroupBuilder group)
+    {
         group.ComboBox("freep.text-autofit", FreePRibbonText.TextAutoFitLabel, control => control with
         {
             Choices = FreePRibbonDefinitionData.TextAutoFitChoices,
@@ -189,6 +222,10 @@ public static class FreePRibbon
             KeyTip = FreePRibbonText.TextColumnSpacingKeyTip,
             Width = 112
         });
+    }
+
+    private static void AddTableCellControls(RibbonGroupBuilder group)
+    {
         group.ComboBox("freep.table-cell-fill", FreePRibbonText.TableCellFillLabel, control => control with
         {
             Choices = FreePRibbonDefinitionData.TableCellFillChoices,
@@ -282,16 +319,6 @@ public static class FreePRibbon
         group.IconToggle(TableCellEditPlanner.TableBandColCommandId,
             FreePRibbonText.TableBandColLabel, RibbonCommandIconKind.Table,
             FreePRibbonText.TableBandColKeyTip);
-        group.IconToggle("freep.bold", FreePRibbonText.BoldLabel, RibbonCommandIconKind.Bold, FreePRibbonText.BoldKeyTip);
-        group.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
-        group.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline,
-            FreePRibbonText.UnderlineKeyTip);
-        group.IconToggle("freep.strikethrough", FreePRibbonText.StrikethroughLabel,
-            RibbonCommandIconKind.Strikethrough, FreePRibbonText.StrikethroughKeyTip);
-        group.IconToggle("freep.superscript", FreePRibbonText.SuperscriptLabel, RibbonCommandIconKind.Superscript,
-            FreePRibbonText.SuperscriptKeyTip);
-        group.IconToggle("freep.subscript", FreePRibbonText.SubscriptLabel, RibbonCommandIconKind.Subscript,
-            FreePRibbonText.SubscriptKeyTip);
     }
 
     private static void AddEditControls(RibbonGroupBuilder group)
