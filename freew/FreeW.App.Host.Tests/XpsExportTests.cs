@@ -105,6 +105,26 @@ public sealed class XpsExportTests : IDisposable
         Assert.Equal(paginator.PageCount, fixedPages);
     }
 
+    [StaFact]
+    public void RenderToBytes_FontSubsetterFallback_PreservesPagesWithoutMutatingDocument()
+    {
+        var view = BuildSampleView();
+        var originalFontFamily = view.Document.FontFamily.Source;
+        var paginator = PrintLayout.BuildPaginator(view);
+
+        var bytes = XpsExport.RenderToBytesWithSimulatedFontSubsetterFailureForTests(paginator);
+
+        Assert.NotEmpty(bytes);
+        Assert.Equal(originalFontFamily, view.Document.FontFamily.Source);
+
+        using var ms = new MemoryStream(bytes);
+        using var zip = new ZipArchive(ms, ZipMode());
+        Assert.Equal(
+            paginator.PageCount,
+            zip.Entries.Count(e => e.FullName.EndsWith(".fpage", StringComparison.OrdinalIgnoreCase)));
+        Assert.DoesNotContain(zip.Entries, e => e.FullName.EndsWith(".odttf", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static ZipArchiveMode ZipMode() => ZipArchiveMode.Read;
 
     private static DocumentView BuildSampleView()
