@@ -23,14 +23,18 @@ internal static class ThemeGallery
     public static FrameworkElement BuildDocumentFormatting(DocumentView editor)
     {
         var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
-        host.Children.Add(BuildThemes(editor));
+        // Word keeps the small theme chooser separate from the primary Document
+        // Formatting gallery. Style-set previews carry the visual weight of the
+        // Design tab; showing the four-theme catalog as that gallery left the
+        // ribbon sparse and hid the backed style-set choices in a menu.
         host.Children.Add(BuildCatalogMenu(
-            FreeWUiTextCatalog.StyleSets,
-            DocumentStyleSet.Catalog,
-            styleSet => styleSet.Name,
-            editor.PreviewStyleSet,
-            editor.EndStyleSetPreview,
-            editor.ApplyStyleSet));
+            FreeWUiTextCatalog.Themes,
+            DocumentTheme.Catalog,
+            theme => theme.Name,
+            editor.PreviewTheme,
+            editor.EndThemePreview,
+            editor.ApplyTheme));
+        host.Children.Add(BuildVisibleStyleSetGallery(editor));
         host.Children.Add(BuildCatalogMenu(
             FreeWUiTextCatalog.Colors,
             DocumentTheme.Catalog,
@@ -50,16 +54,37 @@ internal static class ThemeGallery
         return host;
     }
 
-    // Keep Word's live theme previews in the visible strip at ordinary window sizes. The longer
-    // style-set, palette, and font catalogs retain the same hover-preview/apply behavior in compact
-    // menus so the entire Document Formatting group does not collapse into one generic button.
+    private static FrameworkElement BuildVisibleStyleSetGallery(DocumentView editor)
+    {
+        // At the 1280px Office reference width Word presents eight style-set
+        // cards before its More button; keep that density while preserving a
+        // compact overflow for the remaining catalog.
+        const int visibleStyleCount = 8;
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var styleSet in DocumentStyleSet.Catalog.Take(visibleStyleCount))
+            strip.Children.Add(BuildStyleSetSwatch(editor, styleSet));
+        strip.Children.Add(BuildCatalogMenu(
+            "More",
+            DocumentStyleSet.Catalog,
+            styleSet => styleSet.Name,
+            editor.PreviewStyleSet,
+            editor.EndStyleSetPreview,
+            editor.ApplyStyleSet,
+            automationName: "More Style Sets"));
+        return WithLabel(FreeWUiTextCatalog.StyleSets, strip);
+    }
+
+    // Theme, palette, and font catalogs retain their hover-preview/apply behavior in compact menus.
+    // The visible style-set strip is deliberately bounded so the whole Document Formatting group
+    // remains present at ordinary window sizes.
     private static FrameworkElement BuildCatalogMenu<T>(
         string label,
         IReadOnlyList<T> entries,
         Func<T, string> entryLabel,
         Action<T> preview,
         Action endPreview,
-        Action<T> apply)
+        Action<T> apply,
+        string? automationName = null)
     {
         var button = new Button
         {
@@ -77,7 +102,7 @@ internal static class ThemeGallery
             BorderThickness = new Thickness(1),
             ToolTip = label,
         };
-        AutomationProperties.SetName(button, label);
+        AutomationProperties.SetName(button, automationName ?? label);
 
         var menu = new ContextMenu();
         foreach (var entry in entries)
