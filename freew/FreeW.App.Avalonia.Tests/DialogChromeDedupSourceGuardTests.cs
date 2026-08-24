@@ -23,8 +23,9 @@ public sealed class DialogChromeDedupSourceGuardTests
             ("AutosaveAdapter.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",
-                "AvaloniaCompactDialogChrome.ApplyButton(yes, DialogChromeStyle, minWidth: 82, isDefault: true);",
-                "AvaloniaCompactDialogChrome.CreateActionRow([yes, no], new Thickness(16, 0, 16, 16));",
+                "AvaloniaRecoveryPromptDialogComposer.Compose(",
+                "new(recoveryText.Title, recoveryText.RecoverButton, recoveryText.SkipButton),",
+                "response => Close(response));",
             ]),
             ("DesignDialogs.cs",
             [

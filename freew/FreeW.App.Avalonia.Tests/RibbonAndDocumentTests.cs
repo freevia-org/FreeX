@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.Core.IO;
@@ -270,13 +271,27 @@ public class RibbonAndDocumentTests
             "FreeW.App.Avalonia",
             "SaveCompatibilityWarningDialog.cs"));
 
-        var confirmationIndex = coordinator.IndexOf("await request.ConfirmCompatibilityAsync");
-        var saveIndex = coordinator.IndexOf("_persistence.Save(request.Document, request.Target, expectedLastWriteTimeUtc)");
-        var completionIndex = coordinator.IndexOf("await request.CompleteSaveAsync!");
+        var normalizedCoordinator = coordinator.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var confirmationIndex = normalizedCoordinator.IndexOf(
+            "await request.ConfirmCompatibilityAsync",
+            StringComparison.Ordinal);
+        var conflictIndex = normalizedCoordinator.IndexOf(
+            "ExternalFileWriteConflictPolicy.PrepareAsync(",
+            StringComparison.Ordinal);
+        var saveMatch = Regex.Match(
+            normalizedCoordinator,
+            @"_persistence\.Save\(\s*request\.Document,\s*request\.Target,\s*conflictPreparation\.ExpectedLastWriteTimeUtc\s*\);",
+            RegexOptions.Singleline);
+        var completionIndex = normalizedCoordinator.IndexOf(
+            "await request.CompleteSaveAsync!",
+            StringComparison.Ordinal);
 
         confirmationIndex.Should().BeGreaterThanOrEqualTo(0);
-        saveIndex.Should().BeGreaterThan(confirmationIndex);
-        completionIndex.Should().BeGreaterThan(saveIndex);
+        conflictIndex.Should().BeGreaterThan(confirmationIndex);
+        saveMatch.Success.Should().BeTrue(
+            "the shared coordinator must persist with the externally-checked timestamp it prepared");
+        saveMatch.Index.Should().BeGreaterThan(conflictIndex);
+        completionIndex.Should().BeGreaterThan(saveMatch.Index);
         mainWindow.Should().Contain("SaveCompatibilityWarningDialog.ShowAsync(this, plan)");
         dialogSource.Should().Contain("DocumentSaveCompatibilityPlan");
         dialogSource.Should().Contain("plan.Message");

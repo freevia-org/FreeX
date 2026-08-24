@@ -118,7 +118,7 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("BackstageViewTextResources.WindowTitle");
         source.Should().Contain("SisterBackstageEntryPlanner.Build(");
         source.Should().Contain("new AvaloniaBackstageFrame(");
-        source.Should().Contain("AvaloniaSisterBackstageTheme.FreeW");
+        source.Should().Contain("AvaloniaSisterBackstageTheme.FromTheme(App.ActiveTheme");
         source.Should().Contain("BackstageTheme.Accent");
         source.Should().Contain("new ImmutableSolidColorBrush(BackstageTheme.LinkColor)");
         source.Should().Contain("Width = BackstageTheme.TileWidth");
