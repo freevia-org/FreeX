@@ -4,6 +4,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation;
 using FreeW.Core.Model;
 using WpfTable = System.Windows.Documents.Table;
 using WpfTableCell = System.Windows.Documents.TableCell;
@@ -49,6 +50,17 @@ public sealed class TableStyleGalleryTests
         var gallery = TableStylesGallery.Build(editor);
 
         AutomationProperties.GetName(gallery).Should().Be("Table Styles");
+    }
+
+    [StaFact]
+    public void Build_MoreButtonUsesLocalizedTableStylesLabel()
+    {
+        var editor = new DocumentView();
+        var gallery = TableStylesGallery.Build(editor).Should().BeOfType<StackPanel>().Subject;
+        var moreButton = gallery.Children[1].Should().BeOfType<Button>().Subject;
+
+        moreButton.ToolTip.Should().Be(FreeWUiTextCatalog.TableStylesMoreToolTip);
+        AutomationProperties.GetName(moreButton).Should().Be(FreeWUiTextCatalog.TableStylesMoreToolTip);
     }
 
     [StaFact]

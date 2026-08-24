@@ -50,8 +50,8 @@ internal static class TableStylesGallery
         });
 
         var button = new Button { Content = "▼", Width = 20, Height = 52, Margin = new Thickness(2, 0, 0, 0) };
-        button.ToolTip = "More Table Styles";
-        AutomationProperties.SetName(button, "More Table Styles");
+        button.ToolTip = FreeWUiTextCatalog.TableStylesMoreToolTip;
+        AutomationProperties.SetName(button, FreeWUiTextCatalog.TableStylesMoreToolTip);
         var menu = BuildMenu(editor, registry, out var cancelActivePreview);
         menu.Closed += (_, _) =>
         {
