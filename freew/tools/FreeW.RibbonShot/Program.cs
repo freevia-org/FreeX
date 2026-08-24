@@ -18,7 +18,7 @@ using FreeW.App.Host;
 //
 // Usage: FreeW.RibbonShot <outDir> [tabIndex|all] [width] [height]
 //   tabIndex: live TabControl index (normally 0=File/Backstage, 1=Home, 2=Insert, 3=Design, 4=Layout,
-//             5=References, 6=Mailings, 7=Review, 8=View); use the manifest from "all" for the current
+//             5=References, 6=Mailings, 7=Review, 8=View, 9=Help, 10=Developer); use the manifest from "all" for the current
 //             contextual-tab indices. "all" captures content/contextual tabs (skipping File), "backstage"
 //             captures File, and "backstage:<entry label>" selects one
 //             Backstage rail entry before capture.
