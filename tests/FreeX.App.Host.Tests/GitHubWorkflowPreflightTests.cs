@@ -34,7 +34,7 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build");
         workflow.Should().Contain("name: macOS portable lane");
         workflow.Should().Contain("dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release");
-        workflow.Should().Contain("dotnet build FreeX.PortableTests.slnx --configuration Release");
+        workflow.Should().Contain("dotnet build FreeX.PortableTests.slnx --configuration Release -m:1");
         workflow.Should().Contain("dotnet test FreeX.PortableTests.slnx --configuration Release --no-build");
         workflow.Should().Contain("name: UI test lane");
         workflow.Should().Contain("run_ui_tests:");

@@ -83,7 +83,7 @@ jobs:
 
       - name: Build portable tests
         shell: pwsh
-        run: dotnet build FreeX.PortableTests.slnx --configuration Release
+        run: dotnet build FreeX.PortableTests.slnx --configuration Release -m:1
 
       - name: Test portable tests
         shell: pwsh
