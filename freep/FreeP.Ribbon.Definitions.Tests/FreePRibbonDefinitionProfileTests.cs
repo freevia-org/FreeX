@@ -99,7 +99,7 @@ public sealed class FreePRibbonDefinitionProfileTests
     {
         var expectedGroupIds = new[]
         {
-            "slides", "clipboard", "font", "paragraph", "arrange", "edit", "editing",
+            "slides", "clipboard", "font", "paragraph", "arrange", "edit", "editing", "text-layout", "table-layout",
         };
 
         foreach (var definition in new[]
@@ -773,48 +773,26 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.font-family",
             "freep.font-size",
             "freep.font-color",
-            "freep.text-autofit",
-            "freep.text-direction",
-            "freep.text-columns",
-            "freep.table-cell-fill",
-            "freep.table-cell-anchor",
-            "freep.table-cell-border",
-            "freep.table-cell-inset",
-            "freep.table-row-height",
-            "freep.table.first-row",
-            "freep.table.last-row",
-            "freep.table.first-column",
-            "freep.table.last-column",
-            "freep.table.banded-rows",
-            "freep.table.banded-columns",
             "freep.bold",
             "freep.italic",
             "freep.underline",
+            "freep.strikethrough",
             "freep.superscript",
             "freep.subscript");
         commandIds.Should().ContainInOrder(
             "freep.font-family",
             "freep.font-size",
             "freep.font-color",
-            "freep.text-autofit",
-            "freep.text-direction",
-            "freep.text-columns",
-            "freep.table-cell-fill",
-            "freep.table-cell-anchor",
-            "freep.table-cell-border",
-            "freep.table-cell-inset",
-            "freep.table-row-height",
-            "freep.table.first-row",
-            "freep.table.last-row",
-            "freep.table.first-column",
-            "freep.table.last-column",
-            "freep.table.banded-rows",
-            "freep.table.banded-columns",
             "freep.bold",
             "freep.italic",
             "freep.underline",
+            "freep.strikethrough",
             "freep.superscript",
             "freep.subscript");
+        RequiredGroup(wpf, "home", "text-layout").Controls.Select(control => control.CommandId.Value)
+            .Should().Contain("freep.text-autofit", "freep.text-direction", "freep.text-columns", "freep.text-column-spacing");
+        RequiredGroup(wpf, "home", "table-layout").Controls.Select(control => control.CommandId.Value)
+            .Should().Contain("freep.table-cell-fill", "freep.table-cell-anchor", "freep.table-cell-border", "freep.table-cell-inset", "freep.table-row-height");
         wpfSize.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
         wpfColor.Choices.Should().Equal(FreePRibbonDefinitionData.FontColorChoices);
         wpfFill.Choices.Should().Equal(FreePRibbonDefinitionData.TableCellFillChoices);
