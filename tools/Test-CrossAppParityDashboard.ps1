@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-$acceptanceRefreshTestedSourceCommit = "729502d7b55d6daa13ec4c860c15176a01100959"
+$acceptanceRefreshTestedSourceCommit = "659e851fb2cadec5061a726a1622a7d75c304626"
 $acceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 $acceptanceRefreshAllowedPaths = @(
     "docs/parity/avalonia-parity-wave194-integration-20260824.md",
@@ -187,7 +187,7 @@ Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.initialInd
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.reviewRemediation -match "one authoritative mixed-type geometry contract.*schema v3.*color-geometry guard") "Wave194 reviewer remediations must be recorded."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -eq "Pending: a fresh independent review of tested source merge commit ${acceptanceRefreshTestedSourceCommit} must be completed. The prior final independent review is superseded by the origin/main Surface3D elevation-legend merge and is not a current-source acceptance claim.") "Wave194 independent review evidence must remain pending until the fresh current-source review completes."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.repositoryPreflight -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 exited 0.") "Wave194 repository-preflight evidence must be exact."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:05:57.47.") "Wave194 Release-build evidence must be exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:06:05.76.") "Wave194 Release-build evidence must be exact."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.defaultNonUiTestLane -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,466 passed, 134 intentional skips, 0 failed, 43,600 total.") "Wave194 default-lane evidence must be exact."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.initialDefaultLane -match "43,466 passed, 134 intentional skips, 0 failed, 43,600 total") "Wave194 current default-lane result must be recorded exactly."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sourceTestRemediation -match "generated inventory and visual manifests remain the authority") "Wave194 current evidence source boundary must be recorded."

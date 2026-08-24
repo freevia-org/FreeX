@@ -21,17 +21,17 @@ public sealed class CrossAppParityDashboardTests
             File.ReadAllText(Path.Combine(repoRoot, "docs", "parity", "avalonia-wpf-cross-app-dashboard.json")));
         var root = json.RootElement;
         root.GetProperty("schema").GetString().Should().Be("freex.parity.cross-app-dashboard.v3");
-        root.GetProperty("scopeBoundary").GetString().Should().Contain("do not prove visual parity");
+        root.GetProperty("scopeBoundary").GetString().Should().Contain("do not prove complete visual parity");
 
         var integrationEvidence = root.GetProperty("integrationGateEvidence");
-        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("729502d7b55d6daa13ec4c860c15176a01100959");
+        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("659e851fb2cadec5061a726a1622a7d75c304626");
         integrationEvidence.TryGetProperty("integrationHead", out _).Should().BeFalse();
         integrationEvidence.GetProperty("acceptanceRefreshNote").GetString().Should().Be(
             "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit.");
         integrationEvidence.GetProperty("repositoryPreflight").GetString().Should().Be(
-            "Passed at tested source commit 729502d7b55d6daa13ec4c860c15176a01100959: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0.");
+            "Passed at tested source commit 659e851fb2cadec5061a726a1622a7d75c304626: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0.");
         integrationEvidence.GetProperty("fullReleaseBuild").GetString().Should().Be(
-            "Passed at tested source commit 729502d7b55d6daa13ec4c860c15176a01100959: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:05:57.47.");
+            "Passed at tested source commit 659e851fb2cadec5061a726a1622a7d75c304626: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:06:05.76.");
         integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("43,466 passed, 134 intentional skips, 0 failed, 43,600 total");
 
         var freeX = root.GetProperty("apps")[0];

@@ -13,7 +13,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 # Keep acceptance evidence anchored to the source that was actually built and tested.
 # The generated docs are committed afterward, so deriving this from the current HEAD
 # would make the evidence self-referential and would change the claim on every refresh.
-$wave194TestedSourceCommit = "729502d7b55d6daa13ec4c860c15176a01100959"
+$wave194TestedSourceCommit = "659e851fb2cadec5061a726a1622a7d75c304626"
 $wave194AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 
 function Get-JsonPropertyValue {
@@ -870,7 +870,7 @@ try {
         reviewRemediation = "FreeX now uses one authoritative mixed-type geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved; the color-geometry guard remediation remains retained in the tested source."
         independentReview = "Pending: a fresh independent review of tested source merge commit ${wave194TestedSourceCommit} must be completed. The prior final independent review is superseded by the origin/main Surface3D elevation-legend merge and is not a current-source acceptance claim."
         repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 exited 0."
-        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:05:57.47."
+        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:06:05.76."
         defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,466 passed, 134 intentional skips, 0 failed, 43,600 total."
         initialDefaultLane = "Earlier default-lane remediation history is retained in the Wave194 report; the current final lane is the authoritative 43,466 passed, 134 intentional skips, 0 failed, 43,600 total result."
         sourceTestRemediation = "The current source is accepted only with the focused and full-lane evidence recorded above; generated inventory and visual manifests remain the authority for coverage and comparison counts."
