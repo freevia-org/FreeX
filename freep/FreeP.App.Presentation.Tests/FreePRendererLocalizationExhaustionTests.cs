@@ -30,6 +30,12 @@ public sealed class FreePRendererLocalizationExhaustionTests
                 "Backstage route identifier",
             [Literal("FreeP.App.Host/MainWindow.cs", "Print")] =
                 "Backstage route identifier",
+            [Literal("FreeP.App.Host/MainWindow.cs", "design")] =
+                "ribbon tab identifier",
+            [Literal("FreeP.App.Host/MainWindow.cs", "themes")] =
+                "ribbon group identifier",
+            [Literal("FreeP.App.Host/MainWindow.cs", "transitions")] =
+                "ribbon tab identifier",
             [Literal("FreeP.App.Host/MainWindow.cs", "table")] =
                 "contextual ribbon state identifier",
             [Literal("FreeP.App.Host/MainWindow.cs", "text")] =
