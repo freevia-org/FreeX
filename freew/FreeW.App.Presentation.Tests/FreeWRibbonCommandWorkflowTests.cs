@@ -14,7 +14,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
     {
         var routes = FreeWRibbonCommandWorkflow.Routes;
 
-        routes.Should().HaveCount(405);
+        routes.Should().HaveCount(406);
         routes.Select(route => route.CommandId).Should().OnlyHaveUniqueItems();
         routes.Select(route => route.Action).Should().OnlyHaveUniqueItems();
         routes.Select(route => route.Action)
@@ -35,6 +35,9 @@ public sealed class FreeWRibbonCommandWorkflowTests
         routes.Should().Contain(new FreeWRibbonCommandRoute(
             "freew.smartart-add-shape",
             FreeWRibbonCommandAction.SmartartAddShape));
+        routes.Should().Contain(new FreeWRibbonCommandRoute(
+            "freew.test-crash-reporting",
+            FreeWRibbonCommandAction.TestCrashReporting));
     }
 
     [Fact]
@@ -119,7 +122,8 @@ public sealed class FreeWRibbonCommandWorkflowTests
 
         var result = bindings.Build();
 
-        result.CanonicalCommandIds.Should().HaveCount(405).And.OnlyHaveUniqueItems();
+        result.CanonicalCommandIds.Should().HaveCount(406).And.OnlyHaveUniqueItems();
+        result.CanonicalCommandIds.Should().Contain(new RibbonCommandId("freew.test-crash-reporting"));
         result.CanonicalCommandIds.Should().BeEquivalentTo(
             FreeWRibbonCommandWorkflow.Routes.Select(route => new RibbonCommandId(route.CommandId)));
         result.CommandGroups.Keys.Should().BeEquivalentTo(Enum.GetValues<FreeWRibbonCommandGroup>());
@@ -145,7 +149,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
 
         var result = FreeWRibbonExecutionProfile.Build(bindings);
 
-        result.CanonicalCommandIds.Should().HaveCount(405).And.OnlyHaveUniqueItems();
+        result.CanonicalCommandIds.Should().HaveCount(406).And.OnlyHaveUniqueItems();
         result.Registry.TryGet("freew.bold", out var bold).Should().BeTrue();
         bold.Should().BeSameAs(native);
 
@@ -153,6 +157,11 @@ public sealed class FreeWRibbonCommandWorkflowTests
         unavailable.Should().BeAssignableTo<IRibbonStatefulCommand>()
             .Which.GetState().IsEnabled.Should().BeFalse();
         unavailable.Execute(RibbonCommandContext.Empty);
+
+        result.Registry.TryGet("freew.test-crash-reporting", out var testCrashReporting)
+            .Should().BeTrue();
+        testCrashReporting.Should().BeAssignableTo<IRibbonStatefulCommand>()
+            .Which.GetState().IsEnabled.Should().BeFalse();
 
         result.Registry.TryGet("freew.adapter-only", out var adapter).Should().BeTrue();
         adapter.Should().BeSameAs(native);
@@ -165,6 +174,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         var findCount = 0;
         var aboutCount = 0;
         var acceptCount = 0;
+        var testCrashReportingCount = 0;
         var reviewingPaneVisible = false;
         var notesPaneVisible = false;
         var balloonsVisible = false;
@@ -174,6 +184,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
             OpenFindReplaceDialog = () => findCount++,
             OpenAbout = () => aboutCount++,
             AcceptThisChange = () => acceptCount++,
+            TestCrashReporting = () => testCrashReportingCount++,
             ToggleReviewingPane = () => reviewingPaneVisible = !reviewingPaneVisible,
             IsReviewingPaneVisible = () => reviewingPaneVisible,
             ToggleNotesPane = () => notesPaneVisible = !notesPaneVisible,
@@ -195,6 +206,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         registry.TryGet("freew.about", out var about).Should().BeTrue();
         registry.TryGet("freew.open", out var open).Should().BeTrue();
         registry.TryGet("freew.accept-this", out var accept).Should().BeTrue();
+        registry.TryGet("freew.test-crash-reporting", out var testCrashReporting).Should().BeTrue();
         registry.TryGet("freew.reviewing-pane", out var reviewingPane).Should().BeTrue();
         registry.TryGet("freew.show-notes", out var notesPane).Should().BeTrue();
         registry.TryGet("freew.show-markup-balloons", out var balloons).Should().BeTrue();
@@ -206,6 +218,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         about!.Execute(RibbonCommandContext.Empty);
         open!.Execute(RibbonCommandContext.Empty);
         accept!.Execute(RibbonCommandContext.Empty);
+        testCrashReporting!.Execute(RibbonCommandContext.Empty);
         reviewingPane!.Execute(RibbonCommandContext.Empty);
         notesPane!.Execute(RibbonCommandContext.Empty);
         balloons!.Execute(RibbonCommandContext.Empty);
@@ -214,6 +227,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         findCount.Should().Be(2);
         aboutCount.Should().Be(1);
         acceptCount.Should().Be(1);
+        testCrashReportingCount.Should().Be(1);
         reviewingPaneVisible.Should().BeTrue();
         notesPaneVisible.Should().BeTrue();
         balloonsVisible.Should().BeTrue();
@@ -943,6 +957,11 @@ public sealed class FreeWRibbonCommandWorkflowTests
             "Ribbon",
             "FreeWAvaloniaRibbonCommands.cs");
         var wpfMainWindow = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
+        var avaloniaMainWindow = ReadSource("freew", "FreeW.App.Avalonia", "MainWindow.cs");
+        var avaloniaHelpCommands = ReadSource(
+            "freew",
+            "FreeW.App.Avalonia",
+            "MainWindow.HelpCommands.cs");
         var wpfNativePorts = ReadSource(
             "freew",
             "FreeW.App.Host",
@@ -1014,6 +1033,16 @@ public sealed class FreeWRibbonCommandWorkflowTests
         wpf.Should().Contain("Routed(FreeWRibbonCommandAction.Cut, ApplicationCommands.Cut);");
         wpf.Should().Contain("Routed(FreeWRibbonCommandAction.Copy, ApplicationCommands.Copy);");
         wpf.Should().Contain("Routed(FreeWRibbonCommandAction.Paste, ApplicationCommands.Paste);");
+        hostProfile.Should().Contain(
+            "BindOrUnavailable(bindings, FreeWRibbonCommandAction.TestCrashReporting, ports.TestCrashReporting);");
+        wpfMainWindow.Should().Contain("TestCrashReporting = TestCrashReporting,");
+        wpfMainWindow.Should().Contain("AppCrashAnalyticsRuntime.SendTestReport()");
+        wpfMainWindow.Should().Contain("DialogMessageHelper.ShowInfo(this, message, title);");
+        wpfMainWindow.Should().Contain("DialogMessageHelper.ShowWarning(this, message, title);");
+        avaloniaMainWindow.Should().Contain("TestCrashReporting: () => _ = TestCrashReportingAsync(),");
+        avaloniaHelpCommands.Should().Contain(
+            "AppCrashAnalyticsRuntime.UserMessage(AppCrashAnalyticsRuntime.SendTestReport())");
+        avaloniaHelpCommands.Should().Contain("UiText.Get(\"Help_TestCrashReporting_Title\")");
         wpfMainWindow.Should().Contain("CreateRibbonHostExecutionPorts()");
         wpfMainWindow.Should().Contain("new FreeWWpfRibbonNativeExecutionPorts(");
         wpfMainWindow.Should().NotContain("onPrintPreview:");
