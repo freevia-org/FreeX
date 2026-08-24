@@ -226,7 +226,7 @@ public static class FreePRibbonCommandWorkflow
         RegisterAnimationCommands(commands, editor, stateStore, host);
         RegisterViewCommands(commands, stateStore, host);
         RegisterReviewCommands(commands, host);
-        RegisterSlideShowCommands(commands, host);
+        RegisterSlideShowCommands(commands, editor, host);
 
         return commands.Build();
     }
@@ -788,10 +788,14 @@ public static class FreePRibbonCommandWorkflow
         commands.HostAction(FreePRibbonCommandGroup.Review, "freep.replace", host, FreePRibbonHostActionKind.OpenReplace);
     }
 
-    private static void RegisterSlideShowCommands(Registrar commands, FreePRibbonCommandHostAdapter host)
+    private static void RegisterSlideShowCommands(
+        Registrar commands,
+        EditingSession editor,
+        FreePRibbonCommandHostAdapter host)
     {
         commands.HostAction(FreePRibbonCommandGroup.SlideShow, "freep.slideshow.from-beginning", host, FreePRibbonHostActionKind.StartSlideShowFromBeginning);
         commands.HostAction(FreePRibbonCommandGroup.SlideShow, "freep.slideshow.from-current-slide", host, FreePRibbonHostActionKind.StartSlideShowFromCurrent);
+        commands.Action(FreePRibbonCommandGroup.SlideShow, "freep.slideshow.hide-slide", () => _ = editor.ToggleCurrentSlideHidden());
         commands.HostAction(FreePRibbonCommandGroup.SlideShow, "freep.slideshow.rehearse-timings", host, FreePRibbonHostActionKind.RehearseTimings);
         commands.HostAction(FreePRibbonCommandGroup.SlideShow, "freep.slideshow.record-timings", host, FreePRibbonHostActionKind.RecordTimings);
         commands.HostAction(FreePRibbonCommandGroup.SlideShow, "freep.slideshow.custom-shows", host, FreePRibbonHostActionKind.OpenCustomShows);

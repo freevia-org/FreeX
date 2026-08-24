@@ -364,6 +364,8 @@ public static class FreePRibbon
             RibbonCommandIconKind.Next, FreePRibbonText.SlideShowFromBeginningKeyTip);
         group.Large("freep.slideshow.from-current-slide", FreePRibbonText.SlideShowFromCurrentSlideLabel,
             profile.SlideShowFromCurrentSlideIcon, FreePRibbonText.SlideShowFromCurrentSlideKeyTip);
+        group.Medium("freep.slideshow.hide-slide", FreePRibbonText.SlideShowHideSlideLabel,
+            RibbonCommandIconKind.View, FreePRibbonText.SlideShowHideSlideKeyTip);
         group.Medium("freep.slideshow.rehearse-timings", FreePRibbonText.SlideShowRehearseTimingsLabel,
             RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRehearseTimingsKeyTip);
         group.Medium("freep.slideshow.record-timings", FreePRibbonText.SlideShowRecordTimingsLabel,

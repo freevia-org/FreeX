@@ -38,6 +38,8 @@ public static class WholeWindowVisualEvidenceCatalog
         Ribbon("design"),
         Ribbon("transitions"),
         Ribbon("animations"),
+        Ribbon("slide-show"),
+        Ribbon("review"),
         Ribbon("view"),
 
         Backstage("Info"),

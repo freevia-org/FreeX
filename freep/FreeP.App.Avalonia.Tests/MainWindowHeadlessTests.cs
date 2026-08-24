@@ -942,6 +942,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         slideShow.Controls.Select(i => i.CommandId.Value).Should().Equal(
             "freep.slideshow.from-beginning",
             "freep.slideshow.from-current-slide",
+            "freep.slideshow.hide-slide",
             "freep.slideshow.rehearse-timings",
             "freep.slideshow.record-timings",
             "freep.slideshow.setup",

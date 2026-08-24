@@ -13,7 +13,7 @@ $resolvedRoot = Resolve-ToolRepoPath -Path $EvidenceRoot -RepoRoot $repoRoot
 $manifestPath = Join-Path $resolvedRoot "manifest.json"
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 $widths = @(1280, 1100, 900, 750)
-$tabs = @("home", "insert", "design", "transitions", "animations", "view")
+$tabs = @("home", "insert", "design", "transitions", "animations", "slide-show", "review", "view")
 $hosts = @("wpf", "avalonia")
 $expectedCaptureCount = $widths.Count * $tabs.Count * $hosts.Count
 

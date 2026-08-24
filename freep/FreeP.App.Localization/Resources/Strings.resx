@@ -439,6 +439,12 @@
   <data name="Ribbon_Command_SlideShowFromCurrentSlide_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Command_SlideShowHideSlide_Label" xml:space="preserve">
+    <value>Hide Slide</value>
+  </data>
+  <data name="Ribbon_Command_SlideShowHideSlide_KeyTip" xml:space="preserve">
+    <value>H</value>
+  </data>
   <data name="Ribbon_Command_SlideShowCustomShows_Label" xml:space="preserve">
     <value>Custom Shows</value>
   </data>

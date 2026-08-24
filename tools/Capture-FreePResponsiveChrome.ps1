@@ -11,7 +11,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 . (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
 
-$tabs = @("home", "insert", "design", "transitions", "animations", "view")
+$tabs = @("home", "insert", "design", "transitions", "animations", "slide-show", "review", "view")
 $requiredWidths = @(1280, 1100, 900, 750)
 if (@($Widths | Sort-Object -Unique) -notmatch '^(1280|1100|900|750)$' -or @($Widths | Sort-Object -Unique).Count -ne $requiredWidths.Count) {
     throw "Widths must contain exactly: $($requiredWidths -join ', ')."
@@ -20,9 +20,35 @@ if (@($Widths | Sort-Object -Unique) -notmatch '^(1280|1100|900|750)$' -or @($Wi
 $resolvedOutputDirectory = Resolve-ToolRepoPath -Path $OutputDirectory -RepoRoot $repoRoot
 $manifestPath = Join-Path $resolvedOutputDirectory "manifest.json"
 $readmePath = Join-Path $resolvedOutputDirectory "README.md"
-$dotnet = Join-Path ${env:ProgramFiles} "dotnet\dotnet.exe"
-if (-not (Test-Path -LiteralPath $dotnet -PathType Leaf)) {
-    throw "The global dotnet host is required for foreground visual evidence: $dotnet"
+$dotnet = (Get-Command dotnet -ErrorAction Stop).Source
+$sourceFiles = @(
+    'freep/TestSupport/VisualEvidence.Wpf/WpfWholeWindowVisualEvidenceCapture.cs',
+    'freep/TestSupport/VisualEvidence.Avalonia/AvaloniaWholeWindowVisualEvidenceCapture.cs',
+    'freep/TestSupport/VisualEvidence/WholeWindowVisualEvidenceContract.cs',
+    'freep/FreeP.App.Host/MainWindow.cs',
+    'freep/FreeP.App.Avalonia/MainWindow.cs',
+    'freep/FreeP.Ribbon.Definitions/FreePRibbon.cs',
+    'freep/FreeP.Ribbon.Definitions/FreePRibbonText.cs',
+    'freep/FreeP.Ribbon.Definitions/FreePRibbonCapabilities.cs',
+    'freep/FreeP.App.Presentation/Ribbon/FreePRibbonCommandWorkflow.cs',
+    'freep/FreeP.App.Localization/Resources/Strings.resx',
+    'freep/FreeP.App.Host/Ribbon/PresentationThemeGallery.cs',
+    'freep/FreeP.App.Host/Ribbon/PresentationTransitionGallery.cs',
+    'freep/FreeP.App.Host/Ribbon/PresentationAnimationGallery.cs',
+    'freep/FreeP.App.Avalonia/PresentationThemeGallery.cs',
+    'freep/FreeP.App.Avalonia/PresentationTransitionGallery.cs',
+    'freep/FreeP.App.Avalonia/PresentationAnimationGallery.cs',
+    'shared/Free.Shared.Ribbon.Wpf/RibbonWpfRenderer.cs',
+    'shared/Free.Shared.Ribbon.Wpf/RibbonAdaptivePanel.cs',
+    'shared/Free.Shared.Ribbon.Avalonia/AvaloniaRibbonRenderer.cs'
+)
+
+function Get-ResponsiveChromeSourceHashes {
+    $hashes = [ordered]@{}
+    foreach ($relativePath in $sourceFiles) {
+        $hashes[$relativePath] = Get-VisualEvidenceFileSha256 -Path (Join-Path $repoRoot ($relativePath -replace '/', '\\'))
+    }
+    return $hashes
 }
 
 $projects = @(
@@ -83,6 +109,7 @@ function New-ResponsiveChromeManifest {
         evidenceSubject = "FreeP WPF and Avalonia app-owned ribbon/chrome"
         captureMethod = "visible app-owned whole-client render target, scenario-isolated host process; each host invocation exits successfully before its captured PNG pair is recorded"
         normalizedDpi = 96
+        sourceSha256 = Get-ResponsiveChromeSourceHashes
         widths = $requiredWidths
         mappedFreePTabs = $tabs
         expectedCaptureCount = $requiredWidths.Count * $tabs.Count * $projects.Count
@@ -90,7 +117,7 @@ function New-ResponsiveChromeManifest {
         captures = @($captures)
         comparisonBoundary = "This responsive lane exercises FreeP's own WPF and Avalonia chrome at four widths. It complements the 1280px full-window scenario lane and the native PowerPoint reference lane; it does not assert raw cross-host or PowerPoint pixel equivalence."
         limitations = @(
-            "The six shared FreeP top-level tabs are captured. Slide Show is exposed by FreeP as a group on Transitions rather than a separate top-level tab.",
+            "The eight primary FreeP top-level tabs are captured. Help remains outside this product-chrome lane.",
             "Backstage, dialogs, panes, editing overlays, canvas and status states remain covered by the full-window and dialog/pane evidence lanes at the canonical 1280px viewport."
         )
     }
@@ -104,6 +131,18 @@ if ($Check) {
     $existing = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     if ($existing.captureStatus -ne "complete" -or $existing.actualCaptureCount -ne $manifest.actualCaptureCount) {
         throw "Responsive chrome manifest is stale or incomplete."
+    }
+    $expectedHashes = Get-ResponsiveChromeSourceHashes
+    $sourceHashProperty = $existing.PSObject.Properties['sourceSha256']
+    $existingSourceHashes = if ($null -eq $sourceHashProperty) { $null } else { $sourceHashProperty.Value }
+    if ($null -eq $existingSourceHashes -or
+        @($existingSourceHashes.PSObject.Properties).Count -ne $expectedHashes.Count) {
+        throw "Responsive chrome manifest has no complete source-freshness contract."
+    }
+    foreach ($relativePath in $expectedHashes.Keys) {
+        if ([string]$existingSourceHashes.PSObject.Properties[$relativePath].Value -ne [string]$expectedHashes[$relativePath]) {
+            throw "Responsive chrome evidence is stale for source: $relativePath"
+        }
     }
     Write-Host "FreeP responsive chrome evidence is current: $($manifest.actualCaptureCount)/$($manifest.expectedCaptureCount) captures."
     exit 0
@@ -151,7 +190,7 @@ $json = ($manifest | ConvertTo-Json -Depth 8) + [Environment]::NewLine
 $readme = @"
 # FreeP responsive WPF/Avalonia chrome capture — 2026-08-16
 
-This directory contains a guarded, scenario-isolated capture matrix for FreeP's six actual top-level ribbon tabs: Home, Insert, Design, Transitions, Animations and View. Both WPF and Avalonia are captured at 1280, 1100, 900 and 750 logical pixels, for 48 app-owned chrome captures.
+This directory contains a guarded, scenario-isolated capture matrix for FreeP's eight primary top-level ribbon tabs: Home, Insert, Design, Transitions, Animations, Slide Show, Review and View. Both WPF and Avalonia are captured at 1280, 1100, 900 and 750 logical pixels, for 64 app-owned chrome captures.
 
 The 1280px full-window lane remains the evidence for Backstage, dialogs, panes, editor overlays, canvas and status areas. Native Microsoft PowerPoint references are held separately in `docs/parity/freep-powerpoint-chrome-2026-08-16`.
 "@
