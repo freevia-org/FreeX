@@ -135,3 +135,7 @@ human-validation evidence, crash-backend test event identifier, feedback-form
 test issue, known limitations, rollback owner, and signing status in the release
 notes. A failed or untested item remains visible; it is not converted into a
 claim of support.
+
+Use the
+[public-preview decision record template](public-preview-decision-record-template.md)
+so every candidate is assessed against the same evidence fields.
