@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('App','Suite')][string]$Scope,
-    [Parameter(Mandatory)][ValidateSet('FreeX','FreeW','FreeP')][string[]]$Apps,
+    [Parameter(Mandatory)][string[]]$Apps,
     [Parameter(Mandatory)][string]$Version,
     [Parameter(Mandatory)][ValidatePattern('^(win|linux|osx)-(x64|arm64)$')][string]$Runtime,
     [Parameter(Mandatory)][string]$InputRoot
@@ -11,6 +11,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $Apps = @($Apps | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if ($Apps.Count -eq 0 -or @($Apps | Where-Object { $_ -notin @('FreeX','FreeW','FreeP') }).Count -gt 0) { throw 'Apps must contain only FreeX, FreeW, or FreeP.' }
 if ($Scope -eq 'App' -and $Apps.Count -ne 1) { throw 'App scope requires exactly one app.' }
 if ($Scope -eq 'Suite' -and @($Apps | Sort-Object -Unique).Count -ne 3) { throw 'Suite scope requires all three apps.' }
 $InputRoot = (Resolve-Path -LiteralPath $InputRoot).Path
@@ -48,9 +49,8 @@ if ($Runtime -like 'win-*') {
         if ($portable.Length -eq 0) { throw "Standalone executable missing or empty: $($portable.Name)" }
         Assert-Pe $portable 'Standalone executable'
     }
-    $installer = Find-One "$prefix-setup.exe"
-    if ($installer.Length -eq 0) { throw "Windows installer missing or empty: $($installer.Name)" }
-    Assert-Pe $installer 'Windows installer'
+    $installer = Find-One "$prefix.msix"
+    if ($installer.Length -eq 0) { throw "Windows MSIX package missing or empty: $($installer.Name)" }
 } else {
     if ($Scope -eq 'App') {
         $portable = Find-One "$prefix.zip"

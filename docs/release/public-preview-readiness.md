@@ -137,14 +137,14 @@ Windows public-preview publication retains these download choices:
 
 | Scope | Portable artifact | Installable artifact |
 | --- | --- | --- |
-| FreeX only | standalone FreeX executable | per-user FreeX Inno Setup installer |
-| FreeW only | standalone FreeW executable | per-user FreeW Inno Setup installer |
-| FreeP only | standalone FreeP executable | per-user FreeP Inno Setup installer |
-| Entire suite | the three standalone executables remain individually available | per-user Free Suite Inno Setup installer with all three apps |
+| FreeX only | standalone FreeX executable | FreeX MSIX package |
+| FreeW only | standalone FreeW executable | FreeW MSIX package |
+| FreeP only | standalone FreeP executable | FreeP MSIX package |
+| Entire suite | the three standalone executables remain individually available | Free Suite MSIX package with all three apps |
 
-An installer is additional to, not a replacement for, the standalone executable.
+The MSIX package is additional to, not a replacement for, the standalone executable.
 Checksums are generated after all packaging steps that modify an artifact. Until
-certificates arrive, installer and portable artifacts may be published only as
+certificates arrive, MSIX and portable artifacts may be published only as
 explicitly labeled unsigned previews; production workflows must not pretend they
 are signed.
 

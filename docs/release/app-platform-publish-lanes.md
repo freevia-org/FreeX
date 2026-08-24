@@ -6,18 +6,18 @@ Every tester release uses one predictable app/version tag and independently runn
 
 | App | Tag | Windows | Linux | macOS |
 | --- | --- | --- | --- | --- |
-| FreeX | `freex-v<version>` | portable `.exe` and `-setup.exe` | portable `.zip` and `-installer.zip` | portable `.zip` and `-apps.zip` |
-| FreeW | `freew-v<version>` | portable `.exe` and `-setup.exe` | portable `.zip` and `-installer.zip` | portable `.zip` and `-apps.zip` |
-| FreeP | `freep-v<version>` | portable `.exe` and `-setup.exe` | portable `.zip` and `-installer.zip` | portable `.zip` and `-apps.zip` |
-| Free Suite | `free-suite-v<version>` | suite `-setup.exe` | suite `-installer.zip` per architecture | suite `-apps.zip` per architecture |
+| FreeX | `freex-v<version>` | portable `.exe` and `.msix` | portable `.zip` and `-installer.zip` | portable `.zip` and `-apps.zip` |
+| FreeW | `freew-v<version>` | portable `.exe` and `.msix` | portable `.zip` and `-installer.zip` | portable `.zip` and `-apps.zip` |
+| FreeP | `freep-v<version>` | portable `.exe` and `.msix` | portable `.zip` and `-installer.zip` | portable `.zip` and `-apps.zip` |
+| Free Suite | `free-suite-v<version>` | suite `.msix` | suite `-installer.zip` | suite `-apps.zip` per architecture |
 
-Every release asset has an adjacent `.sha256` file. The original self-contained Windows executables and Linux/macOS archives remain available beside the installers. Installer hashes are calculated after the installer is built. While release certificates are pending, Windows installers are unsigned and macOS app bundles are unsigned and unnotarized; the workflow does not pretend otherwise or require signing credentials.
+Every release asset has an adjacent `.sha256` file. The original self-contained Windows executables and Linux/macOS archives remain available beside the installable packages. Package hashes are calculated after packaging and signing. While release certificates are pending, Windows MSIX packages and macOS app bundles are unsigned/unnotarized; the workflow does not pretend otherwise or require signing credentials.
 
 Each platform payload also carries an SPDX 2.2 SBOM generated with the pinned `Microsoft.Sbom.DotNetTool` 4.1.5 tool and a JSON inventory manifest recording the complete 40-character source commit. Before artifacts cross a workflow job boundary, their canonical checksum files, SBOMs, and inventory are regenerated and compared. The final app or suite release manifest covers every selected runtime payload, installer, checksum, SBOM, runtime manifest, and bundled legal notice. A version tag is immutable: a tag that already exists at another commit causes the lane to fail instead of replacing its assets.
 
-The Free Suite release is created only for `app=all`. Its package is a bootstrapper over the exact individual installers: Windows invokes the three per-app setups, while Linux and macOS invoke the embedded per-app install scripts. Consequently each app keeps one installation destination and one upgrade/uninstall identity whether installation started from the suite or an individual download.
+The Free Suite release is created only for `app=all`. Its Windows package is one MSIX containing all three applications; Linux and macOS invoke the embedded per-app install scripts. The standalone executable remains available for each app on Windows.
 
-Hosted runners exercise install, bounded launch, and uninstall without UI assertions. Suite lanes additionally install suite-to-individual and individual-to-suite transitions against an ephemeral per-user destination. A failed Windows child installer is propagated as a failed suite installation; the bootstrapper cannot report success after a child failure.
+Hosted runners exercise package extraction and bounded validation without UI assertions. Windows MSIX smoke validates the manifest and every packaged executable; Linux and macOS lanes exercise install, update, and uninstall scripts.
 
 ## Tester Installation
 
@@ -25,13 +25,13 @@ Use the matching app name (`FreeX`, `FreeW`, or `FreeP`) and release version in 
 
 | Platform | Select | Verify | Deploy and run |
 | --- | --- | --- | --- |
-| Windows | `win-x64-setup.exe` for installation, or `win-x64.exe` for portable use | `Get-FileHash <download> -Algorithm SHA256` and compare it to the adjacent `.sha256` file | The installer is per-user and needs no elevation. The standalone executable remains self-contained. Both are unsigned until the Windows certificate is available. |
+| Windows | `win-x64.msix` for installation, or `win-x64.exe` for portable use | `Get-FileHash <download> -Algorithm SHA256` and compare it to the adjacent `.sha256` file | Open the signed MSIX with App Installer. The standalone executable remains self-contained. Unsigned internal packages require the signing certificate to be trusted on the test machine. |
 | Linux | `linux-<architecture>-installer.zip`, or the portable archive | `sha256sum -c <download>.sha256` | Extract the installer bundle and run `./install.sh`; it defaults to `~/.local`, accepts another prefix as its first argument, and includes `uninstall.sh`. |
 | macOS | `osx-<architecture>-apps.zip`, or the portable archive | `shasum -a 256 -c <download>.sha256` | Extract the app package and run `./install.sh` or drag the `.app` to `~/Applications`. Current app packages are explicitly unsigned and unnotarized. |
 
 Linux and macOS packages must be extracted before first launch; do not run them from inside the zip file. The canonical workflow repeats these same instructions in every GitHub release body.
 
-For all three applications together, use the matching artifact on the `free-suite-v<version>` release. Installing an individual app after the suite (or running the suite after an individual install) updates the same app installation rather than creating another copy. Uninstall remains per app; the Windows suite bootstrapper intentionally does not register a fourth uninstaller.
+For all three applications together, use the matching `.msix` artifact on the `free-suite-v<version>` release. The package exposes FreeX, FreeW, and FreeP as separate Start-menu applications under one package identity.
 
 ## Dispatching A Lane
 

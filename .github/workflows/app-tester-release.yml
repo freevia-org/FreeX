@@ -225,22 +225,6 @@ jobs:
         with:
           dotnet-version: 10.0.111
 
-      - name: Locate Inno Setup
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: |
-          $compiler = @(
-            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
-            "C:\Program Files\Inno Setup 6\ISCC.exe"
-          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-          if (-not $compiler) {
-            choco install innosetup --version 6.4.3 --yes --no-progress
-            if ($LASTEXITCODE -ne 0) { throw "Could not install the Inno Setup compiler." }
-            $compiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          }
-          if (-not (Test-Path -LiteralPath $compiler)) { throw "Inno Setup compiler not found." }
-          "INNO_SETUP_COMPILER=$compiler" >> $env:GITHUB_ENV
-
       - name: Publish self-contained tester package
         shell: pwsh
         env:
@@ -270,6 +254,28 @@ jobs:
             -InputRoot artifacts\release `
             -OutputDir artifacts\release
 
+          if ("${{ matrix.platform }}" -eq "windows") {
+            $msixParameters = @{}
+            $certificateBase64 = "${{ secrets.FREEX_MSIX_CERTIFICATE_BASE64 }}"
+            if (-not [string]::IsNullOrWhiteSpace($certificateBase64)) {
+              $certificatePath = Join-Path $env:RUNNER_TEMP "freex-msix-signing.pfx"
+              [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($certificateBase64))
+              $msixParameters.MsixCertificatePath = $certificatePath
+              $msixParameters.MsixCertificatePassword = "${{ secrets.FREEX_MSIX_CERTIFICATE_PASSWORD }}"
+              $timestampUrl = "${{ vars.FREEX_MSIX_TIMESTAMP_URL }}"
+              if (-not [string]::IsNullOrWhiteSpace($timestampUrl)) { $msixParameters.MsixTimestampUrl = $timestampUrl }
+            } else {
+              $msixParameters.AllowUnsignedMsix = $true
+            }
+            tools/packaging/New-MsixPackages.ps1 `
+              -Apps "${{ matrix.app }}" `
+              -Version $version `
+              -Runtime "${{ matrix.runtime }}" `
+              -InputRoot artifacts\release `
+              -OutputDir artifacts\release `
+              @msixParameters
+          }
+
           tools/Test-ReleasePackageContents.ps1 `
             -Scope App `
             -Apps "${{ matrix.app }}" `
@@ -285,7 +291,7 @@ jobs:
           $runtime = "${{ matrix.runtime }}"
           $prefix = "$app-v$version-$runtime"
           $payloadNames = if ($runtime -like "win-*") {
-            @("$prefix.exe", "$prefix-setup.exe")
+            @("$prefix.exe", "$prefix.msix")
           } elseif ($runtime -like "linux-*") {
             @("$prefix.zip", "$prefix-installer.zip")
           } else {
@@ -394,34 +400,41 @@ jobs:
               -RequireSourceManifests
           }
 
-      - name: Locate Inno Setup
-        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform == 'windows'
-        shell: pwsh
-        run: |
-          $compiler = @(
-            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
-            "C:\Program Files\Inno Setup 6\ISCC.exe"
-          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-          if (-not $compiler) {
-            choco install innosetup --version 6.4.3 --yes --no-progress
-            if ($LASTEXITCODE -ne 0) { throw "Could not install the Inno Setup compiler." }
-            $compiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          }
-          if (-not (Test-Path -LiteralPath $compiler)) { throw "Inno Setup compiler not found." }
-          "INNO_SETUP_COMPILER=$compiler" >> $env:GITHUB_ENV
-
-      - name: Build unsigned suite installer
+      - name: Build suite installable package
         if: inputs.platform == 'all' || inputs.platform == matrix.platform
         shell: pwsh
         run: |
-          tools/packaging/New-AppInstallers.ps1 `
-            -Apps FreeX,FreeW,FreeP `
-            -Suite `
-            -Platform "${{ matrix.platform }}" `
-            -Version "${{ inputs.release_version }}" `
-            -Runtime "${{ matrix.runtime }}" `
-            -InputRoot downloaded-artifacts `
-            -OutputDir artifacts\suite
+          if ("${{ matrix.platform }}" -eq "windows") {
+            $msixParameters = @{}
+            $certificateBase64 = "${{ secrets.FREEX_MSIX_CERTIFICATE_BASE64 }}"
+            if (-not [string]::IsNullOrWhiteSpace($certificateBase64)) {
+              $certificatePath = Join-Path $env:RUNNER_TEMP "freex-msix-signing.pfx"
+              [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($certificateBase64))
+              $msixParameters.MsixCertificatePath = $certificatePath
+              $msixParameters.MsixCertificatePassword = "${{ secrets.FREEX_MSIX_CERTIFICATE_PASSWORD }}"
+              $timestampUrl = "${{ vars.FREEX_MSIX_TIMESTAMP_URL }}"
+              if (-not [string]::IsNullOrWhiteSpace($timestampUrl)) { $msixParameters.MsixTimestampUrl = $timestampUrl }
+            } else {
+              $msixParameters.AllowUnsignedMsix = $true
+            }
+            tools/packaging/New-MsixPackages.ps1 `
+              -Apps FreeX,FreeW,FreeP `
+              -Suite `
+              -Version "${{ inputs.release_version }}" `
+              -Runtime "${{ matrix.runtime }}" `
+              -InputRoot downloaded-artifacts `
+              -OutputDir artifacts\suite `
+              @msixParameters
+          } else {
+            tools/packaging/New-AppInstallers.ps1 `
+              -Apps FreeX,FreeW,FreeP `
+              -Suite `
+              -Platform "${{ matrix.platform }}" `
+              -Version "${{ inputs.release_version }}" `
+              -Runtime "${{ matrix.runtime }}" `
+              -InputRoot downloaded-artifacts `
+              -OutputDir artifacts\suite
+          }
 
           tools/Test-ReleasePackageContents.ps1 `
             -Scope Suite `
@@ -437,7 +450,7 @@ jobs:
           $version = "${{ inputs.release_version }}"
           $runtime = "${{ matrix.runtime }}"
           $prefix = "FreeSuite-v$version-$runtime"
-          $payloadName = if ($runtime -like "win-*") { "$prefix-setup.exe" } elseif ($runtime -like "linux-*") { "$prefix-installer.zip" } else { "$prefix-apps.zip" }
+          $payloadName = if ($runtime -like "win-*") { "$prefix.msix" } elseif ($runtime -like "linux-*") { "$prefix-installer.zip" } else { "$prefix-apps.zip" }
           Get-ChildItem -LiteralPath downloaded-artifacts -Recurse -File -Filter "*-v$version-$runtime-manifest.json" |
             Copy-Item -Destination artifacts/suite
           dotnet tool install --tool-path artifacts/sbom-tool Microsoft.Sbom.DotNetTool --version 4.1.5
@@ -581,7 +594,7 @@ jobs:
 
           These tester packages are self-contained. Do not run them from inside the archive; keep the extracted Linux or macOS directory intact. The macOS assets are unsigned portable archives, not signed or notarized `.app` bundles.
 
-          Each platform also includes an installable package: `-setup.exe` on Windows, `-installer.zip` on Linux, and `-apps.zip` containing an unsigned/unnotarized `.app` bundle on macOS. The original portable executable or archive remains available.
+          Each platform also includes an installable package: `.msix` on Windows, `-installer.zip` on Linux, and `-apps.zip` containing an unsigned/unnotarized `.app` bundle on macOS. The original portable executable or archive remains available. Windows MSIX packages are signed when the release certificate is configured; otherwise they are intended for internal tester machines that trust the package certificate.
           '@
           $notes = $notes.
             Replace("{{APP}}", $app).
@@ -665,9 +678,9 @@ jobs:
           $notes = @'
           # Free Suite v{{VERSION}} Tester Release
 
-          This release installs FreeX, FreeW, and FreeP together by invoking the same per-app installers shipped on each app's release page. It does not create separate suite-owned copies, so suite-to-individual upgrades and individual-to-suite upgrades keep the same installation and uninstaller identities. Portable artifacts remain available on the individual release pages.
+          This release installs FreeX, FreeW, and FreeP together from one Windows MSIX package, or from the suite install bundle on Linux and macOS. Portable artifacts remain available on the individual release pages.
 
-          Windows uses an unsigned per-user setup executable. Linux uses an installer bundle whose `install.sh` defaults to `~/.local`. macOS contains all three `.app` bundles and an `install.sh` helper; those bundles are currently unsigned and unnotarized.
+          Windows uses an MSIX package signed when the release certificate is configured. Linux uses an installer bundle whose `install.sh` defaults to `~/.local`. macOS contains all three `.app` bundles and an `install.sh` helper; those bundles are currently unsigned and unnotarized.
           '@.Replace("{{VERSION}}", $version)
 
           gh release view $tag *> $null

@@ -4,7 +4,8 @@
     Builds unsigned installable packages without replacing the portable release artifacts.
 
 .DESCRIPTION
-    Windows packages are per-user Inno Setup executables. Linux packages contain a
+    Windows packaging is a deferred legacy path; the active app tester workflow uses
+    MSIX packages. Linux packages contain a
     deterministic install/uninstall script around the existing portable zip. macOS
     packages contain ordinary .app bundles plus a helper that copies them to
     ~/Applications. The macOS bundles are intentionally unsigned and unnotarized.
@@ -15,7 +16,6 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("FreeX", "FreeW", "FreeP")]
     [string[]]$Apps,
 
     [Parameter(Mandatory = $true)]
@@ -45,6 +45,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+$Apps = @($Apps | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if ($Apps.Count -eq 0 -or @($Apps | Where-Object { $_ -notin @("FreeX", "FreeW", "FreeP") }).Count -gt 0) {
+    throw "Apps must contain only FreeX, FreeW, or FreeP."
+}
 
 if ($Suite -and (@($Apps | Sort-Object -Unique).Count -ne 3)) {
     throw "The suite installer requires FreeX, FreeW, and FreeP."

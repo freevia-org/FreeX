@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('windows','linux','macos')][string]$Platform,
-    [Parameter(Mandatory)][ValidateSet('FreeX','FreeW','FreeP')][string[]]$Apps,
+    [Parameter(Mandatory)][string[]]$Apps,
     [Parameter(Mandatory)][string]$Version,
     [Parameter(Mandatory)][string]$Runtime,
     [Parameter(Mandatory)][string]$InputRoot,
@@ -10,6 +10,8 @@ param(
 )
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+$Apps = @($Apps | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if ($Apps.Count -eq 0 -or @($Apps | Where-Object { $_ -notin @('FreeX','FreeW','FreeP') }).Count -gt 0) { throw 'Apps must contain only FreeX, FreeW, or FreeP.' }
 $InputRoot = (Resolve-Path -LiteralPath $InputRoot).Path
 if ($Suite -and @($Apps | Sort-Object -Unique).Count -ne 3) { throw 'Suite smoke requires all three apps.' }
 if (-not $Suite -and $Apps.Count -ne 1) { throw 'Individual smoke requires one app.' }
@@ -38,34 +40,34 @@ function Launch-Bounded([string]$Executable) {
     if ($process.HasExited -and $process.ExitCode -ne 0) { throw "Installed app '$Executable' exited with $($process.ExitCode)." }
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force; $process.WaitForExit() }
 }
+function Find-MakeAppx {
+    $command = Get-Command makeappx.exe -ErrorAction SilentlyContinue
+    if ($null -ne $command) { return $command.Source }
+    $kitRoot = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+    if (Test-Path -LiteralPath $kitRoot) {
+        return Get-ChildItem -LiteralPath $kitRoot -Recurse -Filter makeappx.exe |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+    }
+    throw 'makeappx.exe was not found; Windows MSIX smoke requires the Windows SDK.'
+}
 
 try {
     if ($Platform -eq 'windows') {
-        $programRoot = Join-Path $scratch 'Programs'
-        $dataRoot = Join-Path $scratch 'UserData'
-        New-Item -ItemType Directory -Force -Path $programRoot, $dataRoot | Out-Null
-        if ($Suite) {
-            # Individual -> suite -> individual exercises shared installer identity and destination.
-            $first = $Apps[0]
-            Run (Find-One "$first-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$(Join-Path $programRoot $first)")
-            Run (Find-One "FreeSuite-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/TestInstallRoot=$programRoot")
-            foreach ($app in $Apps) { Run (Find-One "$app-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$(Join-Path $programRoot $app)") }
-        } else {
-            $app = $Apps[0]
-            Run (Find-One "$app-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$(Join-Path $programRoot $app)")
-        }
+        $packageName = if ($Suite) { 'FreeSuite' } else { $Apps[0] }
+        $package = Find-One "$packageName-v$Version-$Runtime.msix"
+        $expanded = Join-Path $scratch 'msix-expanded'
+        Run (Find-MakeAppx) @('unpack','/p',$package,'/d',$expanded,'/o')
+        $manifestPath = Join-Path $expanded 'AppxManifest.xml'
+        if (-not (Test-Path -LiteralPath $manifestPath)) { throw 'MSIX package did not contain AppxManifest.xml.' }
+        [xml]$manifest = Get-Content -LiteralPath $manifestPath -Raw
         foreach ($app in $Apps) {
-            $data = Join-Path $dataRoot $app
-            New-Item -ItemType Directory -Force -Path $data | Out-Null
-            $marker = Join-Path $data 'release-smoke-user-data.txt'
-            'preserve' | Set-Content -LiteralPath $marker -Encoding ascii
-            $exe = Assert-OneInstalled $programRoot $app
-            Launch-Bounded $exe
-            $uninstaller = @(Get-ChildItem -LiteralPath (Split-Path -Parent $exe) -File -Filter 'unins*.exe')
-            if ($uninstaller.Count -ne 1) { throw "Expected one $app uninstaller; found $($uninstaller.Count)." }
-            Run $uninstaller[0].FullName @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
-            if (Test-Path -LiteralPath $exe) { throw "$app executable remained after uninstall." }
-            if (-not (Test-Path -LiteralPath $marker)) { throw "$app uninstall removed user data." }
+            $executable = Join-Path $expanded "$app.exe"
+            if (-not (Test-Path -LiteralPath $executable)) { throw "MSIX package did not contain $app.exe." }
+            $application = @($manifest.Package.Applications.Application | Where-Object { $_.Id -eq $app })
+            if ($application.Count -ne 1 -or $application[0].Executable -ne "$app.exe") {
+                throw "MSIX manifest did not declare the expected $app application entry."
+            }
         }
     } else {
         $bash = (Get-Command bash -ErrorAction Stop).Source

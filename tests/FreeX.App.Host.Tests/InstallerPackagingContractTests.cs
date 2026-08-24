@@ -8,8 +8,10 @@ public sealed class InstallerPackagingContractTests
     public void CanonicalWorkflow_PreservesPortableAssetsAndBuildsIndividualAndSuiteInstallers()
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "app-tester-release.yml");
+        var msixPackager = WorkspaceFileLocator.ReadAllText("tools", "packaging", "New-MsixPackages.ps1");
 
         workflow.Should().Contain("-WindowsPackageMode SingleFile");
+        workflow.Should().Contain("tools/packaging/New-MsixPackages.ps1");
         workflow.Should().Contain("tools/packaging/New-AppInstallers.ps1");
         workflow.Should().Contain("tools/New-ReleaseArtifactManifest.ps1");
         workflow.Should().Contain("tools/New-ReleaseSbom.ps1");
@@ -23,6 +25,10 @@ public sealed class InstallerPackagingContractTests
         workflow.Should().Contain("free-suite-v$version");
         workflow.Should().Contain("unsigned/unnotarized `.app` bundle");
         workflow.Should().Contain("FreeFamilySentryDsn: ${{ secrets.FREE_FAMILY_SENTRY_DSN }}");
+        msixPackager.Should().Contain("makeappx.exe");
+        msixPackager.Should().Contain("signtool.exe");
+        msixPackager.Should().Contain("$identityName = \"$packageName.Tester\"");
+        msixPackager.Should().Contain("AllowUnsignedMsix");
     }
 
     [Fact]
@@ -69,6 +75,6 @@ public sealed class InstallerPackagingContractTests
         publisher.Should().Contain("\"-p:Optimize=true\"");
         contentGate.Should().Contain("Debug artifact");
         contentGate.Should().Contain("Standalone executable missing");
-        contentGate.Should().Contain("Windows installer missing");
+        contentGate.Should().Contain("Windows MSIX package missing");
     }
 }

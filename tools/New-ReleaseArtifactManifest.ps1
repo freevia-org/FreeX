@@ -48,11 +48,11 @@ foreach ($runtime in $Runtimes) {
     if ($runtime -notmatch '^(win|linux|osx)-(x64|arm64)$') { throw "Unsupported runtime '$runtime'." }
     $prefix = if ($Scope -eq 'Suite') { "FreeSuite-v$Version-$runtime" } else { "$($Apps[0])-v$Version-$runtime" }
     $payloadNames = if ($Scope -eq 'Suite') {
-        if ($runtime -like 'win-*') { @("$prefix-setup.exe") }
+        if ($runtime -like 'win-*') { @("$prefix.msix") }
         elseif ($runtime -like 'linux-*') { @("$prefix-installer.zip") }
         else { @("$prefix-apps.zip") }
     } else {
-        if ($runtime -like 'win-*') { @("$prefix.exe", "$prefix-setup.exe") }
+        if ($runtime -like 'win-*') { @("$prefix.exe", "$prefix.msix") }
         elseif ($runtime -like 'linux-*') { @("$prefix.zip", "$prefix-installer.zip") }
         else { @("$prefix.zip", "$prefix-apps.zip") }
     }
