@@ -551,8 +551,9 @@ function Test-ToolGeneratedFileContentMatches {
         [switch]$NormalizeNewlines
     )
 
+    $utf8 = [System.Text.UTF8Encoding]::new($false, $true)
     Test-ToolGeneratedContentMatches `
-        -ExpectedContent (Get-Content -LiteralPath $ExpectedPath -Raw) `
+        -ExpectedContent ([System.IO.File]::ReadAllText($ExpectedPath, $utf8)) `
         -ActualPath $ActualPath `
         -Label $Label `
         -GeneratorScriptName $GeneratorScriptName `
@@ -572,7 +573,7 @@ function Test-ToolGeneratedContentMatches {
         throw "$Label is missing. Run $GeneratorScriptName to create it."
     }
 
-    $actual = [System.IO.File]::ReadAllText($ActualPath)
+    $actual = [System.IO.File]::ReadAllText($ActualPath, [System.Text.UTF8Encoding]::new($false, $true))
     $expected = $ExpectedContent
     if ($NormalizeNewlines) {
         $expected = $expected -replace "`r`n", "`n"

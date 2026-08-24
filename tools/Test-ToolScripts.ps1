@@ -532,6 +532,55 @@ function Assert-CommandInventoryGeneratedProjectCentralization {
     Write-Host "Validated command inventory generated-project orchestration centralization."
 }
 
+function Assert-CommandInventoryGeneratorEncoding {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    $generatorPath = Join-Path $ToolRoot "Generate-FreeWCommandInventory.ps1"
+    $utf8 = [System.Text.UTF8Encoding]::new($false, $true)
+    $generator = [System.IO.File]::ReadAllText($generatorPath, $utf8)
+    $programMarker = '$programSource = @' + [char]39
+    $programStart = $generator.IndexOf($programMarker, [System.StringComparison]::Ordinal)
+    $programEnd = $generator.IndexOf("'@", $programStart + $programMarker.Length, [System.StringComparison]::Ordinal)
+    if ($programStart -lt 0 -or $programEnd -lt 0) {
+        throw "Generate-FreeWCommandInventory.ps1 must retain its embedded C# program source markers."
+    }
+
+    $programSource = $generator.Substring($programStart + $programMarker.Length, $programEnd - $programStart - $programMarker.Length)
+    $nonAscii = [regex]::Matches($programSource, '[^\x00-\x7F]')
+    if ($nonAscii.Count -gt 0) {
+        throw "Generate-FreeWCommandInventory.ps1 contains non-ASCII text in its embedded C# payload; use a C# Unicode escape so Windows PowerShell cannot reinterpret it. Found '$($nonAscii[0].Value)'."
+    }
+
+    if ($programSource.IndexOf('\u00D7', [System.StringComparison]::Ordinal) -lt 0) {
+        throw "Generate-FreeWCommandInventory.ps1 must preserve the multiplication sign through a C# Unicode escape."
+    }
+
+    Write-Host "Validated deterministic UTF-8 handling for the FreeW command inventory generator."
+}
+
+function Assert-GeneratedFileComparisonEncoding {
+    $tempRoot = New-ToolTemporaryDirectory -Prefix "freex-generated-file-encoding-"
+    try {
+        $expectedPath = Join-Path $tempRoot "expected.txt"
+        $actualPath = Join-Path $tempRoot "actual.txt"
+        $utf8 = [System.Text.UTF8Encoding]::new($false, $true)
+        $value = "synthetic " + [char]0x00D7
+        [System.IO.File]::WriteAllText($expectedPath, $value, $utf8)
+        [System.IO.File]::WriteAllText($actualPath, $value, $utf8)
+
+        Test-ToolGeneratedFileContentMatches `
+            -ExpectedPath $expectedPath `
+            -ActualPath $actualPath `
+            -Label "Synthetic UTF-8 generated file" `
+            -GeneratorScriptName "synthetic-generator.ps1"
+    }
+    finally {
+        Remove-ToolTemporaryDirectory -Path $tempRoot
+    }
+
+    Write-Host "Validated UTF-8 round-trip through generated-file freshness checks."
+}
+
 function Assert-GeneratedProjectOrchestrationBehavior {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -1416,6 +1465,8 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-ToolSourceCentralization -ToolRoot $resolvedDirectory
     Assert-CommandInventoryMenuTraversalCentralization -ToolRoot $resolvedDirectory
     Assert-CommandInventoryGeneratedProjectCentralization -ToolRoot $resolvedDirectory
+    Assert-CommandInventoryGeneratorEncoding -ToolRoot $resolvedDirectory
+    Assert-GeneratedFileComparisonEncoding
     Assert-CommandInventoryMenuTraversalBehavior -ToolRoot $resolvedDirectory
     Assert-GeneratedProjectOrchestrationBehavior -ToolRoot $resolvedDirectory
     Assert-ScreenshotCaptureSupportBehavior -ToolRoot $resolvedDirectory
