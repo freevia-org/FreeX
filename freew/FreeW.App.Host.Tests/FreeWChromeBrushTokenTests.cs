@@ -30,6 +30,19 @@ public sealed class FreeWChromeBrushTokenTests
         brush.Color.B.Should().Be(0x14);
     }
 
+    [Fact]
+    public void BuildResources_FreeWTheme_UsesNeutralOfficeLikeTitleBarChrome()
+    {
+        var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeW, "FreeW");
+
+        var titleBar = dict["FreeWTitleBarBrush"] as SolidColorBrush;
+        var titleForeground = dict["FreeWTitleBarForegroundBrush"] as SolidColorBrush;
+        titleBar.Should().NotBeNull();
+        titleForeground.Should().NotBeNull();
+        titleBar!.Color.Should().Be(Color.FromRgb(0xF3, 0xF4, 0xF6));
+        titleForeground!.Color.Should().Be(Color.FromRgb(0x1F, 0x1F, 0x1F));
+    }
+
     /// <summary>
     /// Applying <see cref="BrandThemes.FreeXMidnight"/> with prefix "FreeW" (the FREEW_THEME=midnight
     /// path) produces a <c>FreeWRibbonButtonHoverBrush</c> whose value (#F9D9BC) differs from the

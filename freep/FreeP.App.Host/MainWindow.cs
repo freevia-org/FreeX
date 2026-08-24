@@ -44,13 +44,14 @@ public sealed partial class MainWindow : Window,
     IPresentationAltTextPaneHostView,
     IPresentationReadingOrderPaneHostView
 {
-    // Identity/palette for the shared window shell (PowerPoint-style brick title bar; "P" badge).
+    // Identity/palette for the shared window shell (Office-neutral title bar; berry "P" badge).
     private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeP;
 
     private static ShellChromeOptions BuildChromeOptions() => new()
     {
         BadgeLetter = Program.ActiveTheme.VisualAssets.ProductGlyph,
-        TitleBarColor = FreePBrushes.AccentColor,
+        TitleBarColor = FreePBrushes.TitleBarColor,
+        TitleBarForegroundColor = FreePBrushes.TitleBarForegroundColor,
         BadgeColor = FreePBrushes.AccentDarkColor,
         CaptionHeight = FreePShellVisualMetrics.TitleBarHeight,
         IconUri = Program.ActiveTheme.VisualAssets.GetWpfPackUri("FreeP.App.Host")
@@ -3223,7 +3224,11 @@ public sealed partial class MainWindow : Window,
             new SisterQuickAccessToolbarActions(
                 Save: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.SavePresentation),
                 Undo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Undo),
-                Redo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)));
+                Redo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)),
+            new QuickAccessToolbarRenderOptions
+            {
+                ForegroundResourceKey = ThemeResources.Brush("TitleBarForeground").PrimaryKey
+            });
 
     private void UpdateTitle()
     {
