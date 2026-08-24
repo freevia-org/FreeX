@@ -1553,7 +1553,10 @@ public static partial class ChartRenderPlanner
                         Height = 56.0
                     }
                     : frame.TitleBounds ?? default,
-                IsBold: chart.TitleStyle?.Bold ?? !UsesClassicOfficeChartStyle(chart),
+                // An absent <a:b> is regular weight in both the classic and
+                // style-2 Office chart defaults.  Do not infer bold merely
+                // because the chart carries an explicit style id.
+                IsBold: chart.TitleStyle?.Bold ?? false,
                 FontSize: chart.TitleStyle?.FontSizePt is > 0
                     ? chart.TitleStyle.FontSizePt.Value
                     : ResolveTitleFontSize(chart, 9.0),

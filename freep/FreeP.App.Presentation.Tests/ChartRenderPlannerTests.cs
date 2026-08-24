@@ -531,6 +531,22 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_Style2ChartTitleDefaultsToRegularWeight()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Surface3D,
+            StyleId = 2,
+            Title = "Surface"
+        };
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.Title!.Value.IsBold.Should().BeFalse(
+            "PowerPoint's style-2 chart title is regular unless a title run explicitly requests bold");
+    }
+
+    [Fact]
     public void ComputePrimaryValueAxisRange_ExcludesSecondarySeries()
     {
         var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };

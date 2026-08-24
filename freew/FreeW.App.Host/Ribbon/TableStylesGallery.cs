@@ -11,8 +11,8 @@ using Free.Shared.Ribbon;
 namespace FreeW.App.Host;
 
 /// <summary>
-/// Word-style Table Styles gallery for the Table Design contextual tab. Builds a button that opens a
-/// <see cref="ContextMenu"/> dropdown of catalog table-style entries. Native pointer/menu events invoke
+/// Word-style Table Styles gallery for the Table Design contextual tab. It exposes a compact strip of
+/// direct preview tiles and a <see cref="ContextMenu"/> with the complete catalog. Native pointer/menu events invoke
 /// Presentation-owned <see cref="IRibbonPreviewCommand"/> instances for preview, cancellation, and commit.
 /// Reuses the same hover/preview/commit idiom as <see cref="ThemeGallery"/> and
 /// <see cref="StylesGallery"/>. Hosted as app-side custom content — no shared RibbonGallery render needed.
@@ -21,7 +21,7 @@ internal static class TableStylesGallery
 {
     /// <summary>
     /// Build the Table Styles gallery widget for the Table Design contextual tab's "Table Styles" group.
-    /// Returns a <see cref="Button"/> that opens a context menu of style thumbnails on click.
+    /// The first three catalog styles remain directly available, with all styles under More.
     /// </summary>
     public static FrameworkElement Build(DocumentView editor)
         => Build(editor, registry: null);
@@ -29,46 +29,29 @@ internal static class TableStylesGallery
     /// <summary>Builds the native WPF gallery over Presentation-owned preview commands.</summary>
     public static FrameworkElement Build(DocumentView editor, IRibbonCommandRegistry? registry)
     {
-        var button = new Button
+        var root = new StackPanel
         {
-            Margin = new Thickness(4, 2, 4, 2),
-            Padding = new Thickness(6, 3, 6, 3),
-            MinWidth = 100,
-            Background = Brushes.Transparent,
-            BorderBrush = Brushes.Transparent,
-            BorderThickness = new Thickness(1),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            ToolTip = FreeWUiTextCatalog.TableStyles
-        };
-        AutomationProperties.SetName(button, FreeWUiTextCatalog.TableStyles);
-
-        var stack = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        stack.Children.Add(BuildMiniTableIcon());
-        stack.Children.Add(new TextBlock
-        {
-            Text = FreeWUiTextCatalog.TableStylesCompact,
-            FontSize = 11,
-            TextWrapping = TextWrapping.Wrap,
+            Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(4, 0, 0, 0)
+            Margin = new Thickness(2, 1, 2, 0),
+        };
+        AutomationProperties.SetName(root, FreeWUiTextCatalog.TableStyles);
+        var swatches = new StackPanel { Orientation = Orientation.Horizontal };
+        foreach (var index in Enumerable.Range(0, Math.Min(3, DocumentTableStyle.Catalog.Count)))
+            swatches.Children.Add(BuildStyleButton(DocumentTableStyle.Catalog[index], index, editor, registry));
+        root.Children.Add(new Border
+        {
+            Height = 52,
+            Width = 162,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
+            BorderThickness = new Thickness(1),
+            Child = swatches,
         });
-        button.Content = stack;
 
-        var hover = new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xFB));
-        button.MouseEnter += (_, _) =>
-        {
-            button.Background = hover;
-            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
-        };
-        button.MouseLeave += (_, _) =>
-        {
-            if (button.ContextMenu is null || !button.ContextMenu.IsOpen)
-            {
-                button.Background = Brushes.Transparent;
-                button.BorderBrush = Brushes.Transparent;
-            }
-        };
-
+        var button = new Button { Content = "▼", Width = 20, Height = 52, Margin = new Thickness(2, 0, 0, 0) };
+        button.ToolTip = "More Table Styles";
+        AutomationProperties.SetName(button, "More Table Styles");
         var menu = BuildMenu(editor, registry, out var cancelActivePreview);
         menu.Closed += (_, _) =>
         {
@@ -82,7 +65,58 @@ internal static class TableStylesGallery
             button.ContextMenu.PlacementTarget = button;
             button.ContextMenu.IsOpen = true;
         };
+        root.Children.Add(button);
+        return root;
+    }
 
+    private static Button BuildStyleButton(
+        DocumentTableStyle style,
+        int index,
+        DocumentView editor,
+        IRibbonCommandRegistry? registry)
+    {
+        var commandId = new RibbonCommandId(FreeWContextMenuPlanner.TableStylesPrefix + index);
+        var button = new Button
+        {
+            Content = BuildThumb(style, 46, 30),
+            Width = 52,
+            Height = 50,
+            Padding = new Thickness(2),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            ToolTip = style.Name,
+        };
+        AutomationProperties.SetName(button, FreeWUiTextCatalog.TableStyleAutomationName(style.Name));
+        button.MouseEnter += (_, _) =>
+        {
+            button.Background = new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xFB));
+            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+            if (registry?.TryGet(commandId, out var command) == true && command is IRibbonPreviewCommand preview)
+                preview.BeginPreview(RibbonCommandContext.Empty);
+            else
+                editor.PreviewTableStyle(style);
+        };
+        button.MouseLeave += (_, _) =>
+        {
+            button.Background = Brushes.Transparent;
+            button.BorderBrush = Brushes.Transparent;
+            if (registry?.TryGet(commandId, out var command) == true && command is IRibbonPreviewCommand preview)
+                preview.CancelPreview();
+            else
+                editor.EndTableStylePreview();
+        };
+        button.Click += (_, _) =>
+        {
+            if (registry?.TryGet(commandId, out var command) == true && command is not null)
+            {
+                command.Execute(RibbonCommandContext.Empty);
+                return;
+            }
+
+            editor.EndTableStylePreview();
+            editor.ApplyTableStyle(style);
+        };
         return button;
     }
 
@@ -181,9 +215,9 @@ internal static class TableStylesGallery
     }
 
     // 3-column x 2-row mini table: top row uses the header fill; body row uses the odd-band fill.
-    private static FrameworkElement BuildThumb(DocumentTableStyle style)
+    private static FrameworkElement BuildThumb(DocumentTableStyle style, double width = 42, double height = 22)
     {
-        var grid = new Grid { Width = 42, Height = 22 };
+        var grid = new Grid { Width = width, Height = height };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -221,31 +255,6 @@ internal static class TableStylesGallery
             BorderThickness = new Thickness(0.5),
             SnapsToDevicePixels = true
         };
-    }
-
-    // Small table icon for the gallery button: 2x2 grid of grey cells.
-    private static FrameworkElement BuildMiniTableIcon()
-    {
-        var grid = new Grid { Width = 20, Height = 20 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.RowDefinitions.Add(new RowDefinition());
-        grid.RowDefinitions.Add(new RowDefinition());
-        var borderBrush = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A));
-        for (var c = 0; c < 2; c++)
-            for (var r = 0; r < 2; r++)
-            {
-                var cell = new Border
-                {
-                    Background = r == 0 ? new SolidColorBrush(Color.FromRgb(0xD9, 0xE2, 0xF3)) : Brushes.White,
-                    BorderBrush = borderBrush,
-                    BorderThickness = new Thickness(0.5)
-                };
-                Grid.SetColumn(cell, c);
-                Grid.SetRow(cell, r);
-                grid.Children.Add(cell);
-            }
-        return grid;
     }
 
     private static Brush BrushFor(string hex)

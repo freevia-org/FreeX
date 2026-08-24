@@ -3543,9 +3543,9 @@ public sealed partial class MainWindow : Window
                 // gallery/menu strip so backed commands do not appear twice beside their custom previews.
                 InjectGallery(content, "themes", () => ThemeGallery.BuildDocumentFormatting(_editor), removeKind: RemoveKind.All);
             if (tab.Id == "table-design")
-                // Table Styles gallery: inject a live-preview style picker into the Table Style group,
-                // replacing the Shading button placeholder so the gallery owns that lane.
-                InjectGallery(content, "table-style", () => TableStylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
+                // The gallery owns its dedicated Table Styles lane; Shading and Borders remain in
+                // the neighboring Table Style group instead of being removed with the placeholder.
+                InjectGallery(content, "table-styles", () => TableStylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
 
             if (tab.Id == "chart-design")
             {
