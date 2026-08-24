@@ -14,18 +14,69 @@ internal static class TableStylesGallery
 {
     public static Control Build(IRibbonCommandRegistry registry)
     {
-        var button = new Button { Padding = new Thickness(4, 2), Background = Brushes.Transparent, BorderBrush = Brushes.Transparent };
-        ToolTip.SetTip(button, "Table Styles");
-        AutomationProperties.SetName(button, "Table Styles");
-        button.Content = new StackPanel
+        var root = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Children = { Thumb(DocumentTableStyle.Catalog[0]), new TextBlock { Text = "Table\nStyles", FontSize = 10, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center } },
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 1, 2, 0),
         };
+        var swatches = new StackPanel { Orientation = Orientation.Horizontal };
+        foreach (var index in Enumerable.Range(0, Math.Min(3, DocumentTableStyle.Catalog.Count)))
+            swatches.Children.Add(StyleButton(DocumentTableStyle.Catalog[index], index, registry));
+
+        root.Children.Add(new Border
+        {
+            Height = 52,
+            Width = 162,
+            Background = Brushes.White,
+            BorderBrush = Brush("#D0D0D0"),
+            BorderThickness = new Thickness(1),
+            Child = swatches,
+        });
+
+        var button = new Button { Content = "▾", Width = 20, Height = 52, Margin = new Thickness(2, 0, 0, 0) };
+        ToolTip.SetTip(button, "More Table Styles");
+        AutomationProperties.SetName(button, "More Table Styles");
         var flyout = new MenuFlyout();
         for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
             flyout.Items.Add(Item(DocumentTableStyle.Catalog[index], index, registry));
         button.Click += (_, _) => flyout.ShowAt(button);
+        root.Children.Add(button);
+        return root;
+    }
+
+    private static Button StyleButton(DocumentTableStyle style, int index, IRibbonCommandRegistry registry)
+    {
+        var id = new RibbonCommandId(FreeWContextMenuPlanner.TableStylesPrefix + index);
+        var button = new Button
+        {
+            Content = Thumb(style, 46, 30),
+            Width = 52,
+            Height = 50,
+            Padding = new Thickness(2),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+        };
+        ToolTip.SetTip(button, style.Name);
+        AutomationProperties.SetName(button, style.Name);
+        button.PointerEntered += (_, _) =>
+        {
+            button.Background = Brush("#EAF1FB");
+            button.BorderBrush = Brush("#2B579A");
+            Preview(id, registry, command => command.BeginPreview(RibbonCommandContext.Empty));
+        };
+        button.PointerExited += (_, _) =>
+        {
+            button.Background = Brushes.Transparent;
+            button.BorderBrush = Brushes.Transparent;
+            Preview(id, registry, command => command.CancelPreview());
+        };
+        button.Click += (_, _) =>
+        {
+            if (registry.TryGet(id, out var command) && command is not null)
+                command.Execute(RibbonCommandContext.Empty);
+        };
         return button;
     }
 
@@ -45,9 +96,9 @@ internal static class TableStylesGallery
         if (registry.TryGet(id, out var command) && command is IRibbonPreviewCommand preview) action(preview);
     }
 
-    private static Control Thumb(DocumentTableStyle style)
+    private static Control Thumb(DocumentTableStyle style, double width = 42, double height = 22)
     {
-        var grid = new Grid { Width = 42, Height = 22 };
+        var grid = new Grid { Width = width, Height = height };
         for (var i = 0; i < 3; i++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Star)); grid.RowDefinitions.Add(new RowDefinition(GridLength.Star));
         var border = Brush(style.BorderColorHex);
