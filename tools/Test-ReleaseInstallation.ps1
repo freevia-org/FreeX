@@ -8,7 +8,7 @@ param(
     [Parameter(Mandatory)][string]$InputRoot,
     [switch]$Suite
 )
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $InputRoot = (Resolve-Path -LiteralPath $InputRoot).Path
 if ($Suite -and @($Apps | Sort-Object -Unique).Count -ne 3) { throw 'Suite smoke requires all three apps.' }
