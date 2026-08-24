@@ -42,7 +42,7 @@ namespace FreeW.App.Host;
 /// update mode).
 /// </para>
 /// </summary>
-internal static class XpsExport
+internal static partial class XpsExport
 {
     /// <summary>
     /// Renders the supplied paginator to XPS bytes in memory. Must be called on the UI / STA thread
@@ -78,15 +78,6 @@ internal static class XpsExport
             // serialization boundary without mutating the source FlowDocument.
             return RenderRasterizedPages(paginator);
         }
-    }
-
-    // Keeps the exception boundary directly testable without depending on a particular Windows font
-    // build. Production always tries the selectable vector path first.
-    internal static byte[] RenderToBytesWithSimulatedFontSubsetterFailureForTests(DocumentPaginator paginator)
-    {
-        return RenderToBytesCore(
-            paginator,
-            _ => throw new FileFormatException("Simulated WPF font subsetter failure."));
     }
 
     private static byte[] RenderVectorPages(DocumentPaginator paginator)

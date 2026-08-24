@@ -41,6 +41,8 @@
              Link="Editing\ScreenClipOverlay.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\OutlineView.TestAccess.cs"
              Link="Editing\OutlineView.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\XpsExport.TestAccess.cs"
+             Link="XpsExport.TestAccess.cs" />
   </ItemGroup>
 
   <ItemDefinitionGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
