@@ -13,7 +13,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 # Keep acceptance evidence anchored to the source that was actually built and tested.
 # The generated docs are committed afterward, so deriving this from the current HEAD
 # would make the evidence self-referential and would change the claim on every refresh.
-$wave194TestedSourceCommit = "1bc64c7a5489fea5fafb536ec4a4fc69ceadf1e0"
+$wave194TestedSourceCommit = "f2aab993242fa6a6cc49d67c4b7770c23ce4c067"
 $wave194AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 
 function Get-JsonPropertyValue {
@@ -864,12 +864,14 @@ try {
         testedSourceCommit = $wave194TestedSourceCommit
         acceptanceRefreshNote = $wave194AcceptanceRefreshNote
         initialIndependentReview = "Recorded: the initial independent review found two P2 findings: FreeX crop/readiness/transition and physical click geometry were duplicated instead of consuming one contract; FreeP topology evidence did not pin the complete source PPTX and initially over-attributed the residual."
-        reviewRemediation = "Completed: FreeX now uses one authoritative geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved."
-        independentReview = "Passed: final independent review found no findings; all prior Wave194 findings are closed, 20/10/2 FreeX artifact/reachable-provenance/validation hashes are verified, and FreeP and FreeW are clean."
+        reviewRemediation = "Completed at prior source: FreeX uses one authoritative mixed-type geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved. Reopened after source advancement because the color-geometry guard required remediation."
+        independentReview = "Pending: final independent review after the f2aab99324 source-guard remediation; the prior no-findings review is superseded by the tested-source change."
         repositoryPreflight = "Pending: final repository preflight result at tested source commit ${wave194TestedSourceCommit}."
-        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors."
+        fullReleaseBuild = "Pending: final dotnet build FreeX.slnx --configuration Release result at tested source commit ${wave194TestedSourceCommit}."
         defaultNonUiTestLane = "Pending: final default non-UI test lane result and authoritative project totals at tested source commit ${wave194TestedSourceCommit}."
-        sourceTestRemediation = "No Wave194 product/test source changes are claimed by this acceptance refresh; app-slice focused results are recorded under each app and final integration gates remain pending."
+        initialDefaultLane = "Exited 1 solely because the Wave191/192/193 color-geometry guard was bounded through a later selector and counted Wave194 mixed_type_target_click_x_offset; at that pre-remediation source FreeX Avalonia reported 2,188 passed, 3 failed, 2,191 total."
+        sourceTestRemediation = "Remediation commit f2aab993242fa6a6cc49d67c4b7770c23ce4c067 structurally scopes the old guard to probe_autofilter_color_persistence_physical and adds isolation and inside-function mutation tests."
+        workerVerification = "Passed: failing classes 11/11, full color lane 17/17, Wave194 9/9, full Avalonia project 2,193/2,193, focused project build 0/0; no runtime harness or evidence change."
     }
 
     $dashboard = [ordered]@{
@@ -879,6 +881,8 @@ try {
         cumulativeAppSlicesStatus = "pending-final-integration-gates"
         integrationGateStatus = "pending"
         pendingIntegrationGates = @(
+            "final-independent-review",
+            "full-release-build",
             "default-non-ui-test-lane",
             "repository-preflight"
         )
@@ -1023,7 +1027,9 @@ try {
         "- Acceptance refresh: $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
         "- Full Release build: $($dashboard.integrationGateEvidence.fullReleaseBuild)",
         "- Final default non-UI test lane: $($dashboard.integrationGateEvidence.defaultNonUiTestLane)",
+        "- Initial default-lane result: $($dashboard.integrationGateEvidence.initialDefaultLane)",
         "- Remediation: $($dashboard.integrationGateEvidence.sourceTestRemediation)",
+        "- Worker verification: $($dashboard.integrationGateEvidence.workerVerification)",
         "",
         "## FreeX Visual Review Queue",
         "",

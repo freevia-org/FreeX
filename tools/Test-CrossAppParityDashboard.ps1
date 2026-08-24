@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-$acceptanceRefreshTestedSourceCommit = "1bc64c7a5489fea5fafb536ec4a4fc69ceadf1e0"
+$acceptanceRefreshTestedSourceCommit = "f2aab993242fa6a6cc49d67c4b7770c23ce4c067"
 $acceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 $acceptanceRefreshAllowedPaths = @(
     "docs/parity/avalonia-parity-wave194-integration-20260824.md",
@@ -177,17 +177,19 @@ Assert-DashboardCondition ($dashboard.wave -eq 194) "Cross-app dashboard must de
 Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 582) "Wave194 cumulative app-slice count must be 582."
 Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "pending-final-integration-gates") "Wave194 app-slice count must remain pending until final integration gates pass."
 Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "pending") "Wave194 integration gates must remain pending until final results are recorded."
-Assert-DashboardCondition ((@($dashboard.pendingIntegrationGates) -join ",") -eq "default-non-ui-test-lane,repository-preflight") "Wave194 pending integration gates must retain only the default lane and repository preflight."
+Assert-DashboardCondition ((@($dashboard.pendingIntegrationGates) -join ",") -eq "final-independent-review,full-release-build,default-non-ui-test-lane,repository-preflight") "Wave194 pending integration gates must retain all four final gates after source advancement."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.testedSourceCommit -eq $acceptanceRefreshTestedSourceCommit) "Wave194 integration evidence must name tested source commit $acceptanceRefreshTestedSourceCommit."
 Assert-DashboardCondition ($null -eq $dashboard.integrationGateEvidence.PSObject.Properties["integrationHead"]) "Wave194 integration evidence must not use a recursive current-HEAD claim."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.acceptanceRefreshNote -eq $acceptanceRefreshNote) "Wave194 acceptance evidence must state that the acceptance-only documentation/tooling refresh does not alter tested source."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.initialIndependentReview -match "two P2 findings.*FreeX.*FreeP") "Wave194 initial independent-review findings must be recorded."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.reviewRemediation -match "one authoritative geometry contract.*schema v3.*complete PPTX") "Wave194 reviewer remediations must be recorded."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -eq "Passed: final independent review found no findings; all prior Wave194 findings are closed, 20/10/2 FreeX artifact/reachable-provenance/validation hashes are verified, and FreeP and FreeW are clean.") "Wave194 final independent review evidence must be exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.reviewRemediation -match "one authoritative mixed-type geometry contract.*schema v3.*color-geometry guard") "Wave194 reviewer remediations must be recorded."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -eq "Pending: final independent review after the f2aab99324 source-guard remediation; the prior no-findings review is superseded by the tested-source change.") "Wave194 final independent review must be reopened after source advancement."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.repositoryPreflight -match "^Pending:") "Wave194 repository-preflight result must remain pending."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors.") "Wave194 Release-build evidence must be exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -match "^Pending:") "Wave194 Release-build result must be reopened after source advancement."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.defaultNonUiTestLane -match "^Pending:") "Wave194 default-lane result must remain pending."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sourceTestRemediation -match "No Wave194 product/test source changes") "Wave194 source-test scope must be recorded."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.initialDefaultLane -match "Exited 1 solely.*2,188 passed, 3 failed, 2,191 total") "Wave194 initial default-lane failure must be recorded exactly."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sourceTestRemediation -match "f2aab993242fa6a6cc49d67c4b7770c23ce4c067.*probe_autofilter_color_persistence_physical.*isolation and inside-function mutation tests") "Wave194 source-guard remediation must be recorded exactly."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.workerVerification -match "11/11.*17/17.*9/9.*2,193/2,193.*0/0.*no runtime harness or evidence change") "Wave194 worker verification must be recorded exactly."
 Assert-DashboardCondition ($dashboard.scopeBoundary -match "visual parity") "Cross-app dashboard scope boundary must retain the no-visual-parity claim."
 
 $requiredSources = @(
