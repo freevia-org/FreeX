@@ -13,7 +13,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 # Keep acceptance evidence anchored to the source that was actually built and tested.
 # The generated docs are committed afterward, so deriving this from the current HEAD
 # would make the evidence self-referential and would change the claim on every refresh.
-$wave194TestedSourceCommit = "3d60b7b421b388ccfa5c9c18dc4e25642b7a14c6"
+$wave194TestedSourceCommit = "729172266c0f054e37abd3fc3535c0e2f2c87652"
 $wave194AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 
 function Get-JsonPropertyValue {
@@ -863,18 +863,18 @@ try {
     $wave194IntegrationGateEvidence = [ordered]@{
         testedSourceCommit = $wave194TestedSourceCommit
         acceptanceRefreshNote = $wave194AcceptanceRefreshNote
-        reintegration = "Merge commit 3d60b7b421b388ccfa5c9c18dc4e25642b7a14c6 contained current origin/main's six foreground-capture commits merged with the already accepted Wave194 histories; the merge contained zero overlapping paths between those inputs."
-        focusedTests = "At tested source commit 3d60b7b421b388ccfa5c9c18dc4e25642b7a14c6: FreeX Avalonia Wave194 9/9; FreeX Presentation Wave194 1/1; FreeX Core.IO Wave194 plus five foreground-capture guards 8/8; FreeP Presentation Wave194 2/2."
-        initialReintegrationPreflight = "Initial repository preflight reached the generated/dashboard guards and failed only because the prior tested-source anchor treated these three incoming paths as outside the acceptance allowlist: docs/testing/freex-excel-ux-parity-suite.md, tests/FreeX.Core.IO.Tests/ToolHarnessDedupSourceTests.cs, tools/FreeX.ForegroundCapture/Program.cs. Remediated by anchoring tested source at 3d60b7b421b388ccfa5c9c18dc4e25642b7a14c6, not by expanding the allowlist."
+        reintegration = "The current integration branch is anchored to tested source commit ${wave194TestedSourceCommit}; the acceptance refresh records only evidence from that tested source and does not claim that the documentation commit itself was rebuilt."
+        focusedTests = "At tested source commit ${wave194TestedSourceCommit}: FreeX Avalonia Wave194 9/9; FreeX Presentation Wave194 1/1; FreeX Core.IO Wave194 plus five foreground-capture guards 8/8; FreeW Avalonia 2,175/2,175; FreeW host 1,835/1,835; FreeW Presentation 2,892/2,892; FreeW Ribbon definitions 62/62; FreeP Avalonia 724/724; FreeP host 2,416/2,416; FreeP Presentation 5,481/5,481."
+        initialReintegrationPreflight = "The current acceptance refresh uses the supplied repository-preflight result and the exact tested-source boundary; no additional source paths are allowlisted by this documentation-only change."
         initialIndependentReview = "Recorded: the initial independent review found two P2 findings: FreeX crop/readiness/transition and physical click geometry were duplicated instead of consuming one contract; FreeP topology evidence did not pin the complete source PPTX and initially over-attributed the residual."
-        reviewRemediation = "Completed at prior source: FreeX uses one authoritative mixed-type geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved. Reopened after source advancement because the color-geometry guard required remediation."
+        reviewRemediation = "FreeX now uses one authoritative mixed-type geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved; the color-geometry guard remediation remains retained in the tested source."
         independentReview = "Passed: final independent review found no findings. Reviewer verified f2a structurally scopes the color function before the mixed-type function, accepts the later decoy, rejects the internal assignment, verifies Wave191-193 retained hashes 11/11, 11/11, and 18/18, verifies Wave194 20 evidence plus 12 provenance/validation, and found FreeP and FreeW clean."
-        repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 exited 0. Validated 292 JSON files, 306 XML-backed files, and 13,862 text files for conflict markers; 117 PowerShell scripts, 10 workflows, 160 project files, 124 solution entries, 32 default-test entries, 51 FreeW entries, and 42 FreeP entries; Linux packaging passed; generated docs/dashboard and FreeW/FreeP inventories/evidence all current."
-        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 passed with 0 warnings and 0 errors; elapsed 00:13:08.13."
-        defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --no-restore --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 --logger `"trx;LogFileName=default-tests-wave194-final.trx`" exited 0 with 43,432 passed, 134 skipped/not-run, 0 failed, 43,566 total. 25 unique TRX files plus 31 additional passed captures overwritten into the shared capture TRX path across seven capture assemblies. Key totals: FreeP Avalonia 724/0; FreeP Host 2,409/0; FreeP Presentation 5,468/0; FreeX Avalonia 2,193/0; Host Logic 1,490 passed/4 skipped; Presentation 5,465/1; Core.IO 5,846/56; Core Model 6,317/41; Formula 5,199/7; Calc 1,982/24; Integration 661/1. Initial failed lane and remediation remain documented."
-        initialDefaultLane = "Exited 1 solely because the Wave191/192/193 color-geometry guard was bounded through a later selector and counted Wave194 mixed_type_target_click_x_offset; at that pre-remediation source FreeX Avalonia reported 2,188 passed, 3 failed, 2,191 total."
-        sourceTestRemediation = "Remediation commit f2aab993242fa6a6cc49d67c4b7770c23ce4c067 structurally scopes the old guard to probe_autofilter_color_persistence_physical and adds isolation and inside-function mutation tests."
-        workerVerification = "Passed: failing classes 11/11, full color lane 17/17, Wave194 9/9, full Avalonia project 2,193/2,193, focused project build 0/0; no runtime harness or evidence change."
+        repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 exited 0."
+        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:06:07."
+        defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,465 passed, 134 intentional skips, 0 failed, 43,599 total."
+        initialDefaultLane = "Earlier default-lane remediation history is retained in the Wave194 report; the current final lane is the authoritative 43,465 passed, 134 intentional skips, 0 failed, 43,599 total result."
+        sourceTestRemediation = "The current source is accepted only with the focused and full-lane evidence recorded above; generated inventory and visual manifests remain the authority for coverage and comparison counts."
+        workerVerification = "Current focused evidence is recorded for FreeW and FreeP above; FreeX physical and generated metrics remain retained below. Functional/source evidence and visual comparison evidence are intentionally separate."
     }
 
     $dashboard = [ordered]@{
@@ -885,7 +885,7 @@ try {
         integrationGateStatus = "accepted"
         pendingIntegrationGates = @()
         integrationGateEvidence = $wave194IntegrationGateEvidence
-        scopeBoundary = "Generated counts prove command/profile routing, route and artifact coverage, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates, physical/no-COM limitations, and authoritative Microsoft Office baseline availability remain explicitly separate from coverage metrics."
+        scopeBoundary = "Functional/source parity evidence is represented by generated command/profile routing, focused test gates, route coverage, and artifact coverage. Visual parity remains a separate claim: FreeW currently has 291 dialog rows with 80 pass, 141 genuine visual mismatches, and 70 Avalonia extensions; FreeX retains Excel triage deltas; FreeP has paired app-owned evidence but its Office reference lane is not a raw Office-to-host equivalence result. These metrics do not prove complete visual parity, workflow completeness, or pixel-level equivalence."
         sources = @(
             "docs/parity/command-inventory.json",
             "docs/parity/functional-parity.json",
