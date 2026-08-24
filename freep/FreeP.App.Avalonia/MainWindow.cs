@@ -2389,6 +2389,17 @@ public sealed partial class MainWindow : Window,
             _ribbonControl,
             "themes",
             () => PresentationThemeGallery.Build(registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "transition-gallery",
+            () => PresentationTransitionGallery.Build(registry));
+        if (definition.FindTab("animations") is { } animationsTab)
+        {
+            AvaloniaRibbonRenderer.TryInjectGroupContent(
+                _ribbonControl,
+                "animation-effects",
+                () => PresentationAnimationGallery.Build(animationsTab, registry, _ribbonStateStore));
+        }
 
         return new Border
         {
