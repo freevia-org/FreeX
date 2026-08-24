@@ -63,6 +63,7 @@ jobs:
     name: Build tester release
     runs-on: windows-latest
     timeout-minutes: 180
+    environment: public-preview
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"

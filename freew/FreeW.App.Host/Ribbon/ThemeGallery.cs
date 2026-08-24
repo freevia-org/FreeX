@@ -24,12 +24,83 @@ internal static class ThemeGallery
     {
         var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
         host.Children.Add(BuildThemes(editor));
-        host.Children.Add(BuildStyleSets(editor));
-        host.Children.Add(BuildColours(editor));
-        host.Children.Add(BuildFonts(editor));
+        host.Children.Add(BuildCatalogMenu(
+            FreeWUiTextCatalog.StyleSets,
+            DocumentStyleSet.Catalog,
+            styleSet => styleSet.Name,
+            editor.PreviewStyleSet,
+            editor.EndStyleSetPreview,
+            editor.ApplyStyleSet));
+        host.Children.Add(BuildCatalogMenu(
+            FreeWUiTextCatalog.Colors,
+            DocumentTheme.Catalog,
+            theme => theme.Name,
+            editor.PreviewThemeColors,
+            editor.EndThemePreview,
+            editor.ApplyThemeColors));
+        host.Children.Add(BuildCatalogMenu(
+            FreeWUiTextCatalog.Fonts,
+            DocumentFontSet.Catalog,
+            fontSet => fontSet.Name,
+            editor.PreviewFontSet,
+            editor.EndFontSetPreview,
+            editor.ApplyFontSet));
         host.Children.Add(BuildParagraphSpacingMenu(editor));
         host.Children.Add(BuildEffectsMenu(editor));
         return host;
+    }
+
+    // Keep Word's live theme previews in the visible strip at ordinary window sizes. The longer
+    // style-set, palette, and font catalogs retain the same hover-preview/apply behavior in compact
+    // menus so the entire Document Formatting group does not collapse into one generic button.
+    private static FrameworkElement BuildCatalogMenu<T>(
+        string label,
+        IReadOnlyList<T> entries,
+        Func<T, string> entryLabel,
+        Action<T> preview,
+        Action endPreview,
+        Action<T> apply)
+    {
+        var button = new Button
+        {
+            Content = new TextBlock
+            {
+                Text = label + "\n▾",
+                FontSize = 10,
+                TextAlignment = System.Windows.TextAlignment.Center,
+            },
+            Width = 66,
+            Height = 50,
+            Margin = new Thickness(2, 17, 2, 3),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            ToolTip = label,
+        };
+        AutomationProperties.SetName(button, label);
+
+        var menu = new ContextMenu();
+        foreach (var entry in entries)
+        {
+            var captured = entry;
+            var item = new MenuItem { Header = entryLabel(captured) };
+            item.MouseEnter += (_, _) => preview(captured);
+            item.MouseLeave += (_, _) => endPreview();
+            item.Click += (_, _) =>
+            {
+                endPreview();
+                apply(captured);
+            };
+            menu.Items.Add(item);
+        }
+        menu.Closed += (_, _) => endPreview();
+        button.ContextMenu = menu;
+        button.Click += (_, _) =>
+        {
+            menu.PlacementTarget = button;
+            menu.IsOpen = true;
+        };
+        return button;
     }
 
     /// <summary>Build the Themes gallery: a labelled horizontal strip of theme thumbnail swatches.</summary>

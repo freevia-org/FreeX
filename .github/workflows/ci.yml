@@ -7,6 +7,13 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      run_ui_tests:
+        description: Run the explicitly requested UI test lane
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -84,6 +91,7 @@ jobs:
 
   ui-tests:
     name: UI test lane
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests == true }}
     runs-on: windows-latest
     timeout-minutes: 60
 

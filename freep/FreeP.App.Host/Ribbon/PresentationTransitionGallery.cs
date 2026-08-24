@@ -13,16 +13,16 @@ namespace FreeP.App.Host;
 /// </summary>
 internal static class PresentationTransitionGallery
 {
-    private static readonly (string CommandId, string Label, TransitionPreview Preview)[] Entries =
+    private static readonly (string CommandId, string LabelKey, TransitionPreview Preview)[] Entries =
     [
-        ("freep.transition.none", "None", TransitionPreview.None),
-        ("freep.transition.fade", "Fade", TransitionPreview.Fade),
-        ("freep.transition.push", "Push", TransitionPreview.Push),
-        ("freep.transition.wipe", "Wipe", TransitionPreview.Wipe),
-        ("freep.transition.split", "Split", TransitionPreview.Split),
-        ("freep.transition.reveal", "Reveal", TransitionPreview.Reveal),
-        ("freep.transition.cut", "Cut", TransitionPreview.Cut),
-        ("freep.transition.random-bars", "Random Bars", TransitionPreview.RandomBars),
+        ("freep.transition.none", "Ribbon_Command_TransitionNone_Label", TransitionPreview.None),
+        ("freep.transition.fade", "Ribbon_Command_TransitionFade_Label", TransitionPreview.Fade),
+        ("freep.transition.push", "Ribbon_Command_TransitionPush_Label", TransitionPreview.Push),
+        ("freep.transition.wipe", "Ribbon_Command_TransitionWipe_Label", TransitionPreview.Wipe),
+        ("freep.transition.split", "Ribbon_Command_TransitionSplit_Label", TransitionPreview.Split),
+        ("freep.transition.reveal", "Ribbon_Command_TransitionReveal_Label", TransitionPreview.Reveal),
+        ("freep.transition.cut", "Ribbon_Command_TransitionCut_Label", TransitionPreview.Cut),
+        ("freep.transition.random-bars", "Ribbon_Command_TransitionRandomBars_Label", TransitionPreview.RandomBars),
     ];
 
     public static FrameworkElement Build(IRibbonCommandRegistry registry)
@@ -40,8 +40,9 @@ internal static class PresentationTransitionGallery
         return strip;
     }
 
-    private static FrameworkElement BuildButton((string CommandId, string Label, TransitionPreview Preview) entry, IRibbonCommandRegistry registry)
+    private static FrameworkElement BuildButton((string CommandId, string LabelKey, TransitionPreview Preview) entry, IRibbonCommandRegistry registry)
     {
+        var label = UiText.Get(entry.LabelKey);
         var content = new Grid { Width = 54, Height = 51 };
         content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -49,7 +50,7 @@ internal static class PresentationTransitionGallery
         content.Children.Add(BuildPreview(entry.Preview));
         var caption = new TextBlock
         {
-            Text = entry.Label,
+            Text = label,
             FontSize = 9,
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextAlignment = TextAlignment.Center,
@@ -66,9 +67,9 @@ internal static class PresentationTransitionGallery
             BorderThickness = new Thickness(1),
             Padding = new Thickness(1),
             Margin = new Thickness(1, 0, 1, 0),
-            ToolTip = entry.Label,
+            ToolTip = label,
         };
-        AutomationProperties.SetName(button, entry.Label);
+        AutomationProperties.SetName(button, label);
         button.MouseEnter += (_, _) =>
         {
             button.Background = new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xFB));

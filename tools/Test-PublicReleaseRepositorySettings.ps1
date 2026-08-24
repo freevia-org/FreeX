@@ -55,13 +55,44 @@ function New-Check {
 $checks = [System.Collections.Generic.List[object]]::new()
 
 $branchProtection = Invoke-GhJson -Arguments @("api", "repos/$Repository/branches/main/protection")
+$branchProtectionReady = $branchProtection.Succeeded -and
+    $null -ne $branchProtection.Value.required_pull_request_reviews -and
+    [int]$branchProtection.Value.required_pull_request_reviews.required_approving_review_count -ge 1 -and
+    $null -ne $branchProtection.Value.required_status_checks -and
+    (@($branchProtection.Value.required_status_checks.contexts).Count -gt 0 -or
+        @($branchProtection.Value.required_status_checks.checks).Count -gt 0) -and
+    $branchProtection.Value.allow_force_pushes.enabled -ne $true -and
+    $branchProtection.Value.allow_deletions.enabled -ne $true
+
 $rulesets = Invoke-GhJson -Arguments @("api", "repos/$Repository/rulesets")
-$hasActiveRuleset = $rulesets.Succeeded -and @(
-    $rulesets.Value | Where-Object { $_.enforcement -eq "active" -and $_.target -eq "branch" }
-).Count -gt 0
+$hasProtectiveActiveRuleset = $false
+if ($rulesets.Succeeded) {
+    foreach ($ruleset in @($rulesets.Value | Where-Object { $_.enforcement -eq "active" -and $_.target -eq "branch" })) {
+        $rulesetDetail = Invoke-GhJson -Arguments @("api", "repos/$Repository/rulesets/$($ruleset.id)")
+        if (-not $rulesetDetail.Succeeded) {
+            continue
+        }
+
+        $includedRefs = @($rulesetDetail.Value.conditions.ref_name.include)
+        $coversMain = $includedRefs -contains "~DEFAULT_BRANCH" -or $includedRefs -contains "refs/heads/main"
+        $ruleTypes = @($rulesetDetail.Value.rules | ForEach-Object { $_.type })
+        $statusRules = @($rulesetDetail.Value.rules | Where-Object { $_.type -eq "required_status_checks" })
+        $hasRequiredChecks = @(
+            $statusRules | Where-Object { @($_.parameters.required_status_checks).Count -gt 0 }
+        ).Count -gt 0
+        if ($coversMain -and
+            $ruleTypes -contains "pull_request" -and
+            $hasRequiredChecks -and
+            $ruleTypes -contains "non_fast_forward" -and
+            $ruleTypes -contains "deletion") {
+            $hasProtectiveActiveRuleset = $true
+            break
+        }
+    }
+}
 $checks.Add((New-Check `
     -Name "main branch protection or active branch ruleset" `
-    -Passed ($branchProtection.Succeeded -or $hasActiveRuleset) `
+    -Passed ($branchProtectionReady -or $hasProtectiveActiveRuleset) `
     -Remediation "Protect main with pull-request review, required CI, deletion protection, and no force pushes."))
 
 $vulnerabilityAlerts = Invoke-GhJson -Arguments @("api", "repos/$Repository/vulnerability-alerts")
@@ -84,13 +115,26 @@ $checks.Add((New-Check `
     -Passed $readOnlyDefault `
     -Remediation "Set the default GITHUB_TOKEN permission to read-only."))
 
-$environments = Invoke-GhJson -Arguments @("api", "repos/$Repository/environments")
-$hasReleaseEnvironment = $environments.Succeeded -and @(
-    $environments.Value.environments | Where-Object { $_.name -eq "public-preview" }
-).Count -eq 1
+foreach ($workflowPath in @("ci.yml", "codeql.yml")) {
+    $workflow = Invoke-GhJson -Arguments @("api", "repos/$Repository/actions/workflows/$workflowPath")
+    $checks.Add((New-Check `
+        -Name "active workflow: $workflowPath" `
+        -Passed ($workflow.Succeeded -and $workflow.Value.state -eq "active") `
+        -Remediation "Enable the $workflowPath workflow in the repository Actions settings."))
+}
+
+$releaseEnvironment = Invoke-GhJson -Arguments @("api", "repos/$Repository/environments/public-preview")
+$requiredReviewerRules = @(
+    if ($releaseEnvironment.Succeeded) {
+        $releaseEnvironment.Value.protection_rules | Where-Object { $_.type -eq "required_reviewers" }
+    }
+)
+$hasProtectedReleaseEnvironment = $requiredReviewerRules.Count -gt 0 -and @(
+    $requiredReviewerRules | ForEach-Object { @($_.reviewers).Count } | Where-Object { $_ -gt 0 }
+).Count -gt 0
 $checks.Add((New-Check `
-    -Name "public-preview deployment environment" `
-    -Passed $hasReleaseEnvironment `
+    -Name "protected public-preview deployment environment" `
+    -Passed $hasProtectedReleaseEnvironment `
     -Remediation "Create a protected public-preview environment with a required reviewer."))
 
 $labels = Invoke-GhJson -Arguments @("label", "list", "--repo", $Repository, "--limit", "200", "--json", "name")

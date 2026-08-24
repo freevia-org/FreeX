@@ -456,8 +456,6 @@ public sealed partial class MainWindow : Window,
             FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf),
             _ribbonBindingSession.Registry,
             _ribbonBindingSession.StateStore);
-        Editor.SelectionChanged += (_, _) => RefreshContextualTabs();
-        Editor.CurrentSlideChanged += (_, _) => RefreshContextualTabs();
         RefreshContextualTabs();
 
         // Body: slide pane + stage.
@@ -3972,6 +3970,8 @@ public sealed partial class MainWindow : Window,
                     InjectRibbonGallery(content, "themes", PresentationThemeGallery.Build(registry));
                 else if (tab.Id == "transitions")
                     InjectRibbonGallery(content, "transition-gallery", PresentationTransitionGallery.Build(registry));
+                else if (tab.Id == "animations")
+                    InjectRibbonGallery(content, "animation-effects", PresentationAnimationGallery.Build(tab, registry, stateStore));
             },
         });
 

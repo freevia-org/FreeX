@@ -314,6 +314,10 @@ public sealed partial class DocumentationIndexTests
             "formats/xlsx-test-corpus-plan.md",
             "release/test-distribution.md",
             "release/tester-release-checklist.md",
+            "release/public-preview-readiness.md",
+            "release/public-preview-operations.md",
+            "release/public-preview-decision-record-template.md",
+            "release/public-preview-release-notes-template.md",
             "performance/baseline.md",
             "performance/backlog-2026-06-04.md"
         };

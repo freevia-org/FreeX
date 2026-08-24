@@ -41,3 +41,19 @@ remote diagnostics are covered by the [privacy notice](../legal/privacy.md).
 
 GitHub is an external service and its own account and privacy terms apply to
 information submitted through an issue.
+
+## Release Corrections And Support Boundaries
+
+Public previews do not carry a guaranteed response time or support lifetime.
+Before installing, review the versioned release notes for signing status, known
+limitations, checksum instructions, and any withdrawal or correction notice.
+Use versioned release links because the repository-wide latest release may
+belong to a different app.
+
+If an installed preview appears to corrupt data, remove user data, transmit
+information without consent, or fail checksum verification, stop using that
+artifact and preserve its filename, version, and checksum. Do not post a real
+affected document publicly. Report suspected security issues through the
+private process; use the public defect form for ordinary reliability problems.
+Release operators follow the
+[acceptance, rollback, and incident runbook](../release/public-preview-operations.md).
