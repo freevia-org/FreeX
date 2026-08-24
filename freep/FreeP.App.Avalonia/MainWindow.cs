@@ -2316,6 +2316,7 @@ public sealed partial class MainWindow : Window,
     private void ApplyPresentationViewShowState(PresentationViewShowState state)
     {
         _viewShowState = state;
+        _notesBox.IsVisible = state.ShowNotesPane;
         if (_gestureHandler is null)
             return;
 

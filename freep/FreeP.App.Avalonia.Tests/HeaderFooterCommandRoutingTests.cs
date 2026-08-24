@@ -164,6 +164,7 @@ public sealed class HeaderFooterCommandRoutingTests
         PresentationViewShowState state = default;
         bool? snapToGrid = null;
         bool? snapToShapes = null;
+        bool? notesPaneVisible = null;
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
@@ -171,17 +172,21 @@ public sealed class HeaderFooterCommandRoutingTests
 
             Execute(registry, PresentationViewShowPlanner.GridlinesCommandId);
             Execute(registry, PresentationViewShowPlanner.GuidesCommandId);
+            Execute(registry, PresentationViewShowPlanner.NotesCommandId);
 
             state = window.ViewShowStateForTests;
             snapToGrid = window.GestureSnapToGridForTests;
             snapToShapes = window.GestureSnapToShapesForTests;
+            notesPaneVisible = window.NotesPaneVisibleForTests;
         });
 
         if (!ran) return;
         state.ShowGridlines.Should().BeFalse();
         state.ShowGuides.Should().BeFalse();
+        state.ShowNotesPane.Should().BeFalse();
         snapToGrid.Should().BeFalse();
         snapToShapes.Should().BeFalse();
+        notesPaneVisible.Should().BeFalse();
     }
 
     [Fact]
