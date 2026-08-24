@@ -2151,6 +2151,18 @@ public sealed partial class MainWindow : Window
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
             onFileTabSelected: () => _ = ShowBackstageAsync(),
             stateStore: _ribbonStateStore);
+
+        // Keep the generic menu as the collapsed fallback, but use the native thumbnail strip at
+        // normal widths so Design has the same immediate visual choice surface as the WPF host.
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "themes",
+            () => DocumentThemeGallery.Build(registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "styles",
+            () => DocumentStylesGallery.Build(_editor, registry));
+
         HasToolbar = true;
         _ribbonHost = new Border
         {
