@@ -20,9 +20,31 @@ if (@($Widths | Sort-Object -Unique) -notmatch '^(1280|1100|900|750)$' -or @($Wi
 $resolvedOutputDirectory = Resolve-ToolRepoPath -Path $OutputDirectory -RepoRoot $repoRoot
 $manifestPath = Join-Path $resolvedOutputDirectory "manifest.json"
 $readmePath = Join-Path $resolvedOutputDirectory "README.md"
-$dotnet = Join-Path ${env:ProgramFiles} "dotnet\dotnet.exe"
-if (-not (Test-Path -LiteralPath $dotnet -PathType Leaf)) {
-    throw "The global dotnet host is required for foreground visual evidence: $dotnet"
+$dotnet = (Get-Command dotnet -ErrorAction Stop).Source
+$sourceFiles = @(
+    'freep/TestSupport/VisualEvidence.Wpf/WpfWholeWindowVisualEvidenceCapture.cs',
+    'freep/TestSupport/VisualEvidence.Avalonia/AvaloniaWholeWindowVisualEvidenceCapture.cs',
+    'freep/FreeP.App.Host/MainWindow.cs',
+    'freep/FreeP.App.Avalonia/MainWindow.cs',
+    'freep/FreeP.Ribbon.Definitions/FreePRibbon.cs',
+    'freep/FreeP.Ribbon.Definitions/FreePRibbonCapabilities.cs',
+    'freep/FreeP.App.Host/Ribbon/PresentationThemeGallery.cs',
+    'freep/FreeP.App.Host/Ribbon/PresentationTransitionGallery.cs',
+    'freep/FreeP.App.Host/Ribbon/PresentationAnimationGallery.cs',
+    'freep/FreeP.App.Avalonia/PresentationThemeGallery.cs',
+    'freep/FreeP.App.Avalonia/PresentationTransitionGallery.cs',
+    'freep/FreeP.App.Avalonia/PresentationAnimationGallery.cs',
+    'shared/Free.Shared.Ribbon.Wpf/RibbonWpfRenderer.cs',
+    'shared/Free.Shared.Ribbon.Wpf/RibbonAdaptivePanel.cs',
+    'shared/Free.Shared.Ribbon.Avalonia/AvaloniaRibbonRenderer.cs'
+)
+
+function Get-ResponsiveChromeSourceHashes {
+    $hashes = [ordered]@{}
+    foreach ($relativePath in $sourceFiles) {
+        $hashes[$relativePath] = Get-VisualEvidenceFileSha256 -Path (Join-Path $repoRoot ($relativePath -replace '/', '\\'))
+    }
+    return $hashes
 }
 
 $projects = @(
@@ -83,6 +105,7 @@ function New-ResponsiveChromeManifest {
         evidenceSubject = "FreeP WPF and Avalonia app-owned ribbon/chrome"
         captureMethod = "visible app-owned whole-client render target, scenario-isolated host process; each host invocation exits successfully before its captured PNG pair is recorded"
         normalizedDpi = 96
+        sourceSha256 = Get-ResponsiveChromeSourceHashes
         widths = $requiredWidths
         mappedFreePTabs = $tabs
         expectedCaptureCount = $requiredWidths.Count * $tabs.Count * $projects.Count
@@ -104,6 +127,18 @@ if ($Check) {
     $existing = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     if ($existing.captureStatus -ne "complete" -or $existing.actualCaptureCount -ne $manifest.actualCaptureCount) {
         throw "Responsive chrome manifest is stale or incomplete."
+    }
+    $expectedHashes = Get-ResponsiveChromeSourceHashes
+    $sourceHashProperty = $existing.PSObject.Properties['sourceSha256']
+    $existingSourceHashes = if ($null -eq $sourceHashProperty) { $null } else { $sourceHashProperty.Value }
+    if ($null -eq $existingSourceHashes -or
+        @($existingSourceHashes.PSObject.Properties).Count -ne $expectedHashes.Count) {
+        throw "Responsive chrome manifest has no complete source-freshness contract."
+    }
+    foreach ($relativePath in $expectedHashes.Keys) {
+        if ([string]$existingSourceHashes.PSObject.Properties[$relativePath].Value -ne [string]$expectedHashes[$relativePath]) {
+            throw "Responsive chrome evidence is stale for source: $relativePath"
+        }
     }
     Write-Host "FreeP responsive chrome evidence is current: $($manifest.actualCaptureCount)/$($manifest.expectedCaptureCount) captures."
     exit 0
