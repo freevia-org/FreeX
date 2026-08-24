@@ -1,0 +1,10 @@
+# Default review owner for product, release, legal, and security changes.
+* @tony-xmelon
+
+# Keep release authority and user-facing legal text under explicit review.
+/.github/workflows/ @tony-xmelon
+/tools/packaging/ @tony-xmelon
+/docs/legal/ @tony-xmelon
+/LICENSE @tony-xmelon
+/THIRD_PARTY_NOTICES.md @tony-xmelon
+/SECURITY.md @tony-xmelon
