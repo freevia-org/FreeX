@@ -19,12 +19,20 @@ public sealed class FreePRibbonDefinitionProfileTests
         var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
         var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
 
-        wpf.Tabs.Select(tab => tab.Id)
+        wpf.VisibleTabs.Select(tab => tab.Id)
             .Should()
             .Equal("home", "insert", "design", "transitions", "animations", "view", "help");
-        avalonia.Tabs.Select(tab => tab.Id)
+        avalonia.VisibleTabs.Select(tab => tab.Id)
             .Should()
             .Equal("home", "insert", "design", "transitions", "animations", "view", "help");
+
+        foreach (var definition in new[] { wpf, avalonia })
+        {
+            definition.ContextualTabs.Select(tab => tab.Id)
+                .Should().Equal("text-format", "table-layout");
+            definition.FindTab("text-format")!.Context!.ActivationKey.Should().Be("text");
+            definition.FindTab("table-layout")!.Context!.ActivationKey.Should().Be("table");
+        }
 
         RibbonDefinitionValidator.Validate(wpf).HasErrors.Should().BeFalse();
         RibbonDefinitionValidator.Validate(avalonia).HasErrors.Should().BeFalse();
@@ -99,7 +107,7 @@ public sealed class FreePRibbonDefinitionProfileTests
     {
         var expectedGroupIds = new[]
         {
-            "slides", "clipboard", "font", "paragraph", "arrange", "edit", "editing", "text-layout", "table-layout",
+            "slides", "clipboard", "font", "paragraph", "arrange", "edit", "editing",
         };
 
         foreach (var definition in new[]
@@ -789,9 +797,9 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.strikethrough",
             "freep.superscript",
             "freep.subscript");
-        RequiredGroup(wpf, "home", "text-layout").Controls.Select(control => control.CommandId.Value)
+        RequiredGroup(wpf, "text-format", "text-layout").Controls.Select(control => control.CommandId.Value)
             .Should().Contain("freep.text-autofit", "freep.text-direction", "freep.text-columns", "freep.text-column-spacing");
-        RequiredGroup(wpf, "home", "table-layout").Controls.Select(control => control.CommandId.Value)
+        RequiredGroup(wpf, "table-layout", "table-layout").Controls.Select(control => control.CommandId.Value)
             .Should().Contain("freep.table-cell-fill", "freep.table-cell-anchor", "freep.table-cell-border", "freep.table-cell-inset", "freep.table-row-height");
         wpfSize.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
         wpfColor.Choices.Should().Equal(FreePRibbonDefinitionData.FontColorChoices);
