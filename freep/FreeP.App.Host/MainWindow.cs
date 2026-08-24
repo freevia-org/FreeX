@@ -682,6 +682,8 @@ public sealed partial class MainWindow : Window,
     private void ApplyPresentationViewShowState(PresentationViewShowState state)
     {
         _viewShowState = state;
+        if (_notesBox is not null)
+            _notesBox.Visibility = state.ShowNotesPane ? Visibility.Visible : Visibility.Collapsed;
         if (SlideCanvas is not null)
             SlideCanvas.ApplyViewShowState(state);
     }

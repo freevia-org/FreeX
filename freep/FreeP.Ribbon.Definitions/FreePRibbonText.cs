@@ -755,6 +755,7 @@ internal static class FreePRibbonText
     public static RibbonText ViewShowGroup { get; } = new("Ribbon_Group_ViewShow_Label", "Ribbon_Group_ViewShow_KeyTip");
     public static RibbonText ViewGridlinesCommand { get; } = new("Ribbon_Command_ViewGridlines_Label", "Ribbon_Command_ViewGridlines_KeyTip");
     public static RibbonText ViewGuidesCommand { get; } = new("Ribbon_Command_ViewGuides_Label", "Ribbon_Command_ViewGuides_KeyTip");
+    public static RibbonText ViewNotesCommand { get; } = new("Ribbon_Command_ViewNotes_Label", "Ribbon_Command_ViewNotes_KeyTip");
     public static RibbonText ViewSelectionPaneCommand { get; } = new("Ribbon_Command_ViewSelectionPane_Label", "Ribbon_Command_ViewSelectionPane_KeyTip");
     public static RibbonText ViewZoomGroup { get; } = new("Common_Zoom", "Ribbon_Group_ViewZoom_KeyTip");
     public static RibbonText ViewZoomCommand { get; } = new("Ribbon_Command_ViewZoom_Label", "Ribbon_Command_ViewZoom_KeyTip");

@@ -3091,6 +3091,12 @@
   <data name="Ribbon_Command_ViewGuides_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>
+  <data name="Ribbon_Command_ViewNotes_Label" xml:space="preserve">
+    <value>Notes</value>
+  </data>
+  <data name="Ribbon_Command_ViewNotes_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
   <data name="Ribbon_Command_ViewSelectionPane_Label" xml:space="preserve">
     <value>Selection Pane</value>
   </data>
