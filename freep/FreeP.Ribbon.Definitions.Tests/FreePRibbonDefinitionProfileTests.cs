@@ -21,10 +21,10 @@ public sealed class FreePRibbonDefinitionProfileTests
 
         wpf.VisibleTabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "transitions", "animations", "view", "help");
+            .Equal("home", "insert", "design", "transitions", "animations", "slide-show", "view", "help");
         avalonia.VisibleTabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "transitions", "animations", "view", "help");
+            .Equal("home", "insert", "design", "transitions", "animations", "slide-show", "view", "help");
 
         foreach (var definition in new[] { wpf, avalonia })
         {
@@ -369,7 +369,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(wpf, "freep.find").KeyTip!,
                 RequiredControl(wpf, "freep.replace").Label,
                 RequiredControl(wpf, "freep.replace").KeyTip!,
-                RequiredGroup(wpf, "transitions", "slideshow-from-transitions").Header,
+                RequiredGroup(wpf, "slide-show", "slide-show").Header,
                 RequiredControl(wpf, "freep.slideshow.from-beginning").Label,
                 RequiredControl(wpf, "freep.slideshow.from-current-slide").Label,
                 RequiredControl(wpf, "freep.slideshow.rehearse-timings").Label,
@@ -473,7 +473,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(avalonia, "freep.find").KeyTip!,
                 RequiredControl(avalonia, "freep.replace").Label,
                 RequiredControl(avalonia, "freep.replace").KeyTip!,
-                RequiredGroup(avalonia, "transitions", "slideshow-from-transitions").Header,
+                RequiredGroup(avalonia, "slide-show", "slide-show").Header,
                 RequiredControl(avalonia, "freep.slideshow.from-beginning").Label,
                 RequiredControl(avalonia, "freep.slideshow.from-current-slide").Label,
                 RequiredControl(avalonia, "freep.slideshow.rehearse-timings").Label,
@@ -1015,6 +1015,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         source.Should().Contain("FreePRibbonText.DesignTab");
         source.Should().Contain("FreePRibbonText.TransitionsTab");
         source.Should().Contain("FreePRibbonText.AnimationsTab");
+        source.Should().Contain("FreePRibbonText.SlideShowTab");
         source.Should().Contain("FreePRibbonText.ViewTab");
         source.Should().Contain("FreePRibbonText.ViewShowGroup");
         source.Should().Contain("FreePRibbonText.ViewGridlinesCommand");
