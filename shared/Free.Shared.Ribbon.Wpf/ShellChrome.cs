@@ -11,13 +11,14 @@ namespace Free.Shared.Ribbon.Wpf;
 
 /// <summary>
 /// Palette/identity for a <see cref="ShellChrome"/> title bar: the app-badge letter and the
-/// title-bar / badge colours. Defaults to the FreeX navy (#17324D) title bar with a teal (#0F6D8C)
-/// badge so an app gets the family look with no configuration.
+/// title-bar / caption / badge colours. Defaults to the FreeX navy (#17324D) title bar with a
+/// white caption and teal (#0F6D8C) badge so an app gets the family look with no configuration.
 /// </summary>
 public sealed class ShellChromeOptions
 {
     public string BadgeLetter { get; init; } = "W";
     public Color TitleBarColor { get; init; } = Color.FromRgb(0x17, 0x32, 0x4D);
+    public Color TitleBarForegroundColor { get; init; } = Colors.White;
     public Color BadgeColor { get; init; } = Color.FromRgb(0x0F, 0x6D, 0x8C);
     public double CaptionHeight { get; init; } = 34;
 
@@ -112,19 +113,19 @@ public static class ShellChrome
 
         // Window (caption) buttons, docked right. Right-dock order is right-to-left, so add Close first,
         // then Maximize/Restore, then Minimize, to read [_] [▢] [X] left-to-right.
-        var closeButton = CaptionButton(window, CloseGlyph(), "Close", isClose: true);
+        var closeButton = CaptionButton(window, CloseGlyph(options.TitleBarForegroundColor), "Close", isClose: true);
         closeButton.Click += (_, _) => window.Close();
         DockPanel.SetDock(closeButton, Dock.Right);
         bar.Children.Add(closeButton);
 
-        var maxRestoreGlyph = MaximizeGlyph();
+        var maxRestoreGlyph = MaximizeGlyph(options.TitleBarForegroundColor);
         var maxRestoreButton = CaptionButton(window, maxRestoreGlyph, "Maximize", isClose: false);
         maxRestoreButton.Click += (_, _) => window.WindowState =
             window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
         DockPanel.SetDock(maxRestoreButton, Dock.Right);
         bar.Children.Add(maxRestoreButton);
 
-        var minimizeButton = CaptionButton(window, MinimizeGlyph(), "Minimize", isClose: false);
+        var minimizeButton = CaptionButton(window, MinimizeGlyph(options.TitleBarForegroundColor), "Minimize", isClose: false);
         minimizeButton.Click += (_, _) => window.WindowState = WindowState.Minimized;
         DockPanel.SetDock(minimizeButton, Dock.Right);
         bar.Children.Add(minimizeButton);
@@ -142,7 +143,7 @@ public static class ShellChrome
         // Centred document title fills the remaining (draggable) caption space.
         var titleText = new TextBlock
         {
-            Foreground = Brushes.White,
+            Foreground = Freeze(options.TitleBarForegroundColor),
             FontSize = 12,
             FontWeight = FontWeights.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -252,14 +253,14 @@ public static class ShellChrome
         return button;
     }
 
-    private static Path MinimizeGlyph() => CaptionGlyph("M0,5 H10");
-    private static Path MaximizeGlyph() => CaptionGlyph("M0.5,0.5 H9.5 V9.5 H0.5 Z");
-    private static Path CloseGlyph() => CaptionGlyph("M0,0 L10,10 M10,0 L0,10");
+    private static Path MinimizeGlyph(Color foreground) => CaptionGlyph("M0,5 H10", foreground);
+    private static Path MaximizeGlyph(Color foreground) => CaptionGlyph("M0.5,0.5 H9.5 V9.5 H0.5 Z", foreground);
+    private static Path CloseGlyph(Color foreground) => CaptionGlyph("M0,0 L10,10 M10,0 L0,10", foreground);
 
-    private static Path CaptionGlyph(string data) => new()
+    private static Path CaptionGlyph(string data, Color foreground) => new()
     {
         Data = Geometry.Parse(data),
-        Stroke = Brushes.White,
+        Stroke = Freeze(foreground),
         StrokeThickness = 1,
         Width = 10,
         Height = 10,

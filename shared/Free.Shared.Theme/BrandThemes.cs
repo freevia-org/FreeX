@@ -106,8 +106,9 @@ public static class BrandThemes
         VisualAssets: s_freeXVisualAssets);
 
     /// <summary>
-    /// FreeW (word processor) brand theme. The owned amber/umber palette is shared by WPF,
-    /// Avalonia, packaging artwork, ribbon chrome, backstage, and status surfaces.
+    /// FreeW (word processor) brand theme. Amber remains the product accent, status, and Backstage
+    /// identity, while the title band uses Office's neutral document-chrome treatment so the Word-like
+    /// ribbon can lead directly from the caption surface without a visually competing dark strip.
     /// </summary>
     public static readonly Theme FreeW = new(
         Name: "FreeW",
@@ -116,12 +117,12 @@ public static class BrandThemes
             AccentDark:           ThemeColor.FromHex("#4B2F12"),
             AccentSoft:           ThemeColor.FromHex("#FBF0DC"),
             AccentPressed:        ThemeColor.FromHex("#F3D8AB"),
-            TitleBar:             ThemeColor.FromHex("#4B2F12"),
-            TitleBarForeground:   s_white,
-            TitleBarHover:        ThemeColor.FromHex("#A26714"),
-            TitleBarPressed:      ThemeColor.FromHex("#36200C"),
-            TitleBarDisabled:     ThemeColor.FromHex("#B49A75"),
-            TitleBarButtonBorder: ThemeColor.FromHex("#55FFFFFF"),
+            TitleBar:             ThemeColor.FromHex("#F3F4F6"),
+            TitleBarForeground:   ThemeColor.FromHex("#1F1F1F"),
+            TitleBarHover:        ThemeColor.FromHex("#E2E6EA"),
+            TitleBarPressed:      ThemeColor.FromHex("#D0D4D9"),
+            TitleBarDisabled:     ThemeColor.FromHex("#767676"),
+            TitleBarButtonBorder: ThemeColor.FromHex("#C8CCD0"),
             RibbonButtonHover:    ThemeColor.FromHex("#F6E3C2"),
             RibbonInlineDivider:  ThemeColor.FromHex("#CCCCCC"),
             Text:                 s_text,
