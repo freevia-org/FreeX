@@ -176,6 +176,18 @@ public sealed class ToolHarnessDedupSourceTests
     }
 
     [Fact]
+    public void ForegroundCapture_ReportsSheetOverflowRouteDiagnostics()
+    {
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundCapture.Should().Contain("UIA navigation candidates:");
+        foregroundCapture.Should().Contain("sheet-tab coordinate fallback:");
+        foregroundCapture.Should().Contain("visible process windows:");
+        foregroundCapture.Should().Contain("DescribeProcessWindowCandidates");
+        foregroundCapture.Should().Contain("Diagnostics: {string.Join");
+    }
+
+    [Fact]
     public void ToolScripts_UseCanonicalSharedSupportEntryPoints()
     {
         var support = TestWorkspaceFiles.ReadRepoText("tools", "ToolScriptSupport.ps1");

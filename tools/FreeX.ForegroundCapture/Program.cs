@@ -946,6 +946,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
 
             var rightNavCandidates = FindSheetNavButtonCandidates(hwnd, right: true);
+            var routeDiagnostics = new List<string>
+            {
+                $"UIA navigation candidates: {DescribeSheetNavButtonCandidates(rightNavCandidates)}"
+            };
             WindowInfo? dialog = null;
             foreach (var rightNav in rightNavCandidates)
             {
@@ -963,18 +967,26 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             if (dialog is null)
             {
-                dialog = TryOpenExcelActivateSheetListDialogFromSheetNavCoordinates(pid.Value, hwnd, options.PopupTimeout);
+                dialog = TryOpenExcelActivateSheetListDialogFromSheetNavCoordinates(
+                    pid.Value,
+                    hwnd,
+                    options.PopupTimeout,
+                    out var coordinateDiagnostics);
+                routeDiagnostics.Add($"sheet-tab coordinate fallback: {coordinateDiagnostics}");
             }
 
             var usedWorkbookTabsCommandBarFallback = false;
             if (dialog is null)
             {
                 usedWorkbookTabsCommandBarFallback = TryOpenExcelActivateSheetListDialogFromWorkbookTabsCommandBar(excel, pid.Value, hwnd, options.PopupTimeout, out dialog);
+                routeDiagnostics.Add($"Workbook Tabs command-bar fallback invoked: {usedWorkbookTabsCommandBarFallback}");
             }
 
             if (dialog is null)
             {
-                return CaptureResult.Blocked(scenario, "dialog-not-found", "Did not detect Excel's sheet-list Activate dialog after right-clicking UIA sheet-tab navigation candidates, coordinate fallbacks beside the sheet tabs, or the Workbook Tabs command-bar More Sheets route. The harness intentionally rejects the built-in xlDialogActivate workbook/window dialog because it lists workbooks such as Book1 instead of worksheets.", options.OutputRoot, "excel", guard);
+                routeDiagnostics.Add($"visible process windows: {WindowFinder.DescribeProcessWindowCandidates(pid.Value)}");
+                routeDiagnostics.Add($"visible process menu items: {DescribeVisibleProcessMenuItems(pid.Value)}");
+                return CaptureResult.Blocked(scenario, "dialog-not-found", $"Did not detect Excel's sheet-list Activate dialog after right-clicking UIA sheet-tab navigation candidates, coordinate fallbacks beside the sheet tabs, or the Workbook Tabs command-bar More Sheets route. The harness intentionally rejects the built-in xlDialogActivate workbook/window dialog because it lists workbooks such as Book1 instead of worksheets. Diagnostics: {string.Join(" | ", routeDiagnostics)}", options.OutputRoot, "excel", guard);
             }
 
             var dialogHandle = new IntPtr(dialog.Handle);
@@ -4983,7 +4995,11 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             TimeSpan.FromMilliseconds(Math.Max(1200, timeout.TotalMilliseconds / 2.0)));
     }
 
-    private static WindowInfo? TryOpenExcelActivateSheetListDialogFromSheetNavCoordinates(int processId, IntPtr excelWindowHandle, TimeSpan timeout)
+    private static WindowInfo? TryOpenExcelActivateSheetListDialogFromSheetNavCoordinates(
+        int processId,
+        IntPtr excelWindowHandle,
+        TimeSpan timeout,
+        out string diagnostics)
     {
         var tabBounds = GetVisibleExcelSheetTabElements(excelWindowHandle)
             .Select(element => element.Current.BoundingRectangle)
@@ -4991,21 +5007,28 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             .ToArray();
         if (tabBounds.Length == 0)
         {
+            diagnostics = "no visible Excel TabItem sheet tabs";
             return null;
         }
 
         var firstTabLeft = tabBounds.Min(bounds => bounds.Left);
         var centerY = tabBounds.Average(bounds => bounds.Top + bounds.Height / 2.0);
+        var attempts = new List<string>();
         foreach (var offset in new[] { 18, 36, 54, 72 })
         {
-            RightClickScreenPoint((int)(firstTabLeft - offset), (int)centerY);
+            var x = (int)(firstTabLeft - offset);
+            var y = (int)centerY;
+            attempts.Add($"{x},{y}");
+            RightClickScreenPoint(x, y);
             var dialog = FindActivateSheetListDialogWindow(processId, excelWindowHandle.ToInt64(), timeout);
             if (dialog is not null)
             {
+                diagnostics = $"{tabBounds.Length} visible TabItem sheet tabs; attempts: {string.Join(", ", attempts)}";
                 return dialog;
             }
         }
 
+        diagnostics = $"{tabBounds.Length} visible TabItem sheet tabs; attempts: {string.Join(", ", attempts)}";
         return null;
     }
 
@@ -7023,6 +7046,18 @@ internal static class WindowFinder
         return candidates.Length == 0
             ? "No visible direct, same-executable, or FreeX-titled windows were found."
             : $"Visible window candidates: {string.Join("; ", candidates)}.";
+    }
+
+    public static string DescribeProcessWindowCandidates(int processId)
+    {
+        var candidates = EnumerateVisibleWindows()
+            .Where(candidate => candidate.ProcessId == processId)
+            .OrderByDescending(candidate => candidate.Bounds.Width * candidate.Bounds.Height)
+            .Take(8)
+            .Select(candidate => $"title='{candidate.Title}', class='{candidate.ClassName}', bounds={candidate.Bounds.Width}x{candidate.Bounds.Height}")
+            .ToArray();
+
+        return candidates.Length == 0 ? "<none>" : string.Join("; ", candidates);
     }
 
     public static WindowInfo? FindOwnedOrForegroundPopup(int processId, string className, TimeSpan timeout)
