@@ -3964,6 +3964,13 @@ public sealed partial class MainWindow : Window,
             ShowBackstage)
         {
             EnableContextualTabs = true,
+            CustomizeTabContent = (tab, content) =>
+            {
+                if (tab.Id == "design")
+                    InjectRibbonGallery(content, "themes", PresentationThemeGallery.Build(registry));
+                else if (tab.Id == "transitions")
+                    InjectRibbonGallery(content, "transition-gallery", PresentationTransitionGallery.Build(registry));
+            },
         });
 
         _ribbonTabs    = result.Tabs;
@@ -3971,6 +3978,29 @@ public sealed partial class MainWindow : Window,
         _fileTabRouter = result.FileTabRouter;
         _contextualTabs = result.ContextualTabs;
         return result.Root;
+    }
+
+    // The shared renderer stamps group content with its canonical catalog id. Replace selected WPF command
+    // lanes with native Office-style previews while preserving underlying commands for non-WPF hosts and
+    // contextual command routing.
+    private static void InjectRibbonGallery(DependencyObject content, string groupId, FrameworkElement gallery)
+    {
+        var panel = (content as Border)?.Child as Panel;
+        if (panel is null)
+            return;
+
+        var group = panel.Children.OfType<RibbonGroupHost>()
+            .FirstOrDefault(host => host.Content is Grid grid && RibbonMetadata.GetCatalogId(grid) == groupId);
+        if (group?.Content is not Grid grid)
+            return;
+
+        var lane = grid.Children.OfType<FrameworkElement>()
+            .FirstOrDefault(child => Grid.GetRow(child) == 0) as Panel;
+        if (lane is null)
+            return;
+
+        lane.Children.Clear();
+        lane.Children.Add(gallery);
     }
 
     // FreeP's format and table authoring controls belong in contextual Office tabs, not in the
