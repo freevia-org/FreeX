@@ -6,7 +6,7 @@ namespace FreeW.App.Host.Tests;
 public sealed class FreeWContextMenuInventorySourceTests
 {
     [Fact]
-    public void WpfHost_HasExactlySixExplicitMenuConstructions()
+    public void WpfHost_HasExactlySevenExplicitMenuConstructionsIncludingEffectsGallery()
     {
         var root = HostRoot();
         var source = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
@@ -14,7 +14,9 @@ public sealed class FreeWContextMenuInventorySourceTests
                 && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Select(File.ReadAllText);
 
-        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(6);
+        // ThemeGallery's shared-planner-backed Effects picker is the seventh explicit WPF menu
+        // construction added alongside the existing paragraph-spacing picker.
+        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(7);
     }
 
     [Fact]

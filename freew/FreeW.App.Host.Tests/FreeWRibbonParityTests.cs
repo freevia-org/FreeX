@@ -271,7 +271,8 @@ public sealed class FreeWRibbonParityTests
             .Should()
             .BeTrue("Word exposes Cross-reference from Insert > Links and FreeW already backs the command");
 
-        CommandIds(insert.FindGroup("text")!)
+        var text = insert.FindGroup("text")!;
+        CommandIds(text)
             .Should()
             .Equal(
                 "freew.shape-textbox",
@@ -280,12 +281,18 @@ public sealed class FreeWRibbonParityTests
                 "freew.wordart",
                 "freew.drop-cap",
                 "freew.datetime",
+                "freew.object");
+
+        // Word keeps these five backed commands in Insert > Text > Quick Parts rather than
+        // consuming five additional top-level Text slots.
+        MenuCommandIds(text)
+            .Should()
+            .ContainInOrder(
                 "freew.field",
-                "freew.update-fields",
-                "freew.toggle-field-codes",
-                "freew.object",
                 "freew.save-quickpart",
-                "freew.building-blocks-organizer");
+                "freew.building-blocks-organizer",
+                "freew.update-fields",
+                "freew.toggle-field-codes");
 
         CommandIds(insert.FindGroup("symbols")!)
             .Should()
