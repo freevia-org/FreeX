@@ -128,7 +128,7 @@ public sealed class FreeWDialogEvidenceCatalogContractTests
         avalonia.ManifestFileName.Should().Be("avalonia_dialog_capture_manifest.json");
         avalonia.ManifestSchemaVersion.Should().Be(2);
         avalonia.UseWpfAuthoritySize.Should().BeTrue();
-        avalonia.ClientWidthAdjustment.Should().Be(1);
+        avalonia.ClientWidthAdjustment.Should().Be(0);
 
         Catalog.CreateCapturePlan(
                 "avalonia",

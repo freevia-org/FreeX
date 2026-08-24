@@ -27,7 +27,7 @@ public sealed class FontDialog : FreeWDialogWindow
         {
             // Match the WPF authority's native field and action heights in the captured route.
             ControlHeight = 20,
-            TextBoxHeight = 25,
+            TextBoxHeight = 24,
             ComboBoxHeight = 24,
             TabHeight = 20,
             ButtonHeight = 26,

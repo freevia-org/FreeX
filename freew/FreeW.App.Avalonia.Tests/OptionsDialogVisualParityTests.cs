@@ -217,12 +217,11 @@ public sealed class OptionsDialogVisualParityTests
             {
                 var checks = dialog.GetLogicalDescendants().OfType<CheckBox>().ToArray();
                 var master = checks.Single(check => check.Content?.ToString() == "Enable AutoCorrect (smart typing) as you type");
-                var rules = checks.Where(check => check.Content?.ToString() is not null &&
-                    check.Content.ToString() != "Enable AutoCorrect (smart typing) as you type" &&
-                    check.Content.ToString() != "Correct TWo INitial CApitals" &&
-                    check.Content.ToString() != "Capitalize names of days" &&
-                    check.Content.ToString() != "Replace text as you type").ToArray();
                 var autoFormatPanel = master.Parent as StackPanel;
+                var rules = autoFormatPanel?.GetLogicalDescendants()
+                    .OfType<CheckBox>()
+                    .Where(check => check != master)
+                    .ToArray() ?? [];
                 var section = dialog.GetLogicalDescendants().OfType<TextBlock>()
                     .Single(text => text.Text == OptionsDialogPlanner.AutoFormatSectionLabel);
 
