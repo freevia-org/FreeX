@@ -919,6 +919,9 @@ public static partial class ChartRenderPlanner
         chart.Categories.Count >= 4 &&
         chart.Series.Count >= 4;
 
+    private static bool HasFullImportedSurfaceProjectionWidth(ChartPlanRect bounds) =>
+        bounds.Width > ImportedFullSurfacePlotLeftInset + ImportedFullSurfacePlotRightReduction;
+
     private static bool UsesDefaultSurface3DView(Chart3DView view) =>
         (view.RotationX ?? 15) == 15 &&
         (view.RotationY ?? 20) == 20 &&
@@ -1518,7 +1521,8 @@ public static partial class ChartRenderPlanner
             // series-axis band and a deep lower projection band.
             bool usesTallImportedFrame = UsesImportedTallSurfaceTitleWrap(chart, bounds);
             bool usesFullImportedSurfaceFrame = UsesLargeImportedSurfaceGrid(chart) &&
-                bounds.Height > ImportedSurfaceFullScalePlotHeightLimit;
+                bounds.Height > ImportedSurfaceFullScalePlotHeightLimit &&
+                HasFullImportedSurfaceProjectionWidth(bounds);
             plot = usesFullImportedSurfaceFrame
                 ? new ChartPlanRect(
                     bounds.X + ImportedFullSurfacePlotLeftInset,
@@ -2976,10 +2980,7 @@ public static partial class ChartRenderPlanner
         if (!(majorUnit > 0) || maximum <= minimum)
             return Array.Empty<ChartLegendItemPlan>();
 
-        int bandCount = (int)Math.Clamp(
-            Math.Round((maximum - minimum) / majorUnit),
-            1,
-            ImportedSurfaceElevationLegendColors.Length);
+        int bandCount = ResolveImportedSurfaceElevationBandCount(minimum, maximum, majorUnit);
         double lineHeight = Math.Min(35.0, legendBounds.Height / bandCount);
         double firstY = legendBounds.Y + Math.Max(0, (legendBounds.Height - bandCount * lineHeight) / 2.0);
         double swatchSize = Math.Min(12.0, Math.Max(8.0, lineHeight * 0.42));
@@ -3002,7 +3003,7 @@ public static partial class ChartRenderPlanner
             items.Add(new ChartLegendItemPlan(
                 new ChartPlanRect(legendBounds.X, itemY + (lineHeight - swatchSize) / 2.0, swatchSize, swatchSize),
                 label,
-                new ChartFillPlan(ImportedSurfaceElevationLegendColors[bandIndex], 255),
+                new ChartFillPlan(ResolveImportedSurfaceElevationBandColor(bandIndex), 255),
                 IsLine: false));
         }
 
@@ -5964,7 +5965,11 @@ public static partial class ChartRenderPlanner
         // at its elevation boundaries instead of assigning its average value a
         // single color. The small historical 3x3 import has independent
         // registered face corrections and therefore does not take this path.
-        for (int bandIndex = 0; bandIndex < ImportedSurfaceElevationLegendColors.Length; bandIndex++)
+        // Keep every authored interval even after the sampled Office palette is
+        // exhausted; repeated palette entries are deterministic and preserve
+        // both mesh coverage and the interval labels in the legend.
+        int bandCount = ResolveImportedSurfaceElevationBandCount(minimum, maximum, majorUnit);
+        for (int bandIndex = 0; bandIndex < bandCount; bandIndex++)
         {
             double lower = minimum + bandIndex * majorUnit;
             if (lower >= maximum)
@@ -5981,12 +5986,28 @@ public static partial class ChartRenderPlanner
                 seriesIndex,
                 categoryIndex,
                 clipped.Select(point => point.Point).ToArray(),
-                new ChartFillPlan(ImportedSurfaceElevationLegendColors[bandIndex], 255),
+                new ChartFillPlan(ResolveImportedSurfaceElevationBandColor(bandIndex), 255),
                 stroke,
                 averageValue,
                 averageNormalized));
         }
     }
+
+    private static int ResolveImportedSurfaceElevationBandCount(
+        double minimum,
+        double maximum,
+        double majorUnit)
+    {
+        if (!(majorUnit > 0) || maximum <= minimum)
+            return 0;
+
+        double intervalCount = (maximum - minimum) / majorUnit;
+        return Math.Max(1, (int)Math.Ceiling(intervalCount - 0.000000001));
+    }
+
+    private static SrgbColor ResolveImportedSurfaceElevationBandColor(int bandIndex) =>
+        ImportedSurfaceElevationLegendColors[
+            bandIndex % ImportedSurfaceElevationLegendColors.Length];
 
     private static List<ChartSurfacePointPrimitive> ClipSurfaceElevationPolygon(
         IReadOnlyList<ChartSurfacePointPrimitive> polygon,

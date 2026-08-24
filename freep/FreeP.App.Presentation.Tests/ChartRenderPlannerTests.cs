@@ -1650,6 +1650,47 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildImportedSurfaceElevationBands_PreserveAuthoredTenIntervalsAcross4xNGrid()
+    {
+        var chart = MakeImportedLargeSurfaceChart();
+        chart.Legend = LegendPosition.Right;
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 100;
+        chart.ValueAxis.MajorUnit = 10;
+
+        var frame = ChartRenderPlanner.BuildFramePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        var legend = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, seriesColors: null);
+
+        geometry.RenderFacets.Should().Contain(facet =>
+            facet.AverageValue >= 90 && facet.AverageValue <= 100,
+            "the authored 90-100 interval must remain represented after the palette is exhausted");
+        legend.Select(item => item.Label.Text).Should().Equal(
+            "0-10", "10-20", "20-30", "30-40", "40-50",
+            "50-60", "60-70", "70-80", "80-90", "90-100");
+        legend[0].Fill.Color.Should().Be(legend[9].Fill.Color,
+            "interval semantics remain explicit while the deterministic Office palette is reused");
+    }
+
+    [Fact]
+    public void BuildFramePlan_NarrowTallImportedSurfaceFallsBackToPositiveCompactEnvelope()
+    {
+        var chart = MakeImportedLargeSurfaceChart();
+
+        var frame = ChartRenderPlanner.BuildFramePlan(
+            chart,
+            new ChartPlanRect(0, 0, 280, 500));
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+
+        frame.Plot.Should().Be(new ChartPlanRect(44, 57, 160, 401));
+        frame.Plot.HasPositiveArea.Should().BeTrue();
+        geometry.RenderFacets.Should().NotBeEmpty(
+            "a narrow tall imported surface must use a drawable fallback envelope");
+    }
+
+    [Fact]
     public void BuildSurfaceGeometryPlan_AuthoredViewDoesNotUseImportedSurfaceRegistration()
     {
         var chart = MakeSurfaceChart(ChartType.Surface3D);
@@ -5235,6 +5276,34 @@ public sealed class ChartRenderPlannerTests
         var high = new ChartSeries { Name = "High Band" };
         high.Values.AddRange(new double?[] { 30, 25, 35 });
         chart.Series.Add(high);
+
+        return chart;
+    }
+
+    private static ChartShape MakeImportedLargeSurfaceChart()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Surface3D,
+            TextStyle = new ChartTextStyle { FontSizePt = 18.0 },
+            VaryColors = true,
+            View3D = new Chart3DView { RotationX = 15, RotationY = 20, RightAngleAxes = false }
+        };
+        chart.Categories.AddRange(new[] { "North", "East", "South", "West" });
+
+        foreach (var (name, values) in new[]
+        {
+            ("Band 1", new double?[] { 0, 20, 40, 60 }),
+            ("Band 2", new double?[] { 20, 40, 60, 80 }),
+            ("Band 3", new double?[] { 40, 60, 80, 100 }),
+            ("Band 4", new double?[] { 60, 80, 100, 100 }),
+            ("Band 5", new double?[] { 10, 30, 50, 70 })
+        })
+        {
+            var series = new ChartSeries { Name = name };
+            series.Values.AddRange(values);
+            chart.Series.Add(series);
+        }
 
         return chart;
     }
