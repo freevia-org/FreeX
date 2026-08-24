@@ -820,6 +820,9 @@ public sealed class FreeWRibbonCommandWorkflowTests
         ShapeFill? fill = null;
         ObjectFormatSizeDimension? sizeDimension = null;
         double? sizePoints = null;
+        ObjectFormatTarget? wrappedTarget = null;
+        ImageWrapping? wrapping = null;
+        ObjectFormatTarget? zOrderTarget = null;
         var hasTransformSelection = true;
         var transformed = false;
         var feedback = new List<FreeWRibbonFloatingFeedback>();
@@ -831,9 +834,17 @@ public sealed class FreeWRibbonCommandWorkflowTests
                 PrepareExecution: () => { },
                 HasSelection: target => target == ObjectFormatTarget.Shape && shape is not null,
                 HasTransformSelection: () => hasTransformSelection,
-                ApplyWrap: (_, _) => { },
+                ApplyWrap: (target, value) =>
+                {
+                    wrappedTarget = target;
+                    wrapping = value;
+                },
                 ApplyTransform: (_, _) => transformed = true,
-                ApplyZOrder: (_, _) => true,
+                ApplyZOrder: (target, _) =>
+                {
+                    zOrderTarget = target;
+                    return true;
+                },
                 ApplySize: (_, dimension, points) =>
                 {
                     sizeDimension = dimension;
@@ -883,6 +894,17 @@ public sealed class FreeWRibbonCommandWorkflowTests
         ((IRibbonStatefulCommand)gradient!).GetState().IsEnabled.Should().BeTrue();
         gradient!.Execute(RibbonCommandContext.Empty);
         fill.Should().NotBeNull();
+
+        bindings.TryGet("freew.layout-wrap-square", out var layoutWrap).Should().BeTrue();
+        layoutWrap.Should().BeAssignableTo<IRibbonStatefulCommand>()
+            .Which.GetState().IsEnabled.Should().BeTrue();
+        layoutWrap!.Execute(RibbonCommandContext.Empty);
+        wrappedTarget.Should().Be(ObjectFormatTarget.Shape);
+        wrapping.Should().Be(ImageWrapping.Square);
+
+        bindings.TryGet("freew.layout-bring-forward", out var layoutBringForward).Should().BeTrue();
+        layoutBringForward!.Execute(RibbonCommandContext.Empty);
+        zOrderTarget.Should().Be(ObjectFormatTarget.Shape);
 
         bindings.TryGet("freew.shape-width", out var width).Should().BeTrue();
         width!.Execute(RibbonCommandContext.ForSelectedValue("144"));
