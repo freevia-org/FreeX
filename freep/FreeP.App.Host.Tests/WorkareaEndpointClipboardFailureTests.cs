@@ -70,6 +70,7 @@ public sealed class WorkareaEndpointClipboardFailureTests
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
+            InstallClipboard(window, throwOnWrite: false, out _);
             var shape = window.Editor.CurrentSlide!.Shapes.First();
             window.Editor.Select(shape.Id);
             var before = GetSlideCountText(window);
@@ -88,8 +89,14 @@ public sealed class WorkareaEndpointClipboardFailureTests
     // ── Test plumbing ──────────────────────────────────────────────────────────────
 
     private static void InstallFailingClipboard(MainWindow window, out OsClipboardServiceTests.FakeOsClipboard fake)
+        => InstallClipboard(window, throwOnWrite: true, out fake);
+
+    private static void InstallClipboard(
+        MainWindow window,
+        bool throwOnWrite,
+        out OsClipboardServiceTests.FakeOsClipboard fake)
     {
-        fake = new OsClipboardServiceTests.FakeOsClipboard { ThrowOnWrite = true };
+        fake = new OsClipboardServiceTests.FakeOsClipboard { ThrowOnWrite = throwOnWrite };
         var service = new OsClipboardService(fake, new OsClipboardServiceTests.StubShapeRenderer());
         var field = typeof(MainWindow).GetField("_osClipboard", BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull("MainWindow must still own a private _osClipboard field for this test to rig");

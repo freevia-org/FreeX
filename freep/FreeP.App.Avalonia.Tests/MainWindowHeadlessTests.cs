@@ -616,6 +616,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
         mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
         mainWindow.Should().Contain("SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
+        mainWindow.Should().Contain("ThemeResources.Brush(\"TitleBarForeground\")");
+        mainWindow.Should().NotContain("TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush");
         mainWindow.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
         mainWindow.Should().Contain(
             ".BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())");
@@ -932,11 +934,11 @@ public sealed class MainWindowHeadlessTests : IDisposable
     }
 
     [Fact]
-    public void RibbonDefinition_transitions_group_has_slideshow_commands()
+    public void RibbonDefinition_slide_show_tab_has_slideshow_commands()
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
-        var transitions = definition.Tabs.Single(t => t.Id == "transitions");
-        var slideShow = transitions.Groups.Single(g => g.Id == "slideshow-from-transitions");
+        var slideShowTab = definition.Tabs.Single(t => t.Id == "slide-show");
+        var slideShow = slideShowTab.Groups.Single(g => g.Id == "slide-show");
         slideShow.Controls.Select(i => i.CommandId.Value).Should().Equal(
             "freep.slideshow.from-beginning",
             "freep.slideshow.from-current-slide",

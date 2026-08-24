@@ -26,9 +26,44 @@ public static class FreePRibbon
                 tab => AddTransitionGroups(tab, profile))
             .Tab("animations", FreePRibbonText.AnimationsTab.Label, FreePRibbonText.AnimationsTab.KeyTip,
                 tab => AddAnimationGroups(tab, profile))
+            .Tab("slide-show", FreePRibbonText.SlideShowTab.Label, FreePRibbonText.SlideShowTab.KeyTip,
+                tab => AddSlideShowGroups(tab, profile))
+            .Tab("review", FreePRibbonText.ReviewTab.Label, FreePRibbonText.ReviewTab.KeyTip,
+                AddReviewGroups)
             .Tab("view", FreePRibbonText.ViewTab.Label, FreePRibbonText.ViewTab.KeyTip,
                 AddViewGroups)
             .Tab("help", "Help", "Y", AddHelpGroups)
+            .ContextualTab("text-format", FreePRibbonText.TextFormatTabLabel,
+                new RibbonTabContext(
+                    "text",
+                    FreePRibbonText.TextToolsContextLabel,
+                    RibbonContextColor.Blue,
+                    FreePRibbonText.TextFormatTabKeyTip),
+                tab => tab.Group("text-layout", FreePRibbonText.TextGroupLabel, FreePRibbonText.TextGroupKeyTip, 100,
+                    group =>
+                    {
+                        group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                        AddTextLayoutControls(group);
+                    }))
+            .ContextualTab("table-layout", FreePRibbonText.TableLayoutTabLabel,
+                new RibbonTabContext(
+                    "table",
+                    FreePRibbonText.TableToolsContextLabel,
+                    RibbonContextColor.Teal,
+                    FreePRibbonText.TableLayoutTabKeyTip),
+                tab => tab.Group("table-layout", FreePRibbonText.TablesGroupLabel, FreePRibbonText.TablesGroupKeyTip, 100,
+                    group =>
+                    {
+                        group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                        AddTableCellControls(group);
+                    }))
+            .ContextualTab("smartart-design", FreePRibbonText.SmartArtDesignTabLabel,
+                new RibbonTabContext(
+                    "smartart",
+                    FreePRibbonText.SmartArtToolsContextLabel,
+                    RibbonContextColor.Orange,
+                    FreePRibbonText.SmartArtDesignTabKeyTip),
+                AddSmartArtGroups)
             .Build();
 
         return RibbonDefinitionKeyTipUniquifier.Normalize(definition);
@@ -40,6 +75,8 @@ public static class FreePRibbon
         {
             group.Large("freep.help-online", "Help Online", RibbonCommandIconKind.Help, "H");
             group.Large("freep.feedback", "Send Feedback", RibbonCommandIconKind.Feedback, "F");
+            group.Large("freep.copy-diagnostics", "Copy Diagnostics", RibbonCommandIconKind.Info, "D");
+            group.Large("freep.test-crash-reporting", "Test Crash Reporting", RibbonCommandIconKind.Info, "T");
         });
     }
 
@@ -159,6 +196,23 @@ public static class FreePRibbon
             KeyTip = FreePRibbonText.FontColorKeyTip,
             Width = 96
         });
+        group.IconToggle("freep.bold", FreePRibbonText.BoldLabel, RibbonCommandIconKind.Bold, FreePRibbonText.BoldKeyTip);
+        group.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
+        group.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline,
+            FreePRibbonText.UnderlineKeyTip);
+        group.IconToggle("freep.strikethrough", FreePRibbonText.StrikethroughLabel,
+            RibbonCommandIconKind.Strikethrough, FreePRibbonText.StrikethroughKeyTip);
+        group.IconToggle("freep.superscript", FreePRibbonText.SuperscriptLabel, RibbonCommandIconKind.Superscript,
+            FreePRibbonText.SuperscriptKeyTip);
+        group.IconToggle("freep.subscript", FreePRibbonText.SubscriptLabel, RibbonCommandIconKind.Subscript,
+            FreePRibbonText.SubscriptKeyTip);
+    }
+
+    // Text-box and table-cell authoring are real commands, but they are not part of PowerPoint's
+    // ordinary Home > Font lane. Separate low-priority groups keep them reachable through adaptive
+    // overflow without forcing core Font and Paragraph into category tiles.
+    private static void AddTextLayoutControls(RibbonGroupBuilder group)
+    {
         group.ComboBox("freep.text-autofit", FreePRibbonText.TextAutoFitLabel, control => control with
         {
             Choices = FreePRibbonDefinitionData.TextAutoFitChoices,
@@ -187,6 +241,10 @@ public static class FreePRibbon
             KeyTip = FreePRibbonText.TextColumnSpacingKeyTip,
             Width = 112
         });
+    }
+
+    private static void AddTableCellControls(RibbonGroupBuilder group)
+    {
         group.ComboBox("freep.table-cell-fill", FreePRibbonText.TableCellFillLabel, control => control with
         {
             Choices = FreePRibbonDefinitionData.TableCellFillChoices,
@@ -280,16 +338,6 @@ public static class FreePRibbon
         group.IconToggle(TableCellEditPlanner.TableBandColCommandId,
             FreePRibbonText.TableBandColLabel, RibbonCommandIconKind.Table,
             FreePRibbonText.TableBandColKeyTip);
-        group.IconToggle("freep.bold", FreePRibbonText.BoldLabel, RibbonCommandIconKind.Bold, FreePRibbonText.BoldKeyTip);
-        group.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
-        group.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline,
-            FreePRibbonText.UnderlineKeyTip);
-        group.IconToggle("freep.strikethrough", FreePRibbonText.StrikethroughLabel,
-            RibbonCommandIconKind.Strikethrough, FreePRibbonText.StrikethroughKeyTip);
-        group.IconToggle("freep.superscript", FreePRibbonText.SuperscriptLabel, RibbonCommandIconKind.Superscript,
-            FreePRibbonText.SuperscriptKeyTip);
-        group.IconToggle("freep.subscript", FreePRibbonText.SubscriptLabel, RibbonCommandIconKind.Subscript,
-            FreePRibbonText.SubscriptKeyTip);
     }
 
     private static void AddEditControls(RibbonGroupBuilder group)
@@ -318,6 +366,70 @@ public static class FreePRibbon
             RibbonCommandIconKind.More, FreePRibbonText.SlideShowSetupKeyTip);
         group.Medium("freep.slideshow.custom-shows", FreePRibbonText.SlideShowCustomShowsLabel,
             RibbonCommandIconKind.List, FreePRibbonText.SlideShowCustomShowsKeyTip);
+    }
+
+    private static void AddSlideShowGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
+    {
+        // These controls were previously reachable only through a low-priority Transitions group.
+        // PowerPoint gives the presentation route its own normal tab, so keep the complete supported
+        // slide-show surface together and allow the standard Office adaptation at narrow widths.
+        tab.Group("slide-show", FreePRibbonText.SlideShowGroupLabel,
+            profile.SlideShowGroupKeyTip(), 100, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                AddSlideShowControls(group, profile);
+            });
+    }
+
+    private static void AddReviewGroups(RibbonTabBuilder tab)
+    {
+        tab.Group("comments", FreePRibbonText.ReviewCommentsGroup.Label,
+            FreePRibbonText.ReviewCommentsGroup.KeyTip, 100, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Large(PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
+                    FreePRibbonText.ReviewCommentsCommand.Label, RibbonCommandIconKind.Comment,
+                    FreePRibbonText.ReviewCommentsCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.AddCommentCommandId,
+                    FreePRibbonText.ReviewNewCommentCommand.Label, RibbonCommandIconKind.Insert,
+                    FreePRibbonText.ReviewNewCommentCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
+                    FreePRibbonText.ReviewReplyCommand.Label, RibbonCommandIconKind.Comment,
+                    FreePRibbonText.ReviewReplyCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
+                    FreePRibbonText.ReviewDeleteCommentCommand.Label, RibbonCommandIconKind.Delete,
+                    FreePRibbonText.ReviewDeleteCommentCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.PreviousCommentCommandId,
+                    FreePRibbonText.ReviewPreviousCommentCommand.Label, RibbonCommandIconKind.Previous,
+                    FreePRibbonText.ReviewPreviousCommentCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.NextCommentCommandId,
+                    FreePRibbonText.ReviewNextCommentCommand.Label, RibbonCommandIconKind.Next,
+                    FreePRibbonText.ReviewNextCommentCommand.KeyTip);
+            });
+
+        tab.Group("accessibility", FreePRibbonText.ReviewAccessibilityGroup.Label,
+            FreePRibbonText.ReviewAccessibilityGroup.KeyTip, 90, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Large(PresentationReviewWorkflowPlanner.AccessibilityCommandId,
+                    FreePRibbonText.ReviewCheckAccessibilityCommand.Label, RibbonCommandIconKind.Accessibility,
+                    FreePRibbonText.ReviewCheckAccessibilityCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.AltTextCommandId,
+                    FreePRibbonText.ReviewAltTextCommand.Label, RibbonCommandIconKind.TextBox,
+                    FreePRibbonText.ReviewAltTextCommand.KeyTip);
+                group.Medium(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
+                    FreePRibbonText.ReviewReadingOrderCommand.Label, RibbonCommandIconKind.List,
+                    FreePRibbonText.ReviewReadingOrderCommand.KeyTip);
+            });
+
+        tab.Group("proofing", FreePRibbonText.ReviewProofingGroup.Label,
+            FreePRibbonText.ReviewProofingGroup.KeyTip, 80, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Large(PresentationReviewWorkflowPlanner.ProofingCommandId,
+                    FreePRibbonText.ReviewSpellingCommand.Label, RibbonCommandIconKind.Spelling,
+                    FreePRibbonText.ReviewSpellingCommand.KeyTip);
+            });
     }
 
     private static void AddArrangeControls(RibbonGroupBuilder group)
@@ -820,6 +932,13 @@ public static class FreePRibbon
             group.Medium("freep.background-blue", FreePRibbonText.BackgroundBlueCommand.Label, RibbonCommandIconKind.Fill, FreePRibbonText.BackgroundBlueCommand.KeyTip);
             group.Medium("freep.background-reset", FreePRibbonText.BackgroundResetCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.BackgroundResetCommand.KeyTip);
         });
+    }
+
+    // PowerPoint exposes these editing controls only while a SmartArt graphic is selected.
+    // Keeping them out of the blank Design tab makes the normal presentation surface match the
+    // native ribbon while preserving every existing SmartArt command on its contextual tab.
+    private static void AddSmartArtGroups(RibbonTabBuilder tab)
+    {
         tab.Group("smartart-colors", FreePRibbonText.SmartArtColorsGroup.Label, FreePRibbonText.SmartArtColorsGroup.KeyTip, 80, group =>
         {
             group.Dropdown(
@@ -1213,17 +1332,15 @@ public static class FreePRibbon
             group.MediumToggle("freep.transition.sound-loop", FreePRibbonText.TransitionSoundLoopCommand.Label,
                 RibbonCommandIconKind.Refresh, FreePRibbonText.TransitionSoundLoopCommand.KeyTip);
         });
-        tab.Group("slideshow-from-transitions", FreePRibbonText.SlideShowGroupLabel,
-            profile.SlideShowGroupKeyTip(), 80, group => AddSlideShowControls(group, profile));
     }
 
     private static void AddAnimationGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
     {
         tab.Group("animation-effects", FreePRibbonText.AnimationEffectsGroup.Label, FreePRibbonText.AnimationEffectsGroup.KeyTip, 100, group =>
         {
-            // The effects gallery has dozens of commands. At narrow widths, switch it to
-            // icon presentation before overflow so labels never clip and Timing stays direct.
-            group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
+            // WPF replaces this full catalog with an Office-style preview gallery; keep the shared
+            // group in its authored full form so the host customization is not replaced by an
+            // icon-only adaptive presentation on its first layout pass.
             group.Medium("freep.anim.entrance.appear", FreePRibbonText.AnimationEntranceAppearCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEntranceAppearCommand.KeyTip);
             group.Medium("freep.anim.entrance.fade", FreePRibbonText.AnimationEntranceFadeCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationEntranceFadeCommand.KeyTip);
             group.Medium("freep.anim.entrance.fly-in", FreePRibbonText.AnimationEntranceFlyInCommand.Label, RibbonCommandIconKind.ArrowUp, FreePRibbonText.AnimationEntranceFlyInCommand.KeyTip);
@@ -1313,12 +1430,27 @@ public static class FreePRibbon
 
     private static void AddViewGroups(RibbonTabBuilder tab)
     {
+        tab.Group("presentation-views", FreePRibbonText.ViewPresentationViewsGroup.Label,
+            FreePRibbonText.ViewPresentationViewsGroup.KeyTip, 110, group =>
+        {
+            group.Large(PresentationViewModePlanner.NormalCommandId,
+                FreePRibbonText.ViewNormalCommand.Label, RibbonCommandIconKind.View,
+                FreePRibbonText.ViewNormalCommand.KeyTip);
+            group.Large(PresentationViewModePlanner.SlideSorterCommandId,
+                FreePRibbonText.ViewSlideSorterCommand.Label, RibbonCommandIconKind.Sort,
+                FreePRibbonText.ViewSlideSorterCommand.KeyTip);
+            group.Large(PresentationViewModePlanner.NotesPageCommandId,
+                FreePRibbonText.ViewNotesPageCommand.Label, RibbonCommandIconKind.OnePage,
+                FreePRibbonText.ViewNotesPageCommand.KeyTip);
+        });
         tab.Group("show", FreePRibbonText.ViewShowGroup.Label, FreePRibbonText.ViewShowGroup.KeyTip, 100, group =>
         {
             group.MediumToggle("freep.view.show.gridlines", FreePRibbonText.ViewGridlinesCommand.Label,
                 RibbonCommandIconKind.Grid, FreePRibbonText.ViewGridlinesCommand.KeyTip);
             group.MediumToggle("freep.view.show.guides", FreePRibbonText.ViewGuidesCommand.Label,
                 RibbonCommandIconKind.Align, FreePRibbonText.ViewGuidesCommand.KeyTip);
+            group.MediumToggle(PresentationViewShowPlanner.NotesCommandId, FreePRibbonText.ViewNotesCommand.Label,
+                RibbonCommandIconKind.Comment, FreePRibbonText.ViewNotesCommand.KeyTip);
             group.Medium("freep.view.selection-pane", FreePRibbonText.ViewSelectionPaneCommand.Label,
                 RibbonCommandIconKind.List, FreePRibbonText.ViewSelectionPaneCommand.KeyTip);
         });

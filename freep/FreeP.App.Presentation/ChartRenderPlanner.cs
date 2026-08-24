@@ -788,6 +788,18 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceOrangeBandUpperBound = 0.53;
     private const double ImportedSurfaceGreenBandUpperBound = 0.75;
     private const double ImportedSurfaceReferencePlotWidth = 360.0;
+    private const double ImportedSurfaceCompactLiftCap = 170.0;
+    private const double ImportedSurfaceCompactPlotHeightLimit = 200.0;
+    private const double ImportedSurfaceFullScalePlotHeightLimit = 400.0;
+    // The default Office camera uses a distinct full-size 4x4 projection
+    // envelope. Scaling the compact 3x3 frame to that canvas makes the
+    // category floor too wide and pushes the rear wall too low.
+    private const double ImportedFullSurfacePlotLeftInset = 62.0;
+    private const double ImportedFullSurfacePlotTopInset = 16.0;
+    private const double ImportedFullSurfacePlotRightReduction = 307.0;
+    private const double ImportedFullSurfacePlotBottomReduction = 78.0;
+    private const double ImportedFullSurfaceSeriesAxisBottomInset = 48.0;
+    private const double ImportedFullSurfaceSeriesAxisDepth = 170.0;
     private const double ImportedSurfaceDepthWallX = 124.0;
     private const double ImportedSurfaceFrontCategoryWidth = 301.5;
     private const double ImportedSurfaceFrameFrontLeftX = 8.0;
@@ -845,6 +857,21 @@ public static partial class ChartRenderPlanner
         new(0xFF, 0xC0, 0x00)
     ];
 
+    // PowerPoint's varying Surface3D legend describes elevation intervals,
+    // not source series. Keep the low-to-high bands shared between both hosts.
+    private static readonly SrgbColor[] ImportedSurfaceElevationLegendColors =
+    [
+        new(0x11, 0x54, 0x72),
+        new(0xCE, 0x63, 0x2B),
+        new(0x15, 0x5E, 0x1F),
+        new(0x0C, 0x8B, 0xBC),
+        new(0x8D, 0x25, 0x82),
+        new(0x44, 0x93, 0x28),
+        new(0x85, 0x99, 0xAA),
+        new(0xEE, 0xA1, 0x8A),
+        new(0x86, 0x9E, 0x87)
+    ];
+
     // Office chart imports reserve a larger in-frame area for the inherited 18pt
     // title default. Axes and data labels still use their compact role-specific
     // font defaults below.
@@ -878,12 +905,27 @@ public static partial class ChartRenderPlanner
         chart.Series[2].Values.SequenceEqual(new double?[] { 28, 24, 35 });
 
     // The imported 3x3 surface fixture has a measured PowerPoint frame and
-    // facet registration. Authored view3D settings must use the general
-    // projection path instead of inheriting those fixture-specific offsets.
+    // facet registration. PowerPoint may serialize its default 15/20-degree
+    // camera explicitly, though; that is semantically equivalent to omitting
+    // c:view3D and must retain the default projected path. Non-default camera
+    // settings use the general projection path instead.
     private static bool UsesImportedSurfaceGeometry(ChartShape chart) =>
         chart.ChartType == ChartType.Surface3D &&
         UsesImportedTextMetrics(chart) &&
-        chart.View3D is null;
+        (chart.View3D is null || UsesDefaultSurface3DView(chart.View3D));
+
+    private static bool UsesLargeImportedSurfaceGrid(ChartShape chart) =>
+        UsesImportedSurfaceGeometry(chart) &&
+        chart.Categories.Count >= 4 &&
+        chart.Series.Count >= 4;
+
+    private static bool UsesDefaultSurface3DView(Chart3DView view) =>
+        (view.RotationX ?? 15) == 15 &&
+        (view.RotationY ?? 20) == 20 &&
+        (view.Perspective ?? 30) == 30 &&
+        (view.HeightPercent ?? 100) == 100 &&
+        (view.DepthPercent ?? 100) == 100 &&
+        (view.RightAngleAxes ?? false) == false;
 
     private static bool UsesImportedTallSurfaceTitleWrap(
         ChartShape chart,
@@ -1281,7 +1323,9 @@ public static partial class ChartRenderPlanner
         bool legendRight = chart.Legend is LegendPosition.Right or LegendPosition.Left;
         double legendAreaWidth = legendReservesPlotSpace && legendRight
             ? UsesImportedTextMetrics(chart)
-                ? family == ChartRenderFamily.Pie
+                ? UsesLargeImportedSurfaceGrid(chart)
+                    ? Math.Min(120, Math.Max(96, bounds.Width * 0.11))
+                    : family == ChartRenderFamily.Pie
                     ? Math.Min(137, bounds.Width * 0.12)
                     : UsesImportedSingleScatterDefaults(chart)
                         ? ImportedSingleScatterLegendAreaWidth
@@ -1473,17 +1517,19 @@ public static partial class ChartRenderPlanner
             // PowerPoint's classic 3-D surface view reserves an explicit right
             // series-axis band and a deep lower projection band.
             bool usesTallImportedFrame = UsesImportedTallSurfaceTitleWrap(chart, bounds);
-            double leftInset = usesTallImportedFrame
-                ? ImportedTallSurfacePlotLeftInset
-                : 44.0;
-            double rightReduction = usesTallImportedFrame
-                ? ImportedTallSurfacePlotRightReduction
-                : 120.0;
-            plot = new ChartPlanRect(
-                bounds.X + leftInset,
-                bounds.Y + (usesTallImportedFrame ? 95.0 : 57.0),
-                bounds.Width - rightReduction,
-                bounds.Height - (usesTallImportedFrame ? 149.0 : 99.0));
+            bool usesFullImportedSurfaceFrame = UsesLargeImportedSurfaceGrid(chart) &&
+                bounds.Height > ImportedSurfaceFullScalePlotHeightLimit;
+            plot = usesFullImportedSurfaceFrame
+                ? new ChartPlanRect(
+                    bounds.X + ImportedFullSurfacePlotLeftInset,
+                    bounds.Y + ImportedFullSurfacePlotTopInset,
+                    bounds.Width - ImportedFullSurfacePlotRightReduction,
+                    bounds.Height - ImportedFullSurfacePlotBottomReduction)
+                : new ChartPlanRect(
+                    bounds.X + (usesTallImportedFrame ? ImportedTallSurfacePlotLeftInset : 44.0),
+                    bounds.Y + (usesTallImportedFrame ? 95.0 : 57.0),
+                    bounds.Width - (usesTallImportedFrame ? ImportedTallSurfacePlotRightReduction : 120.0),
+                    bounds.Height - (usesTallImportedFrame ? 149.0 : 99.0));
         }
         else if (chart.ChartType == ChartType.ColumnStacked100 && UsesImportedTextMetrics(chart))
         {
@@ -1553,7 +1599,10 @@ public static partial class ChartRenderPlanner
                         Height = 56.0
                     }
                     : frame.TitleBounds ?? default,
-                IsBold: chart.TitleStyle?.Bold ?? !UsesClassicOfficeChartStyle(chart),
+                // An absent <a:b> is regular weight in both the classic and
+                // style-2 Office chart defaults.  Do not infer bold merely
+                // because the chart carries an explicit style id.
+                IsBold: chart.TitleStyle?.Bold ?? false,
                 FontSize: chart.TitleStyle?.FontSizePt is > 0
                     ? chart.TitleStyle.FontSizePt.Value
                     : ResolveTitleFontSize(chart, 9.0),
@@ -2717,6 +2766,12 @@ public static partial class ChartRenderPlanner
         if (!legendBounds.HasPositiveArea)
             return Array.Empty<ChartLegendItemPlan>();
 
+        if (chart.ChartType == ChartType.Surface3D &&
+            UsesImportedSurfaceGeometry(chart))
+        {
+            return BuildImportedSurfaceElevationLegend(chart, frame, legendBounds);
+        }
+
         var automaticLegendBounds = ResolveAutomaticLegendBounds(chart, frame);
         bool hasManualLayout = TryResolveManualLayoutRect(
             chart.LegendManualLayout,
@@ -2912,6 +2967,48 @@ public static partial class ChartRenderPlanner
         return items;
     }
 
+    private static IReadOnlyList<ChartLegendItemPlan> BuildImportedSurfaceElevationLegend(
+        ChartShape chart,
+        ChartFramePlan frame,
+        ChartPlanRect legendBounds)
+    {
+        var (minimum, maximum, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot);
+        if (!(majorUnit > 0) || maximum <= minimum)
+            return Array.Empty<ChartLegendItemPlan>();
+
+        int bandCount = (int)Math.Clamp(
+            Math.Round((maximum - minimum) / majorUnit),
+            1,
+            ImportedSurfaceElevationLegendColors.Length);
+        double lineHeight = Math.Min(35.0, legendBounds.Height / bandCount);
+        double firstY = legendBounds.Y + Math.Max(0, (legendBounds.Height - bandCount * lineHeight) / 2.0);
+        double swatchSize = Math.Min(12.0, Math.Max(8.0, lineHeight * 0.42));
+        var items = new List<ChartLegendItemPlan>(bandCount);
+        for (int bandIndex = 0; bandIndex < bandCount; bandIndex++)
+        {
+            double start = minimum + bandIndex * majorUnit;
+            double end = Math.Min(maximum, start + majorUnit);
+            double itemY = firstY + (bandCount - bandIndex - 1) * lineHeight;
+            var label = new ChartTextPlan(
+                $"{FormatChartAxisLabelValue(chart, start, chart.ValueAxis)}-{FormatChartAxisLabelValue(chart, end, chart.ValueAxis)}",
+                new ChartPlanRect(
+                    legendBounds.X + swatchSize + 4.0,
+                    itemY,
+                    Math.Max(0, legendBounds.Right - (legendBounds.X + swatchSize + 4.0)),
+                    lineHeight),
+                IsBold: false,
+                FontSize: ResolveTextFontSize(chart, 7.0),
+                Alignment: ChartPlanTextAlignment.Left);
+            items.Add(new ChartLegendItemPlan(
+                new ChartPlanRect(legendBounds.X, itemY + (lineHeight - swatchSize) / 2.0, swatchSize, swatchSize),
+                label,
+                new ChartFillPlan(ImportedSurfaceElevationLegendColors[bandIndex], 255),
+                IsLine: false));
+        }
+
+        return items;
+    }
+
     private static ChartPlanRect ResolveLegendBounds(ChartShape chart, ChartFramePlan frame)
     {
         var automaticLegend = ResolveAutomaticLegendBounds(chart, frame);
@@ -3052,7 +3149,7 @@ public static partial class ChartRenderPlanner
         if (!frame.HasPlot || frame.IsPie || frame.IsRadar || frame.IsScatterLike || !chart.ValueAxis.HasMajorGridlines)
             return EmptyMajorGridLinePrimitivePlan();
 
-        var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        var (minValue, maxValue, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot);
         double steps = (maxValue - minValue) / majorUnit;
         if (steps <= 0)
             return EmptyMajorGridLinePrimitivePlan();
@@ -3132,7 +3229,7 @@ public static partial class ChartRenderPlanner
             !chart.ValueAxis.HasMinorGridlines)
             return EmptyMinorGridLinePrimitivePlan();
 
-        var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        var (minValue, maxValue, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot);
         double minorUnit = chart.ValueAxis.MinorUnit is > 0
             ? chart.ValueAxis.MinorUnit.Value
             : majorUnit / 5.0;
@@ -3353,7 +3450,7 @@ public static partial class ChartRenderPlanner
         if (chart.ValueAxis.TickLabelPosition == ChartTickLabelPosition.None)
             return Array.Empty<ChartTextPlan>();
 
-        var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        var (minValue, maxValue, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot);
         double steps = (maxValue - minValue) / majorUnit;
         if (steps <= 0)
             return Array.Empty<ChartTextPlan>();
@@ -3387,11 +3484,16 @@ public static partial class ChartRenderPlanner
             }
             else
             {
+                bool usesFullImportedSurfaceFrame = chart.ChartType == ChartType.Surface3D &&
+                    UsesLargeImportedSurfaceGrid(chart) &&
+                    plot.Height > ImportedSurfaceFullScalePlotHeightLimit;
                 double axisY = UsesImportedThreeDColumnDefaults(chart)
                     ? plot.Bottom - (ImportedThreeDBarBaseLift - 8.0)
                     : plot.Bottom;
                 double axisTop = plot.Y;
-                double y = UsesImportedThreeDColumnDefaults(chart)
+                double y = usesFullImportedSurfaceFrame
+                    ? ResolveFullImportedSurfaceValueAxisPoint(plot, tickIndex / steps).Y
+                    : UsesImportedThreeDColumnDefaults(chart)
                     ? axisY - (axisY - axisTop) * tickIndex / steps
                     : MapCartesianFractionToY(
                         tickIndex / steps,
@@ -3406,6 +3508,8 @@ public static partial class ChartRenderPlanner
                 double labelWidth = ResolveAxisLabelWidth(chart) - GridlinePad;
                 double labelRight = UsesImportedThreeDColumnDefaults(chart)
                     ? plot.X + 21.0 - 4.0
+                    : usesFullImportedSurfaceFrame
+                        ? ResolveFullImportedSurfaceValueAxisPoint(plot, 0).X - 8.0 * (plot.Width / ImportedSurfaceReferencePlotWidth)
                     : ResolveValueAxisCrossingCoordinate(chart, frame) - rightGap;
                 bool placeOnHighSide = highPosition && !UsesImportedThreeDColumnDefaults(chart);
                 double labelLeft = placeOnHighSide
@@ -3438,6 +3542,8 @@ public static partial class ChartRenderPlanner
         }
 
         var plot = frame.Plot;
+        bool usesFullImportedSurfaceFrame = UsesLargeImportedSurfaceGrid(chart) &&
+            plot.Height > ImportedSurfaceFullScalePlotHeightLimit;
         double depthX = Math.Min(plot.Width * 0.12, 44.0);
         double depthY = Math.Min(plot.Height * 0.44, 88.0);
         double scaleX = plot.Width / 360.0;
@@ -3450,8 +3556,13 @@ public static partial class ChartRenderPlanner
                 ? 0
                 : seriesIndex / (double)(chart.Series.Count - 1);
             var point = new ChartPlanPoint(
-                frontRightX + depthX * seriesT + 5.0,
-                frontRightY - depthY * seriesT);
+                usesFullImportedSurfaceFrame
+                    ? plot.Right - 7.0
+                    : frontRightX + depthX * seriesT + 5.0,
+                usesFullImportedSurfaceFrame
+                    ? plot.Bottom - ImportedFullSurfaceSeriesAxisBottomInset -
+                        ImportedFullSurfaceSeriesAxisDepth * seriesT
+                    : frontRightY - depthY * seriesT);
             string text = string.IsNullOrWhiteSpace(chart.Series[seriesIndex].Name)
                 ? $"Series {seriesIndex + 1}"
                 : chart.Series[seriesIndex].Name;
@@ -3464,6 +3575,21 @@ public static partial class ChartRenderPlanner
         }
 
         return labels;
+    }
+
+    private static ChartPlanPoint ResolveFullImportedSurfaceValueAxisPoint(
+        ChartPlanRect plot,
+        double valueT)
+    {
+        double scaleX = plot.Width / ImportedSurfaceReferencePlotWidth;
+        double scaleY = plot.Height / 189.0;
+        var frontLeft = new ChartPlanPoint(
+            plot.X + ImportedSurfaceFrameFrontLeftX * scaleX,
+            plot.Bottom - 37.0 * scaleY);
+        var valueTop = new ChartPlanPoint(
+            frontLeft.X,
+            plot.Y + 42.0 * scaleY);
+        return InterpolateSurfaceFramePoint(frontLeft, valueTop, valueT);
     }
 
     private static IReadOnlyList<ChartGridLinePlan> BuildCategoryAxisTickPlans(
@@ -3540,7 +3666,7 @@ public static partial class ChartRenderPlanner
         ChartShape chart,
         ChartFramePlan frame)
     {
-        var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        var (minValue, maxValue, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot);
         double steps = (maxValue - minValue) / majorUnit;
         if (steps <= 0)
             return Array.Empty<ChartGridLinePlan>();
@@ -4828,7 +4954,7 @@ public static partial class ChartRenderPlanner
         if (categoryCount < 2 || seriesCount < 2 || !plot.HasPositiveArea)
             return EmptySurfaceGeometryPlan(cells);
 
-        var (valueAxisMin, valueAxisMax, _) = ComputePrimaryValueAxisRange(chart);
+        var (valueAxisMin, valueAxisMax, _) = ResolvePrimaryValueAxisRange(chart, plot);
         double valueAxisRange = valueAxisMax - valueAxisMin;
         var pointsByKey = new Dictionary<(int Series, int Category), ChartSurfacePointPrimitive>();
         foreach (var cell in cells)
@@ -4875,7 +5001,7 @@ public static partial class ChartRenderPlanner
         var wireframe = UsesSurfaceWireframe(chart)
             ? BuildSurfaceWireframeSegments(renderPointsByKey, seriesCount, categoryCount)
             : Array.Empty<ChartLineSegmentPrimitive>();
-        var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, seriesCount, categoryCount, seriesColors);
+        var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, plot, seriesCount, categoryCount, seriesColors);
         bool rebuildFacetsForRenderPoints = ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Span ||
             chart.ChartType == ChartType.Surface3D &&
             (UsesImportedSurfaceGeometry(chart) || UsesExplicitSurface3DFacetRendering(chart));
@@ -4883,6 +5009,7 @@ public static partial class ChartRenderPlanner
             ? BuildSurfaceFacetPrimitives(
                 chart,
                 renderPointsByKey,
+                plot,
                 seriesCount,
                 categoryCount,
                 seriesColors,
@@ -5379,9 +5506,12 @@ public static partial class ChartRenderPlanner
             : Math.Min(plot.Width * 0.18, 72.0);
         double depthY = Math.Min(plot.Height * 0.26, 52.0);
         double categorySlopeY = Math.Min(plot.Height * 0.20, 40.0);
-        double lift = Math.Min(
-            plot.Height * (usesImportedSurfaceGeometry ? 0.90 : 0.50),
-            usesImportedSurfaceGeometry ? 170.0 : 88.0);
+        // Preserve the calibrated compact Surface3D envelope, then allow the
+        // default camera to scale with larger plots. A global 170-DIP cap
+        // compresses full-slide PowerPoint meshes into the category-axis band.
+        double lift = usesImportedSurfaceGeometry
+            ? ResolveImportedSurfaceLift(plot.Height)
+            : Math.Min(plot.Height * 0.50, 88.0);
         ApplySurfaceView3DScales(
             view3D,
             ref depthX,
@@ -5389,7 +5519,13 @@ public static partial class ChartRenderPlanner
             ref categorySlopeY,
             ref lift);
         double drawableWidth = Math.Max(1, plot.Width - depthX);
-        double categoryWidth = usesImportedSurfaceGeometry
+        // The compact imported 3x3 reference has a measured front envelope
+        // wider than its drawable plane. Applying that registration to a
+        // larger mesh lets its category span plus depth extend past the plot
+        // frame. General Surface3D grids retain the bounded drawable width.
+        bool usesCompactImportedSurfaceEnvelope =
+            usesImportedSurfaceGeometry && seriesCount == 3 && categoryCount == 3;
+        double categoryWidth = usesCompactImportedSurfaceEnvelope
             ? plot.Width * (ImportedSurfaceFrontCategoryWidth / ImportedSurfaceReferencePlotWidth) -
                 seriesT * (plot.Width * (ImportedSurfaceFrontCategoryWidth / ImportedSurfaceReferencePlotWidth) - drawableWidth)
             : drawableWidth;
@@ -5432,6 +5568,12 @@ public static partial class ChartRenderPlanner
             Math.Round(x + (usesImportedSurfaceGeometry ? ImportedSurfacePointOffsetX : 0.0), 4),
             Math.Round(y + (usesImportedSurfaceGeometry ? ImportedSurfacePointOffsetY : 0.0), 4));
     }
+
+    private static double ResolveImportedSurfaceLift(double plotHeight) =>
+        plotHeight <= ImportedSurfaceCompactPlotHeightLimit
+            ? Math.Min(plotHeight * 0.90, ImportedSurfaceCompactLiftCap)
+            : ImportedSurfaceCompactLiftCap +
+                (plotHeight - ImportedSurfaceCompactPlotHeightLimit) * 0.90;
 
     private static void ApplySurfaceView3DScales(
         Chart3DView? view3D,
@@ -5674,6 +5816,7 @@ public static partial class ChartRenderPlanner
     private static IReadOnlyList<ChartSurfaceFacetPrimitive> BuildSurfaceFacetPrimitives(
         ChartShape chart,
         IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
+        ChartPlanRect plot,
         int seriesCount,
         int categoryCount,
         IReadOnlyList<SrgbColor>? seriesColors,
@@ -5755,6 +5898,18 @@ public static partial class ChartRenderPlanner
                             }
                         };
                     }
+                    if (UsesImportedSurfaceElevationBanding(chart, plot))
+                    {
+                        AddImportedSurfaceElevationBandFacets(
+                            facets,
+                            chart,
+                            plot,
+                            renderPoints,
+                            seriesIndex,
+                            categoryIndex,
+                            stroke);
+                        continue;
+                    }
                     double averageValue = renderPoints.Average(point => point.Value);
                     double averageNormalized = renderPoints.Average(point => point.NormalizedValue);
                     var color = ResolveSurfaceFacetColor(
@@ -5785,6 +5940,93 @@ public static partial class ChartRenderPlanner
         }
 
         return facets;
+    }
+
+    private static bool UsesImportedSurfaceElevationBanding(ChartShape chart, ChartPlanRect plot) =>
+        UsesLargeImportedSurfaceGrid(chart) &&
+        plot.Height > ImportedSurfaceFullScalePlotHeightLimit;
+
+    private static void AddImportedSurfaceElevationBandFacets(
+        List<ChartSurfaceFacetPrimitive> facets,
+        ChartShape chart,
+        ChartPlanRect plot,
+        IReadOnlyList<ChartSurfacePointPrimitive> renderPoints,
+        int seriesIndex,
+        int categoryIndex,
+        ChartStrokePlan stroke)
+    {
+        var (minimum, maximum, majorUnit) = ResolvePrimaryValueAxisRange(chart, plot);
+        if (!(majorUnit > 0) || maximum <= minimum)
+            return;
+
+        // The full imported Surface3D style colors a continuous mesh by value
+        // interval. Preserve that topology by clipping every projected triangle
+        // at its elevation boundaries instead of assigning its average value a
+        // single color. The small historical 3x3 import has independent
+        // registered face corrections and therefore does not take this path.
+        for (int bandIndex = 0; bandIndex < ImportedSurfaceElevationLegendColors.Length; bandIndex++)
+        {
+            double lower = minimum + bandIndex * majorUnit;
+            if (lower >= maximum)
+                break;
+            double upper = Math.Min(maximum, lower + majorUnit);
+            var clipped = ClipSurfaceElevationPolygon(renderPoints, lower, keepAbove: true);
+            clipped = ClipSurfaceElevationPolygon(clipped, upper, keepAbove: false);
+            if (clipped.Count < 3)
+                continue;
+
+            double averageValue = clipped.Average(point => point.Value);
+            double averageNormalized = clipped.Average(point => point.NormalizedValue);
+            facets.Add(new ChartSurfaceFacetPrimitive(
+                seriesIndex,
+                categoryIndex,
+                clipped.Select(point => point.Point).ToArray(),
+                new ChartFillPlan(ImportedSurfaceElevationLegendColors[bandIndex], 255),
+                stroke,
+                averageValue,
+                averageNormalized));
+        }
+    }
+
+    private static List<ChartSurfacePointPrimitive> ClipSurfaceElevationPolygon(
+        IReadOnlyList<ChartSurfacePointPrimitive> polygon,
+        double boundary,
+        bool keepAbove)
+    {
+        var clipped = new List<ChartSurfacePointPrimitive>();
+        if (polygon.Count == 0)
+            return clipped;
+
+        ChartSurfacePointPrimitive previous = polygon[^1];
+        bool previousInside = keepAbove
+            ? previous.Value >= boundary
+            : previous.Value <= boundary;
+        foreach (var current in polygon)
+        {
+            bool currentInside = keepAbove
+                ? current.Value >= boundary
+                : current.Value <= boundary;
+            if (currentInside != previousInside)
+            {
+                double denominator = current.Value - previous.Value;
+                double fraction = Math.Abs(denominator) < 0.0000001
+                    ? 0
+                    : Math.Clamp((boundary - previous.Value) / denominator, 0, 1);
+                clipped.Add(new ChartSurfacePointPrimitive(
+                    current.SeriesIndex,
+                    current.CategoryIndex,
+                    InterpolateSurfaceFramePoint(previous.Point, current.Point, fraction),
+                    boundary,
+                    previous.NormalizedValue +
+                        (current.NormalizedValue - previous.NormalizedValue) * fraction));
+            }
+            if (currentInside)
+                clipped.Add(current);
+            previous = current;
+            previousInside = currentInside;
+        }
+
+        return clipped;
     }
 
     private static IReadOnlyList<ChartSurfacePointPrimitive> GetSurfaceFacetPoints(
@@ -7776,6 +8018,35 @@ public static partial class ChartRenderPlanner
             return ComputeNiceRange(min, max, targetIntervals: 6);
         }
         return ComputeNiceRange(min, max);
+    }
+
+    private static (double min, double max, double majorUnit) ResolvePrimaryValueAxisRange(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        var range = ComputePrimaryValueAxisRange(chart);
+        if (!UsesLargeImportedSurfaceGrid(chart) ||
+            chart.ValueAxis.Min is not null ||
+            chart.ValueAxis.Max is not null ||
+            chart.ValueAxis.MajorUnit is > 0 ||
+            plot.Height <= ImportedSurfaceFullScalePlotHeightLimit ||
+            range.majorUnit <= 0)
+        {
+            return range;
+        }
+
+        double denseUnit = range.majorUnit / 2.0;
+        double denseMax = range.max - denseUnit;
+        double dataMax = chart.Series
+            .Where(series => !series.OnSecondaryAxis)
+            .SelectMany(series => series.Values)
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .DefaultIfEmpty(double.NegativeInfinity)
+            .Max();
+        return denseUnit > 0 && denseMax >= dataMax && denseMax > range.min
+            ? (range.min, denseMax, denseUnit)
+            : range;
     }
 
     public static (double min, double max, double majorUnit) ComputeSecondaryValueAxisRange(

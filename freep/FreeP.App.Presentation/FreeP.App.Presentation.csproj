@@ -33,4 +33,15 @@
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- One renderer-independent embedded copy keeps Legal Notices available without network or
+         reliance on files beside the executable. The host projects also import FamilyLegalBundle.props
+         so the same source documents remain visible in packaged distributions. -->
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="FreeP.Legal.ProjectLicense.txt" />
+    <EmbeddedResource Include="..\..\docs\legal\legal-notices.md" LogicalName="FreeP.Legal.LegalNotices.md" />
+    <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeP.Legal.PrivacyNotice.md" />
+    <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeP.Legal.ThirdPartyNotices.md" />
+    <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeP.Legal.ThirdPartyLicenses.md" />
+  </ItemGroup>
+
 </Project>

@@ -1697,9 +1697,9 @@ public sealed class FreeWRibbonDefinitionProfileTests
         clipboard.Should().NotBeNull();
 
         var formatPainter = RequiredControl(clipboard!, "freew.format-painter");
-        var pasteTextOnly = RequiredControl(clipboard!, "freew.paste-plain");
-        var pasteMergeFormatting = RequiredControl(clipboard!, "freew.paste-merge");
-        var pasteSpecial = RequiredControl(clipboard!, "freew.paste-special");
+        var pasteTextOnly = RequiredClipboardAccessory(clipboard!, "freew.paste-plain");
+        var pasteMergeFormatting = RequiredClipboardAccessory(clipboard!, "freew.paste-merge");
+        var pasteSpecial = RequiredClipboardAccessory(clipboard!, "freew.paste-special");
 
         return new ClipboardAccessoryRibbonSurface(
             formatPainter.Label,
@@ -1707,6 +1707,22 @@ public sealed class FreeWRibbonDefinitionProfileTests
             pasteTextOnly.Label,
             pasteMergeFormatting.Label,
             pasteSpecial.Label);
+    }
+
+    // WPF places Paste variants in Paste's split-button menu to preserve the Home ribbon's gallery
+    // lane at desktop widths; Avalonia retains its direct compact controls. Both are valid backed
+    // surfaces, so the resource contract follows either representation.
+    private static (string Label, string? KeyTip) RequiredClipboardAccessory(RibbonGroup group, string commandId)
+    {
+        var direct = group.Controls.FirstOrDefault(control => control.CommandId.Value == commandId);
+        if (direct is not null)
+            return (direct.Label, direct.KeyTip);
+
+        var menuItem = group.Controls
+            .OfType<RibbonDropdown>()
+            .SelectMany(control => control.Menu.Items)
+            .Single(item => item.CommandId?.Value == commandId);
+        return (menuItem.Header, menuItem.KeyTip);
     }
 
     private static void AssertClipboardAccessoryLabelsUseResources(ClipboardAccessoryRibbonSurface surface)

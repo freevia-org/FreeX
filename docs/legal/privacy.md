@@ -74,8 +74,15 @@ Default personally identifying information is disabled. Reports can include
 recent allow-listed diagnostic events as breadcrumbs. Before an event leaves
 the device, the implementation attempts to replace the current user's profile
 path and user name in event messages, exception values, and stack-frame file
-paths. Automated redaction reduces risk but cannot guarantee that an arbitrary
+paths. It also replaces recognized absolute Windows, UNC, file-URI, and Unix
+paths and common office-document filenames, and removes complete source-path
+fields from stack frames. Automated redaction reduces risk but cannot guarantee that an arbitrary
 exception contains no sensitive value.
+
+The Help menu's crash-reporting test sends a fixed informational message plus
+the same app/platform metadata and safe breadcrumbs. It does not cause a crash,
+read the active document, or upload local diagnostic files. Like real crash
+reporting, it is unavailable without both consent and endpoint configuration.
 
 Sentry is an external service. Before enabling remote reporting in a public
 build, the release operator must publish the responsible operator's identity and

@@ -159,13 +159,14 @@ public sealed class FreeWRibbonParityTests
                 "freew.help-online",
                 "freew.feedback",
                 "freew.copy-diagnostics",
+                "freew.test-crash-reporting",
                 "freew.check-updates",
                 "freew.about",
                 "freew.legal-notices");
 
         Labels(help)
             .Should()
-            .Equal("Help Online", "Feedback", "Copy Diagnostics", "Check for Updates", "About FreeW", "Legal Notices");
+            .Equal("Help Online", "Feedback", "Copy Diagnostics", "Test Crash Reporting", "Check for Updates", "About FreeW", "Legal Notices");
 
         foreach (var commandId in CommandIds(help))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be backed before it appears on the Help tab");
@@ -924,6 +925,12 @@ public sealed class FreeWRibbonParityTests
         review!.Groups.Select(group => group.Id)
             .Should()
             .Equal("proofing", "speech", "accessibility", "comments", "tracking", "changes", "protect", "compare", "inspect");
+
+        review.FindGroup("proofing")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+        review.FindGroup("speech")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+        review.FindGroup("accessibility")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+        foreach (var groupId in new[] { "comments", "tracking", "changes", "protect", "compare", "inspect" })
+            review.FindGroup(groupId)!.Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
 
         CommandIds(review.FindGroup("accessibility")!)
             .Should()
@@ -2117,7 +2124,7 @@ public sealed class FreeWRibbonParityTests
         tableDesign.Should().NotBeNull();
         tableDesign!.Groups.Select(group => group.Id)
             .Should()
-            .Equal("table-style-options", "table-style", "draw-borders");
+            .Equal("table-style-options", "table-styles", "table-style", "draw-borders");
 
         CommandIds(tableDesign)
             .Should()
@@ -2128,6 +2135,7 @@ public sealed class FreeWRibbonParityTests
                 "freew.table-last-column",
                 "freew.table-banded-rows",
                 "freew.table-banded-cols",
+                "freew.table-styles",
                 "freew.table-shading",
                 "freew.table-borders",
                 "freew.draw-table",

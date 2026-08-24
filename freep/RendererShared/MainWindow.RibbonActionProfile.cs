@@ -114,6 +114,7 @@ public sealed partial class MainWindow
                 ReopenComment = () => ReopenSelectedComment(),
                 ApplyViewShowState = ApplyPresentationViewShowState,
                 ApplyViewZoomState = ApplyPresentationViewZoomState,
+                ApplyViewModeState = ApplyPresentationViewModeState,
 #if FREEP_WPF_RENDERER
                 PickTransitionSound = PickTransitionSound,
                 ToggleAnimationPane = _ => ToggleAnimationPane(),

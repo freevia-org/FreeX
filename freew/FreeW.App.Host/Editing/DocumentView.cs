@@ -7978,6 +7978,34 @@ public sealed partial class DocumentView : RichTextBox
         RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, this));
     }
 
+    /// <summary>Select the floating object identified by its stable document coordinates.</summary>
+    public bool SelectFloating(int blockIndex, int runIndex, bool addToMultiSelect = false)
+    {
+        CommitToModel();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not FreeW.Core.Model.Paragraph paragraph
+            || runIndex < 0 || runIndex >= paragraph.Runs.Count)
+            return false;
+
+        var run = paragraph.Runs[runIndex];
+        if (run.Image is { IsFloating: true } image)
+            SelectFloatingImage(image, addToMultiSelect);
+        else if (run.Shape is { IsFloating: true } shape)
+            SelectFloatingObject(shape, addToMultiSelect);
+        else if (run.Chart is { IsFloating: true } chart)
+            SelectFloatingObject(chart, addToMultiSelect);
+        else if (run.SmartArt is { IsFloating: true } smartArt)
+            SelectFloatingObject(smartArt, addToMultiSelect);
+        else if (run.WordArt is { IsFloating: true } wordArt)
+            SelectFloatingObject(wordArt, addToMultiSelect);
+        else if (run.DrawingGroup is { IsFloating: true } group)
+            SelectFloatingObject(group, addToMultiSelect);
+        else
+            return false;
+
+        return true;
+    }
+
     /// <summary>Select one direct child while retaining its owning group as the active selection.</summary>
     internal void SelectFloatingGroupChild(FreeW.Core.Model.DrawingGroup group, int childIndex)
         => SelectFloatingGroupChild(group, [childIndex]);

@@ -105,7 +105,7 @@ public sealed class RepositoryPreflightTests
             $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("missing a dotnet-version SDK band");
+        result.CombinedOutput.Should().Contain("missing a dotnet-version SDK");
     }
 
     [Fact]

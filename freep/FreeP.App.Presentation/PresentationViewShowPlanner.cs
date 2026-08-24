@@ -3,16 +3,19 @@ namespace FreeP.App.Compositor;
 public enum PresentationViewShowCommandKind
 {
     Gridlines,
-    Guides
+    Guides,
+    Notes
 }
 
 public readonly record struct PresentationViewShowState(
     bool ShowGridlines,
-    bool ShowGuides)
+    bool ShowGuides,
+    bool ShowNotesPane = true)
 {
     public static PresentationViewShowState Default { get; } = new(
         ShowGridlines: true,
-        ShowGuides: true);
+        ShowGuides: true,
+        ShowNotesPane: true);
 }
 
 public readonly record struct PresentationViewShowCommandPlan(
@@ -28,12 +31,14 @@ public static class PresentationViewShowPlanner
 {
     public const string GridlinesCommandId = "freep.view.show.gridlines";
     public const string GuidesCommandId = "freep.view.show.guides";
+    public const string NotesCommandId = "freep.view.show.notes";
 
     public static IReadOnlyList<PresentationViewShowCommandPlan> BuildPlans(
         PresentationViewShowState state) =>
         [
             BuildPlan(PresentationViewShowCommandKind.Gridlines, state),
             BuildPlan(PresentationViewShowCommandKind.Guides, state),
+            BuildPlan(PresentationViewShowCommandKind.Notes, state),
         ];
 
     public static PresentationViewShowCommandPlan BuildPlan(
@@ -64,6 +69,7 @@ public static class PresentationViewShowPlanner
         {
             PresentationViewShowCommandKind.Gridlines => state with { ShowGridlines = !state.ShowGridlines },
             PresentationViewShowCommandKind.Guides => state with { ShowGuides = !state.ShowGuides },
+            PresentationViewShowCommandKind.Notes => state with { ShowNotesPane = !state.ShowNotesPane },
             _ => state
         };
 
@@ -92,6 +98,7 @@ public static class PresentationViewShowPlanner
         {
             PresentationViewShowCommandKind.Gridlines => state.ShowGridlines,
             PresentationViewShowCommandKind.Guides => state.ShowGuides,
+            PresentationViewShowCommandKind.Notes => state.ShowNotesPane,
             _ => false
         };
 
@@ -100,6 +107,7 @@ public static class PresentationViewShowPlanner
         {
             PresentationViewShowCommandKind.Gridlines => GridlinesCommandId,
             PresentationViewShowCommandKind.Guides => GuidesCommandId,
+            PresentationViewShowCommandKind.Notes => NotesCommandId,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
         };
 
@@ -112,6 +120,9 @@ public static class PresentationViewShowPlanner
                 return true;
             case GuidesCommandId:
                 kind = PresentationViewShowCommandKind.Guides;
+                return true;
+            case NotesCommandId:
+                kind = PresentationViewShowCommandKind.Notes;
                 return true;
             default:
                 kind = default;

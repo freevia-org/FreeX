@@ -37,6 +37,17 @@ public sealed class ThemeGalleryTests
         Captions(effects).Where(c => c != "Fx").Should().Equal("Effects", "Office", "Subtle", "Moderate", "Intense");
     }
 
+    [StaFact]
+    public void Compact_document_formatting_keeps_theme_previews_and_every_remaining_catalog_menu()
+    {
+        var formatting = ThemeGallery.BuildDocumentFormatting(new DocumentView());
+
+        Captions(formatting).Should().Contain(["Themes", "Office", "Slate", "Berlin", "Ion"]);
+        Descendants<Button>(formatting)
+            .Select(AutomationProperties.GetName)
+            .Should().Contain(["Style Sets", "Colors", "Fonts", "Paragraph Spacing", "Effects"]);
+    }
+
     private static IReadOnlyList<string> Captions(DependencyObject root)
     {
         var captions = new List<string>();
@@ -51,5 +62,17 @@ public sealed class ThemeGalleryTests
 
         foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
             Collect(child, captions);
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in Descendants<T>(child))
+                yield return descendant;
+        }
     }
 }

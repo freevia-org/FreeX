@@ -22,6 +22,8 @@ public sealed class FreePRibbonCommandWorkflowTests
         result.CommonCommandIds.Should().Contain(PresentationDesignCommandPlanner.LayoutCommandId);
         result.CommonCommandIds.Should().Contain("freep.transition.advance-on-click");
         result.CommonCommandIds.Should().Contain(PresentationSelectionPanePlanner.SelectionPaneCommandId);
+        result.CommonCommandIds.Should().Contain(PresentationViewModePlanner.SlideSorterCommandId);
+        result.CommonCommandIds.Should().Contain(PresentationViewModePlanner.NotesPageCommandId);
     }
 
     [Theory]

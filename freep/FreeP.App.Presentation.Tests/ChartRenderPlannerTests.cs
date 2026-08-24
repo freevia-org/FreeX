@@ -531,6 +531,22 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_Style2ChartTitleDefaultsToRegularWeight()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Surface3D,
+            StyleId = 2,
+            Title = "Surface"
+        };
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.Title!.Value.IsBold.Should().BeFalse(
+            "PowerPoint's style-2 chart title is regular unless a title run explicitly requests bold");
+    }
+
+    [Fact]
     public void ComputePrimaryValueAxisRange_ExcludesSecondarySeries()
     {
         var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
@@ -1532,6 +1548,105 @@ public sealed class ChartRenderPlannerTests
             "a larger authored azimuth and depth should move the rear category farther right");
         authoredPoint.Point.Y.Should().BeLessThan(baselinePoint.Point.Y,
             "a taller authored camera should raise the projected surface");
+    }
+
+    [Fact]
+    public void BuildSurfaceGeometryPlan_ExplicitDefaultView3DUsesImportedDefaultCameraGeometry()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.VaryColors = true;
+        chart.Series.Add(new ChartSeries { Name = "Peak Band", Values = { 33, 39, 45 } });
+        var baseline = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 360, 189));
+
+        chart.View3D = new Chart3DView
+        {
+            RotationX = 15,
+            RotationY = 20,
+            RightAngleAxes = false
+        };
+        var explicitDefault = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 360, 189));
+
+        explicitDefault.Points.Should().Equal(baseline.Points);
+        explicitDefault.RenderFacets.Select(facet =>
+                (facet.SeriesIndex, facet.CategoryIndex, facet.Points.Count,
+                    facet.AverageValue, facet.AverageNormalizedValue))
+            .Should().Equal(baseline.RenderFacets.Select(facet =>
+                (facet.SeriesIndex, facet.CategoryIndex, facet.Points.Count,
+                    facet.AverageValue, facet.AverageNormalizedValue)));
+        explicitDefault.FrameSegments.Should().Equal(baseline.FrameSegments);
+
+        chart.View3D.RotationX = 16;
+        var authored = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 360, 189));
+        authored.FrameSegments.Select(segment => segment.Stroke.Alpha)
+            .Should().OnlyContain(alpha => alpha == 220,
+                "a non-default camera must retain the general projection path");
+    }
+
+    [Fact]
+    public void BuildSurfaceGeometryPlan_LargerImportedGridStaysWithinProjectedWidth()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.VaryColors = true;
+        chart.Categories.Add("West");
+        foreach (var series in chart.Series)
+            series.Values.Add(25);
+        chart.Series.Add(new ChartSeries { Name = "Peak Band", Values = { 33, 39, 45, 37 } });
+        chart.Series.Add(new ChartSeries { Name = "Ridge Band", Values = { 36, 42, 48, 40 } });
+        chart.View3D = new Chart3DView { RotationX = 15, RotationY = 20, RightAngleAxes = false };
+        var plot = new ChartPlanRect(10, 20, 720, 378);
+
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, plot);
+
+        geometry.Points.Should().OnlyContain(point =>
+            point.Point.X >= plot.X - 0.0001 && point.Point.X <= plot.Right + 3.5001,
+            "the larger default-camera grid must not extend beyond its projected frame");
+    }
+
+    [Fact]
+    public void BuildLegendItemPlans_ImportedSurfaceUsesElevationBandsWithoutVaryColorsXml()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.Legend = LegendPosition.Right;
+        chart.Categories.Add("West");
+        chart.Series[0].Values.Clear();
+        chart.Series[0].Values.AddRange(new double?[] { 10, 16, 21, 14 });
+        chart.Series[1].Name = "Mid Band";
+        chart.Series[1].Values.Clear();
+        chart.Series[1].Values.AddRange(new double?[] { 18, 24, 29, 22 });
+        chart.Series.Add(new ChartSeries { Name = "High Band", Values = { 27, 31, 36, 30 } });
+        chart.Series.Add(new ChartSeries { Name = "Peak Band", Values = { 33, 39, 45, 37 } });
+        chart.View3D = new Chart3DView { RotationX = 15, RotationY = 20, RightAngleAxes = false };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 960, 540));
+        frame.Plot.Should().Be(new ChartPlanRect(62, 16, 653, 462),
+            "a full-size imported 4x4 Surface3D chart uses Office's separate projection envelope");
+        frame.LegendAreaWidth.Should().Be(105.6,
+            "the larger grid retains the standard imported legend width when that width is already sufficient");
+        var fullGeometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        fullGeometry.RenderFacets.Should().HaveCountGreaterThan(18,
+            "the full-size imported mesh is clipped at its elevation bands instead of painting one average color per triangle");
+        ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 640, 400)).LegendAreaWidth.Should().Be(96,
+            "a compact large grid needs enough legend width for its elevation interval labels");
+
+        var legend = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, seriesColors: null);
+
+        legend.Select(item => item.Label.Text).Should().Equal(
+            "0-5", "5-10", "10-15", "15-20", "20-25", "25-30", "30-35", "35-40", "40-45");
+        legend[0].SwatchBounds.Y.Should().BeGreaterThan(legend[^1].SwatchBounds.Y,
+            "the highest elevation interval is displayed at the top of the legend");
+        legend.Should().NotContain(item => item.Label.Text == "Low Band" || item.Label.Text == "Peak Band");
+
+        var compactFrame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 640, 400));
+        var compactLegend = ChartRenderPlanner.BuildLegendItemPlans(chart, compactFrame, seriesColors: null);
+        compactLegend.Select(item => item.Label.Text).Should().Equal("0-10", "10-20", "20-30", "30-40", "40-50");
     }
 
     [Fact]

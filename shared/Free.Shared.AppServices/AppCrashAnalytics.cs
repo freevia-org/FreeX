@@ -13,6 +13,82 @@ public interface IAppCrashAnalytics : IDisposable
     void RecordBreadcrumb(string eventName, IReadOnlyDictionary<string, string?>? properties = null);
 
     void CaptureCrash(Exception exception, string source);
+
+    bool SendTestReport();
+}
+
+public enum CrashAnalyticsTestReportResult
+{
+    Sent,
+    Disabled,
+    Failed,
+}
+
+/// <summary>
+/// Process-local entry point used by Help commands to send a harmless, metadata-only test event.
+/// A sender is installed only by an analytics instance that already passed DSN and consent gates.
+/// </summary>
+public static class AppCrashAnalyticsRuntime
+{
+    private static readonly object Sync = new();
+    private static IAppCrashAnalytics? _analytics;
+
+    public static CrashAnalyticsTestReportResult SendTestReport()
+    {
+        IAppCrashAnalytics? analytics;
+        lock (Sync)
+            analytics = _analytics;
+        if (analytics is null || !analytics.IsEnabled)
+            return CrashAnalyticsTestReportResult.Disabled;
+
+        try
+        {
+            return analytics.SendTestReport()
+                ? CrashAnalyticsTestReportResult.Sent
+                : CrashAnalyticsTestReportResult.Failed;
+        }
+        catch
+        {
+            return CrashAnalyticsTestReportResult.Failed;
+        }
+    }
+
+    public static string UserMessage(CrashAnalyticsTestReportResult result) => result switch
+    {
+        CrashAnalyticsTestReportResult.Sent =>
+            "A privacy-safe test report was submitted. It contains app/platform metadata only and no document data. Verify receipt in the crash-reporting dashboard.",
+        CrashAnalyticsTestReportResult.Disabled =>
+            "Crash reporting is off or no release endpoint is configured. Enable it in Options, restart the app, and try again.",
+        _ => "The test report could not be sent. Your documents and local diagnostics were not uploaded.",
+    };
+
+    public static IDisposable Register(IAppCrashAnalytics analytics)
+    {
+        ArgumentNullException.ThrowIfNull(analytics);
+        if (!analytics.IsEnabled)
+            return EmptyRegistration.Instance;
+        lock (Sync)
+            _analytics = analytics;
+        return new Registration(analytics);
+    }
+
+    private sealed class Registration(IAppCrashAnalytics analytics) : IDisposable
+    {
+        public void Dispose()
+        {
+            lock (Sync)
+            {
+                if (ReferenceEquals(_analytics, analytics))
+                    _analytics = null;
+            }
+        }
+    }
+
+    private sealed class EmptyRegistration : IDisposable
+    {
+        public static EmptyRegistration Instance { get; } = new();
+        public void Dispose() { }
+    }
 }
 
 public sealed record AppCrashAnalyticsOptions(
@@ -126,6 +202,8 @@ internal sealed class DisabledAppCrashAnalytics : IAppCrashAnalytics
     public void CaptureCrash(Exception exception, string source)
     {
     }
+
+    public bool SendTestReport() => false;
 
     public void Dispose()
     {

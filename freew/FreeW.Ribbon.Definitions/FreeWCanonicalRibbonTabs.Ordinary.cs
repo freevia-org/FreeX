@@ -57,14 +57,20 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("clipboard", clipboardGroup.Label, clipboardGroup.KeyTip, 100, g =>
                     {
                         // Paste is the hero (Large); the rest stack as labelled medium buttons, like Word.
-                        g.Large("freew.paste", pasteCommand.Label, RibbonCommandIconKind.Paste, pasteCommand.KeyTip);
-                        g.Medium("freew.cut", cutCommand.Label, RibbonCommandIconKind.Cut, cutCommand.KeyTip);
-                        g.Medium("freew.copy", copyCommand.Label, RibbonCommandIconKind.Copy, copyCommand.KeyTip);
-                        g.Medium("freew.format-painter", formatPainterCommand.Label, RibbonCommandIconKind.FormatPainter, formatPainterCommand.KeyTip);
-                        g.Icon("freew.paste-plain", pasteTextOnlyCommand.Label, RibbonCommandIconKind.Paste);
-                        g.Icon("freew.paste-merge", pasteMergeFormattingCommand.Label, RibbonCommandIconKind.Paste);
-                        // Paste Special: dialog offering Keep Source Formatting / Merge Formatting / Keep Text Only.
-                        g.Icon("freew.paste-special", pasteSpecialCommand.Label, RibbonCommandIconKind.Paste);
+                        g.Large("freew.paste", pasteCommand.Label, RibbonCommandIconKind.Paste, pasteCommand.KeyTip, menu: m =>
+                        {
+                            m.Item("freew.paste-plain", pasteTextOnlyCommand.Label, pasteTextOnlyCommand.KeyTip);
+                            m.Item("freew.paste-merge", pasteMergeFormattingCommand.Label, pasteMergeFormattingCommand.KeyTip);
+                            m.Item("freew.paste-special", pasteSpecialCommand.Label, pasteSpecialCommand.KeyTip);
+                        });
+                        // Keep the secondary clipboard actions in Word's narrow icon lane. Their command
+                        // IDs, keytips, and tooltips remain unchanged, while the compact lane leaves room
+                        // for the Home Styles gallery at a 1280-DIP window.
+                        g.Icon("freew.cut", cutCommand.Label, RibbonCommandIconKind.Cut, cutCommand.KeyTip);
+                        g.Icon("freew.copy", copyCommand.Label, RibbonCommandIconKind.Copy, copyCommand.KeyTip);
+                        g.Icon("freew.format-painter", formatPainterCommand.Label, RibbonCommandIconKind.FormatPainter, formatPainterCommand.KeyTip);
+                        // Paste variants live in the Paste split-button menu, as they do in Word, rather
+                        // than consuming a second compact column beside the primary Paste action.
                     }),
                 tab => tab.Group("clipboard", FreeWRibbonText.ClipboardGroup.Label, FreeWRibbonText.ClipboardGroup.KeyTip, 100, g =>
                     {
@@ -296,7 +302,10 @@ internal static partial class FreeWCanonicalRibbonTabs
 
             topology.Section(
                 "home.styles",
-                tab => tab.Group("styles", "Styles", "S", 65, g =>
+                // Keep the visible quick-style strip ahead of the Editing overflow at desktop widths.
+                // This matches Word's Home topology: the gallery remains in the ribbon while Find/Replace
+                // are still available from the compact Editing group.
+                tab => tab.Group("styles", "Styles", "S", 76, g =>
                     {
                         g.ComboBox("freew.style", "Style", c => c with
                         {
@@ -313,7 +322,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.Button("freew.new-style", "New Style", b => Icon(b, RibbonCommandIconKind.TextBox));
                         g.Button("freew.manage-styles", "Manage Styles", b => Icon(b, RibbonCommandIconKind.TextBox));
                     }),
-                tab => tab.Group("styles", "Styles", null, 75, g =>
+                tab => tab.Group("styles", "Styles", null, 82, g =>
                     {
                         // Quick-style buttons (kept from the A1 wave; now model-backed via ApplyNamedStyle).
                         g.Button("freew.style-normal", "Normal");
@@ -454,7 +463,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 "insert.links",
                 tab => tab.Group("links", "Links", "K", 70, g =>
                     {
-                        g.Icon("freew.hyperlink", "Link", RibbonCommandIconKind.Link);
+                        g.Medium("freew.hyperlink", "Link", RibbonCommandIconKind.Link);
                         g.Icon("freew.bookmark", "Bookmark", RibbonCommandIconKind.Bookmark);
                         g.Icon("freew.cross-reference", "Cross-reference", RibbonCommandIconKind.CrossReference);
                         g.Icon("freew.edit-hyperlink", "Edit Hyperlink", RibbonCommandIconKind.Link);
@@ -512,7 +521,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         // Text Box gallery: Simple (plain), Sidebar/Banded (accent fill), and Quote (indented
                         // italic) presets — each inserts a pre-styled Shape.TextBox at the caret. The top-level
                         // id falls through to Simple (same as the existing plain text-box insert).
-                        g.Icon("freew.shape-textbox", "Text Box", RibbonCommandIconKind.TextBox, menu: m =>
+                        g.Large("freew.shape-textbox", "Text Box", RibbonCommandIconKind.TextBox, menu: m =>
                         {
                             m.Item("freew.textbox-simple", "Simple Text Box", "S");
                             m.Item("freew.textbox-sidebar", "Sidebar (Banded)", "B");
@@ -528,6 +537,9 @@ internal static partial class FreeWCanonicalRibbonTabs
                             m.Separator();
                             m.Item("freew.save-quickpart", "Save Selection to Quick Part Gallery…", "V");
                             m.Item("freew.building-blocks-organizer", "Building Blocks Organizer…", "B");
+                            m.Separator();
+                            m.Item("freew.update-fields", "Update Fields", "U");
+                            m.Item("freew.toggle-field-codes", "Toggle Field Codes", "G");
                         });
                         g.Icon("freew.insert-file", "Text from File", RibbonCommandIconKind.TextFromFile);
                         g.Icon("freew.wordart", "WordArt", RibbonCommandIconKind.WordArt);
@@ -542,12 +554,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                             m.Item("freew.drop-cap-options", "Drop Cap Options…", "O");
                         });
                         g.Icon("freew.datetime", "Date & Time", RibbonCommandIconKind.Date);
-                        g.Icon("freew.field", "Field", RibbonCommandIconKind.Field);
-                        g.Icon("freew.update-fields", "Update Fields", RibbonCommandIconKind.Refresh);
-                        g.Icon("freew.toggle-field-codes", "Toggle Field Codes", RibbonCommandIconKind.Field);
                         g.Icon("freew.object", "Object", RibbonCommandIconKind.Object);
-                        g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
-                        g.Icon("freew.building-blocks-organizer", "Building Blocks Organizer", RibbonCommandIconKind.QuickParts);
                     }),
                 tab => tab.Group("text", "Text", null, 93, g =>
                     {
@@ -790,6 +797,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         // It applies a BCP-47 language tag to the selected runs (rPr/w:lang) so the built-in
                         // spell checker uses the correct dictionary per run.
                         g.Medium("freew.set-proofing-language", "Set Proofing Language", RibbonCommandIconKind.Language);
+                        g.Sizing(RibbonGroupSizing.OfficeAdaptive);
                     }),
                 tab => tab.Group("proofing", "Proofing", null, 110, g =>
                     {
@@ -805,6 +813,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("speech", "Speech", "S", 97, g =>
                     {
                         g.MediumToggle("freew.read-aloud", "Read Aloud", RibbonCommandIconKind.ReadAloud);
+                        g.Sizing(RibbonGroupSizing.OfficeAdaptive);
                     }),
                 tab => tab.Group("speech", "Speech", null, 105, g =>
                     {
@@ -816,6 +825,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("accessibility", "Accessibility", "A", 92, g =>
                     {
                         g.Medium("freew.check-accessibility", "Check Accessibility", RibbonCommandIconKind.Accessibility);
+                        g.Sizing(RibbonGroupSizing.OfficeAdaptive);
                     }),
                 tab => tab.Group("accessibility", "Accessibility", null, 92, g =>
                     {
@@ -835,6 +845,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.Medium("freew.reply-comment", "Reply", RibbonCommandIconKind.Comment);
                         g.Medium("freew.resolve-comment", "Resolve", RibbonCommandIconKind.AcceptChange);
                         g.Medium("freew.show-comments", "Show Comments", RibbonCommandIconKind.Comment);
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("comments", "Comments", null, 100, g =>
                     {
@@ -879,6 +890,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                             // Balloons: toggle right-margin balloon display mode for comments and revisions.
                             m.Item("freew.show-markup-balloons", "Show Revisions in Balloons", "B");
                         });
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("tracking", "Tracking", null, 90, g =>
                     {
@@ -906,6 +918,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.RowBreak();
                         g.Medium("freew.previous-change", "Previous", RibbonCommandIconKind.History);
                         g.Medium("freew.next-change", "Next", RibbonCommandIconKind.History);
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("changes", "Changes", null, 80, g =>
                     {
@@ -923,6 +936,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     {
                         g.MediumToggle("freew.mark-as-final", "Mark as Final", RibbonCommandIconKind.Protect);
                         g.MediumToggle("freew.restrict-editing", "Restrict Editing", RibbonCommandIconKind.Protect);
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("compare", "Compare", null, 78, g =>
                     {
@@ -936,6 +950,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     {
                         g.Medium("freew.compare", "Compare", RibbonCommandIconKind.Compare);
                         g.Medium("freew.combine", "Combine", RibbonCommandIconKind.Compare);
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("protect", "Protect", null, 85, g =>
                     {
@@ -948,6 +963,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("inspect", "Inspect", "I", 75, g =>
                     {
                         g.Medium("freew.inspect-document", "Inspect Document", RibbonCommandIconKind.Search);
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                     }),
                 tab => tab.Group("inspect", "Inspect", null, 75, g =>
                     {

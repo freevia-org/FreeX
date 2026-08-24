@@ -46,6 +46,7 @@ This monorepo also hosts **FreeW**, a sibling `.docx` word processor built on th
 - [Feedback and support](docs/support/feedback.md)
 - [Private vulnerability reporting policy](SECURITY.md)
 - [Public-preview release gate](docs/release/public-preview-readiness.md)
+- [Public-preview acceptance, rollback, and incident runbook](docs/release/public-preview-operations.md)
 
 ## Development
 

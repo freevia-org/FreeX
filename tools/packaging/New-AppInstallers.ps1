@@ -161,14 +161,37 @@ function New-WindowsInstaller {
         $app = $Apps[0]
         $lines.Add("Name: `"{autoprograms}\$app`"; Filename: `"{app}\$app.exe`"")
     }
-    $lines.Add('')
-    $lines.Add('[Run]')
     if ($Suite) {
+        $lines.Add('')
+        $lines.Add('[Code]')
+        $lines.Add('procedure InstallChild(const FileName, DisplayName: String);')
+        $lines.Add('var')
+        $lines.Add('  ResultCode: Integer;')
+        $lines.Add('  Parameters, TestInstallRoot: String;')
+        $lines.Add('begin')
+        $lines.Add('  Parameters := ''/VERYSILENT /CURRENTUSER /SUPPRESSMSGBOXES /NORESTART'';')
+        $lines.Add('  TestInstallRoot := ExpandConstant(''{param:TestInstallRoot|}'');')
+        $lines.Add('  if TestInstallRoot <> '''' then')
+        $lines.Add('    Parameters := Parameters + '' /DIR="'' + AddBackslash(TestInstallRoot) + DisplayName + ''"'';')
+        $lines.Add('  if not Exec(ExpandConstant(''{tmp}\'' + FileName), Parameters, '''', SW_HIDE, ewWaitUntilTerminated, ResultCode) then')
+        $lines.Add('    RaiseException(''Could not start the '' + DisplayName + '' installer.'');')
+        $lines.Add('  if ResultCode <> 0 then')
+        $lines.Add('    RaiseException(DisplayName + '' installation failed with exit code '' + IntToStr(ResultCode) + ''. The suite installation is incomplete.'');')
+        $lines.Add('end;')
+        $lines.Add('')
+        $lines.Add('procedure CurStepChanged(CurStep: TSetupStep);')
+        $lines.Add('begin')
+        $lines.Add('  if CurStep = ssPostInstall then')
+        $lines.Add('  begin')
         foreach ($app in $Apps) {
             $childName = "$app-v$Version-$Runtime-setup.exe"
-            $lines.Add("Filename: `"{tmp}\$childName`"; Parameters: `"/SILENT /CURRENTUSER /NORESTART`"; StatusMsg: `"Installing $app...`"; Flags: waituntilterminated")
+            $lines.Add("    InstallChild('$childName', '$app');")
         }
+        $lines.Add('  end;')
+        $lines.Add('end;')
     } else {
+        $lines.Add('')
+        $lines.Add('[Run]')
         $app = $Apps[0]
         $lines.Add("Filename: `"{app}\$app.exe`"; Description: `"Launch $app`"; Flags: nowait postinstall skipifsilent")
     }

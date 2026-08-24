@@ -7,6 +7,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.Drawing;
+using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
@@ -44,13 +45,14 @@ public sealed partial class MainWindow : Window,
     IPresentationAltTextPaneHostView,
     IPresentationReadingOrderPaneHostView
 {
-    // Identity/palette for the shared window shell (PowerPoint-style brick title bar; "P" badge).
+    // Identity/palette for the shared window shell (Office-neutral title bar; berry "P" badge).
     private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeP;
 
     private static ShellChromeOptions BuildChromeOptions() => new()
     {
         BadgeLetter = Program.ActiveTheme.VisualAssets.ProductGlyph,
-        TitleBarColor = FreePBrushes.AccentColor,
+        TitleBarColor = FreePBrushes.TitleBarColor,
+        TitleBarForegroundColor = FreePBrushes.TitleBarForegroundColor,
         BadgeColor = FreePBrushes.AccentDarkColor,
         CaptionHeight = FreePShellVisualMetrics.TitleBarHeight,
         IconUri = Program.ActiveTheme.VisualAssets.GetWpfPackUri("FreeP.App.Host")
@@ -99,6 +101,7 @@ public sealed partial class MainWindow : Window,
     private TabControl _ribbonTabs = null!;
     private TabItem _fileTab = null!;
     private RibbonFileTabRouter? _fileTabRouter;
+    private RibbonContextualTabController? _contextualTabs;
     private readonly RibbonStateStore _ribbonStateStore = new();
     private FreePRibbonBindingSession? _ribbonBindingSession;
 
@@ -120,12 +123,14 @@ public sealed partial class MainWindow : Window,
     internal SlideCanvas SlideCanvas { get; private set; } = null!;
 
     private Border _canvasHost = null!;
+    private Grid _bodySplitter = null!;
     private Canvas _textOverlay = null!;
     private Canvas _oleOverlay = null!;
     private WpfOleInPlaceHost? _activeOleHost;
     private TextBlock _slideCountText = null!;
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
+    private PresentationViewModeState _viewModeState = PresentationViewModeState.Normal;
 
     // Notes pane (Wave 7B)
     private TextBox _notesBox = null!;
@@ -453,6 +458,7 @@ public sealed partial class MainWindow : Window,
             FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf),
             _ribbonBindingSession.Registry,
             _ribbonBindingSession.StateStore);
+        RefreshContextualTabs();
 
         // Body: slide pane + stage.
         var body = BuildBody();
@@ -680,6 +686,10 @@ public sealed partial class MainWindow : Window,
     private void ApplyPresentationViewShowState(PresentationViewShowState state)
     {
         _viewShowState = state;
+        if (_notesBox is not null)
+            _notesBox.Visibility = _viewModeState.Mode == PresentationViewMode.SlideSorter || !state.ShowNotesPane
+                ? Visibility.Collapsed
+                : Visibility.Visible;
         if (SlideCanvas is not null)
             SlideCanvas.ApplyViewShowState(state);
     }
@@ -689,6 +699,32 @@ public sealed partial class MainWindow : Window,
         _viewZoomState = state;
         if (SlideCanvas is not null)
             SlideCanvas.ApplyViewZoomState(state);
+    }
+
+    private void ApplyPresentationViewModeState(PresentationViewModeState state)
+    {
+        _viewModeState = state;
+        var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
+        var isNotesPage = state.Mode == PresentationViewMode.NotesPage;
+        if (SlidePaneHost is null || _canvasHost is null || _bodySplitter is null)
+            return;
+
+        SlidePaneHost.Width = isSlideSorter || isNotesPage ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
+        _bodySplitter.ColumnDefinitions[0].Width = isSlideSorter
+            ? new GridLength(1, GridUnitType.Star)
+            : isNotesPage ? new GridLength(0) : GridLength.Auto;
+        _bodySplitter.ColumnDefinitions[1].Width = isSlideSorter
+            ? new GridLength(0)
+            : new GridLength(1, GridUnitType.Star);
+        _canvasHost.Visibility = isSlideSorter ? Visibility.Collapsed : Visibility.Visible;
+        _notesBox.Visibility = !isSlideSorter && _viewShowState.ShowNotesPane
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
+        _notesBox.MaxHeight = isNotesPage ? 300 : 120;
+        _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
+        (SlidePaneHost.Child as SlidePane)?.SetSlideSorterMode(isSlideSorter);
+        SyncRibbonCommandStates();
     }
 
     private void LoadModel(Presentation presentation)
@@ -894,7 +930,7 @@ public sealed partial class MainWindow : Window,
         _mediaCaptionPaneHost = BuildMediaCaptionPaneHost();
         _smartArtTextPaneHost = BuildSmartArtTextPaneHost();
 
-        var splitter = new Grid();
+        var splitter = _bodySplitter = new Grid();
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -3223,7 +3259,11 @@ public sealed partial class MainWindow : Window,
             new SisterQuickAccessToolbarActions(
                 Save: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.SavePresentation),
                 Undo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Undo),
-                Redo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)));
+                Redo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)),
+            new QuickAccessToolbarRenderOptions
+            {
+                ForegroundResourceKey = ThemeResources.Brush("TitleBarForeground").PrimaryKey
+            });
 
     private void UpdateTitle()
     {
@@ -3953,12 +3993,99 @@ public sealed partial class MainWindow : Window,
             FileTabHeader:  UiText.Get("Ribbon_Group_File_Label"),
             FileTabAccent:  FreePBrushes.AccentColor,
             FileTabHover:   FreePBrushes.AccentDarkColor,
-            ShowBackstage));
+            ShowBackstage)
+        {
+            EnableContextualTabs = true,
+            CustomizeTabContent = (tab, content) =>
+            {
+                if (tab.Id == "design")
+                    InjectRibbonGallery(content, "themes", () => PresentationThemeGallery.Build(registry));
+                else if (tab.Id == "transitions")
+                    InjectRibbonGallery(content, "transition-gallery", () => PresentationTransitionGallery.Build(registry));
+                else if (tab.Id == "animations")
+                    InjectRibbonGallery(content, "animation-effects", () => PresentationAnimationGallery.Build(tab, registry, stateStore));
+            },
+        });
 
         _ribbonTabs    = result.Tabs;
         _fileTab       = result.FileTab;
         _fileTabRouter = result.FileTabRouter;
+        _contextualTabs = result.ContextualTabs;
         return result.Root;
+    }
+
+    // The shared renderer stamps group content with its canonical catalog id. Replace selected WPF command
+    // lanes with native Office-style previews while preserving underlying commands for non-WPF hosts and
+    // contextual command routing.
+    private static void InjectRibbonGallery(
+        DependencyObject content,
+        string groupId,
+        Func<FrameworkElement> createGallery)
+    {
+        var panel = (content as Border)?.Child as Panel;
+        if (panel is null)
+            return;
+
+        var group = panel.Children.OfType<RibbonGroupHost>()
+            .FirstOrDefault(host => host.GroupContent is Grid grid && RibbonMetadata.GetCatalogId(grid) == groupId);
+        if (group is null)
+            return;
+
+        // The shared adaptive host creates compact presentations lazily. A native gallery must be
+        // recreated for each presentation because WPF elements cannot be reparented between group grids.
+        var injectedLanes = new HashSet<Panel>();
+        void InjectInto(FrameworkElement presentation)
+        {
+            if (presentation is not Grid grid)
+                return;
+
+            var lane = grid.Children.OfType<FrameworkElement>()
+                .FirstOrDefault(child => Grid.GetRow(child) == 0) as Panel;
+            if (lane is null || !injectedLanes.Add(lane))
+                return;
+
+            lane.Children.Clear();
+            lane.Children.Add(createGallery());
+        }
+
+        InjectInto(group.GroupContent);
+        group.LayoutUpdated += (_, _) =>
+        {
+            if (group.Content is FrameworkElement presentation)
+                InjectInto(presentation);
+        };
+    }
+
+    // FreeP's format and table authoring controls belong in contextual Office tabs, not in the
+    // ordinary Home ribbon. Keep the tab-strip in sync with the model selection so a blank slide
+    // stays focused on the PowerPoint-equivalent Home groups, while text shapes and tables expose
+    // their dedicated surfaces as soon as they are selected.
+    private void RefreshContextualTabs()
+    {
+        if (_contextualTabs is null || Editor.CurrentSlide is not { } slide)
+            return;
+
+        var state = RibbonContextState.None;
+        foreach (var shapeId in Editor.SelectedShapeIds)
+        {
+            var shape = SlideShapeTraversal.FindById(slide, shapeId);
+            if (shape?.Table is not null)
+            {
+                state = state.With("table");
+                continue;
+            }
+
+            if (shape?.Kind == SlideShapeKind.SmartArt && shape.SmartArt is not null)
+            {
+                state = state.With("smartart");
+                continue;
+            }
+
+            if (shape?.TextBody is not null)
+                state = state.With("text");
+        }
+
+        _contextualTabs.Apply(state);
     }
 
     // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the

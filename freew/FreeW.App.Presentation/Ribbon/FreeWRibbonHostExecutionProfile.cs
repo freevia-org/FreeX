@@ -116,6 +116,7 @@ public static class FreeWRibbonHostExecutionProfile
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.HelpOnline, ports.OpenHelpOnline);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.Feedback, ports.OpenFeedback);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.CopyDiagnostics, ports.CopyDiagnostics);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.TestCrashReporting, ports.TestCrashReporting);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.CheckUpdates, ports.CheckForUpdates);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.About, ports.OpenAbout);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.LegalNotices, ports.OpenLegalNotices);

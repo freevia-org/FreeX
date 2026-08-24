@@ -172,6 +172,45 @@ internal static partial class FreeWCanonicalRibbonTabs
                 portableOrder: 3);
 
             topology.Section(
+                "layout.arrange",
+                tab => tab.Group("arrange", "Arrange", "A", 75, group =>
+                    {
+                        group.Medium("freew.layout-wrap", "Wrap Text", RibbonCommandIconKind.Wrap, menu: menu =>
+                        {
+                            menu.Item("freew.layout-wrap-inline", "In Line with Text", "I");
+                            menu.Item("freew.layout-wrap-square", "Square", "S");
+                            menu.Item("freew.layout-wrap-tight", "Tight", "T");
+                            menu.Item("freew.layout-wrap-top-bottom", "Top and Bottom", "B");
+                            menu.Item("freew.layout-wrap-behind", "Behind Text", "H");
+                            menu.Item("freew.layout-wrap-front", "In Front of Text", "F");
+                        });
+                        group.Medium("freew.layout-selection-pane", "Selection Pane", RibbonCommandIconKind.NavigationPane);
+                        group.Medium("freew.layout-bring-forward", "Bring Forward", RibbonCommandIconKind.BringForward);
+                        group.Medium("freew.layout-send-backward", "Send Backward", RibbonCommandIconKind.SendBackward);
+                        group.Medium("freew.layout-rotate", "Rotate", RibbonCommandIconKind.Rotate, menu: menu =>
+                        {
+                            menu.Item("freew.layout-rotate-right90", "Rotate Right 90°", "R");
+                            menu.Item("freew.layout-rotate-left90", "Rotate Left 90°", "L");
+                            menu.Item("freew.layout-flip-vertical", "Flip Vertical", "V");
+                            menu.Item("freew.layout-flip-horizontal", "Flip Horizontal", "H");
+                        });
+                        group.Medium("freew.object-group", "Group", RibbonCommandIconKind.Group);
+                        group.Medium("freew.object-ungroup", "Ungroup", RibbonCommandIconKind.Ungroup);
+                    }),
+                tab => tab.Group("arrange", "Arrange", null, 75, group =>
+                    {
+                        group.Dropdown("freew.layout-position", "Position", BuildFloatingPositionMenu("layout"));
+                        group.Dropdown("freew.layout-wrap", "Wrap Text", BuildWrapMenu("layout"));
+                        group.Button("freew.layout-selection-pane", "Selection Pane");
+                        group.Button("freew.layout-bring-forward", "Bring Forward");
+                        group.Button("freew.layout-send-backward", "Send Backward");
+                        group.Dropdown("freew.layout-rotate", "Rotate", BuildRotateMenu("layout"));
+                        group.Button("freew.object-group", "Group");
+                        group.Button("freew.object-ungroup", "Ungroup");
+                    }),
+                portableOrder: 2);
+
+            topology.Section(
                 "layout.data",
                 tab => tab.Group("data", "Data", "D", 88, group =>
                     {
@@ -475,6 +514,8 @@ internal static partial class FreeWCanonicalRibbonTabs
                     RibbonCommandIconKind.Feedback, "F");
                 AddHelpButton(group, avalonia, "freew.copy-diagnostics", "Copy Diagnostics",
                     RibbonCommandIconKind.Info, "D");
+                AddHelpButton(group, avalonia, "freew.test-crash-reporting", "Test Crash Reporting",
+                    RibbonCommandIconKind.Info, "T");
             });
             tab.Group("product", "Product", "P", 90, group =>
             {

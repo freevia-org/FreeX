@@ -26,13 +26,15 @@ public sealed class AppCrashAnalyticsTests
 
         options.IsEnabled.Should().BeTrue();
         options.Dsn.Should().Be("https://public@example.ingest.sentry.io/1");
-        options.Environment.Should().Be("tester");
+        options.Environment.Should().Be("production");
     }
 
-    [Fact]
-    public void Options_CreateDefault_MarksEnvironmentKillSwitch()
+    [Theory]
+    [InlineData("0")]
+    [InlineData("false")]
+    public void Options_CreateDefault_MarksEnvironmentKillSwitch(string value)
     {
-        using var environmentVariable = TestEnvironmentVariableScope.Set("FREEX_CRASH_ANALYTICS", "0");
+        using var environmentVariable = TestEnvironmentVariableScope.Set("FREEX_CRASH_ANALYTICS", value);
 
         var options = AppCrashAnalyticsOptions.CreateDefault(
             sentryDsnProvider: () => "https://public@example.ingest.sentry.io/1",
@@ -41,6 +43,22 @@ public sealed class AppCrashAnalyticsTests
         options.IsEnabled.Should().BeFalse();
         options.IsDisabledByEnvironment.Should().BeTrue();
         options.Dsn.Should().Be("https://public@example.ingest.sentry.io/1");
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("true")]
+    public void Options_CreateDefault_AllowsExplicitControlledEnvironmentOptIn(string value)
+    {
+        using var consent = TestEnvironmentVariableScope.Set("FREEX_CRASH_ANALYTICS", value);
+        using var environment = TestEnvironmentVariableScope.Set("FREEX_SENTRY_ENVIRONMENT", "controlled-test");
+
+        var options = AppCrashAnalyticsOptions.CreateDefault(
+            sentryDsnProvider: () => "https://public@example.ingest.sentry.io/1",
+            crashAnalyticsEnabled: false);
+
+        options.IsEnabled.Should().BeTrue();
+        options.Environment.Should().Be("controlled-test");
     }
 
     [Fact]
@@ -123,6 +141,8 @@ public sealed class AppCrashAnalyticsTests
             Crashes.Add((exception, source));
         }
 
+        public bool SendTestReport() => true;
+
         public void Dispose()
         {
         }
@@ -140,6 +160,8 @@ public sealed class AppCrashAnalyticsTests
 
         public void CaptureCrash(Exception exception, string source) =>
             throw new InvalidOperationException("remote unavailable");
+
+        public bool SendTestReport() => false;
 
         public void Dispose()
         {

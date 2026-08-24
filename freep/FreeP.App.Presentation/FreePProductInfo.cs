@@ -20,4 +20,16 @@ public static class FreePProductInfo
             ProductName,
             AppDiagnosticsMetadata.Create(version));
     }
+
+    public static string CreateDiagnosticsText(Assembly assembly)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+        var metadata = AssemblyVersionMetadata.FromAssembly(assembly);
+        var version = AppVersionFormatter.FormatBuildVersionText(
+            metadata.InformationalVersion,
+            metadata.AssemblyVersion);
+        return AppFeedbackReporter.CreateDiagnosticsText(
+            ProductName,
+            AppDiagnosticsMetadata.Create(version));
+    }
 }

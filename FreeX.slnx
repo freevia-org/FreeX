@@ -118,6 +118,7 @@
     <Project Path="tools/Free.ToolsShared/Free.ToolsShared.csproj" />
     <Project Path="tools/FreeP.KeyboardContextEvidence/FreeP.KeyboardContextEvidence.csproj" />
     <Project Path="tools/FreeP.RandomTransitionEvidence/FreeP.RandomTransitionEvidence.csproj" />
+    <Project Path="freep/tools/FreeP.RibbonShot/FreeP.RibbonShot.csproj" />
     <Project Path="tools/FreeW.BackstageParityEvidence/FreeW.BackstageParityEvidence.csproj" />
     <Project Path="tools/FreeP.GenerateFixtures/FreeP.GenerateFixtures.csproj" />
     <Project Path="tools/FreeP.MediaRuntimeProbe/FreeP.MediaRuntimeProbe.csproj" />

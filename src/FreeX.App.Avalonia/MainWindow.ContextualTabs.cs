@@ -24,9 +24,12 @@ public sealed partial class MainWindow
             // --- Help tab (always visible). ---
             [FreeXRibbonCommandIds.HelpAbout] = () => RunGuarded(ShowAboutDialogAsync),
             [FreeXRibbonCommandIds.HelpOnline] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"))),
-            [FreeXRibbonCommandIds.HelpFeedback] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"))),
+            [FreeXRibbonCommandIds.HelpFeedback] = () => RunGuarded(() => OpenExternalHelpLinkAsync(
+                AppIssueReporter.CreateIssueUrl(CreateIssueReportContext()),
+                UiText.Get("MainWindow_Content_Feedback"))),
             [FreeXRibbonCommandIds.HelpCheckForUpdates] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"))),
             [FreeXRibbonCommandIds.HelpCopyDiagnostics] = () => RunGuarded(CopyDiagnosticsToClipboardAsync),
+            [FreeXRibbonCommandIds.HelpTestCrashReporting] = () => RunGuarded(SendCrashAnalyticsTestReportAsync),
             [FreeXRibbonCommandIds.HelpLegalNotices] = () => RunGuarded(ShowLegalNoticesDialogAsync),
 
             // --- Chart Design (chart.selected) — real handlers via SetChartLayoutCommand /

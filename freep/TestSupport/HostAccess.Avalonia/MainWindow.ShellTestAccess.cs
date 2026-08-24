@@ -119,6 +119,8 @@ public sealed partial class MainWindow
 
     internal PresentationViewShowState ViewShowStateForTests => _viewShowState;
 
+    internal bool NotesPaneVisibleForTests => _notesBox.IsVisible;
+
     internal PresentationViewZoomState ViewZoomStateForTests => _viewZoomState;
 
     internal PresentationViewZoomState SlideCanvasViewZoomStateForTests => _slideCanvas.ViewZoomState;

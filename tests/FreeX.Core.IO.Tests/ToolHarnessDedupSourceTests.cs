@@ -119,6 +119,8 @@ public sealed class ToolHarnessDedupSourceTests
     {
         var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
 
+        foregroundCapture.Should().Contain("startInfo.Environment.Remove(\"DOTNET_ROOT\")");
+        foregroundCapture.Should().Contain("startInfo.Environment.Remove(\"DOTNET_ROOT_X64\")");
         foregroundCapture.Should().Contain("WindowFinder.WaitForMainWindow(process, exePath, options.LaunchTimeout)");
         foregroundCapture.Should().Contain("WindowFinder.DescribeLaunchWindowCandidates(process.Id, exePath)");
         foregroundCapture.Should().Contain("IsLaunchMainWindowCandidate(candidate, process.Id, expectedProcessName, expectedExePath)");
@@ -127,6 +129,62 @@ public sealed class ToolHarnessDedupSourceTests
         foregroundCapture.Should().Contain("ForegroundGuard.FocusAndVerify(handle, windowProcessId.Value, \"FreeX\", options.FocusTimeout)");
         foregroundCapture.Should().Contain("WindowFinder.FindProcessPopup(windowProcessId.Value, window.Handle, options.PopupTimeout, 120, 80)");
         foregroundCapture.Should().Contain("Visible window candidates:");
+    }
+
+    [Fact]
+    public void ForegroundCapture_PopupDiscoveryRejectsFocusedOwnerChildren()
+    {
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundCapture.Should().Contain("IsDistinctTopLevelWindow(foreground, ownerHandle)");
+        foregroundCapture.Should().Contain("NativeMethods.GetAncestor(new IntPtr(candidate.Handle), NativeMethods.GA_ROOT)");
+        foregroundCapture.Should().Contain("public const uint GA_ROOT = 2;");
+        foregroundCapture.Should().Contain("GetVisibleExcelSheetTabElements");
+        foregroundCapture.Should().Contain(".Where(element => Equals(element.Current.ControlType, ControlType.TabItem))");
+    }
+
+    [Fact]
+    public void ForegroundCapture_FormatCellsUsesTheSharedSeedFixture()
+    {
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundCapture.Should().Contain("const string seed = \"score\\r\\n1\\r\\n2\\r\\n3\";");
+        foregroundCapture.Should().Contain("PasteCellText(handle, process.Id, a1Bounds, seed)");
+        foregroundCapture.Should().Contain("WaitForCellValue(handle, \"Cell_A1\", \"score\", TimeSpan.FromSeconds(3), out var observedSeedValue)");
+    }
+
+    [Fact]
+    public void ForegroundCapture_SheetTabMenuCapturesTheDetectedPopup()
+    {
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundCapture.Should().Contain("SeedSheetsWithAddButton(handle, processId, 4)");
+        foregroundCapture.Should().Contain("GuardedClickElement(options.Scenario, processId, handle, addButton, MouseButtonKind.Left)");
+        foregroundCapture.Should().Contain("return CaptureWindow(scenario, \"freex\", _lastCaptureWindow ?? refreshedWindow, guard, \"complete\", _lastResultValidation);");
+        foregroundCapture.Should().Contain("_lastCaptureWindow = popup;");
+        foregroundCapture.Should().Contain("_lastCaptureWindow = null;");
+    }
+
+    [Fact]
+    public void ForegroundCapture_ReportsTheWindowsLockScreenExplicitly()
+    {
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundCapture.Should().Contain("IsWindowsLockScreen(current)");
+        foregroundCapture.Should().Contain("Windows lock screen is active; unlock the interactive console before running foreground capture.");
+        foregroundCapture.Should().Contain("Windows Default Lock Screen");
+    }
+
+    [Fact]
+    public void ForegroundCapture_ReportsSheetOverflowRouteDiagnostics()
+    {
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
+
+        foregroundCapture.Should().Contain("UIA navigation candidates:");
+        foregroundCapture.Should().Contain("sheet-tab coordinate fallback:");
+        foregroundCapture.Should().Contain("visible process windows:");
+        foregroundCapture.Should().Contain("DescribeProcessWindowCandidates");
+        foregroundCapture.Should().Contain("Diagnostics: {string.Join");
     }
 
     [Fact]

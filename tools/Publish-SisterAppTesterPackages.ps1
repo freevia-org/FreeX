@@ -26,6 +26,7 @@ param(
     [ValidateSet("SingleFile", "FolderZip")]
     [string]$WindowsPackageMode = "SingleFile",
 
+    [ValidateSet("Release")]
     [string]$Configuration = "Release",
 
     [string]$OutputDir
@@ -54,10 +55,11 @@ if (-not $OutputDir) {
     $OutputDir = Join-Path $repoRoot "artifacts\sister-tester-release-$Version"
 }
 
-$shortSha = (& git -C $repoRoot rev-parse --short=8 HEAD).Trim()
-if (-not $shortSha) {
+$commitSha = (& git -C $repoRoot rev-parse HEAD).Trim().ToLowerInvariant()
+if ($commitSha -notmatch '^[0-9a-f]{40}$') {
     throw "Could not resolve git commit."
 }
+$informationalSha = $commitSha.Substring(0, 8)
 
 $config = switch ($App) {
     "FreeX" {
@@ -93,9 +95,6 @@ $config = switch ($App) {
 }
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-$manifestRows = New-Object System.Collections.Generic.List[string]
-$manifestRows.Add("app,version,commit,runtime,host,package_type,package,sha256")
-
 foreach ($runtime in $Runtimes) {
     $isWindowsRuntime = $runtime -like "win-*"
     $isWindowsSingleFile = $isWindowsRuntime -and $WindowsPackageMode -eq "SingleFile"
@@ -128,8 +127,11 @@ foreach ($runtime in $Runtimes) {
         "--self-contained", "true",
         "-p:UseAppHost=true",
         "-p:PublishSingleFile=$($isWindowsSingleFile.ToString().ToLowerInvariant())",
+        "-p:DebugType=None",
+        "-p:DebugSymbols=false",
+        "-p:Optimize=true",
         "-p:Version=$Version",
-        "-p:InformationalVersion=$Version+$shortSha",
+        "-p:InformationalVersion=$Version+$informationalSha",
         "--output", $publishDir
     )
     if ($isWindowsSingleFile) {
@@ -147,8 +149,11 @@ foreach ($runtime in $Runtimes) {
             "--self-contained", "true",
             "-p:UseAppHost=true",
             "-p:PublishSingleFile=false",
+            "-p:DebugType=None",
+            "-p:DebugSymbols=false",
+            "-p:Optimize=true",
             "-p:Version=$Version",
-            "-p:InformationalVersion=$Version+$shortSha",
+            "-p:InformationalVersion=$Version+$informationalSha",
             "--output", $publishDir
         )
         if ($App -eq "FreeP") {
@@ -187,8 +192,11 @@ foreach ($runtime in $Runtimes) {
             "--self-contained", "true",
             "-p:UseAppHost=true",
             "-p:PublishSingleFile=false",
+            "-p:DebugType=None",
+            "-p:DebugSymbols=false",
+            "-p:Optimize=true",
             "-p:Version=$Version",
-            "-p:InformationalVersion=$Version+$shortSha",
+            "-p:InformationalVersion=$Version+$informationalSha",
             "--output", $validationPublishDir
         )
         if ($App -eq "FreeP") {
@@ -218,6 +226,9 @@ foreach ($runtime in $Runtimes) {
             --configuration $Configuration `
             --runtime $runtime `
             --self-contained false `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -p:Optimize=true `
             --output $smokeToolDir
         if ($LASTEXITCODE -ne 0) {
             throw "$App $runtime tester-release smoke tool publish failed with exit code $LASTEXITCODE."
@@ -283,11 +294,7 @@ foreach ($runtime in $Runtimes) {
     $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
     $shaPath = "$packagePath.sha256"
     "$hash  $packageName" | Set-Content -LiteralPath $shaPath -NoNewline -Encoding ascii
-    $manifestRows.Add("$App,$Version,$shortSha,$runtime,$hostKind,$packageType,$packageName,$hash")
     Write-Host "Produced $packageName"
 }
-
-$manifestPath = Join-Path $OutputDir "$App-$Version-$shortSha-manifest.csv"
-$manifestRows | Set-Content -LiteralPath $manifestPath -Encoding ascii
-Write-Host ""
-Write-Host "Manifest: $manifestPath"
+Write-Host "Source commit: $commitSha"
+Write-Host "Run tools/New-ReleaseArtifactManifest.ps1 after installer and SBOM generation to create the complete release manifest."

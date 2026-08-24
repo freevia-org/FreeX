@@ -331,7 +331,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (harness.CanUseRequestedRibbonWidth(900))
             {
                 harness.TallLargeRibbonCommandLabels.Should().Contain(
-                    ["Help Online", "Feedback", "Copy Diagnostics", "Check for Updates", "About FreeX", "Legal Notices"],
+                    ["Help Online", "Feedback", "Copy Diagnostics", "Test Crash Reporting", "Check for Updates", "About FreeX", "Legal Notices"],
                     $"Help should render its standalone commands as Large icon-label tiles when the row has room; {harness.DebugActiveRibbonChildren}");
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,

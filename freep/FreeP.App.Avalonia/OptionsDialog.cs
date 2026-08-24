@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -102,8 +103,17 @@ internal sealed partial class OptionsDialog : FreePDialogWindow
         cancel.Click += (_, _) => Close();
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: OptionsDialogPlanner.ActionButtonWidth);
 
+        var legalNotices = new Button { Content = "Legal Notices…" };
+        AutomationProperties.SetName(legalNotices, "Legal Notices");
+        AutomationProperties.SetAutomationId(legalNotices, "FreePOptionsLegalNoticesButton");
+        AvaloniaCompactDialogChrome.ApplyButton(
+            legalNotices,
+            DialogChromeStyle,
+            minWidth: OptionsDialogPlanner.ActionButtonWidth);
+        legalNotices.Click += async (_, _) => await new LegalNoticesDialog().ShowDialog(this);
+
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
-            [ok, cancel],
+            [legalNotices, ok, cancel],
             new Thickness(
                 OptionsDialogPlanner.ContentMargin,
                 OptionsDialogPlanner.ActionRowTopMargin,

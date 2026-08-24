@@ -37,17 +37,7 @@ public static partial class AppIssueReporter
     }
 
     public static string CreateIssueUrl(AppIssueReportContext context)
-    {
-        var separator = context.IssueBaseUrl.Contains('?', StringComparison.Ordinal) ? "&" : "?";
-        return context.IssueBaseUrl
-            + separator
-            + "title="
-            + Uri.EscapeDataString("Tester issue: ")
-            + "&body="
-            + Uri.EscapeDataString(CreateIssueBody(context))
-            + "&labels="
-            + Uri.EscapeDataString("tester-feedback");
-    }
+        => AppFeedbackReporter.CreateIssueUrl("FreeX", context.Metadata, context.IssueBaseUrl);
 
     public static string CreateDiagnosticsText(AppIssueReportContext context)
     {
@@ -75,27 +65,6 @@ public static partial class AppIssueReporter
         var match = CommitHashPattern().Match(informationalVersion);
         return match.Success ? match.Groups["sha"].Value[..8] : "unknown";
     }
-
-    private static string CreateIssueBody(AppIssueReportContext context)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine("## Diagnostics");
-        AppendDiagnosticsMetadata(builder, context);
-        builder.AppendLine();
-        AppendIssueSectionHeading(builder, WhatHappenedPrompt);
-        builder.AppendLine();
-        AppendIssueSectionHeading(builder, WhatDidYouExpectPrompt);
-        builder.AppendLine();
-        builder.AppendLine("## Steps to reproduce");
-        builder.AppendLine("1. ");
-        builder.AppendLine();
-        builder.AppendLine("## Privacy");
-        builder.AppendLine(IssuePrivacyNote);
-        return builder.ToString();
-    }
-
-    private static void AppendIssueSectionHeading(StringBuilder builder, string prompt) =>
-        builder.AppendLine($"## {prompt}");
 
     private static void AppendDiagnosticsMetadata(StringBuilder builder, AppIssueReportContext context)
     {

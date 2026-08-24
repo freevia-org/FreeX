@@ -21,6 +21,10 @@ public sealed partial class SlidePane : Border
     private readonly Button _newSlideButton;
     private bool _realizing;
     private bool _restoreFocusAfterRefresh;
+    private bool _isSlideSorter;
+    private int _slideSorterDragSourceIndex = -1;
+    private Point _slideSorterDragStart;
+    private bool _slideSorterDragging;
 
     private sealed record SectionHeaderTag(string SectionId, int SectionIndex);
 
@@ -100,6 +104,32 @@ public sealed partial class SlidePane : Border
             _restoreFocusAfterRefresh = false;
             GetActiveItem()?.Focus();
         }
+    }
+
+    internal void SetSlideSorterMode(bool isSlideSorter)
+    {
+        if (_isSlideSorter == isSlideSorter)
+            return;
+
+        _isSlideSorter = isSlideSorter;
+        _list.ItemsPanel = isSlideSorter ? CreateSlideSorterItemsPanel() : null;
+        _list.HorizontalContentAlignment = isSlideSorter
+            ? HorizontalAlignment.Left
+            : HorizontalAlignment.Stretch;
+        ScrollViewer.SetHorizontalScrollBarVisibility(
+            _list,
+            isSlideSorter ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled);
+        _newSlideButton.HorizontalAlignment = isSlideSorter
+            ? HorizontalAlignment.Left
+            : HorizontalAlignment.Stretch;
+        RefreshProjection();
+    }
+
+    private static ItemsPanelTemplate CreateSlideSorterItemsPanel()
+    {
+        var panel = new FrameworkElementFactory(typeof(WrapPanel));
+        panel.SetValue(WrapPanel.OrientationProperty, Orientation.Horizontal);
+        return new ItemsPanelTemplate(panel);
     }
 
     internal void SyncNativeSelection(bool scrollActiveIntoView = true)
@@ -516,13 +546,36 @@ public sealed partial class SlidePane : Border
     private void OnItemMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is ListBoxItem { Tag: int sourceSlideIndex } item)
+        {
+            if (_isSlideSorter)
+            {
+                _slideSorterDragSourceIndex = sourceSlideIndex;
+                _slideSorterDragStart = e.GetPosition(_list);
+                _slideSorterDragging = false;
+                return;
+            }
             _workarea.BeginSlidePaneDrag(sourceSlideIndex, e.GetPosition(item).Y);
+        }
     }
 
     private void OnItemMouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed || sender is not ListBoxItem item)
             return;
+        if (_isSlideSorter)
+        {
+            if (_slideSorterDragSourceIndex < 0)
+                return;
+            var pointer = e.GetPosition(_list);
+            if (!_slideSorterDragging &&
+                Math.Abs(pointer.X - _slideSorterDragStart.X) < SlidePanePlanner.DefaultDragStartThreshold &&
+                Math.Abs(pointer.Y - _slideSorterDragStart.Y) < SlidePanePlanner.DefaultDragStartThreshold)
+                return;
+            _slideSorterDragging = true;
+            item.CaptureMouse();
+            e.Handled = true;
+            return;
+        }
         var update = _workarea.UpdateSlidePaneDrag(
             e.GetPosition(item).Y,
             e.GetPosition(_list).Y);
@@ -538,6 +591,22 @@ public sealed partial class SlidePane : Border
     {
         if (sender is not ListBoxItem item)
             return;
+        if (_isSlideSorter)
+        {
+            if (_slideSorterDragging && _slideSorterDragSourceIndex >= 0)
+            {
+                var target = FindSlideSorterInsertionIndex(e.GetPosition(_list));
+                _workarea.ExecuteSlidePaneAction(
+                    SlidePaneActionKind.MoveSlide,
+                    _slideSorterDragSourceIndex,
+                    target);
+                item.ReleaseMouseCapture();
+            }
+            _slideSorterDragSourceIndex = -1;
+            _slideSorterDragging = false;
+            e.Handled = true;
+            return;
+        }
         _workarea.CompleteSlidePaneDrag(out var shouldReleaseCapture);
         if (shouldReleaseCapture)
         {
@@ -549,8 +618,34 @@ public sealed partial class SlidePane : Border
 
     private void OnItemLostMouseCapture(object sender, MouseEventArgs e)
     {
+        if (_isSlideSorter)
+        {
+            _slideSorterDragSourceIndex = -1;
+            _slideSorterDragging = false;
+            return;
+        }
         _workarea.CancelSlidePaneDrag();
         HideInsertIndicator();
+    }
+
+    private int FindSlideSorterInsertionIndex(Point pointer)
+    {
+        var items = _list.Items.OfType<ListBoxItem>()
+            .Where(item => item.Tag is int)
+            .Select(item => new { Item = item, SlideIndex = (int)item.Tag })
+            .OrderBy(item => item.Item.TranslatePoint(new Point(), _list).Y)
+            .ThenBy(item => item.Item.TranslatePoint(new Point(), _list).X)
+            .ToArray();
+        foreach (var candidate in items)
+        {
+            var origin = candidate.Item.TranslatePoint(new Point(), _list);
+            if (pointer.Y < origin.Y + candidate.Item.ActualHeight / 2 ||
+                (pointer.Y < origin.Y + candidate.Item.ActualHeight &&
+                 pointer.X < origin.X + candidate.Item.ActualWidth / 2))
+                return candidate.SlideIndex;
+        }
+
+        return _workarea.Presentation.Slides.Count;
     }
 
     private void ShowInsertIndicator(SlidePaneDropVisualPlan plan)

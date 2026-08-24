@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -167,6 +168,8 @@ public sealed partial class MainWindow : Window,
 
     private readonly SlideCanvas _slideCanvas;
     private Border _canvasHost = null!;
+    private Grid _bodyGrid = null!;
+    private Grid _slidePaneHost = null!;
     private Canvas _oleOverlay = null!;
     private Canvas _commentOverlay = null!;
 #if FREEP_WINDOWS_CAPTURE
@@ -349,6 +352,10 @@ public sealed partial class MainWindow : Window,
     private FlyoutBase? _ribbonKeyTipFlyout;
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
+    private PresentationViewModeState _viewModeState = PresentationViewModeState.Normal;
+    private int _slideSorterDragSourceIndex = -1;
+    private Point _slideSorterDragStart;
+    private bool _slideSorterDragging;
 
     private bool _notesRefreshing;
     private bool _slidePaneRefreshing;
@@ -737,8 +744,10 @@ public sealed partial class MainWindow : Window,
             Body: clientRoot,
             TitleBarBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
                 ThemeResources.TitleBarBrush,
-                FreePBrushes.Accent),
-            TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeP.Colors.TitleBar))),
+            TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.Brush("TitleBarForeground"),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeP.Colors.TitleBarForeground))),
             TitleBarHeight: FreePShellVisualMetrics.TitleBarHeight));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
@@ -747,7 +756,9 @@ public sealed partial class MainWindow : Window,
                 Save: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.SavePresentation),
                 Undo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Undo),
                 Redo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)),
-            AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White));
+            AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.Brush("TitleBarForeground"),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeP.Colors.TitleBarForeground))));
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
@@ -1137,7 +1148,7 @@ public sealed partial class MainWindow : Window,
         // Wire interaction after the overlay panel is built.
         WireInteraction(textOverlay);
 
-        var slidePaneHost = new Grid
+        var slidePaneHost = _slidePaneHost = new Grid
         {
             Width = FreePShellVisualMetrics.SlidePaneWidth,
             Background = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
@@ -1155,7 +1166,7 @@ public sealed partial class MainWindow : Window,
         slidePaneHost.Children.Add(_slidePaneNewSlideButton);
 
         // Left (slide pane) + right split.
-        var body = new Grid();
+        var body = _bodyGrid = new Grid();
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -2312,6 +2323,7 @@ public sealed partial class MainWindow : Window,
     private void ApplyPresentationViewShowState(PresentationViewShowState state)
     {
         _viewShowState = state;
+        _notesBox.IsVisible = _viewModeState.Mode != PresentationViewMode.SlideSorter && state.ShowNotesPane;
         if (_gestureHandler is null)
             return;
 
@@ -2323,6 +2335,35 @@ public sealed partial class MainWindow : Window,
     {
         _viewZoomState = state;
         _slideCanvas.ApplyViewZoomState(state);
+    }
+
+    private void ApplyPresentationViewModeState(PresentationViewModeState state)
+    {
+        _viewModeState = state;
+        var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
+        var isNotesPage = state.Mode == PresentationViewMode.NotesPage;
+        if (_bodyGrid is null || _slidePaneHost is null || _canvasHost is null)
+            return;
+
+        _bodyGrid.ColumnDefinitions[0].Width = isSlideSorter
+            ? new GridLength(1, GridUnitType.Star)
+            : isNotesPage ? new GridLength(0) : GridLength.Auto;
+        _bodyGrid.ColumnDefinitions[1].Width = isSlideSorter
+            ? new GridLength(0)
+            : new GridLength(1, GridUnitType.Star);
+        _slidePaneHost.Width = isSlideSorter || isNotesPage ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
+        _slidePaneList.Width = isSlideSorter || isNotesPage ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
+        _slidePaneList.MaxHeight = isSlideSorter ? double.PositiveInfinity : 520;
+        _slidePaneList.ItemsPanel = isSlideSorter
+            ? new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = Orientation.Horizontal })
+            : new FuncTemplate<Panel?>(() => new StackPanel { Orientation = Orientation.Vertical });
+        _canvasHost.IsVisible = !isSlideSorter;
+        _notesBox.IsVisible = !isSlideSorter && _viewShowState.ShowNotesPane;
+        _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
+        _notesBox.MaxHeight = isNotesPage ? 300 : 120;
+        _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
+        RefreshSlidePane();
+        SyncRibbonCommandStates();
     }
 
     private Control BuildRibbon()
@@ -2341,6 +2382,22 @@ public sealed partial class MainWindow : Window,
             options: new AvaloniaRibbonRendererOptions(
                 EnableIntermediateGroupPresentations: true),
             stateStore: _ribbonStateStore);
+
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "themes",
+            () => PresentationThemeGallery.Build(registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "transition-gallery",
+            () => PresentationTransitionGallery.Build(registry));
+        if (definition.FindTab("animations") is { } animationsTab)
+        {
+            AvaloniaRibbonRenderer.TryInjectGroupContent(
+                _ribbonControl,
+                "animation-effects",
+                () => PresentationAnimationGallery.Build(animationsTab, registry, _ribbonStateStore));
+        }
 
         return new Border
         {
@@ -2372,6 +2429,7 @@ public sealed partial class MainWindow : Window,
                 AnimationPaneVisible = () => IsAnimationPaneVisible,
                 ViewShowState = () => _viewShowState,
                 ViewZoomState = () => _viewZoomState,
+                ViewModeState = () => _viewModeState,
             },
             TextActionTargets = CreateRibbonTextActionTargets(),
             DesignCommands = new FreePRibbonDesignCommandEndpoints
@@ -2411,6 +2469,8 @@ public sealed partial class MainWindow : Window,
                 OpenFeedback = () => _ = OpenSupportUriAsync(
                     FreePProductInfo.CreateFeedbackUrl(typeof(MainWindow).Assembly),
                     "FreeP Feedback"),
+                CopyDiagnostics = () => _ = CopySupportDiagnosticsAsync(),
+                TestCrashReporting = () => _ = ShowCrashAnalyticsTestResultAsync(),
             },
         });
 
@@ -2419,6 +2479,36 @@ public sealed partial class MainWindow : Window,
         var result = DesktopExternalUriLauncher.Open(uri);
         if (result != ExternalUriLaunchResult.Launched)
             await AvaloniaUserMessageDialog.ShowWarningAsync(this, $"Could not open the link.\n\n{uri}", title);
+    }
+
+    private async Task CopySupportDiagnosticsAsync()
+    {
+        try
+        {
+            var clipboard = new AvaloniaPlatformClipboard(() => TopLevel.GetTopLevel(this)?.Clipboard);
+            var write = await clipboard.WriteAsync(new PlatformClipboardContent(
+                Text: FreePProductInfo.CreateDiagnosticsText(typeof(MainWindow).Assembly)));
+            if (!write.IsSuccess)
+                throw new InvalidOperationException(write.ErrorMessage ?? "Clipboard is unavailable on this platform.");
+            await AvaloniaUserMessageDialog.ShowAsync(
+                this,
+                "FreeP diagnostics were copied to the clipboard.",
+                "Copy Diagnostics",
+                UserMessageIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            await AvaloniaUserMessageDialog.ShowWarningAsync(this, $"Could not copy diagnostics: {ex.Message}", "Copy Diagnostics");
+        }
+    }
+
+    private Task ShowCrashAnalyticsTestResultAsync()
+    {
+        var result = AppCrashAnalyticsRuntime.SendTestReport();
+        var message = AppCrashAnalyticsRuntime.UserMessage(result);
+        return result == CrashAnalyticsTestReportResult.Sent
+            ? AvaloniaUserMessageDialog.ShowAsync(this, message, "Test Crash Reporting", UserMessageIcon.Information)
+            : AvaloniaUserMessageDialog.ShowWarningAsync(this, message, "Test Crash Reporting");
     }
 
     private FreePRibbonTextActionTargets CreateRibbonTextActionTargets() => new()
@@ -6339,11 +6429,39 @@ public sealed partial class MainWindow : Window,
         if (!point.Properties.IsLeftButtonPressed)
             return;
 
+        if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
+        {
+            _slideSorterDragSourceIndex = sourceSlideIndex;
+            _slideSorterDragStart = e.GetPosition(_slidePaneList);
+            _slideSorterDragging = false;
+            return;
+        }
+
         _workareaSession.BeginSlidePaneDrag(sourceSlideIndex, e.GetPosition(item).Y);
     }
 
     private void OnSlidePaneItemPointerMoved(object? sender, PointerEventArgs e)
     {
+        if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
+        {
+            if (sender is not ListBoxItem sorterItem || _slideSorterDragSourceIndex < 0)
+                return;
+
+            var sorterPoint = e.GetCurrentPoint(sorterItem);
+            if (!sorterPoint.Properties.IsLeftButtonPressed)
+                return;
+
+            var pointer = e.GetPosition(_slidePaneList);
+            if (!_slideSorterDragging &&
+                Math.Abs(pointer.X - _slideSorterDragStart.X) < SlidePanePlanner.DefaultDragStartThreshold &&
+                Math.Abs(pointer.Y - _slideSorterDragStart.Y) < SlidePanePlanner.DefaultDragStartThreshold)
+                return;
+
+            _slideSorterDragging = true;
+            e.Pointer.Capture(sorterItem);
+            e.Handled = true;
+            return;
+        }
         if (sender is not ListBoxItem item ||
             !_workareaSession.SlidePaneSession.Projection.Layout.DragSession.IsTracking)
             return;
@@ -6368,6 +6486,23 @@ public sealed partial class MainWindow : Window,
 
     private void OnSlidePaneItemPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
+        if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
+        {
+            if (_slideSorterDragging && _slideSorterDragSourceIndex >= 0)
+            {
+                var target = FindSlideSorterInsertionIndex(e.GetPosition(_slidePaneList));
+                _workareaSession.ExecuteSlidePaneAction(
+                    SlidePaneActionKind.MoveSlide,
+                    _slideSorterDragSourceIndex,
+                    target);
+                e.Pointer.Capture(null);
+            }
+
+            _slideSorterDragSourceIndex = -1;
+            _slideSorterDragging = false;
+            e.Handled = true;
+            return;
+        }
         _workareaSession.CompleteSlidePaneDrag(out var shouldReleaseCapture);
         if (!shouldReleaseCapture)
         {
@@ -6382,8 +6517,40 @@ public sealed partial class MainWindow : Window,
 
     private void OnSlidePaneItemPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
+        if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
+        {
+            _slideSorterDragSourceIndex = -1;
+            _slideSorterDragging = false;
+            return;
+        }
         _workareaSession.CancelSlidePaneDrag();
         HideSlidePaneInsertionIndicator();
+    }
+
+    private int FindSlideSorterInsertionIndex(Point pointer)
+    {
+        var items = _slidePaneList.Items.OfType<ListBoxItem>()
+            .Where(item => item.Tag is int)
+            .Select(item => new
+            {
+                Item = item,
+                SlideIndex = item.Tag is int slideIndex ? slideIndex : -1,
+            })
+            .OrderBy(item => item.Item.TranslatePoint(new Point(), _slidePaneList)?.Y ?? 0)
+            .ThenBy(item => item.Item.TranslatePoint(new Point(), _slidePaneList)?.X ?? 0)
+            .ToArray();
+        foreach (var candidate in items)
+        {
+            var origin = candidate.Item.TranslatePoint(new Point(), _slidePaneList);
+            if (origin is null)
+                continue;
+            if (pointer.Y < origin.Value.Y + candidate.Item.Bounds.Height / 2 ||
+                (pointer.Y < origin.Value.Y + candidate.Item.Bounds.Height &&
+                 pointer.X < origin.Value.X + candidate.Item.Bounds.Width / 2))
+                return candidate.SlideIndex;
+        }
+
+        return _presentation.Slides.Count;
     }
 
     internal bool TryApplySlidePaneMove(int sourceSlideIndex, int targetInsertionIndex)

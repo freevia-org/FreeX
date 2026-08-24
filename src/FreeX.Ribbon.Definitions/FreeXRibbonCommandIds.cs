@@ -129,6 +129,7 @@ public static class FreeXRibbonCommandIds
     public const string HelpOnline = "help.online";
     public const string HelpFeedback = "help.feedback";
     public const string HelpCopyDiagnostics = "help.copyDiagnostics";
+    public const string HelpTestCrashReporting = "help.testCrashReporting";
     public const string HelpCheckForUpdates = "help.checkForUpdates";
     public const string HelpAbout = "help.about";
     public const string HelpLegalNotices = "help.legalNotices";

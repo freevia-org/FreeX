@@ -299,6 +299,7 @@ public static class FreeXRibbonDefinition
                 .Large(FreeXRibbonCommandIds.HelpOnline, "Help Online", Ico.Help, "H")
                 .Large(FreeXRibbonCommandIds.HelpFeedback, "Feedback", Ico.Comment, "F")
                 .Large(FreeXRibbonCommandIds.HelpCopyDiagnostics, "Copy Diagnostics", Ico.List, "D")
+                .Large(FreeXRibbonCommandIds.HelpTestCrashReporting, "Test Crash Reporting", Ico.Info, "T")
                 .Large(FreeXRibbonCommandIds.HelpCheckForUpdates, "Check for Updates", Ico.Refresh, "U")
                 .Large(FreeXRibbonCommandIds.HelpAbout, "About FreeX", Ico.Info, "A")
                 .Large(FreeXRibbonCommandIds.HelpLegalNotices, "Legal Notices", Ico.Book, "L"))

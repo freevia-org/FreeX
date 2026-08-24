@@ -1,3 +1,6 @@
+using System.Windows;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
@@ -17,6 +20,7 @@ public sealed partial class MainWindow
                 AnimationPaneVisible = () => IsAnimationPaneVisible,
                 ViewShowState = () => _viewShowState,
                 ViewZoomState = () => _viewZoomState,
+                ViewModeState = () => _viewModeState,
             },
             TextActionTargets = CreateRibbonTextActionTargets(),
             DesignCommands = new FreePRibbonDesignCommandEndpoints
@@ -36,6 +40,8 @@ public sealed partial class MainWindow
                 OpenFeedback = () => OpenSupportUri(
                     FreePProductInfo.CreateFeedbackUrl(typeof(MainWindow).Assembly),
                     "FreeP Feedback"),
+                CopyDiagnostics = CopySupportDiagnostics,
+                TestCrashReporting = TestCrashReporting,
             },
         });
 
@@ -44,6 +50,29 @@ public sealed partial class MainWindow
         var result = DesktopExternalUriLauncher.Open(uri);
         if (result != ExternalUriLaunchResult.Launched)
             DialogMessageHelper.ShowWarning(this, $"Could not open the link.\n\n{uri}", title);
+    }
+
+    private void CopySupportDiagnostics()
+    {
+        try
+        {
+            Clipboard.SetText(FreePProductInfo.CreateDiagnosticsText(typeof(MainWindow).Assembly));
+            DialogMessageHelper.ShowInfo(this, "FreeP diagnostics were copied to the clipboard.", "Copy Diagnostics");
+        }
+        catch (Exception ex)
+        {
+            DialogMessageHelper.ShowWarning(this, $"Could not copy diagnostics: {ex.Message}", "Copy Diagnostics");
+        }
+    }
+
+    private void TestCrashReporting()
+    {
+        var result = AppCrashAnalyticsRuntime.SendTestReport();
+        var message = AppCrashAnalyticsRuntime.UserMessage(result);
+        if (result == CrashAnalyticsTestReportResult.Sent)
+            DialogMessageHelper.ShowInfo(this, message, "Test Crash Reporting");
+        else
+            DialogMessageHelper.ShowWarning(this, message, "Test Crash Reporting");
     }
 
     private FreePRibbonTextActionTargets CreateRibbonTextActionTargets() => new()

@@ -56,6 +56,15 @@ internal static class FreePRibbonText
     public static string TextColumnsKeyTip => Get("Ribbon_Command_TextColumns_KeyTip");
     public static string TextColumnSpacingLabel => Get("Ribbon_Command_TextColumnSpacing_Label");
     public static string TextColumnSpacingKeyTip => Get("Ribbon_Command_TextColumnSpacing_KeyTip");
+    public static string TextFormatTabLabel => Get("Ribbon_Tab_TextFormat_Label");
+    public static string TextFormatTabKeyTip => Get("Ribbon_Tab_TextFormat_KeyTip");
+    public static string TextToolsContextLabel => Get("Ribbon_Context_TextTools_Label");
+    public static string TableLayoutTabLabel => Get("Ribbon_Tab_TableLayout_Label");
+    public static string TableLayoutTabKeyTip => Get("Ribbon_Tab_TableLayout_KeyTip");
+    public static string TableToolsContextLabel => Get("Ribbon_Context_TableTools_Label");
+    public static string SmartArtDesignTabLabel => Get("Ribbon_Tab_SmartArtDesign_Label");
+    public static string SmartArtDesignTabKeyTip => Get("Ribbon_Tab_SmartArtDesign_KeyTip");
+    public static string SmartArtToolsContextLabel => Get("Ribbon_Context_SmartArtTools_Label");
     public static string TableCellFillLabel => Get("Ribbon_Command_TableCellFill_Label");
     public static string TableCellFillKeyTip => Get("Ribbon_Command_TableCellFill_KeyTip");
     public static string TableCellAnchorLabel => Get("Ribbon_Command_TableCellAnchor_Label");
@@ -138,6 +147,7 @@ internal static class FreePRibbonText
     public static string SlideShowGroupLabel => Get("Ribbon_Group_SlideShow_Label");
     public static string SlideShowGroupWpfKeyTip => Get("Ribbon_Group_SlideShow_WpfKeyTip");
     public static string SlideShowGroupAvaloniaKeyTip => Get("Ribbon_Group_SlideShow_AvaloniaKeyTip");
+    public static RibbonText SlideShowTab { get; } = new("Ribbon_Group_SlideShow_Label", "Ribbon_Tab_SlideShow_KeyTip");
     public static string SlideShowFromBeginningLabel => Get("Ribbon_Command_SlideShowFromBeginning_Label");
     public static string SlideShowFromBeginningKeyTip => Get("Ribbon_Command_SlideShowFromBeginning_KeyTip");
     public static string SlideShowFromCurrentSlideLabel => Get("Ribbon_Command_SlideShowFromCurrentSlide_Label");
@@ -150,6 +160,21 @@ internal static class FreePRibbonText
     public static string SlideShowRecordTimingsKeyTip => Get("Ribbon_Command_SlideShowRecordTimings_KeyTip");
     public static string SlideShowSetupLabel => Get("Ribbon_Command_SlideShowSetup_Label");
     public static string SlideShowSetupKeyTip => Get("Ribbon_Command_SlideShowSetup_KeyTip");
+
+    public static RibbonText ReviewTab { get; } = new("Ribbon_Tab_Review_Label", "Ribbon_Tab_Review_KeyTip");
+    public static RibbonText ReviewCommentsGroup { get; } = new("Ribbon_Group_ReviewComments_Label", "Ribbon_Group_ReviewComments_KeyTip");
+    public static RibbonText ReviewAccessibilityGroup { get; } = new("Ribbon_Group_ReviewAccessibility_Label", "Ribbon_Group_ReviewAccessibility_KeyTip");
+    public static RibbonText ReviewProofingGroup { get; } = new("Ribbon_Group_ReviewProofing_Label", "Ribbon_Group_ReviewProofing_KeyTip");
+    public static RibbonText ReviewCommentsCommand { get; } = new("Ribbon_Command_ReviewComments_Label", "Ribbon_Command_ReviewComments_KeyTip");
+    public static RibbonText ReviewNewCommentCommand { get; } = new("Ribbon_Command_ReviewNewComment_Label", "Ribbon_Command_ReviewNewComment_KeyTip");
+    public static RibbonText ReviewReplyCommand { get; } = new("Ribbon_Command_ReviewReply_Label", "Ribbon_Command_ReviewReply_KeyTip");
+    public static RibbonText ReviewDeleteCommentCommand { get; } = new("Ribbon_Command_ReviewDeleteComment_Label", "Ribbon_Command_ReviewDeleteComment_KeyTip");
+    public static RibbonText ReviewPreviousCommentCommand { get; } = new("Ribbon_Command_ReviewPreviousComment_Label", "Ribbon_Command_ReviewPreviousComment_KeyTip");
+    public static RibbonText ReviewNextCommentCommand { get; } = new("Ribbon_Command_ReviewNextComment_Label", "Ribbon_Command_ReviewNextComment_KeyTip");
+    public static RibbonText ReviewCheckAccessibilityCommand { get; } = new("Ribbon_Command_ReviewCheckAccessibility_Label", "Ribbon_Command_ReviewCheckAccessibility_KeyTip");
+    public static RibbonText ReviewAltTextCommand { get; } = new("Ribbon_Command_ReviewAltText_Label", "Ribbon_Command_ReviewAltText_KeyTip");
+    public static RibbonText ReviewReadingOrderCommand { get; } = new("Ribbon_Command_ReviewReadingOrder_Label", "Ribbon_Command_ReviewReadingOrder_KeyTip");
+    public static RibbonText ReviewSpellingCommand { get; } = new("Ribbon_Command_ReviewSpelling_Label", "Ribbon_Command_ReviewSpelling_KeyTip");
 
     public static string InsertTabLabel => Get("Common_Insert");
     public static string InsertTabKeyTip => Get("Ribbon_Tab_Insert_KeyTip");
@@ -727,9 +752,14 @@ internal static class FreePRibbonText
     public static string AnimationTriggerAfterPreviousOption => Get("Ribbon_Option_AnimationTriggerAfterPrevious_Label");
 
     public static RibbonText ViewTab { get; } = new("Ribbon_Tab_View_Label", "Ribbon_Tab_View_KeyTip");
+    public static RibbonText ViewPresentationViewsGroup { get; } = new("Ribbon_Group_ViewPresentationViews_Label", "Ribbon_Group_ViewPresentationViews_KeyTip");
+    public static RibbonText ViewNormalCommand { get; } = new("Ribbon_Command_ViewNormal_Label", "Ribbon_Command_ViewNormal_KeyTip");
+    public static RibbonText ViewSlideSorterCommand { get; } = new("Ribbon_Command_ViewSlideSorter_Label", "Ribbon_Command_ViewSlideSorter_KeyTip");
+    public static RibbonText ViewNotesPageCommand { get; } = new("Ribbon_Command_ViewNotesPage_Label", "Ribbon_Command_ViewNotesPage_KeyTip");
     public static RibbonText ViewShowGroup { get; } = new("Ribbon_Group_ViewShow_Label", "Ribbon_Group_ViewShow_KeyTip");
     public static RibbonText ViewGridlinesCommand { get; } = new("Ribbon_Command_ViewGridlines_Label", "Ribbon_Command_ViewGridlines_KeyTip");
     public static RibbonText ViewGuidesCommand { get; } = new("Ribbon_Command_ViewGuides_Label", "Ribbon_Command_ViewGuides_KeyTip");
+    public static RibbonText ViewNotesCommand { get; } = new("Ribbon_Command_ViewNotes_Label", "Ribbon_Command_ViewNotes_KeyTip");
     public static RibbonText ViewSelectionPaneCommand { get; } = new("Ribbon_Command_ViewSelectionPane_Label", "Ribbon_Command_ViewSelectionPane_KeyTip");
     public static RibbonText ViewZoomGroup { get; } = new("Common_Zoom", "Ribbon_Group_ViewZoom_KeyTip");
     public static RibbonText ViewZoomCommand { get; } = new("Ribbon_Command_ViewZoom_Label", "Ribbon_Command_ViewZoom_KeyTip");

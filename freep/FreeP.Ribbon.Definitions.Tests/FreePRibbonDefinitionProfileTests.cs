@@ -19,15 +19,59 @@ public sealed class FreePRibbonDefinitionProfileTests
         var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
         var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
 
-        wpf.Tabs.Select(tab => tab.Id)
+        wpf.VisibleTabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "transitions", "animations", "view", "help");
-        avalonia.Tabs.Select(tab => tab.Id)
+            .Equal("home", "insert", "design", "transitions", "animations", "slide-show", "review", "view", "help");
+        avalonia.VisibleTabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "transitions", "animations", "view", "help");
+            .Equal("home", "insert", "design", "transitions", "animations", "slide-show", "review", "view", "help");
+
+        foreach (var definition in new[] { wpf, avalonia })
+        {
+            definition.ContextualTabs.Select(tab => tab.Id)
+                .Should().Equal("text-format", "table-layout", "smartart-design");
+            definition.FindTab("text-format")!.Context!.ActivationKey.Should().Be("text");
+            definition.FindTab("table-layout")!.Context!.ActivationKey.Should().Be("table");
+            definition.FindTab("smartart-design")!.Context!.ActivationKey.Should().Be("smartart");
+
+            definition.FindTab("design")!.Groups.Select(group => group.Id)
+                .Should().Equal("themes", "customize");
+            definition.FindTab("review")!.Groups.Select(group => group.Id)
+                .Should().Equal("comments", "accessibility", "proofing");
+            definition.FindTab("smartart-design")!.Groups.Select(group => group.Id)
+                .Should().Contain("smartart-colors");
+        }
 
         RibbonDefinitionValidator.Validate(wpf).HasErrors.Should().BeFalse();
         RibbonDefinitionValidator.Validate(avalonia).HasErrors.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Review_tab_exposes_existing_comments_accessibility_and_proofing_routes_in_both_profiles()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var review = definition.FindTab("review")!;
+            review.Groups.SelectMany(group => group.Controls)
+                .Select(control => control.CommandId.Value)
+                .Should()
+                .Contain([
+                    PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
+                    PresentationReviewWorkflowPlanner.AddCommentCommandId,
+                    PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
+                    PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
+                    PresentationReviewWorkflowPlanner.PreviousCommentCommandId,
+                    PresentationReviewWorkflowPlanner.NextCommentCommandId,
+                    PresentationReviewWorkflowPlanner.AccessibilityCommandId,
+                    PresentationReviewWorkflowPlanner.AltTextCommandId,
+                    PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
+                    PresentationReviewWorkflowPlanner.ProofingCommandId,
+                ]);
+        }
     }
 
     [Fact]
@@ -138,7 +182,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                  })
         {
             RequiredGroup(definition, "animations", "animation-effects")
-                .Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+                .Sizing.Should().Be(RibbonGroupSizing.Default);
         }
     }
 
@@ -355,7 +399,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(wpf, "freep.find").KeyTip!,
                 RequiredControl(wpf, "freep.replace").Label,
                 RequiredControl(wpf, "freep.replace").KeyTip!,
-                RequiredGroup(wpf, "transitions", "slideshow-from-transitions").Header,
+                RequiredGroup(wpf, "slide-show", "slide-show").Header,
                 RequiredControl(wpf, "freep.slideshow.from-beginning").Label,
                 RequiredControl(wpf, "freep.slideshow.from-current-slide").Label,
                 RequiredControl(wpf, "freep.slideshow.rehearse-timings").Label,
@@ -459,7 +503,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(avalonia, "freep.find").KeyTip!,
                 RequiredControl(avalonia, "freep.replace").Label,
                 RequiredControl(avalonia, "freep.replace").KeyTip!,
-                RequiredGroup(avalonia, "transitions", "slideshow-from-transitions").Header,
+                RequiredGroup(avalonia, "slide-show", "slide-show").Header,
                 RequiredControl(avalonia, "freep.slideshow.from-beginning").Label,
                 RequiredControl(avalonia, "freep.slideshow.from-current-slide").Label,
                 RequiredControl(avalonia, "freep.slideshow.rehearse-timings").Label,
@@ -675,6 +719,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(wpf, "freep.view.show.gridlines").KeyTip!,
                 RequiredControl(wpf, "freep.view.show.guides").Label,
                 RequiredControl(wpf, "freep.view.show.guides").KeyTip!,
+                RequiredControl(wpf, PresentationViewShowPlanner.NotesCommandId).Label,
+                RequiredControl(wpf, PresentationViewShowPlanner.NotesCommandId).KeyTip!,
                 RequiredGroup(wpf, "view", "zoom").Header,
                 RequiredGroup(wpf, "view", "zoom").KeyTip!,
                 RequiredControl(wpf, "freep.view.zoom").Label,
@@ -689,6 +735,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(avalonia, "freep.view.show.gridlines").KeyTip!,
                 RequiredControl(avalonia, "freep.view.show.guides").Label,
                 RequiredControl(avalonia, "freep.view.show.guides").KeyTip!,
+                RequiredControl(avalonia, PresentationViewShowPlanner.NotesCommandId).Label,
+                RequiredControl(avalonia, PresentationViewShowPlanner.NotesCommandId).KeyTip!,
                 RequiredGroup(avalonia, "view", "zoom").Header,
                 RequiredGroup(avalonia, "view", "zoom").KeyTip!,
                 RequiredControl(avalonia, "freep.view.zoom").Label,
@@ -773,48 +821,26 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.font-family",
             "freep.font-size",
             "freep.font-color",
-            "freep.text-autofit",
-            "freep.text-direction",
-            "freep.text-columns",
-            "freep.table-cell-fill",
-            "freep.table-cell-anchor",
-            "freep.table-cell-border",
-            "freep.table-cell-inset",
-            "freep.table-row-height",
-            "freep.table.first-row",
-            "freep.table.last-row",
-            "freep.table.first-column",
-            "freep.table.last-column",
-            "freep.table.banded-rows",
-            "freep.table.banded-columns",
             "freep.bold",
             "freep.italic",
             "freep.underline",
+            "freep.strikethrough",
             "freep.superscript",
             "freep.subscript");
         commandIds.Should().ContainInOrder(
             "freep.font-family",
             "freep.font-size",
             "freep.font-color",
-            "freep.text-autofit",
-            "freep.text-direction",
-            "freep.text-columns",
-            "freep.table-cell-fill",
-            "freep.table-cell-anchor",
-            "freep.table-cell-border",
-            "freep.table-cell-inset",
-            "freep.table-row-height",
-            "freep.table.first-row",
-            "freep.table.last-row",
-            "freep.table.first-column",
-            "freep.table.last-column",
-            "freep.table.banded-rows",
-            "freep.table.banded-columns",
             "freep.bold",
             "freep.italic",
             "freep.underline",
+            "freep.strikethrough",
             "freep.superscript",
             "freep.subscript");
+        RequiredGroup(wpf, "text-format", "text-layout").Controls.Select(control => control.CommandId.Value)
+            .Should().Contain("freep.text-autofit", "freep.text-direction", "freep.text-columns", "freep.text-column-spacing");
+        RequiredGroup(wpf, "table-layout", "table-layout").Controls.Select(control => control.CommandId.Value)
+            .Should().Contain("freep.table-cell-fill", "freep.table-cell-anchor", "freep.table-cell-border", "freep.table-cell-inset", "freep.table-row-height");
         wpfSize.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
         wpfColor.Choices.Should().Equal(FreePRibbonDefinitionData.FontColorChoices);
         wpfFill.Choices.Should().Equal(FreePRibbonDefinitionData.TableCellFillChoices);
@@ -1023,6 +1049,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         source.Should().Contain("FreePRibbonText.DesignTab");
         source.Should().Contain("FreePRibbonText.TransitionsTab");
         source.Should().Contain("FreePRibbonText.AnimationsTab");
+        source.Should().Contain("FreePRibbonText.SlideShowTab");
         source.Should().Contain("FreePRibbonText.ViewTab");
         source.Should().Contain("FreePRibbonText.ViewShowGroup");
         source.Should().Contain("FreePRibbonText.ViewGridlinesCommand");

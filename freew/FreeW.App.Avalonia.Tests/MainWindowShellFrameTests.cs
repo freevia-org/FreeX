@@ -121,6 +121,8 @@ public sealed class MainWindowShellFrameTests
         mainWindow.Should().Contain("using Free.Shared.Shell.Avalonia;");
         mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(");
         mainWindow.Should().Contain("SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
+        mainWindow.Should().Contain("ThemeResources.Brush(\"TitleBarForeground\")");
+        mainWindow.Should().NotContain("TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush");
         mainWindow.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
         mainWindow.Should().Contain("ApplicationPlacement: FreeWApplicationFrameDescriptor.Title.ApplicationPlacement");
         mainWindow.Should().Contain("ApplyWindowIcon();");

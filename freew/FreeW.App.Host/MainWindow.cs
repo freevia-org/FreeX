@@ -64,6 +64,11 @@ public sealed partial class MainWindow : Window
     private ListBox _navList = null!;
     private bool _navPaneVisible;
     private NavigationPaneSession _navigationPaneSession = null!;
+    private Border _selectionPane = null!;
+    private ListBox _selectionList = null!;
+    private Button _selectionBringForward = null!;
+    private Button _selectionSendBackward = null!;
+    private bool _selectionPaneVisible;
 
     // Reveal Formatting pane (Word's Shift+F1): a read-only side pane, docked on the right (Word's side),
     // that mirrors the effective FONT / PARAGRAPH / SECTION formatting of the current selection. It updates
@@ -144,6 +149,10 @@ public sealed partial class MainWindow : Window
             ThemeResources.TitleBarBrush,
             brush => brush.Color,
             WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBar)),
+        TitleBarForegroundColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
+            ThemeResources.Brush("TitleBarForeground"),
+            brush => brush.Color,
+            WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBarForeground)),
         BadgeColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
             ThemeResources.BadgeBrush,
             brush => brush.Color,
@@ -253,6 +262,7 @@ public sealed partial class MainWindow : Window
             Backstage = ShowBackstage,
             NewDocument = () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
             ToggleNavigationPane = ToggleNavPane,
+            ToggleSelectionPane = ToggleSelectionPane,
             IsNavigationPaneVisible = () => _navPaneVisible,
             ToggleReviewingPane = ToggleReviewPane,
             IsReviewingPaneVisible = () => _reviewPaneVisible,
@@ -304,6 +314,7 @@ public sealed partial class MainWindow : Window
                 FreeWAppInfo.FeedbackUrl,
                 FreeWApplicationFrameTextCatalog.FeedbackCommandName),
             CopyDiagnostics = CopyDiagnostics,
+            TestCrashReporting = TestCrashReporting,
             CheckForUpdates = () => OpenExternalHelpLink(
                 FreeWProductInfo.LatestReleaseUrl,
                 FreeWApplicationFrameTextCatalog.CheckForUpdatesCommandName),
@@ -472,6 +483,7 @@ public sealed partial class MainWindow : Window
             _file.MarkDirty();
             UpdateCounts();
             RefreshOutline();
+            RefreshSelectionPane();
             RefreshContextualTabs();
             RefreshReviewPane();
             RefreshNotesPane();
@@ -539,6 +551,10 @@ public sealed partial class MainWindow : Window
         var navPane = BuildNavPane();
         DockPanel.SetDock(navPane, Dock.Left);
         body.Children.Add(navPane);
+
+        var selectionPane = BuildSelectionPane();
+        DockPanel.SetDock(selectionPane, Dock.Right);
+        body.Children.Add(selectionPane);
 
         // Reveal Formatting pane docks on the RIGHT (Word's side for the Shift+F1 pane), opposite the
         // left navigation pane. Added before the fill child so the DockPanel reserves its edge first.
@@ -999,6 +1015,16 @@ public sealed partial class MainWindow : Window
             DialogMessageHelper.ShowWarning(this, feedback.Message, feedback.Title);
     }
 
+    private void TestCrashReporting()
+    {
+        var result = AppCrashAnalyticsRuntime.SendTestReport();
+        var message = AppCrashAnalyticsRuntime.UserMessage(result);
+        if (result == CrashAnalyticsTestReportResult.Sent)
+            DialogMessageHelper.ShowInfo(this, message, "Test Crash Reporting");
+        else
+            DialogMessageHelper.ShowWarning(this, message, "Test Crash Reporting");
+    }
+
     private void ShowAboutDialog()
     {
         var dialog = new AboutDialog { Owner = this };
@@ -1054,7 +1080,11 @@ public sealed partial class MainWindow : Window
             new SisterQuickAccessToolbarActions(
                 Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
                 Undo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Undo),
-                Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)));
+                Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)),
+            new QuickAccessToolbarRenderOptions
+            {
+                ForegroundResourceKey = ThemeResources.Brush("TitleBarForeground").PrimaryKey
+            });
 
     private void DisposeReadAloud()
     {
@@ -1381,6 +1411,85 @@ public sealed partial class MainWindow : Window
         return area;
     }
 
+    // Layout > Arrange > Selection Pane. Rows are projected from the actual floating-object model;
+    // selecting a row activates that exact object, while the two buttons use the editor's undoable
+    // z-order command route instead of keeping a separate visual-only ordering.
+    private UIElement BuildSelectionPane()
+    {
+        _selectionList = new ListBox
+        {
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent
+        };
+        _selectionList.SelectionChanged += OnSelectionPaneSelected;
+
+        _selectionBringForward = new Button { Content = "Bring Forward", Margin = new Thickness(8, 4, 4, 8) };
+        _selectionBringForward.Click += (_, _) => MoveSelectionPaneObject(ZOrderOperation.BringForward);
+        _selectionSendBackward = new Button { Content = "Send Backward", Margin = new Thickness(4, 4, 8, 8) };
+        _selectionSendBackward.Click += (_, _) => MoveSelectionPaneObject(ZOrderOperation.SendBackward);
+        var controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+        controls.Children.Add(_selectionBringForward);
+        controls.Children.Add(_selectionSendBackward);
+
+        var header = new TextBlock
+        {
+            Text = "Selection Pane",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 8, 10, 6)
+        };
+        var layout = new DockPanel { Width = 240 };
+        DockPanel.SetDock(header, Dock.Top);
+        DockPanel.SetDock(controls, Dock.Bottom);
+        layout.Children.Add(header);
+        layout.Children.Add(controls);
+        layout.Children.Add(_selectionList);
+
+        _selectionPane = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Visibility = Visibility.Collapsed,
+            Child = layout
+        };
+        UpdateSelectionPaneButtons();
+        return _selectionPane;
+    }
+
+    private void OnSelectionPaneSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_selectionList.SelectedItem is SelectionPaneItem item)
+            _editor.SelectFloating(item.BlockIndex, item.RunIndex);
+        UpdateSelectionPaneButtons();
+    }
+
+    private void MoveSelectionPaneObject(ZOrderOperation operation)
+    {
+        if (_editor.ChangeSelectedFloatingZOrder(operation))
+            RefreshSelectionPane();
+    }
+
+    private void RefreshSelectionPane()
+    {
+        if (!_selectionPaneVisible || _selectionList is null)
+            return;
+        _selectionList.SelectionChanged -= OnSelectionPaneSelected;
+        _selectionList.Items.Clear();
+        foreach (var item in SelectionPaneProjection.Build(CurrentPaneDocument()))
+            _selectionList.Items.Add(item);
+        _selectionList.SelectionChanged += OnSelectionPaneSelected;
+        UpdateSelectionPaneButtons();
+    }
+
+    private void UpdateSelectionPaneButtons()
+    {
+        var enabled = _selectionList?.SelectedItem is SelectionPaneItem;
+        if (_selectionBringForward is not null)
+            _selectionBringForward.IsEnabled = enabled;
+        if (_selectionSendBackward is not null)
+            _selectionSendBackward.IsEnabled = enabled;
+    }
+
     // Recompute the set of body blocks that contain the search term (reusing the pure TextSearch helper),
     // jump to the first hit, filter the outline to relevant headings, and refresh the Prev/Next/count row.
     // An empty term clears the search and shows the full outline again.
@@ -1424,6 +1533,14 @@ public sealed partial class MainWindow : Window
         _stateStore.SetChecked("freew.nav-pane", _navPaneVisible);
         if (_navPaneVisible)
             RefreshOutline();
+    }
+
+    private void ToggleSelectionPane()
+    {
+        _selectionPaneVisible = !_selectionPaneVisible;
+        _selectionPane.Visibility = _selectionPaneVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (_selectionPaneVisible)
+            RefreshSelectionPane();
     }
 
     // View > Show > Ruler: Word exposes this as a simple visibility toggle. FreeW's ruler is currently
@@ -3417,33 +3534,33 @@ public sealed partial class MainWindow : Window
             // so we find the target group and prepend a custom gallery control into its content lane. This
             // keeps the galleries entirely app-side (custom WPF content) without a shared RibbonGallery type.
             if (tab.Id == "home")
-                // Drop the placeholder Style combo (the gallery supersedes it) but keep the group's
-                // New Style / Manage Styles buttons, prepending the live-preview gallery before them.
-                InjectGallery(content, "styles", StylesGallery.Build(_editor), removeKind: RemoveKind.Combos);
+                // The gallery owns visible quick-style selection; Clear/New/Manage stay reachable from
+                // its More popup, so duplicate width-heavy style buttons need not evict core Font/Paragraph.
+                InjectGallery(content, "styles", () => StylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
             if (tab.Id == "design")
                 // Replace the rendered Document Formatting controls with the live-preview Word-style
                 // gallery/menu strip so backed commands do not appear twice beside their custom previews.
-                InjectGallery(content, "themes", ThemeGallery.BuildDocumentFormatting(_editor), removeKind: RemoveKind.All);
+                InjectGallery(content, "themes", () => ThemeGallery.BuildDocumentFormatting(_editor), removeKind: RemoveKind.All);
             if (tab.Id == "table-design")
-                // Table Styles gallery: inject a live-preview style picker into the Table Style group,
-                // replacing the Shading button placeholder so the gallery owns that lane.
-                InjectGallery(content, "table-style", TableStylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
+                // The gallery owns its dedicated Table Styles lane; Shading and Borders remain in
+                // the neighboring Table Style group instead of being removed with the placeholder.
+                InjectGallery(content, "table-styles", () => TableStylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
 
             if (tab.Id == "chart-design")
             {
                 // Inject the three Chart Design galleries (Quick Layout, Chart Styles, Change Colors)
                 // into the corresponding groups on the chart contextual tab. Each gallery replaces the
                 // group's placeholder ribbon commands with live-preview swatches.
-                InjectGallery(content, "chart-quick-layout", ChartDesignGallery.BuildQuickLayouts(registry), removeKind: RemoveKind.All);
-                InjectGallery(content, "chart-style", ChartDesignGallery.BuildChartStyles(registry), removeKind: RemoveKind.All);
-                InjectGallery(content, "chart-colors", ChartDesignGallery.BuildChangeColors(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-quick-layout", () => ChartDesignGallery.BuildQuickLayouts(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-style", () => ChartDesignGallery.BuildChartStyles(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-colors", () => ChartDesignGallery.BuildChangeColors(registry), removeKind: RemoveKind.All);
             }
 
             if (tab.Id == "smartart-design")
             {
                 // Inject the three SmartArt gallery strips: Layouts, Change Colors, Styles.
-                InjectGallery(content, "smartart-layouts", SmartArtGallery.BuildLayouts(registry), removeKind: RemoveKind.All);
-                InjectGallery(content, "smartart-colors", SmartArtGallery.BuildColors(registry), removeKind: RemoveKind.All, extra: SmartArtGallery.BuildStyles(registry));
+                InjectGallery(content, "smartart-layouts", () => SmartArtGallery.BuildLayouts(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "smartart-colors", () => SmartArtGallery.BuildColors(registry), removeKind: RemoveKind.All, extra: () => SmartArtGallery.BuildStyles(registry));
             }
 
             }
@@ -3469,37 +3586,58 @@ public sealed partial class MainWindow : Window
     // Combos drops only ComboBox columns (so a placeholder combo the gallery supersedes goes away while
     // command buttons like New Style / Manage Styles remain). An optional `extra` gallery is appended
     // after the first (e.g. the Design Colors strip).
-    private static void InjectGallery(DependencyObject content, string groupId, FrameworkElement gallery, RemoveKind removeKind, FrameworkElement? extra = null)
+    private static void InjectGallery(
+        DependencyObject content,
+        string groupId,
+        Func<FrameworkElement> createGallery,
+        RemoveKind removeKind,
+        Func<FrameworkElement>? extra = null)
     {
-        var grid = FindGroupGrid(content, groupId);
-        if (grid is null)
+        var groupHost = FindGroupHost(content, groupId);
+        if (groupHost is null)
             return;
 
-        // Row 0 of the group grid holds the content lane (a horizontal StackPanel of columns/controls).
-        var lane = grid.Children.OfType<FrameworkElement>().FirstOrDefault(c => Grid.GetRow(c) == 0) as Panel;
-        if (lane is null)
-            return;
-
-        if (removeKind == RemoveKind.All)
+        // Compact group presentations are built lazily by RibbonGroupHost. A FrameworkElement can only
+        // have one WPF parent, so each rebuilt presentation must receive its own gallery instance.
+        var injectedLanes = new HashSet<Panel>();
+        void InjectInto(FrameworkElement presentation)
         {
-            lane.Children.Clear();
-        }
-        else if (removeKind == RemoveKind.Combos)
-        {
-            // Each lane column is its own StackPanel; the renderer packs combos into combo-only columns,
-            // so a column whose children are all ComboBoxes is a placeholder-combo column to drop.
-            var toRemove = lane.Children.OfType<Panel>()
-                .Where(col => col.Children.Count > 0 && col.Children.OfType<UIElement>().All(c => c is ComboBox))
-                .ToList();
-            foreach (var col in toRemove)
-                lane.Children.Remove(col);
+            if (presentation is not Grid grid)
+                return;
+
+            // Row 0 of the group grid holds the content lane (a horizontal StackPanel of columns/controls).
+            var lane = grid.Children.OfType<FrameworkElement>().FirstOrDefault(c => Grid.GetRow(c) == 0) as Panel;
+            if (lane is null || !injectedLanes.Add(lane))
+                return;
+
+            if (removeKind == RemoveKind.All)
+            {
+                lane.Children.Clear();
+            }
+            else if (removeKind == RemoveKind.Combos)
+            {
+                // Each lane column is its own StackPanel; the renderer packs combos into combo-only columns,
+                // so a column whose children are all ComboBoxes is a placeholder-combo column to drop.
+                var toRemove = lane.Children.OfType<Panel>()
+                    .Where(col => col.Children.Count > 0 && col.Children.OfType<UIElement>().All(c => c is ComboBox))
+                    .ToList();
+                foreach (var col in toRemove)
+                    lane.Children.Remove(col);
+            }
+
+            var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 2, 2, 0) };
+            host.Children.Add(createGallery());
+            if (extra is not null)
+                host.Children.Add(extra());
+            lane.Children.Insert(0, host);
         }
 
-        var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 2, 2, 0) };
-        host.Children.Add(gallery);
-        if (extra is not null)
-            host.Children.Add(extra);
-        lane.Children.Insert(0, host);
+        InjectInto(groupHost.GroupContent);
+        groupHost.LayoutUpdated += (_, _) =>
+        {
+            if (groupHost.Content is FrameworkElement presentation)
+                InjectInto(presentation);
+        };
     }
 
     // Find the group content grid stamped with the given catalog id, walking the renderer's known
@@ -3507,7 +3645,7 @@ public sealed partial class MainWindow : Window
     // RibbonGroupHosts. Each host's Content is the group grid (which carries the catalog id). This walks
     // the logical structure the renderer built eagerly, so it works before the visual tree is realized
     // (unlike VisualTreeHelper, which would see nothing until the ribbon is measured/rendered).
-    private static Grid? FindGroupGrid(DependencyObject root, string groupId)
+    private static RibbonGroupHost? FindGroupHost(DependencyObject root, string groupId)
     {
         var panel = (root as Border)?.Child as Panel;
         if (panel is null)
@@ -3515,9 +3653,9 @@ public sealed partial class MainWindow : Window
 
         foreach (var child in panel.Children)
         {
-            if (child is RibbonGroupHost host && host.Content is Grid grid
+            if (child is RibbonGroupHost host && host.GroupContent is Grid grid
                 && RibbonMetadata.GetCatalogId(grid) == groupId)
-                return grid;
+                return host;
         }
         return null;
     }

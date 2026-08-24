@@ -11,12 +11,14 @@ public sealed class PresentationViewShowPlannerTests
 
         state.ShowGridlines.Should().BeTrue();
         state.ShowGuides.Should().BeTrue();
+        state.ShowNotesPane.Should().BeTrue();
         PresentationViewShowPlanner.BuildPlans(state)
             .Select(plan => plan.CommandId)
             .Should()
             .Equal(
                 PresentationViewShowPlanner.GridlinesCommandId,
-                PresentationViewShowPlanner.GuidesCommandId);
+                PresentationViewShowPlanner.GuidesCommandId,
+                PresentationViewShowPlanner.NotesCommandId);
     }
 
     [Fact]
@@ -55,6 +57,22 @@ public sealed class PresentationViewShowPlannerTests
         result.State.ShowGridlines.Should().BeTrue();
         result.State.ShowGuides.Should().BeTrue();
         result.IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Notes_toggle_flips_only_notes_pane_visibility()
+    {
+        PresentationViewShowPlanner.TryToggle(
+                PresentationViewShowState.Default,
+                PresentationViewShowPlanner.NotesCommandId,
+                out var result)
+            .Should()
+            .BeTrue();
+
+        result.State.ShowGridlines.Should().BeTrue();
+        result.State.ShowGuides.Should().BeTrue();
+        result.State.ShowNotesPane.Should().BeFalse();
+        result.IsChecked.Should().BeFalse();
     }
 
     [Fact]

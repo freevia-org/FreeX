@@ -401,6 +401,71 @@ public static class AvaloniaRibbonRenderer
         });
     }
 
+    /// <summary>
+    /// Replaces a generated group's visible content lane with host-native content. The factory is invoked
+    /// once for every full or compact presentation because Avalonia controls cannot belong to two group
+    /// trees at the same time. Collapsed groups deliberately retain the renderer's standard overflow menu.
+    /// </summary>
+    public static bool TryInjectGroupContent(
+        Control ribbon,
+        string groupId,
+        Func<Control> createContent)
+    {
+        ArgumentNullException.ThrowIfNull(ribbon);
+        ArgumentException.ThrowIfNullOrWhiteSpace(groupId);
+        ArgumentNullException.ThrowIfNull(createContent);
+
+        var injectedLanes = new HashSet<Panel>();
+        var attachedHosts = new HashSet<AvaloniaRibbonGroupHost>();
+        void InjectInto(Control presentation)
+        {
+            if (presentation is not Grid grid)
+                return;
+
+            var lane = grid.Children.OfType<Control>()
+                .FirstOrDefault(child => Grid.GetRow(child) == 0) as Panel;
+            if (lane is null || !injectedLanes.Add(lane))
+                return;
+
+            lane.Children.Clear();
+            lane.Children.Add(createContent());
+        }
+
+        void Attach(AvaloniaRibbonGroupHost groupHost)
+        {
+            if (!attachedHosts.Add(groupHost))
+                return;
+
+            InjectInto(groupHost.GroupContent);
+            groupHost.PropertyChanged += (_, change) =>
+            {
+                if (change.Property == ContentControl.ContentProperty
+                    && groupHost.Content is Control presentation)
+                {
+                    InjectInto(presentation);
+                }
+            };
+        }
+
+        void DiscoverAndAttach()
+        {
+            ForEachRibbonDescendant(ribbon, control =>
+            {
+                if (control is AvaloniaRibbonGroupHost candidate
+                    && string.Equals(candidate.GroupId, groupId, StringComparison.Ordinal))
+                {
+                    Attach(candidate);
+                }
+            });
+        }
+
+        // Contextual tabs are added after the initial ribbon tree is built. Re-check during layout
+        // so a host can register a visual gallery before its contextual group is first shown.
+        DiscoverAndAttach();
+        ribbon.LayoutUpdated += (_, _) => DiscoverAndAttach();
+        return true;
+    }
+
     /// <summary>Builds the content panel for one tab (the body shown under the tab header).</summary>
     public static Control BuildTabContent(
         RibbonTab tab,
@@ -2864,6 +2929,7 @@ public static class AvaloniaRibbonRenderer
 
         public int Priority { get; }
         public string GroupId => _group.Id;
+        internal Control GroupContent => _full;
         public double FullWidth { get; set; }
         public RibbonAdaptiveGroupState LayoutState
         {

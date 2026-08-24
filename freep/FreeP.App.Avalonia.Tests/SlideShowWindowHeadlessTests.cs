@@ -1460,17 +1460,17 @@ public sealed class SlideShowWindowHeadlessTests
     public void RibbonDefinition_has_slideshow_group()
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
-        var transitions = definition.Tabs.Single(t => t.Id == "transitions");
-        transitions.Groups.Should().Contain(g => g.Id == "slideshow-from-transitions",
-            "the Slide Show group must match the WPF Transitions placement");
+        var slideShow = definition.Tabs.Single(t => t.Id == "slide-show");
+        slideShow.Groups.Should().Contain(g => g.Id == "slide-show",
+            "the Slide Show commands belong on PowerPoint's normal Slide Show tab");
     }
 
     [Fact]
     public void RibbonDefinition_slideshow_group_has_from_beginning_and_from_current()
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
-        var transitions = definition.Tabs.Single(t => t.Id == "transitions");
-        var sg = transitions.Groups.Single(g => g.Id == "slideshow-from-transitions");
+        var slideShow = definition.Tabs.Single(t => t.Id == "slide-show");
+        var sg = slideShow.Groups.Single(g => g.Id == "slide-show");
         var ids   = sg.Controls.Select(i => i.CommandId.Value).ToList();
         ids.Should().Contain("freep.slideshow.from-beginning");
         ids.Should().Contain("freep.slideshow.from-current-slide");

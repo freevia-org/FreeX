@@ -28,7 +28,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FreeX.icns");
         script.Should().Contain("Test-MacOsIcon");
         script.Should().Contain("NSHighResolutionCapable");
-        script.Should().Contain("dotnet-version: 10.0.x");
+        script.Should().Contain("dotnet-version: 10.0.300");
         script.Should().Contain("osx-arm64=macos-15");
         script.Should().Contain("osx-x64=macos-15-intel");
         script.Should().NotContain("runner: macos-latest");
@@ -49,7 +49,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c ''Print :LSMinimumSystemVersion'' \"$app_info_plist\")");
         script.Should().Contain("bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c ''Print :NSHighResolutionCapable'' \"$app_info_plist\")");
         script.Should().Contain("publish-distribution-candidate:");
-        script.Should().Contain("actions/download-artifact@v7");
+        script.Should().Contain("actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131");
         script.Should().Contain("Test portable PDF macOS route");
         script.Should().Contain("dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests");

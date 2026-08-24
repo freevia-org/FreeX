@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Free.Shared.AppServices;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
@@ -30,6 +31,17 @@ public sealed partial class MainWindow
         {
             ShowHelpIssue(UiText.Format("MainWindowMessage_DiagnosticsCopyFailed", ex.Message));
         }
+    }
+
+    private Task SendCrashAnalyticsTestReportAsync()
+    {
+        var result = AppCrashAnalyticsRuntime.SendTestReport();
+        var message = AppCrashAnalyticsRuntime.UserMessage(result);
+        if (result == CrashAnalyticsTestReportResult.Sent)
+            RefreshShell(message);
+        else
+            ShowHelpIssue(message);
+        return Task.CompletedTask;
     }
 
     private AppIssueReportContext CreateIssueReportContext()

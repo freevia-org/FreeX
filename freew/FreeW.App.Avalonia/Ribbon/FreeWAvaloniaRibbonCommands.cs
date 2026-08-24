@@ -461,7 +461,7 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterNativeFloatingCommands(r, editor, callbacks);
         FreeWRibbonEditorExecutionProfile.RegisterFloating(
             r,
-            CreateFloatingExecutionPorts(editor));
+            CreateFloatingExecutionPorts(editor, callbacks.ToggleSelectionPane));
         FreeWRibbonEditorExecutionProfile.RegisterImageTableWorkflows(
             r,
             CreateImageExecutionPorts(editor, callbacks),
@@ -1170,7 +1170,9 @@ internal static class FreeWAvaloniaRibbonCommands
         }
     }
 
-    private static FreeWRibbonFloatingExecutionPorts CreateFloatingExecutionPorts(DocumentView editor) =>
+    private static FreeWRibbonFloatingExecutionPorts CreateFloatingExecutionPorts(
+        DocumentView editor,
+        Action? toggleSelectionPane = null) =>
         new(
             PrepareExecution: () => editor.Focus(),
             HasSelection: target => target == ObjectFormatTarget.Picture
@@ -1209,7 +1211,13 @@ internal static class FreeWAvaloniaRibbonCommands
             CanGroup: () => editor.HasMultipleFloatingObjectsSelected,
             Group: editor.GroupSelectedFloatingObjects,
             CanUngroup: () => editor.IsGroupSelected,
-            Ungroup: editor.UngroupSelectedFloatingObject);
+            Ungroup: editor.UngroupSelectedFloatingObject,
+            ApplyPosition: (_, position) => editor.SetFloatingPosition(
+                position.HorizontalOffsetPt,
+                position.VerticalOffsetPt,
+                position.HorizontalAnchor,
+                position.VerticalAnchor),
+            ToggleSelectionPane: toggleSelectionPane);
 
     private static void RegisterShapeTextDirectionSelectionGuards(
         FreeWRibbonCommandBindingPorts bindings,

@@ -189,6 +189,7 @@ public partial class MainWindow
             ["Convert to Range"] = new(static (owner, sender, eventArgs) => owner.TableDesignConvertToRangeBtn_Click(sender, eventArgs), nameof(TableDesignConvertToRangeBtn_Click)),
             ["Copy"] = new(static (owner, sender, eventArgs) => owner.CopyBtn_Click(sender, eventArgs), nameof(CopyBtn_Click)),
             [FreeXRibbonCommandIds.HelpCopyDiagnostics] = new(static (owner, sender, eventArgs) => owner.CopyDiagnosticsBtn_Click(sender, eventArgs), nameof(CopyDiagnosticsBtn_Click)),
+            [FreeXRibbonCommandIds.HelpTestCrashReporting] = new(static (owner, sender, eventArgs) => owner.TestCrashReportingBtn_Click(sender, eventArgs), nameof(TestCrashReportingBtn_Click)),
             ["Count All"] = new(static (owner, sender, eventArgs) => owner.AutoSumCountAllMenuItem_Click(sender, eventArgs), nameof(AutoSumCountAllMenuItem_Click)),
             [FreeXRibbonCommandIds.FormulasAutoSumCountAll] = new(static (owner, sender, eventArgs) => owner.AutoSumCountAllMenuItem_Click(sender, eventArgs), nameof(AutoSumCountAllMenuItem_Click)),
             ["Count Numbers"] = new(static (owner, sender, eventArgs) => owner.AutoSumCountMenuItem_Click(sender, eventArgs), nameof(AutoSumCountMenuItem_Click)),

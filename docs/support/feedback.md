@@ -5,6 +5,12 @@ Feedback for FreeX, FreeW, and FreeP is accepted through the repository's
 Use the user-test report for a crash or defect and the family feedback form for
 a suggestion, usability concern, or general comment.
 
+The in-app Feedback command opens the structured user-test form with app,
+version, operating system, and architecture in the proposed title. Select the
+actual installation type in the required form field; the app cannot reliably
+infer whether an executable came from an individual installer, suite installer,
+or manually copied portable package.
+
 ## A Useful Defect Report
 
 Include:
@@ -35,3 +41,19 @@ remote diagnostics are covered by the [privacy notice](../legal/privacy.md).
 
 GitHub is an external service and its own account and privacy terms apply to
 information submitted through an issue.
+
+## Release Corrections And Support Boundaries
+
+Public previews do not carry a guaranteed response time or support lifetime.
+Before installing, review the versioned release notes for signing status, known
+limitations, checksum instructions, and any withdrawal or correction notice.
+Use versioned release links because the repository-wide latest release may
+belong to a different app.
+
+If an installed preview appears to corrupt data, remove user data, transmit
+information without consent, or fail checksum verification, stop using that
+artifact and preserve its filename, version, and checksum. Do not post a real
+affected document publicly. Report suspected security issues through the
+private process; use the public defect form for ordinary reliability problems.
+Release operators follow the
+[acceptance, rollback, and incident runbook](../release/public-preview-operations.md).

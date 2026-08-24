@@ -334,6 +334,93 @@
   <data name="Ribbon_Group_SlideShow_Label" xml:space="preserve">
     <value>Slide Show</value>
   </data>
+  <data name="Ribbon_Tab_SlideShow_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Tab_Review_Label" xml:space="preserve">
+    <value>Review</value>
+  </data>
+  <data name="Ribbon_Tab_Review_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Group_ReviewComments_Label" xml:space="preserve">
+    <value>Comments</value>
+  </data>
+  <data name="Ribbon_Group_ReviewComments_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Group_ReviewAccessibility_Label" xml:space="preserve">
+    <value>Accessibility</value>
+  </data>
+  <data name="Ribbon_Group_ReviewAccessibility_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Group_ReviewProofing_Label" xml:space="preserve">
+    <value>Proofing</value>
+  </data>
+  <data name="Ribbon_Group_ReviewProofing_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_ReviewComments_Label" xml:space="preserve">
+    <value>Comments</value>
+  </data>
+  <data name="Ribbon_Command_ReviewComments_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
+  <data name="Ribbon_Command_ReviewNewComment_Label" xml:space="preserve">
+    <value>New Comment</value>
+  </data>
+  <data name="Ribbon_Command_ReviewNewComment_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Command_ReviewReply_Label" xml:space="preserve">
+    <value>Reply</value>
+  </data>
+  <data name="Ribbon_Command_ReviewReply_KeyTip" xml:space="preserve">
+    <value>Y</value>
+  </data>
+  <data name="Ribbon_Command_ReviewDeleteComment_Label" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Ribbon_Command_ReviewDeleteComment_KeyTip" xml:space="preserve">
+    <value>D</value>
+  </data>
+  <data name="Ribbon_Command_ReviewPreviousComment_Label" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="Ribbon_Command_ReviewPreviousComment_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
+  <data name="Ribbon_Command_ReviewNextComment_Label" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="Ribbon_Command_ReviewNextComment_KeyTip" xml:space="preserve">
+    <value>X</value>
+  </data>
+  <data name="Ribbon_Command_ReviewCheckAccessibility_Label" xml:space="preserve">
+    <value>Check Accessibility</value>
+  </data>
+  <data name="Ribbon_Command_ReviewCheckAccessibility_KeyTip" xml:space="preserve">
+    <value>K</value>
+  </data>
+  <data name="Ribbon_Command_ReviewAltText_Label" xml:space="preserve">
+    <value>Alt Text</value>
+  </data>
+  <data name="Ribbon_Command_ReviewAltText_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_ReviewReadingOrder_Label" xml:space="preserve">
+    <value>Reading Order</value>
+  </data>
+  <data name="Ribbon_Command_ReviewReadingOrder_KeyTip" xml:space="preserve">
+    <value>G</value>
+  </data>
+  <data name="Ribbon_Command_ReviewSpelling_Label" xml:space="preserve">
+    <value>Spelling</value>
+  </data>
+  <data name="Ribbon_Command_ReviewSpelling_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
   <data name="Ribbon_Group_SlideShow_WpfKeyTip" xml:space="preserve">
     <value>L</value>
   </data>
@@ -384,6 +471,33 @@
   </data>
   <data name="Ribbon_Group_Text_KeyTip" xml:space="preserve">
     <value>T</value>
+  </data>
+  <data name="Ribbon_Tab_TextFormat_Label" xml:space="preserve">
+    <value>Text Format</value>
+  </data>
+  <data name="Ribbon_Tab_TextFormat_KeyTip" xml:space="preserve">
+    <value>TF</value>
+  </data>
+  <data name="Ribbon_Context_TextTools_Label" xml:space="preserve">
+    <value>Text Tools</value>
+  </data>
+  <data name="Ribbon_Tab_TableLayout_Label" xml:space="preserve">
+    <value>Table Layout</value>
+  </data>
+  <data name="Ribbon_Tab_TableLayout_KeyTip" xml:space="preserve">
+    <value>TL</value>
+  </data>
+  <data name="Ribbon_Context_TableTools_Label" xml:space="preserve">
+    <value>Table Tools</value>
+  </data>
+  <data name="Ribbon_Tab_SmartArtDesign_Label" xml:space="preserve">
+    <value>SmartArt Design</value>
+  </data>
+  <data name="Ribbon_Tab_SmartArtDesign_KeyTip" xml:space="preserve">
+    <value>SD</value>
+  </data>
+  <data name="Ribbon_Context_SmartArtTools_Label" xml:space="preserve">
+    <value>SmartArt Tools</value>
   </data>
   <data name="Ribbon_Command_TextBox_Label" xml:space="preserve">
     <value>Text Box</value>
@@ -2362,6 +2476,18 @@
   <data name="Ribbon_Group_AnimationEffects_KeyTip" xml:space="preserve">
     <value>N</value>
   </data>
+  <data name="Ribbon_Command_AnimationMoreEffects_Label" xml:space="preserve">
+    <value>More Effects</value>
+  </data>
+  <data name="Ribbon_Category_AnimationEntrance_Label" xml:space="preserve">
+    <value>Entrance</value>
+  </data>
+  <data name="Ribbon_Category_AnimationEmphasis_Label" xml:space="preserve">
+    <value>Emphasis</value>
+  </data>
+  <data name="Ribbon_Category_AnimationExit_Label" xml:space="preserve">
+    <value>Exit</value>
+  </data>
   <data name="Ribbon_Command_AnimationEntranceAppear_Label" xml:space="preserve">
     <value>Appear</value>
   </data>
@@ -2947,6 +3073,30 @@
   <data name="Ribbon_Tab_View_KeyTip" xml:space="preserve">
     <value>W</value>
   </data>
+  <data name="Ribbon_Group_ViewPresentationViews_Label" xml:space="preserve">
+    <value>Presentation Views</value>
+  </data>
+  <data name="Ribbon_Group_ViewPresentationViews_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_ViewNormal_Label" xml:space="preserve">
+    <value>Normal</value>
+  </data>
+  <data name="Ribbon_Command_ViewNormal_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Command_ViewSlideSorter_Label" xml:space="preserve">
+    <value>Slide Sorter</value>
+  </data>
+  <data name="Ribbon_Command_ViewSlideSorter_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_ViewNotesPage_Label" xml:space="preserve">
+    <value>Notes Page</value>
+  </data>
+  <data name="Ribbon_Command_ViewNotesPage_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
   <data name="Ribbon_Group_ViewShow_Label" xml:space="preserve">
     <value>Show</value>
   </data>
@@ -2964,6 +3114,12 @@
   </data>
   <data name="Ribbon_Command_ViewGuides_KeyTip" xml:space="preserve">
     <value>U</value>
+  </data>
+  <data name="Ribbon_Command_ViewNotes_Label" xml:space="preserve">
+    <value>Notes</value>
+  </data>
+  <data name="Ribbon_Command_ViewNotes_KeyTip" xml:space="preserve">
+    <value>N</value>
   </data>
   <data name="Ribbon_Command_ViewSelectionPane_Label" xml:space="preserve">
     <value>Selection Pane</value>

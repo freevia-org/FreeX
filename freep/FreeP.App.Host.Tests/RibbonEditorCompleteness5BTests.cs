@@ -885,6 +885,11 @@ public class RibbonEditorCompleteness5BTests
         Assert.False(state.ShowGridlines);
         Assert.False(state.ShowGuides);
         Assert.False(stateStore.GetState(PresentationViewShowPlanner.GuidesCommandId).IsChecked);
+
+        Exec(reg, PresentationViewShowPlanner.NotesCommandId);
+
+        Assert.False(state.ShowNotesPane);
+        Assert.False(stateStore.GetState(PresentationViewShowPlanner.NotesCommandId).IsChecked);
     }
 
     [Fact]

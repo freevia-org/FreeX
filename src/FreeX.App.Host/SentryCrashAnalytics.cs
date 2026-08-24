@@ -3,17 +3,13 @@ using Sentry;
 
 namespace FreeX.App.Host;
 
-public sealed class SentryCrashAnalytics : ICrashAnalytics
+public sealed class SentryCrashAnalytics : ICrashAnalytics, Free.Shared.AppServices.IAppCrashAnalytics
 {
-    // Captured once so crash events can have the local user profile path and username scrubbed
-    // before they leave the machine — exception messages/stack frames routinely embed
-    // C:\Users\<username>\... paths that would otherwise disclose PII even with SendDefaultPii=false.
-    private static readonly string UserProfilePath =
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-    private static readonly string UserName = Environment.UserName;
-
     private IDisposable? _sentry;
+    private IDisposable? _runtimeRegistration;
     private bool _isEnabled;
+
+    public bool IsEnabled => _isEnabled;
 
     public void Initialize(AppCrashAnalyticsOptions crashAnalyticsOptions, AppDiagnosticsMetadata metadata)
     {
@@ -33,11 +29,12 @@ public sealed class SentryCrashAnalytics : ICrashAnalytics
                 sentryEvent.SetTag("freex.runtime", metadata.RuntimeDescription);
                 sentryEvent.SetTag("freex.os", metadata.OperatingSystemDescription);
                 sentryEvent.SetTag("freex.architecture", metadata.ProcessArchitecture);
-                RedactPersonalData(sentryEvent);
+                Free.Shared.AppServices.AppCrashDataRedactor.Redact(sentryEvent);
                 return sentryEvent;
             });
         });
         _isEnabled = true;
+        _runtimeRegistration = Free.Shared.AppServices.AppCrashAnalyticsRuntime.Register(this);
     }
 
     public void RecordBreadcrumb(string eventName, IReadOnlyDictionary<string, string?>? properties = null)
@@ -45,9 +42,12 @@ public sealed class SentryCrashAnalytics : ICrashAnalytics
         if (!_isEnabled)
             return;
 
-        var data = properties?
+        var data = Free.Shared.AppServices.AppDiagnosticsFileStore.SanitizeProperties(properties)
             .Where(pair => pair.Value is not null)
-            .ToDictionary(pair => pair.Key, pair => pair.Value!, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(
+                pair => pair.Key,
+                pair => Free.Shared.AppServices.AppCrashDataRedactor.RedactText(pair.Value)!,
+                StringComparer.OrdinalIgnoreCase);
         SentrySdk.AddBreadcrumb(
             message: eventName,
             category: "freex",
@@ -68,51 +68,25 @@ public sealed class SentryCrashAnalytics : ICrashAnalytics
         SentrySdk.FlushAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
     }
 
+    public bool SendTestReport()
+    {
+        if (!_isEnabled)
+            return false;
+
+        var sentryEvent = new SentryEvent
+        {
+            Level = SentryLevel.Info,
+            Message = "User-requested crash analytics test report. No document data is included.",
+        };
+        sentryEvent.SetTag("freeapp.test_report", "true");
+        var eventId = SentrySdk.CaptureEvent(sentryEvent);
+        SentrySdk.FlushAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
+        return eventId != SentryId.Empty;
+    }
+
     public void Dispose()
     {
+        _runtimeRegistration?.Dispose();
         _sentry?.Dispose();
-    }
-
-    /// <summary>
-    /// Scrub the local user profile path and username out of an outgoing event's message,
-    /// exception values, and stack-frame paths so crash reports do not disclose PII.
-    /// </summary>
-    private static void RedactPersonalData(SentryEvent sentryEvent)
-    {
-        if (sentryEvent.Message is { } message)
-        {
-            message.Message = Redact(message.Message);
-            message.Formatted = Redact(message.Formatted);
-        }
-
-        if (sentryEvent.SentryExceptions is { } exceptions)
-        {
-            foreach (var exception in exceptions)
-            {
-                exception.Value = Redact(exception.Value);
-                var frames = exception.Stacktrace?.Frames;
-                if (frames is null)
-                    continue;
-
-                foreach (var frame in frames)
-                {
-                    frame.FileName = Redact(frame.FileName);
-                    frame.AbsolutePath = Redact(frame.AbsolutePath);
-                }
-            }
-        }
-    }
-
-    private static string? Redact(string? text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return text;
-
-        if (!string.IsNullOrEmpty(UserProfilePath))
-            text = text.Replace(UserProfilePath, "<user-profile>", StringComparison.OrdinalIgnoreCase);
-        if (!string.IsNullOrEmpty(UserName))
-            text = text.Replace(UserName, "<user>", StringComparison.OrdinalIgnoreCase);
-
-        return text;
     }
 }

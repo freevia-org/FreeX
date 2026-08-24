@@ -37,6 +37,11 @@ public sealed partial class MainWindow
         await ShowHelpMessageAsync(feedback.Message, feedback.Title);
     }
 
+    private Task TestCrashReportingAsync() =>
+        ShowHelpMessageAsync(
+            AppCrashAnalyticsRuntime.UserMessage(AppCrashAnalyticsRuntime.SendTestReport()),
+            "Test Crash Reporting");
+
     private async Task ShowHelpMessageAsync(string message, string title)
     {
         await FreeWInfoDialog.ShowAsync(this, message, title);

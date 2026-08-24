@@ -140,7 +140,11 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             _tabControl,
             AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = LegalNoticesDialogMetrics.TabControlHeight },
-            contentPaneMargin: new Thickness(0, -1, 0, 0));
+            // Avalonia's compact tab header realizes four pixels taller than the
+            // WPF authority.  Pull only the selected pane upward so its document
+            // border and first baseline retain the authority registration while
+            // leaving the already-matched header row untouched.
+            contentPaneMargin: new Thickness(0, -5, 0, 0));
         // WPF's tab header has a two-pixel leading inset while its body remains aligned
         // to the dialog content edge. Keep that compensation local to this authority pair.
         _tabControl.Styles.Add(new Style(s => s

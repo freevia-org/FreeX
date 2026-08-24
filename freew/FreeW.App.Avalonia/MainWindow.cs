@@ -111,6 +111,7 @@ public sealed partial class MainWindow : Window
     private readonly int _documentWindowNumber;
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
+    private readonly SelectionPane _selectionPane;
     private readonly ReviewingPane _reviewingPane;
     private readonly ReviewBalloonsPane _reviewBalloonsPane;
     private readonly RevealFormattingPane _revealPane;
@@ -347,6 +348,7 @@ public sealed partial class MainWindow : Window
             },
             restoreOwnerFocus: RestoreOwnerFocus);
         _navPane = new NavigationPane(_editor);
+        _selectionPane = new SelectionPane(_editor);
         _reviewingPane = new ReviewingPane(_editor);
         _reviewBalloonsPane = new ReviewBalloonsPane(_editor);
         _revealPane = new RevealFormattingPane(_editor);
@@ -376,6 +378,9 @@ public sealed partial class MainWindow : Window
         DockPanel.SetDock(_navPane, Dock.Left);
         workArea.Children.Add(_navPane);
 
+        DockPanel.SetDock(_selectionPane, Dock.Right);
+        workArea.Children.Add(_selectionPane);
+
         DockPanel.SetDock(_reviewingPane, Dock.Right);
         workArea.Children.Add(_reviewingPane);
 
@@ -398,6 +403,8 @@ public sealed partial class MainWindow : Window
         _editor.DocumentChanged += OnEditorDocumentChanged;
         _editor.DocumentChanged += StopReadAloudAfterDocumentChange;
         _editor.DocumentChanged += () => { if (_navPane.IsVisible) _navPane.Refresh(); };
+        _editor.DocumentChanged += () => { if (_selectionPane.IsVisible) _selectionPane.Refresh(); };
+        _editor.FloatingSelectionChanged += () => { if (_selectionPane.IsVisible) _selectionPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_reviewingPane.IsVisible) _reviewingPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_reviewBalloonsPane.IsVisible) _reviewBalloonsPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_revealPane.IsVisible) _revealPane.Refresh(); };
@@ -472,7 +479,9 @@ public sealed partial class MainWindow : Window
             TitleBarBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
                 ThemeResources.TitleBarBrush,
                 new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBar))),
-            TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White)));
+            TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.Brush("TitleBarForeground"),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBarForeground)))));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
             windowFrame.QatHost,
@@ -525,6 +534,15 @@ public sealed partial class MainWindow : Window
         _navPane.IsVisible = !_navPane.IsVisible;
         if (_navPane.IsVisible)
             _navPane.Refresh();
+        RefreshRibbonCommandStates();
+    }
+
+    /// <summary>Show or hide Layout's floating-object Selection Pane.</summary>
+    internal void ToggleSelectionPane()
+    {
+        _selectionPane.IsVisible = !_selectionPane.IsVisible;
+        if (_selectionPane.IsVisible)
+            _selectionPane.Refresh();
         RefreshRibbonCommandStates();
     }
 
@@ -1889,6 +1907,7 @@ public sealed partial class MainWindow : Window
             Backstage: () => _ = ShowBackstageAsync(),
             NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
             ToggleNavigationPane: ToggleNavigationPane,
+            ToggleSelectionPane: ToggleSelectionPane,
             ToggleReviewingPane: ToggleReviewingPane,
             AcceptThisChange: AcceptSelectedRevision,
             RejectThisChange: RejectSelectedRevision,
@@ -2038,6 +2057,7 @@ public sealed partial class MainWindow : Window
                 FreeWProductInfo.CreateFeedbackUrl(typeof(MainWindow).Assembly),
                 FreeWApplicationFrameTextCatalog.FeedbackCommandName),
             CopyDiagnostics: () => _ = CopyDiagnosticsAsync(),
+            TestCrashReporting: () => _ = TestCrashReportingAsync(),
             CheckForUpdates: () => _ = OpenExternalHelpLinkAsync(
                 FreeWProductInfo.LatestReleaseUrl,
                 FreeWApplicationFrameTextCatalog.CheckForUpdatesCommandName),
@@ -2131,6 +2151,38 @@ public sealed partial class MainWindow : Window
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
             onFileTabSelected: () => _ = ShowBackstageAsync(),
             stateStore: _ribbonStateStore);
+
+        // Keep the generic menu as the collapsed fallback, but use the native thumbnail strip at
+        // normal widths so Design has the same immediate visual choice surface as the WPF host.
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "themes",
+            () => DocumentThemeGallery.Build(registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "styles",
+            () => DocumentStylesGallery.Build(_editor, registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "table-styles",
+            () => TableStylesGallery.Build(registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "chart-styles",
+            () => ChartStylesGallery.Build(registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "chart-quick-layout",
+            () => ChartStylesGallery.BuildQuickLayouts(registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "smartart-styles",
+            () => SmartArtStylesGallery.Build(registry));
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "smartart-layouts",
+            () => SmartArtStylesGallery.BuildLayouts(registry));
+
         HasToolbar = true;
         _ribbonHost = new Border
         {

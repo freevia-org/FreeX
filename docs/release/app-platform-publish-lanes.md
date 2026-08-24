@@ -13,7 +13,11 @@ Every tester release uses one predictable app/version tag and independently runn
 
 Every release asset has an adjacent `.sha256` file. The original self-contained Windows executables and Linux/macOS archives remain available beside the installers. Installer hashes are calculated after the installer is built. While release certificates are pending, Windows installers are unsigned and macOS app bundles are unsigned and unnotarized; the workflow does not pretend otherwise or require signing credentials.
 
+Each platform payload also carries an SPDX 2.2 SBOM generated with the pinned `Microsoft.Sbom.DotNetTool` 4.1.5 tool and a JSON inventory manifest recording the complete 40-character source commit. Before artifacts cross a workflow job boundary, their canonical checksum files, SBOMs, and inventory are regenerated and compared. The final app or suite release manifest covers every selected runtime payload, installer, checksum, SBOM, runtime manifest, and bundled legal notice. A version tag is immutable: a tag that already exists at another commit causes the lane to fail instead of replacing its assets.
+
 The Free Suite release is created only for `app=all`. Its package is a bootstrapper over the exact individual installers: Windows invokes the three per-app setups, while Linux and macOS invoke the embedded per-app install scripts. Consequently each app keeps one installation destination and one upgrade/uninstall identity whether installation started from the suite or an individual download.
+
+Hosted runners exercise install, bounded launch, and uninstall without UI assertions. Suite lanes additionally install suite-to-individual and individual-to-suite transitions against an ephemeral per-user destination. A failed Windows child installer is propagated as a failed suite installation; the bootstrapper cannot report success after a child failure.
 
 ## Tester Installation
 

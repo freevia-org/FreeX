@@ -779,6 +779,18 @@ public partial class MainWindow
         }
     }
 
+    private void TestCrashReportingBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var result = AppCrashAnalyticsRuntime.SendTestReport();
+        ShowOwnedMessage(
+            AppCrashAnalyticsRuntime.UserMessage(result),
+            "Test Crash Reporting",
+            MessageBoxButton.OK,
+            result == CrashAnalyticsTestReportResult.Sent
+                ? MessageBoxImage.Information
+                : MessageBoxImage.Warning);
+    }
+
     private AppIssueReportContext CreateIssueReportContext()
     {
         return AppIssueReporter.CreateContext(

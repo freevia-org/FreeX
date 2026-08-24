@@ -90,6 +90,7 @@ public enum FreePRibbonHostActionKind
     ReopenComment,
     ApplyViewShowState,
     ApplyViewZoomState,
+    ApplyViewModeState,
     PickTransitionSound,
     ToggleAnimationPane,
     StartSlideShowFromBeginning,
@@ -107,6 +108,7 @@ public enum FreePRibbonHostQueryKind
     AnimationPaneVisible,
     ViewShowState,
     ViewZoomState,
+    ViewModeState,
 }
 
 public enum FreePRibbonTextActionKind
@@ -728,6 +730,17 @@ public static class FreePRibbonCommandWorkflow
         RibbonStateStore stateStore,
         FreePRibbonCommandHostAdapter host)
     {
+        var initialModeState = host.TryQuery<PresentationViewModeState>(FreePRibbonHostQueryKind.ViewModeState, out var modeState)
+            ? modeState
+            : PresentationViewModeState.Normal;
+        foreach (var plan in PresentationViewModePlanner.BuildPlans(initialModeState))
+        {
+            commands.Register(
+                FreePRibbonCommandGroup.View,
+                plan.CommandId,
+                new ViewModeCommand(stateStore, plan, host));
+        }
+
         var initialShowState = host.TryQuery<PresentationViewShowState>(FreePRibbonHostQueryKind.ViewShowState, out var showState)
             ? showState
             : PresentationViewShowState.Default;
@@ -1497,6 +1510,42 @@ public static class FreePRibbonCommandWorkflow
 
         private PresentationViewShowState CurrentState() =>
             _host.TryQuery<PresentationViewShowState>(FreePRibbonHostQueryKind.ViewShowState, out var state)
+                ? state
+                : _localState;
+
+        private void Sync() => _stateStore.SetChecked(_plan.CommandId, GetState().IsChecked);
+    }
+
+    private sealed class ViewModeCommand : IRibbonStatefulCommand
+    {
+        private readonly RibbonStateStore _stateStore;
+        private readonly PresentationViewModeCommandPlan _plan;
+        private readonly FreePRibbonCommandHostAdapter _host;
+        private PresentationViewModeState _localState = PresentationViewModeState.Normal;
+
+        public ViewModeCommand(
+            RibbonStateStore stateStore,
+            PresentationViewModeCommandPlan plan,
+            FreePRibbonCommandHostAdapter host)
+        {
+            _stateStore = stateStore;
+            _plan = plan;
+            _host = host;
+            Sync();
+        }
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var state = PresentationViewModePlanner.Select(CurrentState(), _plan);
+            _localState = state;
+            _host.Execute(FreePRibbonHostActionKind.ApplyViewModeState, state);
+            _stateStore.SetChecked(_plan.CommandId, state.Mode == _plan.Mode);
+        }
+
+        public RibbonCommandState GetState() => new(IsChecked: CurrentState().Mode == _plan.Mode);
+
+        private PresentationViewModeState CurrentState() =>
+            _host.TryQuery<PresentationViewModeState>(FreePRibbonHostQueryKind.ViewModeState, out var state)
                 ? state
                 : _localState;
 
