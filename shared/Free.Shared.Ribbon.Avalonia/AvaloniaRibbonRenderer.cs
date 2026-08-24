@@ -415,19 +415,8 @@ public static class AvaloniaRibbonRenderer
         ArgumentException.ThrowIfNullOrWhiteSpace(groupId);
         ArgumentNullException.ThrowIfNull(createContent);
 
-        AvaloniaRibbonGroupHost? groupHost = null;
-        ForEachRibbonDescendant(ribbon, control =>
-        {
-            if (groupHost is null && control is AvaloniaRibbonGroupHost candidate
-                && string.Equals(candidate.GroupId, groupId, StringComparison.Ordinal))
-            {
-                groupHost = candidate;
-            }
-        });
-        if (groupHost is null)
-            return false;
-
         var injectedLanes = new HashSet<Panel>();
+        var attachedHosts = new HashSet<AvaloniaRibbonGroupHost>();
         void InjectInto(Control presentation)
         {
             if (presentation is not Grid grid)
@@ -442,15 +431,38 @@ public static class AvaloniaRibbonRenderer
             lane.Children.Add(createContent());
         }
 
-        InjectInto(groupHost.GroupContent);
-        groupHost.PropertyChanged += (_, change) =>
+        void Attach(AvaloniaRibbonGroupHost groupHost)
         {
-            if (change.Property == ContentControl.ContentProperty
-                && groupHost.Content is Control presentation)
+            if (!attachedHosts.Add(groupHost))
+                return;
+
+            InjectInto(groupHost.GroupContent);
+            groupHost.PropertyChanged += (_, change) =>
             {
-                InjectInto(presentation);
-            }
-        };
+                if (change.Property == ContentControl.ContentProperty
+                    && groupHost.Content is Control presentation)
+                {
+                    InjectInto(presentation);
+                }
+            };
+        }
+
+        void DiscoverAndAttach()
+        {
+            ForEachRibbonDescendant(ribbon, control =>
+            {
+                if (control is AvaloniaRibbonGroupHost candidate
+                    && string.Equals(candidate.GroupId, groupId, StringComparison.Ordinal))
+                {
+                    Attach(candidate);
+                }
+            });
+        }
+
+        // Contextual tabs are added after the initial ribbon tree is built. Re-check during layout
+        // so a host can register a visual gallery before its contextual group is first shown.
+        DiscoverAndAttach();
+        ribbon.LayoutUpdated += (_, _) => DiscoverAndAttach();
         return true;
     }
 
