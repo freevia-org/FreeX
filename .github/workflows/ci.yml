@@ -83,11 +83,11 @@ jobs:
 
       - name: Build portable tests
         shell: pwsh
-        run: dotnet build FreeX.DefaultTests.slnx --configuration Release
+        run: dotnet build FreeX.PortableTests.slnx --configuration Release -m:1
 
       - name: Test portable tests
         shell: pwsh
-        run: dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build
+        run: dotnet test FreeX.PortableTests.slnx --configuration Release --no-build
 
   ui-tests:
     name: UI test lane

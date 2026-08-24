@@ -38,4 +38,11 @@
     <ProjectReference Include="..\TestSupport\Validation.Avalonia\FreeP.Validation.Avalonia.csproj" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(FreePWindowsBuild)' != 'true'">
+    <Compile Remove="InlineOleInPlaceCommitEndToEndTests.cs" />
+    <Compile Remove="InlineOleExternalActivationEndToEndTests.cs" />
+    <Compile Remove="OleInPlaceCommitEndToEndTests.cs" />
+    <Compile Remove="WindowsNativePrintHandoffTests.cs" />
+  </ItemGroup>
+
 </Project>
