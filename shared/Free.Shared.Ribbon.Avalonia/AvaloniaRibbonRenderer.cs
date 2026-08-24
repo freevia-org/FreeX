@@ -401,6 +401,59 @@ public static class AvaloniaRibbonRenderer
         });
     }
 
+    /// <summary>
+    /// Replaces a generated group's visible content lane with host-native content. The factory is invoked
+    /// once for every full or compact presentation because Avalonia controls cannot belong to two group
+    /// trees at the same time. Collapsed groups deliberately retain the renderer's standard overflow menu.
+    /// </summary>
+    public static bool TryInjectGroupContent(
+        Control ribbon,
+        string groupId,
+        Func<Control> createContent)
+    {
+        ArgumentNullException.ThrowIfNull(ribbon);
+        ArgumentException.ThrowIfNullOrWhiteSpace(groupId);
+        ArgumentNullException.ThrowIfNull(createContent);
+
+        AvaloniaRibbonGroupHost? groupHost = null;
+        ForEachRibbonDescendant(ribbon, control =>
+        {
+            if (groupHost is null && control is AvaloniaRibbonGroupHost candidate
+                && string.Equals(candidate.GroupId, groupId, StringComparison.Ordinal))
+            {
+                groupHost = candidate;
+            }
+        });
+        if (groupHost is null)
+            return false;
+
+        var injectedLanes = new HashSet<Panel>();
+        void InjectInto(Control presentation)
+        {
+            if (presentation is not Grid grid)
+                return;
+
+            var lane = grid.Children.OfType<Control>()
+                .FirstOrDefault(child => Grid.GetRow(child) == 0) as Panel;
+            if (lane is null || !injectedLanes.Add(lane))
+                return;
+
+            lane.Children.Clear();
+            lane.Children.Add(createContent());
+        }
+
+        InjectInto(groupHost.GroupContent);
+        groupHost.PropertyChanged += (_, change) =>
+        {
+            if (change.Property == ContentControl.ContentProperty
+                && groupHost.Content is Control presentation)
+            {
+                InjectInto(presentation);
+            }
+        };
+        return true;
+    }
+
     /// <summary>Builds the content panel for one tab (the body shown under the tab header).</summary>
     public static Control BuildTabContent(
         RibbonTab tab,
@@ -2864,6 +2917,7 @@ public static class AvaloniaRibbonRenderer
 
         public int Priority { get; }
         public string GroupId => _group.Id;
+        internal Control GroupContent => _full;
         public double FullWidth { get; set; }
         public RibbonAdaptiveGroupState LayoutState
         {

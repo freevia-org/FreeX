@@ -2383,6 +2383,11 @@ public sealed partial class MainWindow : Window,
                 EnableIntermediateGroupPresentations: true),
             stateStore: _ribbonStateStore);
 
+        AvaloniaRibbonRenderer.TryInjectGroupContent(
+            _ribbonControl,
+            "themes",
+            () => PresentationThemeGallery.Build(registry));
+
         return new Border
         {
             Height          = FreePShellVisualMetrics.RibbonHeight,
