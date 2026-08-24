@@ -49,38 +49,25 @@ public sealed class TestDistributionPlanTests
     }
 
     [Fact]
-    public void DistributionPlan_DocumentsDefaultAgentBuildVerificationCommands()
+    public void DistributionPlan_DocumentsManifestDrivenCommitAndReleaseGates()
     {
         var source = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
 
-        source.Should().Contain("## Default Agent Build Verification");
-        source.Should().Contain("tools\\Test-RepositoryPreflight.ps1");
-        source.Should().Contain("dotnet build FreeX.slnx --configuration Release");
-        source.Should().Contain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build");
-        source.Should().Contain("Default agent verification does not run the UI lane");
-        source.Should().Contain("does not use `dotnet test FreeX.slnx`");
-        source.Should().Contain("validates tracked JSON/XML-backed files");
-        source.Should().Contain("keeps build servers, shared compilation, node reuse, and MSBuild parallelism enabled");
+        source.Should().Contain("## Commit Gate Verification");
+        source.Should().Contain("tools/Test-RepositoryPreflight.ps1");
+        source.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform windows");
+        source.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeW -Platform linux");
+        source.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeP -Platform macos");
+        source.Should().Contain("manifest-driven commit gate");
+        source.Should().Contain("separate TRX result per project");
+        source.Should().Contain("commit versus release gate contract");
         source.Should().Contain("## Conservative Rerun Fallback");
         source.Should().Contain("--disable-build-servers");
         source.Should().Contain("-p:UseSharedCompilation=false");
         source.Should().Contain("-p:NodeReuse=false");
         source.Should().Contain("/nr:false");
         source.Should().Contain("-m:1");
-        source.Should().Contain("the default Release test lane reports zero failed tests");
-        source.Should().Contain("stale `dotnet`, `MSBuild`, `VBCSCompiler`, or `testhost` process");
-
-        var defaultSectionIndex = source.IndexOf("## Default Agent Build Verification", StringComparison.Ordinal);
-        var uiSectionIndex = source.IndexOf("## UI Lane Verification", StringComparison.Ordinal);
-
-        defaultSectionIndex.Should().BeGreaterThanOrEqualTo(0);
-        uiSectionIndex.Should().BeGreaterThan(defaultSectionIndex);
-        source[defaultSectionIndex..uiSectionIndex].Should().NotContain("FreeX.UiTests.slnx");
-        source[defaultSectionIndex..uiSectionIndex].Should().NotContain("dotnet restore FreeX.slnx");
-        source[defaultSectionIndex..uiSectionIndex].Should().NotContain("--disable-build-servers");
-        source[uiSectionIndex..].Should().Contain("dotnet test FreeX.UiTests.slnx --configuration Release --no-build");
-        source[uiSectionIndex..].Should().Contain("Tester Release");
-        source[uiSectionIndex..].Should().Contain("still runs both the default and UI test lanes");
+        source.Should().Contain("after clearing stale processes");
     }
 
     [Fact]

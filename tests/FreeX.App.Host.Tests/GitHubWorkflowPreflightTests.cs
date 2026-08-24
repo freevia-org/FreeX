@@ -20,25 +20,25 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().NotContain("contents: write");
         workflow.Should().NotContain("pull_request_target");
         workflow.Should().Contain("runs-on: windows-latest");
-        workflow.Should().Contain("timeout-minutes: 60");
+        workflow.Should().Contain("timeout-minutes: 180");
         workflow.Should().Contain("actions/checkout@v6");
         workflow.Should().Contain("persist-credentials: false");
         workflow.Should().Contain("actions/setup-dotnet@v5");
         workflow.Should().Contain("dotnet-version: 10.0.x");
-        workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");
+        workflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("concurrency:");
         workflow.Should().Contain("group: ci-${{ github.ref }}");
         workflow.Should().Contain("cancel-in-progress: true");
-        workflow.Should().Contain("name: Default test lane");
+        workflow.Should().Contain("name: FreeX commit gate");
         workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release");
-        workflow.Should().Contain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build");
+        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform windows -NoBuild");
+        workflow.Should().Contain("name: Linux portable lane");
+        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux -NoBuild");
         workflow.Should().Contain("name: macOS portable lane");
         workflow.Should().Contain("dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release");
-        workflow.Should().Contain("name: UI test lane");
-        workflow.Should().Contain("dotnet build FreeX.UiTests.slnx --configuration Release");
-        workflow.Should().Contain("dotnet test FreeX.UiTests.slnx --configuration Release --no-build");
-        workflow.Should().NotContain("dotnet restore FreeX.DefaultTests.slnx");
-        workflow.Should().NotContain("dotnet restore FreeX.UiTests.slnx");
+        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform macos -NoBuild");
+        workflow.Should().NotContain("dotnet test FreeX.DefaultTests.slnx");
+        workflow.Should().NotContain("dotnet test FreeX.UiTests.slnx");
         workflow.Should().NotContain("--disable-build-servers");
         workflow.Should().NotContain("-p:UseSharedCompilation=false");
         workflow.Should().NotContain("-p:NodeReuse=false");
@@ -47,22 +47,24 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void FreeWWorkflow_IsManualAndRetainsItsReleaseTestGate()
+    public void FreeWWorkflow_IsPathScopedAndRunsItsCommitGate()
     {
-        // FreeW runs its expensive full test lane on demand and through the unified tester
-        // release workflow; FreeX's central CI remains the automatic push/PR gate.
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "freew-ci.yml");
 
         workflow.Should().Contain("workflow_dispatch:");
-        workflow.Should().NotContain("push:");
-        workflow.Should().NotContain("pull_request:");
+        workflow.Should().Contain("push:");
+        workflow.Should().Contain("pull_request:");
+        workflow.Should().Contain("freew/**");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");
         workflow.Should().NotContain("pull_request_target");
-        workflow.Should().Contain("runs-on: windows-latest");
+        workflow.Should().Contain("runs-on: ${{ matrix.runner }}");
         workflow.Should().Contain("dotnet build FreeW.slnx --configuration Release");
-        workflow.Should().Contain("dotnet test FreeW.slnx --configuration Release --no-build");
+        workflow.Should().Contain("platform: windows");
+        workflow.Should().Contain("platform: linux");
+        workflow.Should().Contain("platform: macos");
+        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeW -Platform ${{ matrix.platform }}");
     }
 
     [Fact]
@@ -136,29 +138,29 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void FreePWorkflow_IsManualAndRetainsItsReleaseTestGate()
+    public void FreePWorkflow_IsPathScopedAndRunsItsCommitGate()
     {
-        // FreeP runs its full test lane on demand and through the unified tester release
-        // workflow; automatic per-push coverage belongs to the central FreeX CI lanes.
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "freep-ci.yml");
 
         workflow.Should().Contain("workflow_dispatch:");
-        workflow.Should().NotContain("push:");
-        workflow.Should().NotContain("pull_request:");
+        workflow.Should().Contain("push:");
+        workflow.Should().Contain("pull_request:");
+        workflow.Should().Contain("freep/**");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");
         workflow.Should().NotContain("pull_request_target");
-        workflow.Should().Contain("runs-on: windows-latest");
+        workflow.Should().Contain("runs-on: ${{ matrix.runner }}");
         workflow.Should().Contain("dotnet build FreeP.slnx --configuration Release");
-        workflow.Should().Contain("dotnet test FreeP.slnx --configuration Release --no-build");
+        workflow.Should().Contain("platform: windows");
+        workflow.Should().Contain("platform: linux");
+        workflow.Should().Contain("platform: macos");
+        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeP -Platform ${{ matrix.platform }}");
     }
 
     [Fact]
-    public void GitHubWorkflowPreflight_DoesNotRequireAutomaticPushForManualSiblingCi()
+    public void GitHubWorkflowPreflight_DoesNotImposeUnrelatedTriggerPolicy()
     {
-        // FreeW and FreeP are tester-release/manual lanes, so the generic workflow policy must
-        // not demand push triggers from them.
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-GitHubWorkflows.ps1");
 
         script.Should().NotContain("primary CI must run on direct pushes to main");

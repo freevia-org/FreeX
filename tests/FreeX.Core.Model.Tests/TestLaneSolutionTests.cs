@@ -157,8 +157,9 @@ public sealed class TestLaneSolutionTests
         readme.Should().Contain("tests only the non-UI lane");
         readme.Should().Contain("dotnet test FreeX.DefaultTests.slnx");
         readme.Should().Contain("Run the UI lane separately only");
-        plan.Should().Contain("Default agent verification does not run the UI lane");
-        plan.Should().Contain("does not use `dotnet test FreeX.slnx`");
+        plan.Should().Contain("Commit Gate Verification");
+        plan.Should().Contain("manifest-driven commit gate");
+        plan.Should().Contain("manifest-defined FreeX release gate");
     }
 
     private static string[] ReadSolutionProjects(string solutionPath)

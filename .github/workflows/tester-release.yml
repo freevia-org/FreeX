@@ -102,19 +102,15 @@ jobs:
 
       - name: Repository preflight
         shell: pwsh
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1
+        run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1
 
       - name: Build
         shell: pwsh
         run: dotnet build FreeX.slnx --configuration Release
 
-      - name: Test
+      - name: Release gate
         shell: pwsh
-        run: dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx"
-
-      - name: UI tests
-        shell: pwsh
-        run: dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"
+        run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate release -App FreeX -Platform windows -NoBuild -ResultsDirectory TestResults
 
       - name: Upload test results
         if: always()

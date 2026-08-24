@@ -11,7 +11,7 @@ public sealed class GeneratedDocsPreflightTests
 
         script.Should().Contain("Generate-CommandInventoryDocs.ps1");
         script.Should().Contain("Generate-FreeWCommandInventory.ps1");
-        script.Should().Contain("& $resolvedScriptPath -Check");
+        script.Should().Contain("& pwsh -NoProfile -File $resolvedScriptPath -Check");
         script.Should().Contain("Generated documentation checks passed.");
     }
 

@@ -28,9 +28,9 @@ public sealed class LegalNoticeProviderTests
             document.Text.Contains("All other trademarks are the property of their respective owners."));
         documents.Should().Contain(document =>
             document.Title == "Privacy Notice" &&
-            document.Text.Contains("%LOCALAPPDATA%\\FreeX\\Diagnostics") &&
+            document.Text.Contains("%LOCALAPPDATA%\\<app>\\Diagnostics") &&
             document.Text.Contains("FREEX_DIAGNOSTICS=0") &&
-            document.Text.Contains("do not intentionally collect document contents, formulas, filenames"));
+            document.Text.Contains("not designed to record document contents or file paths"));
         documents.Should().Contain(document =>
             document.Title == "Third-Party Notices" &&
             document.Text.Contains("Runtime Packages") &&

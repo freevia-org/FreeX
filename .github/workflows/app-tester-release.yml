@@ -85,7 +85,15 @@ jobs:
           $selectedLanes = @($lanes | Where-Object { $_.app -in $apps -and $_.platform -in $platforms })
           if ($selectedLanes.Count -eq 0) { throw "No release lanes were selected." }
 
-          $verifyMatrix = @{ app = $apps } | ConvertTo-Json -Compress
+          $verifyLanes = @(
+            $selectedLanes |
+              Group-Object { "$($_.app):$($_.platform)" } |
+              ForEach-Object {
+                $lane = $_.Group[0]
+                @{ app = $lane.app; platform = $lane.platform; runner = $lane.runner }
+              }
+          )
+          $verifyMatrix = @{ include = $verifyLanes } | ConvertTo-Json -Compress
           $packageMatrix = @{ include = $selectedLanes } | ConvertTo-Json -Compress
           $publishMatrix = @{ app = $apps } | ConvertTo-Json -Compress
           "verify_matrix=$verifyMatrix" >> $env:GITHUB_OUTPUT
@@ -93,10 +101,10 @@ jobs:
           "publish_matrix=$publishMatrix" >> $env:GITHUB_OUTPUT
 
   verify:
-    name: Verify ${{ matrix.app }}
+    name: Verify ${{ matrix.app }} ${{ matrix.platform }}
     needs: prepare
-    runs-on: windows-latest
-    timeout-minutes: 180
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.verify_matrix) }}
@@ -134,68 +142,14 @@ jobs:
       - name: Run release test gate
         shell: pwsh
         run: |
-          function Invoke-Dotnet {
-            param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
-            & dotnet @Arguments
-            if ($LASTEXITCODE -ne 0) {
-              throw "dotnet $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
-            }
-          }
-
-          switch ("${{ matrix.app }}") {
-            "FreeX" {
-              powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1
-              if ($LASTEXITCODE -ne 0) { throw "Repository preflight failed with exit code $LASTEXITCODE." }
-              Invoke-Dotnet build FreeX.slnx --configuration Release
-              Invoke-Dotnet test tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj `
-                --configuration Release `
-                --no-build `
-                --filter "FullyQualifiedName~ReleaseAutomationWorkflowTests|FullyQualifiedName~TesterReleaseSmokeTests|FullyQualifiedName~RibbonNativeRegistryTests|FullyQualifiedName=FreeX.App.Host.Tests.MainWindowRibbonKeyTipTests.DeclarativeHomeMenuChoices_AreEnabledAcrossFormattingFamilies" `
-                --logger "trx;LogFileName=freex-release-focused-tests.trx"
-              Invoke-Dotnet test tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj `
-                --configuration Release `
-                --no-build `
-                --filter "FullyQualifiedName~BorderRenderTests|FullyQualifiedName~R74_SlantDashDotBorderThicknessTests" `
-                --logger "trx;LogFileName=freex-border-tests.trx"
-              Invoke-Dotnet test tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj `
-                --configuration Release `
-                --no-build `
-                --filter "FullyQualifiedName~BorderStrokePixelSnapperTests" `
-                --logger "trx;LogFileName=freex-border-presentation-tests.trx"
-              Invoke-Dotnet test tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj `
-                --configuration Release `
-                --no-build `
-                --filter "FullyQualifiedName~CellBorderPanelNeighborResolutionTests" `
-                --logger "trx;LogFileName=freex-avalonia-release-focused-tests.trx"
-            }
-            "FreeW" {
-              Invoke-Dotnet build FreeW.slnx --configuration Release
-              foreach ($project in @(
-                "freew/FreeW.Core.Model.Tests/FreeW.Core.Model.Tests.csproj",
-                "freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj",
-                "freew/FreeW.Ribbon.Definitions.Tests/FreeW.Ribbon.Definitions.Tests.csproj",
-                "freew/FreeW.App.Localization.Tests/FreeW.App.Localization.Tests.csproj"
-              )) {
-                Invoke-Dotnet test $project `
-                  --configuration Release `
-                  --no-build `
-                  --logger "trx;LogFileName=freew-release-tests.trx"
-              }
-              Invoke-Dotnet test freew/FreeW.App.Avalonia.Tests/FreeW.App.Avalonia.Tests.csproj `
-                --configuration Release `
-                --no-build `
-                --filter "FullyQualifiedName~PackagingSmokeTests|FullyQualifiedName~SharedLaunchSmokeBootstrapTests" `
-                --logger "trx;LogFileName=freew-avalonia-smoke-tests.trx"
-            }
-            "FreeP" {
-              Invoke-Dotnet build FreeP.slnx --configuration Release
-              Invoke-Dotnet test FreeP.slnx `
-                --configuration Release `
-                --no-build `
-                --logger "trx;LogFileName=freep-tests.trx"
-            }
-            default { throw "Unsupported app '${{ matrix.app }}'." }
-          }
+          pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Repository preflight failed with exit code $LASTEXITCODE." }
+          pwsh -NoProfile -File tools/Invoke-TestGate.ps1 `
+            -Gate release `
+            -App "${{ matrix.app }}" `
+            -Platform "${{ matrix.platform }}" `
+            -ResultsDirectory TestResults
+          if ($LASTEXITCODE -ne 0) { throw "Release gate failed with exit code $LASTEXITCODE." }
 
       - name: Upload test results
         if: always()

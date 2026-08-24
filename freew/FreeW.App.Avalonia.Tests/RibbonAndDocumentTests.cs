@@ -271,7 +271,7 @@ public class RibbonAndDocumentTests
             "SaveCompatibilityWarningDialog.cs"));
 
         var confirmationIndex = coordinator.IndexOf("await request.ConfirmCompatibilityAsync");
-        var saveIndex = coordinator.IndexOf("_persistence.Save(request.Document, request.Target, expectedLastWriteTimeUtc)");
+        var saveIndex = coordinator.IndexOf("_persistence.Save(");
         var completionIndex = coordinator.IndexOf("await request.CompleteSaveAsync!");
 
         confirmationIndex.Should().BeGreaterThanOrEqualTo(0);

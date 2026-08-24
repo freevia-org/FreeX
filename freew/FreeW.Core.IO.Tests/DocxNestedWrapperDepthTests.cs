@@ -40,6 +40,17 @@ public sealed class DocxNestedWrapperDepthTests
         DocxReader.Read(docx).PlainText.Should().Contain("wrapped");
     }
 
+    [Fact]
+    public void Read_DeeplyNestedTables_OpensInsteadOfOverflowingTheStack()
+    {
+        using var docx = BuildDocxWithNestedTables(20_000);
+
+        var document = DocxReader.Read(docx);
+
+        document.Should().NotBeNull();
+        document.Blocks.Should().ContainSingle();
+    }
+
     private static MemoryStream BuildDocxWithNestedWrappers(string wrapper, string? contentWrapper, int depth)
     {
         var body = new StringBuilder();
@@ -83,6 +94,53 @@ public sealed class DocxNestedWrapperDepthTests
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
                 """);
 
+            AddText(
+                zip,
+                "word/document.xml",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                    + "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\""
+                    + " xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+                    + "<w:body>"
+                    + body
+                    + "</w:body></w:document>");
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static MemoryStream BuildDocxWithNestedTables(int depth)
+    {
+        var body = new StringBuilder();
+        for (var i = 0; i < depth; i++)
+            body.Append("<w:tbl><w:tr><w:tc>");
+
+        body.Append("<w:p><w:r><w:t>nested</w:t></w:r></w:p>");
+
+        for (var i = 0; i < depth; i++)
+            body.Append("</w:tc></w:tr></w:tbl>");
+
+        var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            AddText(zip, "[Content_Types].xml", """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                </Types>
+                """);
+            AddText(zip, "_rels/.rels", """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                </Relationships>
+                """);
+            AddText(zip, "word/_rels/document.xml.rels", """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+                """);
             AddText(
                 zip,
                 "word/document.xml",

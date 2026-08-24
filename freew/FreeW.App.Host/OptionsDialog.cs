@@ -36,7 +36,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _uiLanguage = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly CheckBox _crashAnalytics = new()
     {
-        Content = "Send privacy-filtered crash reports (takes effect next launch)",
+        Content = UiText.Get("Options_CrashAnalytics_Label"),
     };
 
     private readonly IReadOnlyDictionary<OptionsDialogToggleKind, CheckBox> _toggles;
@@ -137,9 +137,9 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         AddRow(
             grid,
             _surface.General.Fields.Count,
-            "Crash analytics:",
+            UiText.Get("Options_CrashAnalytics_FieldLabel"),
             _crashAnalytics,
-            "Off by default. Reports are sent only when a release endpoint is configured; document contents and paths are not intentionally collected.");
+            UiText.Get("Options_CrashAnalytics_Hint"));
         return grid;
     }
 

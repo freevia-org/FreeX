@@ -1,6 +1,7 @@
 using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfTable = System.Windows.Documents.Table;
@@ -117,21 +118,14 @@ public sealed class DocumentViewTableSelectionOracleTests
         table.Rows[0].Cells[0] = new TableCell("Axx");
         table.Rows[0].Cells[1] = new TableCell("Bmiddle");
         table.Rows[0].Cells[2] = new TableCell("Cyy");
-        var view = Load(model);
+        var clipboard = new FixedTextClipboard("Z\nQ");
+        var view = Load(model, clipboard);
         var row = RenderedTable(view).RowGroups[0].Rows[0];
         var first = row.Cells[0].Blocks.OfType<WpfParagraph>().Single();
         var last = row.Cells[2].Blocks.OfType<WpfParagraph>().Single();
 
         view.Selection.Select(Position(first, 1), Position(last, 1));
-        System.Windows.Clipboard.SetText("Z\nQ");
-        try
-        {
-            view.PastePlainText();
-        }
-        finally
-        {
-            System.Windows.Clipboard.Clear();
-        }
+        view.PastePlainText();
 
         view.CommitToModel();
         var resultTable = view.Model.Blocks.OfType<Table>().Single();
@@ -216,11 +210,29 @@ public sealed class DocumentViewTableSelectionOracleTests
             view.Selection.Text.Should().NotContain(character.ToString());
     }
 
-    private static DocumentView Load(TextDocument document)
+    private static DocumentView Load(TextDocument document, IPlatformClipboard? clipboard = null)
     {
-        var view = new DocumentView();
+        var view = new DocumentView(clipboard);
         view.LoadModel(document);
         return view;
+    }
+
+    private sealed class FixedTextClipboard(string text) : IPlatformClipboard
+    {
+        public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
+            PlatformClipboardReadRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                new PlatformClipboardContent(Text: text)));
+
+        public ValueTask<PlatformClipboardWriteResult> WriteAsync(
+            PlatformClipboardContent content,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+
+        public ValueTask<PlatformClipboardWriteResult> ClearAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PlatformClipboardWriteResult.Success());
     }
 
     private static TextDocument TableDocument(int rows, int columns)

@@ -221,7 +221,8 @@ public sealed class OptionsDialogVisualParityTests
                     check.Content.ToString() != "Enable AutoCorrect (smart typing) as you type" &&
                     check.Content.ToString() != "Correct TWo INitial CApitals" &&
                     check.Content.ToString() != "Capitalize names of days" &&
-                    check.Content.ToString() != "Replace text as you type").ToArray();
+                    check.Content.ToString() != "Replace text as you type" &&
+                    check.Content.ToString() != "Send privacy-filtered crash reports (takes effect next launch)").ToArray();
                 var autoFormatPanel = master.Parent as StackPanel;
                 var section = dialog.GetLogicalDescendants().OfType<TextBlock>()
                     .Single(text => text.Text == OptionsDialogPlanner.AutoFormatSectionLabel);

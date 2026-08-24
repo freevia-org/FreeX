@@ -13,7 +13,7 @@ public sealed class TesterReleaseReadinessPreflightTests
         script.Should().Contain("release/progress.json overallCompletion must be between 0 and 100.");
         script.Should().Contain("Unsupported releasePatchSource");
         script.Should().Contain("Unsupported release channel");
-        script.Should().Contain("tools\\Test-RepositoryPreflight.ps1");
+        script.Should().Contain("tools/Test-RepositoryPreflight.ps1");
         script.Should().Contain("group: tester-release");
         script.Should().Contain("signParameters.AllowUnsignedMsix = `$true");
         script.Should().Contain("Velopack installer/portable/feed artifacts");

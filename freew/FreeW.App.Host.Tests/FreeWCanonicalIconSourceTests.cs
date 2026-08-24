@@ -17,15 +17,17 @@ public sealed class FreeWCanonicalIconSourceTests
             .Should().Contain("#A26714").And.Contain("#4B2F12").And.Contain("FREE").And.Contain(">W</text>");
 
         var wpfProject = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"));
-        wpfProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeW.ico");
+        wpfProject.Should().Contain(@"shared\Free.Shared.Shell\BrandAssets.props");
+        wpfProject.Should().Contain("$(BrandWindowsIconPath)");
         wpfProject.Should().Contain("<ApplicationIcon>");
         var wpfWindow = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "MainWindow.cs"));
-        wpfWindow.Should().Contain("pack://application:,,,/FreeW.App.Host;component/Resources/FreeW.ico");
+        wpfWindow.Should().Contain("GetWpfPackUri(\"FreeW.App.Host\")");
 
         var avaloniaProject = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj"));
-        avaloniaProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeW.ico");
-        avaloniaProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeW.svg");
-        avaloniaProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeW.icns");
+        avaloniaProject.Should().Contain(@"shared\Free.Shared.Shell\BrandAssets.props");
+        avaloniaProject.Should().Contain("$(BrandWindowsIconPath)");
+        avaloniaProject.Should().Contain("$(BrandScalableIconPath)");
+        avaloniaProject.Should().Contain("$(BrandMacOsIconPath)");
 
         File.Exists(Path.Combine(root, "freew", "FreeW.App.Host", "Resources", "FreeW.ico")).Should().BeFalse();
         File.Exists(Path.Combine(root, "freew", "FreeW.App.Avalonia", "Packaging", "linux", "io.github.tony-xmelon.freew.svg")).Should().BeFalse();
