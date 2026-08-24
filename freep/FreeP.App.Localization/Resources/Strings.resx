@@ -385,6 +385,24 @@
   <data name="Ribbon_Group_Text_KeyTip" xml:space="preserve">
     <value>T</value>
   </data>
+  <data name="Ribbon_Tab_TextFormat_Label" xml:space="preserve">
+    <value>Text Format</value>
+  </data>
+  <data name="Ribbon_Tab_TextFormat_KeyTip" xml:space="preserve">
+    <value>TF</value>
+  </data>
+  <data name="Ribbon_Context_TextTools_Label" xml:space="preserve">
+    <value>Text Tools</value>
+  </data>
+  <data name="Ribbon_Tab_TableLayout_Label" xml:space="preserve">
+    <value>Table Layout</value>
+  </data>
+  <data name="Ribbon_Tab_TableLayout_KeyTip" xml:space="preserve">
+    <value>TL</value>
+  </data>
+  <data name="Ribbon_Context_TableTools_Label" xml:space="preserve">
+    <value>Table Tools</value>
+  </data>
   <data name="Ribbon_Command_TextBox_Label" xml:space="preserve">
     <value>Text Box</value>
   </data>

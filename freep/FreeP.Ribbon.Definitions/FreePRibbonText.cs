@@ -56,6 +56,12 @@ internal static class FreePRibbonText
     public static string TextColumnsKeyTip => Get("Ribbon_Command_TextColumns_KeyTip");
     public static string TextColumnSpacingLabel => Get("Ribbon_Command_TextColumnSpacing_Label");
     public static string TextColumnSpacingKeyTip => Get("Ribbon_Command_TextColumnSpacing_KeyTip");
+    public static string TextFormatTabLabel => Get("Ribbon_Tab_TextFormat_Label");
+    public static string TextFormatTabKeyTip => Get("Ribbon_Tab_TextFormat_KeyTip");
+    public static string TextToolsContextLabel => Get("Ribbon_Context_TextTools_Label");
+    public static string TableLayoutTabLabel => Get("Ribbon_Tab_TableLayout_Label");
+    public static string TableLayoutTabKeyTip => Get("Ribbon_Tab_TableLayout_KeyTip");
+    public static string TableToolsContextLabel => Get("Ribbon_Context_TableTools_Label");
     public static string TableCellFillLabel => Get("Ribbon_Command_TableCellFill_Label");
     public static string TableCellFillKeyTip => Get("Ribbon_Command_TableCellFill_KeyTip");
     public static string TableCellAnchorLabel => Get("Ribbon_Command_TableCellAnchor_Label");
