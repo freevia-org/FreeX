@@ -114,7 +114,8 @@ public sealed record FreeWRibbonFloatingExecutionPorts(
     Func<bool> CanUngroup,
     Action Ungroup,
     Action<FreeWRibbonFloatingFeedback>? ShowFeedback = null,
-    Action<ObjectFormatTarget, FreeWRibbonObjectPositionInput>? ApplyPosition = null);
+    Action<ObjectFormatTarget, FreeWRibbonObjectPositionInput>? ApplyPosition = null,
+    Action? ToggleSelectionPane = null);
 
 public sealed record FreeWRibbonChartSmartArtExecutionPorts(
     Action PrepareExecution,
@@ -1019,6 +1020,12 @@ public static class FreeWRibbonEditorExecutionProfile
         bindings.Register("freew.layout-wrap", EmptyRibbonCommand.Instance);
         bindings.Register("freew.layout-rotate", EmptyRibbonCommand.Instance);
         bindings.Register("freew.layout-position", EmptyRibbonCommand.Instance);
+        bindings.Register(
+            "freew.layout-selection-pane",
+            Stateful(
+                () => ports.ToggleSelectionPane?.Invoke(),
+                () => ports.ToggleSelectionPane is not null,
+                ports.PrepareExecution));
 
         foreach (var preset in LayoutPositionPresets)
         {

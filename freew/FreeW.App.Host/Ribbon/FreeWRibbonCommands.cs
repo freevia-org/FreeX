@@ -1255,7 +1255,9 @@ internal static class FreeWRibbonCommands
             headerFooterCommands.Build());
         FreeWRibbonEditorExecutionProfile.RegisterFloating(
             registry,
-            CreateFloatingExecutionPorts(editor));
+            CreateFloatingExecutionPorts(editor, hostPorts?.ToggleSelectionPane));
+        if (hostPorts?.ToggleSelectionPane is { } toggleSelectionPane)
+            registry.Register("freew.layout-selection-pane", new ActionRibbonCommand(toggleSelectionPane));
         FreeWRibbonEditorExecutionProfile.RegisterImageTableWorkflows(
             registry,
             CreateImageExecutionPorts(editor),
@@ -1371,7 +1373,9 @@ internal static class FreeWRibbonCommands
             editor.SetSelectedShapeSize(result.Width, result.Height);
     }
 
-    private static FreeWRibbonFloatingExecutionPorts CreateFloatingExecutionPorts(DocumentView editor) =>
+    private static FreeWRibbonFloatingExecutionPorts CreateFloatingExecutionPorts(
+        DocumentView editor,
+        Action? toggleSelectionPane = null) =>
         new(
             PrepareExecution: () => editor.Focus(),
             HasSelection: target => target == ObjectFormatTarget.Picture
@@ -1453,7 +1457,8 @@ internal static class FreeWRibbonCommands
                     editor.SetSelectedImagePosition(position.HorizontalOffsetPt, position.VerticalOffsetPt, position.HorizontalAnchor, position.VerticalAnchor);
                 else
                     editor.SetSelectedShapePosition(position.HorizontalOffsetPt, position.VerticalOffsetPt, position.HorizontalAnchor, position.VerticalAnchor);
-            });
+            },
+            ToggleSelectionPane: toggleSelectionPane);
 
     private static FreeWRibbonImageExecutionPorts CreateImageExecutionPorts(DocumentView editor) =>
         new(

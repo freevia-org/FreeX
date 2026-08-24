@@ -62,6 +62,7 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Action? ToggleSideToSide = null,
     Func<bool>? IsSideToSideActive = null,
     Action? OpenHyperlinkDialog = null,
+    Action? ToggleSelectionPane = null,
     Action? OpenEditHyperlinkDialog = null,
     Action? OpenHyperlinkTooltipDialog = null,
     Action? OpenBookmarkDialog = null,

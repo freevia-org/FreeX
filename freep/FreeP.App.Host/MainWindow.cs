@@ -4000,14 +4000,14 @@ public sealed partial class MainWindow : Window,
                     InjectRibbonGallery(
                         content,
                         FreeP.Ribbon.Definitions.FreePRibbon.ThemesGroupId,
-                        PresentationThemeGallery.Build(registry));
+                        () => PresentationThemeGallery.Build(registry));
                 else if (tab.Id == FreeP.Ribbon.Definitions.FreePRibbon.TransitionsTabId)
                     InjectRibbonGallery(
                         content,
                         FreeP.Ribbon.Definitions.FreePRibbon.TransitionGalleryGroupId,
-                        PresentationTransitionGallery.Build(registry));
+                        () => PresentationTransitionGallery.Build(registry));
                 else if (tab.Id == "animations")
-                    InjectRibbonGallery(content, "animation-effects", PresentationAnimationGallery.Build(tab, registry, stateStore));
+                    InjectRibbonGallery(content, "animation-effects", () => PresentationAnimationGallery.Build(tab, registry, stateStore));
             },
         });
 
@@ -4021,24 +4021,43 @@ public sealed partial class MainWindow : Window,
     // The shared renderer stamps group content with its canonical catalog id. Replace selected WPF command
     // lanes with native Office-style previews while preserving underlying commands for non-WPF hosts and
     // contextual command routing.
-    private static void InjectRibbonGallery(DependencyObject content, string groupId, FrameworkElement gallery)
+    private static void InjectRibbonGallery(
+        DependencyObject content,
+        string groupId,
+        Func<FrameworkElement> createGallery)
     {
         var panel = (content as Border)?.Child as Panel;
         if (panel is null)
             return;
 
         var group = panel.Children.OfType<RibbonGroupHost>()
-            .FirstOrDefault(host => host.Content is Grid grid && RibbonMetadata.GetCatalogId(grid) == groupId);
-        if (group?.Content is not Grid grid)
+            .FirstOrDefault(host => host.GroupContent is Grid grid && RibbonMetadata.GetCatalogId(grid) == groupId);
+        if (group is null)
             return;
 
-        var lane = grid.Children.OfType<FrameworkElement>()
-            .FirstOrDefault(child => Grid.GetRow(child) == 0) as Panel;
-        if (lane is null)
-            return;
+        // The shared adaptive host creates compact presentations lazily. A native gallery must be
+        // recreated for each presentation because WPF elements cannot be reparented between group grids.
+        var injectedLanes = new HashSet<Panel>();
+        void InjectInto(FrameworkElement presentation)
+        {
+            if (presentation is not Grid grid)
+                return;
 
-        lane.Children.Clear();
-        lane.Children.Add(gallery);
+            var lane = grid.Children.OfType<FrameworkElement>()
+                .FirstOrDefault(child => Grid.GetRow(child) == 0) as Panel;
+            if (lane is null || !injectedLanes.Add(lane))
+                return;
+
+            lane.Children.Clear();
+            lane.Children.Add(createGallery());
+        }
+
+        InjectInto(group.GroupContent);
+        group.LayoutUpdated += (_, _) =>
+        {
+            if (group.Content is FrameworkElement presentation)
+                InjectInto(presentation);
+        };
     }
 
     // FreeP's format and table authoring controls belong in contextual Office tabs, not in the

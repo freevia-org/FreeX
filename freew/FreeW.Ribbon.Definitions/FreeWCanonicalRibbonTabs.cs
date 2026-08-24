@@ -184,6 +184,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                             menu.Item("freew.layout-wrap-behind", "Behind Text", "H");
                             menu.Item("freew.layout-wrap-front", "In Front of Text", "F");
                         });
+                        group.Medium("freew.layout-selection-pane", "Selection Pane", RibbonCommandIconKind.NavigationPane);
                         group.Medium("freew.layout-bring-forward", "Bring Forward", RibbonCommandIconKind.BringForward);
                         group.Medium("freew.layout-send-backward", "Send Backward", RibbonCommandIconKind.SendBackward);
                         group.Medium("freew.layout-rotate", "Rotate", RibbonCommandIconKind.Rotate, menu: menu =>
@@ -200,6 +201,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     {
                         group.Dropdown("freew.layout-position", "Position", BuildFloatingPositionMenu("layout"));
                         group.Dropdown("freew.layout-wrap", "Wrap Text", BuildWrapMenu("layout"));
+                        group.Button("freew.layout-selection-pane", "Selection Pane");
                         group.Button("freew.layout-bring-forward", "Bring Forward");
                         group.Button("freew.layout-send-backward", "Send Backward");
                         group.Dropdown("freew.layout-rotate", "Rotate", BuildRotateMenu("layout"));
