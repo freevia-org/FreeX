@@ -2,6 +2,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Free.Shared.Ribbon;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.Core.Model;
 
@@ -29,7 +30,7 @@ public sealed class TableStylesGalleryTests
             DocumentTableStyle.Catalog.Take(3).Select(style => style.Name));
         buttons[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         commands[1].ExecuteCount.Should().Be(1);
-        AutomationProperties.GetName((Button)gallery.Children[1]).Should().Be("More Table Styles");
+        AutomationProperties.GetName((Button)gallery.Children[1]).Should().Be(FreeWUiTextCatalog.TableStylesMoreToolTip);
     }
 
     private sealed class RecordingCommand : IRibbonPreviewCommand

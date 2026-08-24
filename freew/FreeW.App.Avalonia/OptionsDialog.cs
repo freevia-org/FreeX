@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using System.Globalization;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
 
@@ -34,7 +35,7 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
     private readonly TextBox _uiLanguage = new() { Width = 180, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly CheckBox _crashAnalytics = new()
     {
-        Content = "Send privacy-filtered crash reports (takes effect next launch)",
+        Content = FreeWUiTextCatalog.CrashAnalyticsConsentLabel,
     };
     private readonly IReadOnlyDictionary<OptionsDialogToggleKind, CheckBox> _toggles;
     private readonly Border _replacements = new()

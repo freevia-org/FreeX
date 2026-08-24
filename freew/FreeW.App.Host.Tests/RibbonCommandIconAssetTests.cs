@@ -22,6 +22,7 @@ public sealed class RibbonCommandIconAssetTests
         "shape-wrap", "shape-wrap-behind", "shape-wrap-front", "shape-wrap-inline", "shape-wrap-square",
         "shape-wrap-tight", "shape-wrap-top-bottom", "index-insert", "index-mark", "insert-quickpart",
         "merge-rule-fill-in", "merge-rule-ref", "merge-rule-set", "merge-rule-skip-record-if",
+        "merge-rule-next-record-if", "merge-rules",
         "multilevel-list", "multilevel-preset-0", "multilevel-preset-1", "multilevel-preset-2", "printlayout",
         "reset-style-set", "reviewingpane", "toc", "tof", "weblayout",
     ];

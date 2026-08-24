@@ -8,6 +8,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Free.Shared.AppServices;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
 
@@ -36,7 +37,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _uiLanguage = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly CheckBox _crashAnalytics = new()
     {
-        Content = "Send privacy-filtered crash reports (takes effect next launch)",
+        Content = FreeWUiTextCatalog.CrashAnalyticsConsentLabel,
     };
 
     private readonly IReadOnlyDictionary<OptionsDialogToggleKind, CheckBox> _toggles;

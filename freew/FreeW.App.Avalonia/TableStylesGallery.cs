@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Ribbon;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.Core.Model;
 
@@ -35,8 +36,8 @@ internal static class TableStylesGallery
         });
 
         var button = new Button { Content = "▾", Width = 20, Height = 52, Margin = new Thickness(2, 0, 0, 0) };
-        ToolTip.SetTip(button, "More Table Styles");
-        AutomationProperties.SetName(button, "More Table Styles");
+        ToolTip.SetTip(button, FreeWUiTextCatalog.TableStylesMoreToolTip);
+        AutomationProperties.SetName(button, FreeWUiTextCatalog.TableStylesMoreToolTip);
         var flyout = new MenuFlyout();
         for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
             flyout.Items.Add(Item(DocumentTableStyle.Catalog[index], index, registry));

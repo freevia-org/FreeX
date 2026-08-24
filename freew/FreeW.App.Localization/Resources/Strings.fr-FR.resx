@@ -86,6 +86,7 @@
   <data name="Design_EffectSet_AutomationNameFormat" xml:space="preserve"><value>Effets {0}</value></data>
   <data name="Design_TableStyles_Title" xml:space="preserve"><value>Styles de tableau</value></data>
   <data name="Design_TableStyles_CompactLabel" xml:space="preserve"><value>Styles&#xA;tableau</value></data>
+  <data name="Design_TableStyles_MoreToolTip" xml:space="preserve"><value>Plus de styles de tableau</value></data>
   <data name="Design_TableStyle_AutomationNameFormat" xml:space="preserve"><value>Style de tableau {0}</value></data>
   <data name="Design_Styles_MoreToolTip" xml:space="preserve"><value>Autres styles</value></data>
   <data name="Dialog_DateTime_Title" xml:space="preserve"><value>Date et heure</value></data>
@@ -226,6 +227,11 @@
   <data name="ScreenClip_Failed_Message_Format" xml:space="preserve"><value>Impossible de capturer l'écran :&#xA;{0}</value></data>
   <data name="DocumentProperties_Updated_Status" xml:space="preserve"><value>Propriétés du document mises à jour.</value></data>
   <data name="Options_Dialog_Title" xml:space="preserve"><value>Options FreeW</value></data>
+  <data name="Options_CrashAnalytics_ConsentLabel" xml:space="preserve"><value>Envoyer des rapports de plantage filtrés pour la confidentialité (prend effet au prochain lancement)</value></data>
+  <data name="Layout_SelectionPane_Title" xml:space="preserve"><value>Volet de sélection</value></data>
+  <data name="Layout_BringForward_Label" xml:space="preserve"><value>Avancer</value></data>
+  <data name="Layout_SendBackward_Label" xml:space="preserve"><value>Reculer</value></data>
+  <data name="Help_TestCrashReporting_Title" xml:space="preserve"><value>Tester les rapports de plantage</value></data>
   <data name="Options_SaveFailed_Status" xml:space="preserve"><value>Les options FreeW n'ont pas pu être enregistrées.</value></data>
   <data name="Options_Saved_Status" xml:space="preserve"><value>Options FreeW enregistrées.</value></data>
   <data name="Shell_OpenFolderFailed_Status_Format" xml:space="preserve"><value>Impossible d'ouvrir le dossier : {0}</value></data>

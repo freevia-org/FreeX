@@ -531,6 +531,7 @@
   <data name="Design_EffectSet_AutomationNameFormat" xml:space="preserve"><value>{0} effects</value></data>
   <data name="Design_TableStyles_Title" xml:space="preserve"><value>Table Styles</value></data>
   <data name="Design_TableStyles_CompactLabel" xml:space="preserve"><value>Table&#xA;Styles</value></data>
+  <data name="Design_TableStyles_MoreToolTip" xml:space="preserve"><value>More Table Styles</value></data>
   <data name="Design_TableStyle_AutomationNameFormat" xml:space="preserve"><value>{0} table style</value></data>
   <data name="Design_Styles_MoreToolTip" xml:space="preserve"><value>More styles</value></data>
   <data name="Dialog_DateTime_Title" xml:space="preserve"><value>Date and Time</value></data>
@@ -670,6 +671,11 @@
   <data name="ScreenClip_Failed_Message_Format" xml:space="preserve"><value>Could not capture the screen clip:&#xA;{0}</value></data>
   <data name="DocumentProperties_Updated_Status" xml:space="preserve"><value>Document properties updated.</value></data>
   <data name="Options_Dialog_Title" xml:space="preserve"><value>FreeW Options</value></data>
+  <data name="Options_CrashAnalytics_ConsentLabel" xml:space="preserve"><value>Send privacy-filtered crash reports (takes effect next launch)</value></data>
+  <data name="Layout_SelectionPane_Title" xml:space="preserve"><value>Selection Pane</value></data>
+  <data name="Layout_BringForward_Label" xml:space="preserve"><value>Bring Forward</value></data>
+  <data name="Layout_SendBackward_Label" xml:space="preserve"><value>Send Backward</value></data>
+  <data name="Help_TestCrashReporting_Title" xml:space="preserve"><value>Test Crash Reporting</value></data>
   <data name="Options_SaveFailed_Status" xml:space="preserve"><value>FreeW Options could not be saved.</value></data>
   <data name="Options_Saved_Status" xml:space="preserve"><value>FreeW Options saved.</value></data>
   <data name="Shell_OpenFolderFailed_Status_Format" xml:space="preserve"><value>Could not open folder: {0}</value></data>

@@ -16,14 +16,14 @@ public sealed class SelectionPane : SidePaneBase
     private readonly Button _sendBackward;
 
     public SelectionPane(DocumentView editor)
-        : base(editor, "Selection Pane", 240, new Thickness(1, 0, 0, 0), includeSeparator: true)
+        : base(editor, UiText.Get("Layout_SelectionPane_Title"), 240, new Thickness(1, 0, 0, 0), includeSeparator: true)
     {
         _items = new ListBox { Background = Brushes.Transparent, BorderThickness = new Thickness(0) };
         _items.SelectionChanged += OnSelectionChanged;
 
-        _bringForward = new Button { Content = "Bring Forward", Margin = new Thickness(8, 4, 4, 6) };
+        _bringForward = new Button { Content = UiText.Get("Layout_BringForward_Label"), Margin = new Thickness(8, 4, 4, 6) };
         _bringForward.Click += (_, _) => MoveSelected(ZOrderOperation.BringForward);
-        _sendBackward = new Button { Content = "Send Backward", Margin = new Thickness(4, 4, 8, 6) };
+        _sendBackward = new Button { Content = UiText.Get("Layout_SendBackward_Label"), Margin = new Thickness(4, 4, 8, 6) };
         _sendBackward.Click += (_, _) => MoveSelected(ZOrderOperation.SendBackward);
         var commands = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
         commands.Children.Add(_bringForward);

@@ -40,6 +40,7 @@ public sealed class RibbonCommandIconSlugAliasesTests
         ["shape-wrap-top-bottom", "image-wrap-top-bottom"],
         ["index-insert", "index"],
         ["index-mark", "index"],
+        ["field", "insert-function"],
         ["insert-quickpart", "paste-special"],
         ["merge-rule-fill-in", "merge-rule-ask"],
         ["merge-rule-ref", "merge-rule-ask"],

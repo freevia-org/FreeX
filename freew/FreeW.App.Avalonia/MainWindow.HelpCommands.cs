@@ -40,7 +40,7 @@ public sealed partial class MainWindow
     private Task TestCrashReportingAsync() =>
         ShowHelpMessageAsync(
             AppCrashAnalyticsRuntime.UserMessage(AppCrashAnalyticsRuntime.SendTestReport()),
-            "Test Crash Reporting");
+            UiText.Get("Help_TestCrashReporting_Title"));
 
     private async Task ShowHelpMessageAsync(string message, string title)
     {

@@ -26,8 +26,14 @@ public static class FreeWUiTextCatalog
         "Design_EffectSet_AutomationNameFormat",
         "Design_TableStyles_Title",
         "Design_TableStyles_CompactLabel",
+        "Design_TableStyles_MoreToolTip",
         "Design_TableStyle_AutomationNameFormat",
         "Design_Styles_MoreToolTip",
+        "Options_CrashAnalytics_ConsentLabel",
+        "Layout_SelectionPane_Title",
+        "Layout_BringForward_Label",
+        "Layout_SendBackward_Label",
+        "Help_TestCrashReporting_Title",
         "Dialog_DateTime_Title",
         "Dialog_DateTime_FormatsLabel",
         "Dialog_DateTime_UpdateAutomatically",
@@ -85,7 +91,9 @@ public static class FreeWUiTextCatalog
     public static string FontSampleBody => Text("Design_FontSample_Body");
     public static string TableStyles => Text("Design_TableStyles_Title");
     public static string TableStylesCompact => Text("Design_TableStyles_CompactLabel");
+    public static string TableStylesMoreToolTip => Text("Design_TableStyles_MoreToolTip");
     public static string MoreStylesToolTip => Text("Design_Styles_MoreToolTip");
+    public static string CrashAnalyticsConsentLabel => Text("Options_CrashAnalytics_ConsentLabel");
 
     public static string ThemeColorsAutomationName(string name) =>
         Format("Design_ThemeColors_AutomationNameFormat", name);
