@@ -20,6 +20,10 @@ public sealed class FreePRendererLocalizationExhaustionTests
                 "Backstage route identifier",
             [Literal("FreeP.App.Avalonia/MainWindow.cs", "Info")] =
                 "Backstage route identifier",
+            [Literal("FreeP.App.Avalonia/MainWindow.cs", "themes")] =
+                "ribbon group identifier",
+            [Literal("FreeP.App.Avalonia/MainWindow.cs", "animations")] =
+                "ribbon tab identifier",
             [Literal("FreeP.App.Avalonia/Printing/CupsPrintDialog.cs", "Cancel")] =
                 "resource-key suffix passed to PrintDialogText",
             [Literal("FreeP.App.Avalonia/Printing/CupsPrintDialog.cs", "Title")] =
@@ -43,6 +47,8 @@ public sealed class FreePRendererLocalizationExhaustionTests
             [Literal("FreeP.App.Host/MainWindow.cs", "text")] =
                 "contextual ribbon state identifier",
             [Literal("FreeP.App.Host/Ribbon/PresentationAnimationGallery.cs", "—")] =
+                "decorative animation preview glyph",
+            [Literal("FreeP.App.Avalonia/PresentationAnimationGallery.cs", "—")] =
                 "decorative animation preview glyph",
             [Literal("FreeP.App.Host/OsClipboardService.cs", "N")] =
                 "Guid format specifier",
