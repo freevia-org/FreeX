@@ -3972,6 +3972,8 @@ public sealed partial class MainWindow : Window,
                     InjectRibbonGallery(content, "themes", PresentationThemeGallery.Build(registry));
                 else if (tab.Id == "transitions")
                     InjectRibbonGallery(content, "transition-gallery", PresentationTransitionGallery.Build(registry));
+                else if (tab.Id == "animations")
+                    InjectRibbonGallery(content, "animation-effects", PresentationAnimationGallery.Build(tab, registry, stateStore));
             },
         });
 

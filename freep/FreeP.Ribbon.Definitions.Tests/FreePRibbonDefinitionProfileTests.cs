@@ -152,7 +152,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                  })
         {
             RequiredGroup(definition, "animations", "animation-effects")
-                .Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+                .Sizing.Should().Be(RibbonGroupSizing.Default);
         }
     }
 
