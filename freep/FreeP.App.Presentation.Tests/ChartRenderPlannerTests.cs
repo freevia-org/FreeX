@@ -1551,6 +1551,45 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceGeometryPlan_ExplicitDefaultView3DUsesImportedDefaultCameraGeometry()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.VaryColors = true;
+        chart.Series.Add(new ChartSeries { Name = "Peak Band", Values = { 33, 39, 45 } });
+        var baseline = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 360, 189));
+
+        chart.View3D = new Chart3DView
+        {
+            RotationX = 15,
+            RotationY = 20,
+            RightAngleAxes = false
+        };
+        var explicitDefault = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 360, 189));
+
+        explicitDefault.Points.Should().Equal(baseline.Points);
+        explicitDefault.RenderFacets.Select(facet =>
+                (facet.SeriesIndex, facet.CategoryIndex, facet.Points.Count,
+                    facet.AverageValue, facet.AverageNormalizedValue))
+            .Should().Equal(baseline.RenderFacets.Select(facet =>
+                (facet.SeriesIndex, facet.CategoryIndex, facet.Points.Count,
+                    facet.AverageValue, facet.AverageNormalizedValue)));
+        explicitDefault.FrameSegments.Should().Equal(baseline.FrameSegments);
+
+        chart.View3D.RotationX = 16;
+        var authored = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 360, 189));
+        authored.FrameSegments.Select(segment => segment.Stroke.Alpha)
+            .Should().OnlyContain(alpha => alpha == 220,
+                "a non-default camera must retain the general projection path");
+    }
+
+    [Fact]
     public void BuildSurfaceGeometryPlan_AuthoredViewDoesNotUseImportedSurfaceRegistration()
     {
         var chart = MakeSurfaceChart(ChartType.Surface3D);
