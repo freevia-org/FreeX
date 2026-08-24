@@ -2387,13 +2387,13 @@ public sealed partial class MainWindow : Window,
 
         AvaloniaRibbonRenderer.TryInjectGroupContent(
             _ribbonControl,
-            "themes",
+            FreeP.Ribbon.Definitions.FreePRibbon.ThemesGroupId,
             () => PresentationThemeGallery.Build(registry));
         AvaloniaRibbonRenderer.TryInjectGroupContent(
             _ribbonControl,
             "transition-gallery",
             () => PresentationTransitionGallery.Build(registry));
-        if (definition.FindTab("animations") is { } animationsTab)
+        if (definition.FindTab(FreeP.Ribbon.Definitions.FreePRibbon.AnimationsTabId) is { } animationsTab)
         {
             AvaloniaRibbonRenderer.TryInjectGroupContent(
                 _ribbonControl,

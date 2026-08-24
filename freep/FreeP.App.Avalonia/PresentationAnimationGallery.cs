@@ -112,18 +112,14 @@ internal static class PresentationAnimationGallery
 
     private static Control BuildPreview(string commandId)
     {
-        var mark = commandId switch
-        {
-            "freep.anim.none" => "—", "freep.anim.entrance.appear" => "✦", "freep.anim.entrance.fade" => "✧",
-            "freep.anim.entrance.fly-in" => "➜", "freep.anim.entrance.wipe" => "▐", _ => "✹",
-        };
+        var mark = PresentationAnimationPreviewCatalog.GlyphFor(commandId);
         return new Border
         {
             Width = 50, Height = 30, BorderBrush = new SolidColorBrush(Color.FromRgb(0xA6, 0xA6, 0xA6)),
             BorderThickness = new Thickness(1), Background = Brushes.White,
             Child = new TextBlock
             {
-                Text = mark, FontSize = mark == "—" ? 24 : 25, FontFamily = new FontFamily("Segoe UI Symbol"),
+                Text = mark, FontSize = PresentationAnimationPreviewCatalog.IsNone(commandId) ? 24 : 25, FontFamily = new FontFamily("Segoe UI Symbol"),
                 Foreground = new SolidColorBrush(Color.FromRgb(0x8C, 0x8C, 0x8C)),
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             },

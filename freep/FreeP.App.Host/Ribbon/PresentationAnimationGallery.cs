@@ -170,19 +170,11 @@ internal static class PresentationAnimationGallery
             BorderThickness = new Thickness(1),
             Background = Brushes.White,
         };
-        var mark = commandId switch
-        {
-            "freep.anim.none" => "—",
-            "freep.anim.entrance.appear" => "✦",
-            "freep.anim.entrance.fade" => "✧",
-            "freep.anim.entrance.fly-in" => "➜",
-            "freep.anim.entrance.wipe" => "▐",
-            _ => "✹",
-        };
+        var mark = PresentationAnimationPreviewCatalog.GlyphFor(commandId);
         border.Child = new TextBlock
         {
             Text = mark,
-            FontSize = mark == "—" ? 24 : 25,
+            FontSize = PresentationAnimationPreviewCatalog.IsNone(commandId) ? 24 : 25,
             FontFamily = new FontFamily("Segoe UI Symbol"),
             Foreground = new SolidColorBrush(Color.FromRgb(0x8C, 0x8C, 0x8C)),
             HorizontalAlignment = HorizontalAlignment.Center,

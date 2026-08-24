@@ -13,6 +13,7 @@ public static class FreePRibbon
 {
     public const string DesignTabId = "design";
     public const string TransitionsTabId = "transitions";
+    public const string AnimationsTabId = "animations";
     public const string ThemesGroupId = "themes";
     public const string TransitionGalleryGroupId = "transition-gallery";
 

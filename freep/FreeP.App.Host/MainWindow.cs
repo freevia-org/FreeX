@@ -4006,7 +4006,7 @@ public sealed partial class MainWindow : Window,
                         content,
                         FreeP.Ribbon.Definitions.FreePRibbon.TransitionGalleryGroupId,
                         () => PresentationTransitionGallery.Build(registry));
-                else if (tab.Id == "animations")
+                else if (tab.Id == FreeP.Ribbon.Definitions.FreePRibbon.AnimationsTabId)
                     InjectRibbonGallery(content, "animation-effects", () => PresentationAnimationGallery.Build(tab, registry, stateStore));
             },
         });
