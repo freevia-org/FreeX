@@ -308,6 +308,7 @@ public sealed partial class MainWindow : Window
                 FreeWAppInfo.FeedbackUrl,
                 FreeWApplicationFrameTextCatalog.FeedbackCommandName),
             CopyDiagnostics = CopyDiagnostics,
+            TestCrashReporting = TestCrashReporting,
             CheckForUpdates = () => OpenExternalHelpLink(
                 FreeWProductInfo.LatestReleaseUrl,
                 FreeWApplicationFrameTextCatalog.CheckForUpdatesCommandName),
@@ -1001,6 +1002,16 @@ public sealed partial class MainWindow : Window
             DialogMessageHelper.ShowInfo(this, feedback.Message, feedback.Title);
         else
             DialogMessageHelper.ShowWarning(this, feedback.Message, feedback.Title);
+    }
+
+    private void TestCrashReporting()
+    {
+        var result = AppCrashAnalyticsRuntime.SendTestReport();
+        var message = AppCrashAnalyticsRuntime.UserMessage(result);
+        if (result == CrashAnalyticsTestReportResult.Sent)
+            DialogMessageHelper.ShowInfo(this, message, "Test Crash Reporting");
+        else
+            DialogMessageHelper.ShowWarning(this, message, "Test Crash Reporting");
     }
 
     private void ShowAboutDialog()

@@ -99,7 +99,7 @@ foreach ($marker in @(
     "Validate latest release source",
     "refs/heads/main",
     "refs/heads/codex/daily-tester-release-*",
-    "dotnet-version: 10.0.x",
+    "dotnet-version: 10.0.111",
     "tools\Test-RepositoryPreflight.ps1",
     "FreeX.DefaultTests.slnx",
     "FreeX.UiTests.slnx",

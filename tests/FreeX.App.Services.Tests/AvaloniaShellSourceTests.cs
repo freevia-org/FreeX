@@ -990,7 +990,7 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.HelpOnline, \"Help Online\", new NativeMenuGesturePlan(NativeMenuGestureKey.F1))");
         source.Should().Contain("_helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get(\"MainWindow_Content_HelpOnline\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.SendFeedback, \"Send Feedback\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get(\"MainWindow_Content_Feedback\"));");
+        source.Should().Contain("AppIssueReporter.CreateIssueUrl(CreateIssueReportContext()),");
         catalogSource.Should().Contain("new(NativeMenuItemId.CheckForUpdates, \"Check for Updates\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get(\"MainWindow_Content_CheckForUpdates\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.About, \"About FreeX\", RequiresGestureInSmoke: false)");

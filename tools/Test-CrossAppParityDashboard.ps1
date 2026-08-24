@@ -169,7 +169,6 @@ if ($BoundarySelfTest) {
 }
 
 $resolvedDashboardPath = Resolve-ToolRepoPath -Path $DashboardPath -RepoRoot $repoRoot
-$changedAcceptancePaths = @(Test-AcceptanceRefreshGitBoundary -RepositoryRoot $repoRoot -TestedSourceCommit $acceptanceRefreshTestedSourceCommit -AllowedPaths $acceptanceRefreshAllowedPaths)
 $dashboard = Read-ToolJson -Path $DashboardPath -RepoRoot $repoRoot -MissingMessage "Required generated cross-app dashboard is missing"
 
 Assert-DashboardCondition ($dashboard.schema -eq "freex.parity.cross-app-dashboard.v3") "Cross-app dashboard schema must be v3."

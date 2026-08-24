@@ -15,13 +15,11 @@ public sealed class AppFeedbackReporterTests
         var url = AppFeedbackReporter.CreateIssueUrl("FreeP & Slides", metadata);
         var decoded = Uri.UnescapeDataString(url);
 
-        url.Should().Contain("title=FreeP%20%26%20Slides%20feedback%3A%20");
-        decoded.Should().Contain("App: FreeP & Slides");
-        decoded.Should().Contain("Version: 1.2.3 preview+sha");
-        decoded.Should().Contain("OS: Windows 11 / x64");
+        url.Should().Contain("template=user-test-report.yml");
+        decoded.Should().Contain("[FreeP & Slides 1.2.3 preview+sha | Windows 11 / x64 | X64]");
         decoded.Should().NotContain("session-not-published");
         decoded.Should().NotContain("C:\\");
-        decoded.Should().Contain("do not include document contents, filenames, file paths");
+        decoded.Should().NotContain("body=");
     }
 
     [Fact]
@@ -35,5 +33,6 @@ public sealed class AppFeedbackReporterTests
             "https://example.invalid/issues/new?template=feedback.yml");
 
         url.Should().Contain("?template=feedback.yml&title=");
+        url.Should().NotContain("user-test-report.yml");
     }
 }

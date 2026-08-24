@@ -2466,7 +2466,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"));
 
-        _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"));
+        _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(
+            AppIssueReporter.CreateIssueUrl(CreateIssueReportContext()),
+            UiText.Get("MainWindow_Content_Feedback"));
 
         _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"));
 

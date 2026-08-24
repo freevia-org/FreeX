@@ -20,18 +20,20 @@ if (-not (Test-Path -LiteralPath $resolvedWorkflowPath -PathType Leaf)) {
 }
 
 $workflow = Get-Content -LiteralPath $resolvedWorkflowPath -Raw
-$dotnetVersionMatch = [regex]::Match($workflow, "(?m)^\s*dotnet-version:\s*['""]?(?<major>\d+)\.(?<minor>\d+)\.x['""]?\s*$")
+$dotnetVersionMatch = [regex]::Match($workflow, "(?m)^\s*dotnet-version:\s*['""]?(?<major>\d+)\.(?<minor>\d+)\.(?<patch>x|\d+)['""]?\s*$")
 if (-not $dotnetVersionMatch.Success) {
-    throw "Tester Release workflow is missing a dotnet-version SDK band such as 10.0.x."
+    throw "Tester Release workflow is missing a dotnet-version SDK such as 10.0.111."
 }
 
 $requiredMajor = [int]$dotnetVersionMatch.Groups["major"].Value
 $requiredMinor = [int]$dotnetVersionMatch.Groups["minor"].Value
-$requiredSdkBand = "$requiredMajor.$requiredMinor.x"
+$requiredPatchText = $dotnetVersionMatch.Groups["patch"].Value
+$requiredPatch = if ($requiredPatchText -eq "x") { $null } else { [int]$requiredPatchText }
+$requiredSdk = "$requiredMajor.$requiredMinor.$requiredPatchText"
 
 $dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
 if ($null -eq $dotnetCommand) {
-    throw ".NET SDK $requiredSdkBand is required by the Tester Release workflow, but dotnet was not found on PATH."
+    throw ".NET SDK $requiredSdk is required by the Tester Release workflow, but dotnet was not found on PATH."
 }
 
 $sdkLines = & dotnet --list-sdks 2>&1
@@ -55,12 +57,16 @@ if ($installedVersions.Count -eq 0) {
 
 $matchingSdkVersions = @(
     $installedVersions |
-        Where-Object { $_.Major -eq $requiredMajor -and $_.Minor -eq $requiredMinor } |
+        Where-Object {
+            $_.Major -eq $requiredMajor -and
+            $_.Minor -eq $requiredMinor -and
+            ($null -eq $requiredPatch -or $_.Build -eq $requiredPatch)
+        } |
         Sort-Object -Descending
 )
 
 if ($matchingSdkVersions.Count -eq 0) {
-    throw ".NET SDK $requiredSdkBand is required by the Tester Release workflow. Installed SDKs: $($installedVersions -join ', ')"
+    throw ".NET SDK $requiredSdk is required by the Tester Release workflow. Installed SDKs: $($installedVersions -join ', ')"
 }
 
 $projectFiles = @(

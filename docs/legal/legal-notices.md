@@ -12,7 +12,7 @@ Application UI should prefer neutral format labels such as “XLSX Workbook,” 
 
 Third-party dependency notices are maintained in [../../THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md). Privacy and diagnostics behavior is documented in [privacy.md](privacy.md).
 
-FreeX and FreeW expose the project license, this notice, the privacy notice, third-party notices, and bundled license texts through their Legal Notices dialogs. FreeP distributions must include the same files alongside the application; an in-app legal-notice surface should be treated as a release requirement before public distribution.
+FreeX, FreeW, and FreeP expose the project license, this notice, the privacy notice, third-party notices, and bundled license texts through offline Legal Notices dialogs. Release packages also include these files alongside the applications for review without launching an app.
 
 Project maintainers should review names, artwork, screenshots, sample files, fonts, audio, and dependencies before each release. Test/reference captures of third-party applications are engineering evidence, are not application branding, and must not be included in public application packages unless distribution rights have been confirmed.
 

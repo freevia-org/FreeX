@@ -37,7 +37,7 @@ on:
         type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: app-tester-release-${{ inputs.app }}-${{ inputs.release_version }}
@@ -102,7 +102,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare.outputs.verify_matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -127,9 +127,9 @@ jobs:
           }
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.111
 
       - name: Run release test gate
         shell: pwsh
@@ -199,7 +199,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: tester-${{ matrix.app }}-${{ github.run_id }}-${{ github.run_attempt }}-test-results
           path: "**/TestResults/*.trx"
@@ -215,15 +215,15 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare.outputs.package_matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.111
 
       - name: Locate Inno Setup
         if: matrix.platform == 'windows'
@@ -269,14 +269,58 @@ jobs:
             -InputRoot artifacts\release `
             -OutputDir artifacts\release
 
+      - name: Generate SBOM and validate package inventory
+        shell: pwsh
+        run: |
+          $app = "${{ matrix.app }}"
+          $version = "${{ inputs.release_version }}"
+          $runtime = "${{ matrix.runtime }}"
+          $prefix = "$app-v$version-$runtime"
+          $payloadNames = if ($runtime -like "win-*") {
+            @("$prefix.exe", "$prefix-setup.exe")
+          } elseif ($runtime -like "linux-*") {
+            @("$prefix.zip", "$prefix-installer.zip")
+          } else {
+            @("$prefix.zip", "$prefix-apps.zip")
+          }
+          dotnet tool install --tool-path artifacts/sbom-tool Microsoft.Sbom.DotNetTool --version 4.1.5
+          if ($LASTEXITCODE -ne 0) { throw "Could not install Microsoft.Sbom.DotNetTool 4.1.5." }
+          $sbomTool = if ($IsWindows) { "artifacts/sbom-tool/sbom-tool.exe" } else { "artifacts/sbom-tool/sbom-tool" }
+          tools/New-ReleaseSbom.ps1 `
+            -Name $app `
+            -Version $version `
+            -CommitSha $env:GITHUB_SHA `
+            -Runtime $runtime `
+            -InputRoot artifacts/release `
+            -PayloadNames $payloadNames `
+            -OutputPath "artifacts/release/$prefix.spdx.json" `
+            -SbomToolPath $sbomTool
+          tools/New-ReleaseArtifactManifest.ps1 `
+            -Scope App `
+            -Apps $app `
+            -Version $version `
+            -CommitSha $env:GITHUB_SHA `
+            -Runtimes $runtime `
+            -InputRoot artifacts/release `
+            -OutputPath "artifacts/release/$prefix-manifest.json"
+
+      - name: Install and uninstall individual package
+        shell: pwsh
+        run: |
+          tools/Test-ReleaseInstallation.ps1 `
+            -Platform "${{ matrix.platform }}" `
+            -Apps "${{ matrix.app }}" `
+            -Version "${{ inputs.release_version }}" `
+            -Runtime "${{ matrix.runtime }}" `
+            -InputRoot artifacts/release
+
       - name: Upload package
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: tester-${{ matrix.app }}-${{ inputs.release_version }}-${{ matrix.runtime }}
           path: |
             artifacts/release/${{ matrix.app }}-v${{ inputs.release_version }}-${{ matrix.runtime }}.*
             artifacts/release/${{ matrix.app }}-v${{ inputs.release_version }}-${{ matrix.runtime }}-*
-            artifacts/release/${{ matrix.app }}-${{ inputs.release_version }}-*-manifest.csv
           if-no-files-found: error
           retention-days: 14
 
@@ -308,17 +352,39 @@ jobs:
     steps:
       - name: Checkout
         if: inputs.platform == 'all' || inputs.platform == matrix.platform
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
       - name: Download portable app packages
         if: inputs.platform == 'all' || inputs.platform == matrix.platform
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: tester-*-${{ inputs.release_version }}-${{ matrix.runtime }}
           path: downloaded-artifacts
           merge-multiple: false
+
+      - name: Setup .NET
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.111
+
+      - name: Validate downloaded app packages
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        shell: pwsh
+        run: |
+          foreach ($app in @("FreeX", "FreeW", "FreeP")) {
+            tools/New-ReleaseArtifactManifest.ps1 `
+              -Scope App `
+              -Apps $app `
+              -Version "${{ inputs.release_version }}" `
+              -CommitSha $env:GITHUB_SHA `
+              -Runtimes "${{ matrix.runtime }}" `
+              -InputRoot downloaded-artifacts `
+              -OutputPath "artifacts/precheck/$app-v${{ inputs.release_version }}-${{ matrix.runtime }}-validated.json" `
+              -RequireSourceManifests
+          }
 
       - name: Locate Inno Setup
         if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform == 'windows'
@@ -349,12 +415,60 @@ jobs:
             -InputRoot downloaded-artifacts `
             -OutputDir artifacts\suite
 
+      - name: Generate suite SBOM and validate inventory
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.release_version }}"
+          $runtime = "${{ matrix.runtime }}"
+          $prefix = "FreeSuite-v$version-$runtime"
+          $payloadName = if ($runtime -like "win-*") { "$prefix-setup.exe" } elseif ($runtime -like "linux-*") { "$prefix-installer.zip" } else { "$prefix-apps.zip" }
+          Get-ChildItem -LiteralPath downloaded-artifacts -Recurse -File -Filter "*-v$version-$runtime-manifest.json" |
+            Copy-Item -Destination artifacts/suite
+          dotnet tool install --tool-path artifacts/sbom-tool Microsoft.Sbom.DotNetTool --version 4.1.5
+          if ($LASTEXITCODE -ne 0) { throw "Could not install Microsoft.Sbom.DotNetTool 4.1.5." }
+          $sbomTool = if ($IsWindows) { "artifacts/sbom-tool/sbom-tool.exe" } else { "artifacts/sbom-tool/sbom-tool" }
+          tools/New-ReleaseSbom.ps1 `
+            -Name FreeSuite `
+            -Version $version `
+            -CommitSha $env:GITHUB_SHA `
+            -Runtime $runtime `
+            -InputRoot artifacts/suite `
+            -PayloadNames $payloadName `
+            -OutputPath "artifacts/suite/$prefix.spdx.json" `
+            -SbomToolPath $sbomTool
+          tools/New-ReleaseArtifactManifest.ps1 `
+            -Scope Suite `
+            -Apps FreeX,FreeW,FreeP `
+            -Version $version `
+            -CommitSha $env:GITHUB_SHA `
+            -Runtimes $runtime `
+            -InputRoot artifacts/suite `
+            -OutputPath "artifacts/suite/$prefix-manifest.json" `
+            -RequireSourceManifests
+
+      - name: Install, transition, and uninstall suite package
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        shell: pwsh
+        run: |
+          tools/Test-ReleaseInstallation.ps1 `
+            -Platform "${{ matrix.platform }}" `
+            -Apps FreeX,FreeW,FreeP `
+            -Suite `
+            -Version "${{ inputs.release_version }}" `
+            -Runtime "${{ matrix.runtime }}" `
+            -InputRoot .
+
       - name: Upload suite installer
         if: inputs.platform == 'all' || inputs.platform == matrix.platform
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: tester-FreeSuite-${{ inputs.release_version }}-${{ matrix.runtime }}
-          path: artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}-*
+          path: |
+            artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}-*
+            artifacts/suite/FreeX-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
+            artifacts/suite/FreeW-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
+            artifacts/suite/FreeP-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
           if-no-files-found: error
           retention-days: 14
 
@@ -363,17 +477,19 @@ jobs:
     needs: [prepare, package]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.publish_matrix) }}
     steps:
       - name: Checkout release context
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
       - name: Download selected app packages
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: tester-${{ matrix.app }}-${{ inputs.release_version }}-*
           path: downloaded-artifacts
@@ -393,10 +509,26 @@ jobs:
           New-Item -ItemType Directory -Force -Path $assetRoot | Out-Null
 
           Get-ChildItem -LiteralPath "downloaded-artifacts" -Recurse -File |
-            Where-Object { $_.Name -notlike "*-manifest.csv" } |
             ForEach-Object {
               Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $assetRoot $_.Name) -Force
             }
+
+          $runtimes = switch ("${{ inputs.platform }}") {
+            "windows" { @("win-x64") }
+            "linux" { @("linux-x64", "linux-arm64") }
+            "macos" { @("osx-x64", "osx-arm64") }
+            default { @("win-x64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64") }
+          }
+          tools/New-ReleaseArtifactManifest.ps1 `
+            -Scope App `
+            -Apps $app `
+            -Version $version `
+            -CommitSha $env:GITHUB_SHA `
+            -Runtimes $runtimes `
+            -InputRoot $assetRoot `
+            -OutputPath (Join-Path $assetRoot "$app-v$version-release-manifest.json") `
+            -RequireRuntimeManifests `
+            -StageLegalBundle
 
           $assets = @(Get-ChildItem -LiteralPath $assetRoot -File | ForEach-Object { $_.FullName })
           if ($assets.Count -eq 0) {
@@ -441,7 +573,19 @@ jobs:
             Replace("{{SHA}}", $env:GITHUB_SHA)
 
           gh release view $tag *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $releaseExists = $LASTEXITCODE -eq 0
+          $remoteRefs = @(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}")
+          if ($LASTEXITCODE -ne 0) { throw "Could not resolve remote tag '$tag'." }
+          if ($remoteRefs.Count -gt 0) {
+            $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
+            $tagSha = (($peeled + $remoteRefs)[0] -split "`t")[0]
+            if ($tagSha -cne $env:GITHUB_SHA) {
+              throw "Tag '$tag' is immutable at $tagSha; refusing to replace it with assets from $env:GITHUB_SHA. Use a new version."
+            }
+          } elseif ($releaseExists) {
+            throw "Existing release '$tag' has no resolvable remote tag."
+          }
+          if ($releaseExists) {
             gh release upload $tag @assets --clobber
             $notes | gh release edit $tag --title $title --notes-file -
           } else {
@@ -456,9 +600,17 @@ jobs:
     if: inputs.app == 'all'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write
     steps:
+      - name: Checkout release context
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Download suite packages
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: tester-FreeSuite-${{ inputs.release_version }}-*
           path: downloaded-artifacts
@@ -472,7 +624,26 @@ jobs:
           $version = "${{ inputs.release_version }}".Trim()
           $tag = "free-suite-v$version"
           $title = "Free Suite v$version Tester Release"
-          $assets = @(Get-ChildItem -LiteralPath downloaded-artifacts -File | ForEach-Object { $_.FullName })
+          $assetRoot = Join-Path $env:GITHUB_WORKSPACE "suite-release-assets"
+          New-Item -ItemType Directory -Force -Path $assetRoot | Out-Null
+          Get-ChildItem -LiteralPath downloaded-artifacts -File | Copy-Item -Destination $assetRoot
+          $runtimes = switch ("${{ inputs.platform }}") {
+            "windows" { @("win-x64") }
+            "linux" { @("linux-x64", "linux-arm64") }
+            "macos" { @("osx-x64", "osx-arm64") }
+            default { @("win-x64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64") }
+          }
+          tools/New-ReleaseArtifactManifest.ps1 `
+            -Scope Suite `
+            -Apps FreeX,FreeW,FreeP `
+            -Version $version `
+            -CommitSha $env:GITHUB_SHA `
+            -Runtimes $runtimes `
+            -InputRoot $assetRoot `
+            -OutputPath (Join-Path $assetRoot "FreeSuite-v$version-release-manifest.json") `
+            -RequireRuntimeManifests `
+            -StageLegalBundle
+          $assets = @(Get-ChildItem -LiteralPath $assetRoot -File | ForEach-Object { $_.FullName })
           if ($assets.Count -eq 0) { throw "No suite packages were downloaded." }
           $notes = @'
           # Free Suite v{{VERSION}} Tester Release
@@ -483,7 +654,19 @@ jobs:
           '@.Replace("{{VERSION}}", $version)
 
           gh release view $tag *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $releaseExists = $LASTEXITCODE -eq 0
+          $remoteRefs = @(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}")
+          if ($LASTEXITCODE -ne 0) { throw "Could not resolve remote tag '$tag'." }
+          if ($remoteRefs.Count -gt 0) {
+            $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
+            $tagSha = (($peeled + $remoteRefs)[0] -split "`t")[0]
+            if ($tagSha -cne $env:GITHUB_SHA) {
+              throw "Tag '$tag' is immutable at $tagSha; refusing to replace it with assets from $env:GITHUB_SHA. Use a new version."
+            }
+          } elseif ($releaseExists) {
+            throw "Existing release '$tag' has no resolvable remote tag."
+          }
+          if ($releaseExists) {
             gh release upload $tag @assets --clobber
             $notes | gh release edit $tag --title $title --notes-file -
           } else {

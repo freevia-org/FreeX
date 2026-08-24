@@ -13,6 +13,74 @@ public interface IAppCrashAnalytics : IDisposable
     void RecordBreadcrumb(string eventName, IReadOnlyDictionary<string, string?>? properties = null);
 
     void CaptureCrash(Exception exception, string source);
+
+    bool SendTestReport();
+}
+
+public enum CrashAnalyticsTestReportResult
+{
+    Sent,
+    Disabled,
+    Failed,
+}
+
+/// <summary>
+/// Process-local entry point used by Help commands to send a harmless, metadata-only test event.
+/// A sender is installed only by an analytics instance that already passed DSN and consent gates.
+/// </summary>
+public static class AppCrashAnalyticsRuntime
+{
+    private static readonly object Sync = new();
+    private static Func<bool>? _sendTestReport;
+
+    public static CrashAnalyticsTestReportResult SendTestReport()
+    {
+        Func<bool>? sender;
+        lock (Sync)
+            sender = _sendTestReport;
+        if (sender is null)
+            return CrashAnalyticsTestReportResult.Disabled;
+
+        try
+        {
+            return sender()
+                ? CrashAnalyticsTestReportResult.Sent
+                : CrashAnalyticsTestReportResult.Failed;
+        }
+        catch
+        {
+            return CrashAnalyticsTestReportResult.Failed;
+        }
+    }
+
+    public static string UserMessage(CrashAnalyticsTestReportResult result) => result switch
+    {
+        CrashAnalyticsTestReportResult.Sent =>
+            "A privacy-safe test report was sent. It contains app/platform metadata only and no document data.",
+        CrashAnalyticsTestReportResult.Disabled =>
+            "Crash reporting is off or no release endpoint is configured. Enable it in Options, restart the app, and try again.",
+        _ => "The test report could not be sent. Your documents and local diagnostics were not uploaded.",
+    };
+
+    public static IDisposable Register(Func<bool> sender)
+    {
+        ArgumentNullException.ThrowIfNull(sender);
+        lock (Sync)
+            _sendTestReport = sender;
+        return new Registration(sender);
+    }
+
+    private sealed class Registration(Func<bool> sender) : IDisposable
+    {
+        public void Dispose()
+        {
+            lock (Sync)
+            {
+                if (_sendTestReport == sender)
+                    _sendTestReport = null;
+            }
+        }
+    }
 }
 
 public sealed record AppCrashAnalyticsOptions(
@@ -126,6 +194,8 @@ internal sealed class DisabledAppCrashAnalytics : IAppCrashAnalytics
     public void CaptureCrash(Exception exception, string source)
     {
     }
+
+    public bool SendTestReport() => false;
 
     public void Dispose()
     {

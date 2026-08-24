@@ -21,10 +21,10 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().NotContain("pull_request_target");
         workflow.Should().Contain("runs-on: windows-latest");
         workflow.Should().Contain("timeout-minutes: 60");
-        workflow.Should().Contain("actions/checkout@v6");
+        workflow.Should().Contain("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803");
         workflow.Should().Contain("persist-credentials: false");
-        workflow.Should().Contain("actions/setup-dotnet@v5");
-        workflow.Should().Contain("dotnet-version: 10.0.x");
+        workflow.Should().Contain("actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1");
+        workflow.Should().Contain("dotnet-version: 10.0.111");
         workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("concurrency:");
         workflow.Should().Contain("group: ci-${{ github.ref }}");

@@ -2040,6 +2040,7 @@ public sealed partial class MainWindow : Window
                 FreeWProductInfo.CreateFeedbackUrl(typeof(MainWindow).Assembly),
                 FreeWApplicationFrameTextCatalog.FeedbackCommandName),
             CopyDiagnostics: () => _ = CopyDiagnosticsAsync(),
+            TestCrashReporting: () => _ = TestCrashReportingAsync(),
             CheckForUpdates: () => _ = OpenExternalHelpLinkAsync(
                 FreeWProductInfo.LatestReleaseUrl,
                 FreeWApplicationFrameTextCatalog.CheckForUpdatesCommandName),

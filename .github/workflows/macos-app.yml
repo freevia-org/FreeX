@@ -41,15 +41,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.111
 
       - name: Capture runner toolchain evidence
         shell: bash
@@ -1120,7 +1120,7 @@ jobs:
           ls -1 "$vpk_out"
 
       - name: Upload app artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-app
           path: |
@@ -1139,7 +1139,7 @@ jobs:
 
       - name: Upload app diagnostics
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics
           path: |
@@ -1187,13 +1187,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: 10.0.300
 
@@ -1290,7 +1290,7 @@ jobs:
           } | tee -a "$FREEX_MACOS_TFM_EVIDENCE"
 
       - name: Upload macOS TFM build evidence
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-build-${{ matrix.arch }}-evidence
           path: artifacts/freex-${{ matrix.arch }}-macos-tfm-*-evidence.txt
@@ -1309,13 +1309,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Download macOS preview artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: "freex-${{ github.run_id }}-${{ github.run_attempt }}-osx-*-macos-*"
           path: artifacts/macos-preview-evidence
@@ -1533,7 +1533,7 @@ jobs:
           Set-Content -LiteralPath (Join-Path $outputRoot "macos-preview-readiness-summary.txt") -Value $summaryLines -Encoding ascii
 
       - name: Upload aggregate readiness
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-preview-readiness
           path: artifacts/macos-preview-readiness/*
@@ -1557,13 +1557,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Download macOS app artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-macos-app
           path: artifacts/macos-distribution-candidate
@@ -1806,7 +1806,7 @@ jobs:
           "@
 
       - name: Upload release-channel prepared assets
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-release-assets
           path: artifacts/macos-release-assets/*

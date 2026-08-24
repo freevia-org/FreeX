@@ -58,9 +58,17 @@ test/runtime override to bypass the user's choice. The presence of the Sentry
 package or a local crash file does not by itself prove remote reporting works.
 
 For public-preview evidence, use a separate non-production test DSN or a clearly
-tagged release-health environment and send only a synthetic exception. Verify
+tagged release-health environment and send only the built-in synthetic test event. Verify
 the event in the backend, then remove the test path from the candidate. Do not
 trigger a destructive crash against a real user document.
+
+Each app now exposes **Help > Test Crash Reporting**. The command is available
+only through an analytics instance that already passed both configuration and
+consent gates. It sends an informational event tagged `freeapp.test_report=true`;
+it does not throw an exception, open a document, or attach local diagnostic
+files. Use this command for backend acceptance evidence instead of deliberately
+crashing an installed app. A disabled result is expected when consent or the
+release endpoint is absent.
 
 ## Feedback Gate
 
@@ -69,6 +77,11 @@ app's Help surface should link to the issue-form chooser. The form must capture
 app, version, platform, architecture, installation type, and reproduction steps.
 Crash analytics does not replace issue intake because an anonymous event has no
 reliable follow-up channel.
+
+App feedback commands open `user-test-report.yml` with an encoded title that
+identifies app, version, operating system, and architecture. Installation type
+remains a required issue-form selection because portable and installed copies
+cannot reliably distinguish every packaging route at runtime.
 
 Security reports use the private route in [`../../SECURITY.md`](../../SECURITY.md).
 The release owner must confirm that GitHub private vulnerability reporting is
@@ -135,3 +148,7 @@ human-validation evidence, crash-backend test event identifier, feedback-form
 test issue, known limitations, rollback owner, and signing status in the release
 notes. A failed or untested item remains visible; it is not converted into a
 claim of support.
+
+Use the
+[public-preview decision record template](public-preview-decision-record-template.md)
+so every candidate is assessed against the same evidence fields.

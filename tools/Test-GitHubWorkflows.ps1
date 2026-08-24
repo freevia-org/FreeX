@@ -26,11 +26,13 @@ if ($workflows.Count -eq 0) {
     throw "No GitHub workflow files were found in $resolvedWorkflowDirectory."
 }
 
-$allowedActionMajors = @{
-    "actions/checkout" = "v6"
-    "actions/download-artifact" = "v7"
-    "actions/setup-dotnet" = "v5"
-    "actions/upload-artifact" = "v7"
+$allowedActionPins = @{
+    "actions/checkout" = "d23441a48e516b6c34aea4fa41551a30e30af803"
+    "actions/download-artifact" = "37930b1c2abaa49bbe596cd826c3c89aef350131"
+    "actions/setup-dotnet" = "26b0ec14cb23fa6904739307f278c14f94c95bf1"
+    "actions/upload-artifact" = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+    "github/codeql-action/init" = "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"
+    "github/codeql-action/analyze" = "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"
 }
 
 function Get-IndentedYamlBlock {
@@ -186,7 +188,7 @@ function Get-WorkflowUploadArtifactStepBlocks {
         }
 
         $stepBlock = $stepLines -join "`n"
-        if ($stepBlock -match "(?m)^\s*uses:\s+actions/upload-artifact@v\d+\s*(?:#.*)?$") {
+        if ($stepBlock -match "(?m)^\s*uses:\s+actions/upload-artifact@[0-9a-f]{40}\s*(?:#.*)?$") {
             $uploadBlocks.Add($stepBlock)
         }
     }
@@ -351,12 +353,12 @@ foreach ($workflow in $workflows) {
         }
 
         $stepBlock = $stepLines -join "`n"
-        if ($stepBlock -match "(?m)^\s*uses:\s+actions/checkout@v\d+\s*(?:#.*)?$" -and
+        if ($stepBlock -match "(?m)^\s*uses:\s+actions/checkout@[0-9a-f]{40}\s*(?:#.*)?$" -and
             $stepBlock -notmatch "(?m)^\s*persist-credentials:\s*false\s*(?:#.*)?$") {
             $errors.Add("$($workflow.Name): actions/checkout steps must set persist-credentials: false.")
         }
 
-        if ($stepBlock -match "(?m)^\s*uses:\s+actions/upload-artifact@v\d+\s*(?:#.*)?$" -and
+        if ($stepBlock -match "(?m)^\s*uses:\s+actions/upload-artifact@[0-9a-f]{40}\s*(?:#.*)?$" -and
             $stepBlock -notmatch "(?m)^\s*if-no-files-found:\s*(?:error|warn)\s*(?:#.*)?$") {
             $errors.Add("$($workflow.Name): actions/upload-artifact steps must set if-no-files-found to error or warn.")
         }
@@ -588,8 +590,8 @@ foreach ($workflow in $workflows) {
                 $errors.Add("$($workflow.Name): macOS release publication job must use non-canceling concurrency with cancel-in-progress: false.")
             }
 
-            if ($releasePublicationJobBlock -notmatch "(?ms)^      - name:\s+Checkout\s*(?:#.*)?\r?\n        uses:\s+actions/checkout@v6\s*(?:#.*)?\r?\n        with:\s*(?:#.*)?\r?\n(?:          [^\r\n]*\r?\n)*?          persist-credentials:\s*false\s*(?:#.*)?(?:\r?\n|$)") {
-                $errors.Add("$($workflow.Name): macOS release publication checkout must use actions/checkout@v6 with persist-credentials: false.")
+            if ($releasePublicationJobBlock -notmatch "(?ms)^      - name:\s+Checkout\s*(?:#.*)?\r?\n        uses:\s+actions/checkout@[0-9a-f]{40}\s*(?:#.*)?\r?\n        with:\s*(?:#.*)?\r?\n(?:          [^\r\n]*\r?\n)*?          persist-credentials:\s*false\s*(?:#.*)?(?:\r?\n|$)") {
+                $errors.Add("$($workflow.Name): macOS release publication checkout must use the approved full-SHA actions/checkout pin with persist-credentials: false.")
             }
 
             $downloadMacOsAppArtifactsBlock = Get-WorkflowStepBlock -Workflow $releasePublicationJobBlock -StepName "Download macOS app artifacts"
@@ -719,15 +721,17 @@ foreach ($workflow in $workflows) {
             continue
         }
 
-        if ($actionRef -notmatch "@v\d+$") {
-            $errors.Add("$($workflow.Name): action '$actionRef' must be pinned to an explicit major version such as @v7.")
+        if ($actionRef -notmatch "@(?<pin>[0-9a-f]{40})$") {
+            $errors.Add("$($workflow.Name): action '$actionRef' must be pinned to an approved full 40-character commit SHA.")
             continue
         }
 
         $actionName = $actionRef.Substring(0, $actionRef.LastIndexOf("@", [System.StringComparison]::Ordinal))
-        $actionMajor = $actionRef.Substring($actionRef.LastIndexOf("@", [System.StringComparison]::Ordinal) + 1)
-        if ($allowedActionMajors.ContainsKey($actionName) -and $allowedActionMajors[$actionName] -ne $actionMajor) {
-            $errors.Add("$($workflow.Name): action '$actionRef' must use supported major $($allowedActionMajors[$actionName]).")
+        $actionPin = $actionRef.Substring($actionRef.LastIndexOf("@", [System.StringComparison]::Ordinal) + 1)
+        if (-not $allowedActionPins.ContainsKey($actionName)) {
+            $errors.Add("$($workflow.Name): action '$actionName' is not in the reviewed action allow-list.")
+        } elseif ($allowedActionPins[$actionName] -ne $actionPin) {
+            $errors.Add("$($workflow.Name): action '$actionName' must use reviewed commit $($allowedActionPins[$actionName]).")
         }
     }
 }

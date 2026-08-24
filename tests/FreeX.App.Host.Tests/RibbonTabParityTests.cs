@@ -457,6 +457,7 @@ public sealed class RibbonTabParityTests
             "Help Online",
             "Feedback",
             "Copy Diagnostics",
+            "Test Crash Reporting",
             "Check for Updates",
             "About FreeX",
             "Legal Notices");
