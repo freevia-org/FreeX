@@ -4,19 +4,12 @@ namespace FreeX.App.Avalonia.Tests;
 
 internal static class WaveAutoFilterColorGeometryAssertions
 {
-    private const string FunctionStart = "probe_autofilter_color_persistence_physical() {";
-    private const string FunctionEnd = "\nif [[ \"$probe_selector\" == \"autofilter-date-criteria-persistence\" ]]; then";
+    private const string FunctionName = "probe_autofilter_color_persistence_physical";
 
     public static void AssertBoundGeometry(string probe)
     {
         var normalized = probe.Replace("\r\n", "\n", StringComparison.Ordinal);
-        var start = normalized.IndexOf(FunctionStart, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, "the physical color probe must retain its named function");
-
-        var bodyStart = start + FunctionStart.Length;
-        var end = normalized.IndexOf(FunctionEnd, bodyStart, StringComparison.Ordinal);
-        end.Should().BeGreaterThan(bodyStart, "the physical color probe function must have a bounded source body");
-        var body = normalized[bodyStart..end];
+        var body = ExtractFunctionBody(normalized, FunctionName);
 
         body.Should().Contain(
             "local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27\n" +
