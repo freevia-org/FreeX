@@ -16,7 +16,8 @@ The strict gate requires:
 - dependency vulnerability alerts;
 - private vulnerability reporting;
 - a read-only default `GITHUB_TOKEN`;
-- a protected `public-preview` deployment environment;
+- active CI and CodeQL workflows;
+- a protected `public-preview` deployment environment with at least one required reviewer;
 - the issue labels referenced by the feedback forms; and
 - `FREE_FAMILY_SENTRY_DSN`, after the privacy and Sentry operator settings are complete.
 

@@ -84,13 +84,26 @@ $checks.Add((New-Check `
     -Passed $readOnlyDefault `
     -Remediation "Set the default GITHUB_TOKEN permission to read-only."))
 
-$environments = Invoke-GhJson -Arguments @("api", "repos/$Repository/environments")
-$hasReleaseEnvironment = $environments.Succeeded -and @(
-    $environments.Value.environments | Where-Object { $_.name -eq "public-preview" }
-).Count -eq 1
+foreach ($workflowPath in @("ci.yml", "codeql.yml")) {
+    $workflow = Invoke-GhJson -Arguments @("api", "repos/$Repository/actions/workflows/$workflowPath")
+    $checks.Add((New-Check `
+        -Name "active workflow: $workflowPath" `
+        -Passed ($workflow.Succeeded -and $workflow.Value.state -eq "active") `
+        -Remediation "Enable the $workflowPath workflow in the repository Actions settings."))
+}
+
+$releaseEnvironment = Invoke-GhJson -Arguments @("api", "repos/$Repository/environments/public-preview")
+$requiredReviewerRules = @(
+    if ($releaseEnvironment.Succeeded) {
+        $releaseEnvironment.Value.protection_rules | Where-Object { $_.type -eq "required_reviewers" }
+    }
+)
+$hasProtectedReleaseEnvironment = $requiredReviewerRules.Count -gt 0 -and @(
+    $requiredReviewerRules | ForEach-Object { @($_.reviewers).Count } | Where-Object { $_ -gt 0 }
+).Count -gt 0
 $checks.Add((New-Check `
-    -Name "public-preview deployment environment" `
-    -Passed $hasReleaseEnvironment `
+    -Name "protected public-preview deployment environment" `
+    -Passed $hasProtectedReleaseEnvironment `
     -Remediation "Create a protected public-preview environment with a required reviewer."))
 
 $labels = Invoke-GhJson -Arguments @("label", "list", "--repo", $Repository, "--limit", "200", "--json", "name")
