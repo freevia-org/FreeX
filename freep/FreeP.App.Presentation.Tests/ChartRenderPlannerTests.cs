@@ -1690,6 +1690,30 @@ public sealed class ChartRenderPlannerTests
             "a narrow tall imported surface must use a drawable fallback envelope");
     }
 
+    [Fact]
+    public void BuildImportedSurface_NarrowTallFallbackDoesNotUseFullSizeBandingOrAxisDensification()
+    {
+        var chart = MakeImportedLargeSurfaceChart();
+        foreach (var series in chart.Series)
+        {
+            for (int valueIndex = 0; valueIndex < series.Values.Count; valueIndex++)
+                series.Values[valueIndex] = Math.Min(series.Values[valueIndex]!.Value, 45);
+        }
+
+        var frame = ChartRenderPlanner.BuildFramePlan(
+            chart,
+            new ChartPlanRect(0, 0, 280, 500));
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, frame.Plot);
+        var valueLabels = ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame);
+
+        geometry.RenderFacets.Should().OnlyContain(
+            facet => facet.Points.Count == 3,
+            "the compact fallback must retain ordinary triangular facets instead of full-size elevation clipping");
+        valueLabels.Select(label => label.Text).Should().Equal(
+            new[] { "0", "10", "20", "30", "40", "50" },
+            "the compact fallback must retain the normal axis interval instead of full-size densification");
+    }
+
     [Theory]
     [InlineData(120)]
     [InlineData(80)]

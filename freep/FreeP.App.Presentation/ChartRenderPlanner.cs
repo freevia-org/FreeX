@@ -5978,8 +5978,7 @@ public static partial class ChartRenderPlanner
     }
 
     private static bool UsesImportedSurfaceElevationBanding(ChartShape chart, ChartPlanRect plot) =>
-        UsesLargeImportedSurfaceGrid(chart) &&
-        plot.Height > ImportedSurfaceFullScalePlotHeightLimit;
+        UsesFullImportedSurfaceFrame(chart, plot);
 
     private static void AddImportedSurfaceElevationBandFacets(
         List<ChartSurfaceFacetPrimitive> facets,
@@ -8098,7 +8097,7 @@ public static partial class ChartRenderPlanner
             chart.ValueAxis.Min is not null ||
             chart.ValueAxis.Max is not null ||
             chart.ValueAxis.MajorUnit is > 0 ||
-            plot.Height <= ImportedSurfaceFullScalePlotHeightLimit ||
+            !UsesFullImportedSurfaceFrame(chart, plot) ||
             range.majorUnit <= 0)
         {
             return range;
