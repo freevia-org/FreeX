@@ -215,7 +215,7 @@ internal static class StaTestRunner
 
     private static void ResetClipboard()
     {
-        const int attempts = 10;
+        const int attempts = 20;
         for (var attempt = 1; ; attempt++)
         {
             try
@@ -226,7 +226,7 @@ internal static class StaTestRunner
             }
             catch (ExternalException) when (attempt < attempts)
             {
-                Thread.Sleep(10);
+                Thread.Sleep(TimeSpan.FromMilliseconds(Math.Min(250, 25 * attempt)));
             }
         }
     }
