@@ -5407,7 +5407,13 @@ public static partial class ChartRenderPlanner
             ref categorySlopeY,
             ref lift);
         double drawableWidth = Math.Max(1, plot.Width - depthX);
-        double categoryWidth = usesImportedSurfaceGeometry
+        // The compact imported 3x3 reference has a measured front envelope
+        // wider than its drawable plane. Applying that registration to a
+        // larger mesh lets its category span plus depth extend past the plot
+        // frame. General Surface3D grids retain the bounded drawable width.
+        bool usesCompactImportedSurfaceEnvelope =
+            usesImportedSurfaceGeometry && seriesCount == 3 && categoryCount == 3;
+        double categoryWidth = usesCompactImportedSurfaceEnvelope
             ? plot.Width * (ImportedSurfaceFrontCategoryWidth / ImportedSurfaceReferencePlotWidth) -
                 seriesT * (plot.Width * (ImportedSurfaceFrontCategoryWidth / ImportedSurfaceReferencePlotWidth) - drawableWidth)
             : drawableWidth;

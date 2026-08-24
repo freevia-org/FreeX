@@ -1590,6 +1590,27 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceGeometryPlan_LargerImportedGridStaysWithinProjectedWidth()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.VaryColors = true;
+        chart.Categories.Add("West");
+        foreach (var series in chart.Series)
+            series.Values.Add(25);
+        chart.Series.Add(new ChartSeries { Name = "Peak Band", Values = { 33, 39, 45, 37 } });
+        chart.Series.Add(new ChartSeries { Name = "Ridge Band", Values = { 36, 42, 48, 40 } });
+        chart.View3D = new Chart3DView { RotationX = 15, RotationY = 20, RightAngleAxes = false };
+        var plot = new ChartPlanRect(10, 20, 720, 378);
+
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, plot);
+
+        geometry.Points.Should().OnlyContain(point =>
+            point.Point.X >= plot.X - 0.0001 && point.Point.X <= plot.Right + 3.5001,
+            "the larger default-camera grid must not extend beyond its projected frame");
+    }
+
+    [Fact]
     public void BuildSurfaceGeometryPlan_AuthoredViewDoesNotUseImportedSurfaceRegistration()
     {
         var chart = MakeSurfaceChart(ChartType.Surface3D);
