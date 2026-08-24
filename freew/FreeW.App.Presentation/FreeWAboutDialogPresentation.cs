@@ -21,7 +21,10 @@ public static class FreeWAboutDialogPresentation
     public const double AvaloniaTextFontSize = AboutDialogMetrics.TextFontSize;
     public const double AvaloniaTextPaddingTop = AboutDialogMetrics.TextPadding + 1;
     public const bool AvaloniaDefaultButtonAccent = true;
-    public const double AvaloniaTextLineHeight = 16.6;
+    // WPF's 12px About TextBox advances its wrapped lines at 16 device pixels.
+    // Keeping the Avalonia line box at that measured cadence prevents the centered
+    // document from drifting upward at the first paragraph and downward by the last.
+    public const double AvaloniaTextLineHeight = 16.0;
 
     public static AboutDialogPresentation Create(Assembly assembly)
     {
