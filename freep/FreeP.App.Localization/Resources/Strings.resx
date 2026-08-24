@@ -3091,6 +3091,12 @@
   <data name="Ribbon_Command_ViewSlideSorter_KeyTip" xml:space="preserve">
     <value>S</value>
   </data>
+  <data name="Ribbon_Command_ViewNotesPage_Label" xml:space="preserve">
+    <value>Notes Page</value>
+  </data>
+  <data name="Ribbon_Command_ViewNotesPage_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
   <data name="Ribbon_Group_ViewShow_Label" xml:space="preserve">
     <value>Show</value>
   </data>

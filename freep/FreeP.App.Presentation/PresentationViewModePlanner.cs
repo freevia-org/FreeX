@@ -8,6 +8,7 @@ public enum PresentationViewMode
 {
     Normal,
     SlideSorter,
+    NotesPage,
 }
 
 public readonly record struct PresentationViewModeState(PresentationViewMode Mode)
@@ -24,12 +25,14 @@ public static class PresentationViewModePlanner
 {
     public const string NormalCommandId = "freep.view.normal";
     public const string SlideSorterCommandId = "freep.view.slide-sorter";
+    public const string NotesPageCommandId = "freep.view.notes-page";
 
     public static IReadOnlyList<PresentationViewModeCommandPlan> BuildPlans(
         PresentationViewModeState state) =>
         [
             BuildPlan(PresentationViewMode.Normal, state),
             BuildPlan(PresentationViewMode.SlideSorter, state),
+            BuildPlan(PresentationViewMode.NotesPage, state),
         ];
 
     public static PresentationViewModeCommandPlan BuildPlan(
@@ -60,6 +63,7 @@ public static class PresentationViewModePlanner
     {
         PresentationViewMode.Normal => NormalCommandId,
         PresentationViewMode.SlideSorter => SlideSorterCommandId,
+        PresentationViewMode.NotesPage => NotesPageCommandId,
         _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null),
     };
 
@@ -72,6 +76,9 @@ public static class PresentationViewModePlanner
                 return true;
             case SlideSorterCommandId:
                 mode = PresentationViewMode.SlideSorter;
+                return true;
+            case NotesPageCommandId:
+                mode = PresentationViewMode.NotesPage;
                 return true;
             default:
                 mode = default;

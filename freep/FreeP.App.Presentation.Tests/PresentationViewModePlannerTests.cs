@@ -5,14 +5,15 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class PresentationViewModePlannerTests
 {
     [Fact]
-    public void Default_mode_exposes_only_the_implemented_normal_and_sorter_views()
+    public void Default_mode_exposes_the_implemented_workspace_views()
     {
         PresentationViewModePlanner.BuildPlans(PresentationViewModeState.Normal)
             .Select(plan => (plan.CommandId, plan.IsChecked))
             .Should()
             .Equal(
                 (PresentationViewModePlanner.NormalCommandId, true),
-                (PresentationViewModePlanner.SlideSorterCommandId, false));
+                (PresentationViewModePlanner.SlideSorterCommandId, false),
+                (PresentationViewModePlanner.NotesPageCommandId, false));
     }
 
     [Fact]
@@ -30,13 +31,17 @@ public sealed class PresentationViewModePlannerTests
     }
 
     [Fact]
-    public void Unknown_command_is_not_treated_as_a_view_mode()
+    public void Notes_page_is_a_selectable_exclusive_view_mode()
     {
-        PresentationViewModePlanner.TryBuildPlan(
-                "freep.view.notes-page",
-                PresentationViewModeState.Normal,
-                out _)
-            .Should()
-            .BeFalse();
+        var notesPage = PresentationViewModePlanner.BuildPlan(
+            PresentationViewMode.NotesPage,
+            PresentationViewModeState.Normal);
+
+        var state = PresentationViewModePlanner.Select(PresentationViewModeState.Normal, notesPage);
+
+        state.Mode.Should().Be(PresentationViewMode.NotesPage);
+        PresentationViewModePlanner.BuildPlan(PresentationViewMode.Normal, state).IsChecked.Should().BeFalse();
+        PresentationViewModePlanner.BuildPlan(PresentationViewMode.SlideSorter, state).IsChecked.Should().BeFalse();
+        PresentationViewModePlanner.BuildPlan(PresentationViewMode.NotesPage, state).IsChecked.Should().BeTrue();
     }
 }

@@ -113,7 +113,8 @@ public sealed record FreeWRibbonFloatingExecutionPorts(
     Action Group,
     Func<bool> CanUngroup,
     Action Ungroup,
-    Action<FreeWRibbonFloatingFeedback>? ShowFeedback = null);
+    Action<FreeWRibbonFloatingFeedback>? ShowFeedback = null,
+    Action<ObjectFormatTarget, FreeWRibbonObjectPositionInput>? ApplyPosition = null);
 
 public sealed record FreeWRibbonChartSmartArtExecutionPorts(
     Action PrepareExecution,
@@ -1017,6 +1018,18 @@ public static class FreeWRibbonEditorExecutionProfile
     {
         bindings.Register("freew.layout-wrap", EmptyRibbonCommand.Instance);
         bindings.Register("freew.layout-rotate", EmptyRibbonCommand.Instance);
+        bindings.Register("freew.layout-position", EmptyRibbonCommand.Instance);
+
+        foreach (var preset in LayoutPositionPresets)
+        {
+            var captured = preset;
+            bindings.Register(
+                $"freew.layout-position-{captured.Suffix}",
+                Stateful(
+                    () => TryWithSelectedLayoutTarget(ports, target => ports.ApplyPosition?.Invoke(target, captured.Input)),
+                    () => ports.ApplyPosition is not null && HasLayoutSelection(ports),
+                    ports.PrepareExecution));
+        }
 
         foreach (var command in ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Picture))
         {
@@ -1067,6 +1080,14 @@ public static class FreeWRibbonEditorExecutionProfile
 
     private static string LayoutCommandId(string targetCommandId) =>
         targetCommandId.Replace("freew.image-", "freew.layout-", StringComparison.Ordinal);
+
+    private static IReadOnlyList<(string Suffix, FreeWRibbonObjectPositionInput Input)> LayoutPositionPresets { get; } =
+    [
+        ("column-paragraph", new(0, 0, HorizontalAnchor.Column, VerticalAnchor.Paragraph)),
+        ("margin-paragraph", new(0, 0, HorizontalAnchor.Margin, VerticalAnchor.Paragraph)),
+        ("page-paragraph", new(0, 0, HorizontalAnchor.Page, VerticalAnchor.Paragraph)),
+        ("page-top", new(0, 0, HorizontalAnchor.Page, VerticalAnchor.Page)),
+    ];
 
     private static void BindShapeKind(
         FreeWRibbonCommandBindingPorts bindings,

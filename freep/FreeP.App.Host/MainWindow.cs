@@ -703,13 +703,14 @@ public sealed partial class MainWindow : Window,
     {
         _viewModeState = state;
         var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
+        var isNotesPage = state.Mode == PresentationViewMode.NotesPage;
         if (SlidePaneHost is null || _canvasHost is null || _bodySplitter is null)
             return;
 
-        SlidePaneHost.Width = isSlideSorter ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
+        SlidePaneHost.Width = isSlideSorter || isNotesPage ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
         _bodySplitter.ColumnDefinitions[0].Width = isSlideSorter
             ? new GridLength(1, GridUnitType.Star)
-            : GridLength.Auto;
+            : isNotesPage ? new GridLength(0) : GridLength.Auto;
         _bodySplitter.ColumnDefinitions[1].Width = isSlideSorter
             ? new GridLength(0)
             : new GridLength(1, GridUnitType.Star);
@@ -717,6 +718,9 @@ public sealed partial class MainWindow : Window,
         _notesBox.Visibility = !isSlideSorter && _viewShowState.ShowNotesPane
             ? Visibility.Visible
             : Visibility.Collapsed;
+        _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
+        _notesBox.MaxHeight = isNotesPage ? 300 : 120;
+        _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
         (SlidePaneHost.Child as SlidePane)?.SetSlideSorterMode(isSlideSorter);
         SyncRibbonCommandStates();
     }

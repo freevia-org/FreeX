@@ -823,6 +823,8 @@ public sealed class FreeWRibbonCommandWorkflowTests
         ObjectFormatTarget? wrappedTarget = null;
         ImageWrapping? wrapping = null;
         ObjectFormatTarget? zOrderTarget = null;
+        ObjectFormatTarget? positionTarget = null;
+        FreeWRibbonObjectPositionInput? position = null;
         var hasTransformSelection = true;
         var transformed = false;
         var feedback = new List<FreeWRibbonFloatingFeedback>();
@@ -867,7 +869,12 @@ public sealed class FreeWRibbonCommandWorkflowTests
                 Group: () => { },
                 CanUngroup: () => false,
                 Ungroup: () => { },
-                ShowFeedback: feedback.Add));
+                ShowFeedback: feedback.Add,
+                ApplyPosition: (target, value) =>
+                {
+                    positionTarget = target;
+                    position = value;
+                }));
 
         bindings.TryGet("freew.shape-edit-shape", out var editShape).Should().BeTrue();
         editShape!.Execute(RibbonCommandContext.Empty);
@@ -905,6 +912,17 @@ public sealed class FreeWRibbonCommandWorkflowTests
         bindings.TryGet("freew.layout-bring-forward", out var layoutBringForward).Should().BeTrue();
         layoutBringForward!.Execute(RibbonCommandContext.Empty);
         zOrderTarget.Should().Be(ObjectFormatTarget.Shape);
+
+        bindings.TryGet("freew.layout-position-page-top", out var layoutPosition).Should().BeTrue();
+        layoutPosition.Should().BeAssignableTo<IRibbonStatefulCommand>()
+            .Which.GetState().IsEnabled.Should().BeTrue();
+        layoutPosition!.Execute(RibbonCommandContext.Empty);
+        positionTarget.Should().Be(ObjectFormatTarget.Shape);
+        position.Should().Be(new FreeWRibbonObjectPositionInput(
+            0,
+            0,
+            HorizontalAnchor.Page,
+            VerticalAnchor.Page));
 
         bindings.TryGet("freew.shape-width", out var width).Should().BeTrue();
         width!.Execute(RibbonCommandContext.ForSelectedValue("144"));

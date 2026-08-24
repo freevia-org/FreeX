@@ -198,6 +198,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("arrange", "Arrange", null, 75, group =>
                     {
+                        group.Dropdown("freew.layout-position", "Position", BuildFloatingPositionMenu("layout"));
                         group.Dropdown("freew.layout-wrap", "Wrap Text", BuildWrapMenu("layout"));
                         group.Button("freew.layout-bring-forward", "Bring Forward");
                         group.Button("freew.layout-send-backward", "Send Backward");

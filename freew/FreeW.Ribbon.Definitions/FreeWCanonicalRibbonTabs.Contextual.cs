@@ -976,7 +976,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 preset.Label,
                 new RibbonCommandId($"freew.{prefix}-position-{preset.Suffix}")))
             .Concat(prefix == "image"
-                ? [RibbonMenuItem.Separator(), new RibbonMenuItem("More Layout Options...", new RibbonCommandId("freew.image-position"))]
+                ? [RibbonMenuItem.Separator(), new RibbonMenuItem("More Layout Options...", new RibbonCommandId($"freew.{prefix}-position"))]
                 : [])
             .ToArray());
 

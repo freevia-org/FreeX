@@ -1209,7 +1209,12 @@ internal static class FreeWAvaloniaRibbonCommands
             CanGroup: () => editor.HasMultipleFloatingObjectsSelected,
             Group: editor.GroupSelectedFloatingObjects,
             CanUngroup: () => editor.IsGroupSelected,
-            Ungroup: editor.UngroupSelectedFloatingObject);
+            Ungroup: editor.UngroupSelectedFloatingObject,
+            ApplyPosition: (_, position) => editor.SetFloatingPosition(
+                position.HorizontalOffsetPt,
+                position.VerticalOffsetPt,
+                position.HorizontalAnchor,
+                position.VerticalAnchor));
 
     private static void RegisterShapeTextDirectionSelectionGuards(
         FreeWRibbonCommandBindingPorts bindings,
