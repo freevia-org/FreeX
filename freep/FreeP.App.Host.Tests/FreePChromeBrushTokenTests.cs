@@ -32,7 +32,7 @@ public sealed class FreePChromeBrushTokenTests
 
     /// <summary>
     /// Applying the default <see cref="BrandThemes.FreeP"/> theme with prefix "FreeP" produces
-    /// <c>FreePTitleBarBrush</c> uses the canonical plum #4E213B.
+    /// <c>FreePTitleBarBrush</c> uses the neutral Office-like caption surface #F3F4F6.
     /// </summary>
     [Fact]
     public void BuildResources_FreePTheme_RegistersDefaultTitleBarBrush()
@@ -41,9 +41,11 @@ public sealed class FreePChromeBrushTokenTests
 
         var brush = dict["FreePTitleBarBrush"] as SolidColorBrush;
         brush.Should().NotBeNull("applier must register FreePTitleBarBrush");
-        brush!.Color.R.Should().Be(0x4E);
-        brush.Color.G.Should().Be(0x21);
-        brush.Color.B.Should().Be(0x3B);
+        brush!.Color.Should().Be(Color.FromRgb(0xF3, 0xF4, 0xF6));
+
+        var foreground = dict["FreePTitleBarForegroundBrush"] as SolidColorBrush;
+        foreground.Should().NotBeNull("applier must register FreePTitleBarForegroundBrush");
+        foreground!.Color.Should().Be(Color.FromRgb(0x1F, 0x1F, 0x1F));
     }
 
     /// <summary>

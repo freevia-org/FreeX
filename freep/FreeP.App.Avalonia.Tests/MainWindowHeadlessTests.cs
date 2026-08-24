@@ -616,6 +616,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
         mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
         mainWindow.Should().Contain("SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
+        mainWindow.Should().Contain("ThemeResources.Brush(\"TitleBarForeground\")");
+        mainWindow.Should().NotContain("TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush");
         mainWindow.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
         mainWindow.Should().Contain(
             ".BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())");
