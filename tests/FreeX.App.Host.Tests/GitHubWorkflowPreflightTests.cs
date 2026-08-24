@@ -34,6 +34,8 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build");
         workflow.Should().Contain("name: macOS portable lane");
         workflow.Should().Contain("dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release");
+        workflow.Should().Contain("dotnet build FreeX.PortableTests.slnx --configuration Release");
+        workflow.Should().Contain("dotnet test FreeX.PortableTests.slnx --configuration Release --no-build");
         workflow.Should().Contain("name: UI test lane");
         workflow.Should().Contain("run_ui_tests:");
         workflow.Should().Contain("if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ui_tests == true }}");
@@ -46,6 +48,12 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().NotContain("-p:NodeReuse=false");
         workflow.Should().NotContain("/nr:false");
         workflow.Should().NotContain("dotnet test FreeX.slnx --configuration Release --no-build");
+
+        var portableTests = WorkspaceFileLocator.ReadAllText("FreeX.PortableTests.slnx");
+        portableTests.Should().NotContain("FreeX.App.Host.Logic.Tests");
+        portableTests.Should().NotContain("Free.Shared.Shell.Wpf.Tests");
+        portableTests.Should().NotContain("FreeP.App.Host.Tests");
+        portableTests.Should().NotContain("net10.0-windows");
     }
 
     [Fact]
