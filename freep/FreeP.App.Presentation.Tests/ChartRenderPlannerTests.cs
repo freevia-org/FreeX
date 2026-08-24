@@ -1707,6 +1707,7 @@ public sealed class ChartRenderPlannerTests
     {
         var chart = MakeImportedLargeSurfaceChart();
         chart.Legend = LegendPosition.Right;
+        chart.ValueAxis.NumberFormatCode = "General";
         chart.ValueAxis.Min = -1e308;
         chart.ValueAxis.Max = 1e308;
         chart.ValueAxis.MajorUnit = 1e-9;
@@ -1716,13 +1717,71 @@ public sealed class ChartRenderPlannerTests
         var scene = ChartRenderPlanner.BuildScenePlan(
             chart,
             new ChartPlanRect(0, 0, 960, 540));
+        var geometry = scene.Surface!.Value;
 
         scene.LegendItems.Should().HaveCount(256);
-        scene.Surface!.Value.RenderFacets.Should().NotBeEmpty();
-        scene.Surface.Value.RenderFacets.SelectMany(facet => facet.Points)
+        geometry.Cells.Should().NotBeEmpty();
+        geometry.Cells.Select(cell => cell.Value).Should().Contain(-1e308).And.Contain(1e308);
+        geometry.Cells.Select(cell => cell.NormalizedValue)
+            .Should().OnlyContain(value => double.IsFinite(value) && value >= 0 && value <= 1);
+        geometry.Cells.Select(cell => cell.NormalizedValue).Min().Should().Be(0);
+        geometry.Cells.Select(cell => cell.NormalizedValue).Max().Should().Be(1);
+        geometry.Points.Select(point => point.NormalizedValue)
+            .Should().OnlyContain(value => double.IsFinite(value) && value >= 0 && value <= 1);
+        geometry.Facets.Select(facet => facet.AverageNormalizedValue)
+            .Should().OnlyContain(value => double.IsFinite(value) && value >= 0 && value <= 1);
+        geometry.RenderFacets.Should().NotBeEmpty();
+        geometry.RenderFacets.Select(facet => facet.AverageNormalizedValue)
+            .Should().OnlyContain(value => double.IsFinite(value) && value >= 0 && value <= 1);
+        geometry.RenderFacets.SelectMany(facet => facet.Points)
             .Should().OnlyContain(point => double.IsFinite(point.X) && double.IsFinite(point.Y));
+        scene.ValueAxisLabels.Should().HaveCount(257);
+        scene.ValueAxisLabels[0].Text.Should().Be("-1E+308");
+        scene.ValueAxisLabels[^1].Text.Should().Be("1E+308");
+        scene.ValueAxisLabels.Select(label => label.Text)
+            .Should().OnlyContain(text => !text.Contains("NaN") && !text.Contains("Infinity"));
         scene.ValueAxisLabels.SelectMany(label => new[] { label.Bounds.X, label.Bounds.Y })
             .Should().OnlyContain(value => double.IsFinite(value));
+    }
+
+    [Fact]
+    public void BuildImportedSurface_PositiveExtremeRangePreservesEndpointsAndFiniteMetadata()
+    {
+        var chart = MakeImportedLargeSurfaceChart();
+        chart.Legend = LegendPosition.Right;
+        chart.ValueAxis.NumberFormatCode = "General";
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 1e308;
+        chart.ValueAxis.MajorUnit = 1e307;
+        chart.Series[^1].Values[^1] = 1e308;
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+        var geometry = scene.Surface!.Value;
+
+        scene.ValueAxisLabels.Should().HaveCount(11);
+        scene.ValueAxisLabels[0].Text.Should().Be("0");
+        scene.ValueAxisLabels[^1].Text.Should().Be("1E+308");
+        scene.ValueAxisLabels.Select(label => label.Text)
+            .Should().OnlyContain(text => !text.Contains("NaN") && !text.Contains("Infinity"));
+        scene.ValueAxisLabels.SelectMany(label => new[] { label.Bounds.X, label.Bounds.Y })
+            .Should().OnlyContain(value => double.IsFinite(value));
+
+        geometry.Cells.Select(cell => cell.Value).Should().Contain(0).And.Contain(1e308);
+        geometry.Cells.Select(cell => cell.NormalizedValue)
+            .Should().OnlyContain(value => double.IsFinite(value) && value >= 0 && value <= 1);
+        geometry.Cells.Select(cell => cell.NormalizedValue).Min().Should().Be(0);
+        geometry.Cells.Select(cell => cell.NormalizedValue).Max().Should().Be(1);
+        geometry.Points.Select(point => point.NormalizedValue)
+            .Should().OnlyContain(value => double.IsFinite(value) && value >= 0 && value <= 1);
+        geometry.Facets.Select(facet => facet.AverageNormalizedValue)
+            .Should().OnlyContain(value => double.IsFinite(value) && value >= 0 && value <= 1);
+        geometry.RenderFacets.Select(facet => facet.AverageNormalizedValue)
+            .Should().OnlyContain(value => double.IsFinite(value) && value >= 0 && value <= 1);
+        scene.LegendItems.Should().HaveCount(10);
+        scene.LegendItems[0].Label.Text.Should().StartWith("0-");
+        scene.LegendItems[^1].Label.Text.Should().Contain("1E+308");
     }
 
     [Fact]

@@ -3206,7 +3206,7 @@ public static partial class ChartRenderPlanner
             return EmptyMajorGridLinePrimitivePlan();
 
         var (minValue, maxValue, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot, frame.Surface3DContext);
-        double steps = (maxValue - minValue) / majorUnit;
+        double steps = ResolveFiniteAxisStepCount(minValue, maxValue, majorUnit);
         if (steps <= 0)
             return EmptyMajorGridLinePrimitivePlan();
 
@@ -3292,18 +3292,18 @@ public static partial class ChartRenderPlanner
         if (!(minorUnit > 0) || maxValue <= minValue)
             return EmptyMinorGridLinePrimitivePlan();
 
-        double steps = (maxValue - minValue) / minorUnit;
+        double steps = ResolveFiniteAxisStepCount(minValue, maxValue, minorUnit);
         int tickCount = ResolveBoundedAxisTickCount(steps);
         var plot = frame.Plot;
         var lines = new List<ChartGridLinePlan>(Math.Max(0, tickCount - 1));
         for (int index = 1; index < tickCount; index++)
         {
-            double value = minValue + (maxValue - minValue) * index / tickCount;
-            double majorPosition = (value - minValue) / majorUnit;
+            double fraction = index / (double)tickCount;
+            double value = InterpolateFiniteRange(minValue, maxValue, fraction);
+            double majorPosition = fraction * ResolveFiniteAxisStepCount(minValue, maxValue, majorUnit);
             if (Math.Abs(majorPosition - Math.Round(majorPosition)) < 0.0001)
                 continue;
 
-            double fraction = index / (double)tickCount;
             if (frame.IsBar)
             {
                 double x = MapCartesianFractionToX(
@@ -3507,7 +3507,7 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartTextPlan>();
 
         var (minValue, maxValue, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot, frame.Surface3DContext);
-        double steps = (maxValue - minValue) / majorUnit;
+        double steps = ResolveFiniteAxisStepCount(minValue, maxValue, majorUnit);
         if (steps <= 0)
             return Array.Empty<ChartTextPlan>();
 
@@ -3517,7 +3517,10 @@ public static partial class ChartRenderPlanner
         bool highPosition = chart.ValueAxis.TickLabelPosition == ChartTickLabelPosition.High;
         for (int tickIndex = 0; tickIndex <= tickCount; tickIndex++)
         {
-            double value = minValue + (maxValue - minValue) * tickIndex / tickCount;
+            double value = InterpolateFiniteRange(
+                minValue,
+                maxValue,
+                tickIndex / (double)tickCount);
             if (frame.IsBar)
             {
                 double x = MapCartesianFractionToX(
@@ -3722,7 +3725,7 @@ public static partial class ChartRenderPlanner
         ChartFramePlan frame)
     {
         var (minValue, maxValue, majorUnit) = ResolvePrimaryValueAxisRange(chart, frame.Plot, frame.Surface3DContext);
-        double steps = (maxValue - minValue) / majorUnit;
+        double steps = ResolveFiniteAxisStepCount(minValue, maxValue, majorUnit);
         if (steps <= 0)
             return Array.Empty<ChartGridLinePlan>();
 
@@ -3769,16 +3772,28 @@ public static partial class ChartRenderPlanner
         if (UsesStockLineFallback(chart) && !frame.IsBar && chart.ValueAxis.MinorTickMark != ChartTickMark.None)
         {
             const double stockMinorUnit = 0.4;
-            int minorTickCount = ResolveBoundedAxisTickCount((maxValue - minValue) / stockMinorUnit);
+            int minorTickCount = ResolveBoundedAxisTickCount(
+                ResolveFiniteAxisStepCount(minValue, maxValue, stockMinorUnit));
             for (int minorTickIndex = 1; minorTickIndex < minorTickCount; minorTickIndex++)
             {
-                double value = minValue + stockMinorUnit * minorTickIndex;
-                double majorPosition = (value - minValue) / majorUnit;
+                double span = maxValue - minValue;
+                double value = double.IsFinite(span)
+                    ? minValue + stockMinorUnit * minorTickIndex
+                    : InterpolateFiniteRange(
+                        minValue,
+                        maxValue,
+                        minorTickIndex / (double)minorTickCount);
+                double fraction = double.IsFinite(span)
+                    ? (value - minValue) / span
+                    : minorTickIndex / (double)minorTickCount;
+                double majorPosition = double.IsFinite(span)
+                    ? (value - minValue) / majorUnit
+                    : fraction * ResolveFiniteAxisStepCount(minValue, maxValue, majorUnit);
                 if (Math.Abs(majorPosition - Math.Round(majorPosition)) < 0.0001)
                     continue;
 
                 double y = MapCartesianFractionToY(
-                    (value - minValue) / (maxValue - minValue),
+                    fraction,
                     plot,
                     chart.ValueAxis.ReverseOrder);
                 var tick = BuildAxisTickLine(
@@ -3796,15 +3811,26 @@ public static partial class ChartRenderPlanner
         if (chart.ValueAxis.MinorUnit is > 0 && chart.ValueAxis.MinorTickMark != ChartTickMark.None)
         {
             double minorUnit = chart.ValueAxis.MinorUnit.Value;
-            int minorTickCount = ResolveBoundedAxisTickCount((maxValue - minValue) / minorUnit);
+            int minorTickCount = ResolveBoundedAxisTickCount(
+                ResolveFiniteAxisStepCount(minValue, maxValue, minorUnit));
             for (int minorTickIndex = 1; minorTickIndex < minorTickCount; minorTickIndex++)
             {
-                double value = minValue + minorUnit * minorTickIndex;
-                double majorPosition = (value - minValue) / majorUnit;
+                double span = maxValue - minValue;
+                double value = double.IsFinite(span)
+                    ? minValue + minorUnit * minorTickIndex
+                    : InterpolateFiniteRange(
+                        minValue,
+                        maxValue,
+                        minorTickIndex / (double)minorTickCount);
+                double fraction = double.IsFinite(span)
+                    ? (value - minValue) / span
+                    : minorTickIndex / (double)minorTickCount;
+                double majorPosition = double.IsFinite(span)
+                    ? (value - minValue) / majorUnit
+                    : fraction * ResolveFiniteAxisStepCount(minValue, maxValue, majorUnit);
                 if (Math.Abs(majorPosition - Math.Round(majorPosition)) < 0.0001)
                     continue;
 
-                double fraction = (value - minValue) / (maxValue - minValue);
                 if (frame.IsBar)
                 {
                     double x = MapCartesianFractionToX(
@@ -4152,7 +4178,7 @@ public static partial class ChartRenderPlanner
         }
 
         var (niceMin, niceMax, majorUnit) = ComputeSecondaryValueAxisRange(chart);
-        double steps = (niceMax - niceMin) / majorUnit;
+        double steps = ResolveFiniteAxisStepCount(niceMin, niceMax, majorUnit);
         if (steps <= 0)
             return EmptySecondaryValueAxisPrimitivePlan();
 
@@ -4179,7 +4205,10 @@ public static partial class ChartRenderPlanner
             : 6.0;
         for (int tickIndex = 0; tickIndex <= tickCount; tickIndex++)
         {
-            double value = niceMin + (niceMax - niceMin) * tickIndex / tickCount;
+            double value = InterpolateFiniteRange(
+                niceMin,
+                niceMax,
+                tickIndex / (double)tickCount);
             double y = MapCartesianFractionToY(
                 tickIndex / (double)tickCount,
                 plot,
@@ -4949,7 +4978,7 @@ public static partial class ChartRenderPlanner
 
         var values = chart.Series
             .SelectMany(series => series.Values)
-            .Where(value => value.HasValue)
+            .Where(value => value.HasValue && double.IsFinite(value.Value))
             .Select(value => value!.Value)
             .ToArray();
         if (values.Length == 0)
@@ -4957,7 +4986,6 @@ public static partial class ChartRenderPlanner
 
         double min = values.Min();
         double max = values.Max();
-        double range = max - min;
         double cellWidth = plot.Width / categoryCount;
         double cellHeight = plot.Height / chart.Series.Count;
         var stroke = new ChartStrokePlan(new SrgbColor(0xFF, 0xFF, 0xFF), Alpha: 220, SurfaceCellStrokeThickness);
@@ -4970,10 +4998,13 @@ public static partial class ChartRenderPlanner
                 double? value = ResolveBlankSensitiveValue(
                     chart,
                     TryGetSeriesValue(chart, seriesIndex, categoryIndex));
-                if (value is null)
+                if (value is null || !double.IsFinite(value.Value))
                     continue;
 
-                double normalized = range <= 0 ? 0.5 : (value.Value - min) / range;
+                double normalized = min == max
+                    ? 0.5
+                    : ResolveFiniteInterpolationFraction(value.Value, min, max);
+                normalized = ClampNormalizedValue(normalized);
                 var color = InterpolateSurfaceColor(
                     ResolveSeriesColor(seriesIndex, seriesColors),
                     normalized);
@@ -5016,9 +5047,10 @@ public static partial class ChartRenderPlanner
         var pointsByKey = new Dictionary<(int Series, int Category), ChartSurfacePointPrimitive>();
         foreach (var cell in cells)
         {
-            double heightNormalized = valueAxisRange > 0
+            double heightNormalized = valueAxisMax > valueAxisMin
                 ? ResolveFiniteInterpolationFraction(cell.Value, valueAxisMin, valueAxisMax)
                 : cell.NormalizedValue;
+            heightNormalized = ClampNormalizedValue(heightNormalized);
             var point = new ChartSurfacePointPrimitive(
                 cell.SeriesIndex,
                 cell.CategoryIndex,
@@ -5034,7 +5066,7 @@ public static partial class ChartRenderPlanner
                     UsesExplicitSurface3DFacetRendering(chart),
                     chart.View3D),
                 cell.Value,
-                cell.NormalizedValue);
+                ClampNormalizedValue(cell.NormalizedValue));
             pointsByKey[(cell.SeriesIndex, cell.CategoryIndex)] = point;
         }
 
@@ -5526,8 +5558,9 @@ public static partial class ChartRenderPlanner
             new ChartPlanPoint(
                 (first.Point.X + second.Point.X) / 2.0,
                 (first.Point.Y + second.Point.Y) / 2.0),
-            (first.Value + second.Value) / 2.0,
-            (first.NormalizedValue + second.NormalizedValue) / 2.0);
+            InterpolateFiniteRange(first.Value, second.Value, 0.5),
+            ClampNormalizedValue(
+                InterpolateFiniteRange(first.NormalizedValue, second.NormalizedValue, 0.5)));
 
     private static ChartSurfaceGeometryPlan EmptySurfaceGeometryPlan(
         IReadOnlyList<ChartSurfaceCellPrimitive> cells) =>
@@ -5971,8 +6004,9 @@ public static partial class ChartRenderPlanner
                             renderingContext);
                         continue;
                     }
-                    double averageValue = renderPoints.Average(point => point.Value);
-                    double averageNormalized = renderPoints.Average(point => point.NormalizedValue);
+                    double averageValue = AverageFiniteValue(renderPoints.Select(point => point.Value));
+                    double averageNormalized = ClampNormalizedValue(
+                        renderPoints.Average(point => ClampNormalizedValue(point.NormalizedValue)));
                     var color = ResolveSurfaceFacetColor(
                         chart,
                         seriesIndex,
@@ -6043,8 +6077,9 @@ public static partial class ChartRenderPlanner
             if (clipped.Count < 3)
                 continue;
 
-            double averageValue = clipped.Average(point => point.Value);
-            double averageNormalized = clipped.Average(point => point.NormalizedValue);
+            double averageValue = AverageFiniteValue(clipped.Select(point => point.Value));
+            double averageNormalized = ClampNormalizedValue(
+                clipped.Average(point => ClampNormalizedValue(point.NormalizedValue)));
             facets.Add(new ChartSurfaceFacetPrimitive(
                 seriesIndex,
                 categoryIndex,
@@ -6064,21 +6099,21 @@ public static partial class ChartRenderPlanner
         bool IsCoalesced)
     {
         public double Start(int index) =>
-            !IsCoalesced
-                ? (index == 0 ? Minimum : Minimum + Step * index)
-                : Interpolate(index / (double)Count);
+            index == 0
+                ? Minimum
+                : !IsCoalesced && double.IsFinite(Minimum + Step * index)
+                    ? Minimum + Step * index
+                    : Interpolate(index / (double)Count);
 
         public double End(int index) =>
-            !IsCoalesced
-                ? (index == Count - 1 ? Maximum : Minimum + Step * (index + 1))
-                : Interpolate((index + 1) / (double)Count);
+            index == Count - 1
+                ? Maximum
+                : !IsCoalesced && double.IsFinite(Minimum + Step * (index + 1))
+                    ? Minimum + Step * (index + 1)
+                    : Interpolate((index + 1) / (double)Count);
 
         private double Interpolate(double fraction) =>
-            fraction <= 0
-                ? Minimum
-                : fraction >= 1
-                    ? Maximum
-                    : Minimum * (1 - fraction) + Maximum * fraction;
+            InterpolateFiniteRange(Minimum, Maximum, fraction);
     }
 
     private static ImportedSurfaceElevationBandPlan ResolveImportedSurfaceElevationBandPlan(
@@ -6089,7 +6124,7 @@ public static partial class ChartRenderPlanner
         if (!(majorUnit > 0) || maximum <= minimum)
             return new(minimum, maximum, 0, 0, false);
 
-        double intervalCount = (maximum - minimum) / majorUnit;
+        double intervalCount = ResolveFiniteAxisStepCount(minimum, maximum, majorUnit);
         if (!double.IsFinite(intervalCount))
             return new(minimum, maximum, 0, MaximumRenderedValueIntervals, true);
 
@@ -6099,7 +6134,9 @@ public static partial class ChartRenderPlanner
             // Compare the authored endpoint with the preceding constructed
             // boundary. This removes a division-rounding phantom interval for
             // exact multiples while preserving every representable partial one.
-            double precedingBoundary = minimum + (ceiling - 1.0) * majorUnit;
+            double precedingBoundary = ceiling <= MaximumRenderedValueIntervals + 1
+                ? InterpolateFiniteRange(minimum, maximum, (ceiling - 1.0) / ceiling)
+                : double.NegativeInfinity;
             if (precedingBoundary >= maximum)
                 ceiling--;
         }
@@ -6108,9 +6145,7 @@ public static partial class ChartRenderPlanner
         int count = isCoalesced
             ? MaximumRenderedValueIntervals
             : Math.Max(1, (int)ceiling);
-        return new(minimum, maximum, isCoalesced
-                ? (maximum - minimum) / count
-                : majorUnit,
+        return new(minimum, maximum, isCoalesced ? 0.0 : majorUnit,
             count,
             isCoalesced);
     }
@@ -6146,8 +6181,11 @@ public static partial class ChartRenderPlanner
                     current.CategoryIndex,
                     InterpolateSurfaceFramePoint(previous.Point, current.Point, fraction),
                     boundary,
-                    previous.NormalizedValue +
-                        (current.NormalizedValue - previous.NormalizedValue) * fraction));
+                    ClampNormalizedValue(
+                        InterpolateFiniteRange(
+                            previous.NormalizedValue,
+                            current.NormalizedValue,
+                            fraction))));
             }
             if (currentInside)
                 clipped.Add(current);
@@ -6163,6 +6201,8 @@ public static partial class ChartRenderPlanner
         double start,
         double end)
     {
+        if (!double.IsFinite(value) || !double.IsFinite(start) || !double.IsFinite(end))
+            return 0.5;
         if (start == end)
             return 0;
         if (start > end)
@@ -6181,8 +6221,68 @@ public static partial class ChartRenderPlanner
 
         double span = end - start;
         return span > 0 && double.IsFinite(span)
-            ? Math.Clamp((value - start) / span, 0, 1)
+            ? ClampNormalizedValue((value - start) / span)
             : 0.5;
+    }
+
+    private static double InterpolateFiniteRange(
+        double minimum,
+        double maximum,
+        double fraction)
+    {
+        if (!double.IsFinite(minimum) && !double.IsFinite(maximum))
+            return 0.5;
+        if (!double.IsFinite(minimum))
+            return maximum;
+        if (!double.IsFinite(maximum))
+            return minimum;
+        if (minimum == maximum)
+            return minimum;
+        if (!double.IsFinite(fraction))
+            fraction = fraction > 0 ? 1.0 : 0.5;
+        if (fraction <= 0)
+            return minimum;
+        if (fraction >= 1)
+            return maximum;
+
+        fraction = Math.Clamp(fraction, 0, 1);
+        double span = maximum - minimum;
+        if (double.IsFinite(span))
+        {
+            double value = minimum + span * fraction;
+            if (double.IsFinite(value))
+                return value;
+        }
+
+        // A convex combination never exceeds either finite endpoint, so the
+        // weighted form remains finite when subtracting the endpoints does not.
+        double weighted = minimum * (1.0 - fraction) + maximum * fraction;
+        return double.IsFinite(weighted)
+            ? weighted
+            : fraction < 0.5 ? minimum : maximum;
+    }
+
+    private static double ClampNormalizedValue(double value) =>
+        double.IsFinite(value) ? Math.Clamp(value, 0.0, 1.0) : 0.5;
+
+    private static double AverageFiniteValue(IEnumerable<double> values)
+    {
+        var finiteValues = values.Where(double.IsFinite).ToArray();
+        if (finiteValues.Length == 0)
+            return 0;
+
+        double sum = 0;
+        foreach (double value in finiteValues)
+            sum += value;
+        if (double.IsFinite(sum))
+            return sum / finiteValues.Length;
+
+        double scale = finiteValues.Max(value => Math.Abs(value));
+        if (!(scale > 0) || !double.IsFinite(scale))
+            return 0;
+
+        double scaledAverage = finiteValues.Sum(value => value / scale) / finiteValues.Length;
+        return Math.Clamp(scaledAverage, -1.0, 1.0) * scale;
     }
 
     private static IReadOnlyList<ChartSurfacePointPrimitive> GetSurfaceFacetPoints(
@@ -8216,6 +8316,34 @@ public static partial class ChartRenderPlanner
         return Math.Clamp((int)Math.Ceiling(steps), 1, MaximumRenderedValueIntervals);
     }
 
+    private static double ResolveFiniteAxisStepCount(
+        double minimum,
+        double maximum,
+        double step)
+    {
+        if (!(step > 0) || !double.IsFinite(minimum) || !double.IsFinite(maximum) || maximum <= minimum)
+            return 0;
+
+        double span = maximum - minimum;
+        if (double.IsFinite(span))
+            return span / step;
+
+        // Scale the endpoints before subtracting them. This preserves a
+        // finite interval count for ranges such as -1e308..1e308 without
+        // materializing their overflowing absolute span.
+        double scale = Math.Max(Math.Abs(minimum), Math.Abs(maximum));
+        if (!(scale > 0) || !double.IsFinite(scale))
+            return double.PositiveInfinity;
+
+        double scaledStep = step / scale;
+        if (!(scaledStep > 0))
+            return double.PositiveInfinity;
+
+        double scaledSpan = maximum / scale - minimum / scale;
+        double result = scaledSpan / scaledStep;
+        return result > 0 ? result : double.PositiveInfinity;
+    }
+
     public static (double min, double max, double majorUnit) ComputeSecondaryValueAxisRange(
         ChartShape chart)
     {
@@ -8402,9 +8530,12 @@ public static partial class ChartRenderPlanner
     };
 
     private static string FormatAxisValueWithoutScale(double value) =>
-        value == Math.Floor(value)
+        double.IsFinite(value) &&
+        value == Math.Floor(value) &&
+        value >= long.MinValue &&
+        value <= long.MaxValue
             ? ((long)value).ToString(CultureInfo.InvariantCulture)
-            : value.ToString("G3", CultureInfo.InvariantCulture);
+            : value.ToString("G15", CultureInfo.InvariantCulture);
 
     public static ChartDataLabels? ResolveEffectiveLabels(ChartShape chart, int seriesIndex)
     {
