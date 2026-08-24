@@ -19,7 +19,7 @@ public sealed class SentryAppCrashAnalytics : IAppCrashAnalytics
     private SentryAppCrashAnalytics(IAppCrashAnalyticsTransport transport)
     {
         _transport = transport;
-        _runtimeRegistration = AppCrashAnalyticsRuntime.Register(SendTestReport);
+        _runtimeRegistration = AppCrashAnalyticsRuntime.Register(this);
     }
 
     public bool IsEnabled => _transport is not null;
@@ -60,7 +60,10 @@ public sealed class SentryAppCrashAnalytics : IAppCrashAnalytics
 
         var safeProperties = AppDiagnosticsFileStore.SanitizeProperties(properties)
             .Where(pair => pair.Value is not null)
-            .ToDictionary(pair => pair.Key, pair => pair.Value!, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(
+                pair => pair.Key,
+                pair => AppCrashDataRedactor.RedactText(pair.Value)!,
+                StringComparer.OrdinalIgnoreCase);
         _transport.AddBreadcrumb(eventName, safeProperties);
     }
 

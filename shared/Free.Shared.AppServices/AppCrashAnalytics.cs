@@ -31,19 +31,19 @@ public enum CrashAnalyticsTestReportResult
 public static class AppCrashAnalyticsRuntime
 {
     private static readonly object Sync = new();
-    private static Func<bool>? _sendTestReport;
+    private static IAppCrashAnalytics? _analytics;
 
     public static CrashAnalyticsTestReportResult SendTestReport()
     {
-        Func<bool>? sender;
+        IAppCrashAnalytics? analytics;
         lock (Sync)
-            sender = _sendTestReport;
-        if (sender is null)
+            analytics = _analytics;
+        if (analytics is null || !analytics.IsEnabled)
             return CrashAnalyticsTestReportResult.Disabled;
 
         try
         {
-            return sender()
+            return analytics.SendTestReport()
                 ? CrashAnalyticsTestReportResult.Sent
                 : CrashAnalyticsTestReportResult.Failed;
         }
@@ -56,30 +56,38 @@ public static class AppCrashAnalyticsRuntime
     public static string UserMessage(CrashAnalyticsTestReportResult result) => result switch
     {
         CrashAnalyticsTestReportResult.Sent =>
-            "A privacy-safe test report was sent. It contains app/platform metadata only and no document data.",
+            "A privacy-safe test report was submitted. It contains app/platform metadata only and no document data. Verify receipt in the crash-reporting dashboard.",
         CrashAnalyticsTestReportResult.Disabled =>
             "Crash reporting is off or no release endpoint is configured. Enable it in Options, restart the app, and try again.",
         _ => "The test report could not be sent. Your documents and local diagnostics were not uploaded.",
     };
 
-    public static IDisposable Register(Func<bool> sender)
+    public static IDisposable Register(IAppCrashAnalytics analytics)
     {
-        ArgumentNullException.ThrowIfNull(sender);
+        ArgumentNullException.ThrowIfNull(analytics);
+        if (!analytics.IsEnabled)
+            return EmptyRegistration.Instance;
         lock (Sync)
-            _sendTestReport = sender;
-        return new Registration(sender);
+            _analytics = analytics;
+        return new Registration(analytics);
     }
 
-    private sealed class Registration(Func<bool> sender) : IDisposable
+    private sealed class Registration(IAppCrashAnalytics analytics) : IDisposable
     {
         public void Dispose()
         {
             lock (Sync)
             {
-                if (_sendTestReport == sender)
-                    _sendTestReport = null;
+                if (ReferenceEquals(_analytics, analytics))
+                    _analytics = null;
             }
         }
+    }
+
+    private sealed class EmptyRegistration : IDisposable
+    {
+        public static EmptyRegistration Instance { get; } = new();
+        public void Dispose() { }
     }
 }
 

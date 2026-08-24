@@ -3,11 +3,13 @@ using Sentry;
 
 namespace FreeX.App.Host;
 
-public sealed class SentryCrashAnalytics : ICrashAnalytics
+public sealed class SentryCrashAnalytics : ICrashAnalytics, Free.Shared.AppServices.IAppCrashAnalytics
 {
     private IDisposable? _sentry;
     private IDisposable? _runtimeRegistration;
     private bool _isEnabled;
+
+    public bool IsEnabled => _isEnabled;
 
     public void Initialize(AppCrashAnalyticsOptions crashAnalyticsOptions, AppDiagnosticsMetadata metadata)
     {
@@ -32,7 +34,7 @@ public sealed class SentryCrashAnalytics : ICrashAnalytics
             });
         });
         _isEnabled = true;
-        _runtimeRegistration = Free.Shared.AppServices.AppCrashAnalyticsRuntime.Register(SendTestReport);
+        _runtimeRegistration = Free.Shared.AppServices.AppCrashAnalyticsRuntime.Register(this);
     }
 
     public void RecordBreadcrumb(string eventName, IReadOnlyDictionary<string, string?>? properties = null)
@@ -40,9 +42,12 @@ public sealed class SentryCrashAnalytics : ICrashAnalytics
         if (!_isEnabled)
             return;
 
-        var data = properties?
+        var data = Free.Shared.AppServices.AppDiagnosticsFileStore.SanitizeProperties(properties)
             .Where(pair => pair.Value is not null)
-            .ToDictionary(pair => pair.Key, pair => pair.Value!, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(
+                pair => pair.Key,
+                pair => Free.Shared.AppServices.AppCrashDataRedactor.RedactText(pair.Value)!,
+                StringComparer.OrdinalIgnoreCase);
         SentrySdk.AddBreadcrumb(
             message: eventName,
             category: "freex",

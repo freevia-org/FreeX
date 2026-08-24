@@ -41,36 +41,32 @@ function Launch-Bounded([string]$Executable) {
 
 try {
     if ($Platform -eq 'windows') {
-        $savedLocal = $env:LOCALAPPDATA
-        $savedRoaming = $env:APPDATA
-        $env:LOCALAPPDATA = Join-Path $scratch 'LocalAppData'
-        $env:APPDATA = Join-Path $scratch 'RoamingAppData'
-        New-Item -ItemType Directory -Force -Path $env:LOCALAPPDATA, $env:APPDATA | Out-Null
-        try {
-            if ($Suite) {
-                # Individual -> suite -> individual exercises shared installer identity and destination.
-                $first = $Apps[0]
-                Run (Find-One "$first-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
-                Run (Find-One "FreeSuite-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
-                foreach ($app in $Apps) { Run (Find-One "$app-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') }
-            } else {
-                Run (Find-One "$($Apps[0])-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
-            }
-            $programRoot = Join-Path $env:LOCALAPPDATA 'Programs'
-            foreach ($app in $Apps) {
-                $data = Join-Path $env:LOCALAPPDATA $app
-                New-Item -ItemType Directory -Force -Path $data | Out-Null
-                $marker = Join-Path $data 'release-smoke-user-data.txt'
-                'preserve' | Set-Content -LiteralPath $marker -Encoding ascii
-                $exe = Assert-OneInstalled $programRoot $app
-                Launch-Bounded $exe
-                $uninstaller = @(Get-ChildItem -LiteralPath (Split-Path -Parent $exe) -File -Filter 'unins*.exe')
-                if ($uninstaller.Count -ne 1) { throw "Expected one $app uninstaller; found $($uninstaller.Count)." }
-                Run $uninstaller[0].FullName @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
-                if (Test-Path -LiteralPath $exe) { throw "$app executable remained after uninstall." }
-                if (-not (Test-Path -LiteralPath $marker)) { throw "$app uninstall removed user data." }
-            }
-        } finally { $env:LOCALAPPDATA = $savedLocal; $env:APPDATA = $savedRoaming }
+        $programRoot = Join-Path $scratch 'Programs'
+        $dataRoot = Join-Path $scratch 'UserData'
+        New-Item -ItemType Directory -Force -Path $programRoot, $dataRoot | Out-Null
+        if ($Suite) {
+            # Individual -> suite -> individual exercises shared installer identity and destination.
+            $first = $Apps[0]
+            Run (Find-One "$first-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$(Join-Path $programRoot $first)")
+            Run (Find-One "FreeSuite-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/TestInstallRoot=$programRoot")
+            foreach ($app in $Apps) { Run (Find-One "$app-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$(Join-Path $programRoot $app)") }
+        } else {
+            $app = $Apps[0]
+            Run (Find-One "$app-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$(Join-Path $programRoot $app)")
+        }
+        foreach ($app in $Apps) {
+            $data = Join-Path $dataRoot $app
+            New-Item -ItemType Directory -Force -Path $data | Out-Null
+            $marker = Join-Path $data 'release-smoke-user-data.txt'
+            'preserve' | Set-Content -LiteralPath $marker -Encoding ascii
+            $exe = Assert-OneInstalled $programRoot $app
+            Launch-Bounded $exe
+            $uninstaller = @(Get-ChildItem -LiteralPath (Split-Path -Parent $exe) -File -Filter 'unins*.exe')
+            if ($uninstaller.Count -ne 1) { throw "Expected one $app uninstaller; found $($uninstaller.Count)." }
+            Run $uninstaller[0].FullName @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
+            if (Test-Path -LiteralPath $exe) { throw "$app executable remained after uninstall." }
+            if (-not (Test-Path -LiteralPath $marker)) { throw "$app uninstall removed user data." }
+        }
     } else {
         $bash = (Get-Command bash -ErrorAction Stop).Source
         $packageName = if ($Suite) { 'FreeSuite' } else { $Apps[0] }

@@ -117,7 +117,7 @@ foreach ($runtime in $Runtimes) {
 
 $legalSources = [System.Collections.Generic.List[object]]::new()
 if ($StageLegalBundle) {
-    $legalRelativePaths = @('LICENSE','THIRD_PARTY_NOTICES.md','THIRD_PARTY_LICENSES.md','docs/legal/privacy.md')
+    $legalRelativePaths = @('LICENSE','THIRD_PARTY_NOTICES.md','THIRD_PARTY_LICENSES.md','docs/legal/legal-notices.md','docs/legal/privacy.md')
     $thirdParty = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'docs/legal/licenses') -Recurse -File | Sort-Object FullName)
     $legalFiles = @($legalRelativePaths | ForEach-Object { Get-Item -LiteralPath (Join-Path $RepositoryRoot $_) }) + $thirdParty
     $stage = Join-Path $outputDirectory '.legal-stage'

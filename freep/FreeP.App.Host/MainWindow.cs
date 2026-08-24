@@ -456,8 +456,6 @@ public sealed partial class MainWindow : Window,
             FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf),
             _ribbonBindingSession.Registry,
             _ribbonBindingSession.StateStore);
-        Editor.SelectionChanged += (_, _) => RefreshContextualTabs();
-        Editor.CurrentSlideChanged += (_, _) => RefreshContextualTabs();
         RefreshContextualTabs();
 
         // Body: slide pane + stage.

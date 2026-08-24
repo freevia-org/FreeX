@@ -37,3 +37,12 @@ agreement or guarantee a response deadline.
 
 Ordinary crashes, compatibility problems, and feature requests belong in the
 [public feedback process](docs/support/feedback.md).
+
+## Maintainer Handling
+
+Maintainers should preserve the affected artifact identity and use the
+[public-preview incident procedure](docs/release/public-preview-operations.md#incident-procedure)
+for containment, evidence handling, withdrawal, and replacement. That procedure
+does not establish a disclosure deadline or legal notification threshold; the
+responsible operator must determine those for the actual incident and
+jurisdictions.
