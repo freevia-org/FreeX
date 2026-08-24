@@ -57,7 +57,19 @@ $sourceFiles = @(
     'freew/tools/FreeW.RibbonShot/Program.cs',
     'freew/tools/FreeW.ShellVisualHarness.Avalonia/Program.cs',
     'freew/FreeW.App.Host/MainWindow.cs',
-    'freew/FreeW.App.Avalonia/MainWindow.cs'
+    'freew/FreeW.App.Avalonia/MainWindow.cs',
+    # The hosts inject these gallery surfaces after the declarative ribbon is rendered. Include them
+    # explicitly so evidence freshness cannot report a current shell after a visible gallery changed.
+    'freew/FreeW.App.Host/Ribbon/StylesGallery.cs',
+    'freew/FreeW.App.Host/Ribbon/ThemeGallery.cs',
+    'freew/FreeW.App.Host/Ribbon/TableStylesGallery.cs',
+    'freew/FreeW.App.Host/Ribbon/ChartDesignGallery.cs',
+    'freew/FreeW.App.Host/Ribbon/SmartArtGallery.cs',
+    'freew/FreeW.App.Avalonia/DocumentStylesGallery.cs',
+    'freew/FreeW.App.Avalonia/DocumentThemeGallery.cs',
+    'freew/FreeW.App.Avalonia/TableStylesGallery.cs',
+    'freew/FreeW.App.Avalonia/ChartStylesGallery.cs',
+    'freew/FreeW.App.Avalonia/SmartArtStylesGallery.cs'
 )
 $sourceSha256 = [ordered]@{}
 foreach ($relativePath in $sourceFiles) {
