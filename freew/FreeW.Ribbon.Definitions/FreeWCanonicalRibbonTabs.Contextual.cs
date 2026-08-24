@@ -722,16 +722,23 @@ internal static partial class FreeWCanonicalRibbonTabs
 
                 topology.Section(
                     "table.styles",
-                    tab => tab.Group("table-style", "Table Style", "Y", 80, group =>
+                    tab =>
+                    {
+                        // Keep the injected gallery separate from Shading and Borders. Replacing a
+                        // shared group content lane would otherwise hide those table-formatting commands.
+                        tab.Group("table-styles", "Table Styles", "Y", 90, group =>
+                            group.Dropdown("freew.table-styles", "Table Styles", BuildTableStylesMenu()));
+                        tab.Group("table-style", "Table Style", null, 80, group =>
                         {
                             group.Medium("freew.table-shading", "Shading", RibbonCommandIconKind.Fill,
                                 accent: RibbonCommandIconAccent.Fill);
                             group.Medium("freew.table-borders", "Borders", RibbonCommandIconKind.Grid);
-                        }),
+                        });
+                    },
                     tab =>
                     {
-                        // Keep the gallery as its own adaptive group. Avalonia hosts a thumbnail
-                        // picker here; Shading and Borders remain independently reachable beside it.
+                        // Keep the gallery as its own adaptive group. Shading and Borders remain
+                        // independently reachable beside the injected thumbnail picker.
                         tab.Group("table-styles", "Table Styles", null, 90, group =>
                             group.Dropdown("freew.table-styles", "Table Styles", BuildTableStylesMenu()));
                         tab.Group("table-style", "Table Style", null, 70, group =>

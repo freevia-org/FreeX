@@ -43,7 +43,7 @@ public sealed class TableStyleGalleryTests
     // ── Gallery widget tests ─────────────────────────────────────────────────────────────────────────
 
     [StaFact]
-    public void Build_ReturnsButtonLabelledTableStyles()
+    public void Build_ReturnsGalleryLabelledTableStyles()
     {
         var editor = new DocumentView();
         var gallery = TableStylesGallery.Build(editor);
@@ -55,10 +55,8 @@ public sealed class TableStyleGalleryTests
     public void Build_MenuContainsAllCatalogStyles()
     {
         var editor = new DocumentView();
-        var gallery = TableStylesGallery.Build(editor) as Button;
-
-        gallery.Should().NotBeNull();
-        var menu = gallery!.ContextMenu;
+        var gallery = TableStylesGallery.Build(editor).Should().BeOfType<StackPanel>().Subject;
+        var menu = ((Button)gallery.Children[1]).ContextMenu;
         menu.Should().NotBeNull();
         menu!.Items.Count.Should().Be(DocumentTableStyle.Catalog.Count,
             "every catalog table style must appear as a menu item");
@@ -68,8 +66,8 @@ public sealed class TableStyleGalleryTests
     public void Build_MenuItems_AreAutomationLabelled()
     {
         var editor = new DocumentView();
-        var gallery = TableStylesGallery.Build(editor) as Button;
-        var menu = gallery!.ContextMenu;
+        var gallery = TableStylesGallery.Build(editor).Should().BeOfType<StackPanel>().Subject;
+        var menu = ((Button)gallery.Children[1]).ContextMenu;
 
         foreach (MenuItem item in menu!.Items)
         {

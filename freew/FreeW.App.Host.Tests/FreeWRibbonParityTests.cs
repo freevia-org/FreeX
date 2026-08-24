@@ -2124,7 +2124,7 @@ public sealed class FreeWRibbonParityTests
         tableDesign.Should().NotBeNull();
         tableDesign!.Groups.Select(group => group.Id)
             .Should()
-            .Equal("table-style-options", "table-style", "draw-borders");
+            .Equal("table-style-options", "table-styles", "table-style", "draw-borders");
 
         CommandIds(tableDesign)
             .Should()
@@ -2135,6 +2135,7 @@ public sealed class FreeWRibbonParityTests
                 "freew.table-last-column",
                 "freew.table-banded-rows",
                 "freew.table-banded-cols",
+                "freew.table-styles",
                 "freew.table-shading",
                 "freew.table-borders",
                 "freew.draw-table",
