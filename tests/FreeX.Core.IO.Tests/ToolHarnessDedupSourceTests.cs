@@ -119,6 +119,8 @@ public sealed class ToolHarnessDedupSourceTests
     {
         var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
 
+        foregroundCapture.Should().Contain("startInfo.Environment.Remove(\"DOTNET_ROOT\")");
+        foregroundCapture.Should().Contain("startInfo.Environment.Remove(\"DOTNET_ROOT_X64\")");
         foregroundCapture.Should().Contain("WindowFinder.WaitForMainWindow(process, exePath, options.LaunchTimeout)");
         foregroundCapture.Should().Contain("WindowFinder.DescribeLaunchWindowCandidates(process.Id, exePath)");
         foregroundCapture.Should().Contain("IsLaunchMainWindowCandidate(candidate, process.Id, expectedProcessName, expectedExePath)");
@@ -137,6 +139,7 @@ public sealed class ToolHarnessDedupSourceTests
         foregroundCapture.Should().Contain("IsDistinctTopLevelWindow(foreground, ownerHandle)");
         foregroundCapture.Should().Contain("NativeMethods.GetAncestor(new IntPtr(candidate.Handle), NativeMethods.GA_ROOT)");
         foregroundCapture.Should().Contain("public const uint GA_ROOT = 2;");
+        foregroundCapture.Should().Contain("GetVisibleExcelSheetTabElements");
         foregroundCapture.Should().Contain(".Where(element => Equals(element.Current.ControlType, ControlType.TabItem))");
     }
 
@@ -155,6 +158,8 @@ public sealed class ToolHarnessDedupSourceTests
     {
         var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
 
+        foregroundCapture.Should().Contain("SeedSheetsWithAddButton(handle, processId, 4)");
+        foregroundCapture.Should().Contain("GuardedClickElement(options.Scenario, processId, handle, addButton, MouseButtonKind.Left)");
         foregroundCapture.Should().Contain("return CaptureWindow(scenario, \"freex\", _lastCaptureWindow ?? refreshedWindow, guard, \"complete\", _lastResultValidation);");
         foregroundCapture.Should().Contain("_lastCaptureWindow = popup;");
         foregroundCapture.Should().Contain("_lastCaptureWindow = null;");

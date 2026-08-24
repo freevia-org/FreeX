@@ -1004,7 +1004,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     {
         note = string.Empty;
 
-        var tab = FindVisibleSheetTabElement(hwnd, "Sheet1") ?? GetVisibleSheetTabElements(hwnd)
+        var tab = FindVisibleExcelSheetTabElement(hwnd, "Sheet1") ?? GetVisibleExcelSheetTabElements(hwnd)
             .OrderBy(element => element.Current.BoundingRectangle.Left)
             .FirstOrDefault();
         if (tab is not null && TryRightClickAutomationElement(tab))
@@ -2978,6 +2978,11 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 UseShellExecute = false,
                 WorkingDirectory = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory
             };
+            // The capture runner can itself be launched under a developer-local DOTNET_ROOT that
+            // lacks the runtime used by the built desktop host. Let the app host resolve the
+            // installed runtime normally rather than opening the .NET runtime error dialog.
+            startInfo.Environment.Remove("DOTNET_ROOT");
+            startInfo.Environment.Remove("DOTNET_ROOT_X64");
             if (createEnvironmentOverride is not null)
             {
                 foreach (var pair in createEnvironmentOverride(scenario))
@@ -3644,6 +3649,12 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             }
 
             window = WindowFinder.GetWindowInfo(handle) ?? window;
+            var seedBlocked = SeedSheetsWithAddButton(handle, processId, 4);
+            if (seedBlocked is not null)
+            {
+                return seedBlocked;
+            }
+
             var tab = FindVisibleSheetTabElement(handle, "Sheet1") ?? GetVisibleSheetTabElements(handle)
                 .OrderBy(element => element.Current.BoundingRectangle.Left)
                 .FirstOrDefault();
@@ -4770,17 +4781,10 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return CaptureResult.Blocked(options.Scenario, "uia-target-not-found", $"Could not find the Insert Sheet button before creating {sheetName}.", options.OutputRoot, "freex");
             }
 
-            if (!TryInvokeAutomationElement(addButton))
+            var blocked = GuardedClickElement(options.Scenario, processId, handle, addButton, MouseButtonKind.Left);
+            if (blocked is not null)
             {
-                var blocked = GuardedClickElement(options.Scenario, processId, handle, addButton, MouseButtonKind.Left);
-                if (blocked is not null)
-                {
-                    return blocked;
-                }
-            }
-            else
-            {
-                Thread.Sleep(options.AfterInputDelay);
+                return blocked;
             }
 
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
@@ -4802,33 +4806,6 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         }
 
         return null;
-    }
-
-    private static bool TryInvokeAutomationElement(AutomationElement element)
-    {
-        try
-        {
-            if (element.TryGetCurrentPattern(InvokePattern.Pattern, out var invokePatternObject) &&
-                invokePatternObject is InvokePattern invoke)
-            {
-                invoke.Invoke();
-                return true;
-            }
-        }
-        catch (COMException)
-        {
-            return false;
-        }
-        catch (ElementNotAvailableException)
-        {
-            return false;
-        }
-        catch (InvalidOperationException)
-        {
-            return false;
-        }
-
-        return false;
     }
 
     private static AutomationElement? FindNamedVisibleElement(IntPtr handle, string name, ControlType? controlType = null)
@@ -4897,7 +4874,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             return [automationIdMatch];
         }
 
-        var tabBounds = GetVisibleSheetTabElements(handle)
+        var tabBounds = GetVisibleExcelSheetTabElements(handle)
             .Select(element => element.Current.BoundingRectangle)
             .Where(bounds => !bounds.IsEmpty)
             .ToList();
@@ -5008,7 +4985,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static WindowInfo? TryOpenExcelActivateSheetListDialogFromSheetNavCoordinates(int processId, IntPtr excelWindowHandle, TimeSpan timeout)
     {
-        var tabBounds = GetVisibleSheetTabElements(excelWindowHandle)
+        var tabBounds = GetVisibleExcelSheetTabElements(excelWindowHandle)
             .Select(element => element.Current.BoundingRectangle)
             .Where(bounds => !bounds.IsEmpty)
             .ToArray();
@@ -5133,10 +5110,21 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         return root.FindAll(TreeScope.Descendants, Condition.TrueCondition)
             .Cast<AutomationElement>()
             .Where(IsVisibleElement)
-            .Where(element => Equals(element.Current.ControlType, ControlType.TabItem))
             .Where(element => IsDefaultSheetName(GetSheetTabIdentity(element)))
             .ToList();
     }
+
+    private static AutomationElement? FindVisibleExcelSheetTabElement(IntPtr handle, string name)
+        => GetVisibleExcelSheetTabElements(handle)
+            .Where(element => GetSheetTabIdentity(element).Equals(name, StringComparison.Ordinal))
+            .OrderByDescending(element => element.Current.BoundingRectangle.Width * element.Current.BoundingRectangle.Height)
+            .ThenByDescending(element => element.Current.BoundingRectangle.Top)
+            .FirstOrDefault();
+
+    private static List<AutomationElement> GetVisibleExcelSheetTabElements(IntPtr handle)
+        => GetVisibleSheetTabElements(handle)
+            .Where(element => Equals(element.Current.ControlType, ControlType.TabItem))
+            .ToList();
 
     private static string GetSheetTabIdentity(AutomationElement element)
     {
