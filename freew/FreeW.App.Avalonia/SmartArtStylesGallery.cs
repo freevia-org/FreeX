@@ -12,6 +12,13 @@ namespace FreeW.App.Avalonia;
 /// <summary>Native SmartArt color and style thumbnail strip backed by shared preview commands.</summary>
 internal static class SmartArtStylesGallery
 {
+    public static Control BuildLayouts(IRibbonCommandRegistry registry)
+    {
+        var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 1, 2, 0) };
+        foreach (var layout in SmartArtLayoutPreset.Catalog) host.Children.Add(LayoutButton(layout, registry));
+        return host;
+    }
+
     public static Control Build(IRibbonCommandRegistry registry)
     {
         var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 1, 2, 0) };
@@ -33,6 +40,31 @@ internal static class SmartArtStylesGallery
         var fill = Adjust(Color.FromRgb(0x4E, 0x81, 0xBD), style.BrightnessAdjust);
         var node = new Border { Width = 36, Height = 28, Margin = new Thickness(2, 2, 2, 0), Background = new SolidColorBrush(fill), BorderBrush = Brush("#3B628F"), BorderThickness = new Thickness(Math.Max(style.BorderThickness, 1)), CornerRadius = new CornerRadius(style.CornerRadius), Child = new TextBlock { Text = "A", FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
         return Button(new StackPanel { Width = 42, Children = { node, Label(style.Name) } }, style.Name + " style", SmartArtCommandPlanner.StyleCommandId(style), registry);
+    }
+
+    private static Button LayoutButton(SmartArtLayoutPreset layout, IRibbonCommandRegistry registry)
+    {
+        var preview = new Border { Width = 46, Height = 30, Margin = new Thickness(2, 2, 2, 0), Background = Brushes.White, BorderBrush = Brush("#C0C0C0"), BorderThickness = new Thickness(1), Child = LayoutMiniature(layout.Id) };
+        return Button(new StackPanel { Width = 50, Children = { preview, Label(layout.Name) } }, layout.Name, new RibbonCommandId($"freew.smartart-layout-{layout.Id}"), registry);
+    }
+
+    private static Control LayoutMiniature(string id)
+    {
+        Border Node(string color, double width = 10, double height = 8) => new() { Width = width, Height = height, Margin = new Thickness(1), Background = Brush(color) };
+        if (id is "hierarchy1" or "orgchart1") return new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Children = { Node("#4E81BD", 24), new StackPanel { Orientation = Orientation.Horizontal, Children = { Node("#C0504D"), Node("#9BBB59") } } } };
+        if (id == "cycle1" || id == "radial1") return new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Children = { Node("#4E81BD"), Node("#C0504D"), Node("#9BBB59") } };
+        if (id == "matrix1")
+        {
+            var matrix = new Grid { RowDefinitions = { new RowDefinition(GridLength.Star), new RowDefinition(GridLength.Star) }, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+            var colors = new[] { "#4E81BD", "#C0504D", "#9BBB59", "#8064A2" };
+            for (var index = 0; index < colors.Length; index++)
+            {
+                var node = Node(colors[index]);
+                Grid.SetRow(node, index / 2); Grid.SetColumn(node, index % 2); matrix.Children.Add(node);
+            }
+            return matrix;
+        }
+        return new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Children = { Node("#4E81BD"), Node("#C0504D"), Node("#9BBB59") } };
     }
 
     private static TextBlock Label(string value) => new() { Text = value, FontSize = 8, TextAlignment = global::Avalonia.Media.TextAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };

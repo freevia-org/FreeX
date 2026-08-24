@@ -322,7 +322,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.Button("freew.new-style", "New Style", b => Icon(b, RibbonCommandIconKind.TextBox));
                         g.Button("freew.manage-styles", "Manage Styles", b => Icon(b, RibbonCommandIconKind.TextBox));
                     }),
-                tab => tab.Group("styles", "Styles", null, 75, g =>
+                tab => tab.Group("styles", "Styles", null, 82, g =>
                     {
                         // Quick-style buttons (kept from the A1 wave; now model-backed via ApplyNamedStyle).
                         g.Button("freew.style-normal", "Normal");
