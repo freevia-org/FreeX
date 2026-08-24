@@ -54,6 +54,11 @@ public sealed class GitHubWorkflowPreflightTests
         portableTests.Should().NotContain("Free.Shared.Shell.Wpf.Tests");
         portableTests.Should().NotContain("FreeP.App.Host.Tests");
         portableTests.Should().NotContain("net10.0-windows");
+
+        var freePPortableTests = WorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Avalonia.Tests", "FreeP.App.Avalonia.Tests.csproj");
+        freePPortableTests.Should().Contain("<ItemGroup Condition=\"'$(FreePWindowsBuild)' != 'true'\">");
+        freePPortableTests.Should().Contain("<Compile Remove=\"WindowsNativePrintHandoffTests.cs\" />");
     }
 
     [Fact]
