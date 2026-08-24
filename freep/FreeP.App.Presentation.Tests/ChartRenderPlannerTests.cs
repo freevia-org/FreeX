@@ -1611,6 +1611,32 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildLegendItemPlans_ImportedSurfaceUsesElevationBandsWithoutVaryColorsXml()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.Legend = LegendPosition.Right;
+        chart.Categories.Add("West");
+        foreach (var series in chart.Series)
+            series.Values.Add(25);
+        chart.Series.Add(new ChartSeries { Name = "Peak Band", Values = { 33, 39, 45, 37 } });
+        chart.Series.Add(new ChartSeries { Name = "Ridge Band", Values = { 36, 42, 48, 40 } });
+        chart.View3D = new Chart3DView { RotationX = 15, RotationY = 20, RightAngleAxes = false };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 960, 540));
+        frame.LegendAreaWidth.Should().Be(105.6,
+            "the larger grid retains the standard imported legend width when that width is already sufficient");
+        ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 640, 400)).LegendAreaWidth.Should().Be(96,
+            "a compact large grid needs enough legend width for its elevation interval labels");
+
+        var legend = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, seriesColors: null);
+
+        legend.Select(item => item.Label.Text).Should().Equal("0-10", "10-20", "20-30", "30-40", "40-50");
+        legend[0].SwatchBounds.Y.Should().BeGreaterThan(legend[^1].SwatchBounds.Y,
+            "the highest elevation interval is displayed at the top of the legend");
+        legend.Should().NotContain(item => item.Label.Text == "Low Band" || item.Label.Text == "Peak Band");
+    }
+
+    [Fact]
     public void BuildSurfaceGeometryPlan_AuthoredViewDoesNotUseImportedSurfaceRegistration()
     {
         var chart = MakeSurfaceChart(ChartType.Surface3D);

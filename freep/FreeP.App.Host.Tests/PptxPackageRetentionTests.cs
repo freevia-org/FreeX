@@ -38,6 +38,8 @@ public sealed class PptxPackageRetentionTests
         "24-run-baseline-wrap.pptx",
         "25-chart-surface3d-view3d.pptx",
         "26-chart-surface3d-default-tall-frame.pptx",
+        "27-chart-surface3d-4x4.pptx",
+        "28-chart-surface3d-4x4-compact.pptx",
     ];
 
     private static readonly string[] WriterOwnedPackagePartPaths =

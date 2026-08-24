@@ -847,6 +847,17 @@ public static partial class ChartRenderPlanner
         new(0xFF, 0xC0, 0x00)
     ];
 
+    // PowerPoint's varying Surface3D legend describes elevation intervals,
+    // not source series. Keep the ordered bands shared between both hosts.
+    private static readonly SrgbColor[] ImportedSurfaceElevationLegendColors =
+    [
+        new(0x14, 0x5A, 0x7A),
+        new(0xC6, 0x5A, 0x1F),
+        new(0x0E, 0x5A, 0x1D),
+        new(0x0F, 0x8A, 0xC1),
+        new(0x7F, 0x1D, 0x80)
+    ];
+
     // Office chart imports reserve a larger in-frame area for the inherited 18pt
     // title default. Axes and data labels still use their compact role-specific
     // font defaults below.
@@ -888,6 +899,11 @@ public static partial class ChartRenderPlanner
         chart.ChartType == ChartType.Surface3D &&
         UsesImportedTextMetrics(chart) &&
         (chart.View3D is null || UsesDefaultSurface3DView(chart.View3D));
+
+    private static bool UsesLargeImportedSurfaceGrid(ChartShape chart) =>
+        UsesImportedSurfaceGeometry(chart) &&
+        chart.Categories.Count >= 4 &&
+        chart.Series.Count >= 4;
 
     private static bool UsesDefaultSurface3DView(Chart3DView view) =>
         (view.RotationX ?? 15) == 15 &&
@@ -1293,7 +1309,9 @@ public static partial class ChartRenderPlanner
         bool legendRight = chart.Legend is LegendPosition.Right or LegendPosition.Left;
         double legendAreaWidth = legendReservesPlotSpace && legendRight
             ? UsesImportedTextMetrics(chart)
-                ? family == ChartRenderFamily.Pie
+                ? UsesLargeImportedSurfaceGrid(chart)
+                    ? Math.Min(120, Math.Max(96, bounds.Width * 0.11))
+                    : family == ChartRenderFamily.Pie
                     ? Math.Min(137, bounds.Width * 0.12)
                     : UsesImportedSingleScatterDefaults(chart)
                         ? ImportedSingleScatterLegendAreaWidth
@@ -2732,6 +2750,12 @@ public static partial class ChartRenderPlanner
         if (!legendBounds.HasPositiveArea)
             return Array.Empty<ChartLegendItemPlan>();
 
+        if (chart.ChartType == ChartType.Surface3D &&
+            UsesImportedSurfaceGeometry(chart))
+        {
+            return BuildImportedSurfaceElevationLegend(chart, legendBounds);
+        }
+
         var automaticLegendBounds = ResolveAutomaticLegendBounds(chart, frame);
         bool hasManualLayout = TryResolveManualLayoutRect(
             chart.LegendManualLayout,
@@ -2922,6 +2946,47 @@ public static partial class ChartRenderPlanner
                     (!importedCombo && lineSeries && !lineMarkerSeries)
             };
             items.Add(legendItem);
+        }
+
+        return items;
+    }
+
+    private static IReadOnlyList<ChartLegendItemPlan> BuildImportedSurfaceElevationLegend(
+        ChartShape chart,
+        ChartPlanRect legendBounds)
+    {
+        var (minimum, maximum, majorUnit) = ComputePrimaryValueAxisRange(chart);
+        if (!(majorUnit > 0) || maximum <= minimum)
+            return Array.Empty<ChartLegendItemPlan>();
+
+        int bandCount = (int)Math.Clamp(
+            Math.Round((maximum - minimum) / majorUnit),
+            1,
+            ImportedSurfaceElevationLegendColors.Length);
+        double lineHeight = Math.Min(35.0, legendBounds.Height / bandCount);
+        double firstY = legendBounds.Y + Math.Max(0, (legendBounds.Height - bandCount * lineHeight) / 2.0);
+        double swatchSize = Math.Min(12.0, Math.Max(8.0, lineHeight * 0.42));
+        var items = new List<ChartLegendItemPlan>(bandCount);
+        for (int bandIndex = 0; bandIndex < bandCount; bandIndex++)
+        {
+            double start = minimum + bandIndex * majorUnit;
+            double end = Math.Min(maximum, start + majorUnit);
+            double itemY = firstY + (bandCount - bandIndex - 1) * lineHeight;
+            var label = new ChartTextPlan(
+                $"{FormatChartAxisLabelValue(chart, start, chart.ValueAxis)}-{FormatChartAxisLabelValue(chart, end, chart.ValueAxis)}",
+                new ChartPlanRect(
+                    legendBounds.X + swatchSize + 4.0,
+                    itemY,
+                    Math.Max(0, legendBounds.Right - (legendBounds.X + swatchSize + 4.0)),
+                    lineHeight),
+                IsBold: false,
+                FontSize: ResolveTextFontSize(chart, 7.0),
+                Alignment: ChartPlanTextAlignment.Left);
+            items.Add(new ChartLegendItemPlan(
+                new ChartPlanRect(legendBounds.X, itemY + (lineHeight - swatchSize) / 2.0, swatchSize, swatchSize),
+                label,
+                new ChartFillPlan(ImportedSurfaceElevationLegendColors[bandIndex], 255),
+                IsLine: false));
         }
 
         return items;
