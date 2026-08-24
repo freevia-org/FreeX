@@ -142,6 +142,11 @@ static int Run(string outDir, string tabArg, double w, double h)
                 tabs.SelectedIndex = i;
                 win.UpdateLayout();
                 win.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
+                // The adaptive panel receives gallery injection while the tab tree is being composed.
+                // Give that invalidated measure pass one dispatcher turn before rasterising, otherwise a
+                // first-frame shot can record the pre-injection collapsed group state.
+                PumpFrames(win.Dispatcher, TimeSpan.FromMilliseconds(50));
+                win.UpdateLayout();
             }
             var name = tabs?.Items.Count > i && tabs.Items[i] is TabItem ti ? (ti.Header?.ToString() ?? $"tab{i}") : $"tab{i}";
             var bmp = new RenderTargetBitmap((int)w, (int)h, 96, 96, PixelFormats.Pbgra32);

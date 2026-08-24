@@ -57,14 +57,20 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("clipboard", clipboardGroup.Label, clipboardGroup.KeyTip, 100, g =>
                     {
                         // Paste is the hero (Large); the rest stack as labelled medium buttons, like Word.
-                        g.Large("freew.paste", pasteCommand.Label, RibbonCommandIconKind.Paste, pasteCommand.KeyTip);
-                        g.Medium("freew.cut", cutCommand.Label, RibbonCommandIconKind.Cut, cutCommand.KeyTip);
-                        g.Medium("freew.copy", copyCommand.Label, RibbonCommandIconKind.Copy, copyCommand.KeyTip);
-                        g.Medium("freew.format-painter", formatPainterCommand.Label, RibbonCommandIconKind.FormatPainter, formatPainterCommand.KeyTip);
-                        g.Icon("freew.paste-plain", pasteTextOnlyCommand.Label, RibbonCommandIconKind.Paste);
-                        g.Icon("freew.paste-merge", pasteMergeFormattingCommand.Label, RibbonCommandIconKind.Paste);
-                        // Paste Special: dialog offering Keep Source Formatting / Merge Formatting / Keep Text Only.
-                        g.Icon("freew.paste-special", pasteSpecialCommand.Label, RibbonCommandIconKind.Paste);
+                        g.Large("freew.paste", pasteCommand.Label, RibbonCommandIconKind.Paste, pasteCommand.KeyTip, menu: m =>
+                        {
+                            m.Item("freew.paste-plain", pasteTextOnlyCommand.Label, pasteTextOnlyCommand.KeyTip);
+                            m.Item("freew.paste-merge", pasteMergeFormattingCommand.Label, pasteMergeFormattingCommand.KeyTip);
+                            m.Item("freew.paste-special", pasteSpecialCommand.Label, pasteSpecialCommand.KeyTip);
+                        });
+                        // Keep the secondary clipboard actions in Word's narrow icon lane. Their command
+                        // IDs, keytips, and tooltips remain unchanged, while the compact lane leaves room
+                        // for the Home Styles gallery at a 1280-DIP window.
+                        g.Icon("freew.cut", cutCommand.Label, RibbonCommandIconKind.Cut, cutCommand.KeyTip);
+                        g.Icon("freew.copy", copyCommand.Label, RibbonCommandIconKind.Copy, copyCommand.KeyTip);
+                        g.Icon("freew.format-painter", formatPainterCommand.Label, RibbonCommandIconKind.FormatPainter, formatPainterCommand.KeyTip);
+                        // Paste variants live in the Paste split-button menu, as they do in Word, rather
+                        // than consuming a second compact column beside the primary Paste action.
                     }),
                 tab => tab.Group("clipboard", FreeWRibbonText.ClipboardGroup.Label, FreeWRibbonText.ClipboardGroup.KeyTip, 100, g =>
                     {
@@ -296,7 +302,10 @@ internal static partial class FreeWCanonicalRibbonTabs
 
             topology.Section(
                 "home.styles",
-                tab => tab.Group("styles", "Styles", "S", 65, g =>
+                // Keep the visible quick-style strip ahead of the Editing overflow at desktop widths.
+                // This matches Word's Home topology: the gallery remains in the ribbon while Find/Replace
+                // are still available from the compact Editing group.
+                tab => tab.Group("styles", "Styles", "S", 76, g =>
                     {
                         g.ComboBox("freew.style", "Style", c => c with
                         {
