@@ -149,6 +149,7 @@ public class RibbonTransitionsAnimationsTests
         var group = tab.Groups.Single(g => g.Id == "slide-show");
         Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.from-beginning");
         Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.from-current-slide");
+        Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.hide-slide");
         Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.custom-shows");
         Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.setup");
     }
@@ -661,6 +662,19 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
+    public void Cmd_HideSlide_TogglesTheCurrentSlideUndoably()
+    {
+        var (editor, presentation) = MakeSession();
+        var registry = MakeRegistry(editor);
+
+        Exec(registry, "freep.slideshow.hide-slide");
+        Assert.True(presentation.Slides[0].IsHidden);
+
+        editor.Undo();
+        Assert.False(presentation.Slides[0].IsHidden);
+    }
+
+    [Fact]
     public void Cmd_CustomShows_InvokesOnCustomShows()
     {
         var (ed, _) = MakeSession();
@@ -770,6 +784,7 @@ public class RibbonTransitionsAnimationsTests
     [InlineData("freep.transition.apply-all")]
     [InlineData("freep.slideshow.from-beginning")]
     [InlineData("freep.slideshow.from-current-slide")]
+    [InlineData("freep.slideshow.hide-slide")]
     [InlineData("freep.slideshow.rehearse-timings")]
     [InlineData("freep.slideshow.record-timings")]
     [InlineData("freep.slideshow.setup")]
