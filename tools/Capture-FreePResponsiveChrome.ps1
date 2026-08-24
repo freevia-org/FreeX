@@ -11,7 +11,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 . (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
 
-$tabs = @("home", "insert", "design", "transitions", "animations", "view")
+$tabs = @("home", "insert", "design", "transitions", "animations", "slide-show", "review", "view")
 $requiredWidths = @(1280, 1100, 900, 750)
 if (@($Widths | Sort-Object -Unique) -notmatch '^(1280|1100|900|750)$' -or @($Widths | Sort-Object -Unique).Count -ne $requiredWidths.Count) {
     throw "Widths must contain exactly: $($requiredWidths -join ', ')."
@@ -24,6 +24,7 @@ $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
 $sourceFiles = @(
     'freep/TestSupport/VisualEvidence.Wpf/WpfWholeWindowVisualEvidenceCapture.cs',
     'freep/TestSupport/VisualEvidence.Avalonia/AvaloniaWholeWindowVisualEvidenceCapture.cs',
+    'freep/TestSupport/VisualEvidence/WholeWindowVisualEvidenceContract.cs',
     'freep/FreeP.App.Host/MainWindow.cs',
     'freep/FreeP.App.Avalonia/MainWindow.cs',
     'freep/FreeP.Ribbon.Definitions/FreePRibbon.cs',
@@ -113,7 +114,7 @@ function New-ResponsiveChromeManifest {
         captures = @($captures)
         comparisonBoundary = "This responsive lane exercises FreeP's own WPF and Avalonia chrome at four widths. It complements the 1280px full-window scenario lane and the native PowerPoint reference lane; it does not assert raw cross-host or PowerPoint pixel equivalence."
         limitations = @(
-            "The six shared FreeP top-level tabs are captured. Slide Show is exposed by FreeP as a group on Transitions rather than a separate top-level tab.",
+            "The eight primary FreeP top-level tabs are captured. Help remains outside this product-chrome lane.",
             "Backstage, dialogs, panes, editing overlays, canvas and status states remain covered by the full-window and dialog/pane evidence lanes at the canonical 1280px viewport."
         )
     }
@@ -186,7 +187,7 @@ $json = ($manifest | ConvertTo-Json -Depth 8) + [Environment]::NewLine
 $readme = @"
 # FreeP responsive WPF/Avalonia chrome capture — 2026-08-16
 
-This directory contains a guarded, scenario-isolated capture matrix for FreeP's six actual top-level ribbon tabs: Home, Insert, Design, Transitions, Animations and View. Both WPF and Avalonia are captured at 1280, 1100, 900 and 750 logical pixels, for 48 app-owned chrome captures.
+This directory contains a guarded, scenario-isolated capture matrix for FreeP's eight primary top-level ribbon tabs: Home, Insert, Design, Transitions, Animations, Slide Show, Review and View. Both WPF and Avalonia are captured at 1280, 1100, 900 and 750 logical pixels, for 64 app-owned chrome captures.
 
 The 1280px full-window lane remains the evidence for Backstage, dialogs, panes, editor overlays, canvas and status areas. Native Microsoft PowerPoint references are held separately in `docs/parity/freep-powerpoint-chrome-2026-08-16`.
 "@
