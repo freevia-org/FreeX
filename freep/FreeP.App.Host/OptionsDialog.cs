@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
@@ -86,6 +87,16 @@ internal sealed partial class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
                 OptionsDialogPlanner.ActionRowBottomMargin),
             acceptContent: _surface.AcceptLabel,
             cancelContent: _surface.CancelLabel);
+        var legalNotices = new Button
+        {
+            Content = "_Legal Notices…",
+            MinWidth = OptionsDialogPlanner.ActionButtonWidth,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        AutomationProperties.SetName(legalNotices, "Legal Notices");
+        AutomationProperties.SetAutomationId(legalNotices, "FreePOptionsLegalNoticesButton");
+        legalNotices.Click += (_, _) => new LegalNoticesDialog { Owner = this }.ShowDialog();
+        buttons.Children.Insert(0, legalNotices);
 
         Content = new StackPanel
         {
