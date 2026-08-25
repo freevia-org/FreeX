@@ -11,7 +11,6 @@ public sealed record FreeWRibbonCapabilities
 
     private static readonly IReadOnlySet<string> AvaloniaOmittedSections = new HashSet<string>(StringComparer.Ordinal)
     {
-        FreeWRibbonTopologySection.HomeFormatting,
         FreeWRibbonTopologySection.DrawingInsert,
         FreeWRibbonTopologySection.DrawingText,
     };

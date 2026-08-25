@@ -28,6 +28,7 @@ $sourceFiles = @(
     'freep/TestSupport/VisualEvidence/WholeWindowVisualEvidenceContract.cs',
     'freep/FreeP.App.Host/MainWindow.cs',
     'freep/FreeP.App.Avalonia/MainWindow.cs',
+    'shared/Free.Shared.Shell.Avalonia/SisterAppWindowFrameBuilder.cs',
     'freep/FreeP.Ribbon.Definitions/FreePRibbon.cs',
     'freep/FreeP.Ribbon.Definitions/FreePRibbonText.cs',
     'freep/FreeP.Ribbon.Definitions/FreePRibbonCapabilities.cs',

@@ -59,6 +59,8 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
         anchor.Height = WholeWindowVisualEvidenceCatalog.LogicalClientHeight;
         anchor.Position = new PixelPoint(40, 40);
         anchor.Show();
+        await PumpLayout();
+        EnsureRequestedClientWidth(anchor, hostPolicy.LogicalWidth);
 
         var run = await VisualEvidenceCaptureOrchestrator.RunScenariosAsync(
             WholeWindowVisualEvidenceCatalog.All,
@@ -120,6 +122,15 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
             run,
             hostPolicy.CreateWholeWindowManifest,
             FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
+    }
+
+    private static void EnsureRequestedClientWidth(Window window, int requestedLogicalWidth)
+    {
+        if (Math.Abs(window.ClientSize.Width - requestedLogicalWidth) > 0.5)
+        {
+            throw new InvalidOperationException(
+                $"Avalonia whole-window capture requested {requestedLogicalWidth} DIPs but the visible client width is {window.ClientSize.Width:0.##} DIPs.");
+        }
     }
 
     private static CaptureRaster Capture(

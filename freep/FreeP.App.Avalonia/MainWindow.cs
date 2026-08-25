@@ -480,7 +480,7 @@ public sealed partial class MainWindow : Window,
         Title = FreePApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1280;
         Height = 760;
-        MinWidth = 800;
+        MinWidth = 750;
         MinHeight = 500;
         Background = FreePBrushes.SheetSurface;
         ApplyWindowIcon();
@@ -794,7 +794,11 @@ public sealed partial class MainWindow : Window,
             TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
                 ThemeResources.Brush("TitleBarForeground"),
                 new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeP.Colors.TitleBarForeground))),
-            TitleBarHeight: FreePShellVisualMetrics.TitleBarHeight));
+            TitleBarHeight: FreePShellVisualMetrics.TitleBarHeight,
+            AppBadgeLetter: App.ActiveTheme.VisualAssets.ProductGlyph,
+            AppBadgeBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.BadgeBrush,
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeP.Colors.AccentDark)))));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
             windowFrame.QatHost,

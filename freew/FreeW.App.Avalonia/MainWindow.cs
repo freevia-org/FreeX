@@ -510,7 +510,11 @@ public sealed partial class MainWindow : Window
             TitleBarBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
                 ThemeResources.TitleBarBrush,
                 new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBar))),
-            TitleBarForeground: titleBarForeground));
+            TitleBarForeground: titleBarForeground,
+            AppBadgeLetter: App.ActiveTheme.VisualAssets.ProductGlyph,
+            AppBadgeBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.BadgeBrush,
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.Accent)))));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
             windowFrame.QatHost,

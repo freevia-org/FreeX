@@ -6,6 +6,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -179,6 +180,38 @@ public sealed class AvaloniaRibbonSplitButtonTests
                     .Should().BeTrue();
                 content.GetVisualDescendants().OfType<Button>()
                     .Should().NotContain(button => Equals(button.Tag, "one"));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task CollapsedGroup_uses_the_fixed_single_line_ellipsis_caption_lane()
+    {
+        await Session.Dispatch(() =>
+        {
+            const string header = "Transition to This Slide";
+            var content = AvaloniaRibbonRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("transitions", "Transitions", "T", tab =>
+                        tab.Group("transition-gallery", header, "G", 1, group =>
+                            group.Large("preview", "Preview", RibbonCommandIconKind.Search)))
+                    .Build()
+                    .FindTab("transitions")!);
+            var window = Show(content, width: 90);
+            try
+            {
+                var collapsed = content.GetVisualDescendants().OfType<Button>()
+                    .Single(button => Equals(button.Tag, "collapsed:transition-gallery"));
+                var caption = collapsed.GetVisualDescendants().OfType<TextBlock>()
+                    .Single(text => text.Text == header);
+
+                Assert.Equal(TextWrapping.NoWrap, caption.TextWrapping);
+                Assert.Equal(TextTrimming.CharacterEllipsis, caption.TextTrimming);
+                Assert.Equal(58, caption.Width);
             }
             finally
             {
