@@ -39,7 +39,7 @@ public sealed class FreeWProductInfoTests
         avalonia.AvaloniaTextFontSize.Should().Be(AboutDialogMetrics.TextFontSize);
         avalonia.AvaloniaTextPaddingTop.Should().Be(AboutDialogMetrics.TextPadding + 1);
         avalonia.AvaloniaDefaultButtonAccent.Should().BeTrue();
-        avalonia.AvaloniaTextLineHeight.Should().Be(16.6);
+        avalonia.AvaloniaTextLineHeight.Should().Be(16.0);
         wpf.AboutText.Should().Be(avalonia.AboutText);
     }
 

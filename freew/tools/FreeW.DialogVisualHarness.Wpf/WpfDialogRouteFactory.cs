@@ -34,6 +34,14 @@ internal static class WpfDialogRouteFactory
             return CreatePrivateWindow("CompareDocumentsDialog", owner, @"C:\\Evidence\\Original.docx", "FreeW Reviewer", "Revised document.docx");
         if (routeId.Equals("save-compatibility-warning", StringComparison.OrdinalIgnoreCase))
             return CreatePrivateWindow("SaveCompatibilityWarningDialog", CreateCompatibilityPlan());
+        if (routeId.Equals("mark-index-entry", StringComparison.OrdinalIgnoreCase))
+        {
+            // The public Avalonia constructor receives this selected-text seed directly. Route the
+            // WPF authority through its equivalent test access point so both populated captures
+            // represent the same user-visible dialog state rather than reflection defaults.
+            return MarkIndexEntryDialog.CreateForTest(
+                state.Equals("populated", StringComparison.OrdinalIgnoreCase) ? "Sample text" : string.Empty);
+        }
 
         switch (route.Wpf.OpenAction)
         {
