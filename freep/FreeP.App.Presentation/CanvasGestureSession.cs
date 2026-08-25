@@ -343,7 +343,7 @@ public sealed class CanvasGestureSession
     }
 
     public bool CommitGeometryAdjustment(
-        EditingSession editor,
+        ICanvasGestureEditingSession editor,
         Slide? slide,
         CanvasGesturePoint pointerSlide)
     {

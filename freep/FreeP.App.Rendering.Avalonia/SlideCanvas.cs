@@ -178,7 +178,7 @@ public sealed partial class SlideCanvas : Control
     private PresentationViewColorModeState _viewColorModeState = PresentationViewColorModeState.Color;
     private AvaloniaCanvasGestureHandler? _gestureHandler;
     private bool _editPointsEnabled = true;
-    private EditingSession? _editingSession;
+    private ICanvasGestureEditingSession? _editingSession;
     private readonly PresentationCanvasAutomationSession _canvasAutomation = new();
 
     /// <summary>

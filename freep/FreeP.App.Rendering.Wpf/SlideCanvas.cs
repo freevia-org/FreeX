@@ -136,7 +136,7 @@ public sealed partial class SlideCanvas : FrameworkElement
     private PresentationViewShowState  _viewShowState = PresentationViewShowState.Default with { ShowRulers = false };
     private PresentationViewZoomState  _viewZoomState = PresentationViewZoomState.FitToWindow;
     private PresentationViewColorModeState _viewColorModeState = PresentationViewColorModeState.Color;
-    private EditingSession?            _editingSession;
+    private ICanvasGestureEditingSession? _editingSession;
     private readonly PresentationCanvasAutomationSession _canvasAutomation = new();
 
     /// <summary>

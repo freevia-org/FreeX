@@ -9,9 +9,10 @@ namespace FreeP.App.Compositor;
 /// master/layout target rather than making <see cref="EditingSession"/> pretend that master
 /// placeholders are slide shapes. Both native hosts share this session and its undo bus.
 /// </summary>
-public sealed class MasterEditingSession
+public sealed class MasterEditingSession : ICanvasGestureEditingSession
 {
     private readonly List<uint> _selectedShapeIds = new();
+    private readonly Slide _previewSlide = new();
     private uint? _shapeIdWatermark;
     private MasterEditTarget? _target;
 
@@ -21,12 +22,19 @@ public sealed class MasterEditingSession
         Bus = bus ?? throw new ArgumentNullException(nameof(bus));
         var targets = BuildTargets();
         _target = targets.Count > 0 ? targets[0] : null;
+        RefreshPreviewSlide();
+        Bus.Changed += OnBusChanged;
     }
 
     public Presentation Presentation { get; }
     public PresentationCommandBus Bus { get; }
     public MasterEditTarget? Target => _target;
     public IReadOnlyList<uint> SelectedShapeIds => _selectedShapeIds;
+    /// <summary>
+    /// A shallow stage projection whose shapes reference the active master/layout target. It is
+    /// only for shared hit-testing and gesture geometry; mutations still use master commands.
+    /// </summary>
+    public Slide? CurrentSlide => _target is null ? null : _previewSlide;
     public IReadOnlyList<MasterEditTarget> Targets => BuildTargets();
     public SlideMaster? CurrentMaster => _target is { } target ? MasterEditTargetResolver.GetMaster(Presentation, target) : null;
     public SlideLayout? CurrentLayout => _target is { Kind: MasterEditTargetKind.Layout, Id: var id }
@@ -38,6 +46,7 @@ public sealed class MasterEditingSession
 
     public event EventHandler? TargetChanged;
     public event EventHandler? SelectionChanged;
+    public event EventHandler? CurrentSlideChanged;
     public event Action? Changed
     {
         add => Bus.Changed += value;
@@ -55,7 +64,9 @@ public sealed class MasterEditingSession
             return true;
         _target = target;
         _selectedShapeIds.Clear();
+        RefreshPreviewSlide();
         TargetChanged?.Invoke(this, EventArgs.Empty);
+        CurrentSlideChanged?.Invoke(this, EventArgs.Empty);
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         return true;
     }
@@ -91,6 +102,8 @@ public sealed class MasterEditingSession
     public void Resize(uint shapeId, long x, long y, long cx, long cy) =>
         Execute(new ResizeMasterShapeCommand(RequireTarget(), shapeId, x, y, Math.Max(0, cx), Math.Max(0, cy)));
 
+    public void ResizeShape(uint shapeId, long x, long y, long cx, long cy) => Resize(shapeId, x, y, cx, cy);
+
     public bool ApplySelectedTransforms(IEnumerable<CanvasShapeTransform> transforms)
     {
         ArgumentNullException.ThrowIfNull(transforms);
@@ -115,6 +128,8 @@ public sealed class MasterEditingSession
     }
 
     public void Rotate(uint shapeId, double rotationDeg) => Execute(new RotateMasterShapeCommand(RequireTarget(), shapeId, rotationDeg));
+
+    public void RotateShape(uint shapeId, double rotationDeg) => Rotate(shapeId, rotationDeg);
 
     public void Delete(uint shapeId)
     {
@@ -173,10 +188,44 @@ public sealed class MasterEditingSession
         PruneSelection();
     }
 
+    // Master placeholders intentionally do not opt into the slide-only format painter, picture
+    // crop, or geometry-point tools. Returning no-op/false keeps the shared gesture router honest
+    // while core selection and transform gestures remain available in both native hosts.
+    public bool IsFormatPainterActive => false;
+    public bool BeginFormatPainter() => false;
+    public void CancelFormatPainter() { }
+    public bool TryApplyFormatPainterToShape(uint targetShapeId) => false;
+    public void SelectSlide(int index) { }
+    public bool SetPictureCrop(uint shapeId, PictureCropValues values) => false;
+    public void SetShapeGeometryAdjustment(uint shapeId, string name, double? value) { }
+    public void SetCustomGeometryPoint(uint shapeId, int pathIndex, int segmentIndex, double x, double y,
+        CustomGeometryPointSlot slot = CustomGeometryPointSlot.Endpoint) { }
+    public void SetCustomGeometryArcPoint(uint shapeId, int pathIndex, int segmentIndex, double value,
+        CustomGeometryArcPointSlot slot) { }
+    public bool TryInsertCustomGeometryPoint(uint shapeId, string handleName) => false;
+    public bool TryDeleteCustomGeometryPoint(uint shapeId, string handleName) => false;
+
     private void Execute(IPresentationCommand command)
     {
         Bus.Execute(command);
         PruneSelection();
+    }
+
+    private void OnBusChanged()
+    {
+        RefreshPreviewSlide();
+        PruneSelection();
+    }
+
+    private void RefreshPreviewSlide()
+    {
+        _previewSlide.LayoutId = _target is { Kind: MasterEditTargetKind.Layout, Id: var layoutId }
+            ? layoutId
+            : _target is { Kind: MasterEditTargetKind.Master, Id: var masterId }
+                ? Presentation.Layouts.FirstOrDefault(layout => layout.MasterId == masterId)?.Id
+                : null;
+        _previewSlide.Shapes.Clear();
+        _previewSlide.Shapes.AddRange(CurrentShapes);
     }
 
     private bool ExecuteBatch(string label, IEnumerable<IPresentationCommand> commands)

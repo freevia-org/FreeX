@@ -179,6 +179,22 @@ public sealed class MasterEditingSessionTests
         presentation.Masters[0].Placeholders[1].RotationDeg.Should().Be(0);
     }
 
+    [Fact]
+    public void Shared_canvas_router_moves_a_master_selection_without_slide_commands()
+    {
+        var presentation = CreatePresentation();
+        var shape = new SlideShape { Id = 90, ExtentCxEmu = 100, ExtentCyEmu = 100 };
+        presentation.Masters[0].Placeholders.Add(shape);
+        var session = new MasterEditingSession(presentation, new PresentationCommandBus(presentation));
+        session.Select(90);
+        var router = new CanvasGestureRouter(session);
+
+        router.HandleKeyDown(CanvasGestureKey.Right, CanvasGestureModifiers.None).Handled.Should().BeTrue();
+
+        shape.OffsetXEmu.Should().Be(CanvasGesturePlanner.ResolveNudgeStep(useLargeStep: false));
+        presentation.Slides.Should().BeEmpty();
+    }
+
     private static Presentation CreatePresentation()
     {
         var presentation = new Presentation();
