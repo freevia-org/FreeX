@@ -49,7 +49,14 @@ jobs:
       - name: Build (Release, 0 warnings enforced)
         if: matrix.platform == 'windows'
         shell: pwsh
-        run: dotnet build FreeW.slnx --configuration Release
+        run: |
+          dotnet build FreeW.slnx --configuration Release
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Parallel build failed; retrying once without build servers or shared compilation."
+            dotnet build-server shutdown
+            dotnet build FreeW.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       - name: Commit gate
         shell: pwsh
