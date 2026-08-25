@@ -6543,6 +6543,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
+            window.Editor.Presentation.Properties.Author = "Alice Writer";
             window.Editor.CurrentSlide!.Comments.Add(new SlideComment
             {
                 Author = "Alice Writer",

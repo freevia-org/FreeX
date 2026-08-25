@@ -60,6 +60,7 @@ public sealed class FreePRibbonContextSourceTests
         var source = TestWorkspaceFileLocator.ReadAllText("freep", "FreeP.App.Avalonia", "MainWindow.cs");
 
         source.Should().Contain("contextSource: _ribbonContextSource")
-            .And.Contain("_ribbonContextSource.Refresh(Editor);");
+            .And.Contain("_ribbonContextSource.Refresh(Editor);")
+            .And.NotContain("EnableIntermediateGroupPresentations");
     }
 }

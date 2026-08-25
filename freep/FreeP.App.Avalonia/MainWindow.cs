@@ -2624,8 +2624,6 @@ public sealed partial class MainWindow : Window,
             afterExecute: null,
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
             onFileTabSelected: ShowBackstage,
-            options: new AvaloniaRibbonRendererOptions(
-                EnableIntermediateGroupPresentations: true),
             stateStore: _ribbonStateStore);
 
         AvaloniaRibbonRenderer.TryInjectGroupContent(

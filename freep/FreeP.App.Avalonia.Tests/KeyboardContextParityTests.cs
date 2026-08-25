@@ -467,7 +467,7 @@ public sealed class KeyboardContextParityTests
     }
 
     [Fact]
-    public async Task FreePInsertRibbon_UsesIconCommandsBeforeOverflowAtNarrowWidths()
+    public async Task FreePInsertRibbon_CollapsesGroupsAtNarrowWidths()
     {
         await Session.Dispatch(() =>
         {
@@ -483,22 +483,22 @@ public sealed class KeyboardContextParityTests
                 var tabs = Assert.IsType<TabControl>(ribbon);
                 tabs.SelectedItem = tabs.Items.OfType<TabItem>().Single(item => Equals(item.Tag, "insert"));
                 Dispatcher.UIThread.RunJobs();
-                Button? compactCommand = null;
+                Button? collapsedChartsGroup = null;
 
                 foreach (var width in new[] { 1600d, 1400d, 1200d, 1000d, 900d, 800d })
                 {
                     window.Width = width;
                     Dispatcher.UIThread.RunJobs();
-                    compactCommand = ribbon
+                    collapsedChartsGroup = ribbon
                         .GetVisualDescendants()
                         .OfType<Button>()
-                        .FirstOrDefault(button => Equals(button.Tag, "freep.insert-chart-column") && button.Width == 30);
-                    if (compactCommand is not null)
+                        .FirstOrDefault(button => Equals(button.Tag, "collapsed:charts"));
+                    if (collapsedChartsGroup is not null)
                         break;
                 }
 
-                compactCommand.Should().NotBeNull(
-                    "FreeP opts into the Office-style icon presentation before groups overflow");
+                collapsedChartsGroup.Should().NotBeNull(
+                    "the WPF-aligned responsive ribbon collapses whole Insert groups into their overflow tiles");
             }
             finally
             {
