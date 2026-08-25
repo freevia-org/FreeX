@@ -492,6 +492,18 @@ public sealed partial class MainWindow : Window
         var titleBarForeground = AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
             ThemeResources.Brush("TitleBarForeground"),
             new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBarForeground)));
+        var titleBarVisuals = new SisterQuickAccessToolbarVisualOptions
+        {
+            HoverBackground = AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.Brush("TitleBarHover"),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBarHover))),
+            PressedBackground = AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.Brush("TitleBarPressed"),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBarPressed))),
+            InteractionBorder = AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.Brush("TitleBarButtonBorder"),
+                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBarButtonBorder))),
+        };
         var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
             Window: this,
             Body: frame.Root,
@@ -506,7 +518,8 @@ public sealed partial class MainWindow : Window
                 Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
                 Undo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Undo),
                 Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)),
-            titleBarForeground);
+            titleBarForeground,
+            titleBarVisuals);
 
         Content = windowFrame.Root;
         UpdateStatus();

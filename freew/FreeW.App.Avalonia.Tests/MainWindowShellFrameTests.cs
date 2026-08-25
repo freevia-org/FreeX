@@ -122,9 +122,13 @@ public sealed class MainWindowShellFrameTests
         mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(");
         mainWindow.Should().Contain("SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
         mainWindow.Should().Contain("ThemeResources.Brush(\"TitleBarForeground\")");
+        mainWindow.Should().Contain("ThemeResources.Brush(\"TitleBarHover\")");
+        mainWindow.Should().Contain("ThemeResources.Brush(\"TitleBarPressed\")");
+        mainWindow.Should().Contain("ThemeResources.Brush(\"TitleBarButtonBorder\")");
         mainWindow.Should().NotContain("TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush");
         mainWindow.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
-        mainWindow.Should().Contain("titleBarForeground);");
+        mainWindow.Should().Contain("titleBarForeground,");
+        mainWindow.Should().Contain("titleBarVisuals);");
         mainWindow.Should().Contain("ApplicationPlacement: FreeWApplicationFrameDescriptor.Title.ApplicationPlacement");
         mainWindow.Should().Contain("ApplyWindowIcon();");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
