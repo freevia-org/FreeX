@@ -23,7 +23,7 @@ internal static class ShortcutInteractionValidationCatalog
         }
 
         var sourceModifiers = interaction.Steps[0].Modifiers;
-        if (sourceModifiers.HasFlag(ShortcutModifierKeys.Control)) modifiers |= KeyModifiers.Control;
+        if (sourceModifiers.HasFlag(ShortcutModifierKeys.Control)) modifiers |= PlatformPrimaryModifier;
         if (sourceModifiers.HasFlag(ShortcutModifierKeys.Shift)) modifiers |= KeyModifiers.Shift;
         if (sourceModifiers.HasFlag(ShortcutModifierKeys.Alt)) modifiers |= KeyModifiers.Alt;
         if (sourceModifiers.HasFlag(ShortcutModifierKeys.Meta)) modifiers |= KeyModifiers.Meta;
@@ -39,12 +39,15 @@ internal static class ShortcutInteractionValidationCatalog
         if (!TryMapAvaloniaKey(step.Key, out key))
             return false;
 
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Control)) modifiers |= KeyModifiers.Control;
+        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Control)) modifiers |= PlatformPrimaryModifier;
         if (step.Modifiers.HasFlag(ShortcutModifierKeys.Shift)) modifiers |= KeyModifiers.Shift;
         if (step.Modifiers.HasFlag(ShortcutModifierKeys.Alt)) modifiers |= KeyModifiers.Alt;
         if (step.Modifiers.HasFlag(ShortcutModifierKeys.Meta)) modifiers |= KeyModifiers.Meta;
         return true;
     }
+
+    private static KeyModifiers PlatformPrimaryModifier =>
+        OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
 
     internal static bool TryResolveRibbonKeytipInteraction(
         ShortcutInteractionDescriptor interaction,

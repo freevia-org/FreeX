@@ -7052,7 +7052,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            if (!args.KeyModifiers.HasFlag(KeyModifiers.Shift) && args.KeyModifiers.HasFlag(KeyModifiers.Control))
+            if (!args.KeyModifiers.HasFlag(KeyModifiers.Shift) && HasAdditiveSelectionModifier(args.KeyModifiers))
             {
                 // Ctrl+click a column header adds it as a disjoint area (Excel's multi-area
                 // column selection), matching the WPF host's AddAdditionalColumnSelection
@@ -7110,7 +7110,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            if (!args.KeyModifiers.HasFlag(KeyModifiers.Shift) && args.KeyModifiers.HasFlag(KeyModifiers.Control))
+            if (!args.KeyModifiers.HasFlag(KeyModifiers.Shift) && HasAdditiveSelectionModifier(args.KeyModifiers))
             {
                 // Row-header counterpart of the column-header Ctrl+click fix above
                 // (R84-app-mouse-selection-5-1).
@@ -7147,6 +7147,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             args.KeyModifiers.HasFlag(KeyModifiers.Control));
 
     private static bool HasHyperlinkActivationModifier(KeyModifiers modifiers) =>
+        OperatingSystem.IsMacOS()
+            ? modifiers.HasFlag(KeyModifiers.Meta)
+            : modifiers.HasFlag(KeyModifiers.Control);
+
+    private static bool HasAdditiveSelectionModifier(KeyModifiers modifiers) =>
         OperatingSystem.IsMacOS()
             ? modifiers.HasFlag(KeyModifiers.Meta)
             : modifiers.HasFlag(KeyModifiers.Control);
@@ -7674,7 +7679,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void BeginHeaderResize(PointerPressedEventArgs args, Control capture, HeaderResizeKind kind, uint index, double displayedSize)
     {
         var point = args.GetCurrentPoint(capture);
-        if (!point.Properties.IsLeftButtonPressed || args.KeyModifiers.HasFlag(KeyModifiers.Control))
+        if (!point.Properties.IsLeftButtonPressed || HasAdditiveSelectionModifier(args.KeyModifiers))
             return;
 
         var sheet = _session.ActiveSheet;
@@ -12424,7 +12429,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Excel's multi-area selection (select A1, Ctrl+click C3 -> "A1,C3", usable directly by a
         // formula like =SUM(A1,C3)). Before this fix Ctrl+click behaved identically to a plain
         // click here, discarding every prior area (R84-app-mouse-selection-5-1).
-        if (modifiers.HasFlag(KeyModifiers.Control))
+        if (HasAdditiveSelectionModifier(modifiers))
         {
             AddAdditionalCellSelection(address);
             return;
