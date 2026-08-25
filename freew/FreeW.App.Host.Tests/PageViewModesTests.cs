@@ -369,6 +369,49 @@ public sealed class PageViewModesTests
     }
 
     [StaFact]
+    public void WpfHost_SplitEditorSharesModelHistoryGeometryAndViewState()
+    {
+        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
+        try
+        {
+            var primary = GetEditor(window);
+            primary.SetViewMode(DocumentViewMode.WebLayout);
+            primary.ZoomLevel = 1.25;
+            InvokePrivate(window, "ToggleSplitWindow");
+
+            var lower = window.SplitEditorForTests;
+            lower.Should().NotBeNull();
+            var lowerEditor = lower!;
+            lowerEditor.Model.Should().BeSameAs(primary.Model);
+            lowerEditor.ViewMode.Should().Be(DocumentViewMode.WebLayout);
+            lowerEditor.ZoomLevel.Should().Be(1.25);
+            lowerEditor.Margin.Left.Should().Be(FreeWSplitEditorGeometry.EditorHorizontalInsetDip);
+            lowerEditor.Margin.Top.Should().Be(FreeWSplitEditorGeometry.EditorVerticalInsetDip);
+
+            var split = window.SplitGridForTests;
+            split.Should().NotBeNull();
+            var splitGrid = split!;
+            splitGrid.RowDefinitions[1].Height.Value.Should().Be(FreeWSplitEditorGeometry.SplitterThicknessDip);
+            var splitter = splitGrid.Children[1] as GridSplitter;
+            splitter.Should().NotBeNull();
+            ((System.Windows.Media.SolidColorBrush)splitter.Background).Color.Should()
+                .Be(System.Windows.Media.Color.FromRgb(0xCC, 0xCC, 0xCC));
+
+            lowerEditor.InsertText(" shared edit");
+            lowerEditor.CanUndo.Should().BeTrue();
+            InvokePrivate(window, "Undo");
+            primary.Model.PlainText.Should().NotContain("shared edit");
+
+            InvokePrivate(window, "ToggleSplitWindow");
+            window.ActiveDocumentEditorForTests.Should().BeSameAs(primary);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void WpfHost_SideToSideNavigationControlsStepPagePairs()
     {
         var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());

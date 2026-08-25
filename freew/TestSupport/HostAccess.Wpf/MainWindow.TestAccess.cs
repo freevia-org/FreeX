@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Shell;
 
@@ -18,6 +19,8 @@ public sealed partial class MainWindow
         _sideToSideNextPairButton is not null &&
         _sideToSidePairStatusText is not null;
     internal DocumentView? SplitEditorForTests => _splitEditor;
+    internal Grid? SplitGridForTests => _splitGrid;
+    internal DocumentView ActiveDocumentEditorForTests => ResolveActiveDocumentEditor();
 
     internal void NavigateSideToSideNextPairForTests() =>
         NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair);

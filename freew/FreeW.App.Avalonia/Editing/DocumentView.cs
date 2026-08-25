@@ -642,6 +642,17 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>
+    /// Repaints this view after another split pane edited the same document instance. This deliberately
+    /// does not call <see cref="LoadDocument"/>: replacing the editing session would discard the pane's
+    /// command history and is incorrect for synchronized split editors.
+    /// </summary>
+    internal void RefreshFromSharedDocument()
+    {
+        ClearBitmapCache();
+        InvalidateLayoutAndVisual();
+    }
+
+    /// <summary>
     /// Returns the index, in <see cref="ReadAloudController.ExtractSegments(TextDocument)"/>'s ordered
     /// non-empty segment list, at which Review &gt; Read Aloud should begin. The mapping mirrors the WPF host:
     /// reading starts at the caret's body block (or containing table) and continues to the end.

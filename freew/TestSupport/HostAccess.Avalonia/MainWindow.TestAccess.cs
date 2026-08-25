@@ -18,6 +18,10 @@ public sealed partial class MainWindow
     internal FreeWViewDepthMode ViewDepthMode => _viewSession.CurrentDepth.Mode;
     internal bool IsSplitPreviewActive => _viewSession.CurrentDepth.IsSplitActive;
     internal DocumentView? SplitEditorForTests => _splitEditor;
+    internal Grid? SplitGridForTests => _splitPreviewGrid;
+    internal DocumentView ActiveDocumentEditorForTests => ResolveActiveDocumentEditor();
+    internal LayoutTransformControl? SplitEditorTransformForTests =>
+        _splitPreviewGrid?.Children.OfType<ScrollViewer>().FirstOrDefault()?.Content as LayoutTransformControl;
     internal bool IsMultiplePagesPreviewActive => _viewSession.CurrentDepth.IsMultiplePagesActive;
     internal bool IsSideToSidePreviewActive => _viewSession.CurrentDepth.IsSideToSideActive;
     internal string? ViewDepthLimitation => _viewSession.CurrentDepth.Limitation;

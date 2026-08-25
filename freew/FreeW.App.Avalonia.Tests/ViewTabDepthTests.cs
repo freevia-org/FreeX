@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.DocumentView;
@@ -231,8 +232,8 @@ public sealed class ViewTabDepthTests
             if (window.WorkspaceContentForTests is Grid grid)
                 hasSecondEditor = grid.Children.OfType<ScrollViewer>()
                     .Select(scroller => scroller.Content)
-                    .OfType<DocumentView>()
-                    .Any();
+                    .Any(content => content is DocumentView
+                        || content is LayoutTransformControl { Child: DocumentView });
             lowerEditorEditable = window.SplitEditorForTests is { Focusable: true, IsHitTestVisible: true };
             window.SplitEditorForTests!.InsertText("lower-pane edit");
             lowerEditText = window.Editor.Document.PlainText;
@@ -247,6 +248,44 @@ public sealed class ViewTabDepthTests
         lowerEditorEditable.Should().BeTrue();
         lowerEditText.Should().Contain("lower-pane edit");
         limitation.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task MainWindow_split_view_shares_document_history_geometry_and_zoom()
+    {
+        DocumentView? lower = null;
+        DocumentView? primary = null;
+        Grid? split = null;
+        double splitThickness = 0;
+        double transformScale = 0;
+        bool rehomed = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            primary = window.Editor;
+            window.ApplyZoomForTests(1.25);
+            window.ToggleSplit();
+            lower = window.SplitEditorForTests;
+            split = window.SplitGridForTests;
+            splitThickness = split!.RowDefinitions[1].Height.Value;
+            transformScale = window.SplitEditorTransformForTests?.LayoutTransform is ScaleTransform scale
+                ? scale.ScaleX
+                : 0;
+            lower!.InsertText("shared edit");
+            lower.CanUndo.Should().BeTrue();
+            window.SplitEditorForTests!.Focus();
+            window.ToggleSplit();
+            rehomed = window.ActiveDocumentEditorForTests == primary;
+        });
+
+        if (!ran) return;
+        lower.Should().NotBeNull();
+        lower!.Document.Should().BeSameAs(primary!.Document);
+        split.Should().NotBeNull();
+        splitThickness.Should().Be(FreeWSplitEditorGeometry.SplitterThicknessDip);
+        transformScale.Should().Be(1.25);
+        rehomed.Should().BeTrue();
     }
 
     [Fact]

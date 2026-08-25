@@ -218,6 +218,7 @@ public sealed partial class MainWindow : Window
     // Split Window: two independently focusable editors synchronize through the canonical document.
     private Grid? _splitGrid;                      // the split host grid (non-null while active)
     private DocumentView? _splitEditor;
+    private DocumentView? _lastEditedDocumentEditor;
     private bool _synchronizingSplitEditors;
 
     // PagedEdit: editable paginated surface. When active the workspace child is swapped
@@ -484,6 +485,11 @@ public sealed partial class MainWindow : Window
                 FreeWKeyboardCommand.UpdateCurrentField,
                 ResolveFieldCommandEditor())));
         editor.TextChanged += (_, _) => OnDocumentEditorChanged(editor);
+        editor.ZoomChanged += (_, factor) =>
+        {
+            if (_splitEditor is not null && _splitEditor.ZoomLevel != factor)
+                _splitEditor.ZoomLevel = factor;
+        };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
         // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
         // Also re-evaluate which contextual "Tools" tabs apply to the new selection.
@@ -2337,6 +2343,18 @@ public sealed partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (_viewSession.CurrentDepth.IsSplitActive
+            && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+            && e.Key is Key.Z or Key.Y)
+        {
+            if (e.Key == Key.Z)
+                Undo();
+            else
+                Redo();
+            e.Handled = true;
+            return;
+        }
+
         if (!_focusModeActive || e.Key != Key.Escape)
             return;
 
@@ -2538,6 +2556,8 @@ public sealed partial class MainWindow : Window
             ExitPagedEdit();
 
         _editor.SetViewMode(plan.TargetMode);
+        if (_splitEditor is not null)
+            _splitEditor.SetViewMode(plan.TargetMode);
         RefreshViewModeChecks();
     }
 
@@ -2968,7 +2988,7 @@ public sealed partial class MainWindow : Window
 
         var splitGrid = new Grid();
         splitGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        splitGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(4) });           // splitter
+        splitGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(FreeWSplitEditorGeometry.SplitterThicknessDip) });
         splitGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         // Top pane: the live workspaceGrid (editor + rulers), detached from _workspace first.
@@ -2979,7 +2999,7 @@ public sealed partial class MainWindow : Window
         // Splitter: horizontal, resizes top and bottom rows.
         var splitter = new GridSplitter
         {
-            Height = 4,
+            Height = FreeWSplitEditorGeometry.SplitterThicknessDip,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center,
             Background = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
@@ -2992,9 +3012,17 @@ public sealed partial class MainWindow : Window
         // Bottom pane: an independently focusable editor synchronized with the canonical body.
         var splitEditor = new DocumentView(_platformClipboard)
         {
-            Margin = new Thickness(40, 24, 40, 24),
+            Margin = new Thickness(
+                FreeWSplitEditorGeometry.EditorHorizontalInsetDip,
+                FreeWSplitEditorGeometry.EditorVerticalInsetDip,
+                FreeWSplitEditorGeometry.EditorHorizontalInsetDip,
+                FreeWSplitEditorGeometry.EditorVerticalInsetDip),
         };
-        splitEditor.LoadModel(FreeWDocumentSnapshot.Clone(_editor.Model));
+        // Both panes deliberately attach to the same model instance. Synchronization below only
+        // refreshes the peer projection, so neither pane loses its command history on every edit.
+        splitEditor.LoadModel(_editor.Model);
+        splitEditor.SetViewMode(_editor.ViewMode);
+        splitEditor.ZoomLevel = _editor.ZoomLevel;
         splitEditor.ApplyViewDepthLayout(_viewSession.CurrentDepth.Layout);
         splitEditor.TextChanged += (_, _) => OnDocumentEditorChanged(splitEditor);
         splitEditor.SelectionChanged += (_, _) => { _lastFocusedDocumentEditor = splitEditor; UpdateCounts(splitEditor); RefreshContextualTabs(); };
@@ -3026,6 +3054,8 @@ public sealed partial class MainWindow : Window
 
         _splitEditor = null;
         _splitGrid = null;
+        _lastFocusedDocumentEditor = _editor;
+        _lastEditedDocumentEditor = null;
 
         SyncViewDepthRibbonState();
     }
@@ -3230,7 +3260,7 @@ public sealed partial class MainWindow : Window
     // the same inline history Ctrl+Z / Ctrl+Y drive. Guarded by CanUndo/CanRedo so a no-op stays a no-op.
     private void Undo()
     {
-        var editor = ResolveActiveDocumentEditor();
+        var editor = ResolveHistoryDocumentEditor();
         editor.Focus();
         if (editor.CanUndo)
             editor.Undo();
@@ -3238,7 +3268,7 @@ public sealed partial class MainWindow : Window
 
     private void Redo()
     {
-        var editor = ResolveActiveDocumentEditor();
+        var editor = ResolveHistoryDocumentEditor();
         editor.Focus();
         if (editor.CanRedo)
             editor.Redo();
@@ -3664,15 +3694,29 @@ public sealed partial class MainWindow : Window
             {
                 source.CommitToModel();
                 if (ReferenceEquals(source, _editor))
-                    peer.LoadModel(FreeWDocumentSnapshot.Clone(_editor.Model));
+                {
+                    if (ReferenceEquals(peer.Model, _editor.Model))
+                        peer.RefreshFromSharedDocument();
+                    else
+                        peer.LoadModel(_editor.Model);
+                }
                 else
-                    _editor.LoadModel(FreeWDocumentSnapshot.Clone(source.Model));
+                {
+                    if (ReferenceEquals(_editor.Model, source.Model))
+                        _editor.RefreshFromSharedDocument();
+                    else
+                        _editor.LoadModel(source.Model);
+                }
             }
             finally
             {
                 _synchronizingSplitEditors = false;
             }
         }
+
+        // Rendering the peer can raise its native TextChanged event; record the origin after that
+        // guarded projection so shared undo remains owned by the pane that actually edited.
+        _lastEditedDocumentEditor = source;
 
         _file.MarkDirty();
         UpdateCounts(source);
@@ -3692,6 +3736,11 @@ public sealed partial class MainWindow : Window
                 ? _lastFocusedDocumentEditor
                 : _editor);
     }
+
+    private DocumentView ResolveHistoryDocumentEditor() =>
+        _lastEditedDocumentEditor is { IsEnabled: true } editor
+            ? editor
+            : ResolveActiveDocumentEditor();
 
     // Find the group content grid stamped with the given catalog id, walking the renderer's known
     // structure: the tab content is a Border whose child is a RibbonAdaptivePanel whose children are

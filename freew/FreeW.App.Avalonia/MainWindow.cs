@@ -134,6 +134,7 @@ public sealed partial class MainWindow : Window
     private Grid? _splitPreviewGrid;
     private DocumentView? _splitEditor;
     private DocumentView? _lastFocusedDocumentEditor;
+    private DocumentView? _lastEditedDocumentEditor;
     private bool _synchronizingSplitEditors;
     private readonly FreeWViewSession _viewSession = new(FreeWViewDepthCapabilities.FullDesktop);
     private ScrollViewer? _sideToSidePreviewScrollViewer;
@@ -328,8 +329,8 @@ public sealed partial class MainWindow : Window
             Paste: () => _ = PasteAsync(),
             PasteTextOnly: () => _ = PastePlainTextAsync(),
             SelectAll: () => ResolveActiveDocumentEditor().SelectAll(),
-            Undo: () => ResolveActiveDocumentEditor().Undo(),
-            Redo: () => ResolveActiveDocumentEditor().Redo(),
+            Undo: () => ResolveHistoryDocumentEditor().Undo(),
+            Redo: () => ResolveHistoryDocumentEditor().Redo(),
             RevealFormatting: ToggleRevealFormatting,
             Thesaurus: ToggleThesaurusPane,
             LockCurrentField: () => _editor.SetFieldLockAtCaret(true),
@@ -446,6 +447,11 @@ public sealed partial class MainWindow : Window
             LoadDocumentAsSaved(SampleDocument.Create(), path: null);
         else
             ApplyOpenResult(startupDocument);
+        AddHandler(
+            InputElement.KeyDownEvent,
+            OnSplitHistoryKeyDown,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
         KeyDown += MainWindow_KeyDown;
         AddHandler(
             InputElement.PointerPressedEvent,
@@ -1620,6 +1626,8 @@ public sealed partial class MainWindow : Window
 
         _splitPreviewGrid = null;
         _splitEditor = null;
+        _lastFocusedDocumentEditor = _editor;
+        _lastEditedDocumentEditor = null;
         ResetSideToSideNavigation();
 
         if (_liveWorkspaceContent is not null && !ReferenceEquals(_workspace.Child, _liveWorkspaceContent))
@@ -1642,7 +1650,7 @@ public sealed partial class MainWindow : Window
             RowDefinitions =
             {
                 new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
-                new RowDefinition { Height = new GridLength(5) },
+                new RowDefinition { Height = new GridLength(FreeWSplitEditorGeometry.SplitterThicknessDip) },
                 new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
             },
         };
@@ -1654,10 +1662,10 @@ public sealed partial class MainWindow : Window
 
         var splitter = new GridSplitter
         {
-            Height = 5,
+            Height = FreeWSplitEditorGeometry.SplitterThicknessDip,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center,
-            Background = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+            Background = new SolidColorBrush(Color.Parse(FreeWSplitEditorGeometry.SplitterColorHex)),
             ResizeDirection = GridResizeDirection.Rows,
         };
         Grid.SetRow(splitter, 1);
@@ -1670,7 +1678,9 @@ public sealed partial class MainWindow : Window
             ViewTableGridlines = _editor.ViewTableGridlines,
             ShowRuler = _editor.ShowRuler,
         };
-        splitEditor.LoadDocument(FreeWDocumentSnapshot.Clone(_editor.Document));
+        // Both panes deliberately attach to the same model instance. Synchronization below only
+        // refreshes the peer projection, so neither pane loses its command history on every edit.
+        splitEditor.LoadDocument(_editor.Document);
         splitEditor.ApplyViewDepthLayout(plan.Layout);
         splitEditor.DocumentChanged += () => OnDocumentEditorChanged(splitEditor);
         splitEditor.GotFocus += (_, _) =>
@@ -1684,8 +1694,8 @@ public sealed partial class MainWindow : Window
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Padding = new Thickness(24, 12),
-            Content = splitEditor,
+            Padding = new Thickness(FreeWSplitEditorGeometry.SplitScrollerPaddingDip),
+            Content = new LayoutTransformControl { LayoutTransform = _zoom, Child = splitEditor },
         };
         Grid.SetRow(splitScroller, 2);
         splitGrid.Children.Add(splitScroller);
@@ -3347,10 +3357,10 @@ public sealed partial class MainWindow : Window
         switch (commandId.Value)
         {
             case FreeWContextMenuPlanner.EditorUndo:
-                ResolveActiveDocumentEditor().Undo();
+                ResolveHistoryDocumentEditor().Undo();
                 break;
             case FreeWContextMenuPlanner.EditorRedo:
-                ResolveActiveDocumentEditor().Redo();
+                ResolveHistoryDocumentEditor().Redo();
                 break;
             case FreeWContextMenuPlanner.EditorCut:
                 await CutAsync();
@@ -4202,9 +4212,19 @@ public sealed partial class MainWindow : Window
             try
             {
                 if (ReferenceEquals(source, _editor))
-                    peer.LoadDocument(FreeWDocumentSnapshot.Clone(_editor.Document));
+                {
+                    if (ReferenceEquals(peer.Document, _editor.Document))
+                        peer.RefreshFromSharedDocument();
+                    else
+                        peer.LoadDocument(_editor.Document);
+                }
                 else
-                    _editor.LoadDocument(FreeWDocumentSnapshot.Clone(source.Document));
+                {
+                    if (ReferenceEquals(_editor.Document, source.Document))
+                        _editor.RefreshFromSharedDocument();
+                    else
+                        _editor.LoadDocument(source.Document);
+                }
             }
             finally
             {
@@ -4212,10 +4232,43 @@ public sealed partial class MainWindow : Window
             }
         }
 
+        _lastEditedDocumentEditor = source;
+
         if (!_suppressEditorDirty)
             _fileWorkflow.MarkDirty();
 
         UpdateStatus(source);
+
+        if (!ReferenceEquals(source, _editor))
+            RefreshSplitEditorChrome();
+    }
+
+    private void OnSplitHistoryKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!_viewSession.CurrentDepth.IsSplitActive
+            || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0
+            || e.Key is not (Key.Z or Key.Y))
+            return;
+
+        if (e.Key == Key.Z)
+            ResolveHistoryDocumentEditor().Undo();
+        else
+            ResolveHistoryDocumentEditor().Redo();
+        e.Handled = true;
+    }
+
+    private void RefreshSplitEditorChrome()
+    {
+        StopReadAloudAfterDocumentChange();
+        if (_navPane.IsVisible) _navPane.Refresh();
+        if (_selectionPane.IsVisible) _selectionPane.Refresh();
+        if (_reviewingPane.IsVisible) _reviewingPane.Refresh();
+        if (_reviewBalloonsPane.IsVisible) _reviewBalloonsPane.Refresh();
+        if (_revealPane.IsVisible) _revealPane.Refresh();
+        if (_notesPane.IsVisible) _notesPane.Refresh();
+        if (_thesaurusPane.IsVisible) _thesaurusPane.Refresh();
+        if (_outlineMode) _outlineView.Refresh();
+        RefreshRibbonCommandStates();
     }
 
     private void MarkDocumentSavedWithPath(string path) =>
@@ -4261,6 +4314,11 @@ public sealed partial class MainWindow : Window
         _lastFocusedDocumentEditor is { IsVisible: true, IsEnabled: true } editor
             ? editor
             : _editor;
+
+    private DocumentView ResolveHistoryDocumentEditor() =>
+        _lastEditedDocumentEditor is { IsEnabled: true } editor
+            ? editor
+            : ResolveActiveDocumentEditor();
 
     // ── Backstage (File screen) ───────────────────────────────────────────────
 

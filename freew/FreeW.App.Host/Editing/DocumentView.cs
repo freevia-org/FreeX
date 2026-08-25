@@ -1557,6 +1557,17 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Rebuilds the WPF projection after the other split pane edited the shared model. Unlike
+    /// <see cref="LoadModel"/>, this leaves this view's editing session and history attached to the
+    /// existing document instance.
+    /// </summary>
+    internal void RefreshFromSharedDocument()
+    {
+        Render();
+        ApplyPageChrome();
+    }
+
+    /// <summary>
     /// Mutate page settings as one undoable command and re-render through the command bus. Pending
     /// in-progress edits are committed first so the layout refresh does not drop them.
     /// </summary>
