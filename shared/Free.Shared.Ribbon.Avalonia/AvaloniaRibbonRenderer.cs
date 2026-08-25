@@ -3021,9 +3021,10 @@ public static class AvaloniaRibbonRenderer
                 FontSize = 11,
                 Foreground = _palette.GroupLabelBrush,
                 TextAlignment = TextAlignment.Center,
-                TextWrapping = TextWrapping.WrapWithOverflow,
+                TextWrapping = TextWrapping.NoWrap,
+                TextTrimming = TextTrimming.CharacterEllipsis,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                MaxWidth = 56,
+                Width = 58,
                 Margin = new Thickness(0, 2, 0, 0),
             });
             stack.Children.Add(Chevron(new Thickness(0, 2, 0, 0), _palette));
