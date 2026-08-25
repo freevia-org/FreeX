@@ -21,6 +21,7 @@ using FreeW.Core.Model;
 
 var output = Required(args, "--output");
 var includeContextual = args.Contains("--include-contextual", StringComparer.OrdinalIgnoreCase);
+var includeSplit = args.Contains("--include-split", StringComparer.OrdinalIgnoreCase);
 var widths = Optional(args, "--widths")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
     .Select(value => int.Parse(value, System.Globalization.CultureInfo.InvariantCulture))
     .ToArray() ?? [1500, 1100, 900, 750];
@@ -34,7 +35,7 @@ var session = HeadlessUnitTestSession.GetOrStartForAssembly(typeof(ShellCaptureA
 foreach (var width in widths)
 {
     await session.Dispatch(
-        () => CaptureWidth(output, width, height, captures, includeContextual),
+        () => CaptureWidth(output, width, height, captures, includeContextual, includeSplit),
         CancellationToken.None);
 }
 
@@ -55,7 +56,8 @@ static void CaptureWidth(
     int width,
     int height,
     List<ShellCapture> captures,
-    bool includeContextual)
+    bool includeContextual,
+    bool includeSplit)
 {
     var window = new MainWindow([])
     {
@@ -108,6 +110,9 @@ static void CaptureWidth(
         window.Close();
     }
 
+    if (includeSplit)
+        CaptureSplit(output, width, height, captures);
+
     if (!includeContextual)
         return;
 
@@ -117,6 +122,56 @@ static void CaptureWidth(
     // being combined into a synthetic tab strip.
     foreach (var fixture in ContextFixtures())
         CaptureContextualFixture(output, width, height, captures, fixture);
+}
+
+static void CaptureSplit(string output, int width, int height, List<ShellCapture> captures)
+{
+    var window = new MainWindow([])
+    {
+        Width = width,
+        Height = height,
+        MinWidth = 0,
+        MinHeight = 0,
+    };
+
+    try
+    {
+        window.Show();
+        window.Measure(new Size(width, height));
+        window.Arrange(new Rect(0, 0, width, height));
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+        var tabs = window.GetVisualDescendants().OfType<TabControl>()
+            .OrderByDescending(tab => tab.Items.Count)
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException("FreeW Avalonia Split capture did not expose its ribbon TabControl.");
+        var viewTab = tabs.Items.OfType<TabItem>()
+            .FirstOrDefault(tab => string.Equals(TabName(tab), "View", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("FreeW Avalonia Split capture did not expose its View ribbon tab.");
+        tabs.SelectedItem = viewTab;
+
+        var toggleSplit = typeof(MainWindow).GetMethod("ToggleSplit", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("FreeW Avalonia shell did not expose its backed Split command for capture.");
+        toggleSplit.Invoke(window, null);
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+        using var frame = window.CaptureRenderedFrame();
+        if (frame is null)
+            throw new InvalidOperationException("Avalonia compositor did not return a Split view frame.");
+
+        var fileName = $"shell-{width}x{height}-split.png";
+        var path = Path.Combine(output, fileName);
+        frame.Save(path);
+        if (new FileInfo(path).Length == 0)
+            throw new InvalidOperationException("Avalonia compositor wrote an empty Split view frame.");
+        captures.Add(new ShellCapture(width, height, "View", "view", fileName, "split"));
+    }
+    finally
+    {
+        window.Close();
+    }
 }
 
 static IReadOnlyList<ContextFixture> ContextFixtures() =>

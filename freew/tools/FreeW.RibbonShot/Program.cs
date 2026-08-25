@@ -1,5 +1,6 @@
 using System.IO;
 using System.Globalization;
+using System.Reflection;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,12 +17,13 @@ using FreeW.App.Host;
 // Word-style ribbon: it instantiates the real MainWindow, optionally selects a ribbon tab, lays it out
 // at a given size, and rasterises it.
 //
-// Usage: FreeW.RibbonShot <outDir> [tabIndex|all] [width] [height]
+// Usage: FreeW.RibbonShot <outDir> [tabIndex|all|split] [width] [height]
 //   tabIndex: live TabControl index (normally 0=File/Backstage, 1=Home, 2=Insert, 3=Design, 4=Layout,
 //             5=References, 6=Mailings, 7=Review, 8=View, 9=Help, 10=Developer); use the manifest from "all" for the current
 //             contextual-tab indices. "all" captures content/contextual tabs (skipping File), "backstage"
 //             captures File, and "backstage:<entry label>" selects one
 //             Backstage rail entry before capture.
+//             "split" activates the backed Split editor surface and captures it with the View tab selected.
 //   Each run also writes freew_ribbonshot_manifest.json beside the PNGs so shell-parity evidence can be
 //   traced to the requested mode, render size, tab/backstage entry, and generated files.
 
@@ -128,6 +130,36 @@ static int Run(string outDir, string tabArg, double w, double h)
         }
 
         var tabs = FindTabControl(win);
+        if (tabArg == "split")
+        {
+            const int viewTabIndex = 8;
+            if (tabs is null || tabs.Items.Count <= viewTabIndex)
+                throw new InvalidOperationException("FreeW shell did not expose its View ribbon tab for the Split capture.");
+
+            tabs.SelectedIndex = viewTabIndex;
+            win.UpdateLayout();
+            var toggleSplit = typeof(MainWindow).GetMethod("ToggleSplitWindow", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("FreeW shell did not expose its backed Split command for capture.");
+            toggleSplit.Invoke(win, null);
+            PumpFrames(win.Dispatcher, TimeSpan.FromMilliseconds(250));
+            win.UpdateLayout();
+
+            var split = new RenderTargetBitmap((int)w, (int)h, 96, 96, PixelFormats.Pbgra32);
+            split.Render(win);
+            var splitPath = Path.Combine(outDir, "split-view.png");
+            SavePng(split, splitPath);
+            captures.Add(RibbonShotCapture.Split(
+                GetRelativeEvidencePath(outDir, splitPath),
+                (int)w,
+                (int)h,
+                viewTabIndex,
+                "View"));
+            Console.WriteLine($"captured {splitPath}");
+            WriteManifest(outDir, tabArg, w, h, captures);
+            win.Close();
+            return 0;
+        }
+
         var indices = tabArg == "all"
             ? Enumerable.Range(1, Math.Max(0, (tabs?.Items.Count ?? 1) - 1)).ToList()
             : [int.Parse(tabArg)];
@@ -397,4 +429,7 @@ sealed record RibbonShotCapture(
 
     public static RibbonShotCapture Dialog(string path, int pixelWidth, int pixelHeight) =>
         new("dialog-probe", path, pixelWidth, pixelHeight, null, null, null);
+
+    public static RibbonShotCapture Split(string path, int pixelWidth, int pixelHeight, int tabIndex, string tabName) =>
+        new("split-view", path, pixelWidth, pixelHeight, tabIndex, tabName, null);
 }
