@@ -787,6 +787,29 @@ public sealed partial class MainWindow : Window,
         }
     }
 
+    private static void CascadePresentationWindows()
+    {
+        var windows = Application.Current.Windows.OfType<MainWindow>()
+            .Where(window => window.IsVisible)
+            .ToList();
+        if (windows.Count == 0)
+            return;
+
+        var area = SystemParameters.WorkArea;
+        var bounds = ArrangeAllLayoutPlanner.Arrange(
+            ShellWindowArrangement.Cascade, area.Width, area.Height, windows.Count);
+        for (var index = 0; index < bounds.Count; index++)
+        {
+            var window = windows[index];
+            var tile = bounds[index];
+            window.WindowState = WindowState.Normal;
+            window.Left = area.Left + tile.X;
+            window.Top = area.Top + tile.Y;
+            window.Width = tile.Width;
+            window.Height = tile.Height;
+        }
+    }
+
     // ── Body layout ───────────────────────────────────────────────────────────────
 
     private UIElement BuildBody()

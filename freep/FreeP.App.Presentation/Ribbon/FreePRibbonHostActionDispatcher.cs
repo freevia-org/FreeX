@@ -69,6 +69,7 @@ public sealed class FreePRibbonHostActionEndpoints
     public Action? StartReadingView { get; init; }
     public Action? NewPresentationWindow { get; init; }
     public Action? ArrangeAllPresentationWindows { get; init; }
+    public Action? CascadePresentationWindows { get; init; }
     public Action? PickTransitionSound { get; init; }
     public Action<PresentationAnimationCommandPlan>? ToggleAnimationPane { get; init; }
     public Action? StartSlideShowFromBeginning { get; init; }
@@ -252,6 +253,7 @@ public static class FreePRibbonHostActionDispatcher
             FreePRibbonHostActionKind.StartReadingView => Invoke(endpoints.StartReadingView),
             FreePRibbonHostActionKind.NewPresentationWindow => Invoke(endpoints.NewPresentationWindow),
             FreePRibbonHostActionKind.ArrangeAllPresentationWindows => Invoke(endpoints.ArrangeAllPresentationWindows),
+            FreePRibbonHostActionKind.CascadePresentationWindows => Invoke(endpoints.CascadePresentationWindows),
             FreePRibbonHostActionKind.PickTransitionSound => Invoke(endpoints.PickTransitionSound),
             FreePRibbonHostActionKind.ToggleAnimationPane => Invoke(action.Argument, endpoints.ToggleAnimationPane),
             FreePRibbonHostActionKind.StartSlideShowFromBeginning => Invoke(endpoints.StartSlideShowFromBeginning),

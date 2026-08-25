@@ -94,6 +94,7 @@ public enum FreePRibbonHostActionKind
     StartReadingView,
     NewPresentationWindow,
     ArrangeAllPresentationWindows,
+    CascadePresentationWindows,
     PickTransitionSound,
     ToggleAnimationPane,
     StartSlideShowFromBeginning,
@@ -742,6 +743,8 @@ public static class FreePRibbonCommandWorkflow
             FreePRibbonHostActionKind.NewPresentationWindow);
         commands.HostAction(FreePRibbonCommandGroup.View, "freep.view.arrange-all", host,
             FreePRibbonHostActionKind.ArrangeAllPresentationWindows);
+        commands.HostAction(FreePRibbonCommandGroup.View, "freep.view.cascade-windows", host,
+            FreePRibbonHostActionKind.CascadePresentationWindows);
 
         var initialModeState = host.TryQuery<PresentationViewModeState>(FreePRibbonHostQueryKind.ViewModeState, out var modeState)
             ? modeState

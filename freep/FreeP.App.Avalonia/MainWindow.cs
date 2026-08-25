@@ -6057,6 +6057,36 @@ public sealed partial class MainWindow : Window,
         }
     }
 
+    private void CascadePresentationWindows()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+            return;
+
+        var windows = desktop.Windows.OfType<MainWindow>()
+            .Where(window => window.IsVisible)
+            .ToList();
+        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        if (windows.Count == 0 || screen is null)
+            return;
+
+        var scaling = AvaloniaWindowBoundsTranslator.NormalizeScaling(screen.Scaling);
+        var bounds = ArrangeAllLayoutPlanner.Arrange(
+            ShellWindowArrangement.Cascade,
+            screen.WorkingArea.Width / scaling,
+            screen.WorkingArea.Height / scaling,
+            windows.Count);
+        var tiles = AvaloniaWindowBoundsTranslator.Translate(screen.WorkingArea, scaling, bounds);
+        for (var index = 0; index < tiles.Count; index++)
+        {
+            var window = windows[index];
+            var tile = tiles[index];
+            window.WindowState = WindowState.Normal;
+            window.Position = tile.Position;
+            window.Width = tile.Width;
+            window.Height = tile.Height;
+        }
+    }
+
     // ── Canvas refresh ─────────────────────────────────────────────────────────
 
     private void RefreshCanvas()
