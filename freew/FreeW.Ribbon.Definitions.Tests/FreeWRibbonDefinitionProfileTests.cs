@@ -221,6 +221,14 @@ public sealed class FreeWRibbonDefinitionProfileTests
             ("mailings", "merge-write", "freew.merge-address-block", RibbonCommandIconKind.Recipients),
             ("mailings", "merge-preview", "freew.merge-preview", RibbonCommandIconKind.PreviewResults),
             ("mailings", "merge-finish", "freew.merge-finish", RibbonCommandIconKind.FinishMerge),
+            ("picture-format", "picture-arrange", "freew.image-wrap", RibbonCommandIconKind.Wrap),
+            ("picture-format", "picture-adjust", "freew.image-corrections", RibbonCommandIconKind.Effects),
+            ("table-layout", "table-select", "freew.table-select-table", RibbonCommandIconKind.Table),
+            ("table-layout", "table-rows-cols", "freew.table-insert-above", RibbonCommandIconKind.Insert),
+            ("table-layout", "table-merge", "freew.table-merge-cells", RibbonCommandIconKind.Merge),
+            ("table-layout", "table-cell-size", "freew.table-row-height", RibbonCommandIconKind.Size),
+            ("table-layout", "table-alignment", "freew.cell-align-top-left", RibbonCommandIconKind.AlignLeft),
+            ("table-layout", "table-data", "freew.table-repeat-header", RibbonCommandIconKind.Table),
         }.Should().AllSatisfy(expected =>
             RequiredControl(RequiredGroup(avalonia, expected.TabId, expected.GroupId), expected.CommandId).Icon?.Kind
                 .Should().Be(expected.IconKind));
