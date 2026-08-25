@@ -62,7 +62,7 @@ public sealed class PresentationWorkareaOwnershipSourceTests
             .And.NotContain("SlidePaneHost.Child = new SlidePane(context.Snapshot.Editor)");
         avaloniaEndpoint.Should().Contain(
                 "Copy = QueueClipboardCopy")
-             .And.Contain("RefreshContextualTabs = RefreshContextualTabs")
+             .And.Contain("RefreshContextualTabs = () => _ribbonContextSource.Refresh(Editor)")
              .And.Contain("RewireInteractionToEditor();")
             .And.Contain("RefreshCurrentSlideStatus = UpdateStatus")
             .And.NotContain("SlidePanePlanner.SetSelectedSlide(");
