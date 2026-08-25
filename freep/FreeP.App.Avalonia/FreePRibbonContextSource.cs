@@ -2,6 +2,7 @@ using Free.Shared.Ribbon;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using FreeP.Ribbon.Definitions;
 
 namespace FreeP.App.Avalonia;
 
@@ -56,11 +57,11 @@ internal sealed class FreePRibbonContextSource : IRibbonContextSource
 
         var state = RibbonContextState.None;
         if (_textActive)
-            state = state.With("text");
+            state = state.With(FreePRibbon.TextFormatContextKey);
         if (_tableActive)
-            state = state.With("table");
+            state = state.With(FreePRibbon.TableLayoutContextKey);
         if (_smartArtActive)
-            state = state.With("smartart");
+            state = state.With(FreePRibbon.SmartArtDesignContextKey);
         Current = state;
         ContextChanged?.Invoke(this, EventArgs.Empty);
     }
