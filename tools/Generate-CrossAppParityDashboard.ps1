@@ -13,7 +13,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 # Keep acceptance evidence anchored to the source that was actually built and tested.
 # The generated docs are committed afterward, so deriving this from the current HEAD
 # would make the evidence self-referential and would change the claim on every refresh.
-$wave194TestedSourceCommit = "8624e6d1f4bce133a3685d99f366e668491ea33f"
+$wave194TestedSourceCommit = "e4f40ebcaadc624421b9c0a985330100f10af8df"
 $wave194AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 
 function Get-JsonPropertyValue {
@@ -872,10 +872,11 @@ try {
         initialIndependentReview = "Recorded: the initial independent review found two P2 findings: FreeX crop/readiness/transition and physical click geometry were duplicated instead of consuming one contract; FreeP topology evidence did not pin the complete source PPTX and initially over-attributed the residual."
         reviewRemediation = "FreeX now uses one authoritative mixed-type geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved; the color-geometry guard remediation remains retained in the tested source."
         independentReview = "Pending: a fresh independent final acceptance review of tested source commit ${wave194TestedSourceCommit} must be completed. The supplied current FreeP Surface3D static sign-off is scoped to that focused lane and does not satisfy the cross-app acceptance review."
-        repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 309 XML-backed, 125 PowerShell scripts, 10 test gates/48 assigned projects, 13,922 conflict-marker files checked, and all generated docs/evidence current."
-        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:06:14.37."
-        defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,485 passed, 134 intentional skips, 0 failed, 43,619 total."
-        initialDefaultLane = "Earlier default-lane remediation history is retained in the Wave194 report; the current final pass4 lane is the authoritative 43,485 passed, 134 intentional skips, 0 failed, 43,619 total result."
+        repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 309 XML-backed, 125 PowerShell scripts, 11 GitHub workflows, 10 test gates/48 assigned projects, 13,951 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:03:10.419."
+        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:08:44.581."
+        defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,505 passed, 134 intentional skips, 0 failed, 43,639 total; elapsed 00:17:18.449."
+        initialDefaultLane = "Earlier default-lane remediation history is retained in the Wave194 report; the current final pass6 lane is the authoritative 43,505 passed, 134 intentional skips, 0 failed, 43,639 total result."
+        sliceAccounting = "582 cumulative app slices (194 per app) remain the processed Wave194 accounting; later wave feature commits are included in the tested source and do not add Wave194 slices."
         sourceTestRemediation = "The current source is accepted only with the focused and full-lane evidence recorded above; generated inventory and visual manifests remain the authority for coverage and comparison counts."
         workerVerification = "Current focused evidence is recorded for FreeW and FreeP above; FreeX physical and generated metrics remain retained below. Functional/source evidence and visual comparison evidence are intentionally separate."
     }
@@ -1021,6 +1022,7 @@ try {
         "Wave194's cumulative 582 app-slice count is **accepted**. All final integration gates passed against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
         "",
         "- Initial independent review: $($dashboard.integrationGateEvidence.initialIndependentReview)",
+        "- Slice accounting: $($dashboard.integrationGateEvidence.sliceAccounting)",
         "- Reintegration: $($dashboard.integrationGateEvidence.reintegration)",
         "- Focused tests: $($dashboard.integrationGateEvidence.focusedTests)",
         "- Initial reintegration preflight: $($dashboard.integrationGateEvidence.initialReintegrationPreflight)",

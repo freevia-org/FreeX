@@ -24,17 +24,23 @@ public sealed class CrossAppParityDashboardTests
         root.GetProperty("scopeBoundary").GetString().Should().Contain("do not prove complete visual parity");
 
         var integrationEvidence = root.GetProperty("integrationGateEvidence");
-        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("8624e6d1f4bce133a3685d99f366e668491ea33f");
+        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("e4f40ebcaadc624421b9c0a985330100f10af8df");
         integrationEvidence.TryGetProperty("integrationHead", out _).Should().BeFalse();
         integrationEvidence.GetProperty("acceptanceRefreshNote").GetString().Should().Be(
             "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit.");
         integrationEvidence.GetProperty("repositoryPreflight").GetString().Should().Be(
-            "Passed at tested source commit 8624e6d1f4bce133a3685d99f366e668491ea33f: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 309 XML-backed, 125 PowerShell scripts, 10 test gates/48 assigned projects, 13,922 conflict-marker files checked, and all generated docs/evidence current.");
+            "Passed at tested source commit e4f40ebcaadc624421b9c0a985330100f10af8df: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 309 XML-backed, 125 PowerShell scripts, 11 GitHub workflows, 10 test gates/48 assigned projects, 13,951 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:03:10.419.");
         integrationEvidence.GetProperty("fullReleaseBuild").GetString().Should().Be(
-            "Passed at tested source commit 8624e6d1f4bce133a3685d99f366e668491ea33f: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:06:14.37.");
-        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("43,485 passed, 134 intentional skips, 0 failed, 43,619 total");
+            "Passed at tested source commit e4f40ebcaadc624421b9c0a985330100f10af8df: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:08:44.581.");
+        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("43,505 passed, 134 intentional skips, 0 failed, 43,639 total");
+        integrationEvidence.GetProperty("sliceAccounting").GetString().Should().Be(
+            "582 cumulative app slices (194 per app) remain the processed Wave194 accounting; later wave feature commits are included in the tested source and do not add Wave194 slices.");
 
         var freeX = root.GetProperty("apps")[0];
+        freeX.GetProperty("functionalMatrix").GetProperty("totalCommands").GetInt32().Should().Be(575);
+        freeX.GetProperty("functionalMatrix").GetProperty("parity").GetInt32().Should().Be(569);
+        freeX.GetProperty("functionalMatrix").GetProperty("avaloniaMissing").GetInt32().Should().Be(0);
+        freeX.GetProperty("functionalMatrix").GetProperty("realBehaviorGaps").GetInt32().Should().Be(0);
         var visualEvidence = freeX.GetProperty("dialogVisualEvidence");
         visualEvidence.GetProperty("pairedCapturedSurfaceIds").GetInt32().Should().BeGreaterThan(0);
         visualEvidence.GetProperty("pairedDimensionMismatches").GetInt32().Should().Be(0);
@@ -55,6 +61,24 @@ public sealed class CrossAppParityDashboardTests
             highestScore.Should().BeLessThan(threshold);
         else
             highestScore.Should().BeGreaterThanOrEqualTo(threshold);
+
+        var freeW = root.GetProperty("apps")[1];
+        freeW.GetProperty("commandInventory").GetProperty("totalCommands").GetInt32().Should().Be(954);
+        freeW.GetProperty("commandInventory").GetProperty("bothProfiles").GetInt32().Should().Be(733);
+        freeW.GetProperty("commandInventory").GetProperty("actionableGaps").GetInt32().Should().Be(0);
+        freeW.GetProperty("renderedEvidence").GetProperty("artifactCoverage").GetProperty("evidenceRowCount").GetInt32().Should().Be(291);
+        freeW.GetProperty("renderedEvidence").GetProperty("pairedEvidence").GetProperty("passCount").GetInt32().Should().Be(80);
+        freeW.GetProperty("renderedEvidence").GetProperty("pairedEvidence").GetProperty("mismatchCount").GetInt32().Should().Be(141);
+        freeW.GetProperty("renderedEvidence").GetProperty("pairedEvidence").GetProperty("avaloniaOnlyScenarioCount").GetInt32().Should().Be(70);
+
+        var freeP = root.GetProperty("apps")[2];
+        freeP.GetProperty("commandInventory").GetProperty("totalCommands").GetInt32().Should().Be(715);
+        freeP.GetProperty("commandInventory").GetProperty("bothProfiles").GetInt32().Should().Be(715);
+        freeP.GetProperty("commandInventory").GetProperty("actionableMissingWpf").GetInt32().Should().Be(0);
+        freeP.GetProperty("commandInventory").GetProperty("actionableMissingAvalonia").GetInt32().Should().Be(0);
+        freeP.GetProperty("renderedEvidence").GetProperty("pairedEvidence").GetProperty("pairedScenarioCount").GetInt32().Should().Be(61);
+        freeP.GetProperty("renderedEvidence").GetProperty("pairedEvidence").GetProperty("passCount").GetInt32().Should().Be(61);
+        freeP.GetProperty("renderedEvidence").GetProperty("pairedEvidence").GetProperty("mismatchCount").GetInt32().Should().Be(0);
 
         var markdown = File.ReadAllText(Path.Combine(repoRoot, "docs", "parity", "avalonia-wpf-cross-app-dashboard.md"));
         markdown.Should().Contain("These are coverage/triage metrics, not a visual-parity claim.");
