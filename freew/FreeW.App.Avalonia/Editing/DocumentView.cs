@@ -66,7 +66,7 @@ public sealed partial class DocumentView : Control
     // AV-VIEW: spacing (DIP) between layout-gridlines (Word draws a ~quarter-inch grid; 18pt ≈ 0.25in).
     private const double GridlineStepDip = 18.0;
     // AV-VIEW: height/width of the ruler strip drawn at the page top / left edge in Print Layout.
-    private const double RulerThicknessDip = 14.0;
+    private const double RulerThicknessDip = 16.0;
     // Gap between consecutive page rectangles (grey desk visible between them).
     private const double PageGap = 20;
     private const double DefaultFontSizePt = 11;
@@ -11140,9 +11140,7 @@ public sealed partial class DocumentView : Control
         var bodyRight = _contentLeft + _contentWidth;
         context.FillRectangle(RulerMarginFill, new Rect(bodyRight, hRect.Y, _pageLeft + _pageWidth - bodyRight, RulerThicknessDip));
         context.DrawRectangle(null, RulerBorderPen, hRect);
-        var rulerTicks = DocumentViewLayoutPlanner.BuildRulerTicks(_surfacePlan, inchDip);
-        foreach (var x in rulerTicks)
-            context.DrawLine(RulerTickPen, new Point(x, hRect.Y + RulerThicknessDip - 4), new Point(x, hRect.Y + RulerThicknessDip));
+        DrawRulerTicks(context, hRect, inchDip, horizontal: true);
 
         // Word-style tab selector in the top-left corner. Clicking it cycles Left/Center/Right/Decimal;
         // the selected type is used when the user clicks an empty location on the horizontal ruler.
@@ -11180,8 +11178,7 @@ public sealed partial class DocumentView : Control
         context.FillRectangle(RulerMarginFill, new Rect(vRect.X, pageTop, RulerThicknessDip, _marginTopDip));
         context.FillRectangle(RulerMarginFill, new Rect(vRect.X, bodyBottom, RulerThicknessDip, pageTop + _pageHeightPx - bodyBottom));
         context.DrawRectangle(null, RulerBorderPen, vRect);
-        for (var y = pageTop; y <= pageTop + _pageHeightPx + 0.01; y += inchDip)
-            context.DrawLine(RulerTickPen, new Point(vRect.X + RulerThicknessDip - 4, y), new Point(vRect.X + RulerThicknessDip, y));
+        DrawRulerTicks(context, vRect, inchDip, horizontal: false);
 
         if (_rulerDragPreviewMarginPt is { } preview
             && _rulerDrag is { Kind: DocumentRulerDragKind.TopMargin or DocumentRulerDragKind.BottomMargin } drag)
@@ -11191,6 +11188,40 @@ public sealed partial class DocumentView : Control
                 ? pageTop + previewDip
                 : pageTop + _pageHeightPx - previewDip;
             context.DrawLine(RulerPreviewPen, new Point(vRect.Left, previewY), new Point(vRect.Right, previewY));
+        }
+    }
+
+    private static void DrawRulerTicks(DrawingContext context, Rect ruler, double inchDip, bool horizontal)
+    {
+        if (inchDip <= 0)
+            return;
+
+        var start = horizontal ? ruler.Left : ruler.Top;
+        var end = horizontal ? ruler.Right : ruler.Bottom;
+        var index = 0;
+        var typeface = new Typeface("Segoe UI");
+        for (var position = start; position <= end + 0.01; position += inchDip / 2, index++)
+        {
+            var major = index % 2 == 0;
+            var tickLength = major ? RulerThicknessDip * 0.55 : RulerThicknessDip * 0.30;
+            if (horizontal)
+                context.DrawLine(RulerTickPen, new Point(position, ruler.Bottom - tickLength), new Point(position, ruler.Bottom));
+            else
+                context.DrawLine(RulerTickPen, new Point(ruler.Right - tickLength, position), new Point(ruler.Right, position));
+
+            if (!major || index == 0)
+                continue;
+
+            var label = new FormattedText(
+                (index / 2).ToString(CultureInfo.CurrentCulture),
+                CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                typeface,
+                8,
+                RulerLabelBrush);
+            context.DrawText(label, horizontal
+                ? new Point(position - label.Width / 2, ruler.Top + 1)
+                : new Point(ruler.Left + 1, position - label.Height / 2));
         }
     }
 
@@ -11566,14 +11597,15 @@ public sealed partial class DocumentView : Control
     // AV-VIEW: faint layout-gridlines drawn behind body text when ShowGridlines is set.
     private static IPen    GridlinePen      { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0x30, 0x60, 0x90, 0xC0)), 0.5);
     // AV-VIEW: ruler strip fill, border, and tick marks drawn at the page top/left when ShowRuler is set.
-    private static ImmutableSolidColorBrush RulerFill        { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xF4, 0xF6, 0xFA));
-    private static IPen    RulerBorderPen   { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD4)), 0.75);
-    private static IPen    RulerTickPen     { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x70, 0x80, 0x98)), 0.75);
+    private static ImmutableSolidColorBrush RulerFill        { get; } = new ImmutableSolidColorBrush(Colors.White);
+    private static IPen    RulerBorderPen   { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)), 1.0);
+    private static IPen    RulerTickPen     { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 1.0);
+    private static ImmutableSolidColorBrush RulerLabelBrush  { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
     private static ImmutableSolidColorBrush RulerMarkerBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
     private static IPen    RulerMarkerPen   { get; } = new ImmutablePen(RulerMarkerBrush, 1.0);
     private static IPen    RulerPreviewPen  { get; } = new ImmutablePen(RulerMarkerBrush, 1.0, dashStyle: new ImmutableDashStyle([4, 3], 0));
     // AV-VIEW: darker tint marking the page margins on the ruler (the body text area is the lighter span).
-    private static ImmutableSolidColorBrush RulerMarginFill  { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xD8, 0xDE, 0xE8));
+    private static ImmutableSolidColorBrush RulerMarginFill  { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9));
     private static RunFormatting LineNumberFormatting { get; } = new() { FontSizePt = 8, ColorHex = "#606060" };
 
     // ---- Render ---------------------------------------------------------------------------------
