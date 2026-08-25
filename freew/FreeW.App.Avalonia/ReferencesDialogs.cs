@@ -363,7 +363,15 @@ internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
 
 internal sealed partial class MarkIndexEntryDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
+    // The compact toggle templates already provide the WPF-sized indicators, so this row needs
+    // less separation than the standard action-row contract to retain the WPF dialog geometry.
+    private const double ActionRowTopMargin = 4;
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle with
+    {
+        // WPF's native radio row is effectively 16 DIP. This dialog stacks two standalone
+        // radio rows, so the generic 20-DIP compact row still leaves its action row low.
+        CompactRadioButtonHeight = 16,
+    };
 
     private readonly MarkIndexEntryDialogSession _session;
     private readonly TextBox _mainEntry = new() { MinWidth = 300 };
@@ -435,11 +443,14 @@ internal sealed partial class MarkIndexEntryDialog : FreeWDialogWindow
         foreach (var textBox in new[] { _mainEntry, _subentry, _identifier, _crossReference })
             AvaloniaCompactDialogChrome.ApplyTextBox(textBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_bookmark, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyRadioButton(_currentPage, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyRadioButton(_pageRange, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyRadioButton(_crossReferenceOption, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_boldPageNumber, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_italicPageNumber, DialogChromeStyle);
+        // This compact reference dialog uses WPF's 13px native toggle indicators. The Fluent
+        // defaults consume a full control row for each choice and gradually push the action row
+        // down; use the shared compact templates so its geometry stays aligned with the WPF host.
+        AvaloniaCompactDialogChrome.ApplyCompactRadioButton(_currentPage, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactRadioButton(_pageRange, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactRadioButton(_crossReferenceOption, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_boldPageNumber, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_italicPageNumber, DialogChromeStyle);
         _currentPage.IsCheckedChanged += (_, _) => UpdateCrossReferenceState();
         _pageRange.IsCheckedChanged += (_, _) => UpdateCrossReferenceState();
         _crossReferenceOption.IsCheckedChanged += (_, _) => UpdateCrossReferenceState();
@@ -494,7 +505,7 @@ internal sealed partial class MarkIndexEntryDialog : FreeWDialogWindow
             [markButton, _markAll, cancelButton],
             new Thickness(
                 MarkIndexEntryDialogPlanner.ContentHorizontalMargin,
-                MarkIndexEntryDialogPlanner.ActionRowTopMargin,
+                ActionRowTopMargin,
                 MarkIndexEntryDialogPlanner.ContentHorizontalMargin,
                 MarkIndexEntryDialogPlanner.ActionRowBottomMargin));
 
