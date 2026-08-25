@@ -1328,7 +1328,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 steps:
                   - uses: actions/setup-dotnet@v5
                     with:
-                      dotnet-version: 10.0.x
+                      dotnet-version: 10.0.300
                   - name: Capture runner toolchain evidence
                     run: echo runner
                   - name: Test portable PDF macOS route
@@ -1841,7 +1841,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "^macos_launch_smoke=passed$" "$open_with_report"
                       grep -q "^macos_launch_smoke=passed$" "$default_open_report"
                   - name: Upload app artifact
-                    uses: actions/upload-artifact@v7
+                    uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
                     with:
                       if-no-files-found: error
                       path: |
@@ -1850,7 +1850,7 @@ public sealed class MacOsAppReadinessPreflightTests
                         artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-default-open-launch-smoke.txt
                   - name: Upload app diagnostics
                     if: always()
-                    uses: actions/upload-artifact@v7
+                    uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
                     with:
                       name: freex-${"{{"} github.run_id {"}}"}-${"{{"} github.run_attempt {"}}"}-${"{{"} matrix.runtime {"}}"}-macos-diagnostics
                       if-no-files-found: warn
@@ -1874,7 +1874,7 @@ public sealed class MacOsAppReadinessPreflightTests
                   group: macos-distribution-candidate-release
                   cancel-in-progress: false
                 steps:
-                  - uses: actions/download-artifact@v7
+                  - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
                     with:
                       pattern: freex-${"{{"} github.run_id {"}}"}-${"{{"} github.run_attempt {"}}"}-*-macos-app
                       merge-multiple: true
@@ -1893,7 +1893,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       Assert-ContainsRequiredText -Text $smokeReportText -Needle "macos_launch_smoke=passed"
                       default_open_launch_smoke_report
                   - name: Upload release-channel prepared assets
-                    uses: actions/upload-artifact@v7
+                    uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
                     with:
                       if-no-files-found: error
                   - name: Create or update GitHub release
@@ -3127,6 +3127,7 @@ public sealed class MacOsAppReadinessPreflightTests
                         SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false);
                     _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"));
                     _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"));
+                    AppIssueReporter.CreateIssueUrl(CreateIssueReportContext()),
                     _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"));
                     _aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();
                     _legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();
