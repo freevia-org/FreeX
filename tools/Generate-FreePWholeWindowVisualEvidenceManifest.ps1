@@ -14,7 +14,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $resolvedRoot = Resolve-ToolRepoPath -Path $EvidenceRoot -RepoRoot $repoRoot
 $resolvedManifest = Resolve-ToolRepoPath -Path $ManifestPath -RepoRoot $repoRoot
 $summaryPath = Join-Path $resolvedRoot "summary.json"
-$expectedScenarioCount = 33
+$expectedScenarioCount = 36
 $selectionArtifactCount = 3
 $requiredSelectionArtifactPaths = @(
     "diff/editor.rich-text-selection.wpf-selection.png",

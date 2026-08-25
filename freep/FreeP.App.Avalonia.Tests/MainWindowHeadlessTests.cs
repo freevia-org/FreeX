@@ -8154,6 +8154,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     {
         var masterVisible = false;
         var normalVisible = true;
+        var notesVisibleInMaster = true;
 
         var ran = await OnUiThread(() =>
         {
@@ -8162,6 +8163,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
             registry.TryGet(PresentationViewModePlanner.SlideMasterCommandId, out var master).Should().BeTrue();
             master!.Execute(RibbonCommandContext.Empty);
             masterVisible = window.IsSlideMasterSurfaceVisible;
+            notesVisibleInMaster = window.IsNotesPaneVisible;
 
             registry.TryGet(PresentationViewModePlanner.NormalCommandId, out var normal).Should().BeTrue();
             normal!.Execute(RibbonCommandContext.Empty);
@@ -8170,6 +8172,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
 
         if (!ran) return;
         masterVisible.Should().BeTrue();
+        notesVisibleInMaster.Should().BeFalse();
         normalVisible.Should().BeFalse();
     }
 

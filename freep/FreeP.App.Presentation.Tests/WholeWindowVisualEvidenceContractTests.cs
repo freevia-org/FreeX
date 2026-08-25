@@ -29,7 +29,7 @@ public sealed class WholeWindowVisualEvidenceContractTests
     [Fact]
     public void Catalog_defines_unique_complete_96_dpi_whole_window_matrix()
     {
-        WholeWindowVisualEvidenceCatalog.All.Should().HaveCount(35);
+        WholeWindowVisualEvidenceCatalog.All.Should().HaveCount(36);
         WholeWindowVisualEvidenceCatalog.All.Select(scenario => scenario.Id).Should().OnlyHaveUniqueItems();
         WholeWindowVisualEvidenceCatalog.LogicalClientWidth.Should().Be(1280);
         WholeWindowVisualEvidenceCatalog.LogicalClientHeight.Should().Be(760);
@@ -39,7 +39,7 @@ public sealed class WholeWindowVisualEvidenceContractTests
         WholeWindowVisualEvidenceCatalog.All.Count(scenario => scenario.Kind == WholeWindowVisualEvidenceScenarioKind.StaticRibbonTab).Should().Be(8);
         WholeWindowVisualEvidenceCatalog.All.Count(scenario => scenario.Kind == WholeWindowVisualEvidenceScenarioKind.BackstagePane).Should().Be(7);
         WholeWindowVisualEvidenceCatalog.All.Count(scenario => scenario.Kind is WholeWindowVisualEvidenceScenarioKind.StatusBar or WholeWindowVisualEvidenceScenarioKind.ViewState).Should().Be(5);
-        WholeWindowVisualEvidenceCatalog.All.Count(scenario => scenario.Kind == WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion).Should().Be(3);
+        WholeWindowVisualEvidenceCatalog.All.Count(scenario => scenario.Kind == WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion).Should().Be(4);
         WholeWindowVisualEvidenceCatalog.All.Count(scenario => scenario.Kind == WholeWindowVisualEvidenceScenarioKind.AuxiliaryPane).Should().Be(8);
         WholeWindowVisualEvidenceCatalog.All.Count(scenario => scenario.Kind == WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay).Should().Be(2);
         WholeWindowVisualEvidenceCatalog.Get("editor.rich-text-selection").ActivationId.Should().Be("selection");
@@ -92,6 +92,7 @@ public sealed class WholeWindowVisualEvidenceContractTests
     [Theory]
     [InlineData("startup.notes", WholeWindowVisualEvidenceActivationKind.FocusNotesPane, "notes")]
     [InlineData("workspace.notes-pane", WholeWindowVisualEvidenceActivationKind.FocusNotesPane, "notes-pane")]
+    [InlineData("workspace.slide-master", WholeWindowVisualEvidenceActivationKind.SlideMaster, "slide-master")]
     [InlineData("backstage.info", WholeWindowVisualEvidenceActivationKind.BackstagePane, "Info")]
     [InlineData("review.comments-pane", WholeWindowVisualEvidenceActivationKind.ReviewCommentsPane, "comments")]
     [InlineData("review.accessibility-pane", WholeWindowVisualEvidenceActivationKind.AccessibilityCheckerPane, "accessibility")]

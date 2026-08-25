@@ -408,6 +408,7 @@ public sealed partial class MainWindow : Window,
     internal bool IsNotesPageSurfaceVisible => _notesPageSurface?.IsVisible == true;
     internal bool IsSlideMasterSurfaceVisible =>
         _viewModeState.Mode == PresentationViewMode.SlideMaster && _slideCanvas?.MasterEditTarget is not null;
+    internal bool IsNotesPaneVisible => _notesBox.IsVisible;
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
@@ -2395,7 +2396,7 @@ public sealed partial class MainWindow : Window,
     private void ApplyPresentationViewShowState(PresentationViewShowState state)
     {
         _viewShowState = state;
-        _notesBox.IsVisible = _viewModeState.Mode != PresentationViewMode.SlideSorter &&
+        _notesBox.IsVisible = _viewModeState.Mode is not PresentationViewMode.SlideSorter and not PresentationViewMode.SlideMaster &&
                               (_viewModeState.Mode == PresentationViewMode.NotesPage || state.ShowNotesPane);
         _slideCanvas.ApplyViewShowState(state);
         if (_gestureHandler is null)
@@ -2532,6 +2533,11 @@ public sealed partial class MainWindow : Window,
     private void OnMasterTargetSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (_slidePaneRefreshing || _masterTargetList.SelectedItem is not ListBoxItem { Tag: MasterEditTarget target })
+            return;
+        // Avalonia can deliver the SelectedItem notification after the pane's Items.Clear/Add cycle
+        // completed. The initially selected master target is already active, so re-entering its refresh
+        // would clear the collection while the selection model is enumerating it.
+        if (EnsureMasterEditingSession().Target == target)
             return;
         TrySelectSlideMasterTarget(target);
     }

@@ -63,6 +63,7 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(
         _preparation = plan;
         if (plan.LoadFixturePresentation)
             host.LoadPresentation(fixture.Presentation);
+        host.SetPresentationViewMode(PresentationViewMode.Normal);
         host.SelectSlide(plan.SlideIndex);
         if (plan.SelectionShapeId == 0)
             host.ClearSelection();
@@ -117,7 +118,8 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(
             state.BackstageOpen && StringComparer.OrdinalIgnoreCase.Equals(
                 state.BackstagePaneLabel,
                 preparation.Activation.Id),
-            state.BackstagePaneLabel)));
+            state.BackstagePaneLabel,
+            host.IsSlideMasterSurfaceVisible && host.MasterTargetCount > 0)));
 
         var semantic = new WholeWindowVisualEvidenceSemanticState(
             scenario.Id,
@@ -207,6 +209,9 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(
                 break;
             case WholeWindowVisualEvidenceActivationKind.AnimationPane:
                 host.EnsureAnimationPaneVisible();
+                break;
+            case WholeWindowVisualEvidenceActivationKind.SlideMaster:
+                host.SetPresentationViewMode(PresentationViewMode.SlideMaster);
                 break;
         }
     }

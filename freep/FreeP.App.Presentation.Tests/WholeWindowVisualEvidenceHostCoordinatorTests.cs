@@ -17,6 +17,7 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
 
         probe.Calls.Should().Equal(
             "LoadPresentation:3",
+            "SetPresentationViewMode:Normal",
             "SelectSlide:0",
             $"SelectShape:{fixture.TextShapeId}",
             "HideCommentsPane",
@@ -44,6 +45,7 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
 
         probe.Calls.Should().Equal(
             "LoadPresentation:3",
+            "SetPresentationViewMode:Normal",
             "SelectSlide:0",
             $"SelectShape:{fixture.ChartShapeId}",
             "HideCommentsPane",
@@ -69,6 +71,28 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
 
         probe.Calls.Should().Contain("ShowBackstagePane:Account");
         probe.Calls.Should().NotContain("HideBackstage");
+    }
+
+    [Fact]
+    public void Prepare_routes_slide_master_through_the_real_view_mode_contract()
+    {
+        var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
+        var probe = new FakeProbe();
+        var coordinator = new WholeWindowVisualEvidenceHostCoordinator(probe, probe);
+
+        var assertions = coordinator.Prepare(
+            WholeWindowVisualEvidenceCatalog.Get("workspace.slide-master"),
+            fixture);
+        var semantic = coordinator.CaptureSemantic(
+            WholeWindowVisualEvidenceCatalog.Get("workspace.slide-master"),
+            assertions);
+
+        probe.Calls.Should().ContainInOrder(
+            "SetPresentationViewMode:Normal",
+            "SelectRibbonTab:view",
+            "SetPresentationViewMode:SlideMaster");
+        semantic.Assertions.Should().Contain(assertion =>
+            assertion.Id == "slide-master-activated-via-command" && assertion.Passed);
     }
 
     [Fact]
@@ -149,6 +173,7 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
     {
         private int _slideCount = 1;
         private int _currentSlideIndex;
+        private bool _slideMasterActive;
         private readonly List<uint> _selectedShapeIds = [];
 
         internal List<string> Calls { get; } = [];
@@ -161,6 +186,8 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
         public DialogPaneVisualEvidenceChoiceState ChoiceState => new(0, 0, 0, 0);
         public bool IsTablePickerVisible => false;
         public bool IsLayoutPickerVisible => false;
+        public bool IsSlideMasterSurfaceVisible => _slideMasterActive;
+        public int MasterTargetCount => _slideMasterActive ? 2 : 0;
 
         internal void DriftToSlide(int slideIndex) => _currentSlideIndex = slideIndex;
 
@@ -195,6 +222,12 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
         public bool SelectRibbonTab(string tabId)
         {
             Calls.Add($"SelectRibbonTab:{tabId}");
+            return true;
+        }
+        public bool SetPresentationViewMode(PresentationViewMode mode)
+        {
+            _slideMasterActive = mode == PresentationViewMode.SlideMaster;
+            Calls.Add($"SetPresentationViewMode:{mode}");
             return true;
         }
         public void FocusNotes() => Calls.Add("FocusNotes");

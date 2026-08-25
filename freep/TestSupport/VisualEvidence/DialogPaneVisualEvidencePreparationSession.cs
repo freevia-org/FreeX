@@ -34,6 +34,7 @@ public interface IVisualEvidenceAppHost
     void ResetAuxiliaryPanes();
     void HideBackstage();
     bool SelectRibbonTab(string tabId);
+    bool SetPresentationViewMode(PresentationViewMode mode);
     void FocusNotes();
     void ShowBackstagePane(string paneId);
 
@@ -45,6 +46,8 @@ public interface IVisualEvidenceAppHost
     DialogPaneVisualEvidenceChoiceState ChoiceState { get; }
     bool IsTablePickerVisible { get; }
     bool IsLayoutPickerVisible { get; }
+    bool IsSlideMasterSurfaceVisible { get; }
+    int MasterTargetCount { get; }
 
     void ShowCommentsPane();
     void SelectFirstComment();
