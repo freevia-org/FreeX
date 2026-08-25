@@ -190,6 +190,17 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_references_collapsed_citations_and_captions_keep_their_wpf_representative_icons()
+    {
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+
+        RequiredGroup(avalonia, "references", "citations").Controls[0].Icon?.Kind
+            .Should().Be(RibbonCommandIconKind.Citation);
+        RequiredGroup(avalonia, "references", "captions").Controls[0].Icon?.Kind
+            .Should().Be(RibbonCommandIconKind.Caption);
+    }
+
+    [Fact]
     public void Profile_tab_ids_match_except_named_capability_deltas()
     {
         var wpfTabIds = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();
