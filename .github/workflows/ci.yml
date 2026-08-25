@@ -74,13 +74,9 @@ jobs:
         shell: pwsh
         run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
 
-      - name: Build portable tests
-        shell: pwsh
-        run: dotnet build FreeX.DefaultTests.slnx --configuration Release
-
       - name: Commit gate
         shell: pwsh
-        run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux -NoBuild
+        run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux
 
   portable-macos:
     name: macOS portable lane
@@ -107,10 +103,6 @@ jobs:
         shell: pwsh
         run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
 
-      - name: Build portable tests
-        shell: pwsh
-        run: dotnet build FreeX.DefaultTests.slnx --configuration Release
-
       - name: Commit gate
         shell: pwsh
-        run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform macos -NoBuild
+        run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform macos

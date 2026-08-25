@@ -33,10 +33,12 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release");
         workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform windows -NoBuild");
         workflow.Should().Contain("name: Linux portable lane");
-        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux -NoBuild");
+        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux");
+        workflow.Should().NotContain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux -NoBuild");
         workflow.Should().Contain("name: macOS portable lane");
         workflow.Should().Contain("dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release");
-        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform macos -NoBuild");
+        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform macos");
+        workflow.Should().NotContain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform macos -NoBuild");
         workflow.Should().NotContain("dotnet test FreeX.DefaultTests.slnx");
         workflow.Should().NotContain("dotnet test FreeX.UiTests.slnx");
         workflow.Should().NotContain("--disable-build-servers");
@@ -72,8 +74,8 @@ public sealed class GitHubWorkflowPreflightTests
     {
         var globalJson = WorkspaceFileLocator.ReadAllText("global.json");
 
-        globalJson.Should().Contain("\"version\": \"10.0.100\"");
-        globalJson.Should().Contain("\"rollForward\": \"latestFeature\"");
+        globalJson.Should().Contain("\"version\": \"10.0.111\"");
+        globalJson.Should().Contain("\"rollForward\": \"latestPatch\"");
     }
 
     [Fact]
@@ -90,20 +92,19 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("if-no-files-found");
         script.Should().Contain("workflow must declare top-level permissions explicitly");
         script.Should().Contain("workflow must not request write-all permissions");
-        script.Should().Contain("must be pinned to an explicit major version");
-        script.Should().Contain("\"actions/download-artifact\" = \"v7\"");
+        script.Should().Contain("must be pinned to an approved full 40-character commit SHA");
+        script.Should().Contain("\"actions/download-artifact\" = \"37930b1c2abaa49bbe596cd826c3c89aef350131\"");
         script.Should().Contain("must declare an explicit shell");
         script.Should().Contain("must stay within the workflow workspace");
         script.Should().Contain("workflow YAML must use spaces for indentation");
-        script.Should().Contain("$allowedActionMajors");
-        script.Should().Contain("must use supported major");
+        script.Should().Contain("$allowedActionPins");
         script.Should().Contain("publish-distribution-candidate");
         script.Should().Contain("distribution_candidate");
         script.Should().Contain("macOS release publication job must be gated to workflow_dispatch distribution-candidate runs");
         script.Should().Contain("macOS release publication job must declare actions: read");
         script.Should().Contain("macOS release publication must be the only workflow scope requesting contents: write");
         script.Should().Contain("cancel-in-progress: false");
-        script.Should().Contain("macOS release publication checkout must use actions/checkout@v6 with persist-credentials: false");
+        script.Should().Contain("macOS release publication checkout must use the approved full-SHA actions/checkout pin with persist-credentials: false");
         script.Should().Contain("macOS app hosted test command must use a focused --filter");
         script.Should().Contain("macOS app workflow focused test filter is missing");
         script.Should().Contain("PortablePdfTextCapabilityPlannerTests");
@@ -188,7 +189,7 @@ public sealed class GitHubWorkflowPreflightTests
         releaseJob.Should().Contain("concurrency:");
         releaseJob.Should().Contain("group: macos-distribution-candidate-release");
         releaseJob.Should().Contain("cancel-in-progress: false");
-        releaseJob.Should().Contain("uses: actions/checkout@v6");
+        releaseJob.Should().Contain("uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803");
         releaseJob.Should().Contain("persist-credentials: false");
 
         workflow.Replace(releaseJob, string.Empty, StringComparison.Ordinal)
@@ -327,11 +328,11 @@ public sealed class GitHubWorkflowPreflightTests
         aggregateJob.Should().Contain("contents: read");
 
         var checkoutStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Checkout");
-        checkoutStep.Should().Contain("uses: actions/checkout@v6");
+        checkoutStep.Should().Contain("uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803");
         checkoutStep.Should().Contain("persist-credentials: false");
 
         var downloadStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Download macOS preview artifacts");
-        downloadStep.Should().Contain("uses: actions/download-artifact@v7");
+        downloadStep.Should().Contain("uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131");
         downloadStep.Should().Contain("pattern: \"freex-${{ github.run_id }}-${{ github.run_attempt }}-osx-*-macos-*\"");
         downloadStep.Should().NotContain("{app,diagnostics}");
         downloadStep.Should().Contain("path: artifacts/macos-preview-evidence");
@@ -380,7 +381,7 @@ public sealed class GitHubWorkflowPreflightTests
         manifestStep.Should().Contain("\"bundle_package_type=$($entry.evidence_markers.bundle_package_type)\"");
 
         var uploadStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Upload aggregate readiness");
-        uploadStep.Should().Contain("uses: actions/upload-artifact@v7");
+        uploadStep.Should().Contain("uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
         uploadStep.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-preview-readiness");
         uploadStep.Should().Contain("path: artifacts/macos-preview-readiness/*");
         uploadStep.Should().Contain("if-no-files-found: error");
@@ -453,7 +454,7 @@ public sealed class GitHubWorkflowPreflightTests
                 timeout-minutes: 5
                 steps:
                   - name: Upload release artifact
-                    uses: actions/upload-artifact@v7
+                    uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
                     with:
                       name: freex-release
                       path: artifacts/upload/*.exe
@@ -487,9 +488,10 @@ public sealed class GitHubWorkflowPreflightTests
             jobs:
               build:
                 runs-on: windows-latest
+                timeout-minutes: 5
                 steps:
                   - name: Checkout
-                    uses: actions/checkout@v6
+                    uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
                     with:
                       fetch-depth: 0
                   - name: Safe shell
@@ -820,7 +822,7 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void GitHubWorkflowPreflight_FailsForUnsupportedKnownActionMajor()
+    public void GitHubWorkflowPreflight_FailsForUnpinnedKnownAction()
     {
         using var temp = new TestTemporaryDirectory();
 
@@ -852,7 +854,7 @@ public sealed class GitHubWorkflowPreflightTests
 
         result.ExitCode.Should().NotBe(0);
         result.CombinedOutput.Should().Contain("actions/checkout@v99");
-        result.CombinedOutput.Should().Contain("must use supported major v6");
+        result.CombinedOutput.Should().Contain("must be pinned to an approved full 40-character commit SHA");
     }
 
     [Fact]
@@ -1046,7 +1048,7 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS release publication checkout must use actions/checkout@v6 with persist-credentials: false");
+        result.CombinedOutput.Should().Contain("macOS release publication checkout must use the approved full-SHA actions/checkout pin with");
         result.CombinedOutput.Should().Contain("actions/checkout steps must set persist-credentials: false");
         result.CombinedOutput.Should().Contain("macos-app.yml");
     }
