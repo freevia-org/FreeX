@@ -27,9 +27,9 @@ if ($workflows.Count -eq 0) {
 }
 
 $allowedActionPins = @{
-    "actions/checkout" = "d23441a48e516b6c34aea4fa41551a30e30af803"
-    "actions/download-artifact" = "37930b1c2abaa49bbe596cd826c3c89aef350131"
-    "actions/setup-dotnet" = "26b0ec14cb23fa6904739307f278c14f94c95bf1"
+    "actions/checkout" = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+    "actions/download-artifact" = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+    "actions/setup-dotnet" = "a98b56852c35b8e3190ac28c8c2271da59106c68"
     "actions/upload-artifact" = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
     "github/codeql-action/init" = "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"
     "github/codeql-action/analyze" = "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"
