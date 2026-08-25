@@ -42,19 +42,30 @@ public sealed class WholeWindowVisualEvidenceTests
         using var temporaryDirectory = new TestTemporaryDirectory("freep-whole-window-ui-");
         var root = temporaryDirectory.Path;
         var path = Path.Combine(root, "ui.png");
-        var drawing = new DrawingVisual();
-        using (var context = drawing.RenderOpen())
+        var pixels = new byte[128 * 76 * 4];
+        Array.Fill(pixels, (byte)255);
+
+        void Fill(int left, int top, int width, int height, byte red, byte green, byte blue)
         {
-            context.DrawRectangle(Brushes.White, null, new System.Windows.Rect(0, 0, 128, 76));
-            context.DrawRectangle(new SolidColorBrush(Color.FromRgb(31, 64, 103)), null, new System.Windows.Rect(0, 0, 128, 8));
-            context.DrawRectangle(new SolidColorBrush(Color.FromRgb(242, 242, 242)), null, new System.Windows.Rect(0, 8, 128, 18));
-            context.DrawRectangle(Brushes.LightGray, null, new System.Windows.Rect(0, 26, 24, 46));
-            context.DrawRectangle(Brushes.SteelBlue, null, new System.Windows.Rect(30, 34, 72, 28));
-            context.DrawLine(new Pen(Brushes.Black, 1), new System.Windows.Point(0, 72), new System.Windows.Point(128, 72));
+            for (var y = top; y < top + height; y++)
+            {
+                for (var x = left; x < left + width; x++)
+                {
+                    var offset = (y * 128 + x) * 4;
+                    pixels[offset] = blue;
+                    pixels[offset + 1] = green;
+                    pixels[offset + 2] = red;
+                    pixels[offset + 3] = 255;
+                }
+            }
         }
-        var bitmap = new RenderTargetBitmap(128, 76, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(drawing);
-        WritePng(path, bitmap);
+
+        Fill(0, 0, 128, 8, 31, 64, 103);
+        Fill(0, 8, 128, 18, 242, 242, 242);
+        Fill(0, 26, 24, 46, 211, 211, 211);
+        Fill(30, 34, 72, 28, 70, 130, 180);
+        Fill(0, 72, 128, 1, 0, 0, 0);
+        WritePng(path, BitmapSource.Create(128, 76, 96, 96, PixelFormats.Bgra32, null, pixels, 128 * 4));
 
         var validation = ImageDiff.ValidateContent(path);
 
