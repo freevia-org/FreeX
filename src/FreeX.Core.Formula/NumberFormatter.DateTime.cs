@@ -356,7 +356,9 @@ public static partial class NumberFormatter
         var netFormat = token == SpecialDateTimeLocaleToken.LongDate
             ? dateTimeFormat.LongDatePattern
             : dateTimeFormat.LongTimePattern;
-        return dateTime.ToString(netFormat, dateTimeFormat);
+        return dateTime.ToString(netFormat, dateTimeFormat)
+            .Replace('\u00A0', ' ')
+            .Replace('\u202F', ' ');
     }
 
     private static bool TryResolveSpecialDateTimeLocaleToken(string format, out SpecialDateTimeLocaleToken token)

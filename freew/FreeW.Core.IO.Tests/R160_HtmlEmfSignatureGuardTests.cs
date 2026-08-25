@@ -110,8 +110,8 @@ public sealed class R160_HtmlEmfSignatureGuardTests
     private static TextDocument LoadHtmlReferencing(string path)
     {
         var html =
-            "<!doctype html><html><body><p>Report <img src=\"file:///"
-            + path.Replace('\\', '/')
+            "<!doctype html><html><body><p>Report <img src=\""
+            + new Uri(path).AbsoluteUri
             + "\"></p></body></html>";
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(html));

@@ -171,10 +171,23 @@ function Get-VisualEvidenceArtifactInventory {
             if ($RequireNonEmpty -and $_.Length -le 0) {
                 throw ($EmptyArtifactMessage -f $_.FullName)
             }
+            $isTextArtifact = $_.Extension -in @(".html", ".json", ".md", ".txt")
+            $normalizedTextBytes = if ($isTextArtifact) {
+                $content = [IO.File]::ReadAllText($_.FullName).Replace("`r`n", "`n").Replace("`r", "`n")
+                [Text.UTF8Encoding]::new($false).GetBytes($content)
+            }
+            else {
+                $null
+            }
             [ordered]@{
                 path = Get-VisualEvidenceRelativePath -EvidenceRoot $EvidenceRoot -Path $_.FullName
-                bytes = $_.Length
-                sha256 = Get-VisualEvidenceFileSha256 -Path $_.FullName
+                bytes = if ($isTextArtifact) { $normalizedTextBytes.Length } else { $_.Length }
+                sha256 = if ($isTextArtifact) {
+                    Get-VisualEvidenceNormalizedTextSha256 -Path $_.FullName
+                }
+                else {
+                    Get-VisualEvidenceFileSha256 -Path $_.FullName
+                }
             }
         })
 }

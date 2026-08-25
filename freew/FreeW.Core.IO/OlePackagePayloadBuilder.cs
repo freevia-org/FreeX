@@ -25,7 +25,8 @@ public static class OlePackagePayloadBuilder
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
         ArgumentNullException.ThrowIfNull(fileBytes);
 
-        var displayName = Path.GetFileName(fileName);
+        var lastSeparator = Math.Max(fileName.LastIndexOf('/'), fileName.LastIndexOf('\\'));
+        var displayName = lastSeparator >= 0 ? fileName[(lastSeparator + 1)..] : fileName;
         if (string.IsNullOrWhiteSpace(displayName))
             throw new ArgumentException("The embedded file must have a file name.", nameof(fileName));
 
