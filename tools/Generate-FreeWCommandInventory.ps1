@@ -202,15 +202,15 @@ internal static class FreeWCommandInventory
             "Both shells use the shared Quick Part library and insert the selected building block through their undoable text-edit path.",
             "InsertTextCommands_UseSharedQuickPartAndFieldBehavior"),
         ["freew.insert-table"] = TableInsertionEvidence(
-            "The shared insertion workflow maps the legacy Table route to the canonical 3 × 3 insertion command for both renderers."),
+            "The shared insertion workflow maps the legacy Table route to the canonical 3 \u00D7 3 insertion command for both renderers."),
         ["freew.table-2x2"] = TableInsertionEvidence(
-            "The shared insertion workflow maps the 2 × 2 menu choice and primary Table face to one command for both renderers."),
+            "The shared insertion workflow maps the 2 \u00D7 2 menu choice and primary Table face to one command for both renderers."),
         ["freew.table-3x3"] = TableInsertionEvidence(
-            "The shared insertion workflow maps the 3 × 3 menu choice and legacy Table route to one command for both renderers."),
+            "The shared insertion workflow maps the 3 \u00D7 3 menu choice and legacy Table route to one command for both renderers."),
         ["freew.table-4x4"] = TableInsertionEvidence(
-            "The shared insertion workflow inserts a 4 × 4 table through the same renderer port in both hosts."),
+            "The shared insertion workflow inserts a 4 \u00D7 4 table through the same renderer port in both hosts."),
         ["freew.table-5x2"] = TableInsertionEvidence(
-            "The shared insertion workflow inserts a 5 × 2 table through the same renderer port in both hosts."),
+            "The shared insertion workflow inserts a 5 \u00D7 2 table through the same renderer port in both hosts."),
         ["freew.bullets"] = ParagraphEditingEvidence("Both renderers route bullet-list toggling through the shared paragraph command family."),
         ["freew.numbering"] = ParagraphEditingEvidence("Both renderers route numbered-list toggling through the shared paragraph command family."),
         ["freew.align-left"] = ParagraphEditingEvidence("Both renderers map left paragraph alignment through the shared command family."),
