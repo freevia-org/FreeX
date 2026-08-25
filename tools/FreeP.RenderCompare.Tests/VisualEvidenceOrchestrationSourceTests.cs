@@ -109,6 +109,21 @@ public sealed class VisualEvidenceOrchestrationSourceTests
     }
 
     [Fact]
+    public void Rich_editor_capture_settles_the_slide_layout_before_activating_the_editor()
+    {
+        var wpf = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "freep", "TestSupport", "VisualEvidence.Wpf", "MainWindow.VisualCaptureAdapter.cs");
+        var avalonia = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "freep", "TestSupport", "VisualEvidence.Avalonia", "MainWindow.VisualCaptureAdapter.cs");
+
+        wpf.Should().Contain("owner.UpdateLayout();")
+            .And.Contain("DispatcherPriority.Render")
+            .And.Contain("owner.SlideCanvas.TextEditor");
+        avalonia.Should().Contain("owner.UpdateLayout();")
+            .And.Contain("owner._textEditor?.Activate(shapeId);");
+    }
+
+    [Fact]
     public void Wpf_dialog_capture_forces_normal_window_state_before_showing_the_owner()
     {
         var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(

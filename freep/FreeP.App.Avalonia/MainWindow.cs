@@ -352,7 +352,7 @@ public sealed partial class MainWindow : Window,
     private RibbonDefinition? _ribbonDefinition;
     private RibbonCommandRegistry? _ribbonCommandRegistry;
     private readonly RibbonStateStore _ribbonStateStore = new();
-    private readonly PresentationRibbonContextSource _ribbonContextSource = new();
+    private readonly FreePRibbonContextSource _ribbonContextSource = new();
     private FreePRibbonBindingSession? _ribbonBindingSession;
     private bool _ribbonKeyTipsVisible;
     private string? _ribbonKeyTipTabId;
@@ -2653,9 +2653,6 @@ public sealed partial class MainWindow : Window,
             Child           = _ribbonControl,
         };
     }
-
-    private void RefreshContextualTabs() =>
-        _ribbonContextSource.Apply(PresentationContextualRibbonPlanner.BuildContext(Editor));
 
     internal RibbonCommandRegistry BuildCommandRegistry()
     {
@@ -7349,6 +7346,7 @@ public sealed partial class MainWindow : Window,
     private void SyncRibbonCommandStates()
     {
         _ribbonBindingSession?.SyncCommandStates();
+        _ribbonContextSource.Refresh(Editor);
     }
 
     private void OnFileWorkflowChanged()
