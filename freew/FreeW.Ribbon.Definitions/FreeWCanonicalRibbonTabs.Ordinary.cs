@@ -450,7 +450,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("illustrations", "Illustrations", null, 96, g =>
                     {
-                        g.Button("freew.picture", "Picture");
+                        g.Button("freew.picture", "Picture", b => Icon(b, RibbonCommandIconKind.Picture));
                         g.Dropdown("freew.shapes", "Shapes", BuildInsertShapesMenu());
                         g.Button("freew.smartart", "SmartArt");
                         g.Button("freew.chart", "Chart");
@@ -477,7 +477,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("links", "Links", null, 95, g =>
                     {
-                        g.Button("freew.hyperlink", "Hyperlink");
+                        g.Button("freew.hyperlink", "Hyperlink", b => Icon(b, RibbonCommandIconKind.Link));
                         g.Button("freew.edit-hyperlink", "Edit Hyperlink");
                         g.Button("freew.remove-hyperlink", "Remove Hyperlink");
                         g.Button("freew.hyperlink-tooltip", "ScreenTip");

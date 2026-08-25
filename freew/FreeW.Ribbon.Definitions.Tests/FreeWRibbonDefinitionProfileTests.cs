@@ -179,6 +179,17 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_insert_collapsed_illustrations_and_links_keep_their_wpf_representative_icons()
+    {
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+
+        RequiredGroup(avalonia, "insert", "illustrations").Controls[0].Icon?.Kind
+            .Should().Be(RibbonCommandIconKind.Picture);
+        RequiredGroup(avalonia, "insert", "links").Controls[0].Icon?.Kind
+            .Should().Be(RibbonCommandIconKind.Link);
+    }
+
+    [Fact]
     public void Profile_tab_ids_match_except_named_capability_deltas()
     {
         var wpfTabIds = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();
