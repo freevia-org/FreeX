@@ -280,32 +280,31 @@ public static partial class NumberFormatter
         numberFormat = CultureInfo.InvariantCulture.NumberFormat;
         dateTimeFormat = CultureInfo.InvariantCulture.DateTimeFormat;
 
+        if (int.TryParse(
+                normalizedLocaleToken,
+                NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture,
+                out var lcid))
+        {
+            try
+            {
+                var culture = CultureInfo.GetCultureInfo(lcid);
+                numberFormat = (NumberFormatInfo)culture.NumberFormat.Clone();
+                dateTimeFormat = (DateTimeFormatInfo)culture.DateTimeFormat.Clone();
+                UseGregorianCalendarWhenAvailable(dateTimeFormat);
+                return true;
+            }
+            catch (CultureNotFoundException)
+            {
+            }
+        }
+
         try
         {
             var culture = CultureInfo.GetCultureInfo(normalizedLocaleToken);
             numberFormat = (NumberFormatInfo)culture.NumberFormat.Clone();
             dateTimeFormat = (DateTimeFormatInfo)culture.DateTimeFormat.Clone();
             UseGregorianCalendarWhenAvailable(dateTimeFormat);
-            return true;
-        }
-        catch (CultureNotFoundException)
-        {
-        }
-
-        if (!int.TryParse(
-                normalizedLocaleToken,
-                NumberStyles.HexNumber,
-                CultureInfo.InvariantCulture,
-                out var lcid))
-        {
-            return false;
-        }
-
-        try
-        {
-            var culture = CultureInfo.GetCultureInfo(lcid);
-            numberFormat = (NumberFormatInfo)culture.NumberFormat.Clone();
-            dateTimeFormat = (DateTimeFormatInfo)culture.DateTimeFormat.Clone();
             return true;
         }
         catch (CultureNotFoundException)

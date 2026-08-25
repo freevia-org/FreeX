@@ -124,7 +124,8 @@ public class R162_HtmlListMarkerFidelityTests
         var html = Encoding.UTF8.GetString(saveStream.ToArray());
 
         // Two separate <ul> tags, not one merged tag holding all four items.
-        html.Should().Contain("</ul>\r\n<ul", because: "adjacent same-kind lists with different markers must stay in separate <ul> tags");
+        html.Should().Contain("</ul>" + Environment.NewLine + "<ul",
+            because: "adjacent same-kind lists with different markers must stay in separate <ul> tags");
 
         saveStream.Position = 0;
         var reloaded = new HtmlFileAdapter().Load(saveStream);
