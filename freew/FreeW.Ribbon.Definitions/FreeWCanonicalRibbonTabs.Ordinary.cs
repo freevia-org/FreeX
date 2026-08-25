@@ -704,7 +704,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("citations", "Citations & Bibliography", null, 90, g =>
                     {
-                        g.Button("freew.citation", "Insert Citation");
+                        g.Button("freew.citation", "Insert Citation", b => Icon(b, RibbonCommandIconKind.Citation));
                         g.Button("freew.manage-sources", "Manage Sources");
                         g.ComboBox("freew.citation-style", "Style", c => c with
                         {
@@ -735,7 +735,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("captions", "Captions", null, 80, g =>
                     {
-                        g.Dropdown("freew.caption", "Insert Caption", BuildCaptionMenu());
+                        g.Dropdown("freew.caption", "Insert Caption", BuildCaptionMenu(), b => b with { Icon = new RibbonCommandIcon(RibbonCommandIconKind.Caption) });
                         g.Dropdown("freew.tof", "Insert Table of Figures", BuildTableOfFiguresMenu());
                         g.Button("freew.tof-refresh", "Update Table");
                         g.Button("freew.cross-reference", "Cross-reference");
