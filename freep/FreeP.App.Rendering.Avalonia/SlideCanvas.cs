@@ -96,6 +96,7 @@ public sealed partial class SlideCanvas : Control
 
     private Presentation? _presentation;
     private Slide? _slide;
+    private MasterEditTarget? _masterEditTarget;
     private int _slideIndex;
     private uint? _activeTextEditShapeId;
     private bool _renderSlideBackground = true;
@@ -208,6 +209,19 @@ public sealed partial class SlideCanvas : Control
     {
         _viewShowState = state;
         InvalidateVisual();
+    }
+
+    /// <summary>Optional active Slide Master target rendered as an authoring surface.</summary>
+    public MasterEditTarget? MasterEditTarget
+    {
+        get => _masterEditTarget;
+        set
+        {
+            if (_masterEditTarget == value)
+                return;
+            _masterEditTarget = value;
+            Refresh();
+        }
     }
 
     public void ApplyViewZoomState(PresentationViewZoomState state)
@@ -2667,11 +2681,20 @@ public sealed partial class SlideCanvas : Control
         _slideHeightDip = _presentation.SlideSizeCyEmu / 9525.0;
         try
         {
-            _cachedOps = SlideCompositor.Compose(
-                _presentation,
-                _slide,
-                _slideIndex,
-                RenderSlideBackground);
+            _cachedOps = MasterEditTarget is { } target
+                ? target.Kind switch
+                {
+                    MasterEditTargetKind.Master when _presentation.Masters.Find(master => master.Id == target.Id) is { } master =>
+                        SlideCompositor.ComposeMaster(_presentation, master),
+                    MasterEditTargetKind.Layout when _presentation.Layouts.Find(layout => layout.Id == target.Id) is { } layout =>
+                        SlideCompositor.ComposeLayout(_presentation, layout),
+                    _ => Array.Empty<DrawOp>(),
+                }
+                : SlideCompositor.Compose(
+                    _presentation,
+                    _slide,
+                    _slideIndex,
+                    RenderSlideBackground);
         }
         catch (Exception)
         {

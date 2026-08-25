@@ -139,6 +139,8 @@ public sealed partial class MainWindow : Window,
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
     private PresentationViewModeState _viewModeState = PresentationViewModeState.Normal;
     private PresentationViewColorModeState _viewColorModeState = PresentationViewColorModeState.Color;
+    private MasterEditingSession? _masterEditingSession;
+    private bool _masterCanvasAttached;
 
     // Notes pane (Wave 7B)
     private TextBox _notesBox = null!;
@@ -267,6 +269,8 @@ public sealed partial class MainWindow : Window,
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
     internal bool IsNotesPageSurfaceVisible => _notesPageSurface?.Visibility == Visibility.Visible;
+    internal bool IsSlideMasterSurfaceVisible =>
+        _viewModeState.Mode == PresentationViewMode.SlideMaster && SlideCanvas?.MasterEditTarget is not null;
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
@@ -580,6 +584,7 @@ public sealed partial class MainWindow : Window,
             // edited in its own application saved into the model and left the document clean,
             // because the coordinator's default route reports nothing.
             tryActivateOleExternally: TryActivateOleExternally);
+        _masterCanvasAttached = false;
         SlideCanvas.ApplyViewShowState(_viewShowState);
     }
 
@@ -724,6 +729,7 @@ public sealed partial class MainWindow : Window,
         var isOutline = state.Mode == PresentationViewMode.Outline;
         var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
         var isNotesPage = state.Mode == PresentationViewMode.NotesPage;
+        var isSlideMaster = state.Mode == PresentationViewMode.SlideMaster;
         if (SlidePaneHost is null || _canvasHost is null || _bodySplitter is null)
             return;
 
@@ -736,7 +742,7 @@ public sealed partial class MainWindow : Window,
             ? new GridLength(0)
             : new GridLength(1, GridUnitType.Star);
         _canvasHost.Visibility = isSlideSorter ? Visibility.Collapsed : Visibility.Visible;
-        _notesBox.Visibility = !isSlideSorter && (isNotesPage || _viewShowState.ShowNotesPane)
+        _notesBox.Visibility = !isSlideSorter && !isSlideMaster && (isNotesPage || _viewShowState.ShowNotesPane)
             ? Visibility.Visible
             : Visibility.Collapsed;
         _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
@@ -746,7 +752,35 @@ public sealed partial class MainWindow : Window,
         _slidePane.SetSlideSorterMode(isSlideSorter);
         if (isOutline)
             _outlinePane.RefreshProjection();
+        if (isSlideMaster)
+            ConfigureMasterCanvas();
+        else if (_masterCanvasAttached)
+        {
+            SlideCanvas.MasterEditTarget = null;
+            AttachCanvasEditing();
+        }
         SyncRibbonCommandStates();
+    }
+
+    private MasterEditingSession EnsureMasterEditingSession()
+    {
+        if (_masterEditingSession is null || !ReferenceEquals(_masterEditingSession.Presentation, _presentation))
+            _masterEditingSession = new MasterEditingSession(_presentation, Editor.Bus);
+        return _masterEditingSession;
+    }
+
+    private void ConfigureMasterCanvas()
+    {
+        var masterEditor = EnsureMasterEditingSession();
+        SlideCanvas.Presentation = _presentation;
+        SlideCanvas.Slide = masterEditor.CurrentSlide;
+        SlideCanvas.MasterEditTarget = masterEditor.Target;
+        if (!_masterCanvasAttached)
+        {
+            SlideCanvas.AttachMasterEditing(masterEditor, _textOverlay);
+            _masterCanvasAttached = true;
+        }
+        SlideCanvas.Refresh();
     }
 
     private void SetNotesPageSurface(bool isNotesPage)
@@ -1870,8 +1904,14 @@ public sealed partial class MainWindow : Window,
     private void RefreshCanvas()
     {
         CloseActiveOleHost();
+        if (_viewModeState.Mode == PresentationViewMode.SlideMaster)
+        {
+            ConfigureMasterCanvas();
+            return;
+        }
         SlideCanvas.Presentation = _presentation;
         SlideCanvas.Slide        = Editor.CurrentSlide;
+        SlideCanvas.MasterEditTarget = null;
         SlideCanvas.Refresh();
     }
 

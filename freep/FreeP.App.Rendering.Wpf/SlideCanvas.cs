@@ -94,6 +94,22 @@ public sealed partial class SlideCanvas : FrameworkElement
         set => SetValue(SlideProperty, value);
     }
 
+    /// <summary>Optional active Slide Master target. When set, composition renders the real
+    /// master/layout authoring surface instead of normal slide inheritance output.</summary>
+    public MasterEditTarget? MasterEditTarget
+    {
+        get => _masterEditTarget;
+        set
+        {
+            if (_masterEditTarget == value)
+                return;
+            _masterEditTarget = value;
+            Refresh();
+        }
+    }
+
+    private MasterEditTarget? _masterEditTarget;
+
     /// <summary>Whether the compositor paints the slide background.</summary>
     public bool RenderSlideBackground
     {
@@ -212,6 +228,33 @@ public sealed partial class SlideCanvas : FrameworkElement
             this, editor, textOverlay, onClipboardWriteFailed, onInlineOlePayloadUpdated);
         _tableCellEditor = new InCanvasTableCellEditor(
             this, editor, textOverlay, onClipboardWriteFailed, onInlineOlePayloadUpdated); // Wave 9A
+    }
+
+    /// <summary>
+    /// Attaches the shared gesture surface to a Slide Master editing target. Rich-text and table
+    /// overlays deliberately remain unavailable until master-specific text authoring is modeled;
+    /// selection, marquee, move, resize, rotate, and delete all operate on the real target.
+    /// </summary>
+    public void AttachMasterEditing(MasterEditingSession editor, Canvas textOverlay)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        var editPointsEnabled = _gestureHandler?.EditPointsEnabled ?? true;
+        _gestureHandler?.Dispose();
+        _textEditor?.Dispose();
+        ActiveTextEditShapeId = null;
+        _textEditor = null;
+        _tableCellEditor = null;
+
+        if (_editingSession is not null)
+            _editingSession.SelectionChanged -= OnEditingSessionSelectionChangedForAutomation;
+        _editingSession = editor;
+        _canvasAutomation.ResetSelection(Slide, editor.SelectedShapeIds);
+        _editingSession.SelectionChanged += OnEditingSessionSelectionChangedForAutomation;
+
+        _gestureHandler = new CanvasGestureHandler(this, editor);
+        _gestureHandler.EditPointsEnabled = editPointsEnabled;
+        ApplyViewShowState(_viewShowState);
+        _textOverlay = textOverlay;
     }
 
     /// <summary>
@@ -2915,11 +2958,20 @@ public sealed partial class SlideCanvas : FrameworkElement
         int slideIndex = presentation.Slides.IndexOf(slide);
         try
         {
-            _cachedOps = SlideCompositor.Compose(
-                presentation,
-                slide,
-                slideIndex < 0 ? 0 : slideIndex,
-                RenderSlideBackground);
+            _cachedOps = MasterEditTarget is { } target
+                ? target.Kind switch
+                {
+                    MasterEditTargetKind.Master when presentation.Masters.Find(master => master.Id == target.Id) is { } master =>
+                        SlideCompositor.ComposeMaster(presentation, master),
+                    MasterEditTargetKind.Layout when presentation.Layouts.Find(layout => layout.Id == target.Id) is { } layout =>
+                        SlideCompositor.ComposeLayout(presentation, layout),
+                    _ => Array.Empty<DrawOp>(),
+                }
+                : SlideCompositor.Compose(
+                    presentation,
+                    slide,
+                    slideIndex < 0 ? 0 : slideIndex,
+                    RenderSlideBackground);
         }
         catch (Exception)
         {

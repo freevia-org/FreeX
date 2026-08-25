@@ -8149,6 +8149,30 @@ public sealed class MainWindowHeadlessTests : IDisposable
         normalVisible.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task Slide_master_view_uses_master_canvas_and_restores_normal_canvas()
+    {
+        var masterVisible = false;
+        var normalVisible = true;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(PresentationViewModePlanner.SlideMasterCommandId, out var master).Should().BeTrue();
+            master!.Execute(RibbonCommandContext.Empty);
+            masterVisible = window.IsSlideMasterSurfaceVisible;
+
+            registry.TryGet(PresentationViewModePlanner.NormalCommandId, out var normal).Should().BeTrue();
+            normal!.Execute(RibbonCommandContext.Empty);
+            normalVisible = window.IsSlideMasterSurfaceVisible;
+        });
+
+        if (!ran) return;
+        masterVisible.Should().BeTrue();
+        normalVisible.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("freep.layout")]
     [InlineData("freep.find")]

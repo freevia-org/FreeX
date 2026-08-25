@@ -362,6 +362,8 @@ public sealed partial class MainWindow : Window,
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
     private PresentationViewModeState _viewModeState = PresentationViewModeState.Normal;
     private PresentationViewColorModeState _viewColorModeState = PresentationViewColorModeState.Color;
+    private MasterEditingSession? _masterEditingSession;
+    private bool _masterInteractionAttached;
     private int _slideSorterDragSourceIndex = -1;
     private Point _slideSorterDragStart;
     private bool _slideSorterDragging;
@@ -402,6 +404,8 @@ public sealed partial class MainWindow : Window,
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
     internal bool IsNotesPageSurfaceVisible => _notesPageSurface?.IsVisible == true;
+    internal bool IsSlideMasterSurfaceVisible =>
+        _viewModeState.Mode == PresentationViewMode.SlideMaster && _slideCanvas?.MasterEditTarget is not null;
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
@@ -2180,6 +2184,7 @@ public sealed partial class MainWindow : Window,
             OnChartPointDoubleClick,
             tryOpenOleInPlace: TryOpenOleInPlace);
         _slideCanvas.AttachGestureHandler(_gestureHandler);
+        _masterInteractionAttached = false;
         ApplyPresentationViewShowState(_viewShowState);
 
         // Text editor: double-click a shape to edit its text.
@@ -2206,6 +2211,7 @@ public sealed partial class MainWindow : Window,
     private void RewireInteractionToEditor()
     {
         if (_adorner is null) return;
+        _masterInteractionAttached = false;
         CloseActiveOleHost();
         // The gesture handler and text editor subscribe strongly to the canvas's routed
         // pointer events, so detach them before binding the new EditingSession.
@@ -2397,6 +2403,7 @@ public sealed partial class MainWindow : Window,
         var isOutline = state.Mode == PresentationViewMode.Outline;
         var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
         var isNotesPage = state.Mode == PresentationViewMode.NotesPage;
+        var isSlideMaster = state.Mode == PresentationViewMode.SlideMaster;
         if (_bodyGrid is null || _slidePaneHost is null || _canvasHost is null)
             return;
 
@@ -2421,12 +2428,52 @@ public sealed partial class MainWindow : Window,
             _slidePaneInsertionIndicator.IsVisible = false;
             _slidePaneNewSlideButton.IsVisible = false;
         }
-        _notesBox.IsVisible = !isSlideSorter && (isNotesPage || _viewShowState.ShowNotesPane);
+        _notesBox.IsVisible = !isSlideSorter && !isSlideMaster && (isNotesPage || _viewShowState.ShowNotesPane);
         _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
         _notesBox.MaxHeight = isNotesPage ? double.PositiveInfinity : 120;
         _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
         RefreshSlidePane();
+        if (isSlideMaster)
+            ConfigureMasterCanvas();
+        else if (_masterInteractionAttached)
+        {
+            _slideCanvas.MasterEditTarget = null;
+            RewireInteractionToEditor();
+        }
         SyncRibbonCommandStates();
+    }
+
+    private MasterEditingSession EnsureMasterEditingSession()
+    {
+        if (_masterEditingSession is null || !ReferenceEquals(_masterEditingSession.Presentation, _presentation))
+            _masterEditingSession = new MasterEditingSession(_presentation, Editor.Bus);
+        return _masterEditingSession;
+    }
+
+    private void ConfigureMasterCanvas()
+    {
+        var masterEditor = EnsureMasterEditingSession();
+        _slideCanvas.Presentation = _presentation;
+        _slideCanvas.Slide = masterEditor.CurrentSlide;
+        _slideCanvas.SlideIndex = 0;
+        _slideCanvas.MasterEditTarget = masterEditor.Target;
+        if (!_masterInteractionAttached)
+            RewireInteractionToMaster(masterEditor);
+        _slideCanvas.Refresh();
+    }
+
+    private void RewireInteractionToMaster(MasterEditingSession masterEditor)
+    {
+        if (_adorner is null)
+            return;
+        CloseActiveOleHost();
+        _textEditor?.Dispose();
+        _textEditor = null;
+        _gestureHandler?.Dispose();
+        _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, masterEditor, _adorner);
+        _slideCanvas.AttachGestureHandler(_gestureHandler);
+        ApplyPresentationViewShowState(_viewShowState);
+        _masterInteractionAttached = true;
     }
 
     private void SetNotesPageSurface(bool isNotesPage)
@@ -6202,9 +6249,15 @@ public sealed partial class MainWindow : Window,
     private void RefreshCanvas()
     {
         CloseActiveOleHost();
+        if (_viewModeState.Mode == PresentationViewMode.SlideMaster)
+        {
+            ConfigureMasterCanvas();
+            return;
+        }
         _slideCanvas.Presentation = _presentation;
         _slideCanvas.Slide        = Editor.CurrentSlide;
         _slideCanvas.SlideIndex   = Editor.CurrentSlideIndex;
+        _slideCanvas.MasterEditTarget = null;
         _slideCanvas.Refresh();
     }
 

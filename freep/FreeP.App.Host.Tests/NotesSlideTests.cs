@@ -488,6 +488,28 @@ public sealed class NotesSlideTests : IDisposable
         }
     }
 
+    [StaFact]
+    public void MainWindow_SlideMasterView_UsesMasterCanvasAndRestoresNormalCanvas()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var apply = typeof(MainWindow).GetMethod(
+                "ApplyPresentationViewModeState",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            apply.Should().NotBeNull();
+            apply!.Invoke(window, [new PresentationViewModeState(PresentationViewMode.SlideMaster)]);
+            window.IsSlideMasterSurfaceVisible.Should().BeTrue();
+
+            apply.Invoke(window, [PresentationViewModeState.Normal]);
+            window.IsSlideMasterSurfaceVisible.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private static string FindCorpusFile(string fileName) =>
         TestWorkspaceFileLocator.FindFileFromBaseDirectory(
             "tools", "FreeP.RenderCompare", "corpus", fileName);
