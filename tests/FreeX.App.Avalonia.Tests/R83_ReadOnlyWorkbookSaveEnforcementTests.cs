@@ -31,7 +31,7 @@ public sealed class R83_ReadOnlyWorkbookSaveEnforcementTests
             var window = new MainWindow([]);
             try
             {
-                window.Session.MarkSaved(@"C:\fake\Budget.xlsx");
+                window.Session.MarkSaved(Path.GetFullPath(Path.Combine("fake", "Budget.xlsx")));
                 window.SetWorkbookReadOnlyForTest(true);
 
                 var target = window.ResolveExistingSaveTargetForTest();
@@ -61,7 +61,7 @@ public sealed class R83_ReadOnlyWorkbookSaveEnforcementTests
             var window = new MainWindow([]);
             try
             {
-                const string path = @"C:\fake\Budget.xlsx";
+                var path = Path.GetFullPath(Path.Combine("fake", "Budget.xlsx"));
                 window.Session.MarkSaved(path);
                 window.SetWorkbookReadOnlyForTest(false);
 
