@@ -171,17 +171,13 @@ public static class FilePathPolicy
         if (!IsUsablePathText(path))
             return false;
 
-        if (OperatingSystem.IsWindows())
-        {
-            directoryName = Path.GetDirectoryName(NormalizeSeparatorsForParsing(path!)) ?? string.Empty;
-            return !string.IsNullOrWhiteSpace(directoryName);
-        }
-
         var separatorIndex = path!.LastIndexOfAny(['/', '\\']);
-        if (separatorIndex <= 0)
+        if (separatorIndex < 0)
             return false;
 
-        directoryName = path[..separatorIndex];
+        directoryName = separatorIndex == 0
+            ? path[..1]
+            : path[..separatorIndex];
         return !string.IsNullOrWhiteSpace(directoryName);
     }
 
