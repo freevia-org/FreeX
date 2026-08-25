@@ -829,20 +829,20 @@ public sealed class ViewTabDepthTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc());
-        view.ShowRuler.Should().BeFalse("ruler off by default");
+        view.ShowRuler.Should().BeTrue("Print Layout starts with the same visible ruler as the WPF host");
 
         var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.ruler"), out var cmd).Should().BeTrue();
         var state = cmd.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
-        state.GetState().IsChecked.Should().BeFalse("the ruler starts unchecked");
+        state.GetState().IsChecked.Should().BeTrue("the ruler starts checked");
 
         cmd!.Execute(RibbonCommandContext.Empty);
-        view.ShowRuler.Should().BeTrue("executing freew.ruler must turn the ruler on");
-        state.GetState().IsChecked.Should().BeTrue("the WPF-equivalent command must report checked after enabling");
-
-        cmd!.Execute(RibbonCommandContext.Empty);
-        view.ShowRuler.Should().BeFalse("executing it again must turn the ruler off");
+        view.ShowRuler.Should().BeFalse("executing freew.ruler must turn the ruler off");
         state.GetState().IsChecked.Should().BeFalse("the WPF-equivalent command must clear checked after disabling");
+
+        cmd!.Execute(RibbonCommandContext.Empty);
+        view.ShowRuler.Should().BeTrue("executing it again must turn the ruler on");
+        state.GetState().IsChecked.Should().BeTrue("the WPF-equivalent command must report checked after enabling");
     }
 
     [Fact]
@@ -893,6 +893,7 @@ public sealed class ViewTabDepthTests
     [Fact]
     public async Task Ruler_tick_geometry_reflects_flag()
     {
+        IReadOnlyList<double>? initial = null;
         IReadOnlyList<double>? off = null;
         IReadOnlyList<double>? on = null;
         var ran = await OnUiThread(() =>
@@ -901,6 +902,9 @@ public sealed class ViewTabDepthTests
             view.LoadDocument(MakeDoc("Ruler body text"));
             view.Measure(new Size(816, 4000));
 
+            initial = view.ComputeRulerTicks();
+            view.ShowRuler = false;
+            view.Measure(new Size(816, 4000));
             off = view.ComputeRulerTicks();
             view.ShowRuler = true;
             view.Measure(new Size(816, 4000));
@@ -908,6 +912,7 @@ public sealed class ViewTabDepthTests
         });
 
         if (!ran) return;
+        initial!.Should().NotBeEmpty("Print Layout starts with ruler ticks");
         off!.Should().BeEmpty("no ruler ticks when the flag is off");
         on!.Should().NotBeEmpty("turning ShowRuler on must produce inch tick marks");
         on!.Count.Should().BeGreaterThan(1, "a Letter/A4 page width spans several inch ticks");

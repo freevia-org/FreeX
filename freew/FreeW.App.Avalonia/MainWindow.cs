@@ -2212,6 +2212,10 @@ public sealed partial class MainWindow : Window
             },
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
             onFileTabSelected: () => _ = ShowBackstageAsync(),
+            // Keep command groups discoverable as the shell narrows: retain the renderer's
+            // Full -> compact -> icon-only progression before a group becomes a flyout.
+            options: new AvaloniaRibbonRendererOptions(
+                EnableIntermediateGroupPresentations: true),
             stateStore: _ribbonStateStore);
 
         // Keep the generic menu as the collapsed fallback, but use the native thumbnail strip at
