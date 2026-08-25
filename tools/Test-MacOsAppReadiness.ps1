@@ -642,7 +642,7 @@ function Test-MacOsWorkflow {
         "actions: read",
         "contents: write",
         "macos-distribution-candidate-release",
-        "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
         'pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-macos-app',
         "merge-multiple: true",
         "Prepare release-channel assets",
