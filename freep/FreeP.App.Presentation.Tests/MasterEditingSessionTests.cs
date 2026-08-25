@@ -33,6 +33,16 @@ public sealed class MasterEditingSessionTests
     }
 
     [Fact]
+    public void Presentation_without_masters_has_no_edit_target()
+    {
+        var presentation = new Presentation();
+        var session = new MasterEditingSession(presentation, new PresentationCommandBus(presentation));
+
+        session.Target.Should().BeNull();
+        session.Targets.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Layout_target_can_add_and_delete_placeholder_with_undo()
     {
         var presentation = CreatePresentation();

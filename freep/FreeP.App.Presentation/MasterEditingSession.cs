@@ -18,7 +18,8 @@ public sealed class MasterEditingSession
     {
         Presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         Bus = bus ?? throw new ArgumentNullException(nameof(bus));
-        _target = BuildTargets().FirstOrDefault();
+        var targets = BuildTargets();
+        _target = targets.Count > 0 ? targets[0] : null;
     }
 
     public Presentation Presentation { get; }
