@@ -1232,9 +1232,17 @@ public partial class XlsxCorpusRunnerTests
                 normalizedPart.Contains("/_rels/", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool IsAbsoluteRelationshipTarget(string target) =>
-        Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
-        !string.IsNullOrWhiteSpace(uri.Scheme);
+    private static bool IsAbsoluteRelationshipTarget(string target)
+    {
+        // OPC permits package-root-relative targets such as /xl/workbook.xml. On Unix,
+        // Uri.TryCreate(..., Absolute) interprets those as file:/// URIs; Windows does not. Keep
+        // package URI semantics stable across operating systems before checking true URI schemes.
+        if (target.StartsWith("/", StringComparison.Ordinal))
+            return false;
+
+        return Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
+            !string.IsNullOrWhiteSpace(uri.Scheme);
+    }
 
     private static bool TryResolvePackageRelationshipTarget(
         string relationshipPart,
