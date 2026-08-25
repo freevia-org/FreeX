@@ -1,4 +1,5 @@
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
@@ -458,6 +459,28 @@ public sealed class NotesSlideTests : IDisposable
                     page.ThumbnailLabel == "Slide 1 notes" &&
                     page.Detail == "Notes page for slide 1" &&
                     page.NoteLineCount == 1);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void MainWindow_NotesPageView_UsesDedicatedPageSurfaceAndRestoresNormalLayout()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var apply = typeof(MainWindow).GetMethod(
+                "ApplyPresentationViewModeState",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            apply.Should().NotBeNull();
+            apply!.Invoke(window, [new PresentationViewModeState(PresentationViewMode.NotesPage)]);
+            window.IsNotesPageSurfaceVisible.Should().BeTrue();
+
+            apply.Invoke(window, [PresentationViewModeState.Normal]);
+            window.IsNotesPageSurfaceVisible.Should().BeFalse();
         }
         finally
         {

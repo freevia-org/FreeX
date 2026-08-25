@@ -8125,6 +8125,30 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 page.NoteLineCount == 1);
     }
 
+    [Fact]
+    public async Task Notes_page_view_uses_dedicated_page_surface_and_restores_normal_layout()
+    {
+        var notesPageVisible = false;
+        var normalVisible = true;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(PresentationViewModePlanner.NotesPageCommandId, out var notesPage).Should().BeTrue();
+            notesPage!.Execute(RibbonCommandContext.Empty);
+            notesPageVisible = window.IsNotesPageSurfaceVisible;
+
+            registry.TryGet(PresentationViewModePlanner.NormalCommandId, out var normal).Should().BeTrue();
+            normal!.Execute(RibbonCommandContext.Empty);
+            normalVisible = window.IsNotesPageSurfaceVisible;
+        });
+
+        if (!ran) return;
+        notesPageVisible.Should().BeTrue();
+        normalVisible.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("freep.layout")]
     [InlineData("freep.find")]

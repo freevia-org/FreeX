@@ -127,6 +127,9 @@ public sealed partial class MainWindow : Window,
     internal SlideCanvas SlideCanvas { get; private set; } = null!;
 
     private Border _canvasHost = null!;
+    private Grid _rightPanel = null!;
+    private Border _notesPageSurface = null!;
+    private Grid _notesPageContent = null!;
     private Grid _bodySplitter = null!;
     private Canvas _textOverlay = null!;
     private Canvas _oleOverlay = null!;
@@ -263,6 +266,7 @@ public sealed partial class MainWindow : Window,
         _mediaPaneHostCoordinator.LastCaptionAuthoringPanePlan;
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
+    internal bool IsNotesPageSurfaceVisible => _notesPageSurface?.Visibility == Visibility.Visible;
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
@@ -699,7 +703,8 @@ public sealed partial class MainWindow : Window,
     {
         _viewShowState = state;
         if (_notesBox is not null)
-            _notesBox.Visibility = _viewModeState.Mode == PresentationViewMode.SlideSorter || !state.ShowNotesPane
+            _notesBox.Visibility = _viewModeState.Mode == PresentationViewMode.SlideSorter ||
+                                   (_viewModeState.Mode != PresentationViewMode.NotesPage && !state.ShowNotesPane)
                 ? Visibility.Collapsed
                 : Visibility.Visible;
         if (SlideCanvas is not null)
@@ -722,6 +727,7 @@ public sealed partial class MainWindow : Window,
         if (SlidePaneHost is null || _canvasHost is null || _bodySplitter is null)
             return;
 
+        SetNotesPageSurface(isNotesPage);
         SlidePaneHost.Width = isSlideSorter || isNotesPage ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
         _bodySplitter.ColumnDefinitions[0].Width = isSlideSorter
             ? new GridLength(1, GridUnitType.Star)
@@ -730,17 +736,50 @@ public sealed partial class MainWindow : Window,
             ? new GridLength(0)
             : new GridLength(1, GridUnitType.Star);
         _canvasHost.Visibility = isSlideSorter ? Visibility.Collapsed : Visibility.Visible;
-        _notesBox.Visibility = !isSlideSorter && _viewShowState.ShowNotesPane
+        _notesBox.Visibility = !isSlideSorter && (isNotesPage || _viewShowState.ShowNotesPane)
             ? Visibility.Visible
             : Visibility.Collapsed;
         _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
-        _notesBox.MaxHeight = isNotesPage ? 300 : 120;
+        _notesBox.MaxHeight = isNotesPage ? double.PositiveInfinity : 120;
         _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
         SlidePaneHost.Child = isOutline ? _outlinePane : _slidePane;
         _slidePane.SetSlideSorterMode(isSlideSorter);
         if (isOutline)
             _outlinePane.RefreshProjection();
         SyncRibbonCommandStates();
+    }
+
+    private void SetNotesPageSurface(bool isNotesPage)
+    {
+        if (_rightPanel is null || _notesPageSurface is null || _notesPageContent is null)
+            return;
+
+        if (isNotesPage)
+        {
+            _rightPanel.Children.Remove(_canvasHost);
+            _rightPanel.Children.Remove(_notesBox);
+            _notesPageContent.Children.Clear();
+            Grid.SetRow(_canvasHost, 0);
+            Grid.SetRow(_notesBox, 1);
+            _notesPageContent.Children.Add(_canvasHost);
+            _notesPageContent.Children.Add(_notesBox);
+            _notesPageSurface.Visibility = Visibility.Visible;
+            return;
+        }
+
+        _notesPageContent.Children.Remove(_canvasHost);
+        _notesPageContent.Children.Remove(_notesBox);
+        if (!_rightPanel.Children.Contains(_canvasHost))
+        {
+            Grid.SetRow(_canvasHost, 0);
+            _rightPanel.Children.Add(_canvasHost);
+        }
+        if (!_rightPanel.Children.Contains(_notesBox))
+        {
+            Grid.SetRow(_notesBox, 4);
+            _rightPanel.Children.Add(_notesBox);
+        }
+        _notesPageSurface.Visibility = Visibility.Collapsed;
     }
 
     private void ApplyPresentationViewColorModeState(PresentationViewColorModeState state)
@@ -1021,8 +1060,27 @@ public sealed partial class MainWindow : Window,
         _altTextPaneHost = BuildAltTextPaneHost();
         _accessibilityCheckerPaneHost = BuildAccessibilityCheckerPaneHost();
 
+        _notesPageContent = new Grid();
+        _notesPageContent.RowDefinitions.Add(new RowDefinition { Height = new GridLength(42, GridUnitType.Star) });
+        _notesPageContent.RowDefinitions.Add(new RowDefinition { Height = new GridLength(58, GridUnitType.Star) });
+        _notesPageSurface = new Border
+        {
+            Background = FreePBrushes.PlaceholderSurface,
+            Padding = new Thickness(32),
+            Visibility = Visibility.Collapsed,
+            Child = new Border
+            {
+                Background = FreePBrushes.White,
+                BorderBrush = FreePBrushes.PaneBorder,
+                BorderThickness = new Thickness(1),
+                MaxWidth = 720,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Child = _notesPageContent,
+            },
+        };
+
         // Right-side panel: canvas on top, picker/comment strips, notes strip below.
-        var rightPanel = new Grid();
+        var rightPanel = _rightPanel = new Grid();
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1033,11 +1091,14 @@ public sealed partial class MainWindow : Window,
         Grid.SetRow(_tablePickerHost,  2);
         Grid.SetRow(_commentListHost,  3);
         Grid.SetRow(_notesBox,         4);
+        Grid.SetRow(_notesPageSurface, 0);
+        Grid.SetRowSpan(_notesPageSurface, 5);
         rightPanel.Children.Add(_canvasHost);
         rightPanel.Children.Add(_layoutPickerHost);
         rightPanel.Children.Add(_tablePickerHost);
         rightPanel.Children.Add(_commentListHost);
         rightPanel.Children.Add(_notesBox);
+        rightPanel.Children.Add(_notesPageSurface);
 
         // ── Wave 16B: Animation pane host (right-side, hidden by default) ────────
         // 16B SEAM: _animPaneHost is inserted as column 2. It starts Collapsed so the

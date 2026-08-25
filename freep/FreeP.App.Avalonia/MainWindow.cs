@@ -171,6 +171,9 @@ public sealed partial class MainWindow : Window,
 
     private readonly SlideCanvas _slideCanvas;
     private Border _canvasHost = null!;
+    private Grid _rightGrid = null!;
+    private Border _notesPageSurface = null!;
+    private Grid _notesPageContent = null!;
     private Grid _bodyGrid = null!;
     private Grid _slidePaneHost = null!;
     private Canvas _oleOverlay = null!;
@@ -398,6 +401,7 @@ public sealed partial class MainWindow : Window,
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
+    internal bool IsNotesPageSurfaceVisible => _notesPageSurface?.IsVisible == true;
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
@@ -1158,16 +1162,38 @@ public sealed partial class MainWindow : Window,
         _smartArtTextPaneHost = BuildSmartArtTextPaneHost();
         _animationPaneHost = BuildAnimationPaneHost();
         _printOptionsPaneHost = BuildPrintOptionsPaneHost();
+        _notesPageContent = new Grid();
+        _notesPageContent.RowDefinitions.Add(new RowDefinition { Height = new GridLength(42, GridUnitType.Star) });
+        _notesPageContent.RowDefinitions.Add(new RowDefinition { Height = new GridLength(58, GridUnitType.Star) });
+        _notesPageSurface = new Border
+        {
+            Background = FreePBrushes.PlaceholderSurface,
+            Padding = new Thickness(32),
+            IsVisible = false,
+            Child = new Border
+            {
+                Background = FreePBrushes.White,
+                BorderBrush = FreePBrushes.PaneBorder,
+                BorderThickness = new Thickness(1),
+                MaxWidth = 720,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Child = _notesPageContent,
+            },
+        };
         Grid.SetRow(_canvasHost, 0);
         Grid.SetRow(_layoutPickerHost, 1);
         Grid.SetRow(_tablePickerHost, 2);
         Grid.SetRow(_reviewCommentsPaneHost, 3);
         Grid.SetRow(_notesBox,  4);
+        Grid.SetRow(_notesPageSurface, 0);
+        Grid.SetRowSpan(_notesPageSurface, 5);
         rightGrid.Children.Add(_canvasHost);
         rightGrid.Children.Add(_layoutPickerHost);
         rightGrid.Children.Add(_tablePickerHost);
         rightGrid.Children.Add(_reviewCommentsPaneHost);
         rightGrid.Children.Add(_notesBox);
+        rightGrid.Children.Add(_notesPageSurface);
+        _rightGrid = rightGrid;
 
         // Wire interaction after the overlay panel is built.
         WireInteraction(textOverlay);
@@ -2349,7 +2375,8 @@ public sealed partial class MainWindow : Window,
     private void ApplyPresentationViewShowState(PresentationViewShowState state)
     {
         _viewShowState = state;
-        _notesBox.IsVisible = _viewModeState.Mode != PresentationViewMode.SlideSorter && state.ShowNotesPane;
+        _notesBox.IsVisible = _viewModeState.Mode != PresentationViewMode.SlideSorter &&
+                              (_viewModeState.Mode == PresentationViewMode.NotesPage || state.ShowNotesPane);
         _slideCanvas.ApplyViewShowState(state);
         if (_gestureHandler is null)
             return;
@@ -2373,6 +2400,7 @@ public sealed partial class MainWindow : Window,
         if (_bodyGrid is null || _slidePaneHost is null || _canvasHost is null)
             return;
 
+        SetNotesPageSurface(isNotesPage);
         _bodyGrid.ColumnDefinitions[0].Width = isSlideSorter
             ? new GridLength(1, GridUnitType.Star)
             : isNotesPage ? new GridLength(0) : GridLength.Auto;
@@ -2393,12 +2421,45 @@ public sealed partial class MainWindow : Window,
             _slidePaneInsertionIndicator.IsVisible = false;
             _slidePaneNewSlideButton.IsVisible = false;
         }
-        _notesBox.IsVisible = !isSlideSorter && _viewShowState.ShowNotesPane;
+        _notesBox.IsVisible = !isSlideSorter && (isNotesPage || _viewShowState.ShowNotesPane);
         _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
-        _notesBox.MaxHeight = isNotesPage ? 300 : 120;
+        _notesBox.MaxHeight = isNotesPage ? double.PositiveInfinity : 120;
         _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
         RefreshSlidePane();
         SyncRibbonCommandStates();
+    }
+
+    private void SetNotesPageSurface(bool isNotesPage)
+    {
+        if (_rightGrid is null || _notesPageSurface is null || _notesPageContent is null)
+            return;
+
+        if (isNotesPage)
+        {
+            _rightGrid.Children.Remove(_canvasHost);
+            _rightGrid.Children.Remove(_notesBox);
+            _notesPageContent.Children.Clear();
+            Grid.SetRow(_canvasHost, 0);
+            Grid.SetRow(_notesBox, 1);
+            _notesPageContent.Children.Add(_canvasHost);
+            _notesPageContent.Children.Add(_notesBox);
+            _notesPageSurface.IsVisible = true;
+            return;
+        }
+
+        _notesPageContent.Children.Remove(_canvasHost);
+        _notesPageContent.Children.Remove(_notesBox);
+        if (!_rightGrid.Children.Contains(_canvasHost))
+        {
+            Grid.SetRow(_canvasHost, 0);
+            _rightGrid.Children.Add(_canvasHost);
+        }
+        if (!_rightGrid.Children.Contains(_notesBox))
+        {
+            Grid.SetRow(_notesBox, 4);
+            _rightGrid.Children.Add(_notesBox);
+        }
+        _notesPageSurface.IsVisible = false;
     }
 
     private void ApplyPresentationViewColorModeState(PresentationViewColorModeState state)
