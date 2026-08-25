@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
