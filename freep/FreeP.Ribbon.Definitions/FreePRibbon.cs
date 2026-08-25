@@ -1451,6 +1451,19 @@ public static class FreePRibbon
                 FreePRibbonText.ViewReadingViewCommand.Label, RibbonCommandIconKind.Watch,
                 FreePRibbonText.ViewReadingViewCommand.KeyTip);
         });
+        tab.Group("color-grayscale", FreePRibbonText.ViewColorGrayscaleGroup.Label,
+            FreePRibbonText.ViewColorGrayscaleGroup.KeyTip, 70, group =>
+        {
+            group.Medium(PresentationViewColorModePlanner.ColorCommandId,
+                FreePRibbonText.ViewColorCommand.Label, RibbonCommandIconKind.Color,
+                FreePRibbonText.ViewColorCommand.KeyTip);
+            group.Medium(PresentationViewColorModePlanner.GrayscaleCommandId,
+                FreePRibbonText.ViewGrayscaleCommand.Label, RibbonCommandIconKind.Color,
+                FreePRibbonText.ViewGrayscaleCommand.KeyTip);
+            group.Medium(PresentationViewColorModePlanner.BlackAndWhiteCommandId,
+                FreePRibbonText.ViewBlackAndWhiteCommand.Label, RibbonCommandIconKind.Color,
+                FreePRibbonText.ViewBlackAndWhiteCommand.KeyTip);
+        });
         tab.Group("show", FreePRibbonText.ViewShowGroup.Label, FreePRibbonText.ViewShowGroup.KeyTip, 100, group =>
         {
             group.MediumToggle(PresentationViewShowPlanner.RulerCommandId, FreePRibbonText.ViewRulerCommand.Label,

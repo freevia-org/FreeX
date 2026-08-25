@@ -3115,6 +3115,30 @@
   <data name="Ribbon_Command_ViewReadingView_KeyTip" xml:space="preserve">
     <value>R</value>
   </data>
+  <data name="Ribbon_Group_ViewColorGrayscale_Label" xml:space="preserve">
+    <value>Color/Grayscale</value>
+  </data>
+  <data name="Ribbon_Group_ViewColorGrayscale_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Command_ViewColor_Label" xml:space="preserve">
+    <value>Color</value>
+  </data>
+  <data name="Ribbon_Command_ViewColor_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Command_ViewGrayscale_Label" xml:space="preserve">
+    <value>Grayscale</value>
+  </data>
+  <data name="Ribbon_Command_ViewGrayscale_KeyTip" xml:space="preserve">
+    <value>G</value>
+  </data>
+  <data name="Ribbon_Command_ViewBlackAndWhite_Label" xml:space="preserve">
+    <value>Black and White</value>
+  </data>
+  <data name="Ribbon_Command_ViewBlackAndWhite_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
   <data name="Ribbon_Group_ViewShow_Label" xml:space="preserve">
     <value>Show</value>
   </data>

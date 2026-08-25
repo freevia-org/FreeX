@@ -21,6 +21,7 @@ public sealed partial class MainWindow
                 ViewShowState = () => _viewShowState,
                 ViewZoomState = () => _viewZoomState,
                 ViewModeState = () => _viewModeState,
+                ViewColorModeState = () => _viewColorModeState,
             },
             TextActionTargets = CreateRibbonTextActionTargets(),
             DesignCommands = new FreePRibbonDesignCommandEndpoints

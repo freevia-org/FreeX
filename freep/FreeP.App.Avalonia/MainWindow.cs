@@ -358,6 +358,7 @@ public sealed partial class MainWindow : Window,
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
     private PresentationViewModeState _viewModeState = PresentationViewModeState.Normal;
+    private PresentationViewColorModeState _viewColorModeState = PresentationViewColorModeState.Color;
     private int _slideSorterDragSourceIndex = -1;
     private Point _slideSorterDragStart;
     private bool _slideSorterDragging;
@@ -2400,6 +2401,12 @@ public sealed partial class MainWindow : Window,
         SyncRibbonCommandStates();
     }
 
+    private void ApplyPresentationViewColorModeState(PresentationViewColorModeState state)
+    {
+        _viewColorModeState = state;
+        _slideCanvas.ApplyViewColorModeState(state);
+    }
+
     private Control BuildRibbon()
     {
         var registry = BuildCommandRegistry();
@@ -2464,6 +2471,7 @@ public sealed partial class MainWindow : Window,
                 ViewShowState = () => _viewShowState,
                 ViewZoomState = () => _viewZoomState,
                 ViewModeState = () => _viewModeState,
+                ViewColorModeState = () => _viewColorModeState,
             },
             TextActionTargets = CreateRibbonTextActionTargets(),
             DesignCommands = new FreePRibbonDesignCommandEndpoints

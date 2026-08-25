@@ -25,6 +25,9 @@ public sealed class FreePRibbonCommandWorkflowTests
         result.CommonCommandIds.Should().Contain(PresentationViewModePlanner.SlideSorterCommandId);
         result.CommonCommandIds.Should().Contain(PresentationViewModePlanner.OutlineCommandId);
         result.CommonCommandIds.Should().Contain(PresentationViewModePlanner.NotesPageCommandId);
+        result.CommonCommandIds.Should().Contain(PresentationViewColorModePlanner.ColorCommandId);
+        result.CommonCommandIds.Should().Contain(PresentationViewColorModePlanner.GrayscaleCommandId);
+        result.CommonCommandIds.Should().Contain(PresentationViewColorModePlanner.BlackAndWhiteCommandId);
         result.CommonCommandIds.Should().Contain("freep.view.new-window");
         result.CommonCommandIds.Should().Contain("freep.view.arrange-all");
         result.CommonCommandIds.Should().Contain("freep.view.cascade-windows");
@@ -70,6 +73,22 @@ public sealed class FreePRibbonCommandWorkflowTests
         dispatched.Should().Be(new FreePRibbonHostAction(
             FreePRibbonHostActionKind.ApplyViewModeState,
             new PresentationViewModeState(PresentationViewMode.Outline)));
+    }
+
+    [Fact]
+    public void Grayscale_view_command_routes_the_shared_non_persistent_display_state()
+    {
+        FreePRibbonHostAction? dispatched = null;
+        var result = FreePRibbonCommandWorkflow.Build(
+            MakeEditor(),
+            new RibbonStateStore(),
+            new FreePRibbonCommandHostAdapter { ExecuteAction = action => dispatched = action });
+
+        Execute(result.Registry, PresentationViewColorModePlanner.GrayscaleCommandId);
+
+        dispatched.Should().Be(new FreePRibbonHostAction(
+            FreePRibbonHostActionKind.ApplyViewColorModeState,
+            new PresentationViewColorModeState(PresentationViewColorMode.Grayscale)));
     }
 
     [Fact]

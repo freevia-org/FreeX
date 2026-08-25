@@ -135,6 +135,7 @@ public sealed partial class MainWindow : Window,
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
     private PresentationViewModeState _viewModeState = PresentationViewModeState.Normal;
+    private PresentationViewColorModeState _viewColorModeState = PresentationViewColorModeState.Color;
 
     // Notes pane (Wave 7B)
     private TextBox _notesBox = null!;
@@ -740,6 +741,12 @@ public sealed partial class MainWindow : Window,
         if (isOutline)
             _outlinePane.RefreshProjection();
         SyncRibbonCommandStates();
+    }
+
+    private void ApplyPresentationViewColorModeState(PresentationViewColorModeState state)
+    {
+        _viewColorModeState = state;
+        SlideCanvas?.ApplyViewColorModeState(state);
     }
 
     private void LoadModel(Presentation presentation)

@@ -135,6 +135,7 @@ public sealed partial class SlideCanvas : FrameworkElement
     // main host explicitly applies its View state; secondary canvases must not inherit ruler chrome.
     private PresentationViewShowState  _viewShowState = PresentationViewShowState.Default with { ShowRulers = false };
     private PresentationViewZoomState  _viewZoomState = PresentationViewZoomState.FitToWindow;
+    private PresentationViewColorModeState _viewColorModeState = PresentationViewColorModeState.Color;
     private EditingSession?            _editingSession;
     private readonly PresentationCanvasAutomationSession _canvasAutomation = new();
 
@@ -230,6 +231,7 @@ public sealed partial class SlideCanvas : FrameworkElement
 
     public PresentationViewShowState ViewShowState => _viewShowState;
     public PresentationViewZoomState ViewZoomState => _viewZoomState;
+    public PresentationViewColorModeState ViewColorModeState => _viewColorModeState;
 
     public void ApplyViewShowState(PresentationViewShowState state)
     {
@@ -284,6 +286,16 @@ public sealed partial class SlideCanvas : FrameworkElement
     public void ApplyViewZoomState(PresentationViewZoomState state)
     {
         _viewZoomState = state;
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Applies the non-persistent View &gt; Color/Grayscale treatment. Live presentation
+    /// editing remains backed by the original slide model; only this canvas is filtered.
+    /// </summary>
+    public void ApplyViewColorModeState(PresentationViewColorModeState state)
+    {
+        _viewColorModeState = state;
         InvalidateVisual();
     }
 
@@ -373,9 +385,41 @@ public sealed partial class SlideCanvas : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
+        if (_viewColorModeState.Mode != PresentationViewColorMode.Color)
+        {
+            RenderColorTransformedCanvas(dc, ActualWidth, ActualHeight);
+            return;
+        }
+
         RenderToDrawingContext(dc, ActualWidth, ActualHeight, preserveAspectRatio: true, renderViewAids: true);
         if (_viewShowState.ShowRulers)
             RenderRulers(dc, CurrentTransform.Core, ActualWidth, ActualHeight);
+    }
+
+    private void RenderColorTransformedCanvas(DrawingContext destination, double width, double height)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+
+        var visual = new DrawingVisual();
+        using (var source = visual.RenderOpen())
+        {
+            RenderToDrawingContext(source, width, height, preserveAspectRatio: true, renderViewAids: true);
+            if (_viewShowState.ShowRulers)
+                RenderRulers(source, CurrentTransform.Core, width, height);
+        }
+
+        var bitmap = new RenderTargetBitmap(
+            Math.Max(1, (int)Math.Ceiling(width)),
+            Math.Max(1, (int)Math.Ceiling(height)),
+            96,
+            96,
+            PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var plan = _viewColorModeState.Mode == PresentationViewColorMode.BlackAndWhite
+            ? new PictureColorEffectPlan(Grayscale: false, BiLevelThreshold: 0.5, Brightness: null, Contrast: null)
+            : new PictureColorEffectPlan(Grayscale: true, BiLevelThreshold: null, Brightness: null, Contrast: null);
+        destination.DrawImage(ApplyColorEffectsWpf(bitmap, plan), new Rect(0, 0, width, height));
     }
 
     private static void RenderViewAids(
