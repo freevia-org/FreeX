@@ -132,8 +132,8 @@ public sealed class AutosaveAdapterEmergencySnapshotTests
     /// shape of <c>AppDomain.UnhandledException</c> firing on the UI thread. A naive
     /// <c>Dispatcher.UIThread.InvokeAsync(...).GetAwaiter().GetResult()</c> deadlocks permanently
     /// here -- FreeW hit this in R138 and left a note warning FreeP not to reintroduce it. The
-    /// timeout is the backstop; the wall-clock assertion pins that the fix takes the
-    /// <c>CheckAccess()</c> fast path rather than merely finishing under the timeout.
+    /// timeout is the backstop. The shared dispatcher tests pin the <c>CheckAccess()</c> fast path
+    /// deterministically without making this real PPTX write depend on runner speed.
     /// </summary>
     [Fact(Timeout = 20_000)]
     public async Task TryEmergencySnapshot_UsingRealPorts_DoesNotDeadlockWhenReentrantOnTheUiThread()
@@ -144,10 +144,8 @@ public sealed class AutosaveAdapterEmergencySnapshotTests
         try
         {
             var store = new AutosaveSnapshotStore(dir);
-            var elapsed = TimeSpan.Zero;
-
-            // Warm the pptx writer before timing: its first call in a process JITs several seconds
-            // of OPC/XML code, which would otherwise swamp the marshal cost this test is measuring.
+            // Warm the pptx writer: its first call in a process JITs several seconds of OPC/XML
+            // code. Keeping the warmup also makes this end-to-end regression test faster.
             FreeP.Core.IO.PptxPackageWriter.Write(
                 Presentation.CreateEmpty(),
                 Path.Combine(dir, "warmup.pptx"));
@@ -158,20 +156,14 @@ public sealed class AutosaveAdapterEmergencySnapshotTests
                 adapter = NewAdapter(workflow, ports => new FreePAutosaveSession(ports, store));
                 workflow.MarkDirty();
 
-                var sw = Stopwatch.StartNew();
                 adapter.TryEmergencySnapshot();
-                elapsed = sw.Elapsed;
             });
 
             if (!ran || adapter is null)
                 return; // no headless drawing backend in this environment
 
-            elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
-                "a reentrant emergency snapshot on the UI thread must take the Dispatcher.UIThread.CheckAccess() " +
-                "fast path and run inline, not marshal to itself and wait");
-
             File.Exists(store.GetSnapshotPath(adapter.SnapshotIdForTests)).Should().BeTrue(
-                "the real (non-stubbed) marshal path must still produce a snapshot for a dirty presentation");
+                "the real transaction must run inline instead of timing out behind a reentrant UI-thread marshal");
         }
         finally
         {

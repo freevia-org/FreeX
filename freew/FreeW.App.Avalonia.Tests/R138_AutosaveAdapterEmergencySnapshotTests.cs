@@ -171,9 +171,9 @@ public sealed class R138_AutosaveAdapterEmergencySnapshotTests
     /// <c>Dispatcher.UIThread.InvokeAsync(...).GetAwaiter().GetResult()</c> would queue a continuation
     /// that could only run once this very call returned, then block on it -- a permanent deadlock, not
     /// merely a slow path. The <c>[Fact(Timeout=...)]</c> backstop guarantees this test fails (rather
-    /// than hanging the whole run) if that regresses; the wall-clock assertion below additionally pins
-    /// that the fix takes the fast, non-marshaling path for this case rather than merely happening to
-    /// finish under the timeout.
+    /// than hanging the whole run) if that regresses. The shared dispatcher tests pin the fast,
+    /// non-marshaling path deterministically without making this real document write depend on
+    /// runner speed.
     /// </para>
     /// </summary>
     [Fact(Timeout = 20_000)]
@@ -185,8 +185,6 @@ public sealed class R138_AutosaveAdapterEmergencySnapshotTests
         try
         {
             var store = new AutosaveSnapshotStore(dir);
-            var elapsed = TimeSpan.Zero;
-
             var ran = await OnUiThread(() =>
             {
                 var (editor, wf) = NewWindowParts();
@@ -197,20 +195,14 @@ public sealed class R138_AutosaveAdapterEmergencySnapshotTests
 
                 // Reentrant call: we are already executing on the UI thread (inside the dispatched
                 // action), exactly like AppDomain.UnhandledException firing mid-execution there.
-                var sw = Stopwatch.StartNew();
                 adapter.TryEmergencySnapshot();
-                elapsed = sw.Elapsed;
             });
 
             if (!ran || adapter is null)
                 return; // no headless drawing backend in this environment
 
-            elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
-                "a reentrant emergency snapshot on the UI thread must take the Dispatcher.UIThread.CheckAccess() " +
-                "fast path and run inline, not marshal to itself and wait");
-
             File.Exists(store.GetSnapshotPath(adapter.SnapshotIdForTests)).Should().BeTrue(
-                "the real (non-stubbed) marshal path must still produce a snapshot for a dirty document");
+                "the real transaction must run inline instead of timing out behind a reentrant UI-thread marshal");
         }
         finally
         {
