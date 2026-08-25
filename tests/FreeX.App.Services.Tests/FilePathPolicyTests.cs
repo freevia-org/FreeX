@@ -87,6 +87,21 @@ public sealed class FilePathPolicyTests
     }
 
     [Fact]
+    public void DisplayPathHelpers_RecognizeBothDirectorySeparatorStyles()
+    {
+        FilePathPolicy.FileNameOrPath(@"C:\Docs\Quarterly Review.docx")
+            .Should().Be("Quarterly Review.docx");
+        FilePathPolicy.FileNameOrPath("/home/user/Quarterly Review.docx")
+            .Should().Be("Quarterly Review.docx");
+        FilePathPolicy.TryGetDirectoryName(@"C:\Docs\Quarterly Review.docx", out var windowsDirectory)
+            .Should().BeTrue();
+        windowsDirectory.Should().Be(@"C:\Docs");
+        FilePathPolicy.TryGetDirectoryName("/home/user/Quarterly Review.docx", out var unixDirectory)
+            .Should().BeTrue();
+        unixDirectory.Should().Be("/home/user");
+    }
+
+    [Fact]
     public void OutputFileNameStemPolicy_NormalizesPathsExtensionsAndCallerSelectedReplacement()
     {
         var invalidCharacter = Path.GetInvalidFileNameChars().FirstOrDefault(character =>

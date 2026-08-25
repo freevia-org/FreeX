@@ -1104,7 +1104,7 @@ public class NumberFormatterTests
     }
 
     [Fact]
-    public void Format_LcidToken_FallsBackToDotNetCultureSeparatorsForUncatalogedLocale()
+    public void Format_LcidToken_UsesDeterministicAustrianSeparators()
     {
         var result = NumberFormatter.Format(new NumberValue(1234.5), "[$-0C07]#,##0.00");
 
@@ -1112,7 +1112,7 @@ public class NumberFormatterTests
     }
 
     [Fact]
-    public void Format_LcidCurrencyToken_PreservesSymbolWhenUsingCultureFallback()
+    public void Format_LcidCurrencyToken_PreservesSymbolWithDeterministicAustrianSeparators()
     {
         var result = NumberFormatter.Format(new NumberValue(1234.5), "[$€-0C07]#,##0.00");
 

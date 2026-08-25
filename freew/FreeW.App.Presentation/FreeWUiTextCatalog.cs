@@ -34,6 +34,10 @@ public static class FreeWUiTextCatalog
         "Layout_BringForward_Label",
         "Layout_SendBackward_Label",
         "Help_TestCrashReporting_Title",
+        "Pane_Selection_Title",
+        "Pane_Selection_BringForward",
+        "Pane_Selection_SendBackward",
+        "Support_TestCrashReporting_Title",
         "Dialog_DateTime_Title",
         "Dialog_DateTime_FormatsLabel",
         "Dialog_DateTime_UpdateAutomatically",
@@ -94,6 +98,11 @@ public static class FreeWUiTextCatalog
     public static string TableStylesMoreToolTip => Text("Design_TableStyles_MoreToolTip");
     public static string MoreStylesToolTip => Text("Design_Styles_MoreToolTip");
     public static string CrashAnalyticsConsentLabel => Text("Options_CrashAnalytics_ConsentLabel");
+    public static string MoreTableStylesToolTip => Text("Design_TableStyles_MoreToolTip");
+    public static string SelectionPaneTitle => Text("Pane_Selection_Title");
+    public static string SelectionPaneBringForward => Text("Pane_Selection_BringForward");
+    public static string SelectionPaneSendBackward => Text("Pane_Selection_SendBackward");
+    public static string TestCrashReportingTitle => Text("Support_TestCrashReporting_Title");
 
     public static string ThemeColorsAutomationName(string name) =>
         Format("Design_ThemeColors_AutomationNameFormat", name);

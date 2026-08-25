@@ -225,8 +225,18 @@ The source hashes, row inventory, PNG hashes, and sizes are generated into `free
 "@
 
 if ($Check) {
-    if (-not (Test-Path -LiteralPath $jsonPath) -or -not (Test-Path -LiteralPath $markdownPath)) { throw 'Generated FreeW shell evidence files are missing.' }
-    if ([IO.File]::ReadAllText($jsonPath) -ne $jsonText -or [IO.File]::ReadAllText($markdownPath) -ne $markdownText) { throw 'Generated FreeW shell evidence is stale. Run the generator without -Check.' }
+    Test-ToolGeneratedContentMatches `
+        -ExpectedContent $jsonText `
+        -ActualPath $jsonPath `
+        -Label 'FreeW shell visual evidence JSON' `
+        -GeneratorScriptName 'tools\Generate-FreeWShellVisualEvidence.ps1' `
+        -NormalizeNewlines
+    Test-ToolGeneratedContentMatches `
+        -ExpectedContent $markdownText `
+        -ActualPath $markdownPath `
+        -Label 'FreeW shell visual evidence README' `
+        -GeneratorScriptName 'tools\Generate-FreeWShellVisualEvidence.ps1' `
+        -NormalizeNewlines
     Write-Output "Fresh: $jsonPath"
     Write-Output "Fresh: $markdownPath"
     exit 0

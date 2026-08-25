@@ -465,12 +465,13 @@ public sealed class BackstagePaneSurfacePlannerTests
     [Fact]
     public void BuildSharePane_ReturnsSharedPaneTextAndRows()
     {
+        var currentPath = Path.Combine(Path.GetPathRoot(Environment.CurrentDirectory)!, "Docs", "Plan.docx");
         var openedPath = "";
         var savedCopy = false;
 
         var surface = BackstagePaneSurfacePlanner.BuildSharePane(
-            @"C:\Docs\Plan.docx",
-            path => path == @"C:\Docs\Plan.docx",
+            currentPath,
+            path => path == currentPath,
             saveAs: static () => { },
             openContainingFolder: path => openedPath = path,
             saveCopy: () => savedCopy = true,
@@ -484,7 +485,7 @@ public sealed class BackstagePaneSurfacePlannerTests
         surface.Groups[0].Actions.Single().Invoke();
         surface.Groups[1].Actions.Single(action => action.Label == "Save a Copy").Invoke();
 
-        openedPath.Should().Be(@"C:\Docs\Plan.docx");
+        openedPath.Should().Be(currentPath);
         savedCopy.Should().BeTrue();
     }
 

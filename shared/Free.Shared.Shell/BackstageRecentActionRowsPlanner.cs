@@ -68,8 +68,7 @@ public static class BackstageRecentActionRowsPlanner
             if (!Matches(documentLabel, entry.Path, filter))
                 continue;
 
-            var path = Path.GetDirectoryName(entry.Path);
-            if (string.IsNullOrWhiteSpace(path) || !seen.Add(path))
+            if (!FilePathPolicy.TryGetDirectoryName(entry.Path, out var path) || !seen.Add(path))
                 continue;
 
             rows.Add(new BackstageActionRow(

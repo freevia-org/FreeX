@@ -1037,12 +1037,12 @@ public sealed class FreeWRibbonCommandWorkflowTests
             "BindOrUnavailable(bindings, FreeWRibbonCommandAction.TestCrashReporting, ports.TestCrashReporting);");
         wpfMainWindow.Should().Contain("TestCrashReporting = TestCrashReporting,");
         wpfMainWindow.Should().Contain("AppCrashAnalyticsRuntime.SendTestReport()");
-        wpfMainWindow.Should().Contain("DialogMessageHelper.ShowInfo(this, message, title);");
-        wpfMainWindow.Should().Contain("DialogMessageHelper.ShowWarning(this, message, title);");
+        wpfMainWindow.Should().Contain("DialogMessageHelper.ShowInfo(this, message, FreeWUiTextCatalog.TestCrashReportingTitle);");
+        wpfMainWindow.Should().Contain("DialogMessageHelper.ShowWarning(this, message, FreeWUiTextCatalog.TestCrashReportingTitle);");
         avaloniaMainWindow.Should().Contain("TestCrashReporting: () => _ = TestCrashReportingAsync(),");
         avaloniaHelpCommands.Should().Contain(
             "AppCrashAnalyticsRuntime.UserMessage(AppCrashAnalyticsRuntime.SendTestReport())");
-        avaloniaHelpCommands.Should().Contain("UiText.Get(\"Help_TestCrashReporting_Title\")");
+        avaloniaHelpCommands.Should().Contain("FreeWUiTextCatalog.TestCrashReportingTitle");
         wpfMainWindow.Should().Contain("CreateRibbonHostExecutionPorts()");
         wpfMainWindow.Should().Contain("new FreeWWpfRibbonNativeExecutionPorts(");
         wpfMainWindow.Should().NotContain("onPrintPreview:");

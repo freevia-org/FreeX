@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.Panes;
 using FreeW.Core.Model;
 
@@ -16,14 +17,14 @@ public sealed class SelectionPane : SidePaneBase
     private readonly Button _sendBackward;
 
     public SelectionPane(DocumentView editor)
-        : base(editor, UiText.Get("Layout_SelectionPane_Title"), 240, new Thickness(1, 0, 0, 0), includeSeparator: true)
+        : base(editor, FreeWUiTextCatalog.SelectionPaneTitle, 240, new Thickness(1, 0, 0, 0), includeSeparator: true)
     {
         _items = new ListBox { Background = Brushes.Transparent, BorderThickness = new Thickness(0) };
         _items.SelectionChanged += OnSelectionChanged;
 
-        _bringForward = new Button { Content = UiText.Get("Layout_BringForward_Label"), Margin = new Thickness(8, 4, 4, 6) };
+        _bringForward = new Button { Content = FreeWUiTextCatalog.SelectionPaneBringForward, Margin = new Thickness(8, 4, 4, 6) };
         _bringForward.Click += (_, _) => MoveSelected(ZOrderOperation.BringForward);
-        _sendBackward = new Button { Content = UiText.Get("Layout_SendBackward_Label"), Margin = new Thickness(4, 4, 8, 6) };
+        _sendBackward = new Button { Content = FreeWUiTextCatalog.SelectionPaneSendBackward, Margin = new Thickness(4, 4, 8, 6) };
         _sendBackward.Click += (_, _) => MoveSelected(ZOrderOperation.SendBackward);
         var commands = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
         commands.Children.Add(_bringForward);

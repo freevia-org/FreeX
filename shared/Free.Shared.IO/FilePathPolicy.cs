@@ -113,7 +113,7 @@ public static class FilePathPolicy
 
         try
         {
-            fileName = Path.GetFileName(path) ?? string.Empty;
+            fileName = Path.GetFileName(NormalizeSeparatorsForParsing(path!)) ?? string.Empty;
             return !string.IsNullOrWhiteSpace(fileName);
         }
         catch (ArgumentException)
@@ -138,7 +138,7 @@ public static class FilePathPolicy
 
         try
         {
-            fileName = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            fileName = Path.GetFileNameWithoutExtension(NormalizeSeparatorsForParsing(path!)) ?? string.Empty;
             return !string.IsNullOrWhiteSpace(fileName);
         }
         catch (ArgumentException)
@@ -165,6 +165,26 @@ public static class FilePathPolicy
     public static string FileNameWithoutExtensionOr(string? path, string fallback) =>
         TryGetFileNameWithoutExtension(path, out var fileName) ? fileName : fallback;
 
+    public static bool TryGetDirectoryName(string? path, out string directoryName)
+    {
+        directoryName = string.Empty;
+        if (!IsUsablePathText(path))
+            return false;
+
+        var separatorIndex = path!.LastIndexOfAny(['/', '\\']);
+        if (separatorIndex < 0)
+            return false;
+
+        var directoryLength = separatorIndex;
+        if (separatorIndex == 0)
+            directoryLength = 1;
+        else if (separatorIndex == 2 && path.Length > 2 && path[1] == ':')
+            directoryLength = 3;
+
+        directoryName = path[..directoryLength];
+        return !string.IsNullOrWhiteSpace(directoryName);
+    }
+
     public static bool AreEquivalent(string? left, string? right)
     {
         if (!TryGetFullPath(left, out var normalizedLeft) ||
@@ -184,4 +204,9 @@ public static class FilePathPolicy
 
     private static bool HasInvalidPathCharacters(string path) =>
         path.IndexOfAny(Path.GetInvalidPathChars()) >= 0;
+
+    private static string NormalizeSeparatorsForParsing(string path) =>
+        Path.DirectorySeparatorChar == '\\'
+            ? path.Replace('/', '\\')
+            : path.Replace('\\', '/');
 }

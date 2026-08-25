@@ -36,8 +36,8 @@ internal static class TableStylesGallery
         });
 
         var button = new Button { Content = "▾", Width = 20, Height = 52, Margin = new Thickness(2, 0, 0, 0) };
-        ToolTip.SetTip(button, FreeWUiTextCatalog.TableStylesMoreToolTip);
-        AutomationProperties.SetName(button, FreeWUiTextCatalog.TableStylesMoreToolTip);
+        ToolTip.SetTip(button, FreeWUiTextCatalog.MoreTableStylesToolTip);
+        AutomationProperties.SetName(button, FreeWUiTextCatalog.MoreTableStylesToolTip);
         var flyout = new MenuFlyout();
         for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
             flyout.Items.Add(Item(DocumentTableStyle.Catalog[index], index, registry));

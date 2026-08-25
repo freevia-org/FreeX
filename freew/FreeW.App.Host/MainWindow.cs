@@ -1017,11 +1017,10 @@ public sealed partial class MainWindow : Window
     {
         var result = AppCrashAnalyticsRuntime.SendTestReport();
         var message = AppCrashAnalyticsRuntime.UserMessage(result);
-        var title = UiText.Get("Help_TestCrashReporting_Title");
         if (result == CrashAnalyticsTestReportResult.Sent)
-            DialogMessageHelper.ShowInfo(this, message, title);
+            DialogMessageHelper.ShowInfo(this, message, FreeWUiTextCatalog.TestCrashReportingTitle);
         else
-            DialogMessageHelper.ShowWarning(this, message, title);
+            DialogMessageHelper.ShowWarning(this, message, FreeWUiTextCatalog.TestCrashReportingTitle);
     }
 
     private void ShowAboutDialog()
@@ -1423,9 +1422,9 @@ public sealed partial class MainWindow : Window
         };
         _selectionList.SelectionChanged += OnSelectionPaneSelected;
 
-        _selectionBringForward = new Button { Content = UiText.Get("Layout_BringForward_Label"), Margin = new Thickness(8, 4, 4, 8) };
+        _selectionBringForward = new Button { Content = FreeWUiTextCatalog.SelectionPaneBringForward, Margin = new Thickness(8, 4, 4, 8) };
         _selectionBringForward.Click += (_, _) => MoveSelectionPaneObject(ZOrderOperation.BringForward);
-        _selectionSendBackward = new Button { Content = UiText.Get("Layout_SendBackward_Label"), Margin = new Thickness(4, 4, 8, 8) };
+        _selectionSendBackward = new Button { Content = FreeWUiTextCatalog.SelectionPaneSendBackward, Margin = new Thickness(4, 4, 8, 8) };
         _selectionSendBackward.Click += (_, _) => MoveSelectionPaneObject(ZOrderOperation.SendBackward);
         var controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
         controls.Children.Add(_selectionBringForward);
@@ -1433,7 +1432,7 @@ public sealed partial class MainWindow : Window
 
         var header = new TextBlock
         {
-            Text = UiText.Get("Layout_SelectionPane_Title"),
+            Text = FreeWUiTextCatalog.SelectionPaneTitle,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 6)
         };

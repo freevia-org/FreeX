@@ -464,16 +464,22 @@ public sealed class SkiaPdfWriterTests
     [Fact]
     public void RenderPagesToPng_UsesAuthoredFontFamilies()
     {
+        var families = SKFontManager.Default.FontFamilies
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(2)
+            .ToArray();
+        families.Should().HaveCount(2, "the Skia runtime must expose at least two installed font families");
+
         var pages = new[]
         {
             new PdfContentPage(
                 220,
                 70,
-                [new PdfText(12, 28, 30, PdfFontFace.Regular, PdfColor.Black, "Family sample", "Arial")]),
+                [new PdfText(12, 28, 30, PdfFontFace.Regular, PdfColor.Black, "Family sample", families[0])]),
             new PdfContentPage(
                 220,
                 70,
-                [new PdfText(12, 28, 30, PdfFontFace.Regular, PdfColor.Black, "Family sample", "Courier New")]),
+                [new PdfText(12, 28, 30, PdfFontFace.Regular, PdfColor.Black, "Family sample", families[1])]),
         };
 
         var pngs = SkiaPdfWriter.RenderPagesToPng(new PdfContentDocument(pages));
