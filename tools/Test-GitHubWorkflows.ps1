@@ -269,6 +269,37 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): workflow must not use the privileged pull_request_target event.")
     }
 
+    $inlineTriggerNames = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in $lines) {
+        if ($line -notmatch '^\s*(?:[''"]?on[''"]?)\s*:\s*(?<events>[^#]*)') {
+            continue
+        }
+
+        $events = $Matches["events"] -replace '[''"]', ""
+        foreach ($eventMatch in [regex]::Matches($events, '[A-Za-z_][A-Za-z0-9_-]*')) {
+            $inlineTriggerNames.Add($eventMatch.Value)
+        }
+    }
+
+    $blockTriggerNames = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($onBlock)) {
+        $onBlockLines = $onBlock -split "\r?\n"
+        $onIndent = [regex]::Match($onBlockLines[0], '^(?<indent>\s*)').Groups["indent"].Value.Length
+        foreach ($line in $onBlockLines | Select-Object -Skip 1) {
+            $eventMatch = [regex]::Match($line, '^(?<indent>\s*)(?:[''"]?)(?<event>[A-Za-z_][A-Za-z0-9_-]*)(?:[''"]?)\s*:')
+            if ($eventMatch.Success -and $eventMatch.Groups["indent"].Value.Length -eq $onIndent + 2) {
+                $blockTriggerNames.Add($eventMatch.Groups["event"].Value)
+            }
+        }
+    }
+
+    $triggerNames = @($inlineTriggerNames + $blockTriggerNames)
+    $hasWorkflowDispatch = $triggerNames -contains "workflow_dispatch"
+    $nonManualTriggerNames = @($triggerNames | Where-Object { $_ -ne "workflow_dispatch" })
+    if (-not $hasWorkflowDispatch -or $nonManualTriggerNames.Count -gt 0) {
+        $errors.Add("$($workflow.Name): workflow must use workflow_dispatch only; automatic triggers are disabled.")
+    }
+
     foreach ($match in [regex]::Matches($content, "(?ms)^\s*runs-on\s*:\s*(?<runner>[^\r\n]*(?:\r?\n\s+-\s+[^\r\n]+)*)")) {
         $runnerBlock = (($match.Value -split "\r?\n") | ForEach-Object { $_ -replace "#.*$", "" }) -join "`n"
         if ($runnerBlock -match "(?i)(^|[\[\s,'`"-])self-hosted($|[\]\s,'`"])") {

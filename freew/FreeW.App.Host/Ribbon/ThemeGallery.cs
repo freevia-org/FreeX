@@ -70,7 +70,7 @@ internal static class ThemeGallery
             editor.PreviewStyleSet,
             editor.EndStyleSetPreview,
             editor.ApplyStyleSet,
-            automationName: "More Style Sets"));
+            automationName: UiText.Get("Design_StyleSets_MoreToolTip")));
         return WithLabel(FreeWUiTextCatalog.StyleSets, strip);
     }
 

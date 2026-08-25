@@ -11,10 +11,10 @@ public sealed class GitHubWorkflowPreflightTests
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "ci.yml");
 
-        workflow.Should().Contain("push:");
-        workflow.Should().Contain("pull_request:");
-        workflow.Should().Contain("branches:");
-        workflow.Should().Contain("- main");
+        workflow.Should().Contain("workflow_dispatch:");
+        workflow.Should().NotContain("push:");
+        workflow.Should().NotContain("pull_request:");
+        workflow.Should().NotContain("schedule:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");
@@ -24,7 +24,7 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803");
         workflow.Should().Contain("persist-credentials: false");
         workflow.Should().Contain("actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1");
-        workflow.Should().Contain("dotnet-version: 10.0.111");
+        workflow.Should().Contain("dotnet-version: 10.0.300");
         workflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("concurrency:");
         workflow.Should().Contain("group: ci-${{ github.ref }}");
@@ -49,14 +49,14 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void FreeWWorkflow_IsPathScopedAndRunsItsCommitGate()
+    public void FreeWWorkflow_IsManualDispatchOnlyAndRunsItsValidationGate()
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "freew-ci.yml");
 
         workflow.Should().Contain("workflow_dispatch:");
-        workflow.Should().Contain("push:");
-        workflow.Should().Contain("pull_request:");
-        workflow.Should().Contain("freew/**");
+        workflow.Should().NotContain("push:");
+        workflow.Should().NotContain("pull_request:");
+        workflow.Should().NotContain("schedule:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");
@@ -74,7 +74,7 @@ public sealed class GitHubWorkflowPreflightTests
     {
         var globalJson = WorkspaceFileLocator.ReadAllText("global.json");
 
-        globalJson.Should().Contain("\"version\": \"10.0.111\"");
+        globalJson.Should().Contain("\"version\": \"10.0.300\"");
         globalJson.Should().Contain("\"rollForward\": \"latestPatch\"");
     }
 
@@ -98,6 +98,7 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("must stay within the workflow workspace");
         script.Should().Contain("workflow YAML must use spaces for indentation");
         script.Should().Contain("$allowedActionPins");
+        script.Should().Contain("must use reviewed commit");
         script.Should().Contain("publish-distribution-candidate");
         script.Should().Contain("distribution_candidate");
         script.Should().Contain("macOS release publication job must be gated to workflow_dispatch distribution-candidate runs");
@@ -139,14 +140,14 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void FreePWorkflow_IsPathScopedAndRunsItsCommitGate()
+    public void FreePWorkflow_IsManualDispatchOnlyAndRunsItsValidationGate()
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "freep-ci.yml");
 
         workflow.Should().Contain("workflow_dispatch:");
-        workflow.Should().Contain("push:");
-        workflow.Should().Contain("pull_request:");
-        workflow.Should().Contain("freep/**");
+        workflow.Should().NotContain("push:");
+        workflow.Should().NotContain("pull_request:");
+        workflow.Should().NotContain("schedule:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");
@@ -160,11 +161,44 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void GitHubWorkflowPreflight_DoesNotImposeUnrelatedTriggerPolicy()
+    public void GitHubWorkflowPreflight_RequiresManualDispatchOnly()
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-GitHubWorkflows.ps1");
 
-        script.Should().NotContain("primary CI must run on direct pushes to main");
+        script.Should().Contain("workflow must use workflow_dispatch only; automatic triggers are disabled.");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsForAutomaticTrigger()
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        File.WriteAllText(
+            Path.Combine(temp.Path, "automatic.yml"),
+            """
+            name: Automatic
+
+            on:
+              workflow_dispatch:
+              push:
+
+            permissions:
+              contents: read
+
+            jobs:
+              validate:
+                runs-on: windows-latest
+                timeout-minutes: 5
+                steps: []
+            """);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("workflow must use workflow_dispatch only; automatic triggers are disabled.");
+        result.CombinedOutput.Should().Contain("automatic.yml");
     }
 
     [Fact]
@@ -173,7 +207,8 @@ public sealed class GitHubWorkflowPreflightTests
         var workflow = ReadMacOsAppWorkflow();
 
         workflow.Should().NotContain("push:");
-        workflow.Should().Contain("pull_request:");
+        workflow.Should().NotContain("pull_request:");
+        workflow.Should().NotContain("schedule:");
         var workflowDispatch = ExtractRequiredYamlBlock(workflow, "workflow_dispatch:");
         var distributionCandidateInput = ExtractRequiredYamlBlock(workflowDispatch, "distribution_candidate:");
         distributionCandidateInput.Should().Contain("type: boolean");
@@ -1049,6 +1084,7 @@ public sealed class GitHubWorkflowPreflightTests
 
         result.ExitCode.Should().NotBe(0);
         result.CombinedOutput.Should().Contain("macOS release publication checkout must use the approved full-SHA actions/checkout pin with");
+        result.NormalizedCombinedOutput.Should().Contain("macOS release publication checkout must use the approved full-SHA actions/checkout pin with persist-credentials: false");
         result.CombinedOutput.Should().Contain("actions/checkout steps must set persist-credentials: false");
         result.CombinedOutput.Should().Contain("macos-app.yml");
     }
@@ -1249,8 +1285,8 @@ public sealed class GitHubWorkflowPreflightTests
 
         var withInput = ReplaceRequiredText(
             workflow,
-            "        default: false\n  pull_request:",
-            "        default: false\n      validate_macos_tfm:\n        description: Compile the opt-in net10.0-macos target with the hosted macOS workload; evidence only, no app artifact.\n        required: false\n        type: boolean\n        default: false\n  pull_request:");
+            "        default: false\npermissions:",
+            "        default: false\n      validate_macos_tfm:\n        description: Compile the opt-in net10.0-macos target with the hosted macOS workload; evidence only, no app artifact.\n        required: false\n        type: boolean\n        default: false\npermissions:");
 
         var releaseJob = ExtractRequiredYamlBlock(withInput, "publish-distribution-candidate:");
         const string validationJob =
@@ -1284,13 +1320,13 @@ public sealed class GitHubWorkflowPreflightTests
 
                 steps:
                   - name: Checkout
-                    uses: actions/checkout@v6
+                    uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
                     with:
                       fetch-depth: 0
                       persist-credentials: false
 
                   - name: Setup .NET
-                    uses: actions/setup-dotnet@v5
+                    uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
                     with:
                       dotnet-version: 10.0.300
 
@@ -1340,7 +1376,7 @@ public sealed class GitHubWorkflowPreflightTests
                       } | tee -a "$FREEX_MACOS_TFM_EVIDENCE"
 
                   - name: Upload macOS TFM build evidence
-                    uses: actions/upload-artifact@v7
+                    uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
                     with:
                       name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-build-${{ matrix.arch }}-evidence
                       path: artifacts/freex-${{ matrix.arch }}-macos-tfm-*-evidence.txt

@@ -1,14 +1,8 @@
 name: FreeP CI
 
-# Dedicated app-scoped commit gate. It avoids duplicate FreeX solution runs while ensuring a
-# FreeP or shared-library change is validated before a tester-release workflow can publish it.
+# Dedicated app-scoped validation lane. Release preparation invokes it directly before a
+# tester-release workflow can publish FreeP or shared-library changes.
 on:
-  push:
-    branches: [main]
-    paths: ["freep/**", "shared/**", "eng/test-gates.json", "tools/Invoke-TestGate.ps1", ".github/workflows/freep-ci.yml"]
-  pull_request:
-    branches: [main]
-    paths: ["freep/**", "shared/**", "eng/test-gates.json", "tools/Invoke-TestGate.ps1", ".github/workflows/freep-ci.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -48,7 +42,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
-          dotnet-version: 10.0.111
+          dotnet-version: 10.0.300
 
       - name: Build (Release, 0 warnings enforced)
         if: matrix.platform == 'windows'

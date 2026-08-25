@@ -784,7 +784,7 @@ public partial class MainWindow
         var result = AppCrashAnalyticsRuntime.SendTestReport();
         ShowOwnedMessage(
             AppCrashAnalyticsRuntime.UserMessage(result),
-            "Test Crash Reporting",
+            UiText.Get("Startup_CrashReportsTitle"),
             MessageBoxButton.OK,
             result == CrashAnalyticsTestReportResult.Sent
                 ? MessageBoxImage.Information
