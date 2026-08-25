@@ -66,6 +66,7 @@ public sealed class FreePRibbonHostActionEndpoints
     public Action<PresentationViewShowState>? ApplyViewShowState { get; init; }
     public Action<PresentationViewZoomState>? ApplyViewZoomState { get; init; }
     public Action<PresentationViewModeState>? ApplyViewModeState { get; init; }
+    public Action<PresentationViewColorModeState>? ApplyViewColorModeState { get; init; }
     public Action? StartReadingView { get; init; }
     public Action? NewPresentationWindow { get; init; }
     public Action? ArrangeAllPresentationWindows { get; init; }
@@ -251,6 +252,7 @@ public static class FreePRibbonHostActionDispatcher
             FreePRibbonHostActionKind.ApplyViewShowState => Invoke(action.Argument, endpoints.ApplyViewShowState),
             FreePRibbonHostActionKind.ApplyViewZoomState => Invoke(action.Argument, endpoints.ApplyViewZoomState),
             FreePRibbonHostActionKind.ApplyViewModeState => Invoke(action.Argument, endpoints.ApplyViewModeState),
+            FreePRibbonHostActionKind.ApplyViewColorModeState => Invoke(action.Argument, endpoints.ApplyViewColorModeState),
             FreePRibbonHostActionKind.StartReadingView => Invoke(endpoints.StartReadingView),
             FreePRibbonHostActionKind.NewPresentationWindow => Invoke(endpoints.NewPresentationWindow),
             FreePRibbonHostActionKind.ArrangeAllPresentationWindows => Invoke(endpoints.ArrangeAllPresentationWindows),

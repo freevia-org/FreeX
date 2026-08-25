@@ -14,7 +14,8 @@ public sealed class PresentationViewModePlannerTests
                 (PresentationViewModePlanner.NormalCommandId, true),
                 (PresentationViewModePlanner.OutlineCommandId, false),
                 (PresentationViewModePlanner.SlideSorterCommandId, false),
-                (PresentationViewModePlanner.NotesPageCommandId, false));
+                (PresentationViewModePlanner.NotesPageCommandId, false),
+                (PresentationViewModePlanner.SlideMasterCommandId, false));
     }
 
     [Fact]

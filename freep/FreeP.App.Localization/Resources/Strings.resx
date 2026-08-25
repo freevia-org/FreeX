@@ -3109,11 +3109,44 @@
   <data name="Ribbon_Command_ViewNotesPage_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_ViewSlideMaster_Label" xml:space="preserve">
+    <value>Slide Master</value>
+  </data>
+  <data name="Ribbon_Command_ViewSlideMaster_KeyTip" xml:space="preserve">
+    <value>M</value>
+  </data>
+  <data name="Pane_SlideMaster_Layout" xml:space="preserve">
+    <value>Layout</value>
+  </data>
   <data name="Ribbon_Command_ViewReadingView_Label" xml:space="preserve">
     <value>Reading View</value>
   </data>
   <data name="Ribbon_Command_ViewReadingView_KeyTip" xml:space="preserve">
     <value>R</value>
+  </data>
+  <data name="Ribbon_Group_ViewColorGrayscale_Label" xml:space="preserve">
+    <value>Color/Grayscale</value>
+  </data>
+  <data name="Ribbon_Group_ViewColorGrayscale_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Command_ViewColor_Label" xml:space="preserve">
+    <value>Color</value>
+  </data>
+  <data name="Ribbon_Command_ViewColor_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Command_ViewGrayscale_Label" xml:space="preserve">
+    <value>Grayscale</value>
+  </data>
+  <data name="Ribbon_Command_ViewGrayscale_KeyTip" xml:space="preserve">
+    <value>G</value>
+  </data>
+  <data name="Ribbon_Command_ViewBlackAndWhite_Label" xml:space="preserve">
+    <value>Black and White</value>
+  </data>
+  <data name="Ribbon_Command_ViewBlackAndWhite_KeyTip" xml:space="preserve">
+    <value>B</value>
   </data>
   <data name="Ribbon_Group_ViewShow_Label" xml:space="preserve">
     <value>Show</value>

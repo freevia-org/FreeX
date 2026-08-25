@@ -30,6 +30,7 @@ using Free.Shared.Theme.Avalonia;
 using FreeP.App.Avalonia.Backstage;
 using FreeP.App.Avalonia.Printing;
 using FreeP.App.Compositor;
+using FreeP.App.Localization;
 using FreeP.App.Recording;
 #if FREEP_WINDOWS_CAPTURE
 using FreeP.App.Recording.Windows;
@@ -171,6 +172,9 @@ public sealed partial class MainWindow : Window,
 
     private readonly SlideCanvas _slideCanvas;
     private Border _canvasHost = null!;
+    private Grid _rightGrid = null!;
+    private Border _notesPageSurface = null!;
+    private Grid _notesPageContent = null!;
     private Grid _bodyGrid = null!;
     private Grid _slidePaneHost = null!;
     private Canvas _oleOverlay = null!;
@@ -180,6 +184,7 @@ public sealed partial class MainWindow : Window,
 #endif
     private readonly ListBox _slidePaneList;
     private readonly ListBox _outlinePaneList;
+    private readonly ListBox _masterTargetList;
     private readonly Border _slidePaneInsertionIndicator;
     private readonly Button _slidePaneNewSlideButton;
     private bool _outlinePaneRefreshing;
@@ -359,6 +364,9 @@ public sealed partial class MainWindow : Window,
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
     private PresentationViewModeState _viewModeState = PresentationViewModeState.Normal;
+    private PresentationViewColorModeState _viewColorModeState = PresentationViewColorModeState.Color;
+    private MasterEditingSession? _masterEditingSession;
+    private bool _masterInteractionAttached;
     private int _slideSorterDragSourceIndex = -1;
     private Point _slideSorterDragStart;
     private bool _slideSorterDragging;
@@ -398,6 +406,9 @@ public sealed partial class MainWindow : Window,
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
+    internal bool IsNotesPageSurfaceVisible => _notesPageSurface?.IsVisible == true;
+    internal bool IsSlideMasterSurfaceVisible =>
+        _viewModeState.Mode == PresentationViewMode.SlideMaster && _slideCanvas?.MasterEditTarget is not null;
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
@@ -532,6 +543,16 @@ public sealed partial class MainWindow : Window,
             IsVisible = false,
         };
         _outlinePaneList.SelectionChanged += OnOutlinePaneSelectionChanged;
+
+        _masterTargetList = new ListBox
+        {
+            Width = FreePShellVisualMetrics.SlidePaneWidth,
+            Padding = new Thickness(6),
+            Background = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
+            SelectionMode = SelectionMode.Single,
+            IsVisible = false,
+        };
+        _masterTargetList.SelectionChanged += OnMasterTargetSelectionChanged;
 
         _slidePaneInsertionIndicator = new Border
         {
@@ -1158,16 +1179,38 @@ public sealed partial class MainWindow : Window,
         _smartArtTextPaneHost = BuildSmartArtTextPaneHost();
         _animationPaneHost = BuildAnimationPaneHost();
         _printOptionsPaneHost = BuildPrintOptionsPaneHost();
+        _notesPageContent = new Grid();
+        _notesPageContent.RowDefinitions.Add(new RowDefinition { Height = new GridLength(42, GridUnitType.Star) });
+        _notesPageContent.RowDefinitions.Add(new RowDefinition { Height = new GridLength(58, GridUnitType.Star) });
+        _notesPageSurface = new Border
+        {
+            Background = FreePBrushes.PlaceholderSurface,
+            Padding = new Thickness(32),
+            IsVisible = false,
+            Child = new Border
+            {
+                Background = FreePBrushes.White,
+                BorderBrush = FreePBrushes.PaneBorder,
+                BorderThickness = new Thickness(1),
+                MaxWidth = 720,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Child = _notesPageContent,
+            },
+        };
         Grid.SetRow(_canvasHost, 0);
         Grid.SetRow(_layoutPickerHost, 1);
         Grid.SetRow(_tablePickerHost, 2);
         Grid.SetRow(_reviewCommentsPaneHost, 3);
         Grid.SetRow(_notesBox,  4);
+        Grid.SetRow(_notesPageSurface, 0);
+        Grid.SetRowSpan(_notesPageSurface, 5);
         rightGrid.Children.Add(_canvasHost);
         rightGrid.Children.Add(_layoutPickerHost);
         rightGrid.Children.Add(_tablePickerHost);
         rightGrid.Children.Add(_reviewCommentsPaneHost);
         rightGrid.Children.Add(_notesBox);
+        rightGrid.Children.Add(_notesPageSurface);
+        _rightGrid = rightGrid;
 
         // Wire interaction after the overlay panel is built.
         WireInteraction(textOverlay);
@@ -1190,6 +1233,8 @@ public sealed partial class MainWindow : Window,
         slidePaneHost.Children.Add(_slidePaneNewSlideButton);
         Grid.SetRowSpan(_outlinePaneList, 2);
         slidePaneHost.Children.Add(_outlinePaneList);
+        Grid.SetRowSpan(_masterTargetList, 2);
+        slidePaneHost.Children.Add(_masterTargetList);
 
         // Left (slide pane) + right split.
         var body = _bodyGrid = new Grid();
@@ -2154,6 +2199,7 @@ public sealed partial class MainWindow : Window,
             OnChartPointDoubleClick,
             tryOpenOleInPlace: TryOpenOleInPlace);
         _slideCanvas.AttachGestureHandler(_gestureHandler);
+        _masterInteractionAttached = false;
         ApplyPresentationViewShowState(_viewShowState);
 
         // Text editor: double-click a shape to edit its text.
@@ -2180,6 +2226,7 @@ public sealed partial class MainWindow : Window,
     private void RewireInteractionToEditor()
     {
         if (_adorner is null) return;
+        _masterInteractionAttached = false;
         CloseActiveOleHost();
         // The gesture handler and text editor subscribe strongly to the canvas's routed
         // pointer events, so detach them before binding the new EditingSession.
@@ -2349,7 +2396,8 @@ public sealed partial class MainWindow : Window,
     private void ApplyPresentationViewShowState(PresentationViewShowState state)
     {
         _viewShowState = state;
-        _notesBox.IsVisible = _viewModeState.Mode != PresentationViewMode.SlideSorter && state.ShowNotesPane;
+        _notesBox.IsVisible = _viewModeState.Mode != PresentationViewMode.SlideSorter &&
+                              (_viewModeState.Mode == PresentationViewMode.NotesPage || state.ShowNotesPane);
         _slideCanvas.ApplyViewShowState(state);
         if (_gestureHandler is null)
             return;
@@ -2370,9 +2418,11 @@ public sealed partial class MainWindow : Window,
         var isOutline = state.Mode == PresentationViewMode.Outline;
         var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
         var isNotesPage = state.Mode == PresentationViewMode.NotesPage;
+        var isSlideMaster = state.Mode == PresentationViewMode.SlideMaster;
         if (_bodyGrid is null || _slidePaneHost is null || _canvasHost is null)
             return;
 
+        SetNotesPageSurface(isNotesPage);
         _bodyGrid.ColumnDefinitions[0].Width = isSlideSorter
             ? new GridLength(1, GridUnitType.Star)
             : isNotesPage ? new GridLength(0) : GridLength.Auto;
@@ -2387,18 +2437,171 @@ public sealed partial class MainWindow : Window,
             : new FuncTemplate<Panel?>(() => new StackPanel { Orientation = Orientation.Vertical });
         _canvasHost.IsVisible = !isSlideSorter;
         _outlinePaneList.IsVisible = isOutline;
-        _slidePaneList.IsVisible = !isOutline;
+        _masterTargetList.IsVisible = isSlideMaster;
+        _slidePaneList.IsVisible = !isOutline && !isSlideMaster;
         if (isOutline)
         {
             _slidePaneInsertionIndicator.IsVisible = false;
             _slidePaneNewSlideButton.IsVisible = false;
         }
-        _notesBox.IsVisible = !isSlideSorter && _viewShowState.ShowNotesPane;
+        _notesBox.IsVisible = !isSlideSorter && !isSlideMaster && (isNotesPage || _viewShowState.ShowNotesPane);
         _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
-        _notesBox.MaxHeight = isNotesPage ? 300 : 120;
+        _notesBox.MaxHeight = isNotesPage ? double.PositiveInfinity : 120;
         _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
         RefreshSlidePane();
+        if (isSlideMaster)
+        {
+            ConfigureMasterCanvas();
+            RefreshMasterTargetPane();
+        }
+        else if (_masterInteractionAttached)
+        {
+            _slideCanvas.MasterEditTarget = null;
+            RewireInteractionToEditor();
+        }
         SyncRibbonCommandStates();
+    }
+
+    private MasterEditingSession EnsureMasterEditingSession()
+    {
+        if (_masterEditingSession is null || !ReferenceEquals(_masterEditingSession.Presentation, _presentation))
+            _masterEditingSession = new MasterEditingSession(_presentation, Editor.Bus);
+        return _masterEditingSession;
+    }
+
+    private void ConfigureMasterCanvas()
+    {
+        var masterEditor = EnsureMasterEditingSession();
+        _slideCanvas.Presentation = _presentation;
+        _slideCanvas.Slide = masterEditor.CurrentSlide;
+        _slideCanvas.SlideIndex = 0;
+        _slideCanvas.MasterEditTarget = masterEditor.Target;
+        if (!_masterInteractionAttached)
+            RewireInteractionToMaster(masterEditor);
+        _slideCanvas.Refresh();
+    }
+
+    private void RefreshMasterTargetPane()
+    {
+        if (_viewModeState.Mode != PresentationViewMode.SlideMaster)
+            return;
+
+        var masterEditor = EnsureMasterEditingSession();
+        _slidePaneRefreshing = true;
+        try
+        {
+            _masterTargetList.Items.Clear();
+            foreach (var target in masterEditor.Targets)
+            {
+                var label = DescribeMasterTarget(target);
+                var item = new ListBoxItem
+                {
+                    Tag = target,
+                    Content = new TextBlock
+                    {
+                        Text = label,
+                        Margin = target.Kind == MasterEditTargetKind.Layout
+                            ? new Thickness(16, 5, 4, 5)
+                            : new Thickness(4, 7, 4, 5),
+                        FontWeight = target.Kind == MasterEditTargetKind.Master
+                            ? FontWeight.SemiBold
+                            : FontWeight.Normal,
+                    },
+                    IsSelected = masterEditor.Target == target,
+                };
+                AutomationProperties.SetName(item, label);
+                _masterTargetList.Items.Add(item);
+            }
+        }
+        finally
+        {
+            _slidePaneRefreshing = false;
+        }
+    }
+
+    private string DescribeMasterTarget(MasterEditTarget target) => target.Kind switch
+    {
+        MasterEditTargetKind.Master => string.IsNullOrWhiteSpace(_presentation.Masters.Find(master => master.Id == target.Id)?.Name)
+            ? Loc.Get("Ribbon_Command_ViewSlideMaster_Label")
+            : _presentation.Masters.Find(master => master.Id == target.Id)!.Name,
+        MasterEditTargetKind.Layout => string.IsNullOrWhiteSpace(_presentation.Layouts.Find(layout => layout.Id == target.Id)?.Name)
+            ? Loc.Get("Pane_SlideMaster_Layout")
+            : _presentation.Layouts.Find(layout => layout.Id == target.Id)!.Name,
+        _ => target.Id,
+    };
+
+    private void OnMasterTargetSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_slidePaneRefreshing || _masterTargetList.SelectedItem is not ListBoxItem { Tag: MasterEditTarget target })
+            return;
+        TrySelectSlideMasterTarget(target);
+    }
+
+    internal bool TrySelectSlideMasterTarget(MasterEditTarget target)
+    {
+        if (_viewModeState.Mode != PresentationViewMode.SlideMaster)
+            return false;
+        var selected = EnsureMasterEditingSession().SelectTarget(target);
+        if (!selected)
+            return false;
+        ConfigureMasterCanvas();
+        RefreshMasterTargetPane();
+        return true;
+    }
+
+    internal MasterEditTarget? CurrentSlideMasterTarget => _masterEditingSession?.Target;
+
+    private void RewireInteractionToMaster(MasterEditingSession masterEditor)
+    {
+        if (_adorner is null)
+            return;
+        CloseActiveOleHost();
+        _textEditor?.Dispose();
+        _textEditor = null;
+        _gestureHandler?.Dispose();
+        _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, masterEditor, _adorner);
+        _slideCanvas.AttachGestureHandler(_gestureHandler);
+        ApplyPresentationViewShowState(_viewShowState);
+        _masterInteractionAttached = true;
+    }
+
+    private void SetNotesPageSurface(bool isNotesPage)
+    {
+        if (_rightGrid is null || _notesPageSurface is null || _notesPageContent is null)
+            return;
+
+        if (isNotesPage)
+        {
+            _rightGrid.Children.Remove(_canvasHost);
+            _rightGrid.Children.Remove(_notesBox);
+            _notesPageContent.Children.Clear();
+            Grid.SetRow(_canvasHost, 0);
+            Grid.SetRow(_notesBox, 1);
+            _notesPageContent.Children.Add(_canvasHost);
+            _notesPageContent.Children.Add(_notesBox);
+            _notesPageSurface.IsVisible = true;
+            return;
+        }
+
+        _notesPageContent.Children.Remove(_canvasHost);
+        _notesPageContent.Children.Remove(_notesBox);
+        if (!_rightGrid.Children.Contains(_canvasHost))
+        {
+            Grid.SetRow(_canvasHost, 0);
+            _rightGrid.Children.Add(_canvasHost);
+        }
+        if (!_rightGrid.Children.Contains(_notesBox))
+        {
+            Grid.SetRow(_notesBox, 4);
+            _rightGrid.Children.Add(_notesBox);
+        }
+        _notesPageSurface.IsVisible = false;
+    }
+
+    private void ApplyPresentationViewColorModeState(PresentationViewColorModeState state)
+    {
+        _viewColorModeState = state;
+        _slideCanvas.ApplyViewColorModeState(state);
     }
 
     private Control BuildRibbon()
@@ -2469,6 +2672,7 @@ public sealed partial class MainWindow : Window,
                 ViewShowState = () => _viewShowState,
                 ViewZoomState = () => _viewZoomState,
                 ViewModeState = () => _viewModeState,
+                ViewColorModeState = () => _viewColorModeState,
             },
             TextActionTargets = CreateRibbonTextActionTargets(),
             DesignCommands = new FreePRibbonDesignCommandEndpoints
@@ -6140,9 +6344,15 @@ public sealed partial class MainWindow : Window,
     private void RefreshCanvas()
     {
         CloseActiveOleHost();
+        if (_viewModeState.Mode == PresentationViewMode.SlideMaster)
+        {
+            ConfigureMasterCanvas();
+            return;
+        }
         _slideCanvas.Presentation = _presentation;
         _slideCanvas.Slide        = Editor.CurrentSlide;
         _slideCanvas.SlideIndex   = Editor.CurrentSlideIndex;
+        _slideCanvas.MasterEditTarget = null;
         _slideCanvas.Refresh();
     }
 

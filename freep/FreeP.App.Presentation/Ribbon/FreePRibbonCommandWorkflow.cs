@@ -91,6 +91,7 @@ public enum FreePRibbonHostActionKind
     ApplyViewShowState,
     ApplyViewZoomState,
     ApplyViewModeState,
+    ApplyViewColorModeState,
     StartReadingView,
     NewPresentationWindow,
     ArrangeAllPresentationWindows,
@@ -114,6 +115,7 @@ public enum FreePRibbonHostQueryKind
     ViewShowState,
     ViewZoomState,
     ViewModeState,
+    ViewColorModeState,
 }
 
 public enum FreePRibbonTextActionKind
@@ -758,6 +760,19 @@ public static class FreePRibbonCommandWorkflow
                 FreePRibbonCommandGroup.View,
                 plan.CommandId,
                 new ViewModeCommand(stateStore, plan, host));
+        }
+
+        var initialColorModeState = host.TryQuery<PresentationViewColorModeState>(
+                FreePRibbonHostQueryKind.ViewColorModeState,
+                out var colorModeState)
+            ? colorModeState
+            : PresentationViewColorModeState.Color;
+        foreach (var plan in PresentationViewColorModePlanner.BuildPlans(initialColorModeState))
+        {
+            commands.Register(
+                FreePRibbonCommandGroup.View,
+                plan.CommandId,
+                new ViewColorModeCommand(stateStore, plan, host));
         }
 
         var initialShowState = host.TryQuery<PresentationViewShowState>(FreePRibbonHostQueryKind.ViewShowState, out var showState)
@@ -1500,6 +1515,44 @@ public static class FreePRibbonCommandWorkflow
             _host.TryQuery<bool>(FreePRibbonHostQueryKind.AnimationPaneVisible, out var visible)
                 ? visible
                 : _localVisible);
+    }
+
+    private sealed class ViewColorModeCommand : IRibbonStatefulCommand
+    {
+        private readonly RibbonStateStore _stateStore;
+        private readonly PresentationViewColorModeCommandPlan _plan;
+        private readonly FreePRibbonCommandHostAdapter _host;
+        private PresentationViewColorModeState _localState = PresentationViewColorModeState.Color;
+
+        public ViewColorModeCommand(
+            RibbonStateStore stateStore,
+            PresentationViewColorModeCommandPlan plan,
+            FreePRibbonCommandHostAdapter host)
+        {
+            _stateStore = stateStore;
+            _plan = plan;
+            _host = host;
+            Sync();
+        }
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var state = PresentationViewColorModePlanner.Select(CurrentState(), _plan);
+            _localState = state;
+            _host.Execute(FreePRibbonHostActionKind.ApplyViewColorModeState, state);
+            _stateStore.SetChecked(_plan.CommandId, state.Mode == _plan.Mode);
+        }
+
+        public RibbonCommandState GetState() => new(IsChecked: CurrentState().Mode == _plan.Mode);
+
+        private PresentationViewColorModeState CurrentState() =>
+            _host.TryQuery<PresentationViewColorModeState>(
+                FreePRibbonHostQueryKind.ViewColorModeState,
+                out var state)
+                ? state
+                : _localState;
+
+        private void Sync() => _stateStore.SetChecked(_plan.CommandId, GetState().IsChecked);
     }
 
     private sealed class ViewShowToggleCommand : IRibbonStatefulCommand

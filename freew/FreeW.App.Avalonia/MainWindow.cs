@@ -132,7 +132,9 @@ public sealed partial class MainWindow : Window
     };
     private Control? _liveWorkspaceContent;
     private Grid? _splitPreviewGrid;
-    private Control? _splitPreviewSnapshot;
+    private DocumentView? _splitEditor;
+    private DocumentView? _lastFocusedDocumentEditor;
+    private bool _synchronizingSplitEditors;
     private readonly FreeWViewSession _viewSession = new(FreeWViewDepthCapabilities.FullDesktop);
     private ScrollViewer? _sideToSidePreviewScrollViewer;
     private Button? _sideToSidePreviousPairButton;
@@ -325,9 +327,9 @@ public sealed partial class MainWindow : Window
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync(),
             PasteTextOnly: () => _ = PastePlainTextAsync(),
-            SelectAll: _editor.SelectAll,
-            Undo: _editor.Undo,
-            Redo: _editor.Redo,
+            SelectAll: () => ResolveActiveDocumentEditor().SelectAll(),
+            Undo: () => ResolveActiveDocumentEditor().Undo(),
+            Redo: () => ResolveActiveDocumentEditor().Redo(),
             RevealFormatting: ToggleRevealFormatting,
             Thesaurus: ToggleThesaurusPane,
             LockCurrentField: () => _editor.SetFieldLockAtCaret(true),
@@ -402,7 +404,13 @@ public sealed partial class MainWindow : Window
         _workspace.Child = _scroller;
         workArea.Children.Add(_workspace);
 
-        _editor.DocumentChanged += OnEditorDocumentChanged;
+        _editor.DocumentChanged += () => OnDocumentEditorChanged(_editor);
+        _editor.GotFocus += (_, _) =>
+        {
+            _lastFocusedDocumentEditor = _editor;
+            UpdateStatus(_editor);
+            RefreshRibbonCommandStates();
+        };
         _editor.DocumentChanged += StopReadAloudAfterDocumentChange;
         _editor.DocumentChanged += () => { if (_navPane.IsVisible) _navPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_selectionPane.IsVisible) _selectionPane.Refresh(); };
@@ -414,11 +422,11 @@ public sealed partial class MainWindow : Window
         _editor.DocumentChanged += () => { if (_thesaurusPane.IsVisible) _thesaurusPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_outlineMode) _outlineView.Refresh(); };
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
-        _editor.CaretMoved += UpdateStatus;
+        _editor.CaretMoved += () => UpdateStatus(_editor);
         _editor.CaretMoved += RefreshRibbonCommandStates;
         _editor.DocumentChanged += RefreshRibbonCommandStates;
         _editor.CaretMoved += () => { if (_thesaurusPane.IsVisible) _thesaurusPane.Refresh(); };
-        _editor.ViewModeChanged += UpdateStatus;
+        _editor.ViewModeChanged += () => UpdateStatus(_editor);
         _editor.ViewModeChanged += UpdateViewModeButtons;
         _editor.HyperlinkActivated += OpenExternalUri;
         _editor.ContextMenuCommandRequested += OnEditorContextMenuCommandRequested;
@@ -1482,9 +1490,8 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// AV-VIEW: Window → Split. A true split-pane (two scroll regions over one document) is a larger
-    /// surface than this slice. The top pane remains the live editor; the bottom pane is a
-    /// read-only paginated snapshot, so the command is backed without pretending to offer dual live editing.
+    /// AV-VIEW: Window → Split hosts two focusable editors over the same document state. Changes from
+    /// either pane synchronize through the primary document so file persistence and autosave stay singular.
     /// </summary>
     internal void ToggleSplit() =>
         ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSplit));
@@ -1563,7 +1570,7 @@ public sealed partial class MainWindow : Window
             case FreeWViewDepthSurfaceKind.LiveEditor:
                 RestoreLiveWorkspace();
                 break;
-            case FreeWViewDepthSurfaceKind.SplitEditorWithReadOnlyPreview:
+            case FreeWViewDepthSurfaceKind.SplitEditors:
                 EnterSplitPreview(plan);
                 break;
             case FreeWViewDepthSurfaceKind.ReadOnlyPagePreview:
@@ -1612,7 +1619,7 @@ public sealed partial class MainWindow : Window
         }
 
         _splitPreviewGrid = null;
-        _splitPreviewSnapshot = null;
+        _splitEditor = null;
         ResetSideToSideNavigation();
 
         if (_liveWorkspaceContent is not null && !ReferenceEquals(_workspace.Child, _liveWorkspaceContent))
@@ -1656,11 +1663,35 @@ public sealed partial class MainWindow : Window
         Grid.SetRow(splitter, 1);
         splitGrid.Children.Add(splitter);
 
-        _splitPreviewSnapshot = BuildReadOnlyPagePreviewSurface(plan, compact: true);
-        Grid.SetRow(_splitPreviewSnapshot, 2);
-        splitGrid.Children.Add(_splitPreviewSnapshot);
+        var splitEditor = new DocumentView
+        {
+            ViewMode = _editor.ViewMode,
+            ShowGridlines = _editor.ShowGridlines,
+            ViewTableGridlines = _editor.ViewTableGridlines,
+            ShowRuler = _editor.ShowRuler,
+        };
+        splitEditor.LoadDocument(FreeWDocumentSnapshot.Clone(_editor.Document));
+        splitEditor.ApplyViewDepthLayout(plan.Layout);
+        splitEditor.DocumentChanged += () => OnDocumentEditorChanged(splitEditor);
+        splitEditor.GotFocus += (_, _) =>
+        {
+            _lastFocusedDocumentEditor = splitEditor;
+            UpdateStatus(splitEditor);
+            RefreshRibbonCommandStates();
+        };
+
+        var splitScroller = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Padding = new Thickness(24, 12),
+            Content = splitEditor,
+        };
+        Grid.SetRow(splitScroller, 2);
+        splitGrid.Children.Add(splitScroller);
 
         _splitPreviewGrid = splitGrid;
+        _splitEditor = splitEditor;
         _workspace.Child = splitGrid;
         _editor.Focus();
     }
@@ -1712,22 +1743,6 @@ public sealed partial class MainWindow : Window
         // logical distance. Recompute it whenever zoom changes so navigation stays page-aligned.
         _sideToSidePairScrollStrideDip =
             2 * (pageWidthDip + plan.Layout.InterPageGapDip) * _zoomScale;
-    }
-
-    private void RefreshSplitPreviewSnapshot()
-    {
-        if (!_viewSession.CurrentDepth.IsSplitActive || _splitPreviewGrid is null || _splitPreviewSnapshot is null)
-            return;
-
-        var replacement = BuildReadOnlyPagePreviewSurface(_viewSession.CurrentDepth, compact: true);
-        var index = _splitPreviewGrid.Children.IndexOf(_splitPreviewSnapshot);
-        if (index < 0)
-            return;
-
-        Grid.SetRow(replacement, 2);
-        _splitPreviewGrid.Children.RemoveAt(index);
-        _splitPreviewGrid.Children.Insert(index, replacement);
-        _splitPreviewSnapshot = replacement;
     }
 
     private Control BuildReadOnlyPagePreviewSurface(FreeWViewDepthPlan plan, bool compact)
@@ -2894,8 +2909,11 @@ public sealed partial class MainWindow : Window
         if (plan.ExitPagedEditMode)
             _pagedEditMode = false;
         _editor.ViewMode = plan.TargetMode;
-        if (_viewSession.CurrentDepth.IsSplitActive)
-            RefreshSplitPreviewSnapshot();
+        if (_splitEditor is not null)
+        {
+            _splitEditor.ViewMode = _editor.ViewMode;
+            _splitEditor.ApplyViewDepthLayout(_viewSession.CurrentDepth.Layout);
+        }
         UpdateViewModeButtons();
         RefreshRibbonCommandStates();
         _editor.Focus();
@@ -3279,20 +3297,21 @@ public sealed partial class MainWindow : Window
         _scroller.Offset = new Vector(horizontal, target);
     }
 
-    private async Task<FreeWClipboardTransferResult> CopyAsync()
+    private async Task<FreeWClipboardTransferResult> CopyAsync(DocumentView? source = null)
     {
         // shell-clipboard F2: unlike the WPF shell's native RichTextBox Copy/Cut (which places RTF
         // and an HTML/Xaml payload on the clipboard automatically), this editor is a custom control
         // with no such native behaviour, so it must build the rich payload itself -- otherwise every
         // Copy+Paste round trip silently drops all character formatting, even within this document.
-        var (document, ranges) = _editor.GetSelectionRichSnapshot();
+        var editor = source ?? ResolveActiveDocumentEditor();
+        var (document, ranges) = editor.GetSelectionRichSnapshot();
         var richDocument = FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(document, ranges);
         // ...and alongside it FreeW's own flavour, which keeps what RTF/HTML cannot express — a content
         // control, a tracked change's author, a comment anchor — for a paste back into FreeW.
         var nativeDocument = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges);
         var result = await FreeWClipboardApplicationWorkflow.WriteSelectionAsync(
             _platformClipboard,
-            _editor.SelectedText,
+            editor.SelectedText,
             richDocument,
             nativeDocument);
         if (result.Status is FreeWClipboardTransferStatus.Unsupported or FreeWClipboardTransferStatus.Failed)
@@ -3328,10 +3347,10 @@ public sealed partial class MainWindow : Window
         switch (commandId.Value)
         {
             case FreeWContextMenuPlanner.EditorUndo:
-                _editor.Undo();
+                ResolveActiveDocumentEditor().Undo();
                 break;
             case FreeWContextMenuPlanner.EditorRedo:
-                _editor.Redo();
+                ResolveActiveDocumentEditor().Redo();
                 break;
             case FreeWContextMenuPlanner.EditorCut:
                 await CutAsync();
@@ -3343,19 +3362,20 @@ public sealed partial class MainWindow : Window
                 await PasteAsync();
                 break;
             case FreeWContextMenuPlanner.EditorDelete:
-                _editor.TryDeleteSelection();
+                ResolveActiveDocumentEditor().TryDeleteSelection();
                 break;
             case FreeWContextMenuPlanner.EditorSelectAll:
-                _editor.SelectAllText();
+                ResolveActiveDocumentEditor().SelectAllText();
                 break;
         }
     }
 
     private async Task CutAsync()
     {
-        var copy = await CopyAsync();
+        var editor = ResolveActiveDocumentEditor();
+        var copy = await CopyAsync(editor);
         if (copy.CanCommitCut)
-            _editor.TryDeleteSelection();
+            editor.TryDeleteSelection();
     }
 
     /// <summary>
@@ -3382,7 +3402,7 @@ public sealed partial class MainWindow : Window
         }
 
         var plan = FreeWClipboardApplicationWorkflow.PlanPaste(transfer.Payload, PasteSpecialOption.KeepSourceFormatting);
-        if (!ApplyClipboardPastePlan(plan))
+        if (!ApplyClipboardPastePlan(plan, ResolveActiveDocumentEditor()))
             _status.Text = FreeWClipboardApplicationWorkflow.EmptyClipboardMessage;
     }
 
@@ -3398,20 +3418,21 @@ public sealed partial class MainWindow : Window
     /// (a screenshot tool that also copies the saved file path, say) must still get the text inserted
     /// after the image rather than silently dropped.
     /// </summary>
-    private bool ApplyClipboardPastePlan(FreeWClipboardPastePlan plan)
+    private bool ApplyClipboardPastePlan(FreeWClipboardPastePlan plan, DocumentView? source = null)
     {
+        var editor = source ?? ResolveActiveDocumentEditor();
         if (plan.RichDocument is not { } richDocument)
         {
             return plan.TextKind == DocumentPasteTextKind.TextOnly
-                ? _editor.PastePlainText(plan.Text)
-                : _editor.PasteMergeFormatting(plan.Text);
+                ? editor.PastePlainText(plan.Text)
+                : editor.PasteMergeFormatting(plan.Text);
         }
 
-        if (!_editor.PasteKeepSourceFormatting(richDocument))
-            return _editor.PasteMergeFormatting(plan.Text);
+        if (!editor.PasteKeepSourceFormatting(richDocument))
+            return editor.PasteMergeFormatting(plan.Text);
 
         if (plan.RichDocumentIsSynthesizedImage)
-            _editor.PasteMergeFormatting(plan.Text);
+            editor.PasteMergeFormatting(plan.Text);
         return true;
     }
 
@@ -3455,9 +3476,10 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
+        var editor = ResolveActiveDocumentEditor();
         var pasted = kind == DocumentPasteTextKind.TextOnly
-            ? _editor.PastePlainText(transfer.Payload.Text)
-            : _editor.PasteMergeFormatting(transfer.Payload.Text);
+            ? editor.PastePlainText(transfer.Payload.Text)
+            : editor.PasteMergeFormatting(transfer.Payload.Text);
         if (!pasted)
             _status.Text = FreeWClipboardApplicationWorkflow.EmptyClipboardMessage;
         return pasted;
@@ -4169,13 +4191,31 @@ public sealed partial class MainWindow : Window
         session.Dispose();
     }
 
-    private void OnEditorDocumentChanged()
+    private void OnDocumentEditorChanged(DocumentView source)
     {
+        if (_synchronizingSplitEditors)
+            return;
+
+        if (_splitEditor is { } peer)
+        {
+            _synchronizingSplitEditors = true;
+            try
+            {
+                if (ReferenceEquals(source, _editor))
+                    peer.LoadDocument(FreeWDocumentSnapshot.Clone(_editor.Document));
+                else
+                    _editor.LoadDocument(FreeWDocumentSnapshot.Clone(source.Document));
+            }
+            finally
+            {
+                _synchronizingSplitEditors = false;
+            }
+        }
+
         if (!_suppressEditorDirty)
             _fileWorkflow.MarkDirty();
 
-        RefreshSplitPreviewSnapshot();
-        UpdateStatus();
+        UpdateStatus(source);
     }
 
     private void MarkDocumentSavedWithPath(string path) =>
@@ -4198,23 +4238,29 @@ public sealed partial class MainWindow : Window
             isDefaultDocument: _fileWorkflow.CurrentPath is null);
     }
 
-    private void UpdateStatus()
+    private void UpdateStatus(DocumentView? source = null)
     {
-        var (currentSection, totalSections) = _editor.SectionInfo();
+        var editor = source ?? ResolveActiveDocumentEditor();
+        var (currentSection, totalSections) = editor.SectionInfo();
         var plan = _editorInteraction.BuildStatus(new FreeWEditorStatusContext(
-            _editor.Document,
-            CurrentPage: _editor.CaretPageIndex + 1,
-            TotalPages: _editor.PageCount,
+            editor.Document,
+            CurrentPage: editor.CaretPageIndex + 1,
+            TotalPages: editor.PageCount,
             CurrentSection: currentSection,
             TotalSections: totalSections,
-            SelectionText: _editor.SelectedText,
-            IncludePageStatus: _editor.ViewMode == DocumentViewMode.PrintLayout,
+            SelectionText: editor.SelectedText,
+            IncludePageStatus: editor.ViewMode == DocumentViewMode.PrintLayout,
             IncludeSectionStatus: true,
-            IsEdited: _editor.CanUndo));
+            IsEdited: editor.CanUndo));
         _pageStatus.Text = plan.PageStatus;
         _sectionStatus.Text = plan.SectionStatus;
         _status.Text = plan.CountsStatus;
     }
+
+    private DocumentView ResolveActiveDocumentEditor() =>
+        _lastFocusedDocumentEditor is { IsVisible: true, IsEnabled: true } editor
+            ? editor
+            : _editor;
 
     // ── Backstage (File screen) ───────────────────────────────────────────────
 

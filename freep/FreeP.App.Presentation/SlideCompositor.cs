@@ -121,6 +121,93 @@ public static class SlideCompositor
         return ops;
     }
 
+    /// <summary>
+    /// Composes the editable root of a slide master. Unlike normal slide composition, master
+    /// placeholders are authored content here and are therefore rendered instead of being treated
+    /// as inheritance-only decoration.
+    /// </summary>
+    public static IReadOnlyList<DrawOp> ComposeMaster(PresentationModel presentation, SlideMaster master)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(master);
+
+        var (surface, slide, theme, colorMap) = CreateMasterEditSurface(presentation, master, layout: null);
+        var ops = new List<DrawOp>
+        {
+            new DrawOp.Background
+            {
+                Fill = master.Background is { } background
+                    ? ResolveFill(background, theme, colorMap)
+                    : new ResolvedFill.Solid(SrgbColor.White),
+                BoundsDip = GetSlideBounds(surface),
+            }
+        };
+        foreach (var shape in master.Placeholders)
+            ComposeShape(shape, slide, surface, theme, ops, effectiveClrMap: colorMap);
+        return ops;
+    }
+
+    /// <summary>
+    /// Composes a slide layout in its owning master context. Both inherited master shapes and the
+    /// layout's own placeholders are visible so editing a layout remains spatially faithful.
+    /// </summary>
+    public static IReadOnlyList<DrawOp> ComposeLayout(PresentationModel presentation, SlideLayout layout)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(layout);
+
+        var master = presentation.Masters.Find(candidate => candidate.Id == layout.MasterId)
+            ?? throw new InvalidOperationException("The layout does not have a resolvable slide master.");
+        var (surface, slide, theme, colorMap) = CreateMasterEditSurface(presentation, master, layout);
+        var ops = new List<DrawOp>
+        {
+            new DrawOp.Background
+            {
+                Fill = layout.Background is { } layoutBackground
+                    ? ResolveFill(layoutBackground, theme, colorMap)
+                    : master.Background is { } masterBackground
+                        ? ResolveFill(masterBackground, theme, colorMap)
+                        : new ResolvedFill.Solid(SrgbColor.White),
+                BoundsDip = GetSlideBounds(surface),
+            }
+        };
+        foreach (var shape in master.Placeholders)
+            ComposeShape(shape, slide, surface, theme, ops, effectiveClrMap: colorMap);
+        foreach (var shape in layout.Placeholders)
+            ComposeShape(shape, slide, surface, theme, ops, effectiveClrMap: colorMap);
+        return ops;
+    }
+
+    private static (PresentationModel Surface, Slide Slide, PresentationTheme Theme,
+        IReadOnlyDictionary<string, string>? ColorMap) CreateMasterEditSurface(
+        PresentationModel source,
+        SlideMaster master,
+        SlideLayout? layout)
+    {
+        // Use a small, isolated presentation graph containing the actual master/layout objects.
+        // Placeholder resolution must never fall back to another master in a multi-master deck.
+        var surface = new PresentationModel
+        {
+            SlideSizeCxEmu = source.SlideSizeCxEmu,
+            SlideSizeCyEmu = source.SlideSizeCyEmu,
+            Theme = master.Theme ?? source.Theme,
+        };
+        surface.Masters.Add(master);
+        if (layout is not null)
+            surface.Layouts.Add(layout);
+        var slide = new Slide { LayoutId = layout?.Id };
+        surface.Slides.Add(slide);
+        return (surface, slide, surface.Theme,
+            layout?.ColorMapOverride as IReadOnlyDictionary<string, string>
+            ?? master.ColorMap as IReadOnlyDictionary<string, string>);
+    }
+
+    private static LayoutRect GetSlideBounds(PresentationModel presentation) => new(
+        0,
+        0,
+        presentation.SlideSizeCxEmu / EmuPerDip,
+        presentation.SlideSizeCyEmu / EmuPerDip);
+
     // ─── Background ───────────────────────────────────────────────────────────────────────────
 
     private static ResolvedFill ResolveBackground(Slide slide, PresentationModel presentation, PresentationTheme theme,

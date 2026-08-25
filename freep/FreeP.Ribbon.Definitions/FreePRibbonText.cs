@@ -759,7 +759,12 @@ internal static class FreePRibbonText
     public static RibbonText ViewOutlineCommand { get; } = new("Ribbon_Command_ViewOutline_Label", "Ribbon_Command_ViewOutline_KeyTip");
     public static RibbonText ViewSlideSorterCommand { get; } = new("Ribbon_Command_ViewSlideSorter_Label", "Ribbon_Command_ViewSlideSorter_KeyTip");
     public static RibbonText ViewNotesPageCommand { get; } = new("Ribbon_Command_ViewNotesPage_Label", "Ribbon_Command_ViewNotesPage_KeyTip");
+    public static RibbonText ViewSlideMasterCommand { get; } = new("Ribbon_Command_ViewSlideMaster_Label", "Ribbon_Command_ViewSlideMaster_KeyTip");
     public static RibbonText ViewReadingViewCommand { get; } = new("Ribbon_Command_ViewReadingView_Label", "Ribbon_Command_ViewReadingView_KeyTip");
+    public static RibbonText ViewColorGrayscaleGroup { get; } = new("Ribbon_Group_ViewColorGrayscale_Label", "Ribbon_Group_ViewColorGrayscale_KeyTip");
+    public static RibbonText ViewColorCommand { get; } = new("Ribbon_Command_ViewColor_Label", "Ribbon_Command_ViewColor_KeyTip");
+    public static RibbonText ViewGrayscaleCommand { get; } = new("Ribbon_Command_ViewGrayscale_Label", "Ribbon_Command_ViewGrayscale_KeyTip");
+    public static RibbonText ViewBlackAndWhiteCommand { get; } = new("Ribbon_Command_ViewBlackAndWhite_Label", "Ribbon_Command_ViewBlackAndWhite_KeyTip");
     public static RibbonText ViewShowGroup { get; } = new("Ribbon_Group_ViewShow_Label", "Ribbon_Group_ViewShow_KeyTip");
     public static RibbonText ViewRulerCommand { get; } = new("Ribbon_Command_ViewRuler_Label", "Ribbon_Command_ViewRuler_KeyTip");
     public static RibbonText ViewGridlinesCommand { get; } = new("Ribbon_Command_ViewGridlines_Label", "Ribbon_Command_ViewGridlines_KeyTip");

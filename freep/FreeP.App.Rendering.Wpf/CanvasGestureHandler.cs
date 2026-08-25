@@ -27,7 +27,7 @@ public sealed partial class CanvasGestureHandler : IDisposable
     // ── Wiring ────────────────────────────────────────────────────────────────────────────────
 
     private readonly SlideCanvas       _canvas;
-    private readonly EditingSession    _editor;
+    private readonly ICanvasGestureEditingSession _editor;
     private readonly Func<SlideShape, bool>? _tryOpenOleInPlace;
     private readonly Func<OleObjectInfo?, bool>? _tryActivateOleExternally;
     private readonly Action<ChartPointHit>? _onChartPointDoubleClick;
@@ -85,7 +85,7 @@ public sealed partial class CanvasGestureHandler : IDisposable
 
     public CanvasGestureHandler(
         SlideCanvas canvas,
-        EditingSession editor,
+        ICanvasGestureEditingSession editor,
         Func<SlideShape, bool>? tryOpenOleInPlace = null,
         Action<ChartPointHit>? onChartPointDoubleClick = null,
         Func<OleObjectInfo?, bool>? tryActivateOleExternally = null)

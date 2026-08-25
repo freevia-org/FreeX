@@ -96,6 +96,7 @@ public sealed partial class SlideCanvas : Control
 
     private Presentation? _presentation;
     private Slide? _slide;
+    private MasterEditTarget? _masterEditTarget;
     private int _slideIndex;
     private uint? _activeTextEditShapeId;
     private bool _renderSlideBackground = true;
@@ -178,9 +179,10 @@ public sealed partial class SlideCanvas : Control
     // print canvases free of editor-only ruler chrome.
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default with { ShowRulers = false };
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
+    private PresentationViewColorModeState _viewColorModeState = PresentationViewColorModeState.Color;
     private AvaloniaCanvasGestureHandler? _gestureHandler;
     private bool _editPointsEnabled = true;
-    private EditingSession? _editingSession;
+    private ICanvasGestureEditingSession? _editingSession;
     private readonly PresentationCanvasAutomationSession _canvasAutomation = new();
 
     /// <summary>
@@ -204,6 +206,7 @@ public sealed partial class SlideCanvas : Control
 
     public PresentationViewShowState ViewShowState => _viewShowState;
     public PresentationViewZoomState ViewZoomState => _viewZoomState;
+    public PresentationViewColorModeState ViewColorModeState => _viewColorModeState;
 
     public void ApplyViewShowState(PresentationViewShowState state)
     {
@@ -211,9 +214,32 @@ public sealed partial class SlideCanvas : Control
         InvalidateVisual();
     }
 
+    /// <summary>Optional active Slide Master target rendered as an authoring surface.</summary>
+    public MasterEditTarget? MasterEditTarget
+    {
+        get => _masterEditTarget;
+        set
+        {
+            if (_masterEditTarget == value)
+                return;
+            _masterEditTarget = value;
+            Refresh();
+        }
+    }
+
     public void ApplyViewZoomState(PresentationViewZoomState state)
     {
         _viewZoomState = state;
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Applies the non-persistent View &gt; Color/Grayscale treatment. It filters the
+    /// realized canvas only, leaving the editable presentation model untouched.
+    /// </summary>
+    public void ApplyViewColorModeState(PresentationViewColorModeState state)
+    {
+        _viewColorModeState = state;
         InvalidateVisual();
     }
 
@@ -323,12 +349,21 @@ public sealed partial class SlideCanvas : Control
     public override void Render(DrawingContext context)
     {
         base.Render(context);
+        if (_viewColorModeState.Mode != PresentationViewColorMode.Color)
+        {
+            RenderColorTransformedCanvas(context, Bounds.Width, Bounds.Height);
+            return;
+        }
+
+        RenderDirect(context, Bounds.Width, Bounds.Height);
+    }
+
+    private void RenderDirect(DrawingContext context, double renderW, double renderH)
+    {
         EnsureOps();
 
         if (_cachedOps is null || _slideWidthDip <= 0) return;
 
-        double renderW = Bounds.Width;
-        double renderH = Bounds.Height;
         if (renderW <= 0 || renderH <= 0) return;
 
         // Expose the slide→screen transform so the editing layer can use it.
@@ -357,6 +392,36 @@ public sealed partial class SlideCanvas : Control
         // Keep the WPF draw order: rulers are chrome over the slide/aids boundary.
         if (_viewShowState.ShowRulers)
             RenderRulers(context, CurrentTransform, renderW, renderH);
+    }
+
+    private void RenderColorTransformedCanvas(DrawingContext destination, double width, double height)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+
+        var source = new RasterSurface(RenderDirect);
+        var size = new Size(width, height);
+        source.Measure(size);
+        source.Arrange(new Rect(size));
+
+        using var bitmap = new RenderTargetBitmap(
+            new PixelSize(Math.Max(1, (int)Math.Ceiling(width)), Math.Max(1, (int)Math.Ceiling(height))),
+            new Vector(96, 96));
+        bitmap.Render(source);
+        var plan = _viewColorModeState.Mode == PresentationViewColorMode.BlackAndWhite
+            ? new PictureColorEffectPlan(Grayscale: false, BiLevelThreshold: 0.5, Brightness: null, Contrast: null)
+            : new PictureColorEffectPlan(Grayscale: true, BiLevelThreshold: null, Brightness: null, Contrast: null);
+        using var processed = ApplyColorEffectsAvalonia(bitmap, plan);
+        destination.DrawImage((IImage?)processed ?? bitmap, new Rect(0, 0, width, height));
+    }
+
+    private sealed class RasterSurface(Action<DrawingContext, double, double> render) : Control
+    {
+        public override void Render(DrawingContext context)
+        {
+            base.Render(context);
+            render(context, Bounds.Width, Bounds.Height);
+        }
     }
 
     private static void RenderPrintCommentCallouts(DrawingContext dc, Presentation presentation, Slide slide)
@@ -2621,11 +2686,20 @@ public sealed partial class SlideCanvas : Control
         _slideHeightDip = _presentation.SlideSizeCyEmu / 9525.0;
         try
         {
-            _cachedOps = SlideCompositor.Compose(
-                _presentation,
-                _slide,
-                _slideIndex,
-                RenderSlideBackground);
+            _cachedOps = MasterEditTarget is { } target
+                ? target.Kind switch
+                {
+                    MasterEditTargetKind.Master when _presentation.Masters.Find(master => master.Id == target.Id) is { } master =>
+                        SlideCompositor.ComposeMaster(_presentation, master),
+                    MasterEditTargetKind.Layout when _presentation.Layouts.Find(layout => layout.Id == target.Id) is { } layout =>
+                        SlideCompositor.ComposeLayout(_presentation, layout),
+                    _ => Array.Empty<DrawOp>(),
+                }
+                : SlideCompositor.Compose(
+                    _presentation,
+                    _slide,
+                    _slideIndex,
+                    RenderSlideBackground);
         }
         catch (Exception)
         {

@@ -110,6 +110,44 @@ public sealed class SlideCanvasAvaloniaTests
         return differences;
     }
 
+    [Fact]
+    public async Task SlideCanvas_ViewColorModes_FilterTheWholeRealizedSurfaceWithoutMutatingTheSlide()
+    {
+        await Run(() =>
+        {
+            var presentation = MakePresentation();
+            var slide = presentation.Slides[0];
+            slide.Background = new ShapeFill.Solid(SrgbColor.White);
+            slide.Shapes.Clear();
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = 1,
+                AutoShapeKind = DrawingShapeKind.Rectangle,
+                OffsetXEmu = 0,
+                OffsetYEmu = 0,
+                ExtentCxEmu = presentation.SlideSizeCxEmu,
+                ExtentCyEmu = presentation.SlideSizeCyEmu,
+                Fill = new ShapeFill.Solid(new SrgbColor(0x44, 0x72, 0xC4)),
+                Outline = ShapeOutline.None.Instance,
+            });
+
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = slide };
+            canvas.ApplyViewColorModeState(new PresentationViewColorModeState(PresentationViewColorMode.Grayscale));
+            var grayscale = RenderPixels(canvas, 100, 60);
+            var center = ((30 * 100) + 50) * 4;
+            grayscale[center].Should().Be(grayscale[center + 1]);
+            grayscale[center + 1].Should().Be(grayscale[center + 2]);
+
+            canvas.ApplyViewColorModeState(new PresentationViewColorModeState(PresentationViewColorMode.BlackAndWhite));
+            var blackAndWhite = RenderPixels(canvas, 100, 60);
+            blackAndWhite[center].Should().BeOneOf((byte)0, (byte)255);
+            blackAndWhite[center + 1].Should().Be(blackAndWhite[center]);
+            blackAndWhite[center + 2].Should().Be(blackAndWhite[center]);
+            slide.Shapes[0].Fill.Should().BeOfType<ShapeFill.Solid>()
+                .Which.Color.Resolved.Should().Be(new SrgbColor(0x44, 0x72, 0xC4));
+        });
+    }
+
     private sealed class PinnedFramebuffer : ILockedFramebuffer
     {
         public PinnedFramebuffer(IntPtr address, PixelSize size, int rowBytes)

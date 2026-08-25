@@ -206,14 +206,16 @@ public sealed class ViewTabDepthTests
     }
 
     [Fact]
-    public async Task MainWindow_split_preview_uses_live_editor_and_read_only_snapshot()
+    public async Task MainWindow_split_view_uses_two_live_synchronized_editors()
     {
         FreeWViewDepthMode mode = FreeWViewDepthMode.LiveEditor;
         bool showsLiveBefore = false;
         bool showsLiveDuringSplit = true;
         bool hasSplitGrid = false;
-        bool hasSnapshotScroller = false;
-        string? limitation = null;
+        bool hasSecondEditor = false;
+        bool lowerEditorEditable = false;
+        string lowerEditText = string.Empty;
+        string? limitation = "unexpected";
 
         var ran = await OnUiThread(() =>
         {
@@ -227,7 +229,13 @@ public sealed class ViewTabDepthTests
             limitation = window.ViewDepthLimitation;
             hasSplitGrid = window.WorkspaceContentForTests is Grid;
             if (window.WorkspaceContentForTests is Grid grid)
-                hasSnapshotScroller = grid.Children.OfType<ScrollViewer>().Any();
+                hasSecondEditor = grid.Children.OfType<ScrollViewer>()
+                    .Select(scroller => scroller.Content)
+                    .OfType<DocumentView>()
+                    .Any();
+            lowerEditorEditable = window.SplitEditorForTests is { Focusable: true, IsHitTestVisible: true };
+            window.SplitEditorForTests!.InsertText("lower-pane edit");
+            lowerEditText = window.Editor.Document.PlainText;
         });
 
         if (!ran) return;
@@ -235,8 +243,10 @@ public sealed class ViewTabDepthTests
         mode.Should().Be(FreeWViewDepthMode.SplitPreview);
         showsLiveDuringSplit.Should().BeFalse();
         hasSplitGrid.Should().BeTrue();
-        hasSnapshotScroller.Should().BeTrue();
-        limitation.Should().Contain("read-only");
+        hasSecondEditor.Should().BeTrue();
+        lowerEditorEditable.Should().BeTrue();
+        lowerEditText.Should().Contain("lower-pane edit");
+        limitation.Should().BeNull();
     }
 
     [Fact]

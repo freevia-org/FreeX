@@ -1,4 +1,5 @@
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
@@ -458,6 +459,74 @@ public sealed class NotesSlideTests : IDisposable
                     page.ThumbnailLabel == "Slide 1 notes" &&
                     page.Detail == "Notes page for slide 1" &&
                     page.NoteLineCount == 1);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void MainWindow_NotesPageView_UsesDedicatedPageSurfaceAndRestoresNormalLayout()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var apply = typeof(MainWindow).GetMethod(
+                "ApplyPresentationViewModeState",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            apply.Should().NotBeNull();
+            apply!.Invoke(window, [new PresentationViewModeState(PresentationViewMode.NotesPage)]);
+            window.IsNotesPageSurfaceVisible.Should().BeTrue();
+
+            apply.Invoke(window, [PresentationViewModeState.Normal]);
+            window.IsNotesPageSurfaceVisible.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void MainWindow_SlideMasterView_UsesMasterCanvasAndRestoresNormalCanvas()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var apply = typeof(MainWindow).GetMethod(
+                "ApplyPresentationViewModeState",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            apply.Should().NotBeNull();
+            apply!.Invoke(window, [new PresentationViewModeState(PresentationViewMode.SlideMaster)]);
+            window.IsSlideMasterSurfaceVisible.Should().BeTrue();
+
+            apply.Invoke(window, [PresentationViewModeState.Normal]);
+            window.IsSlideMasterSurfaceVisible.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void MainWindow_SlideMasterView_SelectsLayoutTargetInMasterPane()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var apply = typeof(MainWindow).GetMethod(
+                "ApplyPresentationViewModeState",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            apply.Should().NotBeNull();
+            apply!.Invoke(window, [new PresentationViewModeState(PresentationViewMode.SlideMaster)]);
+
+            var layout = window.Editor.Presentation.Layouts.Should().ContainSingle().Subject;
+            var target = MasterEditTarget.Layout(layout.Id);
+            window.TrySelectSlideMasterTarget(target).Should().BeTrue();
+            window.CurrentSlideMasterTarget.Should().Be(target);
+            window.SlideCanvas.MasterEditTarget.Should().Be(target);
         }
         finally
         {

@@ -215,10 +215,10 @@ public sealed partial class MainWindow : Window
     private TextBlock? _sideToSidePairStatusText;
     private UIElement? _workspaceGridChild;        // saved workspace child so restore is reversible
 
-    // Split Window: a GridSplitter divides the workspace into a top live-editor pane and a bottom
-    // read-only FlowDocumentScrollViewer snapshot. Toggling off restores the single editor.
+    // Split Window: two independently focusable editors synchronize through the canonical document.
     private Grid? _splitGrid;                      // the split host grid (non-null while active)
-    private System.Windows.Threading.DispatcherTimer? _splitDebounceTimer; // ~300 ms refresh gate
+    private DocumentView? _splitEditor;
+    private bool _synchronizingSplitEditors;
 
     // PagedEdit: editable paginated surface. When active the workspace child is swapped
     // from the live workspaceGrid to a PaginatedEditorPanel. Exiting commits all page boxes back to
@@ -483,25 +483,11 @@ public sealed partial class MainWindow : Window
             UpdateCurrentField: () => ExecuteCurrentFieldCommand(
                 FreeWKeyboardCommand.UpdateCurrentField,
                 ResolveFieldCommandEditor())));
-        editor.TextChanged += (_, _) =>
-        {
-            _file.MarkDirty();
-            UpdateCounts();
-            RefreshOutline();
-            RefreshSelectionPane();
-            RefreshContextualTabs();
-            RefreshReviewPane();
-            RefreshNotesPane();
-            // Balloon overlay: rebuild whenever the document changes (no-op when disabled).
-            _balloonOverlay?.Rebuild();
-            // Debounced refresh of the split-window snapshot pane (~300 ms), so rapid keystrokes
-            // don't re-paginate on every character. No-op when the split pane is not open.
-            ScheduleSplitPaneRefresh();
-        };
+        editor.TextChanged += (_, _) => OnDocumentEditorChanged(editor);
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
         // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
         // Also re-evaluate which contextual "Tools" tabs apply to the new selection.
-        editor.SelectionChanged += (_, _) => { UpdateCounts(); RefreshContextualTabs(); };
+        editor.SelectionChanged += (_, _) => { _lastFocusedDocumentEditor = editor; UpdateCounts(editor); RefreshContextualTabs(); };
         _autosave = new AutosaveCoordinator(editor, _file, recoverInNewWindow: OpenNewWindowWithRecoveredSnapshot);
         Loaded += (_, _) =>
         {
@@ -1115,13 +1101,14 @@ public sealed partial class MainWindow : Window
     // word + character totals (via the pure WordCount helpers over Selection.Text); otherwise fall back
     // to the whole-document word/character/paragraph counts. Cheap enough to run on every edit
     // (TextChanged), on selection change, and on document load.
-    private void UpdateCounts()
+    private void UpdateCounts(DocumentView? source = null)
     {
-        var selectionText = _editor.Selection.Text;
-        var (current, total) = _editor.PageInfo();
-        var (section, sections) = _editor.SectionInfo();
+        var editor = source ?? ResolveActiveDocumentEditor();
+        var selectionText = editor.Selection.Text;
+        var (current, total) = editor.PageInfo();
+        var (section, sections) = editor.SectionInfo();
         ApplyStatusPlan(_editorInteraction.BuildStatus(new FreeWEditorStatusContext(
-            _editor.Model,
+            editor.Model,
             CurrentPage: current,
             TotalPages: total,
             CurrentSection: section,
@@ -2673,7 +2660,7 @@ public sealed partial class MainWindow : Window
         {
             case FreeWViewDepthSurfaceKind.LiveEditor:
                 break;
-            case FreeWViewDepthSurfaceKind.SplitEditorWithReadOnlyPreview:
+            case FreeWViewDepthSurfaceKind.SplitEditors:
                 EnterSplitView();
                 break;
             case FreeWViewDepthSurfaceKind.ReadOnlyPagePreview:
@@ -2960,22 +2947,20 @@ public sealed partial class MainWindow : Window
     }
 
     // ── Split Window ─────────────────────────────────────────────────────────────────────────────
-    // Split divides the workspace border into a top pane (the live workspaceGrid + editor) and a
-    // bottom read-only FlowDocumentScrollViewer snapshot built from PrintLayout.BuildPaginatedDocument.
-    // The snapshot is refreshed on TextChanged with a ~300 ms debounce so rapid keystrokes don't
-    // re-paginate on every character. Toggling off removes the splitter and restores the single editor.
+    // Split divides the workspace border into two independently focusable editors. The lower editor
+    // follows the same document as the primary surface, and either pane can become the editing source.
 
     /// <summary>
     /// Toggles the split-window view. When entering, replaces the workspace child with a Grid that
-    /// contains the original workspaceGrid (top), a <see cref="GridSplitter"/> (middle), and a read-only
-    /// <see cref="FlowDocumentScrollViewer"/> snapshot (bottom). When exiting, restores the original child.
+    /// contains the original workspaceGrid (top), a <see cref="GridSplitter"/> (middle), and a synchronized
+    /// <see cref="DocumentView"/> (bottom). When exiting, restores the original child.
     /// </summary>
     private void ToggleSplitWindow() =>
         ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSplit));
 
     private void EnterSplitView()
     {
-        // Commit so the initial snapshot reflects the latest edits.
+        // Commit so the second editor starts from the latest document state.
         _editor.CommitToModel();
 
         // Save the original child (the workspaceGrid) so ExitSplitView can restore it.
@@ -3004,32 +2989,23 @@ public sealed partial class MainWindow : Window
         Grid.SetRow(splitter, 1);
         splitGrid.Children.Add(splitter);
 
-        // Bottom pane: a read-only snapshot built from the paginator.
-        var snapshotViewer = BuildSplitSnapshot();
-        Grid.SetRow(snapshotViewer, 2);
-        splitGrid.Children.Add(snapshotViewer);
+        // Bottom pane: an independently focusable editor synchronized with the canonical body.
+        var splitEditor = new DocumentView(_platformClipboard)
+        {
+            Margin = new Thickness(40, 24, 40, 24),
+        };
+        splitEditor.LoadModel(FreeWDocumentSnapshot.Clone(_editor.Model));
+        splitEditor.ApplyViewDepthLayout(_viewSession.CurrentDepth.Layout);
+        splitEditor.TextChanged += (_, _) => OnDocumentEditorChanged(splitEditor);
+        splitEditor.SelectionChanged += (_, _) => { _lastFocusedDocumentEditor = splitEditor; UpdateCounts(splitEditor); RefreshContextualTabs(); };
+        Grid.SetRow(splitEditor, 2);
+        splitGrid.Children.Add(splitEditor);
 
         _splitGrid = splitGrid;
+        _splitEditor = splitEditor;
         _workspace.Child = splitGrid;
 
         SyncViewDepthRibbonState();
-    }
-
-    /// <summary>
-    /// Builds the initial read-only snapshot <see cref="FlowDocumentScrollViewer"/> for the split-window
-    /// bottom pane, fed by <see cref="PrintLayout.BuildPaginatedDocument"/>.
-    /// </summary>
-    private FlowDocumentScrollViewer BuildSplitSnapshot()
-    {
-        var doc = PrintLayout.BuildPaginatedDocument(_editor);
-        var viewer = new FlowDocumentScrollViewer
-        {
-            Document = doc,
-            IsSelectionEnabled = false,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
-        };
-        return viewer;
     }
 
     /// <summary>
@@ -3048,11 +3024,8 @@ public sealed partial class MainWindow : Window
         _splitGrid.Children.Clear();
         _workspace.Child = originalChild;
 
+        _splitEditor = null;
         _splitGrid = null;
-
-        // Stop the debounce timer if it is still running.
-        _splitDebounceTimer?.Stop();
-        _splitDebounceTimer = null;
 
         SyncViewDepthRibbonState();
     }
@@ -3062,66 +3035,6 @@ public sealed partial class MainWindow : Window
         _stateStore.SetChecked("freew.zoom-multiple-pages", _viewSession.CurrentDepth.IsMultiplePagesActive);
         _stateStore.SetChecked("freew.zoom-side-to-side", _viewSession.CurrentDepth.IsSideToSideActive);
         _stateStore.SetChecked("freew.split-window", _viewSession.CurrentDepth.IsSplitActive);
-    }
-
-    /// <summary>
-    /// Arms a one-shot ~300 ms timer to refresh the split-window snapshot. Resets the timer on every
-    /// call so rapid keystrokes collapse into a single rebuild at the end of the burst. No-op when the
-    /// split pane is not active.
-    /// </summary>
-    private void ScheduleSplitPaneRefresh()
-    {
-        if (!_viewSession.CurrentDepth.IsSplitActive || _splitGrid is null)
-            return;
-
-        // Restart the debounce timer on every TextChanged.
-        if (_splitDebounceTimer is null)
-        {
-            _splitDebounceTimer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = System.TimeSpan.FromMilliseconds(300)
-            };
-            _splitDebounceTimer.Tick += (_, _) =>
-            {
-                _splitDebounceTimer.Stop();
-
-                // Repaginating the live document from a timer tick is fatal if it throws: the
-                // dispatcher handler records the fault but does not mark it handled, and the timer
-                // restarts on every keystroke, so a document that trips it would crash again on the
-                // next character. The sibling repaginate timer in PaginatedEditorPanel is guarded
-                // for exactly this reason; the split pane simply drops its stale snapshot instead.
-                try
-                {
-                    RefreshSplitSnapshot();
-                }
-                catch (Exception)
-                {
-                    // Leave the previous snapshot in place; the next edit schedules another pass.
-                }
-            };
-        }
-        else
-        {
-            _splitDebounceTimer.Stop();
-        }
-
-        _splitDebounceTimer.Start();
-    }
-
-    /// <summary>
-    /// Rebuilds the split-window snapshot pane from the latest committed content. Called after the
-    /// debounce delay so the snapshot reflects the most recent edits without lagging the editor.
-    /// </summary>
-    private void RefreshSplitSnapshot()
-    {
-        if (!_viewSession.CurrentDepth.IsSplitActive || _splitGrid is null || _splitGrid.Children.Count < 3)
-            return;
-
-        _editor.CommitToModel();
-        var newDoc = PrintLayout.BuildPaginatedDocument(_editor);
-
-        if (_splitGrid.Children[2] is FlowDocumentScrollViewer viewer)
-            viewer.Document = newDoc;
     }
 
     // Recompute the heading outline from the editor's committed model and repopulate the nav list.
@@ -3317,16 +3230,18 @@ public sealed partial class MainWindow : Window
     // the same inline history Ctrl+Z / Ctrl+Y drive. Guarded by CanUndo/CanRedo so a no-op stays a no-op.
     private void Undo()
     {
-        _editor.Focus();
-        if (_editor.CanUndo)
-            _editor.Undo();
+        var editor = ResolveActiveDocumentEditor();
+        editor.Focus();
+        if (editor.CanUndo)
+            editor.Undo();
     }
 
     private void Redo()
     {
-        _editor.Focus();
-        if (_editor.CanRedo)
-            _editor.Redo();
+        var editor = ResolveActiveDocumentEditor();
+        editor.Focus();
+        if (editor.CanRedo)
+            editor.Redo();
     }
 
     private void Print() => PrintDocument(_editor, "FreeW Document");
@@ -3735,6 +3650,47 @@ public sealed partial class MainWindow : Window
             if (groupHost.Content is FrameworkElement presentation)
                 InjectInto(presentation);
         };
+    }
+
+    private void OnDocumentEditorChanged(DocumentView source)
+    {
+        if (_synchronizingSplitEditors)
+            return;
+
+        if (_splitEditor is { } peer)
+        {
+            _synchronizingSplitEditors = true;
+            try
+            {
+                source.CommitToModel();
+                if (ReferenceEquals(source, _editor))
+                    peer.LoadModel(FreeWDocumentSnapshot.Clone(_editor.Model));
+                else
+                    _editor.LoadModel(FreeWDocumentSnapshot.Clone(source.Model));
+            }
+            finally
+            {
+                _synchronizingSplitEditors = false;
+            }
+        }
+
+        _file.MarkDirty();
+        UpdateCounts(source);
+        RefreshOutline();
+        RefreshSelectionPane();
+        RefreshContextualTabs();
+        RefreshReviewPane();
+        RefreshNotesPane();
+        _balloonOverlay?.Rebuild();
+    }
+
+    private DocumentView ResolveActiveDocumentEditor()
+    {
+        var lastFocusedAvailable = _lastFocusedDocumentEditor is { IsVisible: true, IsEnabled: true };
+        return FindDocumentEditor(Keyboard.FocusedElement)
+            ?? (lastFocusedAvailable && _lastFocusedDocumentEditor is not null
+                ? _lastFocusedDocumentEditor
+                : _editor);
     }
 
     // Find the group content grid stamped with the given catalog id, walking the renderer's known

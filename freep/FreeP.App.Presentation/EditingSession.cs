@@ -28,7 +28,7 @@ file static class PasteOffset
 ///   <item><description>3C (canvas): bind to <see cref="SelectionChanged"/>, read <see cref="SelectedShapeIds"/>/<see cref="CurrentSlide"/>; call Move/Resize/Rotate/SetFill/SetOutline/Delete; use the run-format toggles for in-canvas text editing.</description></item>
 /// </list>
 /// </summary>
-public sealed class EditingSession
+public sealed class EditingSession : ICanvasGestureEditingSession
 {
     private const long Standard43WidthEmu = DrawingMlCoordinateUnits.EmuPerInch * 10;
     private const long StandardSlideHeightEmu = DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;

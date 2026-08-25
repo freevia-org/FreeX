@@ -115,6 +115,7 @@ public sealed partial class MainWindow
                 ApplyViewShowState = ApplyPresentationViewShowState,
                 ApplyViewZoomState = ApplyPresentationViewZoomState,
                 ApplyViewModeState = ApplyPresentationViewModeState,
+                ApplyViewColorModeState = ApplyPresentationViewColorModeState,
                 StartReadingView = StartReadingView,
                 NewPresentationWindow = OpenNewPresentationWindow,
                 ArrangeAllPresentationWindows = ArrangeAllPresentationWindows,

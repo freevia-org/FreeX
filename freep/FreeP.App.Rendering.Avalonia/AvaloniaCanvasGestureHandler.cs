@@ -26,7 +26,7 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
     // ── Wiring ─────────────────────────────────────────────────────────────────
 
     private readonly SlideCanvas            _canvas;
-    private readonly EditingSession         _editor;
+    private readonly ICanvasGestureEditingSession _editor;
     private readonly SelectionAdornerLayer  _adorner;
     private readonly Action<ChartPointHit>? _onChartPointDoubleClick;
     private readonly Func<SlideShape, bool>? _tryOpenOleInPlace;
@@ -86,11 +86,11 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
     /// (FreeP.App.Rendering.Wpf.SlideCanvas tracks its EditingSession directly since its
     /// gesture handler is constructed inline).
     /// </summary>
-    public EditingSession Editor => _editor;
+    public ICanvasGestureEditingSession Editor => _editor;
 
     // ── Construction / attach ──────────────────────────────────────────────────
 
-    public AvaloniaCanvasGestureHandler(SlideCanvas canvas, EditingSession editor,
+    public AvaloniaCanvasGestureHandler(SlideCanvas canvas, ICanvasGestureEditingSession editor,
                                          SelectionAdornerLayer adorner,
                                          Action<ChartPointHit>? onChartPointDoubleClick = null,
                                          Func<SlideShape, bool>? tryOpenOleInPlace = null,

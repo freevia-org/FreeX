@@ -94,6 +94,22 @@ public sealed partial class SlideCanvas : FrameworkElement
         set => SetValue(SlideProperty, value);
     }
 
+    /// <summary>Optional active Slide Master target. When set, composition renders the real
+    /// master/layout authoring surface instead of normal slide inheritance output.</summary>
+    public MasterEditTarget? MasterEditTarget
+    {
+        get => _masterEditTarget;
+        set
+        {
+            if (_masterEditTarget == value)
+                return;
+            _masterEditTarget = value;
+            Refresh();
+        }
+    }
+
+    private MasterEditTarget? _masterEditTarget;
+
     /// <summary>Whether the compositor paints the slide background.</summary>
     public bool RenderSlideBackground
     {
@@ -138,7 +154,8 @@ public sealed partial class SlideCanvas : FrameworkElement
     // main host explicitly applies its View state; secondary canvases must not inherit ruler chrome.
     private PresentationViewShowState  _viewShowState = PresentationViewShowState.Default with { ShowRulers = false };
     private PresentationViewZoomState  _viewZoomState = PresentationViewZoomState.FitToWindow;
-    private EditingSession?            _editingSession;
+    private PresentationViewColorModeState _viewColorModeState = PresentationViewColorModeState.Color;
+    private ICanvasGestureEditingSession? _editingSession;
     private readonly PresentationCanvasAutomationSession _canvasAutomation = new();
 
     /// <summary>
@@ -217,6 +234,33 @@ public sealed partial class SlideCanvas : FrameworkElement
     }
 
     /// <summary>
+    /// Attaches the shared gesture surface to a Slide Master editing target. Rich-text and table
+    /// overlays deliberately remain unavailable until master-specific text authoring is modeled;
+    /// selection, marquee, move, resize, rotate, and delete all operate on the real target.
+    /// </summary>
+    public void AttachMasterEditing(MasterEditingSession editor, Canvas textOverlay)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        var editPointsEnabled = _gestureHandler?.EditPointsEnabled ?? true;
+        _gestureHandler?.Dispose();
+        _textEditor?.Dispose();
+        ActiveTextEditShapeId = null;
+        _textEditor = null;
+        _tableCellEditor = null;
+
+        if (_editingSession is not null)
+            _editingSession.SelectionChanged -= OnEditingSessionSelectionChangedForAutomation;
+        _editingSession = editor;
+        _canvasAutomation.ResetSelection(Slide, editor.SelectedShapeIds);
+        _editingSession.SelectionChanged += OnEditingSessionSelectionChangedForAutomation;
+
+        _gestureHandler = new CanvasGestureHandler(this, editor);
+        _gestureHandler.EditPointsEnabled = editPointsEnabled;
+        ApplyViewShowState(_viewShowState);
+        _textOverlay = textOverlay;
+    }
+
+    /// <summary>
     /// Notifies the canvas's UIA automation peer (if one has been realized -- i.e. a screen
     /// reader or other automation client is actually listening) that the shape selection
     /// changed, so it can raise the appropriate SelectionItem/focus notifications. Mirrors
@@ -233,6 +277,7 @@ public sealed partial class SlideCanvas : FrameworkElement
 
     public PresentationViewShowState ViewShowState => _viewShowState;
     public PresentationViewZoomState ViewZoomState => _viewZoomState;
+    public PresentationViewColorModeState ViewColorModeState => _viewColorModeState;
 
     public void ApplyViewShowState(PresentationViewShowState state)
     {
@@ -287,6 +332,16 @@ public sealed partial class SlideCanvas : FrameworkElement
     public void ApplyViewZoomState(PresentationViewZoomState state)
     {
         _viewZoomState = state;
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Applies the non-persistent View &gt; Color/Grayscale treatment. Live presentation
+    /// editing remains backed by the original slide model; only this canvas is filtered.
+    /// </summary>
+    public void ApplyViewColorModeState(PresentationViewColorModeState state)
+    {
+        _viewColorModeState = state;
         InvalidateVisual();
     }
 
@@ -376,10 +431,43 @@ public sealed partial class SlideCanvas : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
+        if (_viewColorModeState.Mode != PresentationViewColorMode.Color)
+        {
+            RenderColorTransformedCanvas(dc, ActualWidth, ActualHeight);
+            return;
+        }
+
         RenderToDrawingContext(dc, ActualWidth, ActualHeight, preserveAspectRatio: true,
             renderViewAids: RenderViewAidsEnabled);
         if (_viewShowState.ShowRulers)
             RenderRulers(dc, CurrentTransform.Core, ActualWidth, ActualHeight);
+    }
+
+    private void RenderColorTransformedCanvas(DrawingContext destination, double width, double height)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+
+        var visual = new DrawingVisual();
+        using (var source = visual.RenderOpen())
+        {
+            RenderToDrawingContext(source, width, height, preserveAspectRatio: true,
+                renderViewAids: RenderViewAidsEnabled);
+            if (_viewShowState.ShowRulers)
+                RenderRulers(source, CurrentTransform.Core, width, height);
+        }
+
+        var bitmap = new RenderTargetBitmap(
+            Math.Max(1, (int)Math.Ceiling(width)),
+            Math.Max(1, (int)Math.Ceiling(height)),
+            96,
+            96,
+            PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var plan = _viewColorModeState.Mode == PresentationViewColorMode.BlackAndWhite
+            ? new PictureColorEffectPlan(Grayscale: false, BiLevelThreshold: 0.5, Brightness: null, Contrast: null)
+            : new PictureColorEffectPlan(Grayscale: true, BiLevelThreshold: null, Brightness: null, Contrast: null);
+        destination.DrawImage(ApplyColorEffectsWpf(bitmap, plan), new Rect(0, 0, width, height));
     }
 
     private static void RenderViewAids(
@@ -2875,11 +2963,20 @@ public sealed partial class SlideCanvas : FrameworkElement
         int slideIndex = presentation.Slides.IndexOf(slide);
         try
         {
-            _cachedOps = SlideCompositor.Compose(
-                presentation,
-                slide,
-                slideIndex < 0 ? 0 : slideIndex,
-                RenderSlideBackground);
+            _cachedOps = MasterEditTarget is { } target
+                ? target.Kind switch
+                {
+                    MasterEditTargetKind.Master when presentation.Masters.Find(master => master.Id == target.Id) is { } master =>
+                        SlideCompositor.ComposeMaster(presentation, master),
+                    MasterEditTargetKind.Layout when presentation.Layouts.Find(layout => layout.Id == target.Id) is { } layout =>
+                        SlideCompositor.ComposeLayout(presentation, layout),
+                    _ => Array.Empty<DrawOp>(),
+                }
+                : SlideCompositor.Compose(
+                    presentation,
+                    slide,
+                    slideIndex < 0 ? 0 : slideIndex,
+                    RenderSlideBackground);
         }
         catch (Exception)
         {

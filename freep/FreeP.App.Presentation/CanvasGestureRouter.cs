@@ -238,10 +238,10 @@ public static class CanvasGesturePreviewProjector
 /// </summary>
 public sealed class CanvasGestureRouter
 {
-    private readonly EditingSession _editor;
+    private readonly ICanvasGestureEditingSession _editor;
     private readonly CanvasGestureSession _session = new();
 
-    public CanvasGestureRouter(EditingSession editor)
+    public CanvasGestureRouter(ICanvasGestureEditingSession editor)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
     }

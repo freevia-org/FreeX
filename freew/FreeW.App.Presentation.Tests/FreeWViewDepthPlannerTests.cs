@@ -71,16 +71,17 @@ public sealed class FreeWViewDepthPlannerTests
     }
 
     [Fact]
-    public void Preview_plans_keep_only_split_secondary_surface_read_only()
+    public void Preview_plans_keep_split_editors_live()
     {
         var split = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SplitPreview);
         var multiple = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.MultiplePagesPreview);
         var sideToSide = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview);
 
-        split.UsesReadOnlySnapshot.Should().BeTrue();
+        split.UsesReadOnlySnapshot.Should().BeFalse();
         multiple.UsesReadOnlySnapshot.Should().BeFalse();
         sideToSide.UsesReadOnlySnapshot.Should().BeFalse();
-        split.Limitation.Should().Contain("read-only");
+        split.SurfaceKind.Should().Be(FreeWViewDepthSurfaceKind.SplitEditors);
+        split.Limitation.Should().BeNull();
         multiple.Limitation.Should().BeNull();
         sideToSide.Limitation.Should().BeNull();
     }

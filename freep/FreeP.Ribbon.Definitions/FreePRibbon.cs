@@ -1453,9 +1453,25 @@ public static class FreePRibbon
             group.Large(PresentationViewModePlanner.NotesPageCommandId,
                 FreePRibbonText.ViewNotesPageCommand.Label, RibbonCommandIconKind.OnePage,
                 FreePRibbonText.ViewNotesPageCommand.KeyTip);
+            group.Large(PresentationViewModePlanner.SlideMasterCommandId,
+                FreePRibbonText.ViewSlideMasterCommand.Label, RibbonCommandIconKind.View,
+                FreePRibbonText.ViewSlideMasterCommand.KeyTip);
             group.Large(PresentationReadingViewPlanner.CommandId,
                 FreePRibbonText.ViewReadingViewCommand.Label, RibbonCommandIconKind.Watch,
                 FreePRibbonText.ViewReadingViewCommand.KeyTip);
+        });
+        tab.Group("color-grayscale", FreePRibbonText.ViewColorGrayscaleGroup.Label,
+            FreePRibbonText.ViewColorGrayscaleGroup.KeyTip, 70, group =>
+        {
+            group.Medium(PresentationViewColorModePlanner.ColorCommandId,
+                FreePRibbonText.ViewColorCommand.Label, RibbonCommandIconKind.Color,
+                FreePRibbonText.ViewColorCommand.KeyTip);
+            group.Medium(PresentationViewColorModePlanner.GrayscaleCommandId,
+                FreePRibbonText.ViewGrayscaleCommand.Label, RibbonCommandIconKind.Color,
+                FreePRibbonText.ViewGrayscaleCommand.KeyTip);
+            group.Medium(PresentationViewColorModePlanner.BlackAndWhiteCommandId,
+                FreePRibbonText.ViewBlackAndWhiteCommand.Label, RibbonCommandIconKind.Color,
+                FreePRibbonText.ViewBlackAndWhiteCommand.KeyTip);
         });
         tab.Group("show", FreePRibbonText.ViewShowGroup.Label, FreePRibbonText.ViewShowGroup.KeyTip, 100, group =>
         {
