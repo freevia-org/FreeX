@@ -40,7 +40,7 @@ jobs:
 
       - name: Build analyzed solution
         shell: pwsh
-        run: dotnet build FreeX.slnx --configuration Release
+        run: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1
 
       - name: Analyze
         uses: github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
