@@ -98,6 +98,7 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("must stay within the workflow workspace");
         script.Should().Contain("workflow YAML must use spaces for indentation");
         script.Should().Contain("$allowedActionPins");
+        script.Should().Contain("must use reviewed commit");
         script.Should().Contain("publish-distribution-candidate");
         script.Should().Contain("distribution_candidate");
         script.Should().Contain("macOS release publication job must be gated to workflow_dispatch distribution-candidate runs");
@@ -1083,6 +1084,7 @@ public sealed class GitHubWorkflowPreflightTests
 
         result.ExitCode.Should().NotBe(0);
         result.CombinedOutput.Should().Contain("macOS release publication checkout must use the approved full-SHA actions/checkout pin with");
+        result.NormalizedCombinedOutput.Should().Contain("macOS release publication checkout must use the approved full-SHA actions/checkout pin with persist-credentials: false");
         result.CombinedOutput.Should().Contain("actions/checkout steps must set persist-credentials: false");
         result.CombinedOutput.Should().Contain("macos-app.yml");
     }
@@ -1318,13 +1320,13 @@ public sealed class GitHubWorkflowPreflightTests
 
                 steps:
                   - name: Checkout
-                    uses: actions/checkout@v6
+                    uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
                     with:
                       fetch-depth: 0
                       persist-credentials: false
 
                   - name: Setup .NET
-                    uses: actions/setup-dotnet@v5
+                    uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
                     with:
                       dotnet-version: 10.0.300
 
@@ -1374,7 +1376,7 @@ public sealed class GitHubWorkflowPreflightTests
                       } | tee -a "$FREEX_MACOS_TFM_EVIDENCE"
 
                   - name: Upload macOS TFM build evidence
-                    uses: actions/upload-artifact@v7
+                    uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
                     with:
                       name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-build-${{ matrix.arch }}-evidence
                       path: artifacts/freex-${{ matrix.arch }}-macos-tfm-*-evidence.txt
