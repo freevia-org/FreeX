@@ -101,7 +101,37 @@ $artifact = [ordered]@{
 $json = ($artifact | ConvertTo-Json -Depth 8) + [Environment]::NewLine
 
 if ($Check) {
-    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedManifest -Label "FreeP dialog/pane visual evidence artifact manifest" -GeneratorScriptName "tools\Generate-FreePDialogPaneVisualEvidenceManifest.ps1" -NormalizeNewlines
+    if (-not (Test-Path -LiteralPath $resolvedManifest -PathType Leaf)) {
+        throw "FreeP dialog/pane visual evidence artifact manifest is missing. Run tools\Generate-FreePDialogPaneVisualEvidenceManifest.ps1 to create it."
+    }
+    $actualArtifact = Get-Content -LiteralPath $resolvedManifest -Raw | ConvertFrom-Json
+    $scalarNames = @(
+        "schemaVersion", "generatedBy", "scenarioCount", "routeCount", "pairedCaptureCount",
+        "passCount", "mismatchCount", "limitationCount", "pngCount", "fileCount")
+    $matches = -not @($scalarNames | Where-Object {
+        [string]$actualArtifact.$_ -cne [string]$artifact.$_
+    }).Count
+    $expectedTimestamp = [DateTimeOffset]::Parse([string]$artifact.evidenceGeneratedAtUtc).ToUniversalTime()
+    $actualTimestamp = [DateTimeOffset]::Parse([string]$actualArtifact.evidenceGeneratedAtUtc).ToUniversalTime()
+    $matches = $matches -and $expectedTimestamp -eq $actualTimestamp
+    $actualFiles = @($actualArtifact.files)
+    $expectedFiles = @($artifact.files)
+    $matches = $matches -and $actualFiles.Count -eq $expectedFiles.Count
+    if ($matches) {
+        for ($index = 0; $index -lt $expectedFiles.Count; $index++) {
+            $expectedFile = $expectedFiles[$index]
+            $actualFile = $actualFiles[$index]
+            if ([string]$actualFile.path -cne [string]$expectedFile.path -or
+                [long]$actualFile.bytes -ne [long]$expectedFile.bytes -or
+                [string]$actualFile.sha256 -cne [string]$expectedFile.sha256) {
+                $matches = $false
+                break
+            }
+        }
+    }
+    if (-not $matches) {
+        throw "FreeP dialog/pane visual evidence artifact manifest is out of date. Run tools\Generate-FreePDialogPaneVisualEvidenceManifest.ps1 to refresh it."
+    }
     Write-Host "FreeP dialog/pane visual evidence artifact is current: $($artifact.passCount) pass, $($artifact.mismatchCount) mismatch, zero capture limitations across $($artifact.pngCount) PNG files."
     exit 0
 }

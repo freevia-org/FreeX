@@ -794,6 +794,7 @@ public class NumberFormatterTests
         string format,
         string expected)
     {
+        using var cultureScope = TestCultureScope.CurrentCultureAndUICulture("en-US");
         var result = NumberFormatter.Format(new DateTimeValue(45292), format);
 
         Assert.Equal(expected, result);
@@ -806,6 +807,7 @@ public class NumberFormatterTests
         string format,
         string expected)
     {
+        using var cultureScope = TestCultureScope.CurrentCultureAndUICulture("en-US");
         var result = NumberFormatter.Format(new NumberValue(45292), format);
 
         Assert.Equal(expected, result);

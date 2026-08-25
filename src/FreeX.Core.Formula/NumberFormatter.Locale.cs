@@ -237,7 +237,8 @@ public static partial class NumberFormatter
         var hasCultureFormats = TryCreateCultureInfoLocaleFormats(
             normalized,
             out var cultureNumberFormat,
-            out var cultureDateTimeFormat);
+            out var cultureDateTimeFormat,
+            allowCatalogedNumericLcid: true);
 
         numberFormat = hasCultureFormats
             ? (NumberFormatInfo)cultureNumberFormat.Clone()
@@ -276,7 +277,8 @@ public static partial class NumberFormatter
     private static bool TryCreateCultureInfoLocaleFormats(
         string normalizedLocaleToken,
         out NumberFormatInfo numberFormat,
-        out DateTimeFormatInfo dateTimeFormat)
+        out DateTimeFormatInfo dateTimeFormat,
+        bool allowCatalogedNumericLcid = false)
     {
         numberFormat = CultureInfo.InvariantCulture.NumberFormat;
         dateTimeFormat = CultureInfo.InvariantCulture.DateTimeFormat;
@@ -287,6 +289,12 @@ public static partial class NumberFormatter
                 CultureInfo.InvariantCulture,
                 out var lcid))
         {
+            // Numeric LCIDs are handled by LocaleFormatCatalog. ICU and Windows NLS expose
+            // different extra LCID mappings, so accepting an uncataloged numeric value here
+            // would make workbook formatting depend on the host operating system.
+            if (!allowCatalogedNumericLcid)
+                return false;
+
             try
             {
                 var culture = CultureInfo.GetCultureInfo(lcid);
@@ -297,6 +305,7 @@ public static partial class NumberFormatter
             }
             catch (CultureNotFoundException)
             {
+                return false;
             }
         }
 
