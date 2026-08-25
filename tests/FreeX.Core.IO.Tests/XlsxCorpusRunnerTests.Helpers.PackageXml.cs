@@ -1234,14 +1234,15 @@ public partial class XlsxCorpusRunnerTests
 
     private static bool IsAbsoluteRelationshipTarget(string target)
     {
-        // OPC permits package-root-relative targets such as /xl/workbook.xml. On Unix,
-        // Uri.TryCreate(..., Absolute) interprets those as file:/// URIs; Windows does not. Keep
-        // package URI semantics stable across operating systems before checking true URI schemes.
-        if (target.StartsWith("/", StringComparison.Ordinal))
+        // Classify the syntax written in the relationship, not System.Uri's platform-dependent
+        // interpretation. OPC permits package-root-relative targets such as /xl/workbook.xml;
+        // Unix otherwise promotes those to file:/// URIs. A true external URI has an explicit
+        // RFC-style scheme before its first colon (https:, file:, mailto:, and so on).
+        int schemeSeparator = target.IndexOf(':');
+        if (schemeSeparator <= 0)
             return false;
 
-        return Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
-            !string.IsNullOrWhiteSpace(uri.Scheme);
+        return Uri.CheckSchemeName(target[..schemeSeparator]);
     }
 
     private static bool TryResolvePackageRelationshipTarget(
