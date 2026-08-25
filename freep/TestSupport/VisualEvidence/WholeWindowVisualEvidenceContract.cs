@@ -59,6 +59,7 @@ public static class WholeWindowVisualEvidenceCatalog
         Scenario("workspace.slide-pane", WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion, "slide-pane", "insert", selectionRouteId: "none", slideIndex: 1),
         Scenario("workspace.notes-pane", WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion, "notes-pane", "view", selectionRouteId: "none", slideIndex: 1),
         Scenario("workspace.canvas", WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion, "canvas", "design", selectionRouteId: "chart"),
+        Scenario("workspace.slide-master", WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion, "slide-master", "view", selectionRouteId: "none"),
 
         Scenario("editor.rich-text-selection", WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay, "selection", selectionRouteId: "shape"),
         Scenario("editor.rich-text-caret", WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay, "caret", selectionRouteId: "shape"),
@@ -131,6 +132,7 @@ public enum WholeWindowVisualEvidenceActivationKind
     MediaCaptionPane,
     SmartArtTextPane,
     AnimationPane,
+    SlideMaster,
     ViewGridlinesAndGuides,
     ViewCleanCanvas,
     ViewZoomFit,
@@ -156,6 +158,8 @@ public sealed record WholeWindowVisualEvidenceActivation(
         WholeWindowVisualEvidenceActivationKind.MediaCaptionPane or
         WholeWindowVisualEvidenceActivationKind.SmartArtTextPane or
         WholeWindowVisualEvidenceActivationKind.AnimationPane;
+
+    public bool IsPresentationViewMode => Kind == WholeWindowVisualEvidenceActivationKind.SlideMaster;
 }
 
 public sealed record WholeWindowVisualEvidenceRichEditorPlan(
@@ -184,7 +188,8 @@ public sealed record WholeWindowVisualEvidenceActivationState(
     string ActiveRibbonTabId,
     IReadOnlyList<string> VisibleContextualTabIds,
     bool BackstageActivated,
-    string? BackstagePaneLabel);
+    string? BackstagePaneLabel,
+    bool SlideMasterActivated = false);
 
 public sealed record WholeWindowVisualEvidencePreparationPlan(
     WholeWindowVisualEvidenceScenario Scenario,
@@ -261,6 +266,14 @@ public sealed record WholeWindowVisualEvidencePreparationPlan(
                 $"Activated view state '{Activation.Id}' through the runtime ribbon command path."));
         }
 
+        if (Activation.IsPresentationViewMode)
+        {
+            assertions.Add(new(
+                "slide-master-activated-via-command",
+                state.SlideMasterActivated,
+                "The View ribbon command activated the live master canvas and populated its master/layout target pane."));
+        }
+
         if (!string.IsNullOrWhiteSpace(Scenario.ExpectedActiveRibbonTabId) &&
             Activation.Kind != WholeWindowVisualEvidenceActivationKind.BackstagePane)
         {
@@ -328,6 +341,9 @@ public static class WholeWindowVisualEvidencePreparationSession
             WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion
                 when StringComparer.Ordinal.Equals(scenario.ActivationId, "notes-pane") =>
                 new(WholeWindowVisualEvidenceActivationKind.FocusNotesPane, scenario.ActivationId),
+            WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion
+                when StringComparer.Ordinal.Equals(scenario.ActivationId, "slide-master") =>
+                new(WholeWindowVisualEvidenceActivationKind.SlideMaster, scenario.ActivationId),
             WholeWindowVisualEvidenceScenarioKind.BackstagePane =>
                 new(WholeWindowVisualEvidenceActivationKind.BackstagePane, scenario.ActivationId),
             WholeWindowVisualEvidenceScenarioKind.AuxiliaryPane => scenario.ActivationId switch

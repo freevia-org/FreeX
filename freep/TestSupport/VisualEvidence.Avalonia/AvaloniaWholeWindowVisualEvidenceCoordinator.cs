@@ -137,6 +137,8 @@ internal sealed class AvaloniaVisualEvidenceAppHost(MainWindow.AvaloniaVisualCap
     public string? CurrentLayoutId => access.CurrentLayoutId;
     public bool IsTablePickerVisible => access.IsTablePickerVisible;
     public bool IsLayoutPickerVisible => access.IsLayoutPickerVisible;
+    public bool IsSlideMasterSurfaceVisible => access.IsSlideMasterSurfaceVisible;
+    public int MasterTargetCount => access.MasterTargetCount;
     public DialogPaneVisualEvidenceChoiceState ChoiceState => new(
         access.TableChoiceCount,
         access.DefaultTableChoiceCount,
@@ -154,6 +156,7 @@ internal sealed class AvaloniaVisualEvidenceAppHost(MainWindow.AvaloniaVisualCap
     public void ResetAuxiliaryPanes() => access.ResetAuxiliaryPanes();
     public void HideBackstage() => access.HideBackstage();
     public bool SelectRibbonTab(string tabId) => access.SelectRibbonTab(tabId);
+    public bool SetPresentationViewMode(PresentationViewMode mode) => access.SetPresentationViewMode(mode);
     public void FocusNotes() => access.FocusNotes();
     public void ShowBackstagePane(string paneId) => access.ShowBackstagePane(paneId);
     public void ShowCommentsPane() => access.ShowCommentsPane();

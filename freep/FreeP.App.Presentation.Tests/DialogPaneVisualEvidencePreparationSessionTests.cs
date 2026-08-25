@@ -104,6 +104,8 @@ public sealed class DialogPaneVisualEvidencePreparationSessionTests
         public string? CurrentLayoutId => _presentation.Slides[0].LayoutId;
         public bool IsTablePickerVisible => TablePickerVisible;
         public bool IsLayoutPickerVisible => LayoutPickerVisible;
+        public bool IsSlideMasterSurfaceVisible => false;
+        public int MasterTargetCount => 0;
         public bool TablePickerVisible { get; private set; }
         public bool LayoutPickerVisible { get; private set; }
         public bool CommentsShown { get; private set; }
@@ -132,6 +134,7 @@ public sealed class DialogPaneVisualEvidencePreparationSessionTests
         public void ResetAuxiliaryPanes() { }
         public void HideBackstage() { }
         public bool SelectRibbonTab(string tabId) => true;
+        public bool SetPresentationViewMode(PresentationViewMode mode) => true;
         public void FocusNotes() { }
         public void ShowBackstagePane(string paneId) { }
         public void ShowCommentsPane() => CommentsShown = true;

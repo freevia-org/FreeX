@@ -49,6 +49,8 @@ public sealed partial class MainWindow
     internal bool IsTitleBarVisible => owner._titleBar.IsVisible && owner._titleBar.ActualHeight > 0;
     internal bool HasIcon => owner.Icon is not null;
     internal string WindowTitle => owner.Title;
+    internal bool IsSlideMasterSurfaceVisible => owner.IsSlideMasterSurfaceVisible;
+    internal int MasterTargetCount => owner._masterEditingSession?.Targets.Count ?? 0;
 
     internal DependencyObject DialogMetadataRoot(string routeId) => routeId switch
     {
@@ -148,6 +150,21 @@ public sealed partial class MainWindow
             return false;
         owner._ribbonTabs.SelectedIndex = index + 1;
         return true;
+    }
+
+    internal bool SetPresentationViewMode(PresentationViewMode mode)
+    {
+        if (!SelectRibbonTab("view"))
+            return false;
+
+        // The WPF ribbon creates a tab's controls during layout. The evidence route must invoke the
+        // production button after that realization, rather than treating an unrealized metadata tree as
+        // an executable command path.
+        owner.UpdateLayout();
+        owner.Dispatcher.Invoke(
+            () => { },
+            System.Windows.Threading.DispatcherPriority.Loaded);
+        return ExecuteRibbonCommand(PresentationViewModePlanner.CommandIdFor(mode));
     }
 
     internal bool SetViewShowState(bool showGridlines, bool showGuides)

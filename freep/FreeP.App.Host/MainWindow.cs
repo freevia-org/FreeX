@@ -272,6 +272,7 @@ public sealed partial class MainWindow : Window,
     internal bool IsNotesPageSurfaceVisible => _notesPageSurface?.Visibility == Visibility.Visible;
     internal bool IsSlideMasterSurfaceVisible =>
         _viewModeState.Mode == PresentationViewMode.SlideMaster && SlideCanvas?.MasterEditTarget is not null;
+    internal bool IsNotesPaneVisible => _notesBox?.Visibility == Visibility.Visible;
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
@@ -707,7 +708,7 @@ public sealed partial class MainWindow : Window,
     {
         _viewShowState = state;
         if (_notesBox is not null)
-            _notesBox.Visibility = _viewModeState.Mode == PresentationViewMode.SlideSorter ||
+            _notesBox.Visibility = _viewModeState.Mode is PresentationViewMode.SlideSorter or PresentationViewMode.SlideMaster ||
                                    (_viewModeState.Mode != PresentationViewMode.NotesPage && !state.ShowNotesPane)
                 ? Visibility.Collapsed
                 : Visibility.Visible;

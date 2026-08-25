@@ -55,6 +55,8 @@ public sealed partial class MainWindow
     internal int QuickAccessButtonCount => owner._quickAccessButtons.Count;
     internal bool HasIcon => owner.Icon is not null;
     internal string WindowTitle => owner.Title ?? string.Empty;
+    internal bool IsSlideMasterSurfaceVisible => owner.IsSlideMasterSurfaceVisible;
+    internal int MasterTargetCount => owner._masterEditingSession?.Targets.Count ?? 0;
 
     internal Visual DialogMetadataRoot(string routeId) => routeId switch
     {
@@ -162,6 +164,15 @@ public sealed partial class MainWindow
             return false;
         tabs.SelectedItem = item;
         return true;
+    }
+
+    internal bool SetPresentationViewMode(PresentationViewMode mode)
+    {
+        if (!SelectRibbonTab("view"))
+            return false;
+
+        var registry = owner.BuildCommandRegistry();
+        return ExecuteRibbonCommand(registry, PresentationViewModePlanner.CommandIdFor(mode));
     }
 
     internal bool SetViewShowState(bool showGridlines, bool showGuides)

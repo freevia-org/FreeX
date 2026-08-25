@@ -500,6 +500,7 @@ public sealed class NotesSlideTests : IDisposable
             apply.Should().NotBeNull();
             apply!.Invoke(window, [new PresentationViewModeState(PresentationViewMode.SlideMaster)]);
             window.IsSlideMasterSurfaceVisible.Should().BeTrue();
+            window.IsNotesPaneVisible.Should().BeFalse();
 
             apply.Invoke(window, [PresentationViewModeState.Normal]);
             window.IsSlideMasterSurfaceVisible.Should().BeFalse();
