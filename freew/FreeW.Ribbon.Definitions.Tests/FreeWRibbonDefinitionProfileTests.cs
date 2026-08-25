@@ -201,6 +201,32 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_layout_view_and_mailings_collapsed_groups_keep_their_wpf_representative_icons()
+    {
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+
+        new (string TabId, string GroupId, string CommandId, RibbonCommandIconKind IconKind)[]
+        {
+            ("layout", "page-setup", "freew.margins", RibbonCommandIconKind.Margins),
+            ("layout", "paragraph", "freew.indent-decrease", RibbonCommandIconKind.IndentDecrease),
+            ("layout", "preview", "freew.print-preview", RibbonCommandIconKind.Print),
+            ("layout", "arrange", "freew.layout-wrap", RibbonCommandIconKind.Wrap),
+            ("layout", "data", "freew.text-to-table", RibbonCommandIconKind.Table),
+            ("view", "immersive", "freew.focus", RibbonCommandIconKind.View),
+            ("view", "show", "freew.ruler", RibbonCommandIconKind.Ruler),
+            ("view", "zoom", "freew.zoom-dialog", RibbonCommandIconKind.Zoom),
+            ("view", "window", "freew.split-window", RibbonCommandIconKind.Scale),
+            ("mailings", "create", "freew.merge-envelopes", RibbonCommandIconKind.Envelope),
+            ("mailings", "merge-data", "freew.start-mail-merge", RibbonCommandIconKind.Envelope),
+            ("mailings", "merge-write", "freew.merge-address-block", RibbonCommandIconKind.Recipients),
+            ("mailings", "merge-preview", "freew.merge-preview", RibbonCommandIconKind.PreviewResults),
+            ("mailings", "merge-finish", "freew.merge-finish", RibbonCommandIconKind.FinishMerge),
+        }.Should().AllSatisfy(expected =>
+            RequiredControl(RequiredGroup(avalonia, expected.TabId, expected.GroupId), expected.CommandId).Icon?.Kind
+                .Should().Be(expected.IconKind));
+    }
+
+    [Fact]
     public void Profile_tab_ids_match_except_named_capability_deltas()
     {
         var wpfTabIds = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();
