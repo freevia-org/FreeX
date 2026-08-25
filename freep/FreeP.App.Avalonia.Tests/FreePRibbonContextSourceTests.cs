@@ -1,6 +1,7 @@
+using Free.Shared.Drawing;
+using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
-using Free.Shared.Drawing;
 
 namespace FreeP.App.Avalonia.Tests;
 
@@ -52,6 +53,11 @@ public sealed class FreePRibbonContextSourceTests
 
         source.Refresh(editor);
         changes.Should().Be(3, "an unchanged selection context must not rebuild the ribbon");
+
+        editor.ClearSelection();
+        source.Refresh(editor);
+        source.Current.Should().Be(RibbonContextState.None);
+        changes.Should().Be(4, "clearing the selection must hide all contextual tabs");
     }
 
     [Fact]

@@ -4371,7 +4371,7 @@ public sealed partial class MainWindow : Window,
         if (_contextualTabs is null)
             return;
 
-        _contextualTabs.Apply(PresentationContextualRibbonPlanner.BuildContext(Editor));
+        _contextualTabs.Apply(PresentationRibbonContextPlanner.Build(Editor));
     }
 
     // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the
