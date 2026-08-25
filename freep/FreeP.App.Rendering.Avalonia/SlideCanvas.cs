@@ -334,21 +334,24 @@ public sealed partial class SlideCanvas : Control
         if (_viewShowState.ShowRulers)
             RenderRulers(context, CurrentTransform, renderW, renderH);
 
+        RenderViewAids(context, CurrentTransform, _viewShowState);
+
         var matrix = Matrix.CreateScale(CurrentTransform.Scale, CurrentTransform.Scale)
             * Matrix.CreateTranslation(CurrentTransform.OffsetX, CurrentTransform.OffsetY);
-        using var _ = context.PushTransform(matrix);
-
-        foreach (var command in SlideRenderExecutionPlanner.Plan(
-                     _cachedOps,
-                     _liveTransformPreviewOps,
-                     SuppressedShapeIds,
-                     ActiveTextEditShapeId))
+        using (context.PushTransform(matrix))
         {
-            RenderCommand(context, command);
-        }
+            foreach (var command in SlideRenderExecutionPlanner.Plan(
+                         _cachedOps,
+                         _liveTransformPreviewOps,
+                         SuppressedShapeIds,
+                         ActiveTextEditShapeId))
+            {
+                RenderCommand(context, command);
+            }
 
-        if (RenderPrintMarkup && _presentation is not null && _slide is not null)
-            RenderPrintCommentCallouts(context, _presentation, _slide);
+            if (RenderPrintMarkup && _presentation is not null && _slide is not null)
+                RenderPrintCommentCallouts(context, _presentation, _slide);
+        }
     }
 
     private static void RenderPrintCommentCallouts(DrawingContext dc, Presentation presentation, Slide slide)
@@ -423,6 +426,27 @@ public sealed partial class SlideCanvas : Control
         new Typeface("Segoe UI"),
         8,
         new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)));
+
+    private static void RenderViewAids(
+        DrawingContext context,
+        SlideTransformCore transform,
+        PresentationViewShowState state)
+    {
+        var plan = PresentationViewAidPlanner.Build(transform, state);
+        if (plan.Gridlines.Count == 0 && plan.Guides.Count == 0)
+            return;
+
+        var gridPen = new Pen(new SolidColorBrush(Color.FromArgb(0x54, 0x79, 0x79, 0x79)), 1)
+        {
+            DashStyle = DashStyle.Dash,
+        };
+        foreach (var line in plan.Gridlines)
+            context.DrawLine(gridPen, new Point(line.StartX, line.StartY), new Point(line.EndX, line.EndY));
+
+        var guidePen = new Pen(new SolidColorBrush(Color.FromArgb(0xA8, 0x6D, 0x9E, 0xEB)), 1);
+        foreach (var line in plan.Guides)
+            context.DrawLine(guidePen, new Point(line.StartX, line.StartY), new Point(line.EndX, line.EndY));
+    }
 
     private SlideTransformCore ComputeViewTransform(
         double renderW,
