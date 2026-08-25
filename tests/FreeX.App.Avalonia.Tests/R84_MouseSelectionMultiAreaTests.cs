@@ -27,6 +27,9 @@ public sealed class R84_MouseSelectionMultiAreaTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
+    private static KeyModifiers AdditiveSelectionModifier =>
+        OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
+
     [Fact]
     public async Task CtrlClickCell_AddsDisjointSecondArea_KeepsBothAreasSelected()
     {
@@ -42,7 +45,7 @@ public sealed class R84_MouseSelectionMultiAreaTests
                 var second = new CellAddress(sheet.Id, 3, 3);
                 window.Session.SelectCell(first);
 
-                window.SelectClickedCell(second, KeyModifiers.Control);
+                window.SelectClickedCell(second, AdditiveSelectionModifier);
 
                 window.Session.SelectedRanges.Should().BeEquivalentTo(
                     [new GridRange(first, first), new GridRange(second, second)],
@@ -76,7 +79,7 @@ public sealed class R84_MouseSelectionMultiAreaTests
                 var second = new CellAddress(sheet.Id, 3, 3);
                 var third = new CellAddress(sheet.Id, 5, 5);
                 window.Session.SelectCell(first);
-                window.SelectClickedCell(second, KeyModifiers.Control);
+                window.SelectClickedCell(second, AdditiveSelectionModifier);
                 window.Session.SelectedRanges.Should().HaveCount(2, "the Ctrl+click above must have built a two-area selection first");
 
                 // A plain click (no modifiers) after a multi-area Ctrl+click selection must still

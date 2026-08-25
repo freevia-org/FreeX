@@ -290,7 +290,9 @@ public sealed partial class MainWindow
                 var step = mappedSteps[index];
                 var args = new KeyEventArgs { Key = step.Key, KeyModifiers = step.Modifiers };
                 var ownedBefore = OwnedWindows.ToHashSet();
-                var dispatch = RaiseKeyDownForTest(args);
+                var dispatch = IsFillSelectionInteraction(interactionId)
+                    ? RaiseFormulaBoxShortcutForValidationAsync(args)
+                    : RaiseKeyDownForTest(args);
                 await SettleShortcutDispatchAsync(dispatch, ownedBefore);
                 if (!args.Handled)
                 {
@@ -323,6 +325,18 @@ public sealed partial class MainWindow
         string? interactionId,
         ShortcutInteractionDescriptor interaction)
     {
+        if (IsFillSelectionInteraction(interactionId))
+        {
+            var sheet = _session.ActiveSheet;
+            var range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 2, 2));
+            _session.SelectRange(range);
+            _formulaBox.Text = "shortcut fill";
+            _formulaBox.Focus();
+            return ShortcutSemanticProbe.ForFillSelection(this, range, "shortcut fill");
+        }
+
         if (IsSaveShortcutInteraction(interactionId, interaction))
         {
             var path = Path.Combine(
@@ -387,11 +401,22 @@ public sealed partial class MainWindow
         interaction.Steps[1] == new ShortcutGestureStep("F") &&
         interaction.Steps[2] == new ShortcutGestureStep("F");
 
+    private static bool IsFillSelectionInteraction(string? interactionId) =>
+        string.Equals(interactionId, "shortcut.editing.fill-selection:0", StringComparison.Ordinal);
+
+    private Task RaiseFormulaBoxShortcutForValidationAsync(KeyEventArgs args)
+    {
+        FormulaBox_KeyDown(_formulaBox, args);
+        return Task.CompletedTask;
+    }
+
     private sealed class ShortcutSemanticProbe : IDisposable
     {
         private readonly MainWindow _window;
         private readonly string? _savePath;
         private readonly bool _verifyLegacyFilter;
+        private readonly GridRange? _fillSelectionRange;
+        private readonly string? _fillSelectionText;
         private readonly Func<WorkbookSaveAsCommandPickerPlan, Task<WorkbookSaveAsPickerSelection?>>?
             _previousSaveAsPicker;
 
@@ -399,12 +424,16 @@ public sealed partial class MainWindow
             MainWindow window,
             string? savePath = null,
             bool verifyLegacyFilter = false,
+            GridRange? fillSelectionRange = null,
+            string? fillSelectionText = null,
             Func<WorkbookSaveAsCommandPickerPlan, Task<WorkbookSaveAsPickerSelection?>>?
                 previousSaveAsPicker = null)
         {
             _window = window;
             _savePath = savePath;
             _verifyLegacyFilter = verifyLegacyFilter;
+            _fillSelectionRange = fillSelectionRange;
+            _fillSelectionText = fillSelectionText;
             _previousSaveAsPicker = previousSaveAsPicker;
         }
 
@@ -419,6 +448,12 @@ public sealed partial class MainWindow
 
         internal static ShortcutSemanticProbe ForLegacyFilter(MainWindow window) =>
             new(window, verifyLegacyFilter: true);
+
+        internal static ShortcutSemanticProbe ForFillSelection(
+            MainWindow window,
+            GridRange range,
+            string text) =>
+            new(window, fillSelectionRange: range, fillSelectionText: text);
 
         internal (bool Passed, string Note) Verify()
         {
@@ -442,6 +477,24 @@ public sealed partial class MainWindow
                     return (false, "Alt+D,F,F was consumed without applying AutoFilter.");
 
                 return (true, "The second F completed the legacy sequence and applied AutoFilter.");
+            }
+
+            if (_fillSelectionRange is { } range)
+            {
+                for (var row = range.Start.Row; row <= range.End.Row; row++)
+                {
+                    for (var col = range.Start.Col; col <= range.End.Col; col++)
+                    {
+                        var address = new CellAddress(range.Start.Sheet, row, col);
+                        if (_window._session.ActiveSheet.GetValue(address) is not TextValue { Value: var value } ||
+                            !string.Equals(value, _fillSelectionText, StringComparison.Ordinal))
+                        {
+                            return (false, "Ctrl+Enter was handled without filling every selected cell.");
+                        }
+                    }
+                }
+
+                return (true, "Ctrl+Enter filled every selected cell through the production formula-bar handler.");
             }
 
             return (true, "No additional semantic settlement was required.");
