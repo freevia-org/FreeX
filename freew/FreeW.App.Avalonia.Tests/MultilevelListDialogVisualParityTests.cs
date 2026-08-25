@@ -136,8 +136,8 @@ public sealed class MultilevelListDialogVisualParityTests
         dialogSource.Should().NotContain("ComboBoxHeight = 22");
         dialogSource.Should().NotContain("ButtonHeight = 20");
         catalog.Should().Contain("Pair(\"multilevel-list\", \"MultilevelListDialog\"");
-        catalog.Should().Contain("useWpfAuthoritySize: true,");
-        catalog.Should().Contain("avaloniaClientWidthAdjustment: 1");
+        catalog.Should().Contain("useWpfAuthoritySize: true),");
+        catalog.Should().NotContain("avaloniaClientWidthAdjustment: 1");
     }
 
     // AvaloniaDialogButtonContent wraps mnemonic-bearing text ("_OK") in an AccessText so Avalonia's

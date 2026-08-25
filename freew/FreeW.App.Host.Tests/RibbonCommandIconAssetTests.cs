@@ -21,7 +21,7 @@ public sealed class RibbonCommandIconAssetTests
         "shape-position", "shape-rotate-left90", "shape-rotate-right90", "shape-rotate",
         "shape-wrap", "shape-wrap-behind", "shape-wrap-front", "shape-wrap-inline", "shape-wrap-square",
         "shape-wrap-tight", "shape-wrap-top-bottom", "index-insert", "index-mark", "insert-quickpart",
-        "merge-rule-ask", "merge-rule-fill-in", "merge-rule-next-record-if", "merge-rule-ref", "merge-rule-set", "merge-rule-skip-record-if", "merge-rules",
+        "field", "merge-rule-ask", "merge-rule-fill-in", "merge-rule-next-record-if", "merge-rule-ref", "merge-rule-set", "merge-rule-skip-record-if", "merge-rules",
         "multilevel-list", "multilevel-preset-0", "multilevel-preset-1", "multilevel-preset-2", "printlayout",
         "reset-style-set", "reviewingpane", "toc", "tof", "weblayout",
     ];
@@ -135,6 +135,7 @@ public sealed class RibbonCommandIconAssetTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var iconDirectory = Path.Combine(root, "freew", "FreeW.Ribbon.Definitions", "Resources", "CommandIconsSvg");
+        var canonicalIconDirectory = Path.Combine(root, "src", "FreeX.Ribbon.Definitions", "Resources", "CommandIconsSvg");
         var assets = XDocument.Load(Path.Combine(
             root,
             "freew",
@@ -169,7 +170,8 @@ public sealed class RibbonCommandIconAssetTests
             var candidates = ((IEnumerable<string>)candidateMethod!.Invoke(null, [alias])!).ToArray();
 
             candidates.First().Should().Be(canonical, alias);
-            File.Exists(Path.Combine(iconDirectory, canonical + ".svg")).Should().BeTrue(alias);
+            (File.Exists(Path.Combine(iconDirectory, canonical + ".svg")) ||
+                File.Exists(Path.Combine(canonicalIconDirectory, canonical + ".svg"))).Should().BeTrue(alias);
             File.Exists(Path.Combine(iconDirectory, alias + ".svg")).Should().BeFalse(alias);
         }
     }
