@@ -483,15 +483,16 @@ public sealed partial class MainWindow : Window
             statusBar: statusBar,
             bottomPanelsAboveStatus: [findBar]));
 
+        var titleBarForeground = AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+            ThemeResources.Brush("TitleBarForeground"),
+            new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBarForeground)));
         var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
             Window: this,
             Body: frame.Root,
             TitleBarBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
                 ThemeResources.TitleBarBrush,
                 new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBar))),
-            TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
-                ThemeResources.Brush("TitleBarForeground"),
-                new SolidColorBrush(AvaloniaThemeApplier.ToColor(BrandThemes.FreeW.Colors.TitleBarForeground)))));
+            TitleBarForeground: titleBarForeground));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
             windowFrame.QatHost,
@@ -499,7 +500,7 @@ public sealed partial class MainWindow : Window
                 Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
                 Undo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Undo),
                 Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)),
-            AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White));
+            titleBarForeground);
 
         Content = windowFrame.Root;
         UpdateStatus();
