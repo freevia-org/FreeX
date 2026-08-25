@@ -589,6 +589,8 @@ public class BackstageViewTests : IDisposable
         source.Should().NotContain("printPreview: null");
 
         sharedSource.Should().Contain("public static class AvaloniaBackstageChrome");
+        sharedSource.Should().Contain("public static TextBlock CreateHeading(");
+        sharedSource.Should().Contain("FontWeight = FontWeight.Light,");
         sharedSource.Should().Contain("public static Border CreateContentArea(");
         sharedSource.Should().Contain("public static Button CreateStackedActionButton(");
         sharedPaneSource.Should().Contain("public Control BuildInfoPane(BackstageInfoPaneSpec spec)");

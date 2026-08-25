@@ -12,6 +12,7 @@ public sealed class PresentationViewModePlannerTests
             .Should()
             .Equal(
                 (PresentationViewModePlanner.NormalCommandId, true),
+                (PresentationViewModePlanner.OutlineCommandId, false),
                 (PresentationViewModePlanner.SlideSorterCommandId, false),
                 (PresentationViewModePlanner.NotesPageCommandId, false));
     }
@@ -28,6 +29,21 @@ public sealed class PresentationViewModePlannerTests
         state.Mode.Should().Be(PresentationViewMode.SlideSorter);
         PresentationViewModePlanner.BuildPlan(PresentationViewMode.Normal, state).IsChecked.Should().BeFalse();
         PresentationViewModePlanner.BuildPlan(PresentationViewMode.SlideSorter, state).IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Outline_view_is_a_selectable_exclusive_view_mode()
+    {
+        var outline = PresentationViewModePlanner.BuildPlan(
+            PresentationViewMode.Outline,
+            PresentationViewModeState.Normal);
+
+        var state = PresentationViewModePlanner.Select(PresentationViewModeState.Normal, outline);
+
+        state.Mode.Should().Be(PresentationViewMode.Outline);
+        PresentationViewModePlanner.BuildPlan(PresentationViewMode.Normal, state).IsChecked.Should().BeFalse();
+        PresentationViewModePlanner.BuildPlan(PresentationViewMode.Outline, state).IsChecked.Should().BeTrue();
+        PresentationViewModePlanner.BuildPlan(PresentationViewMode.SlideSorter, state).IsChecked.Should().BeFalse();
     }
 
     [Fact]

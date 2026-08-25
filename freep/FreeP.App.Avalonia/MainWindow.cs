@@ -176,8 +176,10 @@ public sealed partial class MainWindow : Window,
     private AvaloniaOleInPlaceHost? _activeOleHost;
 #endif
     private readonly ListBox _slidePaneList;
+    private readonly ListBox _outlinePaneList;
     private readonly Border _slidePaneInsertionIndicator;
     private readonly Button _slidePaneNewSlideButton;
+    private bool _outlinePaneRefreshing;
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
     private readonly BackstageView _backstage;
@@ -510,6 +512,16 @@ public sealed partial class MainWindow : Window,
             SelectionMode = SelectionMode.Multiple,
         };
         _slidePaneList.SelectionChanged += OnSlidePaneSelectionChanged;
+
+        _outlinePaneList = new ListBox
+        {
+            Width = FreePShellVisualMetrics.SlidePaneWidth,
+            Padding = new Thickness(8, 6, 6, 6),
+            Background = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
+            SelectionMode = SelectionMode.Single,
+            IsVisible = false,
+        };
+        _outlinePaneList.SelectionChanged += OnOutlinePaneSelectionChanged;
 
         _slidePaneInsertionIndicator = new Border
         {
@@ -1165,6 +1177,8 @@ public sealed partial class MainWindow : Window,
         Grid.SetRow(_slidePaneNewSlideButton, 1);
         slidePaneHost.Children.Add(slidePaneListHost);
         slidePaneHost.Children.Add(_slidePaneNewSlideButton);
+        Grid.SetRowSpan(_outlinePaneList, 2);
+        slidePaneHost.Children.Add(_outlinePaneList);
 
         // Left (slide pane) + right split.
         var body = _bodyGrid = new Grid();
@@ -2341,6 +2355,7 @@ public sealed partial class MainWindow : Window,
     private void ApplyPresentationViewModeState(PresentationViewModeState state)
     {
         _viewModeState = state;
+        var isOutline = state.Mode == PresentationViewMode.Outline;
         var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
         var isNotesPage = state.Mode == PresentationViewMode.NotesPage;
         if (_bodyGrid is null || _slidePaneHost is null || _canvasHost is null)
@@ -2359,6 +2374,13 @@ public sealed partial class MainWindow : Window,
             ? new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = Orientation.Horizontal })
             : new FuncTemplate<Panel?>(() => new StackPanel { Orientation = Orientation.Vertical });
         _canvasHost.IsVisible = !isSlideSorter;
+        _outlinePaneList.IsVisible = isOutline;
+        _slidePaneList.IsVisible = !isOutline;
+        if (isOutline)
+        {
+            _slidePaneInsertionIndicator.IsVisible = false;
+            _slidePaneNewSlideButton.IsVisible = false;
+        }
         _notesBox.IsVisible = !isSlideSorter && _viewShowState.ShowNotesPane;
         _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
         _notesBox.MaxHeight = isNotesPage ? 300 : 120;
@@ -5996,6 +6018,14 @@ public sealed partial class MainWindow : Window,
 
     private void RefreshSlidePane()
     {
+        if (_viewModeState.Mode == PresentationViewMode.Outline)
+        {
+            RefreshOutlinePane();
+            return;
+        }
+
+        _outlinePaneList.IsVisible = false;
+        _slidePaneList.IsVisible = true;
         if (IsSlidePaneListTarget(FocusManager?.GetFocusedElement() as Control))
             _restoreSlidePaneFocusAfterRefresh = true;
         var restoreSlidePaneFocus = _restoreSlidePaneFocusAfterRefresh;
@@ -6737,6 +6767,12 @@ public sealed partial class MainWindow : Window,
 
     private void UpdateSlidePaneItemChrome()
     {
+        if (_viewModeState.Mode == PresentationViewMode.Outline)
+        {
+            SyncOutlinePaneSelection(scrollActiveIntoView: false);
+            return;
+        }
+
         var projection = _workareaSession.SlidePaneSession.Projection;
         foreach (var item in _slidePaneList.Items.OfType<ListBoxItem>())
         {
@@ -6784,6 +6820,78 @@ public sealed partial class MainWindow : Window,
             return;
 
         _workareaSession.ApplySlidePaneNativeSelection(selected, active);
+    }
+
+    private void RefreshOutlinePane()
+    {
+        _outlinePaneRefreshing = true;
+        try
+        {
+            _outlinePaneList.Items.Clear();
+            foreach (var slide in PresentationOutlineViewPlanner.Build(_presentation))
+                _outlinePaneList.Items.Add(BuildOutlinePaneItem(slide));
+            SyncOutlinePaneSelection(scrollActiveIntoView: false);
+        }
+        finally
+        {
+            _outlinePaneRefreshing = false;
+        }
+    }
+
+    private static ListBoxItem BuildOutlinePaneItem(PresentationOutlineSlidePlan slide)
+    {
+        var content = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        content.Children.Add(new TextBlock
+        {
+            Text = slide.SlideLabel,
+            FontSize = 10,
+            Foreground = Brushes.DimGray,
+        });
+        content.Children.Add(new TextBlock
+        {
+            Text = slide.Title,
+            FontWeight = FontWeight.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        foreach (var paragraph in slide.Body)
+        {
+            content.Children.Add(new TextBlock
+            {
+                Text = paragraph.Text,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(10 + paragraph.Level * 12, 2, 0, 0),
+            });
+        }
+
+        var item = new ListBoxItem { Tag = slide.SlideIndex, Content = content };
+        AutomationProperties.SetName(item, $"{slide.SlideLabel}: {slide.Title}");
+        return item;
+    }
+
+    private void OnOutlinePaneSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_outlinePaneRefreshing || _outlinePaneList.SelectedItem is not ListBoxItem { Tag: int slideIndex })
+            return;
+
+        _workareaSession.ApplySlidePaneNativeSelection([slideIndex], slideIndex);
+    }
+
+    private void SyncOutlinePaneSelection(bool scrollActiveIntoView = true)
+    {
+        var activeIndex = _workareaSession.SlidePaneSession.Selection.ActiveSlideIndex;
+        _outlinePaneRefreshing = true;
+        try
+        {
+            foreach (var item in _outlinePaneList.Items.OfType<ListBoxItem>())
+                item.IsSelected = item.Tag is int slideIndex && slideIndex == activeIndex;
+        }
+        finally
+        {
+            _outlinePaneRefreshing = false;
+        }
+
+        if (scrollActiveIntoView && _outlinePaneList.SelectedItem is { } active)
+            _outlinePaneList.ScrollIntoView(active);
     }
 
     // ── Notes pane ─────────────────────────────────────────────────────────────
@@ -6879,6 +6987,12 @@ public sealed partial class MainWindow : Window,
 
     private void SyncSlidePaneSelectionFromEditor()
     {
+        if (_viewModeState.Mode == PresentationViewMode.Outline)
+        {
+            SyncOutlinePaneSelection();
+            return;
+        }
+
         _slidePaneRefreshing = true;
         try { SyncSlidePaneSelectionFromSession(); }
         finally { _slidePaneRefreshing = false; }

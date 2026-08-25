@@ -7,6 +7,7 @@ namespace FreeP.App.Compositor;
 public enum PresentationViewMode
 {
     Normal,
+    Outline,
     SlideSorter,
     NotesPage,
 }
@@ -24,6 +25,7 @@ public readonly record struct PresentationViewModeCommandPlan(
 public static class PresentationViewModePlanner
 {
     public const string NormalCommandId = "freep.view.normal";
+    public const string OutlineCommandId = "freep.view.outline";
     public const string SlideSorterCommandId = "freep.view.slide-sorter";
     public const string NotesPageCommandId = "freep.view.notes-page";
 
@@ -31,6 +33,7 @@ public static class PresentationViewModePlanner
         PresentationViewModeState state) =>
         [
             BuildPlan(PresentationViewMode.Normal, state),
+            BuildPlan(PresentationViewMode.Outline, state),
             BuildPlan(PresentationViewMode.SlideSorter, state),
             BuildPlan(PresentationViewMode.NotesPage, state),
         ];
@@ -62,6 +65,7 @@ public static class PresentationViewModePlanner
     public static string CommandIdFor(PresentationViewMode mode) => mode switch
     {
         PresentationViewMode.Normal => NormalCommandId,
+        PresentationViewMode.Outline => OutlineCommandId,
         PresentationViewMode.SlideSorter => SlideSorterCommandId,
         PresentationViewMode.NotesPage => NotesPageCommandId,
         _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null),
@@ -73,6 +77,9 @@ public static class PresentationViewModePlanner
         {
             case NormalCommandId:
                 mode = PresentationViewMode.Normal;
+                return true;
+            case OutlineCommandId:
+                mode = PresentationViewMode.Outline;
                 return true;
             case SlideSorterCommandId:
                 mode = PresentationViewMode.SlideSorter;

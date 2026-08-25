@@ -30,6 +30,10 @@ public sealed class PresentationThemeGalleryTests
                 .Where(button => !string.IsNullOrEmpty(AutomationProperties.GetName(button)))
                 .Select(AutomationProperties.GetName)
                 .Should().Contain(["Office Theme", "Berlin", "Facet", "Ion", "Slice"]);
+            VisualDescendants<TextBlock>(window)
+                .Count(text => Equals(text.Text, "Aa"))
+                .Should().BeGreaterThanOrEqualTo(5,
+                    "each built-in theme preview uses the recognizable PowerPoint-style type sample");
         }
         finally
         {
