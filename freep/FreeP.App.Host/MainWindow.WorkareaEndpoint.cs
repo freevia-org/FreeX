@@ -81,14 +81,29 @@ public sealed partial class MainWindow
         RefreshContextualTabs();
     }
 
-    private void RefreshSlidePane() =>
-        (SlidePaneHost?.Child as SlidePane)?.RefreshProjection();
+    private void RefreshSlidePane()
+    {
+        if (_viewModeState.Mode == PresentationViewMode.Outline)
+            _outlinePane?.RefreshProjection();
+        else
+            _slidePane?.RefreshProjection();
+    }
 
-    private void SyncSlidePaneSelection() =>
-        (SlidePaneHost?.Child as SlidePane)?.SyncNativeSelection();
+    private void SyncSlidePaneSelection()
+    {
+        if (_viewModeState.Mode == PresentationViewMode.Outline)
+            _outlinePane?.SyncNativeSelection();
+        else
+            _slidePane?.SyncNativeSelection();
+    }
 
-    private void RefreshSlidePaneChrome() =>
-        (SlidePaneHost?.Child as SlidePane)?.RefreshItemChrome();
+    private void RefreshSlidePaneChrome()
+    {
+        if (_viewModeState.Mode == PresentationViewMode.Outline)
+            _outlinePane?.SyncNativeSelection(scrollActiveIntoView: false);
+        else
+            _slidePane?.RefreshItemChrome();
+    }
 
     private void HideTransientPickers()
     {

@@ -1438,6 +1438,9 @@ public static class FreePRibbon
             group.Large(PresentationViewModePlanner.NormalCommandId,
                 FreePRibbonText.ViewNormalCommand.Label, RibbonCommandIconKind.View,
                 FreePRibbonText.ViewNormalCommand.KeyTip);
+            group.Large(PresentationViewModePlanner.OutlineCommandId,
+                FreePRibbonText.ViewOutlineCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.ViewOutlineCommand.KeyTip);
             group.Large(PresentationViewModePlanner.SlideSorterCommandId,
                 FreePRibbonText.ViewSlideSorterCommand.Label, RibbonCommandIconKind.Sort,
                 FreePRibbonText.ViewSlideSorterCommand.KeyTip);

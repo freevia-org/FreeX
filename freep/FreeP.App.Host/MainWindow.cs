@@ -114,6 +114,8 @@ public sealed partial class MainWindow : Window,
     /// <!-- 3B SEAM: add your thumbnail pane as the Child of this Border. -->
     /// </summary>
     internal Border SlidePaneHost { get; private set; } = null!;
+    private SlidePane _slidePane = null!;
+    private PresentationOutlinePane _outlinePane = null!;
 
     /// <summary>
     /// The centre-stage canvas. 3C attaches interaction (mouse/keyboard) to this.
@@ -704,6 +706,7 @@ public sealed partial class MainWindow : Window,
     private void ApplyPresentationViewModeState(PresentationViewModeState state)
     {
         _viewModeState = state;
+        var isOutline = state.Mode == PresentationViewMode.Outline;
         var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
         var isNotesPage = state.Mode == PresentationViewMode.NotesPage;
         if (SlidePaneHost is null || _canvasHost is null || _bodySplitter is null)
@@ -723,7 +726,10 @@ public sealed partial class MainWindow : Window,
         _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
         _notesBox.MaxHeight = isNotesPage ? 300 : 120;
         _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
-        (SlidePaneHost.Child as SlidePane)?.SetSlideSorterMode(isSlideSorter);
+        SlidePaneHost.Child = isOutline ? _outlinePane : _slidePane;
+        _slidePane.SetSlideSorterMode(isSlideSorter);
+        if (isOutline)
+            _outlinePane.RefreshProjection();
         SyncRibbonCommandStates();
     }
 
@@ -744,7 +750,9 @@ public sealed partial class MainWindow : Window,
             Background = FreePBrushes.CardBorder,
         };
         // 3B SEAM: attach the slide-thumbnail pane.
-        SlidePaneHost.Child = new SlidePane(_workareaSession);
+        _slidePane = new SlidePane(_workareaSession);
+        _outlinePane = new PresentationOutlinePane(_workareaSession);
+        SlidePaneHost.Child = _slidePane;
 
         // CENTRE stage — the canvas proper.
         SlideCanvas = new SlideCanvas

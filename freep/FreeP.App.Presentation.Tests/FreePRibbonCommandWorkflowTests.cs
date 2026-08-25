@@ -23,6 +23,7 @@ public sealed class FreePRibbonCommandWorkflowTests
         result.CommonCommandIds.Should().Contain("freep.transition.advance-on-click");
         result.CommonCommandIds.Should().Contain(PresentationSelectionPanePlanner.SelectionPaneCommandId);
         result.CommonCommandIds.Should().Contain(PresentationViewModePlanner.SlideSorterCommandId);
+        result.CommonCommandIds.Should().Contain(PresentationViewModePlanner.OutlineCommandId);
         result.CommonCommandIds.Should().Contain(PresentationViewModePlanner.NotesPageCommandId);
     }
 
@@ -44,6 +45,22 @@ public sealed class FreePRibbonCommandWorkflowTests
 
         dispatched.Should().NotBeNull();
         dispatched!.Kind.Should().Be(expectedKind);
+    }
+
+    [Fact]
+    public void Outline_view_command_routes_the_shared_outline_mode()
+    {
+        FreePRibbonHostAction? dispatched = null;
+        var result = FreePRibbonCommandWorkflow.Build(
+            MakeEditor(),
+            new RibbonStateStore(),
+            new FreePRibbonCommandHostAdapter { ExecuteAction = action => dispatched = action });
+
+        Execute(result.Registry, PresentationViewModePlanner.OutlineCommandId);
+
+        dispatched.Should().Be(new FreePRibbonHostAction(
+            FreePRibbonHostActionKind.ApplyViewModeState,
+            new PresentationViewModeState(PresentationViewMode.Outline)));
     }
 
     [Fact]

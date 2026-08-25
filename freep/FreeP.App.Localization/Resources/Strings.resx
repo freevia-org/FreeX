@@ -3091,6 +3091,12 @@
   <data name="Ribbon_Command_ViewNormal_KeyTip" xml:space="preserve">
     <value>N</value>
   </data>
+  <data name="Ribbon_Command_ViewOutline_Label" xml:space="preserve">
+    <value>Outline View</value>
+  </data>
+  <data name="Ribbon_Command_ViewOutline_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
   <data name="Ribbon_Command_ViewSlideSorter_Label" xml:space="preserve">
     <value>Slide Sorter</value>
   </data>
