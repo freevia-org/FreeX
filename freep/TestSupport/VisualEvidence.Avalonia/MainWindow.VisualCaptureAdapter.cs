@@ -192,6 +192,9 @@ public sealed partial class MainWindow
 
     internal AvaloniaVisualCaptureRichEditorState PrepareRichEditor(uint shapeId, int selectionStart, int selectionEnd)
     {
+        // RefreshCanvas invalidates the slide surface. Let its transform settle before deriving
+        // the editor placement so the overlay uses the same viewport geometry as the capture.
+        owner.UpdateLayout();
         owner._textEditor?.Activate(shapeId);
         var selectionSet = owner._textEditor?.TrySelectTextRange(selectionStart, selectionEnd) == true;
         var body = owner.Editor.CurrentSlide?.Shapes.Single(shape => shape.Id == shapeId).TextBody;

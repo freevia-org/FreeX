@@ -181,6 +181,10 @@ public sealed partial class MainWindow
 
     internal WpfVisualCaptureRichEditorState PrepareRichEditor(uint shapeId, int selectionStart, int selectionEnd)
     {
+        // RefreshCanvas invalidates the slide surface. Let its transform settle before deriving
+        // the editor placement so the overlay uses the same viewport geometry as the capture.
+        owner.UpdateLayout();
+        owner.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
         var editor = owner.SlideCanvas.TextEditor;
         editor?.Activate(shapeId);
         var selectionSet = editor?.TrySelectTextRange(selectionStart, selectionEnd) == true;
