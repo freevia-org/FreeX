@@ -326,6 +326,14 @@ public sealed partial class DocumentView : RichTextBox
         // Scale the editing surface via a LayoutTransform so text, images, and tables all zoom together
         // while the model and on-disk document are untouched (this is pure view chrome).
         LayoutTransform = _zoomTransform;
+        SizeChanged += (_, _) =>
+        {
+            if (_viewDepthLayout.PageFlow == DocumentViewDepthPageFlow.SplitVerticalEditors
+                && PrintLayoutEnabled)
+            {
+                ApplyPageChrome();
+            }
+        };
 
         _editingSession.Changed += Render;
 
@@ -362,6 +370,7 @@ public sealed partial class DocumentView : RichTextBox
         ArgumentNullException.ThrowIfNull(layout);
 
         _viewDepthLayout = layout;
+        ApplyPageChrome();
         LayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -6116,11 +6125,7 @@ public sealed partial class DocumentView : RichTextBox
             var pageMetrics = DocumentViewLayoutPlanner.BuildPageMetrics(_model.Page);
             Width = pageMetrics.PageWidthDip;
             HorizontalAlignment = HorizontalAlignment.Center;
-            Padding = new Thickness(
-                pageMetrics.MarginLeftDip,
-                _model.DoNotDisplayPageBoundaries ? 0 : pageMetrics.MarginTopDip,
-                pageMetrics.MarginRightDip,
-                _model.DoNotDisplayPageBoundaries ? 0 : pageMetrics.MarginBottomDip);
+            Padding = BuildPrintLayoutPadding(pageMetrics);
             Effect = PageShadow;
         }
         else
@@ -6138,6 +6143,30 @@ public sealed partial class DocumentView : RichTextBox
         // Let passive page-geometry chrome (the ruler) redraw against the new width/margins/print-layout.
         InvalidateVisual();
         LayoutChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private Thickness BuildPrintLayoutPadding(DocumentPageMetricsPlan pageMetrics)
+    {
+        var top = _model.DoNotDisplayPageBoundaries ? 0 : pageMetrics.MarginTopDip;
+        var bottom = _model.DoNotDisplayPageBoundaries ? 0 : pageMetrics.MarginBottomDip;
+
+        // Split keeps the editable Print-Layout chrome, but each independently scrollable pane can be
+        // shorter than the document's top + bottom page margins. A RichTextBox clips its FlowDocument to
+        // the remaining client height, so preserving both full margins can leave no room for even a line
+        // of text. Cap only the vertical insets while Split is active; wide/tall panes retain the document
+        // margins and horizontal geometry is never changed.
+        if (_viewDepthLayout.PageFlow == DocumentViewDepthPageFlow.SplitVerticalEditors)
+        {
+            const double minimumEditableContentHeight = 96;
+            const double minimumSplitInset = 24;
+            var maximumInset = ActualHeight > 0
+                ? Math.Max(minimumSplitInset, (ActualHeight - minimumEditableContentHeight) / 2)
+                : 48;
+            top = Math.Min(top, maximumInset);
+            bottom = Math.Min(bottom, maximumInset);
+        }
+
+        return new Thickness(pageMetrics.MarginLeftDip, top, pageMetrics.MarginRightDip, bottom);
     }
 
     // Add, remove, or refresh the page-break overlay to match PrintLayoutEnabled. Mirrors

@@ -14,6 +14,8 @@ public sealed class RibbonShotManifestSourceTests
         source.Should().Contain("RibbonShotCapture.Ribbon(");
         source.Should().Contain("RibbonShotCapture.Backstage(");
         source.Should().Contain("RibbonShotCapture.Dialog(");
+        source.Should().Contain("RibbonShotCapture.Split(");
+        source.Should().Contain("tabArg == \"split\"");
         source.Should().Contain("ManifestSchemaVersion: 1");
         source.Should().Contain("RequestedMode");
         source.Should().Contain("CaptureCount");

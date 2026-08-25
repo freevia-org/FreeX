@@ -269,6 +269,20 @@ public sealed class PageViewModesTests
         view.ViewDepthLayout.AllowsPrimaryEditing.Should().BeTrue();
     }
 
+    [StaFact]
+    public void WpfDocumentView_SplitLayoutCapsVerticalPrintMarginsBeforeThePaneIsMeasured()
+    {
+        var view = NewEditor();
+        var plan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SplitPreview);
+
+        view.ApplyViewDepthLayout(plan.Layout);
+
+        view.ViewDepthLayout.PageFlow.Should().Be(DocumentViewDepthPageFlow.SplitVerticalEditors);
+        view.Padding.Top.Should().Be(48,
+            "an unmeasured Split editor must reserve client height for editable text instead of both full page margins");
+        view.Padding.Bottom.Should().Be(48);
+    }
+
     // ── Split Window mode ────────────────────────────────────────────────────────────────────────
 
     [StaFact]
