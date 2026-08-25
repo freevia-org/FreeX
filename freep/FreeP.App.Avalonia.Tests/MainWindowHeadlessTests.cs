@@ -8173,6 +8173,28 @@ public sealed class MainWindowHeadlessTests : IDisposable
         normalVisible.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task Slide_master_view_selects_layout_target_in_master_pane()
+    {
+        var layoutSelected = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(PresentationViewModePlanner.SlideMasterCommandId, out var master).Should().BeTrue();
+            master!.Execute(RibbonCommandContext.Empty);
+
+            var layout = window.Editor.Presentation.Layouts.Should().ContainSingle().Subject;
+            var target = MasterEditTarget.Layout(layout.Id);
+            window.TrySelectSlideMasterTarget(target).Should().BeTrue();
+            layoutSelected = window.CurrentSlideMasterTarget == target;
+        });
+
+        if (!ran) return;
+        layoutSelected.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData("freep.layout")]
     [InlineData("freep.find")]

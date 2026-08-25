@@ -15,6 +15,7 @@ using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 using FreeP.App.Compositor;
 using FreeP.App.Host.Backstage;
+using FreeP.App.Localization;
 using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 using ModelHyperlink = FreeP.Core.Model.Hyperlink;
@@ -748,7 +749,7 @@ public sealed partial class MainWindow : Window,
         _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
         _notesBox.MaxHeight = isNotesPage ? double.PositiveInfinity : 120;
         _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
-        SlidePaneHost.Child = isOutline ? _outlinePane : _slidePane;
+        SlidePaneHost.Child = isOutline ? _outlinePane : isSlideMaster ? BuildMasterTargetPane() : _slidePane;
         _slidePane.SetSlideSorterMode(isSlideSorter);
         if (isOutline)
             _outlinePane.RefreshProjection();
@@ -782,6 +783,69 @@ public sealed partial class MainWindow : Window,
         }
         SlideCanvas.Refresh();
     }
+
+    /// <summary>Builds the Slide Master navigation pane with both master roots and layouts.</summary>
+    private StackPanel BuildMasterTargetPane()
+    {
+        var masterEditor = EnsureMasterEditingSession();
+        var pane = new StackPanel
+        {
+            Background = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
+            Margin = new Thickness(6),
+        };
+        pane.Children.Add(new TextBlock
+        {
+            Text = Loc.Get("Ribbon_Command_ViewSlideMaster_Label"),
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(4, 2, 4, 8),
+        });
+
+        foreach (var target in masterEditor.Targets)
+        {
+            var targetLabel = DescribeMasterTarget(target);
+            var targetButton = new Button
+            {
+                Content = targetLabel,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Margin = target.Kind == MasterEditTargetKind.Layout
+                    ? new Thickness(16, 1, 0, 1)
+                    : new Thickness(0, 3, 0, 1),
+                Padding = new Thickness(6, 4, 6, 4),
+                IsEnabled = masterEditor.Target != target,
+            };
+            AutomationProperties.SetName(targetButton, targetLabel);
+            targetButton.Click += (_, _) => TrySelectSlideMasterTarget(target);
+            pane.Children.Add(targetButton);
+        }
+
+        return pane;
+    }
+
+    private string DescribeMasterTarget(MasterEditTarget target) => target.Kind switch
+    {
+        MasterEditTargetKind.Master => string.IsNullOrWhiteSpace(_presentation.Masters.Find(master => master.Id == target.Id)?.Name)
+            ? Loc.Get("Ribbon_Command_ViewSlideMaster_Label")
+            : _presentation.Masters.Find(master => master.Id == target.Id)!.Name,
+        MasterEditTargetKind.Layout => string.IsNullOrWhiteSpace(_presentation.Layouts.Find(layout => layout.Id == target.Id)?.Name)
+            ? Loc.Get("Pane_SlideMaster_Layout")
+            : _presentation.Layouts.Find(layout => layout.Id == target.Id)!.Name,
+        _ => target.Id,
+    };
+
+    /// <summary>Switches the authoring surface to a master or layout selected in Slide Master view.</summary>
+    internal bool TrySelectSlideMasterTarget(MasterEditTarget target)
+    {
+        if (_viewModeState.Mode != PresentationViewMode.SlideMaster)
+            return false;
+        var selected = EnsureMasterEditingSession().SelectTarget(target);
+        if (!selected)
+            return false;
+        ConfigureMasterCanvas();
+        SlidePaneHost.Child = BuildMasterTargetPane();
+        return true;
+    }
+
+    internal MasterEditTarget? CurrentSlideMasterTarget => _masterEditingSession?.Target;
 
     private void SetNotesPageSurface(bool isNotesPage)
     {

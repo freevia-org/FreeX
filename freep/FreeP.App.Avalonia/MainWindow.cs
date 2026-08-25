@@ -30,6 +30,7 @@ using Free.Shared.Theme.Avalonia;
 using FreeP.App.Avalonia.Backstage;
 using FreeP.App.Avalonia.Printing;
 using FreeP.App.Compositor;
+using FreeP.App.Localization;
 using FreeP.App.Recording;
 #if FREEP_WINDOWS_CAPTURE
 using FreeP.App.Recording.Windows;
@@ -183,6 +184,7 @@ public sealed partial class MainWindow : Window,
 #endif
     private readonly ListBox _slidePaneList;
     private readonly ListBox _outlinePaneList;
+    private readonly ListBox _masterTargetList;
     private readonly Border _slidePaneInsertionIndicator;
     private readonly Button _slidePaneNewSlideButton;
     private bool _outlinePaneRefreshing;
@@ -540,6 +542,16 @@ public sealed partial class MainWindow : Window,
             IsVisible = false,
         };
         _outlinePaneList.SelectionChanged += OnOutlinePaneSelectionChanged;
+
+        _masterTargetList = new ListBox
+        {
+            Width = FreePShellVisualMetrics.SlidePaneWidth,
+            Padding = new Thickness(6),
+            Background = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
+            SelectionMode = SelectionMode.Single,
+            IsVisible = false,
+        };
+        _masterTargetList.SelectionChanged += OnMasterTargetSelectionChanged;
 
         _slidePaneInsertionIndicator = new Border
         {
@@ -1220,6 +1232,8 @@ public sealed partial class MainWindow : Window,
         slidePaneHost.Children.Add(_slidePaneNewSlideButton);
         Grid.SetRowSpan(_outlinePaneList, 2);
         slidePaneHost.Children.Add(_outlinePaneList);
+        Grid.SetRowSpan(_masterTargetList, 2);
+        slidePaneHost.Children.Add(_masterTargetList);
 
         // Left (slide pane) + right split.
         var body = _bodyGrid = new Grid();
@@ -2422,7 +2436,8 @@ public sealed partial class MainWindow : Window,
             : new FuncTemplate<Panel?>(() => new StackPanel { Orientation = Orientation.Vertical });
         _canvasHost.IsVisible = !isSlideSorter;
         _outlinePaneList.IsVisible = isOutline;
-        _slidePaneList.IsVisible = !isOutline;
+        _masterTargetList.IsVisible = isSlideMaster;
+        _slidePaneList.IsVisible = !isOutline && !isSlideMaster;
         if (isOutline)
         {
             _slidePaneInsertionIndicator.IsVisible = false;
@@ -2434,7 +2449,10 @@ public sealed partial class MainWindow : Window,
         _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
         RefreshSlidePane();
         if (isSlideMaster)
+        {
             ConfigureMasterCanvas();
+            RefreshMasterTargetPane();
+        }
         else if (_masterInteractionAttached)
         {
             _slideCanvas.MasterEditTarget = null;
@@ -2461,6 +2479,76 @@ public sealed partial class MainWindow : Window,
             RewireInteractionToMaster(masterEditor);
         _slideCanvas.Refresh();
     }
+
+    private void RefreshMasterTargetPane()
+    {
+        if (_viewModeState.Mode != PresentationViewMode.SlideMaster)
+            return;
+
+        var masterEditor = EnsureMasterEditingSession();
+        _slidePaneRefreshing = true;
+        try
+        {
+            _masterTargetList.Items.Clear();
+            foreach (var target in masterEditor.Targets)
+            {
+                var label = DescribeMasterTarget(target);
+                var item = new ListBoxItem
+                {
+                    Tag = target,
+                    Content = new TextBlock
+                    {
+                        Text = label,
+                        Margin = target.Kind == MasterEditTargetKind.Layout
+                            ? new Thickness(16, 5, 4, 5)
+                            : new Thickness(4, 7, 4, 5),
+                        FontWeight = target.Kind == MasterEditTargetKind.Master
+                            ? FontWeight.SemiBold
+                            : FontWeight.Normal,
+                    },
+                    IsSelected = masterEditor.Target == target,
+                };
+                AutomationProperties.SetName(item, label);
+                _masterTargetList.Items.Add(item);
+            }
+        }
+        finally
+        {
+            _slidePaneRefreshing = false;
+        }
+    }
+
+    private string DescribeMasterTarget(MasterEditTarget target) => target.Kind switch
+    {
+        MasterEditTargetKind.Master => string.IsNullOrWhiteSpace(_presentation.Masters.Find(master => master.Id == target.Id)?.Name)
+            ? Loc.Get("Ribbon_Command_ViewSlideMaster_Label")
+            : _presentation.Masters.Find(master => master.Id == target.Id)!.Name,
+        MasterEditTargetKind.Layout => string.IsNullOrWhiteSpace(_presentation.Layouts.Find(layout => layout.Id == target.Id)?.Name)
+            ? Loc.Get("Pane_SlideMaster_Layout")
+            : _presentation.Layouts.Find(layout => layout.Id == target.Id)!.Name,
+        _ => target.Id,
+    };
+
+    private void OnMasterTargetSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_slidePaneRefreshing || _masterTargetList.SelectedItem is not ListBoxItem { Tag: MasterEditTarget target })
+            return;
+        TrySelectSlideMasterTarget(target);
+    }
+
+    internal bool TrySelectSlideMasterTarget(MasterEditTarget target)
+    {
+        if (_viewModeState.Mode != PresentationViewMode.SlideMaster)
+            return false;
+        var selected = EnsureMasterEditingSession().SelectTarget(target);
+        if (!selected)
+            return false;
+        ConfigureMasterCanvas();
+        RefreshMasterTargetPane();
+        return true;
+    }
+
+    internal MasterEditTarget? CurrentSlideMasterTarget => _masterEditingSession?.Target;
 
     private void RewireInteractionToMaster(MasterEditingSession masterEditor)
     {

@@ -3115,6 +3115,9 @@
   <data name="Ribbon_Command_ViewSlideMaster_KeyTip" xml:space="preserve">
     <value>M</value>
   </data>
+  <data name="Pane_SlideMaster_Layout" xml:space="preserve">
+    <value>Layout</value>
+  </data>
   <data name="Ribbon_Command_ViewReadingView_Label" xml:space="preserve">
     <value>Reading View</value>
   </data>
