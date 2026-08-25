@@ -19,7 +19,7 @@ public sealed partial class MainWindow
                 AfterEditorMarkedDirty = () =>
                     RecordStartupObservation("editor-changed"),
                 RefreshCommandStates = SyncRibbonCommandStates,
-                RefreshContextualTabs = RefreshContextualTabs,
+                RefreshContextualTabs = () => _ribbonContextSource.Refresh(Editor),
                 RefreshSlidePane = RefreshSlidePane,
                 RefreshCanvas = RefreshCanvas,
                 RefreshNotesPane = RefreshNotesPane,
