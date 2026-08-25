@@ -508,6 +508,37 @@ public sealed class KeyboardContextParityTests
     }
 
     [Fact]
+    public async Task FreePHomeRibbon_ReclaimsParagraphCommandsAtDesktopWidths()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([])
+            {
+                MinWidth = 0,
+                Width = 1280,
+                Height = 600,
+            };
+            try
+            {
+                window.Show();
+                var ribbon = window.RibbonControlForTests!;
+                var tabs = Assert.IsType<TabControl>(ribbon);
+                tabs.SelectedItem = tabs.Items.OfType<TabItem>().Single(item => Equals(item.Tag, "home"));
+                Dispatcher.UIThread.RunJobs();
+
+                var buttons = ribbon.GetVisualDescendants().OfType<Button>().ToArray();
+                buttons.Should().NotContain(button => Equals(button.Tag, "collapsed:paragraph"));
+                buttons.Should().Contain(button => Equals(button.Tag, "freep.bullets"));
+                buttons.Should().Contain(button => Equals(button.Tag, "freep.numbering"));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task RendererBackedNestedKeyTipTraversalOpensVisibleChildSubmenu()
     {
         await Session.Dispatch(() =>
