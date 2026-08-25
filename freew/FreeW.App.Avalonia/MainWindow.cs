@@ -1513,6 +1513,7 @@ public sealed partial class MainWindow : Window
             {
                 Header = target.Title,
                 IsChecked = ReferenceEquals(target, this),
+                ToggleType = MenuItemToggleType.CheckBox,
             };
             item.Click += (_, _) => ActivateDocumentWindow(target);
             menu.Items.Add(item);
