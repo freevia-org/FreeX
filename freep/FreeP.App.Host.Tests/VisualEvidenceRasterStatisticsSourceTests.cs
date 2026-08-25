@@ -39,6 +39,17 @@ public sealed class VisualEvidenceRasterStatisticsSourceTests
             .And.NotContain("yield return child;");
     }
 
+    [Fact]
+    public void Avalonia_whole_window_capture_rejects_a_clamped_client_width()
+    {
+        var source = ReadWorkspaceSource(
+            "freep", "TestSupport", "VisualEvidence.Avalonia", "AvaloniaWholeWindowVisualEvidenceCapture.cs");
+
+        source.Should().Contain("EnsureRequestedClientWidth(anchor, hostPolicy.LogicalWidth);")
+            .And.Contain("window.ClientSize.Width - requestedLogicalWidth")
+            .And.Contain("Avalonia whole-window capture requested");
+    }
+
     private static string ReadWorkspaceSource(params string[] relativeParts)
     {
         var parts = new string[relativeParts.Length + 1];

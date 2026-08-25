@@ -480,7 +480,7 @@ public sealed partial class MainWindow : Window,
         Title = FreePApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1280;
         Height = 760;
-        MinWidth = 800;
+        MinWidth = 750;
         MinHeight = 500;
         Background = FreePBrushes.SheetSurface;
         ApplyWindowIcon();

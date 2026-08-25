@@ -520,6 +520,16 @@ public sealed class MainWindowHeadlessTests : IDisposable
     }
 
     [Fact]
+    public async Task MainWindow_accepts_the_responsive_750_dip_ribbon_breakpoint()
+    {
+        var minWidth = 0d;
+        var ran = await OnUiThread(() => minWidth = new MainWindow(Array.Empty<string>()).MinWidth);
+
+        if (!ran) return;
+        minWidth.Should().Be(750);
+    }
+
+    [Fact]
     public async Task MainWindow_titlebar_restores_the_product_badge_before_the_qat()
     {
         string badgeId = string.Empty;
