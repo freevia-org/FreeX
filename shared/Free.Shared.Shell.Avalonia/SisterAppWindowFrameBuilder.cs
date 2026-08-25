@@ -24,7 +24,8 @@ public sealed record SisterAppWindowFrameBuildResult(
     Grid Root,
     Border TitleBar,
     StackPanel QatHost,
-    TextBlock TitleText);
+    TextBlock TitleText,
+    Grid TitleCaptionLane);
 
 /// <summary>
 /// Builds the shared Avalonia outer window frame. The operating system keeps its normal icon and
@@ -58,7 +59,6 @@ public static class SisterAppWindowFrameBuilder
             TextAlignment = TextAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
             IsHitTestVisible = false,
-            Margin = new Thickness(spec.NativeTrailingInset, 0),
         };
         AutomationProperties.SetAutomationId(titleText, "SisterAppTitleText");
         titleText.Bind(TextBlock.TextProperty, new Binding(nameof(Window.Title)) { Source = spec.Window });
@@ -68,14 +68,21 @@ public static class SisterAppWindowFrameBuilder
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(spec.NativeLeadingInset, 0, spec.NativeTrailingInset, 0),
+            Margin = new Thickness(spec.NativeLeadingInset, 0, 8, 0),
         };
         AutomationProperties.SetAutomationId(qatHost, "TitleBarQuickAccessToolbarHost");
         AutomationProperties.SetName(qatHost, "Quick Access Toolbar");
         WindowDecorationProperties.SetElementRole(qatHost, WindowDecorationsElementRole.User);
 
         var titleSurface = new Grid();
-        titleSurface.Children.Add(titleText);
+        titleSurface.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        titleSurface.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+        titleSurface.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(spec.NativeTrailingInset)));
+        var titleCaptionLane = new Grid();
+        AutomationProperties.SetAutomationId(titleCaptionLane, "TitleBarCaptionLane");
+        titleCaptionLane.Children.Add(titleText);
+        Grid.SetColumn(titleCaptionLane, 1);
+        titleSurface.Children.Add(titleCaptionLane);
         if (spec.AppBadgeLetter is { } badgeLetter)
         {
             var badge = new Border
@@ -106,6 +113,7 @@ public static class SisterAppWindowFrameBuilder
             AutomationProperties.SetName(badge, $"{badgeLetter} application badge");
             titleSurface.Children.Add(badge);
         }
+        Grid.SetColumn(qatHost, 0);
         titleSurface.Children.Add(qatHost);
 
         var titleBar = new Border
@@ -125,6 +133,6 @@ public static class SisterAppWindowFrameBuilder
         Grid.SetRow(spec.Body, 1);
         root.Children.Add(spec.Body);
 
-        return new SisterAppWindowFrameBuildResult(root, titleBar, qatHost, titleText);
+        return new SisterAppWindowFrameBuildResult(root, titleBar, qatHost, titleText, titleCaptionLane);
     }
 }

@@ -97,6 +97,39 @@ public sealed class MainWindowShellFrameTests
     }
 
     [Fact]
+    public async Task MainWindow_title_uses_the_safe_caption_lane_between_qat_and_native_buttons()
+    {
+        Rect titleBounds = default;
+        Rect captionLaneBounds = default;
+        Rect qatBounds = default;
+        Rect titleBarBounds = default;
+
+        await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Measure(new Size(750, 720));
+            window.Arrange(new Rect(0, 0, 750, 720));
+            window.UpdateLayout();
+
+            var titleBar = window.TitleBarForTests;
+            var title = titleBar.GetVisualDescendants().OfType<TextBlock>()
+                .Single(control => AutomationProperties.GetAutomationId(control) == "SisterAppTitleText");
+            var captionLane = titleBar.GetVisualDescendants().OfType<Grid>()
+                .Single(control => AutomationProperties.GetAutomationId(control) == "TitleBarCaptionLane");
+
+            titleBounds = title.Bounds;
+            captionLaneBounds = captionLane.Bounds;
+            qatBounds = window.QuickAccessButtonsForTests[0].Parent!.Should().BeOfType<StackPanel>().Subject.Bounds;
+            titleBarBounds = titleBar.Bounds;
+        });
+
+        qatBounds.Right.Should().BeLessThanOrEqualTo(captionLaneBounds.Left);
+        captionLaneBounds.Right.Should().BeLessThanOrEqualTo(titleBarBounds.Right - 140);
+        titleBounds.Width.Should().BeLessThanOrEqualTo(captionLaneBounds.Width);
+        (titleBounds.Center.X - (captionLaneBounds.Width / 2)).Should().BeApproximately(0, 1);
+    }
+
+    [Fact]
     public async Task MainWindow_status_matches_Wpf_content_controls_and_zoom_state()
     {
         string page = string.Empty;

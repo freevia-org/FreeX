@@ -450,7 +450,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("illustrations", "Illustrations", null, 96, g =>
                     {
-                        g.Button("freew.picture", "Picture");
+                        g.Button("freew.picture", "Picture", b => Icon(b, RibbonCommandIconKind.Picture));
                         g.Dropdown("freew.shapes", "Shapes", BuildInsertShapesMenu());
                         g.Button("freew.smartart", "SmartArt");
                         g.Button("freew.chart", "Chart");
@@ -477,7 +477,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("links", "Links", null, 95, g =>
                     {
-                        g.Button("freew.hyperlink", "Hyperlink");
+                        g.Button("freew.hyperlink", "Hyperlink", b => Icon(b, RibbonCommandIconKind.Link));
                         g.Button("freew.edit-hyperlink", "Edit Hyperlink");
                         g.Button("freew.remove-hyperlink", "Remove Hyperlink");
                         g.Button("freew.hyperlink-tooltip", "ScreenTip");
@@ -803,7 +803,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("proofing", "Proofing", null, 110, g =>
                     {
-                        g.Button("freew.statistics", "Word Count");
+                        g.Button("freew.statistics", "Word Count", b => Icon(b, RibbonCommandIconKind.WordCount));
                         g.Toggle("freew.spellcheck-toggle", "Spelling & Grammar");
                         g.Button("freew.add-to-dictionary", "Add to Dictionary");
                         g.Button("freew.thesaurus", "Thesaurus");
@@ -819,7 +819,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("speech", "Speech", null, 105, g =>
                     {
-                        g.Toggle("freew.read-aloud", "Read Aloud");
+                        g.Toggle("freew.read-aloud", "Read Aloud", b => Icon(b, RibbonCommandIconKind.ReadAloud));
                     }));
 
             topology.Section(
@@ -831,7 +831,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("accessibility", "Accessibility", null, 92, g =>
                     {
-                        g.Button("freew.check-accessibility", "Check Accessibility");
+                        g.Button("freew.check-accessibility", "Check Accessibility", b => Icon(b, RibbonCommandIconKind.Accessibility));
                     }));
 
             topology.Section(
@@ -851,7 +851,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("comments", "Comments", null, 100, g =>
                     {
-                        g.Button("freew.new-comment", "New Comment");
+                        g.Button("freew.new-comment", "New Comment", b => Icon(b, RibbonCommandIconKind.Comment));
                         g.Button("freew.delete-comment", "Delete");
                         g.Button("freew.previous-comment", "Previous");
                         g.Button("freew.next-comment", "Next");
@@ -896,7 +896,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("tracking", "Tracking", null, 90, g =>
                     {
-                        g.Toggle("freew.track-changes", "Track Changes");
+                        g.Toggle("freew.track-changes", "Track Changes", b => Icon(b, RibbonCommandIconKind.History));
                         g.Toggle("freew.track-formatting", "Track Formatting");
                         g.Toggle("freew.reviewing-pane", "Reviewing Pane");
                         g.Dropdown("freew.display-for-review", "All Markup", BuildDisplayForReviewMenu());
@@ -924,7 +924,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("changes", "Changes", null, 80, g =>
                     {
-                        g.Button("freew.accept-this", "Accept");
+                        g.Button("freew.accept-this", "Accept", b => Icon(b, RibbonCommandIconKind.AcceptChange));
                         g.Button("freew.accept-all", "Accept All");
                         g.Button("freew.reject-this", "Reject");
                         g.Button("freew.reject-all", "Reject All");
@@ -942,7 +942,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("compare", "Compare", null, 78, g =>
                     {
-                        g.Button("freew.compare", "Compare");
+                        g.Button("freew.compare", "Compare", b => Icon(b, RibbonCommandIconKind.Compare));
                         g.Button("freew.combine", "Combine");
                     }));
 
@@ -956,7 +956,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("protect", "Protect", null, 85, g =>
                     {
-                        g.Toggle("freew.mark-as-final", "Mark as Final");
+                        g.Toggle("freew.mark-as-final", "Mark as Final", b => Icon(b, RibbonCommandIconKind.Protect));
                         g.Toggle("freew.restrict-editing", "Restrict Editing");
                     }));
 
@@ -969,7 +969,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("inspect", "Inspect", null, 75, g =>
                     {
-                        g.Button("freew.inspect-document", "Inspect Document");
+                        g.Button("freew.inspect-document", "Inspect Document", b => Icon(b, RibbonCommandIconKind.Search));
                     }));
 
             topology.Build();
@@ -981,6 +981,12 @@ internal static partial class FreeWCanonicalRibbonTabs
 
     private static RibbonButton Icon(
         RibbonButton button,
+        RibbonCommandIconKind kind,
+        RibbonCommandIconAccent accent = RibbonCommandIconAccent.None) =>
+        button with { Icon = new RibbonCommandIcon(kind, accent) };
+
+    private static RibbonToggleButton Icon(
+        RibbonToggleButton button,
         RibbonCommandIconKind kind,
         RibbonCommandIconAccent accent = RibbonCommandIconAccent.None) =>
         button with { Icon = new RibbonCommandIcon(kind, accent) };
