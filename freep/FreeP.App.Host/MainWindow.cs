@@ -84,6 +84,8 @@ public sealed partial class MainWindow : Window,
     // ── Shell chrome ──────────────────────────────────────────────────────────────
 
     private PresentationFileCommandSession _fileSession = null!;
+    private readonly PresentationDocumentWindowPlanner _documentWindowPlanner;
+    private readonly int _documentWindowNumber;
 
     // ── Autosave / crash recovery ─────────────────────────────────────────────────
 
@@ -306,8 +308,15 @@ public sealed partial class MainWindow : Window,
         PresentationNativePrintHandoffHostCapabilities? nativePrintCapability = null,
         IReadOnlyList<string>? startupFilePaths = null,
         bool suppressStartupRecoveryOffer = false,
-        PresentationCustomDictionaryStore? proofingDictionaryStore = null)
+        PresentationCustomDictionaryStore? proofingDictionaryStore = null,
+        PresentationDocumentWindowPlanner? documentWindowPlanner = null,
+        int documentWindowNumber = 1)
     {
+        if (documentWindowNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(documentWindowNumber));
+
+        _documentWindowPlanner = documentWindowPlanner ?? new PresentationDocumentWindowPlanner();
+        _documentWindowNumber = documentWindowNumber;
         _options = options ?? new FreePOptions();
         _optionsRuntime = new FreePOptionsRuntimeSession(_options);
         _messageService = messageService;
@@ -736,6 +745,46 @@ public sealed partial class MainWindow : Window,
     private void LoadModel(Presentation presentation)
     {
         _workareaSession.ReplacePresentation(presentation);
+    }
+
+    private void OpenNewPresentationWindow()
+    {
+        var plan = _documentWindowPlanner.CreateNext(
+            _presentation,
+            _fileSession.CurrentPath,
+            _fileSession.IsDirty);
+        var window = new MainWindow(
+            _options,
+            _optionsStore,
+            _messageService,
+            documentWindowPlanner: _documentWindowPlanner,
+            documentWindowNumber: plan.WindowNumber);
+        window.LoadModel(plan.Presentation);
+        window._fileSession.ApplyWindowState(plan.CurrentPath, plan.IsDirty);
+        window.Show();
+    }
+
+    private static void ArrangeAllPresentationWindows()
+    {
+        var windows = Application.Current.Windows.OfType<MainWindow>()
+            .Where(window => window.IsVisible)
+            .ToList();
+        if (windows.Count == 0)
+            return;
+
+        var area = SystemParameters.WorkArea;
+        var bounds = ArrangeAllLayoutPlanner.ArrangeRowFirst(
+            area.Width, area.Height, windows.Count, maxColumns: 3);
+        for (var index = 0; index < bounds.Count; index++)
+        {
+            var window = windows[index];
+            var tile = bounds[index];
+            window.WindowState = WindowState.Normal;
+            window.Left = area.Left + tile.X;
+            window.Top = area.Top + tile.Y;
+            window.Width = tile.Width;
+            window.Height = tile.Height;
+        }
     }
 
     // ── Body layout ───────────────────────────────────────────────────────────────
@@ -3282,7 +3331,8 @@ public sealed partial class MainWindow : Window,
             IsDirty: _fileSession.IsDirty,
             DirtyMarker: title.DirtyMarker,
             Separator: title.Separator,
-            ApplicationPlacement: title.ApplicationPlacement));
+            ApplicationPlacement: title.ApplicationPlacement,
+            WindowSuffix: PresentationDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber)));
     }
 
     // ── Keyboard bindings ─────────────────────────────────────────────────────────

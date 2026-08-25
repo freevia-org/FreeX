@@ -1469,6 +1469,11 @@ public static class FreePRibbon
             group.Medium("freep.view.fit-to-window", FreePRibbonText.ViewFitToWindowCommand.Label,
                 RibbonCommandIconKind.Scale, FreePRibbonText.ViewFitToWindowCommand.KeyTip);
         });
+        tab.Group("window", "Window", "W", 65, group =>
+        {
+            group.Medium("freep.view.new-window", "New Window", RibbonCommandIconKind.Window, "N");
+            group.Medium("freep.view.arrange-all", "Arrange All", RibbonCommandIconKind.Grid, "A");
+        });
     }
 
     private static void AddParagraphControls(RibbonGroupBuilder group)

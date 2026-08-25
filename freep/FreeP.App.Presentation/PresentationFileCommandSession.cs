@@ -304,6 +304,21 @@ public interface IPresentationFileLifecyclePort
     void MarkSavedWithoutPath();
     void MarkSavedWithPath(string path, bool suppressRecentFiles);
 
+    /// <summary>
+    /// Initializes an independently opened View &gt; New Window snapshot without treating it as a
+    /// newly opened/recent file. Implementations with a richer file workflow may override this;
+    /// the default preserves the path and dirty state through the existing lifecycle operations.
+    /// </summary>
+    void ApplyWindowState(string? path, bool isDirty)
+    {
+        if (isDirty)
+            MarkDirtyWithPath(path);
+        else if (string.IsNullOrWhiteSpace(path))
+            MarkSavedWithoutPath();
+        else
+            MarkSavedWithPath(path, suppressRecentFiles: true);
+    }
+
     Task<bool> NewAsync(string action, Func<Task> loadNewPresentationAsync);
     Task<bool> OpenAsync(
         string action,
@@ -547,6 +562,15 @@ public sealed class PresentationFileCommandSession
     private int _videoExportInProgress;
 
     public void MarkDirty() => _lifecycle.MarkDirty();
+
+    /// <summary>Restores the file identity for an independent New Window snapshot.</summary>
+    public void ApplyWindowState(string? path, bool isDirty)
+    {
+        _lifecycle.ApplyWindowState(path, isDirty);
+        _currentFileSourceLastWriteTimeUtc = string.IsNullOrWhiteSpace(path) || !File.Exists(path)
+            ? null
+            : File.GetLastWriteTimeUtc(path);
+    }
 
     /// <summary>
     /// Loads a recovered autosave snapshot, retargeting the presentation at
