@@ -21,9 +21,9 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().NotContain("pull_request_target");
         workflow.Should().Contain("runs-on: windows-latest");
         workflow.Should().Contain("timeout-minutes: 180");
-        workflow.Should().Contain("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803");
+        workflow.Should().Contain("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
         workflow.Should().Contain("persist-credentials: false");
-        workflow.Should().Contain("actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1");
+        workflow.Should().Contain("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68");
         workflow.Should().Contain("dotnet-version: 10.0.300");
         workflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("concurrency:");
@@ -93,7 +93,7 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("workflow must declare top-level permissions explicitly");
         script.Should().Contain("workflow must not request write-all permissions");
         script.Should().Contain("must be pinned to an approved full 40-character commit SHA");
-        script.Should().Contain("\"actions/download-artifact\" = \"37930b1c2abaa49bbe596cd826c3c89aef350131\"");
+        script.Should().Contain("\"actions/download-artifact\" = \"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c\"");
         script.Should().Contain("must declare an explicit shell");
         script.Should().Contain("must stay within the workflow workspace");
         script.Should().Contain("workflow YAML must use spaces for indentation");
@@ -224,7 +224,7 @@ public sealed class GitHubWorkflowPreflightTests
         releaseJob.Should().Contain("concurrency:");
         releaseJob.Should().Contain("group: macos-distribution-candidate-release");
         releaseJob.Should().Contain("cancel-in-progress: false");
-        releaseJob.Should().Contain("uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803");
+        releaseJob.Should().Contain("uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
         releaseJob.Should().Contain("persist-credentials: false");
 
         workflow.Replace(releaseJob, string.Empty, StringComparison.Ordinal)
@@ -363,11 +363,11 @@ public sealed class GitHubWorkflowPreflightTests
         aggregateJob.Should().Contain("contents: read");
 
         var checkoutStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Checkout");
-        checkoutStep.Should().Contain("uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803");
+        checkoutStep.Should().Contain("uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
         checkoutStep.Should().Contain("persist-credentials: false");
 
         var downloadStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Download macOS preview artifacts");
-        downloadStep.Should().Contain("uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131");
+        downloadStep.Should().Contain("uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c");
         downloadStep.Should().Contain("pattern: \"freex-${{ github.run_id }}-${{ github.run_attempt }}-osx-*-macos-*\"");
         downloadStep.Should().NotContain("{app,diagnostics}");
         downloadStep.Should().Contain("path: artifacts/macos-preview-evidence");
@@ -526,7 +526,7 @@ public sealed class GitHubWorkflowPreflightTests
                 timeout-minutes: 5
                 steps:
                   - name: Checkout
-                    uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+                    uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
                     with:
                       fetch-depth: 0
                   - name: Safe shell
@@ -1320,13 +1320,13 @@ public sealed class GitHubWorkflowPreflightTests
 
                 steps:
                   - name: Checkout
-                    uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+                    uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
                     with:
                       fetch-depth: 0
                       persist-credentials: false
 
                   - name: Setup .NET
-                    uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+                    uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
                     with:
                       dotnet-version: 10.0.300
 

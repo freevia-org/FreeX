@@ -49,7 +49,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c ''Print :LSMinimumSystemVersion'' \"$app_info_plist\")");
         script.Should().Contain("bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c ''Print :NSHighResolutionCapable'' \"$app_info_plist\")");
         script.Should().Contain("publish-distribution-candidate:");
-        script.Should().Contain("actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131");
+        script.Should().Contain("actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c");
         script.Should().Contain("Test portable PDF macOS route");
         script.Should().Contain("dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests");
@@ -1874,7 +1874,7 @@ public sealed class MacOsAppReadinessPreflightTests
                   group: macos-distribution-candidate-release
                   cancel-in-progress: false
                 steps:
-                  - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+                  - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
                     with:
                       pattern: freex-${"{{"} github.run_id {"}}"}-${"{{"} github.run_attempt {"}}"}-*-macos-app
                       merge-multiple: true

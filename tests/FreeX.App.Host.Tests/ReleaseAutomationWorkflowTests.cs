@@ -28,7 +28,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("group: tester-release");
         workflow.Should().Contain("cancel-in-progress: false");
         workflow.Should().NotContain("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24");
-        workflow.Should().Contain("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803");
+        workflow.Should().Contain("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
         workflow.Should().Contain("persist-credentials: false");
         workflow.Should().Contain("name: Validate latest release source");
         workflow.Should().Contain("$isMainRelease = $env:GITHUB_REF -eq \"refs/heads/main\"");
@@ -38,7 +38,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("git fetch origin main:refs/remotes/origin/main --no-tags");
         workflow.Should().Contain("git merge-base --is-ancestor origin/main HEAD");
         workflow.Should().Contain("Daily tester release branches must contain the current origin/main commit.");
-        workflow.Should().Contain("actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1");
+        workflow.Should().Contain("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68");
         workflow.Should().Contain("timeout-minutes: 180");
         workflow.Should().Contain("name: Repository preflight");
         workflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
