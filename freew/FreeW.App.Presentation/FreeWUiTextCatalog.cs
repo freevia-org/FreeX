@@ -27,7 +27,12 @@ public static class FreeWUiTextCatalog
         "Design_TableStyles_Title",
         "Design_TableStyles_CompactLabel",
         "Design_TableStyle_AutomationNameFormat",
+        "Design_TableStyles_MoreToolTip",
         "Design_Styles_MoreToolTip",
+        "Pane_Selection_Title",
+        "Pane_Selection_BringForward",
+        "Pane_Selection_SendBackward",
+        "Support_TestCrashReporting_Title",
         "Dialog_DateTime_Title",
         "Dialog_DateTime_FormatsLabel",
         "Dialog_DateTime_UpdateAutomatically",
@@ -86,6 +91,11 @@ public static class FreeWUiTextCatalog
     public static string TableStyles => Text("Design_TableStyles_Title");
     public static string TableStylesCompact => Text("Design_TableStyles_CompactLabel");
     public static string MoreStylesToolTip => Text("Design_Styles_MoreToolTip");
+    public static string MoreTableStylesToolTip => Text("Design_TableStyles_MoreToolTip");
+    public static string SelectionPaneTitle => Text("Pane_Selection_Title");
+    public static string SelectionPaneBringForward => Text("Pane_Selection_BringForward");
+    public static string SelectionPaneSendBackward => Text("Pane_Selection_SendBackward");
+    public static string TestCrashReportingTitle => Text("Support_TestCrashReporting_Title");
 
     public static string ThemeColorsAutomationName(string name) =>
         Format("Design_ThemeColors_AutomationNameFormat", name);

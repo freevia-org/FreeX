@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host.Tests;
@@ -20,6 +21,8 @@ public sealed class PresentationTransitionGalleryTests
             var tabs = VisualDescendants<TabControl>(window)
                 .Single(control => control.Items.OfType<TabItem>().Any(tab => Equals(tab.Header, "Transitions")));
             tabs.SelectedItem = tabs.Items.OfType<TabItem>().Single(tab => Equals(tab.Header, "Transitions"));
+            window.UpdateLayout();
+            window.Dispatcher.Invoke(static () => { }, DispatcherPriority.ApplicationIdle);
             window.UpdateLayout();
 
             var fade = VisualDescendants<Button>(window)

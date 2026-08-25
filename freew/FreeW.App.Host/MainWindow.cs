@@ -1012,9 +1012,9 @@ public sealed partial class MainWindow : Window
         var result = AppCrashAnalyticsRuntime.SendTestReport();
         var message = AppCrashAnalyticsRuntime.UserMessage(result);
         if (result == CrashAnalyticsTestReportResult.Sent)
-            DialogMessageHelper.ShowInfo(this, message, "Test Crash Reporting");
+            DialogMessageHelper.ShowInfo(this, message, FreeWUiTextCatalog.TestCrashReportingTitle);
         else
-            DialogMessageHelper.ShowWarning(this, message, "Test Crash Reporting");
+            DialogMessageHelper.ShowWarning(this, message, FreeWUiTextCatalog.TestCrashReportingTitle);
     }
 
     private void ShowAboutDialog()
@@ -1416,9 +1416,9 @@ public sealed partial class MainWindow : Window
         };
         _selectionList.SelectionChanged += OnSelectionPaneSelected;
 
-        _selectionBringForward = new Button { Content = "Bring Forward", Margin = new Thickness(8, 4, 4, 8) };
+        _selectionBringForward = new Button { Content = FreeWUiTextCatalog.SelectionPaneBringForward, Margin = new Thickness(8, 4, 4, 8) };
         _selectionBringForward.Click += (_, _) => MoveSelectionPaneObject(ZOrderOperation.BringForward);
-        _selectionSendBackward = new Button { Content = "Send Backward", Margin = new Thickness(4, 4, 8, 8) };
+        _selectionSendBackward = new Button { Content = FreeWUiTextCatalog.SelectionPaneSendBackward, Margin = new Thickness(4, 4, 8, 8) };
         _selectionSendBackward.Click += (_, _) => MoveSelectionPaneObject(ZOrderOperation.SendBackward);
         var controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
         controls.Children.Add(_selectionBringForward);
@@ -1426,7 +1426,7 @@ public sealed partial class MainWindow : Window
 
         var header = new TextBlock
         {
-            Text = "Selection Pane",
+            Text = FreeWUiTextCatalog.SelectionPaneTitle,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 6)
         };

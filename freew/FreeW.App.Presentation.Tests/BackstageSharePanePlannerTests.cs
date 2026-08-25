@@ -7,11 +7,12 @@ public sealed class BackstageSharePanePlannerTests
     [Fact]
     public void Build_WithSavedLocalDocument_OpensContainingFolderFirst()
     {
+        var currentPath = Path.Combine(Path.GetPathRoot(Environment.CurrentDirectory)!, "Docs", "Plan.docx");
         var openedPath = "";
         var savedAs = false;
         var groups = BackstageSharePanePlanner.Build(
-            @"C:\Docs\Plan.docx",
-            path => path == @"C:\Docs\Plan.docx",
+            currentPath,
+            path => path == currentPath,
             () => savedAs = true,
             path => openedPath = path,
             static () => { },
@@ -21,11 +22,11 @@ public sealed class BackstageSharePanePlannerTests
         var primary = groups[0].Actions.Should().ContainSingle().Subject;
         primary.Label.Should().Be("Open Containing Folder");
         primary.Description.Should().Contain("Windows Share is unavailable");
-        primary.Description.Should().Contain(@"C:\Docs\Plan.docx");
+        primary.Description.Should().Contain(currentPath);
 
         primary.Invoke();
 
-        openedPath.Should().Be(@"C:\Docs\Plan.docx");
+        openedPath.Should().Be(currentPath);
         savedAs.Should().BeFalse();
     }
 

@@ -12,7 +12,7 @@ public sealed class ObjectFormatCommandPolicySourceGuardTests
 
         source.Should().Contain("using FreeW.App.Presentation.Ribbon;");
         source.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
-        source.Should().Contain("CreateFloatingExecutionPorts(editor)");
+        source.Should().Contain("CreateFloatingExecutionPorts(editor,");
         profile.Should().Contain("foreach (var target in ObjectFormatCommandPlanner.Targets)");
         profile.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(target)");
         profile.Should().Contain("ObjectFormatCommandPlanner.TransformCommands(target)");
@@ -35,7 +35,7 @@ public sealed class ObjectFormatCommandPolicySourceGuardTests
 
         source.Should().Contain("using FreeW.App.Presentation.Ribbon;");
         source.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
-        source.Should().Contain("CreateFloatingExecutionPorts(editor)");
+        source.Should().Contain("CreateFloatingExecutionPorts(editor,");
         profile.Should().Contain("ObjectFormatCommandPlanner.WrapDropdownCommandId(target)");
         profile.Should().Contain("ObjectFormatCommandPlanner.TransformDropdownCommandId(target)");
         profile.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(target)");

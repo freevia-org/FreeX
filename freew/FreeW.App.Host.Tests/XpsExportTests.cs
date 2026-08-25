@@ -110,6 +110,7 @@ public sealed class XpsExportTests : IDisposable
     private static DocumentView BuildSampleView()
     {
         var doc = TextDocument.CreateEmpty();
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = "Arial" };
         doc.Blocks.Clear();
         doc.Blocks.Add(new Paragraph("Exported Heading") { StyleId = "Heading1" });
         doc.Blocks.Add(new Paragraph("Body paragraph with some text to render onto the page."));
@@ -122,6 +123,7 @@ public sealed class XpsExportTests : IDisposable
     private static DocumentView BuildMultiPageView()
     {
         var doc = TextDocument.CreateEmpty();
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = "Arial" };
         doc.Blocks.Clear();
         doc.Blocks.Add(new Paragraph("Exported Heading") { StyleId = "Heading1" });
         for (var i = 0; i < 400; i++)

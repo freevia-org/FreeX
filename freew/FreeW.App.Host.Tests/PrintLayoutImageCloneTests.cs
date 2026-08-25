@@ -137,6 +137,7 @@ public sealed class PrintLayoutImageCloneTests
     private static DocumentView BuildViewWithImage(byte[] bytes, ImageFormat format)
     {
         var doc = TextDocument.CreateEmpty();
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = "Arial" };
         doc.Blocks.Clear();
         var para = new FreeW.Core.Model.Paragraph();
         para.Runs.Add(new Run("Before "));

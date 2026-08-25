@@ -6,7 +6,7 @@ namespace FreeW.App.Host.Tests;
 public sealed class FreeWContextMenuInventorySourceTests
 {
     [Fact]
-    public void WpfHost_HasExactlySixExplicitMenuConstructions()
+    public void WpfHost_HasExactlySevenExplicitMenuConstructions()
     {
         var root = HostRoot();
         var source = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
@@ -14,7 +14,7 @@ public sealed class FreeWContextMenuInventorySourceTests
                 && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Select(File.ReadAllText);
 
-        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(6);
+        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(7);
     }
 
     [Fact]

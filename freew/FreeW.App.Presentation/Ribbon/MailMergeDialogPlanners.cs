@@ -51,6 +51,8 @@ public readonly record struct MailMergeRecipientDialogValidation(
 
 public static class MailMergeRecipientDialogPlanner
 {
+    private const string CsvNewLine = "\r\n";
+
     public static MailMergeRecipientDialogPlan CreatePlan(
         IReadOnlyList<string> documentFields,
         MergeData? existingData = null)
@@ -62,7 +64,7 @@ public static class MailMergeRecipientDialogPlanner
             : string.Join(",", documentFields);
         var initialCsv = existingData is not null
             ? ToCsv(existingData)
-            : string.IsNullOrWhiteSpace(seedHeader) ? string.Empty : seedHeader + Environment.NewLine;
+            : string.IsNullOrWhiteSpace(seedHeader) ? string.Empty : seedHeader + CsvNewLine;
 
         return new(seedHeader, initialCsv, existingData is not null);
     }
@@ -88,7 +90,7 @@ public static class MailMergeRecipientDialogPlanner
         lines.AddRange(data.Rows.Select(row =>
             string.Join(",", data.Header.Select(header =>
                 row.TryGetValue(header, out var value) ? Escape(value) : string.Empty))));
-        return string.Join(Environment.NewLine, lines);
+        return string.Join(CsvNewLine, lines);
     }
 
     private static string Escape(string value) =>

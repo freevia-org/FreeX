@@ -277,15 +277,10 @@ public sealed class FreeWRibbonParityTests
                 "freew.shape-textbox",
                 "freew.insert-quickpart",
                 "freew.insert-file",
-                "freew.wordart",
-                "freew.drop-cap",
-                "freew.datetime",
-                "freew.field",
-                "freew.update-fields",
-                "freew.toggle-field-codes",
-                "freew.object",
-                "freew.save-quickpart",
-                "freew.building-blocks-organizer");
+            "freew.wordart",
+            "freew.drop-cap",
+            "freew.datetime",
+            "freew.object");
 
         CommandIds(insert.FindGroup("symbols")!)
             .Should()
