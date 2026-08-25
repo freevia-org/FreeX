@@ -100,4 +100,18 @@ public sealed class FileLifecycleWorkflowSourceTests
         project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
     }
 
+    [Fact]
+    public void NewWindow_PreservesTheInjectedMessageService()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.cs"));
+
+        source.Should().Contain(
+            "optionsStore: _optionsStore,\n            messageService: _messageService,\n            documentWindowPlanner: _documentWindowPlanner,");
+    }
+
 }

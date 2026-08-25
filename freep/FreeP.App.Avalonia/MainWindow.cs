@@ -6025,6 +6025,7 @@ public sealed partial class MainWindow : Window,
             loadRecentFilesStore: null,
             options: _options,
             optionsStore: _optionsStore,
+            messageService: _messageService,
             documentWindowPlanner: _documentWindowPlanner,
             documentWindowNumber: plan.WindowNumber);
         window.LoadPresentationContent(plan.Presentation);
