@@ -151,6 +151,9 @@ if ($RefreshSourceHashes) {
                 throw "Responsive chrome capture is missing or empty: $capturePath"
             }
         }
+
+        $capture.fullImageSha256 = Get-VisualEvidenceFileSha256 -Path (Join-Path $resolvedOutputDirectory ($capture.fullImagePath -replace '/', '\'))
+        $capture.clientImageSha256 = Get-VisualEvidenceFileSha256 -Path (Join-Path $resolvedOutputDirectory ($capture.clientImagePath -replace '/', '\'))
     }
 
     $existing.sourceSha256 = Get-ResponsiveChromeSourceHashes
