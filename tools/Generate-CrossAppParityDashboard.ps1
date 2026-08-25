@@ -13,7 +13,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 # Keep acceptance evidence anchored to the source that was actually built and tested.
 # The generated docs are committed afterward, so deriving this from the current HEAD
 # would make the evidence self-referential and would change the claim on every refresh.
-$wave194TestedSourceCommit = "659e851fb2cadec5061a726a1622a7d75c304626"
+$wave194TestedSourceCommit = "8624e6d1f4bce133a3685d99f366e668491ea33f"
 $wave194AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 
 function Get-JsonPropertyValue {
@@ -486,6 +486,9 @@ try {
     $freeWPairedComparisonRows = @($freeWComparisonRows | Where-Object { $_.captureStatus -eq "captured/captured" })
     $freeWAvaloniaExtensionRows = @($freeWComparisonRows | Where-Object { $_.classification -eq "avalonia-extension" })
     $freeWStateNotApplicableRows = @($freeWComparisonRows | Where-Object { $_.classification -eq "state-not-applicable" })
+    $freeWPassCount = @($freeWPairedComparisonRows | Where-Object { $_.classification -eq "pass" }).Count
+    $freeWVisualMismatchCount = @($freeWPairedComparisonRows | Where-Object { $_.classification -eq "genuine-visual-mismatch" }).Count
+    $freeWClassificationTotals = "$freeWVisualMismatchCount mismatch / $freeWPassCount pass / $($freeWAvaloniaExtensionRows.Count) extension"
     $freeWPairedRouteIds = @($freeWPairedComparisonRows | ForEach-Object { Get-ScenarioRouteId ([string]$_.scenarioId) } | Sort-Object -Unique)
     $freeWAvaloniaExtensionRouteIds = @($freeWAvaloniaExtensionRows | ForEach-Object { Get-ScenarioRouteId ([string]$_.scenarioId) } | Sort-Object -Unique)
     $freeWRenderedEvidence = [ordered]@{
@@ -527,7 +530,7 @@ try {
             paintedBounds = "421 x 321"
             nonFontRowsCompared = [int]$freeWFontProvenance.wave193Result.nonFontRowsCompared
             nonFontRowsChanged = [int]$freeWFontProvenance.wave193Result.nonFontRowsChanged
-            classificationTotals = "141 mismatch / 80 pass / 70 extension"
+            classificationTotals = $freeWClassificationTotals
             retainedPolicy = "shared opt-in 14px checkbox indicator, +1px vertical offset, #EBEBEB/#F6F6F6 frame; the 1px stroke probe was a no-op and was removed."
         }
         wave194 = [ordered]@{
@@ -545,7 +548,7 @@ try {
             paintedBounds = "421 x 321"
             nonFontRowsCompared = [int]$freeWFontProvenance.wave194Result.nonFontRowsCompared
             nonFontRowsChanged = [int]$freeWFontProvenance.wave194Result.nonFontRowsChanged
-            classificationTotals = "141 mismatch / 80 pass / 70 extension"
+            classificationTotals = $freeWClassificationTotals
             correction = "Avalonia Font action-button border changed from #707070 to #C8C8C8 to match WPF; no other rows changed."
             claimBoundary = "Canonical FreeW Font-dialog WPF/Avalonia evidence only; remaining text/control raster differences do not establish Word visual parity."
         }
@@ -602,8 +605,8 @@ try {
                 "Wave191 aligns the Avalonia Font route's selected combo template with the WPF gradient, neutral border, and one-DIP cadence. The three-state aggregate falls from 44687 to 36053 changed pixels, a further 19.321055% reduction; all states improve, exact 421 x 321 painted bounds remain stable, and all three remain genuine mismatches.",
                 "Wave192 aligns the Font route's checkbox/effect-lane registration and measured trailing margins. The three-state aggregate falls from 36053 to 34196 changed pixels, a further 5.1508% reduction; all states improve, exact 421 x 321 painted bounds remain stable, and all three remain genuine mismatches.",
                 "Wave193 aligns the shared Font checkbox native frame. The three-state aggregate falls from 34196 to 32861 changed pixels, a further 3.9040% reduction; each state improves by 445 pixels, exact 421 x 321 painted bounds remain stable, and the 1px stroke probe was a no-op and was removed.",
-                "Wave193's tracked Font provenance binds all three states and six host captures to dimensions, painted bounds, exact canonical comparison rows, source hashes, and external capture-manifest identities. Only the three Font rows changed; all 288 non-Font rows remain unchanged. The external PNGs remain uncommitted and require the capture hosts for pixel reproduction.",
-                "Wave194 changes only the Avalonia Font action-button border to the WPF-style #C8C8C8 value. Aggregate changed pixels fall from $($freeWFontProvenance.wave193Result.aggregateChangedPixels) to $($freeWFontProvenance.wave194Result.aggregateChangedPixels), a delta of $($freeWFontProvenance.wave194Result.aggregateDelta) and relative improvement $([string]('{0:P4}' -f $freeWFontProvenance.wave194Result.relativeImprovement)); each of the three states improves by 183 pixels, painted bounds remain 421 x 321, and all 288 non-Font rows remain unchanged.",
+                "Wave193's tracked Font provenance binds all three states and six host captures to dimensions, painted bounds, exact canonical comparison rows, source hashes, and external capture-manifest identities. Only the three Font rows changed; all $($freeWFontProvenance.wave193Result.nonFontRowsCompared) non-Font rows remain unchanged. The external PNGs remain uncommitted and require the capture hosts for pixel reproduction.",
+                "Wave194 changes only the Avalonia Font action-button border to the WPF-style #C8C8C8 value. Aggregate changed pixels fall from $($freeWFontProvenance.wave193Result.aggregateChangedPixels) to $($freeWFontProvenance.wave194Result.aggregateChangedPixels), a delta of $($freeWFontProvenance.wave194Result.aggregateDelta) and relative improvement $([string]('{0:P4}' -f $freeWFontProvenance.wave194Result.relativeImprovement)); painted bounds remain 421 x 321, and all $($freeWFontProvenance.wave194Result.nonFontRowsCompared) non-Font rows remain unchanged.",
                 "Avalonia-only route/state rows are reported separately and are outside the WPF-authority pairing set.",
                 [string]$freeWOfficeBaseline.limitation
             )
@@ -637,7 +640,7 @@ try {
             classifiedRows = $true
         }
         renderedEvidence = $freeWRenderedEvidence
-        nextSlice = "A committed current-source Word PNG baseline bundle is available for $($freeWOfficeBaseline.comparison.comparableRows) comparable rows, but $($freeWOfficeBaseline.comparison.failedRows) comparisons remain outside tolerance. Font dialog captures now improve from 61396 to $($freeWFontProvenance.wave194Result.aggregateChangedPixels) aggregate changed pixels across Waves188-194 and match WPF painted bounds; continue with the remaining native checkbox/glyph raster tail, tab-template edges, Legal Notices glyph/template tail, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
+        nextSlice = "A committed current-source Word PNG baseline bundle is available for $($freeWOfficeBaseline.comparison.comparableRows) comparable rows, but $($freeWOfficeBaseline.comparison.failedRows) comparisons remain outside tolerance. The current Font evidence contains $($freeWFontProvenance.wave194Result.aggregateChangedPixels) aggregate changed pixels with relative improvement $([string]('{0:P4}' -f $freeWFontProvenance.wave194Result.relativeImprovement)) and matching WPF painted bounds; $($freeWFontProvenance.wave194Result.nonFontRowsCompared) non-Font rows remain unchanged. Continue with the remaining native checkbox/glyph raster tail, tab-template edges, Legal Notices glyph/template tail, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
     }
 
     $freePExternalPowerPointResidual = Get-ResidualById -Residuals $freePRenderParity.Residuals -Id "external-powerpoint-baseline"
@@ -864,15 +867,15 @@ try {
         testedSourceCommit = $wave194TestedSourceCommit
         acceptanceRefreshNote = $wave194AcceptanceRefreshNote
         reintegration = "The current integration branch is anchored to tested source commit ${wave194TestedSourceCommit}; the acceptance refresh records only evidence from that tested source and does not claim that the documentation commit itself was rebuilt."
-        focusedTests = "At tested source commit ${wave194TestedSourceCommit}: FreeX Avalonia Wave194 9/9; FreeX Presentation Wave194 1/1; FreeX Core.IO Wave194 plus five foreground-capture guards 8/8; FreeW Avalonia 2,175/2,175; FreeW host 1,835/1,835; FreeW Presentation 2,892/2,892; FreeW Ribbon definitions 62/62; FreeP Avalonia 724/724; FreeP host 2,416/2,416; FreeP Presentation 5,482/5,482; post-merge FreeP retention 2/2; post-merge ChartRenderPlanner 250/250."
+        focusedTests = "At tested source commit ${wave194TestedSourceCommit}: FreeX Avalonia Wave194 9/9; FreeX Presentation Wave194 1/1; FreeX Core.IO Wave194 plus five foreground-capture guards 8/8; FreeW Avalonia 2,175/2,175; FreeW host 1,835/1,835; FreeW Presentation 2,892/2,892; FreeW Ribbon definitions 62/62; FreeP Avalonia 724/724; FreeP host 2,418/2,418; FreeP Presentation 5,496/5,496; FreeP Ribbon definitions 34/34; FreeP responsive evidence 64/64; FreeP localization focused 1/1; FreeP resources 14/14; FreeP Hide Slide assertions 2/2; FreeP ChartRenderPlanner 264/264."
         initialReintegrationPreflight = "The current acceptance refresh uses the supplied repository-preflight result and the exact tested-source boundary; no additional source paths are allowlisted by this documentation-only change."
         initialIndependentReview = "Recorded: the initial independent review found two P2 findings: FreeX crop/readiness/transition and physical click geometry were duplicated instead of consuming one contract; FreeP topology evidence did not pin the complete source PPTX and initially over-attributed the residual."
         reviewRemediation = "FreeX now uses one authoritative mixed-type geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved; the color-geometry guard remediation remains retained in the tested source."
-        independentReview = "Pending: a fresh independent review of tested source merge commit ${wave194TestedSourceCommit} must be completed. The prior final independent review is superseded by the origin/main Surface3D elevation-legend merge and is not a current-source acceptance claim."
-        repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 exited 0."
-        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:06:05.76."
-        defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,466 passed, 134 intentional skips, 0 failed, 43,600 total."
-        initialDefaultLane = "Earlier default-lane remediation history is retained in the Wave194 report; the current final lane is the authoritative 43,466 passed, 134 intentional skips, 0 failed, 43,600 total result."
+        independentReview = "Pending: a fresh independent final acceptance review of tested source commit ${wave194TestedSourceCommit} must be completed. The supplied current FreeP Surface3D static sign-off is scoped to that focused lane and does not satisfy the cross-app acceptance review."
+        repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 309 XML-backed, 125 PowerShell scripts, 10 test gates/48 assigned projects, 13,922 conflict-marker files checked, and all generated docs/evidence current."
+        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:06:14.37."
+        defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,485 passed, 134 intentional skips, 0 failed, 43,619 total."
+        initialDefaultLane = "Earlier default-lane remediation history is retained in the Wave194 report; the current final pass4 lane is the authoritative 43,485 passed, 134 intentional skips, 0 failed, 43,619 total result."
         sourceTestRemediation = "The current source is accepted only with the focused and full-lane evidence recorded above; generated inventory and visual manifests remain the authority for coverage and comparison counts."
         workerVerification = "Current focused evidence is recorded for FreeW and FreeP above; FreeX physical and generated metrics remain retained below. Functional/source evidence and visual comparison evidence are intentionally separate."
     }
@@ -885,7 +888,7 @@ try {
         integrationGateStatus = "accepted"
         pendingIntegrationGates = @()
         integrationGateEvidence = $wave194IntegrationGateEvidence
-        scopeBoundary = "Functional/source parity evidence is represented by generated command/profile routing, focused test gates, route coverage, and artifact coverage. Visual parity remains a separate claim: FreeW currently has 291 dialog rows with 80 pass, 141 genuine visual mismatches, and 70 Avalonia extensions; FreeX retains Excel triage deltas; FreeP has paired app-owned evidence but its Office reference lane is not a raw Office-to-host equivalence result. These metrics do not prove complete visual parity, workflow completeness, or pixel-level equivalence."
+        scopeBoundary = "Functional/source parity evidence is represented by generated command/profile routing, focused test gates, route coverage, and artifact coverage. Visual parity remains a separate claim: current generated FreeW evidence has $($freeW.renderedEvidence.artifactCoverage.evidenceRowCount) dialog rows with $($freeW.renderedEvidence.pairedEvidence.passCount) pass, $($freeW.renderedEvidence.pairedEvidence.mismatchCount) genuine visual mismatches, and $($freeW.renderedEvidence.pairedEvidence.avaloniaOnlyScenarioCount) Avalonia extensions; FreeX retains Excel triage deltas; FreeP has paired app-owned evidence but its Office reference lane is not a raw Office-to-host equivalence result. These metrics do not prove complete visual parity, workflow completeness, or pixel-level equivalence."
         sources = @(
             "docs/parity/command-inventory.json",
             "docs/parity/functional-parity.json",

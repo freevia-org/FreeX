@@ -24,15 +24,15 @@ public sealed class CrossAppParityDashboardTests
         root.GetProperty("scopeBoundary").GetString().Should().Contain("do not prove complete visual parity");
 
         var integrationEvidence = root.GetProperty("integrationGateEvidence");
-        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("659e851fb2cadec5061a726a1622a7d75c304626");
+        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("8624e6d1f4bce133a3685d99f366e668491ea33f");
         integrationEvidence.TryGetProperty("integrationHead", out _).Should().BeFalse();
         integrationEvidence.GetProperty("acceptanceRefreshNote").GetString().Should().Be(
             "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit.");
         integrationEvidence.GetProperty("repositoryPreflight").GetString().Should().Be(
-            "Passed at tested source commit 659e851fb2cadec5061a726a1622a7d75c304626: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0.");
+            "Passed at tested source commit 8624e6d1f4bce133a3685d99f366e668491ea33f: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 309 XML-backed, 125 PowerShell scripts, 10 test gates/48 assigned projects, 13,922 conflict-marker files checked, and all generated docs/evidence current.");
         integrationEvidence.GetProperty("fullReleaseBuild").GetString().Should().Be(
-            "Passed at tested source commit 659e851fb2cadec5061a726a1622a7d75c304626: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:06:05.76.");
-        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("43,466 passed, 134 intentional skips, 0 failed, 43,600 total");
+            "Passed at tested source commit 8624e6d1f4bce133a3685d99f366e668491ea33f: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:06:14.37.");
+        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("43,485 passed, 134 intentional skips, 0 failed, 43,619 total");
 
         var freeX = root.GetProperty("apps")[0];
         var visualEvidence = freeX.GetProperty("dialogVisualEvidence");
