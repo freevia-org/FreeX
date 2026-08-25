@@ -27,7 +27,7 @@ public enum FreeWViewDepthPagePairNavigationCommand
 public enum FreeWViewDepthSurfaceKind
 {
     LiveEditor,
-    SplitEditorWithReadOnlyPreview,
+    SplitEditors,
     ReadOnlyPagePreview,
     EditablePageView
 }
@@ -126,15 +126,15 @@ public static class FreeWViewDepthPlanner
         {
         FreeWViewDepthMode.SplitPreview => new FreeWViewDepthPlan(
             mode,
-            FreeWViewDepthSurfaceKind.SplitEditorWithReadOnlyPreview,
+            FreeWViewDepthSurfaceKind.SplitEditors,
             IsSplitActive: true,
             IsMultiplePagesActive: false,
             IsSideToSideActive: false,
-            UsesReadOnlySnapshot: true,
+            UsesReadOnlySnapshot: false,
             PagesAcross: 1,
             Layout: DocumentViewDepthLayoutPlanner.Build(mode),
-            StatusText: "Split view active: live editor above, read-only paginated snapshot below.",
-            Limitation: "The secondary split pane is read-only; dual live editing is not available in this host."),
+            StatusText: "Split view active: synchronized live editors above and below.",
+            Limitation: null),
         FreeWViewDepthMode.MultiplePagesPreview => new FreeWViewDepthPlan(
             mode,
             FreeWViewDepthSurfaceKind.EditablePageView,

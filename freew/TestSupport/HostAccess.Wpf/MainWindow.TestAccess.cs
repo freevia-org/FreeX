@@ -17,6 +17,7 @@ public sealed partial class MainWindow
         _sideToSidePreviousPairButton is not null &&
         _sideToSideNextPairButton is not null &&
         _sideToSidePairStatusText is not null;
+    internal DocumentView? SplitEditorForTests => _splitEditor;
 
     internal void NavigateSideToSideNextPairForTests() =>
         NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair);

@@ -5,7 +5,7 @@ namespace FreeW.App.Presentation.DocumentView;
 public enum DocumentViewDepthPageFlow
 {
     LiveDocument,
-    SplitVerticalSnapshot,
+    SplitVerticalEditors,
     MultiplePagesGrid,
     SideToSideHorizontal
 }
@@ -51,11 +51,11 @@ public static class DocumentViewDepthLayoutPlanner
     public static DocumentViewDepthLayoutPlan Build(FreeWViewDepthMode mode) => mode switch
     {
         FreeWViewDepthMode.SplitPreview => new DocumentViewDepthLayoutPlan(
-            DocumentViewDepthPageFlow.SplitVerticalSnapshot,
+            DocumentViewDepthPageFlow.SplitVerticalEditors,
             UsesLiveEditor: true,
             AllowsPrimaryEditing: true,
-            UsesReadOnlySnapshot: true,
-            RequiresPrintLayoutSnapshot: true,
+            UsesReadOnlySnapshot: false,
+            RequiresPrintLayoutSnapshot: false,
             PagesAcross: 1,
             PageRows: 1,
             PreferredVisiblePageCount: 1,
@@ -160,7 +160,7 @@ public static class DocumentViewDepthLayoutPlanner
     }
 
     private static (double HorizontalDip, double VerticalDip) ChromeFor(DocumentViewDepthLayoutPlan layout) =>
-        layout.PageFlow == DocumentViewDepthPageFlow.SplitVerticalSnapshot
+        layout.PageFlow == DocumentViewDepthPageFlow.SplitVerticalEditors
             ? (48.0, 32.0)
             : (96.0, 72.0);
 

@@ -19,8 +19,8 @@ namespace FreeW.App.Host.Tests;
 /// Coverage for the three new paginated view modes added to View > Zoom and View > Window:
 /// <c>freew.zoom-multiple-pages</c>, <c>freew.zoom-side-to-side</c>, and <c>freew.split-window</c>.
 ///
-/// All three are read-only parallel surfaces built on top of <see cref="PrintLayout"/> — they never
-/// touch the editing/commit path. Tests run on STA because they build the real WPF editing surface.
+/// Split is a pair of synchronized live editors; the two page arrangements use their editable native
+/// surfaces. Tests run on STA because they build the real WPF editing surface.
 /// </summary>
 public sealed class PageViewModesTests
 {
@@ -325,6 +325,28 @@ public sealed class PageViewModesTests
                 paragraph.PlainText.Contains("Multiple Pages edit persisted.", StringComparison.Ordinal));
             paragraphs[0].SectionBreak.Should().NotBeNull();
             paragraphs[0].SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void WpfHost_SplitEditorsSynchronizeLowerPaneEditsToTheSavedDocument()
+    {
+        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
+        try
+        {
+            GetEditor(window).LoadModel(NewEditor().Model);
+            InvokePrivate(window, "ToggleSplitWindow");
+
+            var lower = window.SplitEditorForTests;
+            lower.Should().NotBeNull();
+            lower!.IsReadOnly.Should().BeFalse();
+            lower.InsertText(" lower pane edit");
+
+            GetEditor(window).Model.PlainText.Should().Contain("lower pane edit");
         }
         finally
         {
