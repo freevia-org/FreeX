@@ -52,7 +52,7 @@ public sealed class WorkbookInfoPlannerTests
         var workbook = new Workbook("Budget");
         workbook.AddSheet("Sheet1");
 
-        WorkbookInfoPlanner.Build(workbook, @"C:\Work.v1\Budget", activeSheetIndex: 0)
+        WorkbookInfoPlanner.Build(workbook, Path.Combine("Work.v1", "Budget"), activeSheetIndex: 0)
             .FormatExtension
             .Should()
             .Be(".xlsx");

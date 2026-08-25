@@ -487,7 +487,7 @@ public sealed class AvaloniaShellSourceTests
         overwritePlannerSource.Should().Contain("\"WorkbookSaveOverwriteCancelButton\"");
 
         source.Should().Contain(
-            "private Task ExportActiveSheetPdfAsync() =>\r\n" +
+            "private Task ExportActiveSheetPdfAsync() =>" + Environment.NewLine +
             "        ExportWorkbookPdfAsync(");
 
         var workbookExportBlock = ExtractSourceBlock(

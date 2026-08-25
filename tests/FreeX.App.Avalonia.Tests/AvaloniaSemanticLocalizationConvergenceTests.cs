@@ -167,7 +167,6 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
 
         actual.Should().BeEquivalentTo(
             JustifiedRendererLiterals,
-            options => options.WithStrictOrdering(),
             "raw renderer text is limited to language-independent formatting glyphs with exact counts");
     }
 

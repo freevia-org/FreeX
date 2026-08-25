@@ -11,6 +11,7 @@ public sealed class BackstageInfoPlannerTests
     [Fact]
     public void Build_SummarizesStatisticsAndAccessibilityIssuesForInfoPanel()
     {
+        var path = Path.GetFullPath(Path.Combine("work", "budget.xlsx"));
         var workbook = new Workbook("Budget");
         var sheet = workbook.AddSheet("Budget");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(42)));
@@ -21,20 +22,20 @@ public sealed class BackstageInfoPlannerTests
 
         var plan = BackstageInfoPlanner.Build(
             workbook,
-            @"C:\work\budget.xlsx",
+            path,
             Strings(),
-            fileExists: path => path == @"C:\work\budget.xlsx",
+            fileExists: candidate => candidate == path,
             hasSelection: true);
 
         plan.WorkbookName.Should().Be("Budget");
-        plan.FilePath.Should().Be(@"C:\work\budget.xlsx");
+        plan.FilePath.Should().Be(path);
         plan.SheetCount.Should().Be("1");
         plan.Format.Should().Be(".xlsx");
         plan.StatisticsSummary.Should().Contain("Cells with data: 2");
         plan.StatisticsSummary.Should().Contain("Formulas: 1");
         plan.AccessibilitySummary.Should().Be("one issue");
         plan.FormulaErrorSummary.Should().Be("no formula errors");
-        plan.SharingStatus.Should().Be(@"Ready for Windows Share from C:\work\budget.xlsx.");
+        plan.SharingStatus.Should().Be($"Ready for Windows Share from {path}.");
         plan.ExportStatus.Should().Contain("selected range");
         plan.ExportStatus.Should().Contain("No Microsoft account or cloud service is required.");
     }
@@ -162,19 +163,21 @@ public sealed class BackstageInfoPlannerTests
     [Fact]
     public void Build_ReportsMissingMetadataWhenSavedPathNoLongerExists()
     {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "missing.xlsx");
         var workbook = new Workbook("Missing");
         workbook.AddSheet("Sheet1");
 
         var plan = BackstageInfoPlanner.Build(
             workbook,
-            @"C:\work\missing.xlsx",
+            path,
             Strings(),
             culture: CultureInfo.InvariantCulture);
 
-        plan.FilePath.Should().Be(@"C:\work\missing.xlsx");
+        plan.FilePath.Should().Be(path);
         plan.FileSize.Should().Be("missing");
         plan.LastModified.Should().Be("missing");
-        plan.SharingStatus.Should().Be(@"Save As is required before Windows Share can send the workbook because the saved path is missing: C:\work\missing.xlsx.");
+        plan.SharingStatus.Should().Be($"Save As is required before Windows Share can send the workbook because the saved path is missing: {path}.");
         plan.ExportStatus.Should().Contain("Ready for local PDF/XPS export");
     }
 

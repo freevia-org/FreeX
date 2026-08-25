@@ -246,6 +246,7 @@ public static class HyperlinkNavigationPlanner
     {
         localPath = "";
         if (string.IsNullOrWhiteSpace(path) ||
+            path.Length > 32_767 ||
             path.Contains('\0', StringComparison.Ordinal))
         {
             return false;

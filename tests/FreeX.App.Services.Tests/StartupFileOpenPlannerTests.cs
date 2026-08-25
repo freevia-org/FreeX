@@ -7,7 +7,12 @@ public sealed class StartupFileOpenPlannerTests
     [Fact]
     public void Plan_routes_every_existing_argument_without_replacing_prior_workbooks()
     {
-        var arguments = new[] { @"C:\work\one.xlsx", @"C:\work\two.xlsx", @"C:\work\three.xlsx" };
+        var arguments = new[]
+        {
+            Path.GetFullPath(Path.Combine("work", "one.xlsx")),
+            Path.GetFullPath(Path.Combine("work", "two.xlsx")),
+            Path.GetFullPath(Path.Combine("work", "three.xlsx"))
+        };
 
         var plan = StartupFileOpenPlanner.Plan(arguments, recoveryAccepted: false, fileExists: _ => true);
 
@@ -28,13 +33,14 @@ public sealed class StartupFileOpenPlannerTests
         // one process launch with the path repeated in argv. The second occurrence must not spawn
         // an independent second window on the same file -- two windows editing the same file with
         // separate dirty/undo state means whichever saves last silently overwrites the other.
+        var path = Path.GetFullPath(Path.Combine("work", "one.xlsx"));
         var plan = StartupFileOpenPlanner.Plan(
-            [@"C:\work\one.xlsx", @"C:\work\one.xlsx"],
+            [path, path],
             recoveryAccepted: false,
             fileExists: _ => true);
 
         plan.Entries.Should().ContainSingle().Which.Should().Be(
-            new StartupFileOpenEntry(@"C:\work\one.xlsx", OpenInNewWindow: false));
+            new StartupFileOpenEntry(path, OpenInNewWindow: false));
     }
 
     [Fact]

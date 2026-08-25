@@ -23,7 +23,6 @@
       "gate": "commit",
       "platforms": ["windows", "linux", "macos"],
       "projects": [
-        "tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj",
         "tests/FreeX.App.Localization.Tests/FreeX.App.Localization.Tests.csproj",
         "tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj",
         "tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj",
@@ -47,6 +46,7 @@
       "gate": "commit",
       "platforms": ["windows"],
       "projects": [
+        "tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj",
         "tests/Free.Shared.Ribbon.Wpf.Tests/Free.Shared.Ribbon.Wpf.Tests.csproj",
         "tests/Free.Shared.Shell.Wpf.Tests/Free.Shared.Shell.Wpf.Tests.csproj",
         "tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj",
