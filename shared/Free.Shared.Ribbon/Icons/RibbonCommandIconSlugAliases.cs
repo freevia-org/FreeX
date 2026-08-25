@@ -79,6 +79,7 @@ public static class RibbonCommandIconSlugAliases
             ["multilevel-preset-0"] = "multilevel-define",
             ["multilevel-preset-1"] = "multilevel-define", ["multilevel-preset-2"] = "multilevel-define",
             ["printlayout"] = "print-layout", ["reset-style-set"] = "style-set", ["reviewingpane"] = "reviewing-pane",
+            ["focus"] = "read-mode",
             ["weblayout"] = "web-layout",
             ["layout-bring-forward"] = "bring-forward", ["layout-rotate"] = "rotate",
             ["layout-selection-pane"] = "selection-pane", ["layout-send-backward"] = "send-backward",
