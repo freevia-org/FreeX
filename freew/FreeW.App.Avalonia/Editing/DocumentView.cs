@@ -11191,29 +11191,31 @@ public sealed partial class DocumentView : Control
         }
     }
 
-    private static void DrawRulerTicks(DrawingContext context, Rect ruler, double inchDip, bool horizontal)
+    private void DrawRulerTicks(DrawingContext context, Rect ruler, double inchDip, bool horizontal)
     {
         if (inchDip <= 0)
             return;
 
-        var start = horizontal ? ruler.Left : ruler.Top;
-        var end = horizontal ? ruler.Right : ruler.Bottom;
+        var positions = horizontal
+            ? DocumentViewLayoutPlanner.BuildRulerTicks(_surfacePlan, inchDip / 2)
+            : BuildVerticalRulerTickPositions(ruler.Top, ruler.Bottom, inchDip / 2);
         var index = 0;
         var typeface = new Typeface("Segoe UI");
-        for (var position = start; position <= end + 0.01; position += inchDip / 2, index++)
+        foreach (var position in positions)
         {
-            var major = index % 2 == 0;
+            var tickIndex = index++;
+            var major = tickIndex % 2 == 0;
             var tickLength = major ? RulerThicknessDip * 0.55 : RulerThicknessDip * 0.30;
             if (horizontal)
                 context.DrawLine(RulerTickPen, new Point(position, ruler.Bottom - tickLength), new Point(position, ruler.Bottom));
             else
                 context.DrawLine(RulerTickPen, new Point(ruler.Right - tickLength, position), new Point(ruler.Right, position));
 
-            if (!major || index == 0)
+            if (!major || tickIndex == 0)
                 continue;
 
             var label = new FormattedText(
-                (index / 2).ToString(CultureInfo.CurrentCulture),
+                (tickIndex / 2).ToString(CultureInfo.CurrentCulture),
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 typeface,
@@ -11223,6 +11225,14 @@ public sealed partial class DocumentView : Control
                 ? new Point(position - label.Width / 2, ruler.Top + 1)
                 : new Point(ruler.Left + 1, position - label.Height / 2));
         }
+    }
+
+    private static IReadOnlyList<double> BuildVerticalRulerTickPositions(double start, double end, double step)
+    {
+        var positions = new List<double>();
+        for (var position = start; position <= end + 0.01; position += step)
+            positions.Add(position);
+        return positions;
     }
 
     private Rect RulerTabSelectorRect(double pageTop) =>

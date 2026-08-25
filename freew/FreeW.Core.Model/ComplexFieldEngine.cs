@@ -385,6 +385,9 @@ public static class ComplexFieldEngine
             if (path.Length >= 3 && path[0] == '/' && char.IsLetter(path[1]) && path[2] == ':')
                 return path[1..].Replace('/', '\\');
 
+            if (path.Length >= 3 && char.IsLetter(path[0]) && path[1] == ':' && path[2] is '/' or '\\')
+                return path.Replace('/', '\\');
+
             return path.Replace('/', Path.DirectorySeparatorChar);
         }
         catch (UriFormatException)

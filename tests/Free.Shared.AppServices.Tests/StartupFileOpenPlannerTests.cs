@@ -63,8 +63,11 @@ public sealed class StartupFileOpenPlannerTests
     }
 
     [Fact]
-    public void Plan_collapses_a_repeated_argument_regardless_of_case_or_separator_style()
+    public void Plan_collapses_a_repeated_argument_regardless_of_case_or_separator_style_on_windows()
     {
+        if (!OperatingSystem.IsWindows())
+            return;
+
         // Same underlying file reached through a differently-cased, forward-slashed argument
         // must still be recognized as the same document identity on Windows.
         var plan = StartupFileOpenPlanner.Plan(
