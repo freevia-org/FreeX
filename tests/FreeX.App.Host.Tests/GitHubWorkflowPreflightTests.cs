@@ -24,7 +24,7 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803");
         workflow.Should().Contain("persist-credentials: false");
         workflow.Should().Contain("actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1");
-        workflow.Should().Contain("dotnet-version: 10.0.111");
+        workflow.Should().Contain("dotnet-version: 10.0.300");
         workflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("concurrency:");
         workflow.Should().Contain("group: ci-${{ github.ref }}");
@@ -74,7 +74,7 @@ public sealed class GitHubWorkflowPreflightTests
     {
         var globalJson = WorkspaceFileLocator.ReadAllText("global.json");
 
-        globalJson.Should().Contain("\"version\": \"10.0.111\"");
+        globalJson.Should().Contain("\"version\": \"10.0.300\"");
         globalJson.Should().Contain("\"rollForward\": \"latestPatch\"");
     }
 

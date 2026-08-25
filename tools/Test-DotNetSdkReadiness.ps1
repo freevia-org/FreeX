@@ -22,7 +22,7 @@ if (-not (Test-Path -LiteralPath $resolvedWorkflowPath -PathType Leaf)) {
 $workflow = Get-Content -LiteralPath $resolvedWorkflowPath -Raw
 $dotnetVersionMatch = [regex]::Match($workflow, "(?m)^\s*dotnet-version:\s*['""]?(?<major>\d+)\.(?<minor>\d+)\.(?<patch>x|\d+)['""]?\s*$")
 if (-not $dotnetVersionMatch.Success) {
-    throw "Tester Release workflow is missing a dotnet-version SDK such as 10.0.111."
+    throw "Tester Release workflow is missing a dotnet-version SDK such as 10.0.300."
 }
 
 $requiredMajor = [int]$dotnetVersionMatch.Groups["major"].Value
