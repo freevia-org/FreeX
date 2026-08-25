@@ -159,6 +159,26 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_review_collapsed_groups_keep_their_wpf_representative_icons()
+    {
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+
+        new Dictionary<string, RibbonCommandIconKind>
+        {
+            ["proofing"] = RibbonCommandIconKind.WordCount,
+            ["speech"] = RibbonCommandIconKind.ReadAloud,
+            ["accessibility"] = RibbonCommandIconKind.Accessibility,
+            ["comments"] = RibbonCommandIconKind.Comment,
+            ["tracking"] = RibbonCommandIconKind.History,
+            ["changes"] = RibbonCommandIconKind.AcceptChange,
+            ["compare"] = RibbonCommandIconKind.Compare,
+            ["protect"] = RibbonCommandIconKind.Protect,
+            ["inspect"] = RibbonCommandIconKind.Search,
+        }.Should().AllSatisfy(expected =>
+            RequiredGroup(avalonia, "review", expected.Key).Controls[0].Icon?.Kind.Should().Be(expected.Value));
+    }
+
+    [Fact]
     public void Profile_tab_ids_match_except_named_capability_deltas()
     {
         var wpfTabIds = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();

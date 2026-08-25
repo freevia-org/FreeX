@@ -1,8 +1,10 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using System.Threading;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
@@ -91,6 +93,39 @@ public sealed class MainWindowShellFrameTests
         badgeName.Should().Be("W application badge");
         badgeLetter.Should().Be("W");
         qatLeadingMargin.Should().Be(34, "the QAT must keep the space immediately following the badge");
+    }
+
+    [Fact]
+    public async Task MainWindow_title_uses_the_safe_caption_lane_between_qat_and_native_buttons()
+    {
+        Rect titleBounds = default;
+        Rect captionLaneBounds = default;
+        Rect qatBounds = default;
+        Rect titleBarBounds = default;
+
+        await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Measure(new Size(750, 720));
+            window.Arrange(new Rect(0, 0, 750, 720));
+            window.UpdateLayout();
+
+            var titleBar = window.TitleBarForTests;
+            var title = titleBar.GetVisualDescendants().OfType<TextBlock>()
+                .Single(control => AutomationProperties.GetAutomationId(control) == "SisterAppTitleText");
+            var captionLane = titleBar.GetVisualDescendants().OfType<Grid>()
+                .Single(control => AutomationProperties.GetAutomationId(control) == "TitleBarCaptionLane");
+
+            titleBounds = title.Bounds;
+            captionLaneBounds = captionLane.Bounds;
+            qatBounds = window.QuickAccessButtonsForTests[0].Parent!.Should().BeOfType<StackPanel>().Subject.Bounds;
+            titleBarBounds = titleBar.Bounds;
+        });
+
+        qatBounds.Right.Should().BeLessThanOrEqualTo(captionLaneBounds.Left);
+        captionLaneBounds.Right.Should().BeLessThanOrEqualTo(titleBarBounds.Right - 140);
+        titleBounds.Width.Should().BeLessThanOrEqualTo(captionLaneBounds.Width);
+        (titleBounds.Center.X - (captionLaneBounds.Width / 2)).Should().BeApproximately(0, 1);
     }
 
     [Fact]
