@@ -1,7 +1,8 @@
 param(
     [string]$OutputDirectory = "docs\parity\freep-responsive-chrome-2026-08-16",
     [int[]]$Widths = @(1280, 1100, 900, 750),
-    [switch]$Check
+    [switch]$Check,
+    [switch]$RefreshSourceHashes
 )
 
 Set-StrictMode -Version Latest
@@ -121,6 +122,42 @@ function New-ResponsiveChromeManifest {
             "Backstage, dialogs, panes, editing overlays, canvas and status states remain covered by the full-window and dialog/pane evidence lanes at the canonical 1280px viewport."
         )
     }
+}
+
+function Write-ResponsiveChromeManifest {
+    param([Parameter(Mandatory = $true)][object]$Manifest)
+
+    $json = ($Manifest | ConvertTo-Json -Depth 8) + [Environment]::NewLine
+    [IO.File]::WriteAllText($manifestPath, $json, [Text.UTF8Encoding]::new($false))
+}
+
+if ($RefreshSourceHashes) {
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        throw "Responsive chrome manifest is missing: $manifestPath"
+    }
+
+    $existing = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    if ($existing.captureStatus -ne "complete" -or
+        [int]$existing.actualCaptureCount -ne [int]$existing.expectedCaptureCount -or
+        [int]$existing.actualCaptureCount -ne ($requiredWidths.Count * $tabs.Count * $projects.Count)) {
+        throw "Responsive chrome manifest does not contain the complete expected capture matrix."
+    }
+
+    foreach ($capture in @($existing.captures)) {
+        foreach ($relativePath in @($capture.fullImagePath, $capture.clientImagePath)) {
+            $capturePath = Join-Path $resolvedOutputDirectory ($relativePath -replace '/', '\')
+            if (-not (Test-Path -LiteralPath $capturePath -PathType Leaf) -or
+                (Get-Item -LiteralPath $capturePath).Length -le 0) {
+                throw "Responsive chrome capture is missing or empty: $capturePath"
+            }
+        }
+    }
+
+    $existing.sourceSha256 = Get-ResponsiveChromeSourceHashes
+    $existing.generatedAtUtc = [DateTime]::UtcNow.ToString("O")
+    Write-ResponsiveChromeManifest -Manifest $existing
+    Write-Host "Refreshed FreeP responsive chrome source hashes: $($existing.actualCaptureCount)/$($existing.expectedCaptureCount) captures preserved."
+    exit 0
 }
 
 if ($Check) {
