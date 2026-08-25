@@ -561,7 +561,7 @@ function Test-MacOsWorkflow {
         "runner: macos-15-intel",
         "distribution_candidate:",
         "Require Developer ID signing, accepted notarization, stapled ticket, and Gatekeeper assessment evidence.",
-        "dotnet-version: 10.0.300",
+        "dotnet-version: 10.0.400",
         "dotnet build $projectPath --configuration Release",
         "Test portable PDF macOS route",
         "dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj",

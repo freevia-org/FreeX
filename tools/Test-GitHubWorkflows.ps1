@@ -520,8 +520,8 @@ foreach ($workflow in $workflows) {
                 foreach ($requiredMacOsTfmMarker in @(
                     'runner: macos-26',
                     'runner: macos-26-intel',
-                    'dotnet-version: 10.0.300',
-                    'FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300.3',
+                    'dotnet-version: 10.0.400',
+                    'FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.400',
                     'FREEX_MACOS_TFM: net10.0-macos',
                     'FREEX_XCODE_PATH: /Applications/Xcode_26.5.app/Contents/Developer',
                     'sudo xcode-select -s "$FREEX_XCODE_PATH"',

@@ -28,7 +28,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FreeX.icns");
         script.Should().Contain("Test-MacOsIcon");
         script.Should().Contain("NSHighResolutionCapable");
-        script.Should().Contain("dotnet-version: 10.0.300");
+        script.Should().Contain("dotnet-version: 10.0.400");
         script.Should().Contain("osx-arm64=macos-15");
         script.Should().Contain("osx-x64=macos-15-intel");
         script.Should().NotContain("runner: macos-latest");
@@ -1328,7 +1328,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 steps:
                   - uses: actions/setup-dotnet@v5
                     with:
-                      dotnet-version: 10.0.300
+                      dotnet-version: 10.0.400
                   - name: Capture runner toolchain evidence
                     run: echo runner
                   - name: Test portable PDF macOS route

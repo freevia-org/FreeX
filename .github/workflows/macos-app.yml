@@ -45,7 +45,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.300
+          dotnet-version: 10.0.400
 
       - name: Capture runner toolchain evidence
         shell: bash
@@ -1174,7 +1174,7 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
-      FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300.3
+      FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.400
       FREEX_MACOS_ARCH: ${{ matrix.arch }}
       FREEX_MACOS_TFM: net10.0-macos
       FREEX_MACOS_TFM_EVIDENCE: artifacts/freex-${{ matrix.arch }}-macos-tfm-build-evidence.txt
@@ -1191,7 +1191,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.300
+          dotnet-version: 10.0.400
 
       - name: Capture macOS TFM toolchain evidence
         shell: bash
