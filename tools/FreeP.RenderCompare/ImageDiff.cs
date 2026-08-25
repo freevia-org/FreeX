@@ -318,6 +318,7 @@ internal static class ImageDiff
         var bottom = Math.Clamp((int)Math.Ceiling(bounds.Y + bounds.Height), top, bitmap.PixelHeight);
         long sampledPixels = 0;
         long accentPixels = 0;
+        long neutralCaptionPixels = 0;
         for (var y = top; y < bottom; y++)
         {
             for (var x = left; x < right; x++)
@@ -330,11 +331,21 @@ internal static class ImageDiff
                 sampledPixels++;
                 if (alpha >= 224 && red >= 130 && red >= green + 40 && red >= blue + 40 && green <= 135 && blue <= 125)
                     accentPixels++;
+                // FreeP deliberately uses the Office-like neutral #F3F4F6 caption surface.
+                // Treat a dominant neutral caption raster as valid alongside accent-branded hosts.
+                if (alpha >= 224 && red >= 225 && green >= 225 && blue >= 225 &&
+                    Math.Max(red, Math.Max(green, blue)) <= 250 &&
+                    Math.Max(red, Math.Max(green, blue)) - Math.Min(red, Math.Min(green, blue)) <= 16)
+                {
+                    neutralCaptionPixels++;
+                }
             }
         }
 
         var accentRatio = sampledPixels == 0 ? 0 : accentPixels / (double)sampledPixels;
-        return new(sampledPixels, accentPixels, accentRatio, sampledPixels > 0 && accentRatio >= 0.40);
+        var neutralCaptionRatio = sampledPixels == 0 ? 0 : neutralCaptionPixels / (double)sampledPixels;
+        return new(sampledPixels, accentPixels, accentRatio,
+            sampledPixels > 0 && (accentRatio >= 0.40 || neutralCaptionRatio >= 0.40));
     }
 
     private static ulong DifferenceHash(BitmapSource source)

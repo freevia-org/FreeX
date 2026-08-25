@@ -64,11 +64,12 @@ public sealed class WholeWindowVisualEvidenceTests
     }
 
     [Fact]
-    public void Titlebar_raster_gate_requires_shared_freep_accent_in_declared_bounds()
+    public void Titlebar_raster_gate_accepts_freep_neutral_caption_and_rejects_white_occlusion()
     {
         using var temporaryDirectory = new TestTemporaryDirectory("freep-whole-window-titlebar-");
         var root = temporaryDirectory.Path;
-        var visible = Path.Combine(root, "visible.png");
+        var accent = Path.Combine(root, "accent.png");
+        var neutral = Path.Combine(root, "neutral.png");
         var occluded = Path.Combine(root, "occluded.png");
         var pixels = Enumerable.Repeat((byte)255, 128 * 76 * 4).ToArray();
         for (var offset = 0; offset < pixels.Length; offset += 4)
@@ -83,11 +84,13 @@ public sealed class WholeWindowVisualEvidenceTests
                 pixels[offset + 2] = 183;
             }
         }
-        WritePng(visible, BitmapSource.Create(128, 76, 96, 96, PixelFormats.Bgra32, null, pixels, 128 * 4));
+        WritePng(accent, BitmapSource.Create(128, 76, 96, 96, PixelFormats.Bgra32, null, pixels, 128 * 4));
+        WriteSolidPng(neutral, 128, 76, 243, 244, 246, 255);
         WriteSolidPng(occluded, 128, 76, 255, 255, 255, 255);
         var bounds = new FreeP.App.Compositor.WholeWindowVisualEvidenceBounds(0, 0, 128, 10);
 
-        ImageDiff.ValidateFreePTitleBarRegion(visible, bounds).IsValid.Should().BeTrue();
+        ImageDiff.ValidateFreePTitleBarRegion(accent, bounds).IsValid.Should().BeTrue();
+        ImageDiff.ValidateFreePTitleBarRegion(neutral, bounds).IsValid.Should().BeTrue();
         ImageDiff.ValidateFreePTitleBarRegion(occluded, bounds).IsValid.Should().BeFalse();
     }
 
