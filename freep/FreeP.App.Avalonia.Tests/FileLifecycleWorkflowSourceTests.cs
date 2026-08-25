@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace FreeP.App.Avalonia.Tests;
 
@@ -110,8 +111,53 @@ public sealed class FileLifecycleWorkflowSourceTests
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
 
-        source.Should().Contain(
-            "optionsStore: _optionsStore,\n            messageService: _messageService,\n            documentWindowPlanner: _documentWindowPlanner,");
+        var method = ExtractMethod(source, "private void OpenNewPresentationWindow()");
+        var constructor = ExtractInvocation(method, "new MainWindow(");
+
+        Regex.IsMatch(
+                constructor,
+                @"optionsStore\s*:\s*_optionsStore\s*,\s*messageService\s*:\s*_messageService\s*,\s*documentWindowPlanner\s*:\s*_documentWindowPlanner\s*,\s*documentWindowNumber\s*:\s*plan\.WindowNumber\s*\)",
+                RegexOptions.CultureInvariant)
+            .Should().BeTrue("the new presentation window must preserve all injected services and its planned window number");
     }
+
+    private static string ExtractMethod(string source, string signature)
+    {
+        source = NormalizeLineEndings(source);
+        var signatureStart = source.IndexOf(signature, StringComparison.Ordinal);
+        signatureStart.Should().BeGreaterThanOrEqualTo(0);
+
+        var bodyStart = source.IndexOf('{', signatureStart);
+        bodyStart.Should().BeGreaterThanOrEqualTo(0);
+        var bodyEnd = FindMatchingDelimiter(source, bodyStart, '{', '}');
+        return source[signatureStart..(bodyEnd + 1)];
+    }
+
+    private static string ExtractInvocation(string source, string invocationStart)
+    {
+        var invocationIndex = source.IndexOf(invocationStart, StringComparison.Ordinal);
+        invocationIndex.Should().BeGreaterThanOrEqualTo(0);
+
+        var argumentStart = invocationIndex + invocationStart.Length - 1;
+        var invocationEnd = FindMatchingDelimiter(source, argumentStart, '(', ')');
+        return source[invocationIndex..(invocationEnd + 1)];
+    }
+
+    private static int FindMatchingDelimiter(string source, int openingIndex, char opening, char closing)
+    {
+        var depth = 0;
+        for (var index = openingIndex; index < source.Length; index++)
+        {
+            if (source[index] == opening)
+                depth++;
+            else if (source[index] == closing && --depth == 0)
+                return index;
+        }
+
+        throw new InvalidOperationException($"No matching '{closing}' was found for index {openingIndex}.");
+    }
+
+    private static string NormalizeLineEndings(string source) =>
+        source.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
 
 }
