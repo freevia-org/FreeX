@@ -103,6 +103,22 @@ public sealed class MasterEditingSessionTests
             .Should().Contain(new uint[] { 20, 21 });
     }
 
+    [Fact]
+    public void Deleting_a_nested_master_shape_restores_it_to_its_group_on_undo()
+    {
+        var presentation = CreatePresentation();
+        var group = new SlideShape { Id = 30, Kind = SlideShapeKind.Group };
+        group.Children.Add(new SlideShape { Id = 31, OffsetXEmu = 10, ExtentCxEmu = 50, ExtentCyEmu = 50 });
+        presentation.Masters[0].Placeholders.Add(group);
+        var session = new MasterEditingSession(presentation, new PresentationCommandBus(presentation));
+
+        session.Delete(31);
+        group.Children.Should().BeEmpty();
+
+        session.Undo();
+        group.Children.Should().ContainSingle().Which.Id.Should().Be(31);
+    }
+
     private static Presentation CreatePresentation()
     {
         var presentation = new Presentation();

@@ -217,6 +217,7 @@ public sealed class DeleteMasterShapeCommand : IPresentationCommand
     private readonly MasterEditTarget _target;
     private readonly uint _shapeId;
     private SlideShape? _captured;
+    private List<SlideShape>? _container;
     private int _index = -1;
 
     public DeleteMasterShapeCommand(MasterEditTarget target, uint shapeId)
@@ -241,15 +242,16 @@ public sealed class DeleteMasterShapeCommand : IPresentationCommand
         if (_index < 0)
             return;
         _captured = SlideCloner.CloneShape(containing[_index]);
+        _container = containing;
         containing.RemoveAt(_index);
     }
 
     public void Revert(Presentation presentation)
     {
-        if (_captured is null || _index < 0 || MasterEditTargetResolver.GetShapes(presentation, _target) is not { } shapes)
+        if (_captured is null || _index < 0 || _container is null)
             return;
-        var insertAt = Math.Min(_index, shapes.Count);
-        shapes.Insert(insertAt, SlideCloner.CloneShape(_captured));
+        var insertAt = Math.Min(_index, _container.Count);
+        _container.Insert(insertAt, SlideCloner.CloneShape(_captured));
     }
 }
 
