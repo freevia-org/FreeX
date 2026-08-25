@@ -773,6 +773,7 @@ internal static class FreePRibbonText
     public static RibbonText ViewNewWindowCommand { get; } = new("Ribbon_Command_ViewNewWindow_Label", "Ribbon_Command_ViewNewWindow_KeyTip");
     public static RibbonText ViewArrangeAllCommand { get; } = new("Ribbon_Command_ViewArrangeAll_Label", "Ribbon_Command_ViewArrangeAll_KeyTip");
     public static RibbonText ViewCascadeWindowsCommand { get; } = new("Ribbon_Command_ViewCascadeWindows_Label", "Ribbon_Command_ViewCascadeWindows_KeyTip");
+    public static RibbonText ViewSwitchWindowsCommand { get; } = new("Ribbon_Command_ViewSwitchWindows_Label", "Ribbon_Command_ViewSwitchWindows_KeyTip");
 
     private static string Get(string key) => Loc.Get(key);
 }

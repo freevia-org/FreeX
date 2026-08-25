@@ -119,6 +119,7 @@ public sealed partial class MainWindow
                 NewPresentationWindow = OpenNewPresentationWindow,
                 ArrangeAllPresentationWindows = ArrangeAllPresentationWindows,
                 CascadePresentationWindows = CascadePresentationWindows,
+                SwitchPresentationWindow = ShowPresentationWindowPicker,
 #if FREEP_WPF_RENDERER
                 PickTransitionSound = PickTransitionSound,
                 ToggleAnimationPane = _ => ToggleAnimationPane(),

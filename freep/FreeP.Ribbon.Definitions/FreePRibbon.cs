@@ -1479,6 +1479,8 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Grid, FreePRibbonText.ViewArrangeAllCommand.KeyTip);
             group.Medium("freep.view.cascade-windows", FreePRibbonText.ViewCascadeWindowsCommand.Label,
                 RibbonCommandIconKind.Window, FreePRibbonText.ViewCascadeWindowsCommand.KeyTip);
+            group.Medium("freep.view.switch-windows", FreePRibbonText.ViewSwitchWindowsCommand.Label,
+                RibbonCommandIconKind.Window, FreePRibbonText.ViewSwitchWindowsCommand.KeyTip);
         });
     }
 

@@ -810,6 +810,48 @@ public sealed partial class MainWindow : Window,
         }
     }
 
+    /// <summary>
+    /// Shows the View &gt; Window live window list. This is deliberately a native menu rather than a
+    /// static ribbon dropdown: its entries must track independently-created FreeP document windows.
+    /// </summary>
+    private void ShowPresentationWindowPicker()
+    {
+        var windows = Application.Current.Windows.OfType<MainWindow>()
+            .Where(window => window.IsVisible)
+            .ToList();
+        if (windows.Count == 0)
+            return;
+
+        var menu = new ContextMenu
+        {
+            PlacementTarget = this,
+            Placement = PlacementMode.Bottom,
+        };
+        foreach (var window in windows)
+        {
+            var target = window;
+            var item = new MenuItem
+            {
+                Header = target.Title,
+                IsCheckable = true,
+                IsChecked = ReferenceEquals(target, this),
+            };
+            item.Click += (_, _) => ActivatePresentationWindow(target);
+            menu.Items.Add(item);
+        }
+
+        menu.IsOpen = true;
+    }
+
+    private static void ActivatePresentationWindow(MainWindow window)
+    {
+        if (window.WindowState == WindowState.Minimized)
+            window.WindowState = WindowState.Normal;
+
+        window.Activate();
+        window.Focus();
+    }
+
     // ── Body layout ───────────────────────────────────────────────────────────────
 
     private UIElement BuildBody()

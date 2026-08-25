@@ -28,6 +28,7 @@ public sealed class FreePRibbonCommandWorkflowTests
         result.CommonCommandIds.Should().Contain("freep.view.new-window");
         result.CommonCommandIds.Should().Contain("freep.view.arrange-all");
         result.CommonCommandIds.Should().Contain("freep.view.cascade-windows");
+        result.CommonCommandIds.Should().Contain("freep.view.switch-windows");
     }
 
     [Theory]
@@ -38,6 +39,7 @@ public sealed class FreePRibbonCommandWorkflowTests
     [InlineData("freep.view.new-window", FreePRibbonHostActionKind.NewPresentationWindow)]
     [InlineData("freep.view.arrange-all", FreePRibbonHostActionKind.ArrangeAllPresentationWindows)]
     [InlineData("freep.view.cascade-windows", FreePRibbonHostActionKind.CascadePresentationWindows)]
+    [InlineData("freep.view.switch-windows", FreePRibbonHostActionKind.SwitchPresentationWindow)]
     [InlineData(SlideZoomInsertionPlanner.CommandId, FreePRibbonHostActionKind.InsertSlideZoom)]
     [InlineData(PresentationDesignCommandPlanner.LayoutCommandId, FreePRibbonHostActionKind.DesignRequest)]
     public void HostCommandsUseSharedTypedRouting(string commandId, FreePRibbonHostActionKind expectedKind)
