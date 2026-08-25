@@ -56,7 +56,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                     tab => tab.Group("picture-arrange", "Arrange", null, 100, group =>
                         {
                             group.Dropdown("freew.image-position", "Position", BuildFloatingPositionMenu("image"));
-                            group.Dropdown("freew.image-wrap", "Wrap Text", BuildWrapMenu("image"));
+                            group.Dropdown("freew.image-wrap", "Wrap Text", BuildWrapMenu("image"), control => control with
+                            {
+                                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Wrap),
+                            });
                             group.Dropdown("freew.image-rotate", "Rotate", BuildRotateMenu("image"));
                             group.Button("freew.shape-bring-to-front", "Bring to Front");
                             group.Button("freew.shape-send-to-back", "Send to Back");
@@ -188,7 +191,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                         }),
                     tab => tab.Group("picture-adjust", "Adjust", null, 90, group =>
                         {
-                            group.Dropdown("freew.image-corrections", "Corrections", BuildPictureCorrectionsMenu());
+                            group.Dropdown("freew.image-corrections", "Corrections", BuildPictureCorrectionsMenu(), control => control with
+                            {
+                                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Effects),
+                            });
                             group.Dropdown("freew.image-color", "Color", BuildPictureColorMenu());
                             group.Dropdown("freew.image-transparency", "Transparency", BuildPictureTransparencyMenu());
                             group.Dropdown("freew.image-effects", "Picture Effects", BuildPictureEffectsMenu());
@@ -797,7 +803,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                         }),
                     tab => tab.Group("table-select", "Table", null, 110, group =>
                         {
-                            group.Button("freew.table-select-table", "Select Table");
+                            group.Button("freew.table-select-table", "Select Table", control => control with
+                            {
+                                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Table),
+                            });
                             group.Button("freew.table-select-row", "Select Row");
                             group.Button("freew.table-select-col", "Select Column");
                             group.Button("freew.table-select-cell", "Select Cell");
@@ -826,7 +835,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                         }),
                     tab => tab.Group("table-rows-cols", "Rows & Columns", null, 100, group =>
                         {
-                            group.Button("freew.table-insert-above", "Insert Above");
+                            group.Button("freew.table-insert-above", "Insert Above", control => control with
+                            {
+                                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Insert, RibbonCommandIconAccent.Green),
+                            });
                             group.Button("freew.table-insert-below", "Insert Below");
                             group.Button("freew.table-insert-col-left", "Insert Left");
                             group.Button("freew.table-insert-col-right", "Insert Right");
@@ -846,7 +858,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                         }),
                     tab => tab.Group("table-merge", "Merge", null, 90, group =>
                         {
-                            group.Button("freew.table-merge-cells", "Merge Cells");
+                            group.Button("freew.table-merge-cells", "Merge Cells", control => control with
+                            {
+                                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Merge),
+                            });
                             group.Button("freew.table-split-cell", "Split Cell");
                             group.Button("freew.split-table", "Split Table");
                         }));
@@ -867,7 +882,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                         }),
                     tab => tab.Group("table-cell-size", "Cell Size", null, 95, group =>
                         {
-                            group.Button("freew.table-row-height", "Row Height");
+                            group.Button("freew.table-row-height", "Row Height", control => control with
+                            {
+                                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Size),
+                            });
                             group.Button("freew.table-col-width", "Column Width");
                             group.Button("freew.table-distribute-rows", "Distribute Rows");
                             group.Button("freew.table-distribute-cols", "Distribute Columns");
@@ -900,7 +918,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                         }),
                     tab => tab.Group("table-alignment", "Alignment", null, 110, group =>
                         {
-                            group.Button("freew.cell-align-top-left", "Top Left");
+                            group.Button("freew.cell-align-top-left", "Top Left", control => control with
+                            {
+                                Icon = new RibbonCommandIcon(RibbonCommandIconKind.AlignLeft),
+                            });
                             group.Button("freew.cell-align-top-center", "Top Center");
                             group.Button("freew.cell-align-top-right", "Top Right");
                             group.Button("freew.cell-align-middle-left", "Middle Left");
@@ -929,7 +950,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                         }),
                     tab => tab.Group("table-data", "Data", null, 80, group =>
                         {
-                            group.Toggle("freew.table-repeat-header", "Repeat Header Row");
+                            group.Toggle("freew.table-repeat-header", "Repeat Header Row", control => control with
+                            {
+                                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green),
+                            });
                             group.Button("freew.table-formula", "Formula");
                             group.Button("freew.sort", "Sort");
                             group.Button("freew.table-to-text", "Convert to Text");
