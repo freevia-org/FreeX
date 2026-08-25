@@ -11,6 +11,10 @@ namespace FreeP.Ribbon.Definitions;
 /// </summary>
 public static class FreePRibbon
 {
+    public const string TextFormatContextKey = "text";
+    public const string TableLayoutContextKey = "table";
+    public const string SmartArtDesignContextKey = "smartart";
+
     public const string DesignTabId = "design";
     public const string TransitionsTabId = "transitions";
     public const string AnimationsTabId = "animations";
@@ -41,7 +45,7 @@ public static class FreePRibbon
             .Tab("help", "Help", "Y", AddHelpGroups)
             .ContextualTab("text-format", FreePRibbonText.TextFormatTabLabel,
                 new RibbonTabContext(
-                    PresentationContextualRibbonPlanner.TextContextKey,
+                    TextFormatContextKey,
                     FreePRibbonText.TextToolsContextLabel,
                     RibbonContextColor.Blue,
                     FreePRibbonText.TextFormatTabKeyTip),
@@ -53,7 +57,7 @@ public static class FreePRibbon
                     }))
             .ContextualTab("table-layout", FreePRibbonText.TableLayoutTabLabel,
                 new RibbonTabContext(
-                    PresentationContextualRibbonPlanner.TableContextKey,
+                    TableLayoutContextKey,
                     FreePRibbonText.TableToolsContextLabel,
                     RibbonContextColor.Teal,
                     FreePRibbonText.TableLayoutTabKeyTip),
@@ -65,7 +69,7 @@ public static class FreePRibbon
                     }))
             .ContextualTab("smartart-design", FreePRibbonText.SmartArtDesignTabLabel,
                 new RibbonTabContext(
-                    PresentationContextualRibbonPlanner.SmartArtContextKey,
+                    SmartArtDesignContextKey,
                     FreePRibbonText.SmartArtToolsContextLabel,
                     RibbonContextColor.Orange,
                     FreePRibbonText.SmartArtDesignTabKeyTip),
