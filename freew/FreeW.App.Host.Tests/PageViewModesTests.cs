@@ -1,12 +1,10 @@
 using System.IO;
 using System.Windows.Controls;
 using System.Windows.Documents;
-using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
-using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
@@ -37,8 +35,7 @@ public sealed class PageViewModesTests
     [StaFact]
     public void ReadMode_AuthorityTogglesChromeOptionsAndRestoresPresentation()
     {
-        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
-        try
+        WithWindow(window =>
         {
             var editor = GetEditor(window);
             var originalView = editor.ViewMode;
@@ -83,11 +80,7 @@ public sealed class PageViewModesTests
             editor.HorizontalAlignment.Should().Be(originalAlignment);
             editor.Background.Should().BeSameAs(originalBackground);
             editor.Model.Page.BackgroundColorHex.Should().Be(originalPageColor);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     // ── PrintLayout.BuildPaginatedSource / BuildPaginatedDocument ────────────────────────────────
@@ -315,8 +308,7 @@ public sealed class PageViewModesTests
     [StaFact]
     public void WpfHost_MultiplePagesEditsCommitWhenRestoringLiveEditor()
     {
-        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
-        try
+        WithWindow(window =>
         {
             var document = NewMultiPageDocument();
             var firstParagraph = document.Blocks.OfType<Paragraph>().First();
@@ -339,18 +331,13 @@ public sealed class PageViewModesTests
                 paragraph.PlainText.Contains("Multiple Pages edit persisted.", StringComparison.Ordinal));
             paragraphs[0].SectionBreak.Should().NotBeNull();
             paragraphs[0].SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void WpfHost_SplitEditorsSynchronizeLowerPaneEditsToTheSavedDocument()
     {
-        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
-        try
+        WithWindow(window =>
         {
             GetEditor(window).LoadModel(NewEditor().Model);
             InvokePrivate(window, "ToggleSplitWindow");
@@ -361,18 +348,13 @@ public sealed class PageViewModesTests
             lower.InsertText(" lower pane edit");
 
             GetEditor(window).Model.PlainText.Should().Contain("lower pane edit");
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void WpfHost_SideToSideNavigationControlsStepPagePairs()
     {
-        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
-        try
+        WithWindow(window =>
         {
             GetEditor(window).LoadModel(NewMultiPageDocument());
 
@@ -394,11 +376,7 @@ public sealed class PageViewModesTests
 
             window.NavigateSideToSidePreviousPairForTests();
             window.SideToSideNavigationForTests.FirstVisiblePageNumber.Should().Be(1);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
@@ -607,18 +585,7 @@ public sealed class PageViewModesTests
         method!.Invoke(window, null);
     }
 
-    private sealed class NoUiMessageService : IUserMessageService
-    {
-        public void ShowError(string message, string title = "Error") { }
-        public void ShowWarning(string message, string title = "Warning") { }
-        public void ShowInfo(string message, string title = "Information") { }
-        public bool AskYesNo(string message, string title = "Confirm") => false;
-        public UserMessageResult ShowMessage(
-            string message,
-            string title,
-            UserMessageButtons buttons,
-            UserMessageIcon icon) =>
-            UserMessageResult.No;
-    }
+    private static void WithWindow(Action<MainWindow> assertion) =>
+        ReusableFreeWMainWindowSession.Run(assertion);
 
 }

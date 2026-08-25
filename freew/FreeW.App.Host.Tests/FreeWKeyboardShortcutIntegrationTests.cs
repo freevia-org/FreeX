@@ -15,8 +15,7 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
     [StaFact]
     public void WpfWindowInstallsEverySharedCatalogGesture()
     {
-        var window = new MainWindow(new FreeWOptions());
-        try
+        ReusableFreeWMainWindowSession.Run(window =>
         {
             var actual = window.InputBindings
                 .OfType<KeyBinding>()
@@ -32,11 +31,7 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
 
             actual.Should().HaveCount(expected.Length);
             actual.Should().BeEquivalentTo(expected);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
