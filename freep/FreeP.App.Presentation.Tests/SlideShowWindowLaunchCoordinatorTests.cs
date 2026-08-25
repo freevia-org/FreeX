@@ -74,6 +74,34 @@ public sealed class SlideShowWindowLaunchCoordinatorTests
         createCount.Should().Be(0);
     }
 
+    [Fact]
+    public void TryLaunchReadingView_UsesCurrentSlideAndForcesNonPersistentBrowseWindow()
+    {
+        var editor = CreateEditor();
+        editor.SelectSlide(1);
+        var customShows = new SlideShowCustomShowSession(() => editor);
+        SlideShowWindowLaunchPlan? createdPlan = null;
+        var coordinator = new SlideShowWindowLaunchCoordinator<FakeWindow>(
+            customShows,
+            () => editor.Presentation,
+            () => null,
+            editor.SetSlideNotesText,
+            plan =>
+            {
+                createdPlan = plan;
+                return new FakeWindow();
+            },
+            (_, _) => { },
+            _ => { });
+
+        coordinator.TryLaunchReadingView().Should().BeTrue();
+
+        createdPlan.Should().NotBeNull();
+        createdPlan!.PlaybackRoute.StartIndex.Should().Be(1);
+        createdPlan.ForceBrowseWindow.Should().BeTrue();
+        editor.Presentation.ShowType.Should().Be(PresentationShowType.PresentedBySpeaker);
+    }
+
     private static EditingSession CreateEditor()
     {
         var presentation = Presentation.CreateEmpty();

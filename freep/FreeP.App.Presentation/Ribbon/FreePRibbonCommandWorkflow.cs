@@ -91,6 +91,7 @@ public enum FreePRibbonHostActionKind
     ApplyViewShowState,
     ApplyViewZoomState,
     ApplyViewModeState,
+    StartReadingView,
     PickTransitionSound,
     ToggleAnimationPane,
     StartSlideShowFromBeginning,
@@ -730,6 +731,12 @@ public static class FreePRibbonCommandWorkflow
         RibbonStateStore stateStore,
         FreePRibbonCommandHostAdapter host)
     {
+        commands.HostAction(
+            FreePRibbonCommandGroup.View,
+            PresentationReadingViewPlanner.CommandId,
+            host,
+            FreePRibbonHostActionKind.StartReadingView);
+
         var initialModeState = host.TryQuery<PresentationViewModeState>(FreePRibbonHostQueryKind.ViewModeState, out var modeState)
             ? modeState
             : PresentationViewModeState.Normal;

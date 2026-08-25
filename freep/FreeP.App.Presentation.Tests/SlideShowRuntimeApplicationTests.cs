@@ -75,6 +75,24 @@ public sealed class SlideShowRuntimeApplicationTests
     }
 
     [Fact]
+    public void Runtime_ForceBrowseWindow_uses_reading_window_chrome_without_mutating_show_settings()
+    {
+        var presentation = MakePresentation(1);
+        presentation.ShowType = PresentationShowType.PresentedBySpeaker;
+        presentation.ShowBrowseScrollbar = false;
+
+        var runtime = CreateRuntime(presentation, forceBrowseWindow: true);
+
+        runtime.WindowPlan.Should().Be(new SlideShowRuntimeWindowPlan(
+            IsBrowseWindow: true,
+            IsBorderless: false,
+            IsTopmost: false,
+            AllowsResize: true,
+            ShowBrowseScrollbars: true));
+        presentation.ShowType.Should().Be(PresentationShowType.PresentedBySpeaker);
+    }
+
+    [Fact]
     public void Runtime_ExecutesNavigationAndInputThroughOneBoundRenderer()
     {
         var presentation = MakePresentation(2);
@@ -599,14 +617,16 @@ public sealed class SlideShowRuntimeApplicationTests
     private static SlideShowRuntimeApplication CreateRuntime(
         Presentation presentation,
         SlideShowRuntimeCaptionPreference? captionPreference = null,
-        Func<DateTimeOffset>? utcNow = null) =>
+        Func<DateTimeOffset>? utcNow = null,
+        bool forceBrowseWindow = false) =>
         new(
             presentation,
             SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0),
             StartedAtUtc,
             SlideShowHostCapabilityRecordingCaptureBackend.Deferred("runtime application test"),
             captionPreference,
-            utcNow);
+            utcNow,
+            forceBrowseWindow);
 
     private static SlideShowRuntimeRendererCallbacks NoOpRenderer() => new(
         () => { },

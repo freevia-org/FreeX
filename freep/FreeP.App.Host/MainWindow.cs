@@ -3332,6 +3332,12 @@ public sealed partial class MainWindow : Window,
     internal void StartSlideShow(bool fromStart)
         => StartSlideShow(fromStart, FreeP.App.Compositor.SlideShowTimingIntent.None);
 
+    /// <summary>
+    /// Opens the current slide in a resizable, non-editing Reading View window without
+    /// changing the presentation's persisted slide-show settings.
+    /// </summary>
+    internal void StartReadingView() => SlideShowWindowLauncher.TryLaunchReadingView();
+
     private void StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent timingIntent)
         => StartSlideShow(fromStart: true, timingIntent: timingIntent);
 

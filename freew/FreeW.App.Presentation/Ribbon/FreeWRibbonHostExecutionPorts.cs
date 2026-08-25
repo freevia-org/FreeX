@@ -171,6 +171,8 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Action? CheckForUpdates = null,
     Action? ToggleReadMode = null,
     Func<bool>? IsReadModeActive = null,
+    Action? ToggleFocusMode = null,
+    Func<bool>? IsFocusModeActive = null,
     Action<string>? ApplyReadModeColumnWidth = null,
     Action<string>? ApplyReadModePageColor = null,
     Action? ToggleRuler = null,

@@ -328,6 +328,10 @@ internal static class FreeWAvaloniaRibbonCommands
                         callbacks.ApplyReadModePageColor,
                         ViewRibbonBindingAvailability.Disabled)),
                 Modes: new ViewRibbonModeBindings(
+                    Focus: new ViewRibbonToggleBinding(
+                        callbacks.ToggleFocusMode,
+                        callbacks.IsFocusModeActive,
+                        ViewRibbonBindingAvailability.Disabled),
                     PrintLayout: new ViewRibbonToggleBinding(
                         callbacks.SetPrintLayout,
                         callbacks.ResolvePrintLayoutActive(

@@ -144,6 +144,8 @@ public sealed partial class MainWindow : Window
     private bool _updatingZoomSlider;
     private readonly FreeWEditorInteractionSession _editorInteraction = new();
     private readonly FreeWApplicationCommandRouter _applicationCommands;
+    private bool _focusModeActive;
+    private FreeWEditorChromeVisibility? _chromeBeforeFocusMode;
     private bool _pagedEditMode;
     // Avalonia's PrintLayout is already the live, multi-page editing surface used by Page Edit.
     // Keep the prior continuous view so entering the alias does not change the user's view when it
@@ -2065,6 +2067,8 @@ public sealed partial class MainWindow : Window
             OpenLegalNotices: () => _ = OpenLegalNoticesAsync(),
             ToggleReadMode: ToggleReadMode,
             IsReadModeActive: () => _editorInteraction.IsReadModeActive,
+            ToggleFocusMode: ToggleFocusMode,
+            IsFocusModeActive: () => _focusModeActive,
             ApplyReadModeColumnWidth: ApplyReadModeColumnWidth,
             ApplyReadModePageColor: ApplyReadModePageColor,
             ToggleReviewBalloons: ToggleReviewBalloons,
@@ -2961,6 +2965,45 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    // Focus is intentionally distinct from Read Mode: it keeps the active editable document surface
+    // intact and only suppresses application chrome and docked inspection panes until toggled or Esc.
+    private void ToggleFocusMode()
+    {
+        _focusModeActive = !_focusModeActive;
+        if (_focusModeActive)
+        {
+            _chromeBeforeFocusMode = new FreeWEditorChromeVisibility(
+                ToChromeVisibility(_titleBar.IsVisible),
+                ToChromeVisibility(_ribbonHost?.IsVisible == true),
+                ToChromeVisibility(_dataFolderItemControl?.IsVisible == true),
+                ToChromeVisibility(_statusViewSwitchControl?.IsVisible == true),
+                ToChromeVisibility(_statusZoomControl?.IsVisible == true),
+                ToChromeVisibility(_navPane.IsVisible),
+                ToChromeVisibility(_revealPane.IsVisible),
+                ToChromeVisibility(_reviewingPane.IsVisible));
+
+            _titleBar.IsVisible = false;
+            if (_ribbonHost is not null)
+                _ribbonHost.IsVisible = false;
+            _navPane.IsVisible = false;
+            _revealPane.IsVisible = false;
+            _reviewingPane.IsVisible = false;
+        }
+        else if (_chromeBeforeFocusMode is { } chrome)
+        {
+            _titleBar.IsVisible = IsChromeVisible(chrome.TitleBar);
+            if (_ribbonHost is not null)
+                _ribbonHost.IsVisible = IsChromeVisible(chrome.Ribbon);
+            _navPane.IsVisible = IsChromeVisible(chrome.NavigationPane);
+            _revealPane.IsVisible = IsChromeVisible(chrome.RevealPane);
+            _reviewingPane.IsVisible = IsChromeVisible(chrome.ReviewingPane);
+            _chromeBeforeFocusMode = null;
+        }
+
+        RefreshRibbonCommandStates();
+        _editor.Focus();
+    }
+
     private static FreeWChromeVisibility ToChromeVisibility(bool isVisible) =>
         isVisible ? FreeWChromeVisibility.Visible : FreeWChromeVisibility.Collapsed;
 
@@ -2991,6 +3034,13 @@ public sealed partial class MainWindow : Window
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (_focusModeActive && e.Key == Key.Escape)
+        {
+            ToggleFocusMode();
+            e.Handled = true;
+            return;
+        }
+
         if (TryHandleRibbonKeyTips(e))
             return;
 

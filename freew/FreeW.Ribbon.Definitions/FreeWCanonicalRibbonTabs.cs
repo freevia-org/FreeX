@@ -349,6 +349,19 @@ internal static partial class FreeWCanonicalRibbonTabs
                         group.Toggle("freew.paged-edit-view", "Page Edit");
                     }));
 
+            // Focus is a separate editing surface rather than an alias for Read Mode: it keeps the
+            // document editable while temporarily removing the surrounding application chrome.
+            topology.Section(
+                "view.immersive",
+                tab => tab.Group("immersive", "Immersive", "I", 45, group =>
+                {
+                    group.MediumToggle("freew.focus", "Focus", RibbonCommandIconKind.View);
+                }),
+                tab => tab.Group("immersive", "Immersive", null, 55, group =>
+                {
+                    group.Toggle("freew.focus", "Focus");
+                }));
+
             topology.Section(
                 "view.show",
                 tab => tab.Group("show", "Show", "S", 90, group =>

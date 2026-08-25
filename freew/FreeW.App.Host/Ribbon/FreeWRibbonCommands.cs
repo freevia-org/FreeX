@@ -112,6 +112,8 @@ internal static class FreeWRibbonCommands
         var isNavPaneVisible = hostPorts?.IsNavigationPaneVisible;
         var onToggleReadMode = hostPorts?.ToggleReadMode;
         var isReadModeActive = hostPorts?.IsReadModeActive;
+        var onToggleFocusMode = hostPorts?.ToggleFocusMode;
+        var isFocusModeActive = hostPorts?.IsFocusModeActive;
         var onTogglePrintLayout = hostPorts?.SetPrintLayout;
         var isPrintLayoutActive = hostPorts?.ResolvePrintLayoutActive();
         var onToggleOutlineView = hostPorts?.SetOutlineView;
@@ -1143,6 +1145,7 @@ internal static class FreeWRibbonCommands
                         onReadModePageColor,
                         ViewRibbonBindingAvailability.Disabled)),
                 Modes: new ViewRibbonModeBindings(
+                    Focus: new ViewRibbonToggleBinding(onToggleFocusMode, isFocusModeActive),
                     PrintLayout: new ViewRibbonToggleBinding(onTogglePrintLayout, isPrintLayoutActive),
                     WebLayout: new ViewRibbonToggleBinding(onWebLayout, isWebLayoutActive),
                     Draft: new ViewRibbonToggleBinding(onDraftView, isDraftViewActive),

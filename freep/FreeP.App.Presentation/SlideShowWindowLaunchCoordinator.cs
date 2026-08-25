@@ -69,9 +69,25 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
         return true;
     }
 
+    public bool TryLaunchReadingView()
+    {
+        if (!_customShows.TryBuildPlaybackLaunch(
+                fromStart: false,
+                animationStartIndex: null,
+                _getSelectedCaptionTrackIndex(),
+                out var playback))
+        {
+            return false;
+        }
+
+        Launch(playback, SlideShowTimingIntent.None, forceBrowseWindow: true);
+        return true;
+    }
+
     private void Launch(
         SlideShowPlaybackLaunchPlan playback,
-        SlideShowTimingIntent timingIntent)
+        SlideShowTimingIntent timingIntent,
+        bool forceBrowseWindow = false)
     {
         var caption = playback.CaptionSelection;
         var launchPlan = new SlideShowWindowLaunchPlan(
@@ -80,7 +96,8 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
             SetSlideNotesText: _setSlideNotesText,
             PreferredCaptionSlideIndex: caption?.SlideIndex,
             PreferredCaptionShapeId: caption?.ShapeId,
-            PreferredCaptionTrackIndex: caption?.TrackIndex);
+            PreferredCaptionTrackIndex: caption?.TrackIndex,
+            ForceBrowseWindow: forceBrowseWindow);
         var window = _createWindow(launchPlan);
         if (timingIntent != SlideShowTimingIntent.None)
             _setTimingIntent(window, timingIntent);
