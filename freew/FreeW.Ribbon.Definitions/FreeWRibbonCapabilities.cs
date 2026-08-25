@@ -59,7 +59,7 @@ public sealed record FreeWRibbonCapabilities
         FreeWRibbonControlPresentation.Portable,
         AvaloniaOmittedSections,
         [
-            "file", "home", "insert", "layout", "design", "view", "review", "developer", "references", "mailings", "help",
+            "file", "home", "insert", "design", "layout", "references", "mailings", "review", "view", "help", "developer",
             "table-design", "table-layout", "header-footer-design", "picture-format", "drawing-format",
             "chart-design", "chart-format", "smartart-design",
         ]);
