@@ -163,10 +163,39 @@ function Assert-DashboardCondition {
     }
 }
 
+function Test-CrossAppDashboardGeneratorHosts {
+    $generatorPath = Join-Path $PSScriptRoot "Generate-CrossAppParityDashboard.ps1"
+    $hostCommands = @(
+        [pscustomobject]@{
+            Label = "pwsh"
+            Path = (Get-Command pwsh.exe -ErrorAction Stop).Source
+        }
+    )
+
+    if ($env:OS -eq "Windows_NT") {
+        $hostCommands += [pscustomobject]@{
+            Label = "powershell.exe"
+            Path = (Get-Command powershell.exe -ErrorAction Stop).Source
+        }
+    }
+
+    foreach ($hostCommand in $hostCommands) {
+        $output = @(& $hostCommand.Path -NoProfile -ExecutionPolicy Bypass -File $generatorPath -Check 2>&1)
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0) {
+            throw "Cross-app dashboard generator -Check failed under $($hostCommand.Label): $($output -join "`n")"
+        }
+
+        Write-Host "Cross-app dashboard generator -Check passed under $($hostCommand.Label)."
+    }
+}
+
 if ($BoundarySelfTest) {
     Invoke-AcceptanceBoundaryMutationSelfTest
     return
 }
+
+Test-CrossAppDashboardGeneratorHosts
 
 $resolvedDashboardPath = Resolve-ToolRepoPath -Path $DashboardPath -RepoRoot $repoRoot
 $dashboard = Read-ToolJson -Path $DashboardPath -RepoRoot $repoRoot -MissingMessage "Required generated cross-app dashboard is missing"
@@ -185,10 +214,15 @@ Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.focusedTes
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.initialReintegrationPreflight -eq "The current acceptance refresh uses the supplied repository-preflight result and the exact tested-source boundary; no additional source paths are allowlisted by this documentation-only change.") "Wave194 acceptance evidence must record the supplied preflight and exact boundary."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.initialIndependentReview -match "two P2 findings.*FreeX.*FreeP") "Wave194 initial independent-review findings must be recorded."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.reviewRemediation -match "one authoritative mixed-type geometry contract.*schema v3.*color-geometry guard") "Wave194 reviewer remediations must be recorded."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -eq "Pending: a fresh independent final acceptance review of tested source commit ${acceptanceRefreshTestedSourceCommit} must be completed. The supplied current FreeP Surface3D static sign-off is scoped to that focused lane and does not satisfy the cross-app acceptance review.") "Wave194 independent acceptance review must remain pending until the fresh cross-app review completes."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReviewStatus -eq "remediation-awaiting-recheck") "Wave194 independent acceptance review must remain remediation-awaiting-recheck."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -eq "Remediation-awaiting-recheck: a fresh independent final acceptance review of tested source commit ${acceptanceRefreshTestedSourceCommit} must be completed. The supplied current FreeP Surface3D static sign-off is scoped to that focused lane and does not satisfy the cross-app acceptance review.") "Wave194 independent acceptance review must remain remediation-awaiting-recheck until the fresh cross-app review completes."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.repositoryPreflight -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 309 XML-backed, 125 PowerShell scripts, 11 GitHub workflows, 10 test gates/48 assigned projects, 13,951 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:03:10.419.") "Wave194 repository-preflight evidence must be exact."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:08:44.581.") "Wave194 Release-build evidence must be exact."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.defaultNonUiTestLane -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,505 passed, 134 intentional skips, 0 failed, 43,639 total; elapsed 00:17:18.449.") "Wave194 default-lane evidence must be exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuildMsBuildElapsed -eq "00:08:44.31") "Wave194 Release-build MSBuild elapsed evidence must be exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuildWrapperElapsed -eq "00:08:44.581") "Wave194 Release-build wrapper elapsed evidence must be exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; MSBuild-retained Time Elapsed 00:08:44.31; wrapper stopwatch 00:08:44.581.") "Wave194 Release-build evidence must distinguish MSBuild and wrapper elapsed times."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.defaultNonUiTestLaneWrapperElapsed -eq "00:17:18.449") "Wave194 default-lane wrapper elapsed evidence must be exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.defaultNonUiTestLaneTrxTimestampSpan -eq "00:17:17.5738434") "Wave194 default-lane TRX timestamp span must be exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.defaultNonUiTestLane -eq "Passed at tested source commit ${acceptanceRefreshTestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,505 passed, 134 intentional skips, 0 failed, 43,639 total; wrapper stopwatch 00:17:18.449; independently parsed 31-TRX timestamp span 00:17:17.5738434.") "Wave194 default-lane evidence must distinguish wrapper and TRX elapsed times."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.initialDefaultLane -match "43,505 passed, 134 intentional skips, 0 failed, 43,639 total") "Wave194 current default-lane result must be recorded exactly."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sliceAccounting -eq "582 cumulative app slices (194 per app) remain the processed Wave194 accounting; later wave feature commits are included in the tested source and do not add Wave194 slices.") "Wave194 slice accounting must remain explicit and non-inflated."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sourceTestRemediation -match "generated inventory and visual manifests remain the authority") "Wave194 current evidence source boundary must be recorded."

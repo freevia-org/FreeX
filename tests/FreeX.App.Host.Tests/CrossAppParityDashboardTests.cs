@@ -17,6 +17,13 @@ public sealed class CrossAppParityDashboardTests
 
         result.ExitCode.Should().Be(0, result.CombinedOutput);
 
+        var hostGuard = PowerShellScriptRunner.RunToolScript(
+            "Test-CrossAppParityDashboard.ps1",
+            repoRoot);
+        hostGuard.ExitCode.Should().Be(0, hostGuard.CombinedOutput);
+        hostGuard.CombinedOutput.Should().Contain("generator -Check passed under pwsh");
+        hostGuard.CombinedOutput.Should().Contain("generator -Check passed under powershell.exe");
+
         using var json = JsonDocument.Parse(
             File.ReadAllText(Path.Combine(repoRoot, "docs", "parity", "avalonia-wpf-cross-app-dashboard.json")));
         var root = json.RootElement;
@@ -31,8 +38,15 @@ public sealed class CrossAppParityDashboardTests
         integrationEvidence.GetProperty("repositoryPreflight").GetString().Should().Be(
             "Passed at tested source commit e4f40ebcaadc624421b9c0a985330100f10af8df: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 309 XML-backed, 125 PowerShell scripts, 11 GitHub workflows, 10 test gates/48 assigned projects, 13,951 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:03:10.419.");
         integrationEvidence.GetProperty("fullReleaseBuild").GetString().Should().Be(
-            "Passed at tested source commit e4f40ebcaadc624421b9c0a985330100f10af8df: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:08:44.581.");
+            "Passed at tested source commit e4f40ebcaadc624421b9c0a985330100f10af8df: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; MSBuild-retained Time Elapsed 00:08:44.31; wrapper stopwatch 00:08:44.581.");
+        integrationEvidence.GetProperty("fullReleaseBuildMsBuildElapsed").GetString().Should().Be("00:08:44.31");
+        integrationEvidence.GetProperty("fullReleaseBuildWrapperElapsed").GetString().Should().Be("00:08:44.581");
         integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("43,505 passed, 134 intentional skips, 0 failed, 43,639 total");
+        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("wrapper stopwatch 00:17:18.449; independently parsed 31-TRX timestamp span 00:17:17.5738434");
+        integrationEvidence.GetProperty("defaultNonUiTestLaneWrapperElapsed").GetString().Should().Be("00:17:18.449");
+        integrationEvidence.GetProperty("defaultNonUiTestLaneTrxTimestampSpan").GetString().Should().Be("00:17:17.5738434");
+        integrationEvidence.GetProperty("independentReviewStatus").GetString().Should().Be("remediation-awaiting-recheck");
+        integrationEvidence.GetProperty("independentReview").GetString().Should().StartWith("Remediation-awaiting-recheck:");
         integrationEvidence.GetProperty("sliceAccounting").GetString().Should().Be(
             "582 cumulative app slices (194 per app) remain the processed Wave194 accounting; later wave feature commits are included in the tested source and do not add Wave194 slices.");
 

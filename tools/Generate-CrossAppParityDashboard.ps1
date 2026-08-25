@@ -8,6 +8,39 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+
+# PowerShell Desktop serializes JSON differently from pwsh. Re-run the canonical
+# implementation under pwsh so generation and -Check have one byte-level format.
+$canonicalHostMarker = "FREEX_CROSS_APP_PARITY_DASHBOARD_CANONICAL_HOST"
+$currentCanonicalHostMarker = [Environment]::GetEnvironmentVariable($canonicalHostMarker, "Process")
+if ($PSVersionTable.PSEdition -eq "Desktop" -and $currentCanonicalHostMarker -ne "1") {
+    $pwshCommand = Get-Command pwsh.exe -ErrorAction Stop
+    $forwardedArguments = @()
+    if ($PSBoundParameters.ContainsKey("JsonPath")) {
+        $forwardedArguments += "-JsonPath"
+        $forwardedArguments += [string]$PSBoundParameters["JsonPath"]
+    }
+    if ($PSBoundParameters.ContainsKey("MarkdownPath")) {
+        $forwardedArguments += "-MarkdownPath"
+        $forwardedArguments += [string]$PSBoundParameters["MarkdownPath"]
+    }
+    if ($PSBoundParameters.ContainsKey("Check")) {
+        $forwardedArguments += "-Check:$([bool]$PSBoundParameters["Check"])"
+    }
+
+    $previousCanonicalHostMarker = $currentCanonicalHostMarker
+    try {
+        [Environment]::SetEnvironmentVariable($canonicalHostMarker, "1", "Process")
+        & $pwshCommand.Source -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath @forwardedArguments
+        $canonicalExitCode = $LASTEXITCODE
+    }
+    finally {
+        [Environment]::SetEnvironmentVariable($canonicalHostMarker, $previousCanonicalHostMarker, "Process")
+    }
+
+    exit $canonicalExitCode
+}
+
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 # Keep acceptance evidence anchored to the source that was actually built and tested.
@@ -15,6 +48,10 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 # would make the evidence self-referential and would change the claim on every refresh.
 $wave194TestedSourceCommit = "e4f40ebcaadc624421b9c0a985330100f10af8df"
 $wave194AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
+$wave194FullReleaseBuildMsBuildElapsed = "00:08:44.31"
+$wave194FullReleaseBuildWrapperElapsed = "00:08:44.581"
+$wave194DefaultLaneWrapperElapsed = "00:17:18.449"
+$wave194DefaultLaneTrxTimestampSpan = "00:17:17.5738434"
 
 function Get-JsonPropertyValue {
     param(
@@ -871,10 +908,15 @@ try {
         initialReintegrationPreflight = "The current acceptance refresh uses the supplied repository-preflight result and the exact tested-source boundary; no additional source paths are allowlisted by this documentation-only change."
         initialIndependentReview = "Recorded: the initial independent review found two P2 findings: FreeX crop/readiness/transition and physical click geometry were duplicated instead of consuming one contract; FreeP topology evidence did not pin the complete source PPTX and initially over-attributed the residual."
         reviewRemediation = "FreeX now uses one authoritative mixed-type geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved; the color-geometry guard remediation remains retained in the tested source."
-        independentReview = "Pending: a fresh independent final acceptance review of tested source commit ${wave194TestedSourceCommit} must be completed. The supplied current FreeP Surface3D static sign-off is scoped to that focused lane and does not satisfy the cross-app acceptance review."
+        independentReviewStatus = "remediation-awaiting-recheck"
+        independentReview = "Remediation-awaiting-recheck: a fresh independent final acceptance review of tested source commit ${wave194TestedSourceCommit} must be completed. The supplied current FreeP Surface3D static sign-off is scoped to that focused lane and does not satisfy the cross-app acceptance review."
         repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 309 XML-backed, 125 PowerShell scripts, 11 GitHub workflows, 10 test gates/48 assigned projects, 13,951 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:03:10.419."
-        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; elapsed 00:08:44.581."
-        defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,505 passed, 134 intentional skips, 0 failed, 43,639 total; elapsed 00:17:18.449."
+        fullReleaseBuildMsBuildElapsed = $wave194FullReleaseBuildMsBuildElapsed
+        fullReleaseBuildWrapperElapsed = $wave194FullReleaseBuildWrapperElapsed
+        fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; MSBuild-retained Time Elapsed $wave194FullReleaseBuildMsBuildElapsed; wrapper stopwatch $wave194FullReleaseBuildWrapperElapsed."
+        defaultNonUiTestLaneWrapperElapsed = $wave194DefaultLaneWrapperElapsed
+        defaultNonUiTestLaneTrxTimestampSpan = $wave194DefaultLaneTrxTimestampSpan
+        defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,505 passed, 134 intentional skips, 0 failed, 43,639 total; wrapper stopwatch $wave194DefaultLaneWrapperElapsed; independently parsed 31-TRX timestamp span $wave194DefaultLaneTrxTimestampSpan."
         initialDefaultLane = "Earlier default-lane remediation history is retained in the Wave194 report; the current final pass6 lane is the authoritative 43,505 passed, 134 intentional skips, 0 failed, 43,639 total result."
         sliceAccounting = "582 cumulative app slices (194 per app) remain the processed Wave194 accounting; later wave feature commits are included in the tested source and do not add Wave194 slices."
         sourceTestRemediation = "The current source is accepted only with the focused and full-lane evidence recorded above; generated inventory and visual manifests remain the authority for coverage and comparison counts."
@@ -1023,6 +1065,7 @@ try {
         "",
         "- Initial independent review: $($dashboard.integrationGateEvidence.initialIndependentReview)",
         "- Slice accounting: $($dashboard.integrationGateEvidence.sliceAccounting)",
+        "- Elapsed-time provenance: Release build MSBuild-retained ``Time Elapsed $($dashboard.integrationGateEvidence.fullReleaseBuildMsBuildElapsed)`` versus wrapper stopwatch ``$($dashboard.integrationGateEvidence.fullReleaseBuildWrapperElapsed)``; default lane wrapper stopwatch ``$($dashboard.integrationGateEvidence.defaultNonUiTestLaneWrapperElapsed)`` versus independently parsed 31-TRX timestamp span ``$($dashboard.integrationGateEvidence.defaultNonUiTestLaneTrxTimestampSpan)``.",
         "- Reintegration: $($dashboard.integrationGateEvidence.reintegration)",
         "- Focused tests: $($dashboard.integrationGateEvidence.focusedTests)",
         "- Initial reintegration preflight: $($dashboard.integrationGateEvidence.initialReintegrationPreflight)",
