@@ -3160,6 +3160,30 @@
   <data name="Ribbon_Command_ViewFitToWindow_KeyTip" xml:space="preserve">
     <value>F</value>
   </data>
+  <data name="Ribbon_Group_ViewWindow_Label" xml:space="preserve">
+    <value>Window</value>
+  </data>
+  <data name="Ribbon_Group_ViewWindow_KeyTip" xml:space="preserve">
+    <value>W</value>
+  </data>
+  <data name="Ribbon_Command_ViewNewWindow_Label" xml:space="preserve">
+    <value>New Window</value>
+  </data>
+  <data name="Ribbon_Command_ViewNewWindow_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Command_ViewArrangeAll_Label" xml:space="preserve">
+    <value>Arrange All</value>
+  </data>
+  <data name="Ribbon_Command_ViewArrangeAll_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Command_ViewCascadeWindows_Label" xml:space="preserve">
+    <value>Cascade Windows</value>
+  </data>
+  <data name="Ribbon_Command_ViewCascadeWindows_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
   <data name="File_OpenPresentationPickerTitle" xml:space="preserve">
     <value>Open Presentation</value>
   </data>

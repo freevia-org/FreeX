@@ -92,6 +92,9 @@ public enum FreePRibbonHostActionKind
     ApplyViewZoomState,
     ApplyViewModeState,
     StartReadingView,
+    NewPresentationWindow,
+    ArrangeAllPresentationWindows,
+    CascadePresentationWindows,
     PickTransitionSound,
     ToggleAnimationPane,
     StartSlideShowFromBeginning,
@@ -736,6 +739,12 @@ public static class FreePRibbonCommandWorkflow
             PresentationReadingViewPlanner.CommandId,
             host,
             FreePRibbonHostActionKind.StartReadingView);
+        commands.HostAction(FreePRibbonCommandGroup.View, "freep.view.new-window", host,
+            FreePRibbonHostActionKind.NewPresentationWindow);
+        commands.HostAction(FreePRibbonCommandGroup.View, "freep.view.arrange-all", host,
+            FreePRibbonHostActionKind.ArrangeAllPresentationWindows);
+        commands.HostAction(FreePRibbonCommandGroup.View, "freep.view.cascade-windows", host,
+            FreePRibbonHostActionKind.CascadePresentationWindows);
 
         var initialModeState = host.TryQuery<PresentationViewModeState>(FreePRibbonHostQueryKind.ViewModeState, out var modeState)
             ? modeState

@@ -116,6 +116,9 @@ public sealed partial class MainWindow
                 ApplyViewZoomState = ApplyPresentationViewZoomState,
                 ApplyViewModeState = ApplyPresentationViewModeState,
                 StartReadingView = StartReadingView,
+                NewPresentationWindow = OpenNewPresentationWindow,
+                ArrangeAllPresentationWindows = ArrangeAllPresentationWindows,
+                CascadePresentationWindows = CascadePresentationWindows,
 #if FREEP_WPF_RENDERER
                 PickTransitionSound = PickTransitionSound,
                 ToggleAnimationPane = _ => ToggleAnimationPane(),

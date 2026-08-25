@@ -1475,6 +1475,15 @@ public static class FreePRibbon
             group.Medium("freep.view.fit-to-window", FreePRibbonText.ViewFitToWindowCommand.Label,
                 RibbonCommandIconKind.Scale, FreePRibbonText.ViewFitToWindowCommand.KeyTip);
         });
+        tab.Group("window", FreePRibbonText.ViewWindowGroup.Label, FreePRibbonText.ViewWindowGroup.KeyTip, 65, group =>
+        {
+            group.Medium("freep.view.new-window", FreePRibbonText.ViewNewWindowCommand.Label,
+                RibbonCommandIconKind.Window, FreePRibbonText.ViewNewWindowCommand.KeyTip);
+            group.Medium("freep.view.arrange-all", FreePRibbonText.ViewArrangeAllCommand.Label,
+                RibbonCommandIconKind.Grid, FreePRibbonText.ViewArrangeAllCommand.KeyTip);
+            group.Medium("freep.view.cascade-windows", FreePRibbonText.ViewCascadeWindowsCommand.Label,
+                RibbonCommandIconKind.Window, FreePRibbonText.ViewCascadeWindowsCommand.KeyTip);
+        });
     }
 
     private static void AddParagraphControls(RibbonGroupBuilder group)

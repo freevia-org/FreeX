@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
@@ -131,6 +132,8 @@ public sealed partial class MainWindow : Window,
     private Presentation _presentation => _workareaSession.Presentation;
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
     private readonly PresentationFileCommandSession _fileSession;
+    private readonly PresentationDocumentWindowPlanner _documentWindowPlanner;
+    private readonly int _documentWindowNumber;
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
     private readonly AutosaveAdapter _autosave;
     private readonly PresentationPlatformClipboardSession _clipboardService;
@@ -452,8 +455,15 @@ public sealed partial class MainWindow : Window,
         IApplicationOptionsStore<FreePOptions>? optionsStore = null,
         IUserMessageService? messageService = null,
         bool suppressStartupRecoveryOffer = false,
-        PresentationCustomDictionaryStore? proofingDictionaryStore = null)
+        PresentationCustomDictionaryStore? proofingDictionaryStore = null,
+        PresentationDocumentWindowPlanner? documentWindowPlanner = null,
+        int documentWindowNumber = 1)
     {
+        if (documentWindowNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(documentWindowNumber));
+
+        _documentWindowPlanner = documentWindowPlanner ?? new PresentationDocumentWindowPlanner();
+        _documentWindowNumber = documentWindowNumber;
         InitializeConditionalHost();
         Title = FreePApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1280;
@@ -559,7 +569,8 @@ public sealed partial class MainWindow : Window,
                 ApplicationName: FreePApplicationFrameDescriptor.Title.ApplicationName,
                 Separator: FreePApplicationFrameDescriptor.Title.Separator,
                 DirtyMarker: FreePApplicationFrameDescriptor.Title.DirtyMarker,
-                ApplicationPlacement: FreePApplicationFrameDescriptor.Title.ApplicationPlacement),
+                ApplicationPlacement: FreePApplicationFrameDescriptor.Title.ApplicationPlacement,
+                WindowSuffix: PresentationDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber)),
             maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: OnFileWorkflowChanged,
             loadRecentFilesStore: loadRecentFilesStore,
@@ -6001,6 +6012,84 @@ public sealed partial class MainWindow : Window,
     private void LoadPresentationContent(Presentation presentation)
     {
         _workareaSession.ReplacePresentation(presentation);
+    }
+
+    private void OpenNewPresentationWindow()
+    {
+        var plan = _documentWindowPlanner.CreateNext(
+            _presentation,
+            _fileSession.CurrentPath,
+            _fileSession.IsDirty);
+        var window = new MainWindow(
+            [],
+            loadRecentFilesStore: null,
+            options: _options,
+            optionsStore: _optionsStore,
+            documentWindowPlanner: _documentWindowPlanner,
+            documentWindowNumber: plan.WindowNumber);
+        window.LoadPresentationContent(plan.Presentation);
+        window._fileSession.ApplyWindowState(plan.CurrentPath, plan.IsDirty);
+        window.Show();
+    }
+
+    private void ArrangeAllPresentationWindows()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+            return;
+
+        var windows = desktop.Windows.OfType<MainWindow>()
+            .Where(window => window.IsVisible)
+            .ToList();
+        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        if (windows.Count == 0 || screen is null)
+            return;
+
+        var scaling = AvaloniaWindowBoundsTranslator.NormalizeScaling(screen.Scaling);
+        var bounds = ArrangeAllLayoutPlanner.ArrangeRowFirst(
+            screen.WorkingArea.Width / scaling,
+            screen.WorkingArea.Height / scaling,
+            windows.Count,
+            maxColumns: 3);
+        var tiles = AvaloniaWindowBoundsTranslator.Translate(screen.WorkingArea, scaling, bounds);
+        for (var index = 0; index < tiles.Count; index++)
+        {
+            var window = windows[index];
+            var tile = tiles[index];
+            window.WindowState = WindowState.Normal;
+            window.Position = tile.Position;
+            window.Width = tile.Width;
+            window.Height = tile.Height;
+        }
+    }
+
+    private void CascadePresentationWindows()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+            return;
+
+        var windows = desktop.Windows.OfType<MainWindow>()
+            .Where(window => window.IsVisible)
+            .ToList();
+        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        if (windows.Count == 0 || screen is null)
+            return;
+
+        var scaling = AvaloniaWindowBoundsTranslator.NormalizeScaling(screen.Scaling);
+        var bounds = ArrangeAllLayoutPlanner.Arrange(
+            ShellWindowArrangement.Cascade,
+            screen.WorkingArea.Width / scaling,
+            screen.WorkingArea.Height / scaling,
+            windows.Count);
+        var tiles = AvaloniaWindowBoundsTranslator.Translate(screen.WorkingArea, scaling, bounds);
+        for (var index = 0; index < tiles.Count; index++)
+        {
+            var window = windows[index];
+            var tile = tiles[index];
+            window.WindowState = WindowState.Normal;
+            window.Position = tile.Position;
+            window.Width = tile.Width;
+            window.Height = tile.Height;
+        }
     }
 
     // ── Canvas refresh ─────────────────────────────────────────────────────────
