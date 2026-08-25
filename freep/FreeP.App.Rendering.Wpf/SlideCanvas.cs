@@ -373,9 +373,36 @@ public sealed partial class SlideCanvas : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
-        RenderToDrawingContext(dc, ActualWidth, ActualHeight);
+        RenderToDrawingContext(dc, ActualWidth, ActualHeight, preserveAspectRatio: true, renderViewAids: true);
         if (_viewShowState.ShowRulers)
             RenderRulers(dc, CurrentTransform.Core, ActualWidth, ActualHeight);
+    }
+
+    private static void RenderViewAids(
+        DrawingContext dc,
+        SlideTransformCore transform,
+        PresentationViewShowState state)
+    {
+        var plan = PresentationViewAidPlanner.Build(transform, state);
+        if (plan.Gridlines.Count == 0 && plan.Guides.Count == 0)
+            return;
+
+        var gridPen = new Pen(
+            FreezeBrush(new SolidColorBrush(Color.FromArgb(0x54, 0x79, 0x79, 0x79))),
+            1)
+        {
+            DashStyle = DashStyles.Dot,
+        };
+        gridPen.Freeze();
+        foreach (var line in plan.Gridlines)
+            dc.DrawLine(gridPen, new Point(line.StartX, line.StartY), new Point(line.EndX, line.EndY));
+
+        var guidePen = new Pen(
+            FreezeBrush(new SolidColorBrush(Color.FromArgb(0xA8, 0x6D, 0x9E, 0xEB))),
+            1);
+        guidePen.Freeze();
+        foreach (var line in plan.Guides)
+            dc.DrawLine(guidePen, new Point(line.StartX, line.StartY), new Point(line.EndX, line.EndY));
     }
 
     /// <summary>
@@ -395,7 +422,8 @@ public sealed partial class SlideCanvas : FrameworkElement
         DrawingContext dc,
         double renderW,
         double renderH,
-        bool preserveAspectRatio)
+        bool preserveAspectRatio,
+        bool renderViewAids = false)
     {
         EnsureOps();
 
@@ -409,6 +437,8 @@ public sealed partial class SlideCanvas : FrameworkElement
         if (preserveAspectRatio)
         {
             CurrentTransform = ComputeViewTransform(renderW, renderH, _slideWidthDip, _slideHeightDip);
+            if (renderViewAids)
+                RenderViewAids(dc, CurrentTransform.Core, _viewShowState);
             transform.Children.Add(new ScaleTransform(CurrentTransform.Scale, CurrentTransform.Scale));
             transform.Children.Add(new TranslateTransform(CurrentTransform.OffsetX, CurrentTransform.OffsetY));
         }
