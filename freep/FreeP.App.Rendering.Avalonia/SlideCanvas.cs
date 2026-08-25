@@ -171,6 +171,9 @@ public sealed partial class SlideCanvas : Control
     private IReadOnlyDictionary<uint, DrawOp>? _liveTransformPreviewOps;
     private double _slideWidthDip;
     private double _slideHeightDip;
+    // The interactive host explicitly applies its View state. Keep standalone thumbnail and
+    // print canvases free of editor-only ruler chrome.
+    private PresentationViewShowState _viewShowState = PresentationViewShowState.Default with { ShowRulers = false };
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
     private AvaloniaCanvasGestureHandler? _gestureHandler;
     private bool _editPointsEnabled = true;
@@ -196,7 +199,14 @@ public sealed partial class SlideCanvas : Control
     /// </summary>
     protected override AutomationPeer OnCreateAutomationPeer() => new SlideCanvasAutomationPeer(this);
 
+    public PresentationViewShowState ViewShowState => _viewShowState;
     public PresentationViewZoomState ViewZoomState => _viewZoomState;
+
+    public void ApplyViewShowState(PresentationViewShowState state)
+    {
+        _viewShowState = state;
+        InvalidateVisual();
+    }
 
     public void ApplyViewZoomState(PresentationViewZoomState state)
     {
@@ -321,6 +331,9 @@ public sealed partial class SlideCanvas : Control
         // Expose the slide→screen transform so the editing layer can use it.
         CurrentTransform = ComputeViewTransform(renderW, renderH, _slideWidthDip, _slideHeightDip);
 
+        if (_viewShowState.ShowRulers)
+            RenderRulers(context, CurrentTransform, renderW, renderH);
+
         var matrix = Matrix.CreateScale(CurrentTransform.Scale, CurrentTransform.Scale)
             * Matrix.CreateTranslation(CurrentTransform.OffsetX, CurrentTransform.OffsetY);
         using var _ = context.PushTransform(matrix);
@@ -377,17 +390,62 @@ public sealed partial class SlideCanvas : Control
     private static Rect ToAvaloniaRect(LayoutRect rect) =>
         new(rect.X, rect.Y, rect.Width, rect.Height);
 
+    private static void RenderRulers(
+        DrawingContext context,
+        SlideTransformCore transform,
+        double width,
+        double height)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+
+        const double thickness = PresentationRulerTickPlanner.RulerThickness;
+        var surface = new SolidColorBrush(Color.FromRgb(0xF7, 0xF7, 0xF7));
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0xA6, 0xA6, 0xA6)), 1);
+        context.DrawRectangle(surface, pen, new Rect(0, 0, width, thickness));
+        context.DrawRectangle(surface, pen, new Rect(0, 0, thickness, height));
+
+        foreach (var tick in PresentationRulerTickPlanner.BuildHorizontal(transform))
+        {
+            context.DrawLine(pen, new Point(tick.Offset, thickness), new Point(tick.Offset, thickness - tick.Length));
+            if (tick.Label is not null)
+                context.DrawText(CreateRulerLabel(tick.Label), new Point(tick.Offset + 2, 0));
+        }
+
+        foreach (var tick in PresentationRulerTickPlanner.BuildVertical(transform))
+            context.DrawLine(pen, new Point(thickness, tick.Offset), new Point(thickness - tick.Length, tick.Offset));
+    }
+
+    private static FormattedText CreateRulerLabel(string text) => new(
+        text,
+        System.Globalization.CultureInfo.InvariantCulture,
+        FlowDirection.LeftToRight,
+        new Typeface("Segoe UI"),
+        8,
+        new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)));
+
     private SlideTransformCore ComputeViewTransform(
         double renderW,
         double renderH,
         double slideWidthDip,
-        double slideHeightDip) =>
-        PresentationViewZoomPlanner.PlanStageTransform(
-            renderW,
-            renderH,
+        double slideHeightDip)
+    {
+        var rulerInset = _viewShowState.ShowRulers
+            ? PresentationRulerTickPlanner.RulerThickness
+            : 0;
+        var plan = PresentationViewZoomPlanner.PlanStageTransform(
+            Math.Max(0, renderW - rulerInset),
+            Math.Max(0, renderH - rulerInset),
             slideWidthDip,
             slideHeightDip,
             _viewZoomState);
+        return new SlideTransformCore(
+            plan.Scale,
+            plan.OffsetX + rulerInset,
+            plan.OffsetY + rulerInset,
+            plan.SlideWidthDip,
+            plan.SlideHeightDip);
+    }
 
     private static void RenderCommand(DrawingContext dc, SlideRenderExecutionCommand command)
     {

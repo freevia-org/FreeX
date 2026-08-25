@@ -2350,6 +2350,7 @@ public sealed partial class MainWindow : Window,
     {
         _viewShowState = state;
         _notesBox.IsVisible = _viewModeState.Mode != PresentationViewMode.SlideSorter && state.ShowNotesPane;
+        _slideCanvas.ApplyViewShowState(state);
         if (_gestureHandler is null)
             return;
 
@@ -6091,6 +6092,46 @@ public sealed partial class MainWindow : Window,
             window.Width = tile.Width;
             window.Height = tile.Height;
         }
+    }
+
+    /// <summary>
+    /// Opens the View &gt; Window live window list. The native menu is built on invocation so its
+    /// entries always reflect the current desktop window collection.
+    /// </summary>
+    private void ShowPresentationWindowPicker()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+            return;
+
+        var windows = desktop.Windows.OfType<MainWindow>()
+            .Where(window => window.IsVisible)
+            .ToList();
+        if (windows.Count == 0)
+            return;
+
+        var menu = new ContextMenu { Placement = PlacementMode.Bottom };
+        foreach (var window in windows)
+        {
+            var target = window;
+            var item = new MenuItem
+            {
+                Header = target.Title,
+                IsChecked = ReferenceEquals(target, this),
+            };
+            item.Click += (_, _) => ActivatePresentationWindow(target);
+            menu.Items.Add(item);
+        }
+
+        menu.Open(this);
+    }
+
+    private static void ActivatePresentationWindow(MainWindow window)
+    {
+        if (window.WindowState == WindowState.Minimized)
+            window.WindowState = WindowState.Normal;
+
+        window.Activate();
+        window.Focus();
     }
 
     // ── Canvas refresh ─────────────────────────────────────────────────────────

@@ -3127,6 +3127,12 @@
   <data name="Ribbon_Command_ViewGridlines_KeyTip" xml:space="preserve">
     <value>G</value>
   </data>
+  <data name="Ribbon_Command_ViewRuler_Label" xml:space="preserve">
+    <value>Ruler</value>
+  </data>
+  <data name="Ribbon_Command_ViewRuler_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
   <data name="Ribbon_Command_ViewGuides_Label" xml:space="preserve">
     <value>Guides</value>
   </data>
@@ -3183,6 +3189,12 @@
   </data>
   <data name="Ribbon_Command_ViewCascadeWindows_KeyTip" xml:space="preserve">
     <value>C</value>
+  </data>
+  <data name="Ribbon_Command_ViewSwitchWindows_Label" xml:space="preserve">
+    <value>Switch Windows</value>
+  </data>
+  <data name="Ribbon_Command_ViewSwitchWindows_KeyTip" xml:space="preserve">
+    <value>W</value>
   </data>
   <data name="File_OpenPresentationPickerTitle" xml:space="preserve">
     <value>Open Presentation</value>

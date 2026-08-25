@@ -95,6 +95,7 @@ public enum FreePRibbonHostActionKind
     NewPresentationWindow,
     ArrangeAllPresentationWindows,
     CascadePresentationWindows,
+    SwitchPresentationWindow,
     PickTransitionSound,
     ToggleAnimationPane,
     StartSlideShowFromBeginning,
@@ -745,6 +746,8 @@ public static class FreePRibbonCommandWorkflow
             FreePRibbonHostActionKind.ArrangeAllPresentationWindows);
         commands.HostAction(FreePRibbonCommandGroup.View, "freep.view.cascade-windows", host,
             FreePRibbonHostActionKind.CascadePresentationWindows);
+        commands.HostAction(FreePRibbonCommandGroup.View, "freep.view.switch-windows", host,
+            FreePRibbonHostActionKind.SwitchPresentationWindow);
 
         var initialModeState = host.TryQuery<PresentationViewModeState>(FreePRibbonHostQueryKind.ViewModeState, out var modeState)
             ? modeState

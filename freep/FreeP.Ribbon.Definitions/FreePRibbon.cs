@@ -1459,6 +1459,8 @@ public static class FreePRibbon
         });
         tab.Group("show", FreePRibbonText.ViewShowGroup.Label, FreePRibbonText.ViewShowGroup.KeyTip, 100, group =>
         {
+            group.MediumToggle(PresentationViewShowPlanner.RulerCommandId, FreePRibbonText.ViewRulerCommand.Label,
+                RibbonCommandIconKind.Ruler, FreePRibbonText.ViewRulerCommand.KeyTip);
             group.MediumToggle("freep.view.show.gridlines", FreePRibbonText.ViewGridlinesCommand.Label,
                 RibbonCommandIconKind.Grid, FreePRibbonText.ViewGridlinesCommand.KeyTip);
             group.MediumToggle("freep.view.show.guides", FreePRibbonText.ViewGuidesCommand.Label,
@@ -1483,6 +1485,8 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Grid, FreePRibbonText.ViewArrangeAllCommand.KeyTip);
             group.Medium("freep.view.cascade-windows", FreePRibbonText.ViewCascadeWindowsCommand.Label,
                 RibbonCommandIconKind.Window, FreePRibbonText.ViewCascadeWindowsCommand.KeyTip);
+            group.Medium("freep.view.switch-windows", FreePRibbonText.ViewSwitchWindowsCommand.Label,
+                RibbonCommandIconKind.Window, FreePRibbonText.ViewSwitchWindowsCommand.KeyTip);
         });
     }
 
