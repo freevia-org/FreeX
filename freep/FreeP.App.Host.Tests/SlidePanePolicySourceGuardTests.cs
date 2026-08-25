@@ -44,7 +44,13 @@ public sealed class SlidePanePolicySourceGuardTests
         endpoint.Should().Contain("RefreshSlidePane = RefreshSlidePane");
         endpoint.Should().Contain("SyncSlidePaneSelection = SyncSlidePaneSelection");
         endpoint.Should().Contain("RefreshSlidePaneChrome = RefreshSlidePaneChrome");
-        endpoint.Should().Contain("(SlidePaneHost?.Child as SlidePane)?.RefreshProjection()");
+        endpoint.Should().Contain("if (_viewModeState.Mode == PresentationViewMode.Outline)");
+        endpoint.Should().Contain("_outlinePane?.RefreshProjection()");
+        endpoint.Should().Contain("_slidePane?.RefreshProjection()");
+        endpoint.Should().Contain("_outlinePane?.SyncNativeSelection()");
+        endpoint.Should().Contain("_slidePane?.SyncNativeSelection()");
+        endpoint.Should().Contain("_outlinePane?.SyncNativeSelection(scrollActiveIntoView: false)");
+        endpoint.Should().Contain("_slidePane?.RefreshItemChrome()");
         endpoint.Should().NotContain("SlidePaneHost.Child = new SlidePane(context.Snapshot.Editor)");
     }
 }
