@@ -112,7 +112,8 @@ public sealed class SlideShowRuntimeApplication
         DateTimeOffset startedAtUtc,
         ISlideShowRecordingCaptureBackend captureBackend,
         SlideShowRuntimeCaptionPreference? captionPreference = null,
-        Func<DateTimeOffset>? utcNow = null)
+        Func<DateTimeOffset>? utcNow = null,
+        bool forceBrowseWindow = false)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         ArgumentNullException.ThrowIfNull(playbackRoute);
@@ -130,13 +131,15 @@ public sealed class SlideShowRuntimeApplication
         InitialSlideMetrics = SlideShowHostPlanner.BuildSlideMetrics(
             presentation.SlideSizeCxEmu,
             presentation.SlideSizeCyEmu);
-        var isBrowseWindow = presentation.ShowType == PresentationShowType.BrowsedByIndividual;
+        var isBrowseWindow = forceBrowseWindow ||
+            presentation.ShowType == PresentationShowType.BrowsedByIndividual;
         WindowPlan = new SlideShowRuntimeWindowPlan(
             isBrowseWindow,
             IsBorderless: !isBrowseWindow,
             IsTopmost: !isBrowseWindow,
             AllowsResize: isBrowseWindow,
-            ShowBrowseScrollbars: isBrowseWindow && presentation.ShowBrowseScrollbar);
+            ShowBrowseScrollbars: isBrowseWindow &&
+                (forceBrowseWindow || presentation.ShowBrowseScrollbar));
         KioskRestartInterval = SlideShowKioskRestartPlanner.TryGetInterval(presentation, out var interval)
             ? interval
             : null;

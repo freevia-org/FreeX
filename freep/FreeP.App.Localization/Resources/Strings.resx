@@ -3109,6 +3109,12 @@
   <data name="Ribbon_Command_ViewNotesPage_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_ViewReadingView_Label" xml:space="preserve">
+    <value>Reading View</value>
+  </data>
+  <data name="Ribbon_Command_ViewReadingView_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
   <data name="Ribbon_Group_ViewShow_Label" xml:space="preserve">
     <value>Show</value>
   </data>

@@ -12,7 +12,8 @@ public sealed record SlideShowWindowLaunchPlan(
     Action<int, string?>? SetSlideNotesText = null,
     int? PreferredCaptionSlideIndex = null,
     uint? PreferredCaptionShapeId = null,
-    int? PreferredCaptionTrackIndex = null)
+    int? PreferredCaptionTrackIndex = null,
+    bool ForceBrowseWindow = false)
 {
     public static SlideShowWindowLaunchPlan FullPresentation(
         Presentation presentation,
@@ -38,6 +39,7 @@ public sealed record SlideShowWindowLaunchPlan(
             new(
                 PreferredCaptionSlideIndex,
                 PreferredCaptionShapeId,
-                PreferredCaptionTrackIndex));
+                PreferredCaptionTrackIndex),
+            forceBrowseWindow: ForceBrowseWindow);
     }
 }

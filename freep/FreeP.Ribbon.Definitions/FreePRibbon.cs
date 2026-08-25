@@ -1447,6 +1447,9 @@ public static class FreePRibbon
             group.Large(PresentationViewModePlanner.NotesPageCommandId,
                 FreePRibbonText.ViewNotesPageCommand.Label, RibbonCommandIconKind.OnePage,
                 FreePRibbonText.ViewNotesPageCommand.KeyTip);
+            group.Large(PresentationReadingViewPlanner.CommandId,
+                FreePRibbonText.ViewReadingViewCommand.Label, RibbonCommandIconKind.Watch,
+                FreePRibbonText.ViewReadingViewCommand.KeyTip);
         });
         tab.Group("show", FreePRibbonText.ViewShowGroup.Label, FreePRibbonText.ViewShowGroup.KeyTip, 100, group =>
         {
