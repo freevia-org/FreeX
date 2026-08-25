@@ -491,12 +491,13 @@ public static partial class BuiltInFunctions
         var filePath = ctx.CurrentWorkbook?.FilePath;
         if (string.IsNullOrEmpty(filePath)) return "";
 
-        var directory = System.IO.Path.GetDirectoryName(filePath);
-        var fileName = System.IO.Path.GetFileName(filePath);
+        // Workbook paths can originate on another operating system. Split on both separators so a
+        // Windows-authored path still has Excel's drive:\path\[file] shape on Linux/macOS, and a
+        // POSIX-authored path retains forward slashes when inspected on Windows.
+        int separatorIndex = Math.Max(filePath.LastIndexOf('/'), filePath.LastIndexOf('\\'));
+        var directoryWithSeparator = separatorIndex < 0 ? "" : filePath[..(separatorIndex + 1)];
+        var fileName = filePath[(separatorIndex + 1)..];
         var sheetName = (sheet ?? ctx.CurrentSheet)?.Name ?? "";
-        var directoryWithSeparator = string.IsNullOrEmpty(directory)
-            ? ""
-            : EnsureTrailingDirectorySeparator(directory);
 
         return $"{directoryWithSeparator}[{fileName}]{sheetName}";
     }

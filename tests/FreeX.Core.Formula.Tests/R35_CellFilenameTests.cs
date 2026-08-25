@@ -36,4 +36,15 @@ public class R35_CellFilenameTests
         _eval.Evaluate("=CELL(\"filename\")", sheet, wb)
             .Should().Be(new TextValue(""));
     }
+
+    [Fact]
+    public void Cell_Filename_PreservesPosixPathSyntaxAcrossOperatingSystems()
+    {
+        var wb = new Workbook();
+        var sheet = wb.AddSheet("Sheet1");
+        wb.FilePath = "/work/reports/Q1.xlsx";
+
+        _eval.Evaluate("=CELL(\"filename\")", sheet, wb)
+            .Should().Be(new TextValue("/work/reports/[Q1.xlsx]Sheet1"));
+    }
 }

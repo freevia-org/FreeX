@@ -76,7 +76,9 @@ $sourceFiles = @(
 )
 $sourceSha256 = [ordered]@{}
 foreach ($relativePath in $sourceFiles) {
-    $sourceSha256[$relativePath] = Get-VisualEvidenceFileSha256 -Path (Join-Path $repo ($relativePath -replace '/', '\\'))
+    # Source freshness must not change when Git checks the same text out with CRLF on Windows and
+    # LF on Linux/macOS. Binary capture artifacts continue to use byte-exact hashes below.
+    $sourceSha256[$relativePath] = Get-VisualEvidenceNormalizedTextSha256 -Path (Join-Path $repo ($relativePath -replace '/', '\\'))
 }
 
 $standardTabs = @('home', 'insert', 'design', 'layout', 'references', 'mailings', 'review', 'view', 'help', 'developer')
