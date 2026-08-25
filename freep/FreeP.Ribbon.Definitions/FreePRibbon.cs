@@ -1453,6 +1453,8 @@ public static class FreePRibbon
         });
         tab.Group("show", FreePRibbonText.ViewShowGroup.Label, FreePRibbonText.ViewShowGroup.KeyTip, 100, group =>
         {
+            group.MediumToggle(PresentationViewShowPlanner.RulerCommandId, FreePRibbonText.ViewRulerCommand.Label,
+                RibbonCommandIconKind.Ruler, FreePRibbonText.ViewRulerCommand.KeyTip);
             group.MediumToggle("freep.view.show.gridlines", FreePRibbonText.ViewGridlinesCommand.Label,
                 RibbonCommandIconKind.Grid, FreePRibbonText.ViewGridlinesCommand.KeyTip);
             group.MediumToggle("freep.view.show.guides", FreePRibbonText.ViewGuidesCommand.Label,

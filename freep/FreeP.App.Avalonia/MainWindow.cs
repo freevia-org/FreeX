@@ -2349,6 +2349,7 @@ public sealed partial class MainWindow : Window,
     {
         _viewShowState = state;
         _notesBox.IsVisible = _viewModeState.Mode != PresentationViewMode.SlideSorter && state.ShowNotesPane;
+        _slideCanvas.ApplyViewShowState(state);
         if (_gestureHandler is null)
             return;
 

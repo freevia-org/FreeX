@@ -2,6 +2,7 @@ namespace FreeP.App.Compositor;
 
 public enum PresentationViewShowCommandKind
 {
+    Ruler,
     Gridlines,
     Guides,
     Notes
@@ -10,12 +11,14 @@ public enum PresentationViewShowCommandKind
 public readonly record struct PresentationViewShowState(
     bool ShowGridlines,
     bool ShowGuides,
-    bool ShowNotesPane = true)
+    bool ShowNotesPane = true,
+    bool ShowRulers = true)
 {
     public static PresentationViewShowState Default { get; } = new(
         ShowGridlines: true,
         ShowGuides: true,
-        ShowNotesPane: true);
+        ShowNotesPane: true,
+        ShowRulers: true);
 }
 
 public readonly record struct PresentationViewShowCommandPlan(
@@ -30,12 +33,14 @@ public readonly record struct PresentationViewShowToggleResult(
 public static class PresentationViewShowPlanner
 {
     public const string GridlinesCommandId = "freep.view.show.gridlines";
+    public const string RulerCommandId = "freep.view.show.ruler";
     public const string GuidesCommandId = "freep.view.show.guides";
     public const string NotesCommandId = "freep.view.show.notes";
 
     public static IReadOnlyList<PresentationViewShowCommandPlan> BuildPlans(
         PresentationViewShowState state) =>
         [
+            BuildPlan(PresentationViewShowCommandKind.Ruler, state),
             BuildPlan(PresentationViewShowCommandKind.Gridlines, state),
             BuildPlan(PresentationViewShowCommandKind.Guides, state),
             BuildPlan(PresentationViewShowCommandKind.Notes, state),
@@ -67,6 +72,7 @@ public static class PresentationViewShowPlanner
     {
         var next = plan.Kind switch
         {
+            PresentationViewShowCommandKind.Ruler => state with { ShowRulers = !state.ShowRulers },
             PresentationViewShowCommandKind.Gridlines => state with { ShowGridlines = !state.ShowGridlines },
             PresentationViewShowCommandKind.Guides => state with { ShowGuides = !state.ShowGuides },
             PresentationViewShowCommandKind.Notes => state with { ShowNotesPane = !state.ShowNotesPane },
@@ -96,6 +102,7 @@ public static class PresentationViewShowPlanner
         PresentationViewShowCommandKind kind) =>
         kind switch
         {
+            PresentationViewShowCommandKind.Ruler => state.ShowRulers,
             PresentationViewShowCommandKind.Gridlines => state.ShowGridlines,
             PresentationViewShowCommandKind.Guides => state.ShowGuides,
             PresentationViewShowCommandKind.Notes => state.ShowNotesPane,
@@ -105,6 +112,7 @@ public static class PresentationViewShowPlanner
     public static string CommandIdFor(PresentationViewShowCommandKind kind) =>
         kind switch
         {
+            PresentationViewShowCommandKind.Ruler => RulerCommandId,
             PresentationViewShowCommandKind.Gridlines => GridlinesCommandId,
             PresentationViewShowCommandKind.Guides => GuidesCommandId,
             PresentationViewShowCommandKind.Notes => NotesCommandId,
@@ -115,6 +123,9 @@ public static class PresentationViewShowPlanner
     {
         switch (commandId)
         {
+            case RulerCommandId:
+                kind = PresentationViewShowCommandKind.Ruler;
+                return true;
             case GridlinesCommandId:
                 kind = PresentationViewShowCommandKind.Gridlines;
                 return true;

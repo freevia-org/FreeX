@@ -131,7 +131,9 @@ public sealed partial class SlideCanvas : FrameworkElement
     private InCanvasTextEditor?        _textEditor;
     private InCanvasTableCellEditor?   _tableCellEditor;   // Wave 9A
     private Canvas?                    _textOverlay;   // WPF Canvas layered above SlideCanvas for text-edit overlay
-    private PresentationViewShowState  _viewShowState = PresentationViewShowState.Default;
+    // Standalone canvases also render slide-pane thumbnails and print surfaces. The interactive
+    // main host explicitly applies its View state; secondary canvases must not inherit ruler chrome.
+    private PresentationViewShowState  _viewShowState = PresentationViewShowState.Default with { ShowRulers = false };
     private PresentationViewZoomState  _viewZoomState = PresentationViewZoomState.FitToWindow;
     private EditingSession?            _editingSession;
     private readonly PresentationCanvasAutomationSession _canvasAutomation = new();
@@ -232,12 +234,52 @@ public sealed partial class SlideCanvas : FrameworkElement
     public void ApplyViewShowState(PresentationViewShowState state)
     {
         _viewShowState = state;
+        InvalidateVisual();
         if (_gestureHandler is null)
             return;
 
         _gestureHandler.SnapToGrid = state.ShowGridlines;
         _gestureHandler.SnapToShapes = state.ShowGuides;
     }
+
+    private static void RenderRulers(
+        DrawingContext dc,
+        SlideTransformCore transform,
+        double width,
+        double height)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+
+        const double thickness = PresentationRulerTickPlanner.RulerThickness;
+        var surface = FreezeBrush(new SolidColorBrush(Color.FromRgb(0xF7, 0xF7, 0xF7)));
+        var lineBrush = FreezeBrush(new SolidColorBrush(Color.FromRgb(0xA6, 0xA6, 0xA6)));
+        var pen = new Pen(lineBrush, 1);
+        pen.Freeze();
+        dc.DrawRectangle(surface, pen, new Rect(0, 0, width, thickness));
+        dc.DrawRectangle(surface, pen, new Rect(0, 0, thickness, height));
+
+        foreach (var tick in PresentationRulerTickPlanner.BuildHorizontal(transform))
+        {
+            dc.DrawLine(pen, new Point(tick.Offset, thickness), new Point(tick.Offset, thickness - tick.Length));
+            if (tick.Label is not null)
+                dc.DrawText(CreateRulerLabel(tick.Label), new Point(tick.Offset + 2, 0));
+        }
+
+        foreach (var tick in PresentationRulerTickPlanner.BuildVertical(transform))
+            dc.DrawLine(pen, new Point(thickness, tick.Offset), new Point(thickness - tick.Length, tick.Offset));
+    }
+
+    private static FormattedText CreateRulerLabel(string text) => new(
+        text,
+        System.Globalization.CultureInfo.InvariantCulture,
+        FlowDirection.LeftToRight,
+        new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
+        8,
+        FreezeBrush(new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60))),
+        numberSubstitution: null,
+        textFormattingMode: TextFormattingMode.Display,
+        pixelsPerDip: 1.0);
 
     public void ApplyViewZoomState(PresentationViewZoomState state)
     {
@@ -332,6 +374,8 @@ public sealed partial class SlideCanvas : FrameworkElement
     {
         base.OnRender(dc);
         RenderToDrawingContext(dc, ActualWidth, ActualHeight);
+        if (_viewShowState.ShowRulers)
+            RenderRulers(dc, CurrentTransform.Core, ActualWidth, ActualHeight);
     }
 
     /// <summary>
@@ -439,16 +483,19 @@ public sealed partial class SlideCanvas : FrameworkElement
         double slideWidthDip,
         double slideHeightDip)
     {
+        var rulerInset = _viewShowState.ShowRulers
+            ? PresentationRulerTickPlanner.RulerThickness
+            : 0;
         var plan = PresentationViewZoomPlanner.PlanStageTransform(
-            renderW,
-            renderH,
+            Math.Max(0, renderW - rulerInset),
+            Math.Max(0, renderH - rulerInset),
             slideWidthDip,
             slideHeightDip,
             _viewZoomState);
         return new SlideTransform(
             plan.Scale,
-            plan.OffsetX,
-            plan.OffsetY,
+            plan.OffsetX + rulerInset,
+            plan.OffsetY + rulerInset,
             plan.SlideWidthDip,
             plan.SlideHeightDip);
     }

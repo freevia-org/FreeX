@@ -3127,6 +3127,12 @@
   <data name="Ribbon_Command_ViewGridlines_KeyTip" xml:space="preserve">
     <value>G</value>
   </data>
+  <data name="Ribbon_Command_ViewRuler_Label" xml:space="preserve">
+    <value>Ruler</value>
+  </data>
+  <data name="Ribbon_Command_ViewRuler_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
   <data name="Ribbon_Command_ViewGuides_Label" xml:space="preserve">
     <value>Guides</value>
   </data>

@@ -9,6 +9,7 @@ public sealed class PresentationViewShowPlannerTests
     {
         var state = PresentationViewShowState.Default;
 
+        state.ShowRulers.Should().BeTrue();
         state.ShowGridlines.Should().BeTrue();
         state.ShowGuides.Should().BeTrue();
         state.ShowNotesPane.Should().BeTrue();
@@ -16,6 +17,7 @@ public sealed class PresentationViewShowPlannerTests
             .Select(plan => plan.CommandId)
             .Should()
             .Equal(
+                PresentationViewShowPlanner.RulerCommandId,
                 PresentationViewShowPlanner.GridlinesCommandId,
                 PresentationViewShowPlanner.GuidesCommandId,
                 PresentationViewShowPlanner.NotesCommandId);
@@ -25,6 +27,7 @@ public sealed class PresentationViewShowPlannerTests
     public void Gridlines_toggle_flips_only_grid_visibility_and_snap_intent()
     {
         var state = new PresentationViewShowState(
+            ShowRulers: true,
             ShowGridlines: true,
             ShowGuides: true);
 
@@ -44,6 +47,7 @@ public sealed class PresentationViewShowPlannerTests
     public void Guides_toggle_flips_only_guides_visibility_and_shape_snap_intent()
     {
         var state = new PresentationViewShowState(
+            ShowRulers: true,
             ShowGridlines: true,
             ShowGuides: false);
 
@@ -72,6 +76,22 @@ public sealed class PresentationViewShowPlannerTests
         result.State.ShowGridlines.Should().BeTrue();
         result.State.ShowGuides.Should().BeTrue();
         result.State.ShowNotesPane.Should().BeFalse();
+        result.IsChecked.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Ruler_toggle_flips_only_ruler_chrome_visibility()
+    {
+        PresentationViewShowPlanner.TryToggle(
+                PresentationViewShowState.Default,
+                PresentationViewShowPlanner.RulerCommandId,
+                out var result)
+            .Should()
+            .BeTrue();
+
+        result.State.ShowRulers.Should().BeFalse();
+        result.State.ShowGridlines.Should().BeTrue();
+        result.State.ShowGuides.Should().BeTrue();
         result.IsChecked.Should().BeFalse();
     }
 
