@@ -33,19 +33,21 @@ public sealed class AutosaveSnapshotStoreTests
     [Fact]
     public void GetSnapshotPath_ContainsRecoveryDirectoryAndId()
     {
-        var store = new AutosaveSnapshotStore(@"C:\FreeX\Recovery");
+        var recoveryDirectory = Path.Combine("FreeX", "Recovery");
+        var store = new AutosaveSnapshotStore(recoveryDirectory);
 
         store.GetSnapshotPath("recovery-1234-w0")
-            .Should().Be(@"C:\FreeX\Recovery\recovery-1234-w0.fxl");
+            .Should().Be(Path.Combine(recoveryDirectory, "recovery-1234-w0.fxl"));
     }
 
     [Fact]
     public void GetSidecarPath_ContainsRecoveryDirectoryAndId()
     {
-        var store = new AutosaveSnapshotStore(@"C:\FreeX\Recovery");
+        var recoveryDirectory = Path.Combine("FreeX", "Recovery");
+        var store = new AutosaveSnapshotStore(recoveryDirectory);
 
         store.GetSidecarPath("recovery-1234-w0")
-            .Should().Be(@"C:\FreeX\Recovery\recovery-1234-w0.sidecar.json");
+            .Should().Be(Path.Combine(recoveryDirectory, "recovery-1234-w0.sidecar.json"));
     }
 
     [Fact]
@@ -251,6 +253,9 @@ public sealed class AutosaveSnapshotStoreTests
     [Fact]
     public void DeleteSnapshot_WhenSnapshotDeleteFails_LeavesSidecarInPlaceInsteadOfOrphaningPayload()
     {
+        if (!OperatingSystem.IsWindows())
+            return;
+
         using var dir = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(dir.Path);
 

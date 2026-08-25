@@ -188,11 +188,12 @@ public sealed class AutosaveRecoveryFlowTests
     public void SnapshotIds_WithSamePidAndSameGuid_ProduceConsistentPaths()
     {
         // Within one session the same window should always map to the same snapshot file.
-        var store = new AutosaveSnapshotStore(@"C:\FreeX\Recovery");
+        var recoveryDirectory = Path.Combine("FreeX", "Recovery");
+        var store = new AutosaveSnapshotStore(recoveryDirectory);
         var id = "recovery-9999-abcd1234-w0";
 
-        store.GetSnapshotPath(id).Should().Be(@"C:\FreeX\Recovery\recovery-9999-abcd1234-w0.fxl");
-        store.GetSidecarPath(id).Should().Be(@"C:\FreeX\Recovery\recovery-9999-abcd1234-w0.sidecar.json");
+        store.GetSnapshotPath(id).Should().Be(Path.Combine(recoveryDirectory, $"{id}.fxl"));
+        store.GetSidecarPath(id).Should().Be(Path.Combine(recoveryDirectory, $"{id}.sidecar.json"));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
