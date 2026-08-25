@@ -33,7 +33,7 @@ internal static class DocumentThemeGallery
         foreach (var styleSet in DocumentStyleSet.Catalog.Take(VisibleStyleCount))
             root.Children.Add(BuildStyleSetButton(styleSet, registry));
         root.Children.Add(BuildMenuButton("More", "▾", DocumentStyleSet.Catalog.Select(styleSet =>
-            (styleSet.Name, new RibbonCommandId(DesignRibbonWorkflow.StyleSetCommandId(styleSet.Name)))), registry, "More Style Sets"));
+            (styleSet.Name, new RibbonCommandId(DesignRibbonWorkflow.StyleSetCommandId(styleSet.Name)))), registry, UiText.Get("Design_StyleSets_MoreToolTip")));
         root.Children.Add(BuildMenuButton("Colors", "", DocumentTheme.Catalog.Select(theme =>
             (theme.Name, new RibbonCommandId($"freew.theme-colors.{theme.Name.ToLowerInvariant()}"))), registry));
         root.Children.Add(BuildMenuButton("Fonts", "", DocumentFontSet.Catalog.Select(fontSet =>
