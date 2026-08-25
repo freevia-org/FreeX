@@ -146,6 +146,19 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_home_restores_the_wpf_formatting_group()
+    {
+        var wpf = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf);
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+
+        var wpfFormatting = RequiredGroup(wpf, "home", "formatting");
+        var avaloniaFormatting = RequiredGroup(avalonia, "home", "formatting");
+        wpfFormatting.Controls.Select(control => control.CommandId.Value).Should().ContainSingle().Which.Should().Be("freew.reveal-formatting");
+        avaloniaFormatting.Controls.Select(control => control.CommandId.Value).Should().ContainSingle().Which.Should().Be("freew.reveal-formatting");
+        avaloniaFormatting.Controls[0].PreferredLayout.Should().Be(wpfFormatting.Controls[0].PreferredLayout);
+    }
+
+    [Fact]
     public void Profile_tab_ids_match_except_named_capability_deltas()
     {
         var wpfTabIds = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();

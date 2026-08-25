@@ -170,7 +170,7 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
         avalonia.FindTab("file").Should().NotBeNull();
 
         wpf.FindTab("home")!.FindGroup("formatting").Should().NotBeNull();
-        avalonia.FindTab("home")!.FindGroup("formatting").Should().BeNull();
+        avalonia.FindTab("home")!.FindGroup("formatting").Should().NotBeNull();
 
         var wpfDrawing = wpf.FindTab("drawing-format")!;
         var avaloniaDrawing = avalonia.FindTab("drawing-format")!;
