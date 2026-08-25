@@ -24,6 +24,17 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
+    public void Ribbon_definition_orders_primary_tabs_like_the_word_style_wpf_host()
+    {
+        FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia)
+            .VisibleTabs
+            .Where(tab => !tab.IsContextual)
+            .Select(tab => tab.Id)
+            .Should()
+            .Equal("file", "home", "insert", "design", "layout", "references", "mailings", "review", "view", "help", "developer");
+    }
+
+    [Fact]
     public void Ribbon_home_tab_has_the_expected_groups()
     {
         var home = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("home");

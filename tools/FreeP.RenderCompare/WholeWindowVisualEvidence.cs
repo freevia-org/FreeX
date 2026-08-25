@@ -233,9 +233,9 @@ internal static class WholeWindowVisualEvidence
             Mismatch("capture-pixel-content-invalid", string.Join("; ", reasons) + ".");
         }
         if (wpf.SemanticState.AppOwnedTitleBarVisible && wpfTitleBarRaster?.IsValid != true)
-            Mismatch("app-owned-titlebar-raster", $"WPF titlebar accent is not visibly present in its declared raster bounds (accent ratio {wpfTitleBarRaster?.AccentPixelRatio ?? 0:P1}).");
+            Mismatch("app-owned-titlebar-raster", $"WPF titlebar surface is not visibly present in its declared raster bounds (accent ratio {wpfTitleBarRaster?.AccentPixelRatio ?? 0:P1}).");
         if (avalonia.SemanticState.AppOwnedTitleBarVisible && avaloniaTitleBarRaster?.IsValid != true)
-            Mismatch("app-owned-titlebar-raster", $"Avalonia titlebar accent is not visibly present in its declared raster bounds (accent ratio {avaloniaTitleBarRaster?.AccentPixelRatio ?? 0:P1}).");
+            Mismatch("app-owned-titlebar-raster", $"Avalonia titlebar surface is not visibly present in its declared raster bounds (accent ratio {avaloniaTitleBarRaster?.AccentPixelRatio ?? 0:P1}).");
 
         if (wpf.PixelWidth != WholeWindowVisualEvidenceCatalog.LogicalClientWidth ||
             wpf.PixelHeight != WholeWindowVisualEvidenceCatalog.LogicalClientHeight ||
