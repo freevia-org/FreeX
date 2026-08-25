@@ -167,6 +167,8 @@ public sealed class GridViewHighContrastChromeTests
         var handler = gridViewSource[
             gridViewSource.IndexOf("private void OnSystemParametersChangedForHighContrastChrome", StringComparison.Ordinal)..
             gridViewSource.IndexOf("protected override AutomationPeer OnCreateAutomationPeer", StringComparison.Ordinal)];
+        handler.Should().Contain("if (!Dispatcher.CheckAccess())");
+        handler.Should().Contain("Dispatcher.BeginInvoke(DispatcherPriority.Render, RefreshHighContrastChrome)");
         handler.Should().Contain("RefreshHighContrastChromePalette();");
         // These caches bake HeaderBackgroundBrush/GridPen/HeaderTextBrush into cached
         // Drawing/FormattedText objects (see DrawHeaderText/GetDefaultHeaderFormattedText), so a

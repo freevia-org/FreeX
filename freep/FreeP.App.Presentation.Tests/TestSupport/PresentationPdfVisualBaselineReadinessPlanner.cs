@@ -269,7 +269,8 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
         if (string.IsNullOrWhiteSpace(sourceName))
             return "Presentation.pptx";
 
-        var fileName = Path.GetFileName(sourceName.Trim());
+        var portablePath = sourceName.Trim().Replace('\\', '/');
+        var fileName = Path.GetFileName(portablePath);
         return string.IsNullOrWhiteSpace(fileName) ? "Presentation.pptx" : fileName;
     }
 }

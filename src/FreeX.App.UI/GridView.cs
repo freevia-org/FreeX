@@ -4,6 +4,7 @@ using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Media;
+using System.Windows.Threading;
 using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.PageLayout;
@@ -58,6 +59,19 @@ public partial class GridView : FrameworkElement
     /// paint instead of the toggle being silently absorbed by a stale cache.
     /// </summary>
     private void OnSystemParametersChangedForHighContrastChrome(object? sender, EventArgs e)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            if (!Dispatcher.HasShutdownStarted && !Dispatcher.HasShutdownFinished)
+                _ = Dispatcher.BeginInvoke(DispatcherPriority.Render, RefreshHighContrastChrome);
+
+            return;
+        }
+
+        RefreshHighContrastChrome();
+    }
+
+    private void RefreshHighContrastChrome()
     {
         RefreshHighContrastChromePalette();
         _headerBaseLayerCache = null;

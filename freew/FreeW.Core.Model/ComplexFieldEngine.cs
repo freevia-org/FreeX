@@ -367,6 +367,9 @@ public static class ComplexFieldEngine
         target = target.Trim();
         try
         {
+            if (target.Length >= 3 && char.IsLetter(target[0]) && target[1] == ':' && target[2] is '/' or '\\')
+                return Uri.UnescapeDataString(target).Replace('/', '\\');
+
             if (!Uri.TryCreate(target, UriKind.Absolute, out var uri))
                 return Path.IsPathFullyQualified(target) ? Uri.UnescapeDataString(target) : null;
 
