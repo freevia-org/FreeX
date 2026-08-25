@@ -23,7 +23,7 @@ public sealed class DesignDialogPlannerTests
                 SeparatorBottomMargin: 4,
                 ActionButtonWidth: 72,
                 ActionRowTopMargin: 12,
-                AvaloniaColorRowHeight: 29.4,
+                AvaloniaColorRowHeight: 28,
                 AvaloniaSeparatorHeight: 1,
                 AvaloniaValidationTopMargin: 8));
     }
