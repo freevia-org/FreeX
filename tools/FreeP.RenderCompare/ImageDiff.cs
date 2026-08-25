@@ -31,6 +31,12 @@ namespace FreeP.RenderCompare;
 /// </summary>
 internal static class ImageDiff
 {
+    private const int FreePNeutralCaptionRed = 243;
+    private const int FreePNeutralCaptionGreen = 244;
+    private const int FreePNeutralCaptionBlue = 246;
+    private const int FreePNeutralCaptionChannelTolerance = 2;
+    private const double FreePNeutralCaptionMinimumRatio = 0.80;
+
     internal const int DefaultChangedChannelThreshold = 24;
 
     internal static bool TryWriteCrop(
@@ -332,10 +338,11 @@ internal static class ImageDiff
                 if (alpha >= 224 && red >= 130 && red >= green + 40 && red >= blue + 40 && green <= 135 && blue <= 125)
                     accentPixels++;
                 // FreeP deliberately uses the Office-like neutral #F3F4F6 caption surface.
-                // Treat a dominant neutral caption raster as valid alongside accent-branded hosts.
-                if (alpha >= 224 && red >= 225 && green >= 225 && blue >= 225 &&
-                    Math.Max(red, Math.Max(green, blue)) <= 250 &&
-                    Math.Max(red, Math.Max(green, blue)) - Math.Min(red, Math.Min(green, blue)) <= 16)
+                // Keep this path specific enough that a generic light-gray occlusion cannot pass.
+                if (alpha >= 224 &&
+                    Math.Abs(red - FreePNeutralCaptionRed) <= FreePNeutralCaptionChannelTolerance &&
+                    Math.Abs(green - FreePNeutralCaptionGreen) <= FreePNeutralCaptionChannelTolerance &&
+                    Math.Abs(blue - FreePNeutralCaptionBlue) <= FreePNeutralCaptionChannelTolerance)
                 {
                     neutralCaptionPixels++;
                 }
@@ -344,8 +351,8 @@ internal static class ImageDiff
 
         var accentRatio = sampledPixels == 0 ? 0 : accentPixels / (double)sampledPixels;
         var neutralCaptionRatio = sampledPixels == 0 ? 0 : neutralCaptionPixels / (double)sampledPixels;
-        return new(sampledPixels, accentPixels, accentRatio,
-            sampledPixels > 0 && (accentRatio >= 0.40 || neutralCaptionRatio >= 0.40));
+        return new(sampledPixels, accentPixels, accentRatio, neutralCaptionPixels, neutralCaptionRatio,
+            sampledPixels > 0 && (accentRatio >= 0.40 || neutralCaptionRatio >= FreePNeutralCaptionMinimumRatio));
     }
 
     private static ulong DifferenceHash(BitmapSource source)
@@ -514,4 +521,6 @@ internal sealed record TitleBarRasterValidation(
     long SampledPixelCount,
     long AccentPixelCount,
     double AccentPixelRatio,
+    long NeutralCaptionPixelCount,
+    double NeutralCaptionPixelRatio,
     bool IsValid);

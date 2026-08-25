@@ -64,12 +64,15 @@ public sealed class WholeWindowVisualEvidenceTests
     }
 
     [Fact]
-    public void Titlebar_raster_gate_accepts_freep_neutral_caption_and_rejects_white_occlusion()
+    public void Titlebar_raster_gate_accepts_freep_neutral_caption_and_rejects_wrong_or_partial_surfaces()
     {
         using var temporaryDirectory = new TestTemporaryDirectory("freep-whole-window-titlebar-");
         var root = temporaryDirectory.Path;
         var accent = Path.Combine(root, "accent.png");
         var neutral = Path.Combine(root, "neutral.png");
+        var neutralAtThreshold = Path.Combine(root, "neutral-at-threshold.png");
+        var neutralBelowThreshold = Path.Combine(root, "neutral-below-threshold.png");
+        var wrongNeutral = Path.Combine(root, "wrong-neutral.png");
         var occluded = Path.Combine(root, "occluded.png");
         var pixels = Enumerable.Repeat((byte)255, 128 * 76 * 4).ToArray();
         for (var offset = 0; offset < pixels.Length; offset += 4)
@@ -86,12 +89,48 @@ public sealed class WholeWindowVisualEvidenceTests
         }
         WritePng(accent, BitmapSource.Create(128, 76, 96, 96, PixelFormats.Bgra32, null, pixels, 128 * 4));
         WriteSolidPng(neutral, 128, 76, 243, 244, 246, 255);
+        WriteTitleBarBandPng(neutralAtThreshold, neutralRows: 8, darkRows: 2);
+        WriteTitleBarBandPng(neutralBelowThreshold, neutralRows: 7, darkRows: 3);
+        WriteSolidPng(wrongNeutral, 128, 76, 240, 240, 240, 255);
         WriteSolidPng(occluded, 128, 76, 255, 255, 255, 255);
         var bounds = new FreeP.App.Compositor.WholeWindowVisualEvidenceBounds(0, 0, 128, 10);
 
         ImageDiff.ValidateFreePTitleBarRegion(accent, bounds).IsValid.Should().BeTrue();
-        ImageDiff.ValidateFreePTitleBarRegion(neutral, bounds).IsValid.Should().BeTrue();
+        var neutralValidation = ImageDiff.ValidateFreePTitleBarRegion(neutral, bounds);
+        neutralValidation.IsValid.Should().BeTrue();
+        neutralValidation.NeutralCaptionPixelRatio.Should().BeGreaterThan(0.9);
+        ImageDiff.ValidateFreePTitleBarRegion(neutralAtThreshold, bounds).IsValid.Should().BeTrue();
+        ImageDiff.ValidateFreePTitleBarRegion(neutralBelowThreshold, bounds).IsValid.Should().BeFalse();
+        ImageDiff.ValidateFreePTitleBarRegion(wrongNeutral, bounds).IsValid.Should().BeFalse();
         ImageDiff.ValidateFreePTitleBarRegion(occluded, bounds).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Titlebar_raster_gate_keeps_accent_threshold_semantics_for_non_neutral_hosts()
+    {
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-whole-window-accent-titlebar-");
+        var root = temporaryDirectory.Path;
+        var pixels = Enumerable.Repeat((byte)255, 128 * 76 * 4).ToArray();
+        for (var offset = 0; offset < pixels.Length; offset += 4)
+            pixels[offset + 3] = 255;
+        for (var y = 0; y < 4; y++)
+        {
+            for (var x = 0; x < 128; x++)
+            {
+                var offset = (y * 128 + x) * 4;
+                pixels[offset] = 42;
+                pixels[offset + 1] = 71;
+                pixels[offset + 2] = 183;
+            }
+        }
+
+        var path = Path.Combine(root, "accent-at-threshold.png");
+        WritePng(path, BitmapSource.Create(128, 76, 96, 96, PixelFormats.Bgra32, null, pixels, 128 * 4));
+
+        ImageDiff.ValidateFreePTitleBarRegion(
+            path,
+            new FreeP.App.Compositor.WholeWindowVisualEvidenceBounds(0, 0, 128, 10))
+            .IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -203,6 +242,34 @@ public sealed class WholeWindowVisualEvidenceTests
             pixels[offset + 2] = red;
             pixels[offset + 3] = alpha;
         }
+        WritePng(path, BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, width * 4));
+    }
+
+    private static void WriteTitleBarBandPng(string path, int neutralRows, int darkRows)
+    {
+        const int width = 128;
+        const int height = 76;
+        var pixels = new byte[width * height * 4];
+        for (var offset = 0; offset < pixels.Length; offset += 4)
+        {
+            pixels[offset] = 255;
+            pixels[offset + 1] = 255;
+            pixels[offset + 2] = 255;
+            pixels[offset + 3] = 255;
+        }
+
+        for (var y = 0; y < neutralRows + darkRows; y++)
+        {
+            var isNeutral = y < neutralRows;
+            for (var x = 0; x < width; x++)
+            {
+                var offset = (y * width + x) * 4;
+                pixels[offset] = isNeutral ? (byte)246 : (byte)0;
+                pixels[offset + 1] = isNeutral ? (byte)244 : (byte)0;
+                pixels[offset + 2] = isNeutral ? (byte)243 : (byte)0;
+            }
+        }
+
         WritePng(path, BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, width * 4));
     }
 
