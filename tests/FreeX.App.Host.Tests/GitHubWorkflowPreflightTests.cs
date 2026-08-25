@@ -41,10 +41,11 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().NotContain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform macos -NoBuild");
         workflow.Should().NotContain("dotnet test FreeX.DefaultTests.slnx");
         workflow.Should().NotContain("dotnet test FreeX.UiTests.slnx");
-        workflow.Should().NotContain("--disable-build-servers");
-        workflow.Should().NotContain("-p:UseSharedCompilation=false");
-        workflow.Should().NotContain("-p:NodeReuse=false");
-        workflow.Should().NotContain("/nr:false");
+        workflow.Should().Contain("--disable-build-servers");
+        workflow.Should().Contain("-p:UseSharedCompilation=false");
+        workflow.Should().Contain("-p:NodeReuse=false");
+        workflow.Should().Contain("/nr:false");
+        workflow.Should().Contain("-m:1");
         workflow.Should().NotContain("dotnet test FreeX.slnx --configuration Release --no-build");
     }
 

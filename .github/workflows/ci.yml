@@ -40,7 +40,7 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: dotnet build FreeX.slnx --configuration Release
+        run: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1
 
       - name: Commit gate
         shell: pwsh

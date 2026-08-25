@@ -47,10 +47,11 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().NotContain("dotnet test FreeX.DefaultTests.slnx");
         workflow.Should().NotContain("dotnet test FreeX.UiTests.slnx");
         workflow.Should().NotContain("dotnet restore FreeX.slnx");
-        workflow.Should().NotContain("--disable-build-servers");
-        workflow.Should().NotContain("-p:UseSharedCompilation=false");
-        workflow.Should().NotContain("-p:NodeReuse=false");
-        workflow.Should().NotContain("/nr:false");
+        workflow.Should().Contain("--disable-build-servers");
+        workflow.Should().Contain("-p:UseSharedCompilation=false");
+        workflow.Should().Contain("-p:NodeReuse=false");
+        workflow.Should().Contain("/nr:false");
+        workflow.Should().Contain("-m:1");
         workflow.Should().Contain("if: always()");
         workflow.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-test-results");
         workflow.Should().Contain("path: \"**/TestResults/*.trx\"");
