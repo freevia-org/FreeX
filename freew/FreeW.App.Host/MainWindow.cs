@@ -308,6 +308,7 @@ public sealed partial class MainWindow : Window
             NextChange = () => StepRevision(+1),
             NewWindow = OpenNewWindow,
             ArrangeAll = ArrangeAllWindows,
+            SwitchWindows = ShowDocumentWindowPicker,
             OpenThesaurus = ToggleThesaurusPane,
             ToggleReviewBalloons = ToggleBalloons,
             IsReviewBalloonsActive = () => _balloonOverlay?.BalloonsEnabled ?? false,
@@ -2481,6 +2482,49 @@ public sealed partial class MainWindow : Window
             w.Width  = bound.Width;
             w.Height = bound.Height;
         }
+    }
+
+    /// <summary>
+    /// Shows the View &gt; Window live document-window list. It is built at invocation time because
+    /// separate document windows can be opened or closed after the static ribbon has rendered.
+    /// </summary>
+    private void ShowDocumentWindowPicker()
+    {
+        var windows = System.Windows.Application.Current.Windows
+            .OfType<MainWindow>()
+            .Where(window => window.IsVisible)
+            .ToList();
+        if (windows.Count == 0)
+            return;
+
+        var menu = new ContextMenu
+        {
+            PlacementTarget = this,
+            Placement = PlacementMode.Bottom,
+        };
+        foreach (var window in windows)
+        {
+            var target = window;
+            var item = new MenuItem
+            {
+                Header = target.Title,
+                IsCheckable = true,
+                IsChecked = ReferenceEquals(target, this),
+            };
+            item.Click += (_, _) => ActivateDocumentWindow(target);
+            menu.Items.Add(item);
+        }
+
+        menu.IsOpen = true;
+    }
+
+    private static void ActivateDocumentWindow(MainWindow window)
+    {
+        if (window.WindowState == System.Windows.WindowState.Minimized)
+            window.WindowState = System.Windows.WindowState.Normal;
+
+        window.Activate();
+        window.Focus();
     }
 
     // View > Views: switch the editing surface to one of the three mutually-exclusive print-family view

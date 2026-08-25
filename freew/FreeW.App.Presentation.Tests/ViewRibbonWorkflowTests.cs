@@ -66,6 +66,7 @@ public sealed class ViewRibbonWorkflowTests
                 Window: new ViewRibbonWindowBindings(
                     NewWindow: Action("new-window"),
                     ArrangeAll: Action("arrange-all"),
+                    SwitchWindows: Action("switch-windows"),
                     Split: Toggle(() => split = !split, () => split)),
                 RegisterCompatibilityAliases: true));
 
@@ -118,13 +119,15 @@ public sealed class ViewRibbonWorkflowTests
         Execute(registry, "freew.zoom-page-width");
         Execute(registry, "freew.new-window");
         Execute(registry, "freew.arrange-all");
+        Execute(registry, "freew.switch-windows");
         actions.Should().Equal(
             "print-preview",
             "zoom-dialog",
             "one-page",
             "page-width",
             "new-window",
-            "arrange-all");
+            "arrange-all",
+            "switch-windows");
 
         ViewRibbonActionBinding Action(string name) =>
             new(() => actions.Add(name));

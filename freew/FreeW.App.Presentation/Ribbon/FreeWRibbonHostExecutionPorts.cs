@@ -53,6 +53,7 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Action? OpenPrintPreview = null,
     Action? NewWindow = null,
     Action? ArrangeAll = null,
+    Action? SwitchWindows = null,
     Action? ToggleSplit = null,
     Func<bool>? IsSplitActive = null,
     Action? ZoomOnePage = null,

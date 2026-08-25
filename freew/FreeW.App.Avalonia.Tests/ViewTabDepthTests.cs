@@ -763,6 +763,21 @@ public sealed class ViewTabDepthTests
         invoked.Should().Be(1);
     }
 
+    [Fact]
+    public void View_switch_windows_routes_to_the_host_callback()
+    {
+        var invoked = 0;
+        var callbacks = NoopCallbacks() with { SwitchWindows = () => invoked++ };
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.switch-windows"), out var command)
+            .Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        invoked.Should().Be(1);
+    }
+
     private static void Execute(IRibbonCommandRegistry registry, string id)
     {
         registry.TryGet(new RibbonCommandId(id), out var command).Should().BeTrue();
