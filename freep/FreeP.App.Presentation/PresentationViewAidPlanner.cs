@@ -79,8 +79,10 @@ public static class PresentationViewAidPlanner
     {
         var right = transform.OffsetX + transform.SlideWidthDip * transform.Scale;
         var bottom = transform.OffsetY + transform.SlideHeightDip * transform.Scale;
-        var centerX = (transform.OffsetX + right) / 2;
-        var centerY = (transform.OffsetY + bottom) / 2;
+        // Avoid averaging endpoints: adding two very large finite coordinates can overflow
+        // even when the translated canvas bounds themselves are finite.
+        var centerX = transform.OffsetX + transform.SlideWidthDip * transform.Scale / 2;
+        var centerY = transform.OffsetY + transform.SlideHeightDip * transform.Scale / 2;
         return
         [
             new PresentationViewAidLine(centerX, transform.OffsetY, centerX, bottom),
@@ -96,5 +98,7 @@ public static class PresentationViewAidPlanner
         double.IsFinite(transform.SlideHeightDip) &&
         transform.Scale > 0 &&
         transform.SlideWidthDip > 0 &&
-        transform.SlideHeightDip > 0;
+        transform.SlideHeightDip > 0 &&
+        double.IsFinite(transform.OffsetX + transform.SlideWidthDip * transform.Scale) &&
+        double.IsFinite(transform.OffsetY + transform.SlideHeightDip * transform.Scale);
 }

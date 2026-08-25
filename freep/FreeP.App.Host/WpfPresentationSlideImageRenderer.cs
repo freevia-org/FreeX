@@ -69,6 +69,8 @@ internal static class WpfPresentationSlideImageRenderer
             Presentation = presentation,
             Slide = presentation.Slides[slideIndex],
             RenderPrintMarkup = includeCommentsAndInkMarkup,
+            // Keep exported images free of editor-only gridline and guide aids.
+            RenderViewAidsEnabled = false,
         };
 
         canvas.Measure(new Size(widthPx, heightPx));

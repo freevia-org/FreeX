@@ -104,6 +104,9 @@ public sealed partial class SlideCanvas : FrameworkElement
     /// <summary>Whether print-only comment callouts are painted over the slide.</summary>
     public bool RenderPrintMarkup { get; set; }
 
+    /// <summary>Whether editor-only gridline and guide aids are painted by the live canvas.</summary>
+    public bool RenderViewAidsEnabled { get; set; } = true;
+
     /// <summary>Shape whose base text is hidden while its rich editor overlay is active.</summary>
     public uint? ActiveTextEditShapeId
     {
@@ -373,7 +376,8 @@ public sealed partial class SlideCanvas : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
-        RenderToDrawingContext(dc, ActualWidth, ActualHeight, preserveAspectRatio: true, renderViewAids: true);
+        RenderToDrawingContext(dc, ActualWidth, ActualHeight, preserveAspectRatio: true,
+            renderViewAids: RenderViewAidsEnabled);
         if (_viewShowState.ShowRulers)
             RenderRulers(dc, CurrentTransform.Core, ActualWidth, ActualHeight);
     }

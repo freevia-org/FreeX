@@ -55,4 +55,14 @@ public sealed class PresentationViewAidPlannerTests
             .Should()
             .Be(PresentationViewAidPlan.Empty);
     }
+
+    [Fact]
+    public void Finite_but_overflowing_screen_bounds_do_not_emit_non_finite_geometry()
+    {
+        var plan = PresentationViewAidPlanner.Build(
+            new SlideTransformCore(double.MaxValue, double.MaxValue, double.MaxValue, 1, 1),
+            PresentationViewShowState.Default);
+
+        plan.Should().Be(PresentationViewAidPlan.Empty);
+    }
 }

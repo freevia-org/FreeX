@@ -55,6 +55,8 @@ public static class SlideRenderer
             Slide        = slide,
             SlideIndex   = slideIndex,
             RenderPrintMarkup = includeCommentsAndInkMarkup,
+            // WPF's off-screen renderer leaves editor-only aids out of exported images.
+            RenderViewAidsEnabled = false,
         };
 
         var size = new Size(widthPx, heightPx);

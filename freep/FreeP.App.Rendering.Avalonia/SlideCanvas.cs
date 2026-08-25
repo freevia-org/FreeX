@@ -138,6 +138,9 @@ public sealed partial class SlideCanvas : Control
     /// <summary>Whether print-only comment callouts are painted over the slide.</summary>
     public bool RenderPrintMarkup { get; set; }
 
+    /// <summary>Whether editor-only gridline and guide aids are painted by the live canvas.</summary>
+    public bool RenderViewAidsEnabled { get; set; } = true;
+
     public int SlideIndex
     {
         get => _slideIndex;
@@ -331,10 +334,8 @@ public sealed partial class SlideCanvas : Control
         // Expose the slide→screen transform so the editing layer can use it.
         CurrentTransform = ComputeViewTransform(renderW, renderH, _slideWidthDip, _slideHeightDip);
 
-        if (_viewShowState.ShowRulers)
-            RenderRulers(context, CurrentTransform, renderW, renderH);
-
-        RenderViewAids(context, CurrentTransform, _viewShowState);
+        if (RenderViewAidsEnabled)
+            RenderViewAids(context, CurrentTransform, _viewShowState);
 
         var matrix = Matrix.CreateScale(CurrentTransform.Scale, CurrentTransform.Scale)
             * Matrix.CreateTranslation(CurrentTransform.OffsetX, CurrentTransform.OffsetY);
@@ -352,6 +353,10 @@ public sealed partial class SlideCanvas : Control
             if (RenderPrintMarkup && _presentation is not null && _slide is not null)
                 RenderPrintCommentCallouts(context, _presentation, _slide);
         }
+
+        // Keep the WPF draw order: rulers are chrome over the slide/aids boundary.
+        if (_viewShowState.ShowRulers)
+            RenderRulers(context, CurrentTransform, renderW, renderH);
     }
 
     private static void RenderPrintCommentCallouts(DrawingContext dc, Presentation presentation, Slide slide)
@@ -438,7 +443,7 @@ public sealed partial class SlideCanvas : Control
 
         var gridPen = new Pen(new SolidColorBrush(Color.FromArgb(0x54, 0x79, 0x79, 0x79)), 1)
         {
-            DashStyle = DashStyle.Dash,
+            DashStyle = DashStyle.Dot,
         };
         foreach (var line in plan.Gridlines)
             context.DrawLine(gridPen, new Point(line.StartX, line.StartY), new Point(line.EndX, line.EndY));
