@@ -1205,20 +1205,31 @@ public partial class XlsxCorpusRunnerTests
         if (target.IndexOf('\\') >= 0)
             issues.Add($"{relationshipLabel} Target uses backslashes instead of package URI separators");
 
+        bool resolvesInsidePackage = TryResolvePackageRelationshipTarget(
+            relationshipPart,
+            target,
+            out var resolvedTarget,
+            out var error);
+
+        // Resolve valid package targets before applying external-URI heuristics. Root-relative OPC
+        // targets can be promoted to file: URIs by Unix runtimes, but an existing resolved package
+        // part is unambiguously internal regardless of that platform interpretation.
+        if (resolvesInsidePackage && packageParts.Contains(resolvedTarget))
+            return;
+
         if (IsAbsoluteRelationshipTarget(target))
         {
             issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} targets external URI without TargetMode=External: {target}");
             return;
         }
 
-        if (!TryResolvePackageRelationshipTarget(relationshipPart, target, out var resolvedTarget, out var error))
+        if (!resolvesInsidePackage)
         {
             issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has invalid Target {target}: {error}");
             return;
         }
 
-        if (!packageParts.Contains(resolvedTarget))
-            issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} targets missing package part {resolvedTarget}");
+        issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} targets missing package part {resolvedTarget}");
     }
 
     private static string FormatRelationshipIssueId(string? id) =>
