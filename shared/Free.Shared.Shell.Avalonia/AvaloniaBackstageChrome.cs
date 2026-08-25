@@ -220,7 +220,7 @@ public static class AvaloniaBackstageChrome
         return new TextBlock
         {
             Text = text,
-            FontWeight = FontWeight.SemiBold,
+            FontWeight = FontWeight.Light,
             FontSize = style.HeadingFontSize,
             Foreground = style.PrimaryInk,
             Margin = style.HeadingMargin,
