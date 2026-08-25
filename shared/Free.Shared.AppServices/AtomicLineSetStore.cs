@@ -83,7 +83,7 @@ public sealed class AtomicLineSetStore
 
         try
         {
-            var directory = Path.GetDirectoryName(_storePath);
+            var directory = GetParentDirectory(_storePath);
             if (!string.IsNullOrEmpty(directory))
                 _fileSystem.CreateDirectory(directory);
 
@@ -119,5 +119,15 @@ public sealed class AtomicLineSetStore
         return materialized.Length == 0
             ? content
             : content + Environment.NewLine;
+    }
+
+    private static string? GetParentDirectory(string path)
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory))
+            return directory;
+
+        var separatorIndex = Math.Max(path.LastIndexOf('/'), path.LastIndexOf('\\'));
+        return separatorIndex > 0 ? path[..separatorIndex] : null;
     }
 }

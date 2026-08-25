@@ -47,6 +47,21 @@ function Get-ManifestString {
         return ""
     }
 
+    if ($value -is [DateTime]) {
+        return $value.ToUniversalTime().ToString("o", [System.Globalization.CultureInfo]::InvariantCulture)
+    }
+
+    if ($PropertyName -eq "CapturedAtUtc") {
+        $timestamp = [DateTimeOffset]::MinValue
+        if ([DateTimeOffset]::TryParse(
+                [string]$value,
+                [System.Globalization.CultureInfo]::InvariantCulture,
+                [System.Globalization.DateTimeStyles]::RoundtripKind,
+                [ref]$timestamp)) {
+            return $timestamp.ToUniversalTime().ToString("o", [System.Globalization.CultureInfo]::InvariantCulture)
+        }
+    }
+
     return [string]$value
 }
 
