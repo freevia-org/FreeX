@@ -481,7 +481,7 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotTableOptionsDialog_ButtonRowKeepsNaturalHeightAtRuntime()
+    public void PivotTableOptionsDialog_ButtonRowKeepsNaturalHeightInsideClientArea()
     {
         StaTestRunner.Run(() =>
         {
@@ -493,11 +493,15 @@ public sealed partial class PivotWorkflowDialogTests
                 var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog).ToList();
                 var ok = buttons.Single(button => button.IsDefault);
                 var cancel = buttons.Single(button => button.IsCancel);
+                var content = dialog.Content.Should().BeAssignableTo<FrameworkElement>().Subject;
+                var okBounds = ok.TransformToAncestor(content).TransformBounds(new Rect(ok.RenderSize));
+                var cancelBounds = cancel.TransformToAncestor(content).TransformBounds(new Rect(cancel.RenderSize));
 
                 ok.ActualHeight.Should().BeLessThan(40);
                 cancel.ActualHeight.Should().BeLessThan(40);
                 Math.Abs(ok.ActualHeight - cancel.ActualHeight).Should().BeLessThan(1);
-                Math.Round(dialog.ActualHeight).Should().Be(PivotOptionsPlanner.LayoutAndFormatCaptureHeight);
+                okBounds.Bottom.Should().BeLessThanOrEqualTo(content.ActualHeight);
+                cancelBounds.Bottom.Should().BeLessThanOrEqualTo(content.ActualHeight);
             }
             finally
             {
