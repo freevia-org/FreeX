@@ -1,14 +1,8 @@
 name: FreeW CI
 
-# Dedicated app-scoped commit gate. It avoids duplicate FreeX solution runs while ensuring a
-# FreeW or shared-library change is validated before a tester-release workflow can publish it.
+# Dedicated app-scoped validation lane. Release preparation invokes it directly before a
+# tester-release workflow can publish FreeW or shared-library changes.
 on:
-  push:
-    branches: [main]
-    paths: ["freew/**", "shared/**", "eng/test-gates.json", "tools/Invoke-TestGate.ps1", ".github/workflows/freew-ci.yml"]
-  pull_request:
-    branches: [main]
-    paths: ["freew/**", "shared/**", "eng/test-gates.json", "tools/Invoke-TestGate.ps1", ".github/workflows/freew-ci.yml"]
   workflow_dispatch:
 
 concurrency:

@@ -11,10 +11,10 @@ public sealed class GitHubWorkflowPreflightTests
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "ci.yml");
 
-        workflow.Should().Contain("push:");
-        workflow.Should().Contain("pull_request:");
-        workflow.Should().Contain("branches:");
-        workflow.Should().Contain("- main");
+        workflow.Should().Contain("workflow_dispatch:");
+        workflow.Should().NotContain("push:");
+        workflow.Should().NotContain("pull_request:");
+        workflow.Should().NotContain("schedule:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");
@@ -49,14 +49,14 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void FreeWWorkflow_IsPathScopedAndRunsItsCommitGate()
+    public void FreeWWorkflow_IsManualDispatchOnlyAndRunsItsValidationGate()
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "freew-ci.yml");
 
         workflow.Should().Contain("workflow_dispatch:");
-        workflow.Should().Contain("push:");
-        workflow.Should().Contain("pull_request:");
-        workflow.Should().Contain("freew/**");
+        workflow.Should().NotContain("push:");
+        workflow.Should().NotContain("pull_request:");
+        workflow.Should().NotContain("schedule:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");
@@ -139,14 +139,14 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void FreePWorkflow_IsPathScopedAndRunsItsCommitGate()
+    public void FreePWorkflow_IsManualDispatchOnlyAndRunsItsValidationGate()
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "freep-ci.yml");
 
         workflow.Should().Contain("workflow_dispatch:");
-        workflow.Should().Contain("push:");
-        workflow.Should().Contain("pull_request:");
-        workflow.Should().Contain("freep/**");
+        workflow.Should().NotContain("push:");
+        workflow.Should().NotContain("pull_request:");
+        workflow.Should().NotContain("schedule:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");
@@ -160,11 +160,44 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void GitHubWorkflowPreflight_DoesNotImposeUnrelatedTriggerPolicy()
+    public void GitHubWorkflowPreflight_RequiresManualDispatchOnly()
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-GitHubWorkflows.ps1");
 
-        script.Should().NotContain("primary CI must run on direct pushes to main");
+        script.Should().Contain("workflow must use workflow_dispatch only; automatic triggers are disabled.");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsForAutomaticTrigger()
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        File.WriteAllText(
+            Path.Combine(temp.Path, "automatic.yml"),
+            """
+            name: Automatic
+
+            on:
+              workflow_dispatch:
+              push:
+
+            permissions:
+              contents: read
+
+            jobs:
+              validate:
+                runs-on: windows-latest
+                timeout-minutes: 5
+                steps: []
+            """);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("workflow must use workflow_dispatch only; automatic triggers are disabled.");
+        result.CombinedOutput.Should().Contain("automatic.yml");
     }
 
     [Fact]
@@ -173,7 +206,8 @@ public sealed class GitHubWorkflowPreflightTests
         var workflow = ReadMacOsAppWorkflow();
 
         workflow.Should().NotContain("push:");
-        workflow.Should().Contain("pull_request:");
+        workflow.Should().NotContain("pull_request:");
+        workflow.Should().NotContain("schedule:");
         var workflowDispatch = ExtractRequiredYamlBlock(workflow, "workflow_dispatch:");
         var distributionCandidateInput = ExtractRequiredYamlBlock(workflowDispatch, "distribution_candidate:");
         distributionCandidateInput.Should().Contain("type: boolean");
@@ -1249,8 +1283,8 @@ public sealed class GitHubWorkflowPreflightTests
 
         var withInput = ReplaceRequiredText(
             workflow,
-            "        default: false\n  pull_request:",
-            "        default: false\n      validate_macos_tfm:\n        description: Compile the opt-in net10.0-macos target with the hosted macOS workload; evidence only, no app artifact.\n        required: false\n        type: boolean\n        default: false\n  pull_request:");
+            "        default: false\npermissions:",
+            "        default: false\n      validate_macos_tfm:\n        description: Compile the opt-in net10.0-macos target with the hosted macOS workload; evidence only, no app artifact.\n        required: false\n        type: boolean\n        default: false\npermissions:");
 
         var releaseJob = ExtractRequiredYamlBlock(withInput, "publish-distribution-candidate:");
         const string validationJob =
