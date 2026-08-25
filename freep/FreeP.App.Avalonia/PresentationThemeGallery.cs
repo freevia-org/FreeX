@@ -40,15 +40,31 @@ internal static class PresentationThemeGallery
             Background = Brush(theme.ColorScheme[ThemeColorSlot.Lt1]),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x9C, 0x9C, 0x9C)),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(7, 5, 7, 4),
+            Padding = new Thickness(7, 3, 7, 4),
         };
-        var marks = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        marks.Children.Add(Bar(theme.ColorScheme[ThemeColorSlot.Accent1], 31, 4));
-        marks.Children.Add(new Border { Height = 3 });
-        marks.Children.Add(Bar(theme.ColorScheme[ThemeColorSlot.Dk2], 48, 2));
-        marks.Children.Add(new Border { Height = 2 });
-        marks.Children.Add(Bar(theme.ColorScheme[ThemeColorSlot.Accent2], 39, 2));
-        page.Child = marks;
+        var previewContent = new Grid();
+        previewContent.RowDefinitions.Add(new RowDefinition(GridLength.Star));
+        previewContent.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        previewContent.Children.Add(new TextBlock
+        {
+            Text = "Aa",
+            FontSize = 26,
+            Foreground = Brush(theme.ColorScheme[ThemeColorSlot.Dk2]),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        var swatches = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        foreach (var slot in AccentSlots)
+        {
+            swatches.Children.Add(Bar(theme.ColorScheme[slot], 7, 4));
+            swatches.Children.Add(new Border { Width = 1 });
+        }
+        Grid.SetRow(swatches, 1);
+        previewContent.Children.Add(swatches);
+        page.Child = previewContent;
         preview.Children.Add(page);
 
         var caption = new TextBlock
@@ -100,4 +116,14 @@ internal static class PresentationThemeGallery
 
     private static IBrush Brush(SrgbColor color) =>
         new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+
+    private static readonly ThemeColorSlot[] AccentSlots =
+    [
+        ThemeColorSlot.Accent1,
+        ThemeColorSlot.Accent2,
+        ThemeColorSlot.Accent3,
+        ThemeColorSlot.Accent4,
+        ThemeColorSlot.Accent5,
+        ThemeColorSlot.Accent6,
+    ];
 }
