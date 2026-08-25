@@ -74,7 +74,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("page-setup", "Page Setup", null, 100, group =>
                     {
-                        group.Dropdown("freew.margins", "Margins", BuildAvaloniaMarginsMenu());
+                        group.Dropdown("freew.margins", "Margins", BuildAvaloniaMarginsMenu(), control => control with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Margins),
+                        });
                         group.Button("freew.orientation", "Orientation");
                         group.Dropdown("freew.size", "Size", BuildAvaloniaPageSizeMenu());
                         group.Dropdown("freew.columns", "Columns", BuildAvaloniaColumnsMenu());
@@ -130,7 +133,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, null, 92, group =>
                     {
-                        group.Button("freew.indent-decrease", "Decrease Indent");
+                        group.Button("freew.indent-decrease", "Decrease Indent", control => control with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.IndentDecrease),
+                        });
                         group.Button("freew.indent-increase", "Increase Indent");
                         group.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", control => control with
                         {
@@ -168,7 +174,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("preview", "Preview", "V", 90, group =>
                     group.Large("freew.print-preview", "Print Preview", RibbonCommandIconKind.Print)),
                 tab => tab.Group("preview", "Preview", null, 90, group =>
-                    group.Button("freew.print-preview", "Print Preview")),
+                    group.Button("freew.print-preview", "Print Preview", control => control with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Print),
+                    })),
                 portableOrder: 3);
 
             topology.Section(
@@ -200,7 +209,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("arrange", "Arrange", null, 75, group =>
                     {
                         group.Dropdown("freew.layout-position", "Position", BuildFloatingPositionMenu("layout"));
-                        group.Dropdown("freew.layout-wrap", "Wrap Text", BuildWrapMenu("layout"));
+                        group.Dropdown("freew.layout-wrap", "Wrap Text", BuildWrapMenu("layout"), control => control with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Wrap),
+                        });
                         group.Button("freew.layout-selection-pane", "Selection Pane");
                         group.Button("freew.layout-bring-forward", "Bring Forward");
                         group.Button("freew.layout-send-backward", "Send Backward");
@@ -220,7 +232,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("data", "Data", null, 95, group =>
                     {
-                        group.Button("freew.text-to-table", "Text to Table");
+                        group.Button("freew.text-to-table", "Text to Table", control => control with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Table),
+                        });
                         group.Button("freew.table-to-text", "Table to Text");
                     }),
                 portableOrder: 2);
@@ -359,7 +374,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                 }),
                 tab => tab.Group("immersive", "Immersive", null, 55, group =>
                 {
-                    group.Toggle("freew.focus", "Focus");
+                    group.Toggle("freew.focus", "Focus", control => control with
+                    {
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.View),
+                    });
                 }));
 
             topology.Section(
@@ -372,7 +390,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("show", "Show", null, 100, group =>
                     {
-                        group.Toggle("freew.ruler", "Ruler");
+                        group.Toggle("freew.ruler", "Ruler", control => control with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Ruler),
+                        });
                         group.Toggle("freew.gridlines", "Gridlines");
                         group.Toggle("freew.nav-pane", "Navigation Pane");
                         group.Toggle("freew.reviewing-pane", "Reviewing Pane");
@@ -392,7 +413,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("zoom", "Zoom", null, 90, group =>
                     {
-                        group.Button("freew.zoom-dialog", "Zoom");
+                        group.Button("freew.zoom-dialog", "Zoom", control => control with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Zoom),
+                        });
                         group.Button("freew.zoom-100", "100%");
                         group.Button("freew.zoom-one-page", "One Page");
                         group.Button("freew.zoom-page-width", "Page Width");
@@ -414,7 +438,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                         group.Button("freew.new-window", "New Window");
                         group.Button("freew.arrange-all", "Arrange All");
                         group.Button("freew.switch-windows", "Switch Windows");
-                        group.Toggle("freew.split-window", "Split");
+                        group.Toggle("freew.split-window", "Split", control => control with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale),
+                        });
                     }));
 
             topology.Build();
@@ -575,18 +602,18 @@ internal static partial class FreeWCanonicalRibbonTabs
                 {
                     group.Dropdown("freew.hf-edit-header", "Edit Header", BuildHeaderMenu(), control => control with
                     {
-                        Icon = WpfIcon(avalonia, RibbonCommandIconKind.Header),
+                        Icon = ProfiledIcon(RibbonCommandIconKind.Header),
                     });
                     group.Dropdown("freew.hf-edit-footer", "Edit Footer", BuildFooterMenu(), control => control with
                     {
-                        Icon = WpfIcon(avalonia, RibbonCommandIconKind.Footer),
+                        Icon = ProfiledIcon(RibbonCommandIconKind.Footer),
                     });
                 });
                 tab.Group("hf-insert", "Insert", "I", 110, group =>
                 {
                     group.Dropdown("freew.hf-insert-page-number", "Page Number", BuildPageNumberMenu(), control => control with
                     {
-                        Icon = WpfIcon(avalonia, RibbonCommandIconKind.PageNumber),
+                        Icon = ProfiledIcon(RibbonCommandIconKind.PageNumber),
                     });
                     AddProfiledButton(group, avalonia, "freew.hf-insert-datetime", "Date && Time",
                         RibbonCommandIconKind.Date);
@@ -787,7 +814,7 @@ internal static partial class FreeWCanonicalRibbonTabs
     {
         group.Button(commandId, avalonia ? avaloniaLabel ?? label : label, control => control with
         {
-            Icon = WpfIcon(avalonia, wpfIcon, wpfAccent),
+            Icon = ProfiledIcon(wpfIcon, wpfAccent),
             KeyTip = wpfKeyTip,
             PreferredLayout = avalonia ? RibbonCommandLayoutKind.Medium : wpfLayout,
         });
@@ -899,10 +926,9 @@ internal static partial class FreeWCanonicalRibbonTabs
         string wpfKeyTip) =>
         new(header, new RibbonCommandId(commandId), wpfKeyTip);
 
-    private static RibbonCommandIcon? WpfIcon(
-        bool avalonia,
+    private static RibbonCommandIcon ProfiledIcon(
         RibbonCommandIconKind kind,
         RibbonCommandIconAccent accent = RibbonCommandIconAccent.None) =>
-        avalonia ? null : new RibbonCommandIcon(kind, accent);
+        new(kind, accent);
 
 }
