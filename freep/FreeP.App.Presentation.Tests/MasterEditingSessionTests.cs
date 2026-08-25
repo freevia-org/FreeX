@@ -1,4 +1,5 @@
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -117,6 +118,34 @@ public sealed class MasterEditingSessionTests
 
         session.Undo();
         group.Children.Should().ContainSingle().Which.Id.Should().Be(31);
+    }
+
+    [Fact]
+    public void Master_edits_survive_pptx_save_and_reopen()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var master = presentation.Masters[0];
+        master.Placeholders.Add(new SlideShape
+        {
+            Id = 77,
+            Name = "Master title",
+            OffsetXEmu = 100,
+            OffsetYEmu = 200,
+            ExtentCxEmu = 1000,
+            ExtentCyEmu = 700,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title },
+        });
+        var session = new MasterEditingSession(presentation, new PresentationCommandBus(presentation));
+        session.Move(77, 300, 400);
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var reopened = PptxPackageReader.Read(stream);
+
+        var saved = reopened.Masters.Single().Placeholders.Single(shape => shape.Id == 77);
+        saved.OffsetXEmu.Should().Be(400);
+        saved.OffsetYEmu.Should().Be(600);
     }
 
     private static Presentation CreatePresentation()
