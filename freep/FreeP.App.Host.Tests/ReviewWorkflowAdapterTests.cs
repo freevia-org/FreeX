@@ -1409,6 +1409,7 @@ public sealed class ReviewWorkflowAdapterTests
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
+            window.Editor.Presentation.Properties.Author = "Alice Writer";
             window.Editor.CurrentSlide!.Comments.Add(new SlideComment
             {
                 Author = "Alice Writer",

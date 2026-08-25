@@ -14,6 +14,8 @@ public sealed record SisterAppWindowFrameSpec(
     Control Body,
     IBrush TitleBarBackground,
     IBrush TitleBarForeground,
+    string? AppBadgeLetter = null,
+    IBrush? AppBadgeBackground = null,
     double TitleBarHeight = 34,
     double NativeLeadingInset = 34,
     double NativeTrailingInset = 140);
@@ -40,6 +42,8 @@ public static class SisterAppWindowFrameBuilder
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(spec.TitleBarHeight);
         ArgumentOutOfRangeException.ThrowIfNegative(spec.NativeLeadingInset);
         ArgumentOutOfRangeException.ThrowIfNegative(spec.NativeTrailingInset);
+        if (string.IsNullOrWhiteSpace(spec.AppBadgeLetter) != (spec.AppBadgeBackground is null))
+            throw new ArgumentException("An app badge requires both its letter and background brush.", nameof(spec));
 
         spec.Window.ExtendClientAreaToDecorationsHint = true;
         spec.Window.ExtendClientAreaTitleBarHeightHint = spec.TitleBarHeight;
@@ -72,6 +76,36 @@ public static class SisterAppWindowFrameBuilder
 
         var titleSurface = new Grid();
         titleSurface.Children.Add(titleText);
+        if (spec.AppBadgeLetter is { } badgeLetter)
+        {
+            var badge = new Border
+            {
+                Width = 22,
+                Height = 22,
+                Margin = new Thickness(2, 0, 8, 0),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = spec.AppBadgeBackground,
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(2),
+                IsHitTestVisible = false,
+                Child = new TextBlock
+                {
+                    Text = badgeLetter,
+                    Foreground = Brushes.White,
+                    FontFamily = new FontFamily("Segoe UI"),
+                    FontSize = 13,
+                    FontWeight = FontWeight.Bold,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextAlignment = TextAlignment.Center,
+                },
+            };
+            AutomationProperties.SetAutomationId(badge, "TitleBarAppBadge");
+            AutomationProperties.SetName(badge, $"{badgeLetter} application badge");
+            titleSurface.Children.Add(badge);
+        }
         titleSurface.Children.Add(qatHost);
 
         var titleBar = new Border

@@ -58,6 +58,7 @@ $sourceFiles = @(
     'freew/tools/FreeW.ShellVisualHarness.Avalonia/Program.cs',
     'freew/FreeW.App.Host/MainWindow.cs',
     'freew/FreeW.App.Avalonia/MainWindow.cs',
+    'shared/Free.Shared.Shell.Avalonia/SisterAppWindowFrameBuilder.cs',
     # The hosts inject these gallery surfaces after the declarative ribbon is rendered. Include them
     # explicitly so evidence freshness cannot report a current shell after a visible gallery changed.
     'freew/FreeW.App.Host/Ribbon/StylesGallery.cs',

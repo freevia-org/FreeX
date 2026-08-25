@@ -68,6 +68,32 @@ public sealed class MainWindowShellFrameTests
     }
 
     [Fact]
+    public async Task MainWindow_titlebar_restores_the_product_badge_before_the_qat()
+    {
+        string badgeId = string.Empty;
+        string badgeName = string.Empty;
+        string badgeLetter = string.Empty;
+        var qatLeadingMargin = 0d;
+
+        await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var badge = window.TitleBarForTests.GetVisualDescendants().OfType<Border>()
+                .Single(border => AutomationProperties.GetAutomationId(border) == "TitleBarAppBadge");
+            badgeId = AutomationProperties.GetAutomationId(badge) ?? string.Empty;
+            badgeName = AutomationProperties.GetName(badge) ?? string.Empty;
+            badgeLetter = badge.Child.Should().BeOfType<TextBlock>().Subject.Text ?? string.Empty;
+            qatLeadingMargin = window.QuickAccessButtonsForTests[0].Parent!
+                .Should().BeOfType<StackPanel>().Subject.Margin.Left;
+        });
+
+        badgeId.Should().Be("TitleBarAppBadge");
+        badgeName.Should().Be("W application badge");
+        badgeLetter.Should().Be("W");
+        qatLeadingMargin.Should().Be(34, "the QAT must keep the space immediately following the badge");
+    }
+
+    [Fact]
     public async Task MainWindow_status_matches_Wpf_content_controls_and_zoom_state()
     {
         string page = string.Empty;
