@@ -83,6 +83,8 @@ public sealed class TestWorkspaceFileLocatorSourceGuardTests
         var targets = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("Directory.Build.targets");
 
         targets.Should().Contain("tests\\SharedTestInfrastructure\\*.cs");
+        targets.Should().Contain("tests\\SharedTestInfrastructure\\ReusableWpfWindowSession.cs");
+        targets.Should().Contain("Condition=\"'$(UseWPF)' == 'true'\"");
     }
 
     [Fact]
