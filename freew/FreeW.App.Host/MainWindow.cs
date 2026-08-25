@@ -194,6 +194,8 @@ public sealed partial class MainWindow : Window
     private IDisposable? _readAloudCommandLifetime;
     private readonly FreeWEditorInteractionSession _editorInteraction = new();
     private FreeWApplicationCommandRouter _applicationCommands = null!;
+    private bool _focusModeActive;
+    private FreeWEditorChromeVisibility? _chromeBeforeFocusMode;
 
     // Status-bar view-switch toggle buttons for the three mutually-exclusive print-family view modes
     // (Print Layout / Web Layout / Draft). They mirror the same state as the View ribbon's Views group;
@@ -283,6 +285,8 @@ public sealed partial class MainWindow : Window
             OpenPrintPreview = OpenPrintPreview,
             ToggleReadMode = ToggleReadMode,
             IsReadModeActive = () => _editorInteraction.IsReadModeActive,
+            ToggleFocusMode = ToggleFocusMode,
+            IsFocusModeActive = () => _focusModeActive,
             ApplyReadModeColumnWidth = ApplyReadModeColumnWidth,
             ApplyReadModePageColor = ApplyReadModePageColor,
             ToggleRuler = ToggleRulers,
@@ -763,6 +767,7 @@ public sealed partial class MainWindow : Window
         // status), so the File screen covers those but leaves the title bar visible (Word behaviour).
         var frame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(_titleBar, root, _backstage));
         Content = frame.Root;
+        PreviewKeyDown += MainWindow_PreviewKeyDown;
 
         // V5 KeyTips: pressing Alt overlays Word-style letter badges over the ribbon tabs, then over the
         // active tab's controls, so the ribbon is fully keyboard-navigable. The overlay walks the rendered
@@ -2301,6 +2306,53 @@ public sealed partial class MainWindow : Window
         }
 
         _stateStore.SetChecked("freew.read-mode", plan.IsActive);
+    }
+
+    // Word's View > Focus remains an editing mode. Unlike Read Mode, it preserves the document's
+    // width and page treatment; only application chrome and docked inspection panes are hidden.
+    // Escape reverses the transition so the hidden ribbon is never the sole way back out.
+    private void ToggleFocusMode()
+    {
+        _focusModeActive = !_focusModeActive;
+        if (_focusModeActive)
+        {
+            _chromeBeforeFocusMode = new FreeWEditorChromeVisibility(
+                ToChromeVisibility(_titleBar.Visibility),
+                ToChromeVisibility(_ribbon.Visibility),
+                ToChromeVisibility(_dataFolderItem.Visibility),
+                ToChromeVisibility(_viewSwitchItem.Visibility),
+                ToChromeVisibility(_zoomItem.Visibility),
+                ToChromeVisibility(_navPaneVisible),
+                ToChromeVisibility(_revealPaneVisible),
+                ToChromeVisibility(_reviewPaneVisible));
+
+            _titleBar.Visibility = Visibility.Collapsed;
+            _ribbon.Visibility = Visibility.Collapsed;
+            _navPane.Visibility = Visibility.Collapsed;
+            _revealPane.Visibility = Visibility.Collapsed;
+            _reviewPane.Visibility = Visibility.Collapsed;
+        }
+        else if (_chromeBeforeFocusMode is { } chrome)
+        {
+            _titleBar.Visibility = ToVisibility(chrome.TitleBar);
+            _ribbon.Visibility = ToVisibility(chrome.Ribbon);
+            _navPane.Visibility = ToVisibility(chrome.NavigationPane);
+            _revealPane.Visibility = ToVisibility(chrome.RevealPane);
+            _reviewPane.Visibility = ToVisibility(chrome.ReviewingPane);
+            _chromeBeforeFocusMode = null;
+        }
+
+        _stateStore.SetChecked("freew.focus", _focusModeActive);
+        _editor.Focus();
+    }
+
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (!_focusModeActive || e.Key != Key.Escape)
+            return;
+
+        ToggleFocusMode();
+        e.Handled = true;
     }
 
     private static FreeWChromeVisibility ToChromeVisibility(bool isVisible) =>

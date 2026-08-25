@@ -29,6 +29,7 @@ public sealed record ViewRibbonReadModeBindings(
     ViewRibbonChoiceBinding? PageColor = null);
 
 public sealed record ViewRibbonModeBindings(
+    ViewRibbonToggleBinding? Focus = null,
     ViewRibbonToggleBinding? PrintLayout = null,
     ViewRibbonToggleBinding? WebLayout = null,
     ViewRibbonToggleBinding? Draft = null,
@@ -116,6 +117,7 @@ public static class ViewRibbonWorkflow
             readMode?.PageColor);
 
         var modes = bindings.Modes;
+        RegisterToggle(registry, "freew.focus", modes?.Focus);
         var printLayout = RegisterToggle(registry, "freew.print-layout", modes?.PrintLayout);
         var webLayout = RegisterToggle(registry, "freew.web-layout", modes?.WebLayout);
         var draft = RegisterToggle(registry, "freew.draft-view", modes?.Draft);

@@ -12,6 +12,7 @@ public sealed class ViewRibbonWorkflowTests
     {
         var registry = new RibbonCommandRegistry();
         var mode = "print";
+        var focus = false;
         var readMode = false;
         var navigationPane = false;
         var revealFormatting = false;
@@ -34,6 +35,7 @@ public sealed class ViewRibbonWorkflowTests
                     ColumnWidth: new ViewRibbonChoiceBinding(readModeColumns.Add),
                     PageColor: new ViewRibbonChoiceBinding(readModeColors.Add)),
                 Modes: new ViewRibbonModeBindings(
+                    Focus: Toggle(() => focus = !focus, () => focus),
                     PrintLayout: Mode("print"),
                     WebLayout: Mode("web"),
                     Draft: Mode("draft"),
@@ -73,6 +75,10 @@ public sealed class ViewRibbonWorkflowTests
         Execute(registry, "freew.draftview");
         mode.Should().Be("draft");
         Stateful(registry, "freew.draft-view").GetState().IsChecked.Should().BeTrue();
+
+        Execute(registry, "freew.focus");
+        Stateful(registry, "freew.focus").GetState().IsChecked.Should().BeTrue();
+        focus.Should().BeTrue();
 
         Execute(registry, "freew.read-mode");
         Execute(registry, "freew.read-mode-column-wide");
