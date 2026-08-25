@@ -47,11 +47,32 @@ internal static class FreePAvaloniaRenderer
             (presentation, slideIndex, renderWidth, renderHeight, outputPath) =>
                 File.WriteAllBytes(
                     outputPath,
-                    SlideRenderer.RenderToBytes(
+                    RenderOfficeSizedSlide(
                         presentation,
                         slideIndex,
                         renderWidth,
                         renderHeight)));
+    }
+
+    private static byte[] RenderOfficeSizedSlide(
+        FreeP.Core.Model.Presentation presentation,
+        int slideIndex,
+        int targetWidth,
+        int targetHeight)
+    {
+        var nativeSize = RenderCompareSurfaceScaler.ResolveNativeRenderSize(
+            presentation,
+            targetWidth,
+            targetHeight);
+        var aspectPreservingPng = SlideRenderer.RenderToBytes(
+            presentation,
+            slideIndex,
+            nativeSize.Width,
+            nativeSize.Height);
+        return RenderCompareSurfaceScaler.StretchPngToSurface(
+            aspectPreservingPng,
+            targetWidth,
+            targetHeight);
     }
 }
 
