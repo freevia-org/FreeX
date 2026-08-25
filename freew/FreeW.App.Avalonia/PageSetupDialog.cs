@@ -20,7 +20,22 @@ namespace FreeW.App.Avalonia;
 /// <summary>Avalonia chrome for the shared WPF-authoritative three-tab Page Setup contract.</summary>
 public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControlSource
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = PageLayoutDialogChrome.Style;
+    // WPF's native Page Setup selectors use a shallow #F0F0F0 -> #E5E5E5 fill.
+    // Keep this route-local rather than changing the flat shared selector surface
+    // used by the other Page Layout dialogs.
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = PageLayoutDialogChrome.Style with
+    {
+        ComboBoxBackgroundBrush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops =
+            [
+                new global::Avalonia.Media.GradientStop(Color.FromRgb(240, 240, 240), 0),
+                new global::Avalonia.Media.GradientStop(Color.FromRgb(229, 229, 229), 1),
+            ],
+        },
+    };
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
 
     private readonly TextBox _top;
@@ -144,6 +159,15 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
 
         Opened += (_, _) =>
         {
+            // FreeWDialogWindow first normalizes descendant controls with the shared default
+            // style. Reapply this route's selector fill after that pass so it reaches the
+            // already-realized compact templates.
+            foreach (var combo in new[]
+                     {
+                         _gutterPosition, _orientation, _multiplePages, _applyTo,
+                         _paperSize, _sectionStart, _verticalAlignment
+                     })
+                AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle);
             foreach (var button in ((Panel)actions).Children.OfType<Button>())
                 AvaloniaCompactDialogChrome.ApplyButton(button, actionStyle, metrics.ActionButtonWidth);
             ApplyFocus(_session.InitialFocusPlan);
