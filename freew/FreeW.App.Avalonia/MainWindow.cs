@@ -1489,6 +1489,47 @@ public sealed partial class MainWindow : Window
     internal void ToggleSplit() =>
         ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSplit));
 
+    /// <summary>
+    /// Opens the current document list as a native menu. The list is not a static ribbon dropdown
+    /// because it must reflect top-level FreeW windows created after the ribbon has loaded.
+    /// </summary>
+    private void ShowDocumentWindowPicker()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+            return;
+
+        var windows = desktop.Windows
+            .OfType<MainWindow>()
+            .Where(window => window.IsVisible)
+            .ToList();
+        if (windows.Count == 0)
+            return;
+
+        var menu = new ContextMenu { Placement = PlacementMode.Bottom };
+        foreach (var window in windows)
+        {
+            var target = window;
+            var item = new MenuItem
+            {
+                Header = target.Title,
+                IsChecked = ReferenceEquals(target, this),
+            };
+            item.Click += (_, _) => ActivateDocumentWindow(target);
+            menu.Items.Add(item);
+        }
+
+        menu.Open(this);
+    }
+
+    private static void ActivateDocumentWindow(MainWindow window)
+    {
+        if (window.WindowState == WindowState.Minimized)
+            window.WindowState = WindowState.Normal;
+
+        window.Activate();
+        window.Focus();
+    }
+
     private void ZoomToOnePage()
     {
         var (_, _, wholePageFactor) = ComputeZoomFitFactors();
@@ -2003,6 +2044,7 @@ public sealed partial class MainWindow : Window
             OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),
             NewWindow:       OpenNewWindow,
             ArrangeAll:      ArrangeAllWindows,
+            SwitchWindows:   ShowDocumentWindowPicker,
             ToggleSplit:     ToggleSplit,
             IsSplitActive:   () => _viewSession.CurrentDepth.IsSplitActive,
             ZoomOnePage:     ZoomToOnePage,

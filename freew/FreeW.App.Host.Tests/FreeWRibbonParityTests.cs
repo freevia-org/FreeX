@@ -3384,9 +3384,11 @@ public sealed class FreeWRibbonParityTests
         var ids = window!.Controls.Select(c => c.CommandId.Value).ToList();
         ids.Should().Contain("freew.new-window",  "View > Window must expose New Window");
         ids.Should().Contain("freew.arrange-all", "View > Window must expose Arrange All");
+        ids.Should().Contain("freew.switch-windows", "View > Window must expose Switch Windows");
 
         var newWindowCalled = false;
         var arrangeAllCalled = false;
+        var switchWindowsCalled = false;
         var registry = FreeWRibbonCommands.Build(
             new DocumentView(),
             new RibbonStateStore(),
@@ -3394,14 +3396,18 @@ public sealed class FreeWRibbonParityTests
             {
                 NewWindow = () => newWindowCalled = true,
                 ArrangeAll = () => arrangeAllCalled = true,
+                SwitchWindows = () => switchWindowsCalled = true,
             });
 
         registry.TryGet("freew.new-window",  out var nw).Should().BeTrue();
         registry.TryGet("freew.arrange-all", out var aa).Should().BeTrue();
+        registry.TryGet("freew.switch-windows", out var sw).Should().BeTrue();
         nw!.Execute(RibbonCommandContext.Empty);
         aa!.Execute(RibbonCommandContext.Empty);
+        sw!.Execute(RibbonCommandContext.Empty);
         newWindowCalled.Should().BeTrue("freew.new-window must invoke the onNewWindow callback");
         arrangeAllCalled.Should().BeTrue("freew.arrange-all must invoke the onArrangeAll callback");
+        switchWindowsCalled.Should().BeTrue("freew.switch-windows must invoke the host callback");
     }
 
     [Fact]

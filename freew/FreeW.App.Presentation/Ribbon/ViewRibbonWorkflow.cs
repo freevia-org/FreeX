@@ -55,6 +55,7 @@ public sealed record ViewRibbonZoomBindings(
 public sealed record ViewRibbonWindowBindings(
     ViewRibbonActionBinding? NewWindow = null,
     ViewRibbonActionBinding? ArrangeAll = null,
+    ViewRibbonActionBinding? SwitchWindows = null,
     ViewRibbonToggleBinding? Split = null);
 
 public sealed record ViewRibbonCommandBindings(
@@ -143,6 +144,7 @@ public static class ViewRibbonWorkflow
         var window = bindings.Window;
         RegisterAction(registry, "freew.new-window", window?.NewWindow);
         RegisterAction(registry, "freew.arrange-all", window?.ArrangeAll);
+        RegisterAction(registry, "freew.switch-windows", window?.SwitchWindows);
         var split = RegisterToggle(registry, "freew.split-window", window?.Split);
 
         if (bindings.RegisterCompatibilityAliases)

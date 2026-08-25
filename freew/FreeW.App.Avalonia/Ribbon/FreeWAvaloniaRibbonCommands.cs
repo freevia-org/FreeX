@@ -382,6 +382,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 Window: new ViewRibbonWindowBindings(
                     NewWindow: new ViewRibbonActionBinding(callbacks.NewWindow, ViewRibbonBindingAvailability.Disabled),
                     ArrangeAll: new ViewRibbonActionBinding(callbacks.ArrangeAll, ViewRibbonBindingAvailability.Disabled),
+                    SwitchWindows: new ViewRibbonActionBinding(callbacks.SwitchWindows, ViewRibbonBindingAvailability.Disabled),
                     Split: new ViewRibbonToggleBinding(
                         callbacks.ToggleSplit,
                         callbacks.IsSplitActive,

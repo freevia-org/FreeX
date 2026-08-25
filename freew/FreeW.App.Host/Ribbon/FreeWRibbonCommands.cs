@@ -146,6 +146,7 @@ internal static class FreeWRibbonCommands
         var onReadModePageColor = hostPorts?.ApplyReadModePageColor;
         var onNewWindow = hostPorts?.NewWindow;
         var onArrangeAll = hostPorts?.ArrangeAll;
+        var onSwitchWindows = hostPorts?.SwitchWindows;
         var askHeaderFooterText = nativePorts.AskHeaderFooterText;
         var onOpenMailMergeErrorReport = hostPorts?.OpenMailMergeErrorReport;
         var onPrintMailMergeDocument = hostPorts?.PrintMailMergeDocument;
@@ -1177,6 +1178,9 @@ internal static class FreeWRibbonCommands
                         ViewRibbonBindingAvailability.Disabled),
                     ArrangeAll: new ViewRibbonActionBinding(
                         onArrangeAll,
+                        ViewRibbonBindingAvailability.Disabled),
+                    SwitchWindows: new ViewRibbonActionBinding(
+                        onSwitchWindows,
                         ViewRibbonBindingAvailability.Disabled),
                     Split: new ViewRibbonToggleBinding(onToggleSplitWindow, isSplitWindowActive))));
 

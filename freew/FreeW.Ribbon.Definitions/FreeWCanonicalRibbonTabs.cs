@@ -407,11 +407,13 @@ internal static partial class FreeWCanonicalRibbonTabs
                         group.MediumToggle("freew.split-window", "Split", RibbonCommandIconKind.Scale);
                         group.Medium("freew.new-window", "New Window", RibbonCommandIconKind.Page);
                         group.Medium("freew.arrange-all", "Arrange All", RibbonCommandIconKind.Grid);
+                        group.Medium("freew.switch-windows", "Switch Windows", RibbonCommandIconKind.Window);
                     }),
                 tab => tab.Group("window", "Window", null, 80, group =>
                     {
                         group.Button("freew.new-window", "New Window");
                         group.Button("freew.arrange-all", "Arrange All");
+                        group.Button("freew.switch-windows", "Switch Windows");
                         group.Toggle("freew.split-window", "Split");
                     }));
 
