@@ -134,6 +134,18 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_home_font_and_paragraph_support_compact_icon_presentations()
+    {
+        var wpf = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf);
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+
+        RequiredGroup(avalonia, "home", "font").Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+        RequiredGroup(avalonia, "home", "paragraph").Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+        RequiredGroup(wpf, "home", "font").Sizing.Should().Be(RibbonGroupSizing.Default);
+        RequiredGroup(wpf, "home", "paragraph").Sizing.Should().Be(RibbonGroupSizing.Default);
+    }
+
+    [Fact]
     public void Profile_tab_ids_match_except_named_capability_deltas()
     {
         var wpfTabIds = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();

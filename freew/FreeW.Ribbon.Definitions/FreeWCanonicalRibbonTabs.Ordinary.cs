@@ -137,6 +137,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("font", FreeWRibbonText.FontGroup.Label, FreeWRibbonText.FontGroup.KeyTip, 90, g =>
                     {
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                         g.ComboBox("freew.font-family", FreeWRibbonText.FontFamilyCommand.Label, c => c with { Items = FontFamilies, Width = 128 });
                         g.ComboBox("freew.font-size", FreeWRibbonText.FontSizeCommand.Label, c => c with { Items = FontSizes, Width = 64 });
                         g.Toggle("freew.bold", FreeWRibbonText.BoldCommand.Label, b => b with { KeyTip = FreeWRibbonText.BoldCommand.KeyTip });
@@ -215,6 +216,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, null, 80, g =>
                     {
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                         g.Toggle("freew.bullets", FreeWRibbonText.BulletsCommand.Label);
                         g.Toggle("freew.numbering", FreeWRibbonText.NumberingCommand.Label);
                         g.Dropdown("freew.multilevel-list", FreeWRibbonText.MultilevelListCommand.Label, BuildMultilevelListMenu(), d => d with
