@@ -172,6 +172,56 @@ public sealed class ResizeMasterShapeCommand : IPresentationCommand
             : null;
 }
 
+/// <summary>Sets a master/layout shape rotation, retaining its former value for undo.</summary>
+public sealed class RotateMasterShapeCommand : IPresentationCommand
+{
+    private readonly MasterEditTarget _target;
+    private readonly uint _shapeId;
+    private readonly double _after;
+    private double _before;
+    private bool _applied;
+
+    public RotateMasterShapeCommand(MasterEditTarget target, uint shapeId, double rotationDeg)
+    {
+        _target = target;
+        _shapeId = shapeId;
+        _after = Normalize(rotationDeg);
+    }
+
+    public string Label => "Rotate Master Shape";
+
+    public bool HasEffect(Presentation presentation) => Find(presentation) is { } shape &&
+        Math.Abs(shape.RotationDeg - _after) > 0.0001;
+
+    public void Apply(Presentation presentation)
+    {
+        if (Find(presentation) is not { } shape)
+            return;
+        _before = shape.RotationDeg;
+        shape.RotationDeg = _after;
+        _applied = true;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        if (_applied && Find(presentation) is { } shape)
+            shape.RotationDeg = _before;
+    }
+
+    private SlideShape? Find(Presentation presentation) =>
+        MasterEditTargetResolver.GetShapes(presentation, _target) is { } shapes
+            ? SlideShapeTraversal.FindById(shapes, _shapeId)
+            : null;
+
+    private static double Normalize(double rotationDeg)
+    {
+        if (!double.IsFinite(rotationDeg))
+            return 0;
+        var normalized = rotationDeg % 360d;
+        return normalized < 0 ? normalized + 360d : normalized;
+    }
+}
+
 /// <summary>Inserts a deep-cloned shape into a master/layout target.</summary>
 public sealed class AddMasterShapeCommand : IPresentationCommand
 {

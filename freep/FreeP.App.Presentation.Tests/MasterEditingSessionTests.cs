@@ -158,6 +158,27 @@ public sealed class MasterEditingSessionTests
         saved.OffsetYEmu.Should().Be(600);
     }
 
+    [Fact]
+    public void Selected_master_shapes_accept_a_single_transform_undo_step()
+    {
+        var presentation = CreatePresentation();
+        presentation.Masters[0].Placeholders.Add(new SlideShape { Id = 80, ExtentCxEmu = 100, ExtentCyEmu = 100 });
+        presentation.Masters[0].Placeholders.Add(new SlideShape { Id = 81, ExtentCxEmu = 100, ExtentCyEmu = 100 });
+        var session = new MasterEditingSession(presentation, new PresentationCommandBus(presentation));
+        session.Select(80);
+        session.Select(81, addToSelection: true);
+
+        session.ApplySelectedTransforms([
+            new CanvasShapeTransform(80, 10, 20, 300, 400, 45),
+            new CanvasShapeTransform(81, 30, 40, 500, 600, -90)]).Should().BeTrue();
+
+        presentation.Masters[0].Placeholders[0].RotationDeg.Should().Be(45);
+        presentation.Masters[0].Placeholders[1].RotationDeg.Should().Be(270);
+        session.Undo();
+        presentation.Masters[0].Placeholders[0].RotationDeg.Should().Be(0);
+        presentation.Masters[0].Placeholders[1].RotationDeg.Should().Be(0);
+    }
+
     private static Presentation CreatePresentation()
     {
         var presentation = new Presentation();

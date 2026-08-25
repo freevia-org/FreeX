@@ -1,4 +1,5 @@
 using Free.Shared.Drawing;
+using Free.Shared.Commands;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -80,13 +81,54 @@ public sealed class MasterEditingSession
 
     public void Move(uint shapeId, long dxEmu, long dyEmu) => Execute(new MoveMasterShapeCommand(RequireTarget(), shapeId, dxEmu, dyEmu));
 
+    public void MoveSelected(long dxEmu, long dyEmu)
+    {
+        var target = RequireTarget();
+        ExecuteBatch("Move Master Shapes", _selectedShapeIds.Select(id =>
+            (IPresentationCommand)new MoveMasterShapeCommand(target, id, dxEmu, dyEmu)));
+    }
+
     public void Resize(uint shapeId, long x, long y, long cx, long cy) =>
         Execute(new ResizeMasterShapeCommand(RequireTarget(), shapeId, x, y, Math.Max(0, cx), Math.Max(0, cy)));
+
+    public bool ApplySelectedTransforms(IEnumerable<CanvasShapeTransform> transforms)
+    {
+        ArgumentNullException.ThrowIfNull(transforms);
+        var target = RequireTarget();
+        var selected = _selectedShapeIds.ToHashSet();
+        var commands = new List<IPresentationCommand>();
+        foreach (var transform in transforms)
+        {
+            if (!selected.Contains(transform.ShapeId) ||
+                SlideShapeTraversal.FindById(CurrentShapes, transform.ShapeId) is not { } shape)
+                continue;
+            if (shape.OffsetXEmu != transform.XEmu || shape.OffsetYEmu != transform.YEmu ||
+                shape.ExtentCxEmu != transform.CxEmu || shape.ExtentCyEmu != transform.CyEmu)
+            {
+                commands.Add(new ResizeMasterShapeCommand(target, transform.ShapeId,
+                    transform.XEmu, transform.YEmu, Math.Max(0, transform.CxEmu), Math.Max(0, transform.CyEmu)));
+            }
+            if (Math.Abs(shape.RotationDeg - transform.RotationDeg) > 0.0001)
+                commands.Add(new RotateMasterShapeCommand(target, transform.ShapeId, transform.RotationDeg));
+        }
+        return ExecuteBatch("Transform Master Shapes", commands);
+    }
+
+    public void Rotate(uint shapeId, double rotationDeg) => Execute(new RotateMasterShapeCommand(RequireTarget(), shapeId, rotationDeg));
 
     public void Delete(uint shapeId)
     {
         Execute(new DeleteMasterShapeCommand(RequireTarget(), shapeId));
         PruneSelection();
+    }
+
+    public void DeleteSelected()
+    {
+        var target = RequireTarget();
+        var selected = _selectedShapeIds.ToArray();
+        ClearSelection();
+        ExecuteBatch("Delete Master Shapes", selected.Select(id =>
+            (IPresentationCommand)new DeleteMasterShapeCommand(target, id)));
     }
 
     public void SetFill(uint shapeId, ShapeFill? fill) => Execute(new SetMasterShapeFillCommand(RequireTarget(), shapeId, fill));
@@ -135,6 +177,15 @@ public sealed class MasterEditingSession
     {
         Bus.Execute(command);
         PruneSelection();
+    }
+
+    private bool ExecuteBatch(string label, IEnumerable<IPresentationCommand> commands)
+    {
+        var batch = commands.ToArray();
+        if (batch.Length == 0)
+            return false;
+        Execute(batch.Length == 1 ? batch[0] : new BatchCommand(label, batch));
+        return true;
     }
 
     private MasterEditTarget RequireTarget() => _target ?? throw new InvalidOperationException("Select a slide master or layout before editing.");
