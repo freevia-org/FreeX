@@ -44,7 +44,7 @@ public sealed class SlidePanePolicySourceGuardTests
         endpoint.Should().Contain("RefreshSlidePane = RefreshSlidePane");
         endpoint.Should().Contain("SyncSlidePaneSelection = SyncSlidePaneSelection");
         endpoint.Should().Contain("RefreshSlidePaneChrome = RefreshSlidePaneChrome");
-        endpoint.Should().Contain("(SlidePaneHost?.Child as SlidePane)?.RefreshProjection()");
+        endpoint.Should().Contain("_slidePane?.RefreshProjection()");
         endpoint.Should().NotContain("SlidePaneHost.Child = new SlidePane(context.Snapshot.Editor)");
     }
 }
