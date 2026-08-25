@@ -287,17 +287,10 @@ public static partial class NumberFormatter
                 CultureInfo.InvariantCulture,
                 out var lcid))
         {
-            try
-            {
-                var culture = CultureInfo.GetCultureInfo(lcid);
-                numberFormat = (NumberFormatInfo)culture.NumberFormat.Clone();
-                dateTimeFormat = (DateTimeFormatInfo)culture.DateTimeFormat.Clone();
-                UseGregorianCalendarWhenAvailable(dateTimeFormat);
-                return true;
-            }
-            catch (CultureNotFoundException)
-            {
-            }
+            // Numeric LCIDs are handled by LocaleFormatCatalog. ICU and Windows NLS expose
+            // different extra LCID mappings, so accepting an uncataloged numeric value here
+            // would make workbook formatting depend on the host operating system.
+            return false;
         }
 
         try
