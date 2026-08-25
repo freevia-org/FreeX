@@ -45,8 +45,9 @@ public sealed class CrossAppParityDashboardTests
         integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("wrapper stopwatch 00:17:18.449; independently parsed 31-TRX timestamp span 00:17:17.5738434");
         integrationEvidence.GetProperty("defaultNonUiTestLaneWrapperElapsed").GetString().Should().Be("00:17:18.449");
         integrationEvidence.GetProperty("defaultNonUiTestLaneTrxTimestampSpan").GetString().Should().Be("00:17:17.5738434");
-        integrationEvidence.GetProperty("independentReviewStatus").GetString().Should().Be("remediation-awaiting-recheck");
-        integrationEvidence.GetProperty("independentReview").GetString().Should().StartWith("Remediation-awaiting-recheck:");
+        integrationEvidence.GetProperty("independentReviewStatus").GetString().Should().Be("passed");
+        integrationEvidence.GetProperty("independentReview").GetString().Should().Be(
+            "Passed: the clean independent final acceptance review rechecked tested source commit e4f40ebcaadc624421b9c0a985330100f10af8df after remediation of both P3 acceptance findings (Desktop PowerShell host determinism and elapsed-time provenance); no remaining acceptance findings were identified. This review does not alter the tested-source boundary, counts, timings, or visual claim boundaries.");
         integrationEvidence.GetProperty("sliceAccounting").GetString().Should().Be(
             "582 cumulative app slices (194 per app) remain the processed Wave194 accounting; later wave feature commits are included in the tested source and do not add Wave194 slices.");
 
