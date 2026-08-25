@@ -42,6 +42,9 @@ public sealed class R147_RealPointerPressedCellSelectionTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
+    private static RawInputModifiers AdditiveSelectionModifier =>
+        OperatingSystem.IsMacOS() ? RawInputModifiers.Meta : RawInputModifiers.Control;
+
     [Fact]
     public async Task RealPointerPressed_CtrlClickCell_AddsDisjointSecondArea()
     {
@@ -60,7 +63,7 @@ public sealed class R147_RealPointerPressedCellSelectionTests
                 // this exercises the actual PointerPressed guard cascade (right-click check,
                 // formula point-mode, autofill/move-drag hit-testing, double-click detection) in
                 // front of SelectClickedCell, not the helper directly.
-                ClickCell(window, second, RawInputModifiers.Control);
+                ClickCell(window, second, AdditiveSelectionModifier);
                 await DrainInputAsync();
 
                 window.Session.SelectedRanges.Should().BeEquivalentTo(
@@ -93,7 +96,7 @@ public sealed class R147_RealPointerPressedCellSelectionTests
                 Refresh(window);
                 await DrainInputAsync();
 
-                ClickCell(window, second, RawInputModifiers.Control);
+                ClickCell(window, second, AdditiveSelectionModifier);
                 await DrainInputAsync();
                 window.Session.SelectedRanges.Should().HaveCount(2,
                     "the real Ctrl+click above must have built a two-area selection first");

@@ -57,6 +57,9 @@ public sealed class R147_RealPointerPressedHeaderSelectionTests
         .GetField("HeaderResizeHitThickness", BindingFlags.NonPublic | BindingFlags.Static)!
         .GetValue(null)!;
 
+    private static RawInputModifiers AdditiveSelectionModifier =>
+        OperatingSystem.IsMacOS() ? RawInputModifiers.Meta : RawInputModifiers.Control;
+
     [Fact]
     public async Task RealPointerPressed_CtrlClickColumnHeader_AddsDisjointColumnBand()
     {
@@ -77,7 +80,7 @@ public sealed class R147_RealPointerPressedHeaderSelectionTests
                 await DrainInputAsync();
                 var firstBand = window.Session.SelectedRange;
 
-                ClickHeader(window, "ColumnHeader_E", Center, RawInputModifiers.Control);
+                ClickHeader(window, "ColumnHeader_E", Center, AdditiveSelectionModifier);
                 await DrainInputAsync();
 
                 var expectedSecondBand = new GridRange(
@@ -119,7 +122,7 @@ public sealed class R147_RealPointerPressedHeaderSelectionTests
                 await DrainInputAsync();
                 var firstBand = window.Session.SelectedRange;
 
-                ClickHeader(window, "RowHeader_5", NearTop, RawInputModifiers.Control);
+                ClickHeader(window, "RowHeader_5", NearTop, AdditiveSelectionModifier);
                 await DrainInputAsync();
 
                 var expectedSecondBand = new GridRange(
@@ -167,7 +170,7 @@ public sealed class R147_RealPointerPressedHeaderSelectionTests
                     window,
                     "ColumnHeader_E",
                     size => new Point(Math.Max(0, size.Width - HeaderResizeHitThickness - 3), size.Height / 2),
-                    RawInputModifiers.Control);
+                    AdditiveSelectionModifier);
                 await DrainInputAsync();
 
                 var expectedSecondBand = new GridRange(
@@ -218,7 +221,7 @@ public sealed class R147_RealPointerPressedHeaderSelectionTests
                     window,
                     "ColumnHeader_E",
                     size => new Point(size.Width - HeaderResizeHitThickness / 2, size.Height / 2),
-                    RawInputModifiers.Control);
+                    AdditiveSelectionModifier);
                 await DrainInputAsync();
 
                 window.Session.SelectedRanges.Should().BeEquivalentTo(
