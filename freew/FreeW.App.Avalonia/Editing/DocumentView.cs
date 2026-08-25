@@ -96,7 +96,10 @@ public sealed partial class DocumentView : Control
     // ruler pointer edits route separately through the command bus and then relayout normally.
     private bool _showGridlines;
     private bool _showTableGridlines;
-    private bool _showRuler;
+    // Keep Print Layout's initial workspace chrome aligned with the WPF host and Word's
+    // desktop default. The View > Ruler toggle still persists as a view-only preference
+    // for the lifetime of this editor.
+    private bool _showRuler = true;
     private TabStopAlignment _rulerTabStopAlignment = TabStopAlignment.Left;
     private RulerDragState? _rulerDrag;
     private double? _rulerDragPreviewMarginPt;

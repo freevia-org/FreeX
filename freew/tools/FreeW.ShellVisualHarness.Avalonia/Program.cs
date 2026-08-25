@@ -72,8 +72,7 @@ static void CaptureWidth(
         window.Show();
         window.Measure(new Size(width, height));
         window.Arrange(new Rect(0, 0, width, height));
-        window.UpdateLayout();
-        Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+        SettleRender(window);
 
         var tabs = window.GetVisualDescendants().OfType<TabControl>()
             .OrderByDescending(tab => tab.Items.Count)
@@ -90,8 +89,7 @@ static void CaptureWidth(
         {
             tab.IsVisible = true;
             tabs.SelectedItem = tab;
-            window.UpdateLayout();
-            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+            SettleRender(window);
             using var frame = window.CaptureRenderedFrame();
             if (frame is null)
                 throw new InvalidOperationException($"Avalonia compositor did not return a frame for tab '{TabName(tab)}'.");
@@ -139,8 +137,7 @@ static void CaptureSplit(string output, int width, int height, List<ShellCapture
         window.Show();
         window.Measure(new Size(width, height));
         window.Arrange(new Rect(0, 0, width, height));
-        window.UpdateLayout();
-        Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+        SettleRender(window);
 
         var tabs = window.GetVisualDescendants().OfType<TabControl>()
             .OrderByDescending(tab => tab.Items.Count)
@@ -154,8 +151,7 @@ static void CaptureSplit(string output, int width, int height, List<ShellCapture
         var toggleSplit = typeof(MainWindow).GetMethod("ToggleSplit", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("FreeW Avalonia shell did not expose its backed Split command for capture.");
         toggleSplit.Invoke(window, null);
-        window.UpdateLayout();
-        Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+        SettleRender(window);
 
         using var frame = window.CaptureRenderedFrame();
         if (frame is null)
@@ -184,6 +180,16 @@ static IReadOnlyList<ContextFixture> ContextFixtures() =>
     new("header-footer", ["header-footer-design"]),
 ];
 
+static void SettleRender(Window window)
+{
+    // Adaptive state is picked during layout. Run a second layout/render turn so an
+    // invalidation raised by the first presentation choice settles before a PNG is saved.
+    window.UpdateLayout();
+    Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+    window.UpdateLayout();
+    Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+}
+
 static void CaptureContextualFixture(
     string output,
     int width,
@@ -204,12 +210,10 @@ static void CaptureContextualFixture(
         window.Show();
         window.Measure(new Size(width, height));
         window.Arrange(new Rect(0, 0, width, height));
-        window.UpdateLayout();
-        Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+        SettleRender(window);
 
         ActivateContextFixture(window, fixture.Id);
-        window.UpdateLayout();
-        Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+        SettleRender(window);
 
         var tabs = window.GetVisualDescendants().OfType<TabControl>()
             .OrderByDescending(tab => tab.Items.Count)
@@ -225,8 +229,7 @@ static void CaptureContextualFixture(
                     $"Context fixture '{fixture.Id}' did not activate expected ribbon tab '{tabId}'.");
 
             tabs.SelectedItem = tab;
-            window.UpdateLayout();
-            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+            SettleRender(window);
             using var frame = window.CaptureRenderedFrame();
             if (frame is null)
                 throw new InvalidOperationException(

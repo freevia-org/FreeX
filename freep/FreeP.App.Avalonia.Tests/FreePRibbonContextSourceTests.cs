@@ -63,23 +63,9 @@ public sealed class FreePRibbonContextSourceTests
     [Fact]
     public void Avalonia_host_supplies_the_selection_context_source_to_the_shared_ribbon()
     {
-        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var source = TestWorkspaceFileLocator.ReadAllText("freep", "FreeP.App.Avalonia", "MainWindow.cs");
 
         source.Should().Contain("contextSource: _ribbonContextSource")
             .And.Contain("_ribbonContextSource.Refresh(Editor);");
-    }
-
-    private static string FindRepoFile(params string[] segments)
-    {
-        var directory = AppContext.BaseDirectory;
-        while (Directory.GetParent(directory) is { } parent)
-        {
-            directory = parent.FullName;
-            var candidate = Path.Combine(directory, Path.Combine(segments));
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(segments));
     }
 }

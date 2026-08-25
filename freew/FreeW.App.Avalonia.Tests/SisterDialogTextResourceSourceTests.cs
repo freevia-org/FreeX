@@ -93,8 +93,10 @@ public sealed class SisterDialogTextResourceSourceTests
     public void MainWindow_ResolvesEditorStatusTextFromPresentationPlanner()
     {
         var source = ReadAvaloniaSource("MainWindow.cs");
-        var statusStart = source.IndexOf("private void UpdateStatus", StringComparison.Ordinal);
-        var statusEnd = source.IndexOf("private DocumentView ResolveActiveDocumentEditor", statusStart, StringComparison.Ordinal);
+        var statusStart = source.IndexOf("private void UpdateStatus(DocumentView? source = null)", StringComparison.Ordinal);
+        var statusEnd = source.IndexOf("private DocumentView ResolveActiveDocumentEditor()", statusStart, StringComparison.Ordinal);
+        statusStart.Should().BeGreaterThanOrEqualTo(0);
+        statusEnd.Should().BeGreaterThan(statusStart);
         var statusSource = source[statusStart..statusEnd];
 
         source.Should().Contain("using FreeW.App.Presentation.Shell;");

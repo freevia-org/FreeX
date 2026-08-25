@@ -205,6 +205,7 @@ public class RibbonAndDocumentTests
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
         mainWindow.Should().Contain("using Free.Shared.Ribbon.Avalonia;");
         mainWindow.Should().Contain("AvaloniaRibbonRenderer.BuildRibbon(");
+        mainWindow.Should().Contain("EnableIntermediateGroupPresentations: true");
 
         File.Exists(FindRepoFile("freew", "FreeW.App.Avalonia", "Ribbon", "AvaloniaRibbonRenderer.cs"))
             .Should()
