@@ -1246,14 +1246,13 @@ public partial class XlsxCorpusRunnerTests
     private static bool IsAbsoluteRelationshipTarget(string target)
     {
         // Classify the syntax written in the relationship, not System.Uri's platform-dependent
-        // interpretation. OPC permits package-root-relative targets such as /xl/workbook.xml;
-        // Unix otherwise promotes those to file:/// URIs. A true external URI has an explicit
-        // RFC-style scheme before its first colon (https:, file:, mailto:, and so on).
-        int schemeSeparator = target.IndexOf(':');
-        if (schemeSeparator <= 0)
-            return false;
-
-        return Uri.CheckSchemeName(target[..schemeSeparator]);
+        // interpretation. OPC package targets never contain an authority delimiter; external web
+        // and file URIs do. Keep the few standard non-authority schemes explicit.
+        int authorityDelimiter = target.IndexOf("://", StringComparison.Ordinal);
+        return authorityDelimiter > 0 ||
+            target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ||
+            target.StartsWith("urn:", StringComparison.OrdinalIgnoreCase) ||
+            target.StartsWith("data:", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryResolvePackageRelationshipTarget(
