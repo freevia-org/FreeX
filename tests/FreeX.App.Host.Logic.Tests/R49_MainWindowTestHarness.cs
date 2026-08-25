@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Windows;
 using Free.Shared.AppServices;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -20,6 +21,12 @@ internal static class R49MainWindowTestHarness
     public static (MainWindow Window, Workbook Workbook) CreateWindow(
         IPlatformClipboard? platformClipboard = null)
     {
+        // Closing the last test window must not shut down the shared WPF dispatcher. Several
+        // rendering tests run after these window tests and use the same STA for DrawingVisual /
+        // RenderTargetBitmap work.
+        if (Application.Current is { } application)
+            application.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
         var initialWorkbook = new Workbook("Book1");
         initialWorkbook.AddSheet("Sheet1");
 
