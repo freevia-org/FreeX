@@ -53,6 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
+      preflight_matrix: ${{ steps.select.outputs.preflight_matrix }}
       verify_matrix: ${{ steps.select.outputs.verify_matrix }}
       package_matrix: ${{ steps.select.outputs.package_matrix }}
       publish_matrix: ${{ steps.select.outputs.publish_matrix }}
@@ -93,21 +94,33 @@ jobs:
                 @{ app = $lane.app; platform = $lane.platform; runner = $lane.runner }
               }
           )
+          $preflightLanes = @(
+            foreach ($selectedPlatform in $platforms) {
+              $runner = switch ($selectedPlatform) {
+                "windows" { "windows-latest" }
+                "linux" { "ubuntu-latest" }
+                "macos" { "macos-15" }
+              }
+              @{ platform = $selectedPlatform; runner = $runner }
+            }
+          )
+          $preflightMatrix = @{ include = $preflightLanes } | ConvertTo-Json -Compress
           $verifyMatrix = @{ include = $verifyLanes } | ConvertTo-Json -Compress
           $packageMatrix = @{ include = $selectedLanes } | ConvertTo-Json -Compress
           $publishMatrix = @{ app = $apps } | ConvertTo-Json -Compress
+          "preflight_matrix=$preflightMatrix" >> $env:GITHUB_OUTPUT
           "verify_matrix=$verifyMatrix" >> $env:GITHUB_OUTPUT
           "package_matrix=$packageMatrix" >> $env:GITHUB_OUTPUT
           "publish_matrix=$publishMatrix" >> $env:GITHUB_OUTPUT
 
-  verify:
-    name: Verify ${{ matrix.app }} ${{ matrix.platform }}
+  preflight:
+    name: Preflight ${{ matrix.platform }}
     needs: prepare
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 240
+    timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.prepare.outputs.verify_matrix) }}
+      matrix: ${{ fromJSON(needs.prepare.outputs.preflight_matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -139,11 +152,47 @@ jobs:
         with:
           dotnet-version: 10.0.400
 
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Repository preflight
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1
+
+  verify:
+    name: Verify ${{ matrix.app }} ${{ matrix.platform }}
+    needs: [prepare, preflight]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.verify_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.400
+
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
       - name: Run release test gate
         shell: pwsh
         run: |
-          pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1
-          if ($LASTEXITCODE -ne 0) { throw "Repository preflight failed with exit code $LASTEXITCODE." }
           pwsh -NoProfile -File tools/Invoke-TestGate.ps1 `
             -Gate release `
             -App "${{ matrix.app }}" `
@@ -178,6 +227,13 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.400
+
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
 
       - name: Locate Inno Setup
         if: matrix.platform == 'windows'

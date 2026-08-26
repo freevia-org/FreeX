@@ -20,7 +20,7 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().NotContain("contents: write");
         workflow.Should().NotContain("pull_request_target");
         workflow.Should().Contain("runs-on: windows-latest");
-        workflow.Should().Contain("timeout-minutes: 180");
+        workflow.Should().Contain("timeout-minutes: 120");
         workflow.Should().Contain("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
         workflow.Should().Contain("persist-credentials: false");
         workflow.Should().Contain("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68");
@@ -31,7 +31,11 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("cancel-in-progress: true");
         workflow.Should().Contain("name: FreeX commit gate");
         workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release");
-        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform windows -NoBuild");
+        workflow.Should().Contain("-Gate commit -App FreeX -Platform windows");
+        workflow.Should().Contain("-GateId \"${{ matrix.gate }}\"");
+        workflow.Should().Contain("name: Windows test shard (${{ matrix.gate }})");
+        workflow.Should().Contain("needs: [freex-build, freex-tests]");
+        workflow.Should().Contain("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9");
         workflow.Should().Contain("name: Linux portable lane");
         workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux");
         workflow.Should().NotContain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux -NoBuild");
@@ -46,7 +50,27 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("-p:NodeReuse=false");
         workflow.Should().Contain("/nr:false");
         workflow.Should().Contain("-m:1");
+        workflow.Should().Contain("Parallel build failed; retrying once");
         workflow.Should().NotContain("dotnet test FreeX.slnx --configuration Release --no-build");
+    }
+
+    [Fact]
+    public void CodeQlWorkflow_AnalyzesProductionSuiteAndCancelsSupersededRuns()
+    {
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "codeql.yml");
+        var solution = WorkspaceFileLocator.ReadAllText("FreeSuite.CodeQL.slnx");
+
+        workflow.Should().Contain("group: codeql-${{ github.ref }}");
+        workflow.Should().Contain("cancel-in-progress: true");
+        workflow.Should().Contain("dotnet build FreeSuite.CodeQL.slnx --configuration Release");
+        workflow.Should().Contain("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9");
+        workflow.Should().Contain("Parallel CodeQL build failed; retrying once");
+        workflow.Should().NotContain("dotnet build FreeX.slnx");
+        solution.Should().Contain("freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj");
+        solution.Should().Contain("freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj");
+        solution.Should().NotContain(".Tests.csproj");
+        solution.Should().NotContain("/tools/");
+        solution.Should().NotContain("/TestSupport/");
     }
 
     [Fact]

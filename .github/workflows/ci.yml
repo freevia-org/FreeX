@@ -10,69 +10,131 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
+
 jobs:
-  freex-commit:
-    name: FreeX commit gate
+  freex-build:
+    name: Windows build and preflight
     runs-on: windows-latest
-    timeout-minutes: 180
-
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-      DOTNET_NOLOGO: "1"
-      LANG: en_US.UTF-8
-      LC_ALL: en_US.UTF-8
-
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
-
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.400
-
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
       - name: Repository preflight
         shell: pwsh
         run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1
-
       - name: Build
         shell: pwsh
-        run: dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1
+        run: |
+          dotnet build FreeX.slnx --configuration Release
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Parallel build failed; retrying once with build servers and shared compilation disabled."
+            dotnet build-server shutdown
+            dotnet build FreeX.slnx --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1
+            if ($LASTEXITCODE -ne 0) { throw "Fallback build failed with exit code $LASTEXITCODE." }
+          }
 
-      - name: Commit gate
+  freex-tests:
+    name: Windows test shard (${{ matrix.gate }})
+    runs-on: windows-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        gate:
+          - freex-core
+          - freex-contract
+          - freex-avalonia
+          - freex-wpf-shell
+          - freex-wpf-host-a
+          - freex-wpf-host-b
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.400
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Run test shard
         shell: pwsh
-        run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform windows -NoBuild
+        run: |
+          pwsh -NoProfile -File tools/Invoke-TestGate.ps1 `
+            -Gate commit -App FreeX -Platform windows `
+            -GateId "${{ matrix.gate }}" `
+            -ResultsDirectory TestResults
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ci-${{ matrix.gate }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: "**/TestResults/*.trx"
+          if-no-files-found: warn
+
+  freex-commit:
+    name: FreeX commit gate
+    needs: [freex-build, freex-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aggregate Windows gate results
+        shell: pwsh
+        run: |
+          $buildResult = "${{ needs.freex-build.result }}"
+          $testResult = "${{ needs.freex-tests.result }}"
+          if ($buildResult -ne "success" -or $testResult -ne "success") {
+            throw "Windows build/preflight result: $buildResult; Windows test-shard result: $testResult."
+          }
 
   portable-linux:
     name: Linux portable lane
     runs-on: ubuntu-latest
     timeout-minutes: 120
-
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-      DOTNET_NOLOGO: "1"
-      LANG: en_US.UTF-8
-      LC_ALL: en_US.UTF-8
-
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
-
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.400
-
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
       - name: Build Avalonia project
         shell: pwsh
         run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
-
       - name: Commit gate
         shell: pwsh
         run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux
@@ -81,29 +143,25 @@ jobs:
     name: macOS portable lane
     runs-on: macos-latest
     timeout-minutes: 120
-
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-      DOTNET_NOLOGO: "1"
-      LANG: en_US.UTF-8
-      LC_ALL: en_US.UTF-8
-
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
-
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.400
-
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
       - name: Build Avalonia project
         shell: pwsh
         run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
-
       - name: Commit gate
         shell: pwsh
         run: pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform macos

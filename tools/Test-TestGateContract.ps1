@@ -89,6 +89,7 @@ function Assert-WorkflowContains {
 foreach ($platform in @("windows", "linux", "macos")) {
     Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected "-Gate commit -App FreeX -Platform $platform"
 }
+Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-GateId "${{ matrix.gate }}"'
 Assert-WorkflowContains -Path ".github/workflows/freew-ci.yml" -Expected '-Gate commit -App FreeW -Platform ${{ matrix.platform }}'
 Assert-WorkflowContains -Path ".github/workflows/freep-ci.yml" -Expected '-Gate commit -App FreeP -Platform ${{ matrix.platform }}'
 Assert-WorkflowContains -Path ".github/workflows/tester-release.yml" -Expected '-Gate release -App FreeX -Platform windows'

@@ -293,6 +293,10 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("git merge-base --is-ancestor origin/main HEAD");
         workflow.Should().Contain("Full release branches must contain the current origin/main commit.");
         workflow.Should().Contain("$verifyLanes");
+        workflow.Should().Contain("$preflightLanes");
+        workflow.Should().Contain("needs: [prepare, preflight]");
+        Regex.Matches(workflow, "pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1").Count.Should().Be(1);
+        workflow.Should().Contain("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9");
         workflow.Should().Contain("Group-Object { \"$($_.app):$($_.platform)\" }");
         workflow.Should().Contain("name: Verify ${{ matrix.app }} ${{ matrix.platform }}");
         workflow.Should().Contain("runs-on: ${{ matrix.runner }}");

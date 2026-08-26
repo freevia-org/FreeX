@@ -102,6 +102,17 @@ Linux and macOS include only portable core, contract, and Avalonia projects. The
 `FreeX.DefaultTests.slnx` and `FreeX.UiTests.slnx` files remain build-grouping aids, not executable
 test gates. See [testing/test-gates.md](../testing/test-gates.md) for the complete ownership map.
 
+The FreeX Windows lane runs the manifest gates as isolated hosted-runner shards and folds them into
+the stable `FreeX commit gate` required check. Builds use normal parallelism first and retain the
+documented serial retry only for build-server or compiler-state failures. CI, CodeQL, tester-release
+verification, and package jobs reuse OS-specific NuGet caches. CodeQL builds
+`FreeSuite.CodeQL.slnx`, which is guarded to contain every production project across FreeX, FreeW,
+FreeP, and shared libraries while excluding test/evidence tooling. Superseded CodeQL runs cancel.
+
+For the suite tester workflow, repository preflight and release-source validation run once on each
+selected native platform before app-specific verification. An all-app/all-platform dispatch therefore
+runs three platform preflights rather than repeating the same platform preflight for every app.
+
 A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Avalonia` on architecture-specific hosted macOS runners for `osx-arm64` and `osx-x64`, wraps the output in `FreeX.app` with `FreeX.icns`, verifies bundle metadata, ad-hoc signs by default, optionally Developer ID signs/notarizes when secrets are configured, self-checks each SHA-256 file with `shasum -a 256 -c`, records `zip_sha256` in evidence, and uploads zipped app artifacts, checksum files, tester instructions, smoke evidence, separate diagnostics artifacts, and a post-matrix aggregate readiness artifact. The Windows-runnable `tools/Test-MacOsAppReadiness.ps1` preflight statically checks the app project, `Info.plist`, icon asset, workflow markers, source wiring, and portable-source hygiene. After hosted artifacts are downloaded and unzipped, the Windows-runnable `tools/Test-MacOsPublicPreviewReadiness.ps1` preflight validates both runtime evidence bundles, checksum files, LaunchServices/Open-With/default-open smoke, startup smoke, command key smoke, hosted dialog smoke, Format Cells roundtrip evidence, diagnostics artifact file sets, tester instructions, distribution-candidate signing/notarization/stapler evidence, and release publication artifacts when required for promotion. File-access grant diagnostics in those artifacts are instrumentation/readiness evidence only; hosted CI must not be treated as proof of real macOS security-scoped access to user-selected workbook files.
 
 Use [release/macos-hosted-app-production.md](macos-hosted-app-production.md) for the maintainer sequence to produce macOS app artifacts on hosted GitHub macOS runners without a local Mac, preserve the app/diagnostics/aggregate/release artifact wrappers, run evidence preflight, and generate the human-validation handoff. Use [release/macos-signing-notarization.md](macos-signing-notarization.md) to configure Developer ID signing secrets and record the expected `codesign_mode=developer-id`, `notarization_status=accepted`, and `stapler_validated=true` evidence before treating a macOS artifact as externally distributable.
