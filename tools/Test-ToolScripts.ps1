@@ -1355,6 +1355,86 @@ function Assert-GeneratedDocCheckNewlineSemantics {
     Write-Host "Validated generated-document newline normalization source and behavior."
 }
 
+function Assert-PortableDialogPngAnalyzer {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][string]$ToolRoot
+    )
+
+    $generatorPath = Join-Path $ToolRoot "Generate-DialogVisualEvidenceSummary.ps1"
+    $analyzerPath = Join-Path $ToolRoot "DialogPngAnalyzer.cs"
+    $generator = Get-Content -LiteralPath $generatorPath -Raw
+    $analyzer = Get-Content -LiteralPath $analyzerPath -Raw
+
+    if (-not $generator.Contains('DialogPngAnalyzer.cs')) {
+        throw "Generate-DialogVisualEvidenceSummary.ps1 must load the managed PNG analyzer."
+    }
+    foreach ($windowsImageToken in @("System.Drawing", "GdiPlus", "PInvokeGdiPlus")) {
+        if ($generator.Contains($windowsImageToken) -or $analyzer.Contains($windowsImageToken)) {
+            throw "Dialog PNG analysis must not depend on Windows image API '$windowsImageToken'."
+        }
+    }
+    foreach ($requiredValidation in @("DeflateStream", "ComputeCrc32", "ComputeAdler32", "PreserveLegacyColorChannels", "PNG must use 8-bit RGB or RGBA pixels")) {
+        if (-not $analyzer.Contains($requiredValidation)) {
+            throw "DialogPngAnalyzer.cs is missing required portable validation '$requiredValidation'."
+        }
+    }
+
+    Add-Type -TypeDefinition $analyzer
+
+    $rgbaPath = Join-Path $RepoRoot "docs/parity/dialog-visual-assets/wpf-capture/dialog.AdvancedFilter.png"
+    $rgbPath = Join-Path $RepoRoot "docs/parity/dialog-visual-assets/avalonia-capture/dialog.FormatCells.Fill.png"
+    $straightAlphaPath = Join-Path $RepoRoot "docs/parity/dialog-visual-assets/avalonia-capture/dialog.AutoFilter.png"
+    $rgbaMetrics = [DialogPngAnalyzer]::Analyze($rgbaPath)
+    $rgbMetrics = [DialogPngAnalyzer]::Analyze($rgbPath)
+    $straightAlphaMetrics = [DialogPngAnalyzer]::Analyze($straightAlphaPath)
+    if ($rgbaMetrics.Width -ne 630 -or $rgbaMetrics.Height -ne 510 -or
+        $rgbaMetrics.DistinctColors -ne 482 -or $rgbaMetrics.Signature.Count -ne 1024 -or
+        -not $rgbaMetrics.IsNonBlank -or
+        [Math]::Abs($rgbaMetrics.DpiX - 143.99259948730469) -gt 0.0000001 -or
+        [Math]::Abs($rgbaMetrics.NonBackgroundRatio - 0.102194210) -gt 0.0000005 -or
+        [Math]::Abs($rgbaMetrics.MeanLuma - 247.054042) -gt 0.0000005) {
+        throw "Portable RGBA PNG analysis did not preserve the established evidence metrics."
+    }
+    if ($rgbMetrics.Width -ne 620 -or $rgbMetrics.Height -ne 540 -or
+        $rgbMetrics.DistinctColors -ne 1813 -or $rgbMetrics.Signature.Count -ne 1024 -or
+        -not $rgbMetrics.IsNonBlank -or $rgbMetrics.OpaqueRatio -ne 1.0 -or
+        [Math]::Abs($rgbMetrics.NonBackgroundRatio - 0.125020908) -gt 0.0000005 -or
+        [Math]::Abs($rgbMetrics.MeanLuma - 244.163866) -gt 0.0000005) {
+        throw "Portable RGB PNG analysis did not preserve the established evidence metrics."
+    }
+    if ($straightAlphaMetrics.Width -ne 312 -or $straightAlphaMetrics.Height -ne 437 -or
+        $straightAlphaMetrics.DistinctColors -ne 227 -or
+        [Math]::Abs($straightAlphaMetrics.NonBackgroundRatio - 0.115605) -gt 0.0000005 -or
+        [Math]::Abs($straightAlphaMetrics.MeanLuma - 247.86178) -gt 0.0000005) {
+        throw "Portable sBIT PNG analysis did not preserve the established straight-alpha evidence metrics."
+    }
+
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-png-analyzer-tests-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
+    try {
+        $corruptPath = Join-Path $tempRoot "corrupt.png"
+        $corruptBytes = [System.IO.File]::ReadAllBytes($rgbaPath)
+        $corruptBytes[40] = $corruptBytes[40] -bxor 1
+        [System.IO.File]::WriteAllBytes($corruptPath, $corruptBytes)
+        $corruptionRejected = $false
+        try {
+            [DialogPngAnalyzer]::Analyze($corruptPath) | Out-Null
+        }
+        catch {
+            $corruptionRejected = $_.Exception.Message.Contains("CRC mismatch")
+        }
+        if (-not $corruptionRejected) {
+            throw "Portable PNG analysis did not reject corrupt chunk data."
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "Validated portable RGB/RGBA PNG metrics and corrupt-data rejection."
+}
+
 function Assert-FidelityCorpusDownloaderBehavior {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -1484,6 +1564,7 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-ToolProviderPathBehavior -ToolRoot $resolvedDirectory
     Assert-ToolProcessBehavior -ToolRoot $resolvedDirectory
     Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
+    Assert-PortableDialogPngAnalyzer -RepoRoot $repoRoot -ToolRoot $resolvedDirectory
     Assert-FidelityCorpusDownloaderBehavior -ToolRoot $resolvedDirectory
 }
 
