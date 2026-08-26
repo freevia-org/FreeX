@@ -62,6 +62,17 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
+    public void Dollar_InvariantHeadlessCulture_UsesExcelUsBaseline()
+    {
+        using var culture = TestCultureScope.InvariantCurrentCulture();
+
+        _eval.Evaluate("=DOLLAR(1234.5,2)", MakeSheet())
+            .Should().Be(new TextValue("$1,234.50"));
+        _eval.Evaluate("=VALUE(\"$1,234.50\")", MakeSheet())
+            .Should().Be(new NumberValue(1234.5));
+    }
+
+    [Fact]
     public void Numbervalue_DeDeCulture_DefaultsToCultureSeparatorsWhenOmitted()
     {
         using var culture = new TestCultureScope("de-DE");

@@ -1021,8 +1021,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         {
             var buttons = panel.Children
                 .OfType<ButtonBase>()
-                .Where(IsEffectivelyVisible)
-                .Where(button => TryGetCommandIconSlot(button, out _))
+                .Where(IsSmallLabeledCommandButton)
                 .ToArray();
 
             if (buttons.Length < 2)

@@ -9,6 +9,8 @@ param(
     [ValidateSet("windows", "linux", "macos")]
     [string]$Platform = "windows",
 
+    [string]$GateId = "",
+
     [string]$Configuration = "Release",
 
     [switch]$NoBuild,
@@ -31,10 +33,12 @@ if ($manifest.schemaVersion -ne 1) {
 $gates = @($manifest.gates | Where-Object {
     ($App -eq "all" -or $_.app -eq $App) -and
     $_.platforms -contains $Platform -and
-    ($_.gate -eq "commit" -or $Gate -eq "release")
+    ($_.gate -eq "commit" -or $Gate -eq "release") -and
+    ([string]::IsNullOrWhiteSpace($GateId) -or $_.id -eq $GateId)
 })
 if ($gates.Count -eq 0) {
-    throw "No $Gate test gates match app '$App' on platform '$Platform'."
+    $gateIdDescription = if ([string]::IsNullOrWhiteSpace($GateId)) { "" } else { " with id '$GateId'" }
+    throw "No $Gate test gates$gateIdDescription match app '$App' on platform '$Platform'."
 }
 
 $seenProjects = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)

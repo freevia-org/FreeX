@@ -34,3 +34,7 @@ pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate release -App all -Platform
 The runner is serial by project. Existing explicit batch projects remain separate entries where
 they provide process isolation for UI or renderer resources. A project may belong to one gate only;
 the release gate inherits commit coverage rather than duplicating a second project list.
+
+CI may select one manifest entry with `-GateId` so independent gates can run on separate hosted
+runners. Projects within a selected gate remain serial, and the aggregate required check succeeds
+only after every shard succeeds.

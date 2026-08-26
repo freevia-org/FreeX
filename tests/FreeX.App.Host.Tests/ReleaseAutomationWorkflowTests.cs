@@ -28,7 +28,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("group: tester-release");
         workflow.Should().Contain("cancel-in-progress: false");
         workflow.Should().NotContain("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24");
-        workflow.Should().Contain("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803");
+        workflow.Should().Contain("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
         workflow.Should().Contain("persist-credentials: false");
         workflow.Should().Contain("name: Validate latest release source");
         workflow.Should().Contain("$isMainRelease = $env:GITHUB_REF -eq \"refs/heads/main\"");
@@ -38,7 +38,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("git fetch origin main:refs/remotes/origin/main --no-tags");
         workflow.Should().Contain("git merge-base --is-ancestor origin/main HEAD");
         workflow.Should().Contain("Daily tester release branches must contain the current origin/main commit.");
-        workflow.Should().Contain("actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1");
+        workflow.Should().Contain("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68");
         workflow.Should().Contain("timeout-minutes: 180");
         workflow.Should().Contain("name: Repository preflight");
         workflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
@@ -47,10 +47,11 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().NotContain("dotnet test FreeX.DefaultTests.slnx");
         workflow.Should().NotContain("dotnet test FreeX.UiTests.slnx");
         workflow.Should().NotContain("dotnet restore FreeX.slnx");
-        workflow.Should().NotContain("--disable-build-servers");
-        workflow.Should().NotContain("-p:UseSharedCompilation=false");
-        workflow.Should().NotContain("-p:NodeReuse=false");
-        workflow.Should().NotContain("/nr:false");
+        workflow.Should().Contain("--disable-build-servers");
+        workflow.Should().Contain("-p:UseSharedCompilation=false");
+        workflow.Should().Contain("-p:NodeReuse=false");
+        workflow.Should().Contain("/nr:false");
+        workflow.Should().Contain("-m:1");
         workflow.Should().Contain("if: always()");
         workflow.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-test-results");
         workflow.Should().Contain("path: \"**/TestResults/*.trx\"");
@@ -292,6 +293,10 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("git merge-base --is-ancestor origin/main HEAD");
         workflow.Should().Contain("Full release branches must contain the current origin/main commit.");
         workflow.Should().Contain("$verifyLanes");
+        workflow.Should().Contain("$preflightLanes");
+        workflow.Should().Contain("needs: [prepare, preflight]");
+        Regex.Matches(workflow, "pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1").Count.Should().Be(1);
+        workflow.Should().Contain("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9");
         workflow.Should().Contain("Group-Object { \"$($_.app):$($_.platform)\" }");
         workflow.Should().Contain("name: Verify ${{ matrix.app }} ${{ matrix.platform }}");
         workflow.Should().Contain("runs-on: ${{ matrix.runner }}");

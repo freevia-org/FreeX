@@ -305,8 +305,8 @@ public sealed partial class XsltWorkbookTransformTests
 
         using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
         reader.ReadToEnd().Should()
-            .Contain("<workbook>\r\n")
-            .And.Contain("  <row>\r\n")
+            .Contain($"<workbook>{Environment.NewLine}")
+            .And.Contain($"  <row>{Environment.NewLine}")
             .And.Contain("    <cell>Mike</cell>");
     }
 

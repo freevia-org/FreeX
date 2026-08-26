@@ -10,8 +10,7 @@ public sealed class KeyboardContextParityTests
     [StaFact]
     public void WpfWindowInstallsEverySharedShortcutGesture()
     {
-        var window = new MainWindow();
-        try
+        WithWindow(window =>
         {
             var actual = window.InputBindings
                 .OfType<KeyBinding>()
@@ -26,20 +25,13 @@ public sealed class KeyboardContextParityTests
 
             actual.Should().HaveCount(18);
             actual.Should().BeEquivalentTo(expected);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void WpfSharedShortcutsExecuteModelEffects()
     {
-        var window = new MainWindow(
-            new FreePOptions(),
-            messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             window.Editor.CurrentSlide!.Shapes.Add(new SlideShape { Id = 41, Name = "One" });
             window.Editor.CurrentSlide.Shapes.Add(new SlideShape { Id = 42, Name = "Two" });
@@ -50,11 +42,7 @@ public sealed class KeyboardContextParityTests
             var before = window.Editor.Presentation.Slides.Count;
             Execute(window, Key.D, ModifierKeys.Control);
             window.Editor.Presentation.Slides.Should().HaveCount(before + 1);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
@@ -121,10 +109,7 @@ public sealed class KeyboardContextParityTests
     [StaFact]
     public void WpfTableContextMenuExecutesCellMutations()
     {
-        var window = new MainWindow(
-            new FreePOptions(),
-            messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             var table = new SlideShape
             {
@@ -171,20 +156,13 @@ public sealed class KeyboardContextParityTests
             splitMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Split Cell"))
                 .RaiseEvent(new System.Windows.RoutedEventArgs(MenuItem.ClickEvent));
             table.Table.Rows[0].Cells[0].GridSpan.Should().Be(1);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void WpfChartContextMenuUsesSharedWaterfallStateAndCommands()
     {
-        var window = new MainWindow(
-            new FreePOptions(),
-            messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             var chart = window.Editor.InsertChart(ChartType.Waterfall);
             var hit = new ChartSubtargetHit(
@@ -201,11 +179,7 @@ public sealed class KeyboardContextParityTests
 
             window.BuildChartContextMenuForTests(hit)
                 .Items.OfType<MenuItem>().First().Header.Should().Be("Clear Total");
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     private static void AssertMenuMatches(
@@ -237,6 +211,9 @@ public sealed class KeyboardContextParityTests
                 gesture.Key == key && gesture.Modifiers == modifiers);
         ((RoutedCommand)binding.Command).Execute(null, window);
     }
+
+    private static void WithWindow(Action<MainWindow> assertion) =>
+        ReusableFreePMainWindowSession.Run(assertion);
 
     private static Key ToWpfKey(FreePKeyboardKey key) => Enum.Parse<Key>(key.ToString());
 

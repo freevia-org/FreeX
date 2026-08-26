@@ -27,6 +27,8 @@ public enum ExternalUriLaunchResult
 /// </summary>
 public static class ExternalUriLauncher
 {
+    private const int MaximumLocalPathLength = 32_767;
+
     /// <summary>Schemes safe to hand to a platform launcher (mirrors the hyperlink allowlist).</summary>
     private static readonly HashSet<string> AllowedSchemes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -112,7 +114,9 @@ public static class ExternalUriLauncher
     /// </summary>
     private static bool IsWellFormedLocalPath(string localPath)
     {
-        if (string.IsNullOrWhiteSpace(localPath) || localPath.Contains('\0', StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(localPath) ||
+            localPath.Length > MaximumLocalPathLength ||
+            localPath.Contains('\0', StringComparison.Ordinal))
             return false;
 
         try

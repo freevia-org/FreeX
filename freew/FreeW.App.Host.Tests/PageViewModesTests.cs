@@ -37,8 +37,7 @@ public sealed class PageViewModesTests
     [StaFact]
     public void ReadMode_AuthorityTogglesChromeOptionsAndRestoresPresentation()
     {
-        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
-        try
+        WithWindow(window =>
         {
             var editor = GetEditor(window);
             var originalView = editor.ViewMode;
@@ -83,11 +82,7 @@ public sealed class PageViewModesTests
             editor.HorizontalAlignment.Should().Be(originalAlignment);
             editor.Background.Should().BeSameAs(originalBackground);
             editor.Model.Page.BackgroundColorHex.Should().Be(originalPageColor);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     // ── PrintLayout.BuildPaginatedSource / BuildPaginatedDocument ────────────────────────────────
@@ -315,8 +310,7 @@ public sealed class PageViewModesTests
     [StaFact]
     public void WpfHost_MultiplePagesEditsCommitWhenRestoringLiveEditor()
     {
-        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
-        try
+        WithWindow(window =>
         {
             var document = NewMultiPageDocument();
             var firstParagraph = document.Blocks.OfType<Paragraph>().First();
@@ -339,18 +333,13 @@ public sealed class PageViewModesTests
                 paragraph.PlainText.Contains("Multiple Pages edit persisted.", StringComparison.Ordinal));
             paragraphs[0].SectionBreak.Should().NotBeNull();
             paragraphs[0].SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void WpfHost_SplitEditorsSynchronizeLowerPaneEditsToTheSavedDocument()
     {
-        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
-        try
+        WithWindow(window =>
         {
             GetEditor(window).LoadModel(NewEditor().Model);
             InvokePrivate(window, "ToggleSplitWindow");
@@ -361,11 +350,7 @@ public sealed class PageViewModesTests
             lower.InsertText(" lower pane edit");
 
             GetEditor(window).Model.PlainText.Should().Contain("lower pane edit");
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
@@ -414,8 +399,7 @@ public sealed class PageViewModesTests
     [StaFact]
     public void WpfHost_SideToSideNavigationControlsStepPagePairs()
     {
-        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
-        try
+        WithWindow(window =>
         {
             GetEditor(window).LoadModel(NewMultiPageDocument());
 
@@ -437,11 +421,7 @@ public sealed class PageViewModesTests
 
             window.NavigateSideToSidePreviousPairForTests();
             window.SideToSideNavigationForTests.FirstVisiblePageNumber.Should().Be(1);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
@@ -649,6 +629,9 @@ public sealed class PageViewModesTests
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         method!.Invoke(window, null);
     }
+
+    private static void WithWindow(Action<MainWindow> assertion) =>
+        ReusableFreeWMainWindowSession.Run(assertion);
 
     private sealed class NoUiMessageService : IUserMessageService
     {

@@ -204,7 +204,52 @@ if ($artifact.fullPngCount -ne (2 * $expectedScenarioCount) -or
 
 $json = ($artifact | ConvertTo-Json -Depth 8) + [Environment]::NewLine
 if ($Check) {
-    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedManifest -Label "FreeP whole-window visual evidence artifact manifest" -GeneratorScriptName "tools\Generate-FreePWholeWindowVisualEvidenceManifest.ps1" -NormalizeNewlines
+    if (-not (Test-Path -LiteralPath $resolvedManifest -PathType Leaf)) {
+        throw "FreeP whole-window visual evidence artifact manifest is missing. Run tools\Generate-FreePWholeWindowVisualEvidenceManifest.ps1 to create it."
+    }
+    $actualArtifact = Get-Content -LiteralPath $resolvedManifest -Raw | ConvertFrom-Json
+    $scalarNames = @(
+        "schemaVersion", "generatedBy", "scenarioCount", "pairedCaptureCount", "passCount",
+        "mismatchCount", "limitationCount", "duplicateCaptureCount", "fullPngCount",
+        "clientPngCount", "diffPngCount", "selectionArtifactCount", "fileCount")
+    $matches = -not @($scalarNames | Where-Object {
+        [string]$actualArtifact.$_ -cne [string]$artifact.$_
+    }).Count
+    $expectedTimestamp = [DateTimeOffset]::Parse([string]$artifact.evidenceGeneratedAtUtc).ToUniversalTime()
+    $actualTimestamp = [DateTimeOffset]::Parse([string]$actualArtifact.evidenceGeneratedAtUtc).ToUniversalTime()
+    $matches = $matches -and $expectedTimestamp -eq $actualTimestamp
+
+    $actualInputs = @($actualArtifact.inputs)
+    $expectedInputs = @($artifact.inputs)
+    $matches = $matches -and $actualInputs.Count -eq $expectedInputs.Count
+    if ($matches) {
+        for ($index = 0; $index -lt $expectedInputs.Count; $index++) {
+            if ([string]$actualInputs[$index].path -cne [string]$expectedInputs[$index].path -or
+                [string]$actualInputs[$index].sha256 -cne [string]$expectedInputs[$index].sha256) {
+                $matches = $false
+                break
+            }
+        }
+    }
+
+    $actualFiles = @($actualArtifact.files)
+    $expectedFiles = @($artifact.files)
+    $matches = $matches -and $actualFiles.Count -eq $expectedFiles.Count
+    if ($matches) {
+        for ($index = 0; $index -lt $expectedFiles.Count; $index++) {
+            $expectedFile = $expectedFiles[$index]
+            $actualFile = $actualFiles[$index]
+            if ([string]$actualFile.path -cne [string]$expectedFile.path -or
+                [long]$actualFile.bytes -ne [long]$expectedFile.bytes -or
+                [string]$actualFile.sha256 -cne [string]$expectedFile.sha256) {
+                $matches = $false
+                break
+            }
+        }
+    }
+    if (-not $matches) {
+        throw "FreeP whole-window visual evidence artifact manifest is out of date. Run tools\Generate-FreePWholeWindowVisualEvidenceManifest.ps1 to refresh it."
+    }
     Write-Host "FreeP whole-window evidence is current: $expectedScenarioCount/$expectedScenarioCount paired, $($artifact.mismatchCount) explicit product mismatches, zero capture limitations."
     exit 0
 }

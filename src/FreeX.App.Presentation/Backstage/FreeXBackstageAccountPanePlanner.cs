@@ -164,12 +164,18 @@ public static class FreeXBackstageAccountPanePlanner
         string? currentWorkbookName)
     {
         if (!string.IsNullOrWhiteSpace(currentWorkbookPath))
-            return FreeXBackstageTextValue.Literal(Path.GetFileName(currentWorkbookPath));
+            return FreeXBackstageTextValue.Literal(GetPortableFileName(currentWorkbookPath));
 
         if (!string.IsNullOrWhiteSpace(currentWorkbookName))
             return FreeXBackstageTextValue.Literal(currentWorkbookName.Trim());
 
         return FreeXBackstageTextValue.Key("Backstage_Account_CurrentWorkbookUnsaved");
+    }
+
+    private static string GetPortableFileName(string path)
+    {
+        var lastSeparator = Math.Max(path.LastIndexOf('/'), path.LastIndexOf('\\'));
+        return lastSeparator >= 0 ? path[(lastSeparator + 1)..] : path;
     }
 
     private static string ResolveNoticeValue(

@@ -132,7 +132,7 @@ public sealed class XpsExportTests : IDisposable
         var doc = TextDocument.CreateEmpty();
         doc.DefaultRun = doc.DefaultRun with { FontFamily = "Arial" };
         doc.Blocks.Clear();
-        doc.Blocks.Add(new Paragraph("Exported Heading") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Exported Heading"));
         doc.Blocks.Add(new Paragraph("Body paragraph with some text to render onto the page."));
 
         var view = new DocumentView();
@@ -145,7 +145,7 @@ public sealed class XpsExportTests : IDisposable
         var doc = TextDocument.CreateEmpty();
         doc.DefaultRun = doc.DefaultRun with { FontFamily = "Arial" };
         doc.Blocks.Clear();
-        doc.Blocks.Add(new Paragraph("Exported Heading") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Exported Heading"));
         for (var i = 0; i < 400; i++)
             doc.Blocks.Add(new Paragraph($"Body paragraph number {i} with enough text to fill the page and force pagination across several pages."));
 

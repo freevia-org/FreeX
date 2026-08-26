@@ -45,14 +45,16 @@ public sealed class WorkbookExportInteractionPlannerTests
     [Fact]
     public void CreateRequestPlan_NormalizesDestinationAndOverwriteDecision()
     {
+        var requestedPath = Path.Combine(Path.GetTempPath(), "report.txt");
+        var normalizedPath = Path.Combine(Path.GetTempPath(), "report.pdf");
         var plan = WorkbookExportInteractionPlanner.CreateRequestPlan(
-            @"C:\temp\report.txt",
+            requestedPath,
             WorkbookExportPrintOutputKind.Pdf,
             ExportOptions.ExcelLikeDefault with { PdfLanguage = "en_us" },
-            path => path == @"C:\temp\report.pdf");
+            path => path == normalizedPath);
 
         plan.Format.Should().BeSameAs(ExportFormatCatalog.Pdf);
-        plan.Request.Path.Should().Be(@"C:\temp\report.pdf");
+        plan.Request.Path.Should().Be(normalizedPath);
         plan.Request.Options.PdfLanguage.Should().Be("en-US");
         plan.ShouldConfirmNormalizedOverwrite.Should().BeTrue();
         plan.ShouldPersistPdfLanguage.Should().BeTrue();

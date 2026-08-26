@@ -122,9 +122,10 @@ public static partial class BuiltInFunctions
     {
         double n = ToNumber(value);
         var numberText = FormatRoundedNumber(Math.Abs(n), dec, useCommas: true);
-        var currencySymbol = CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol;
+        var culture = ExcelCulture.Current;
+        var currencySymbol = culture.NumberFormat.CurrencySymbol;
         var formatted = ApplyCurrencyPositivePattern(
-            currencySymbol, numberText, CultureInfo.CurrentCulture.NumberFormat.CurrencyPositivePattern);
+            currencySymbol, numberText, culture.NumberFormat.CurrencyPositivePattern);
         return TextResult(n < 0 && (dec >= 0 || numberText != "0") ? "(" + formatted + ")" : formatted);
     }
 
@@ -150,7 +151,8 @@ public static partial class BuiltInFunctions
         double rounded = decimals <= 15 ? RoundWithExcelDigits(value, decimals) : value;
         int displayDecimals = Math.Clamp(decimals, 0, 99); // .NET "N"/"F" format supports 0-99 only
         string format = (useCommas ? "N" : "F") + displayDecimals;
-        string text = rounded.ToString(format, CultureInfo.CurrentCulture);
+        var culture = ExcelCulture.Current;
+        string text = rounded.ToString(format, culture);
 
         // A tiny negative input that rounds to zero at the requested precision (e.g.
         // FIXED(-0.001,2)) re-acquires IEEE double negative zero when RoundWithExcelDigits'
@@ -162,7 +164,7 @@ public static partial class BuiltInFunctions
         // auto-generated sign, never an author/caller-intended one.
         if (value < 0)
         {
-            string negativeSign = CultureInfo.CurrentCulture.NumberFormat.NegativeSign;
+            string negativeSign = culture.NumberFormat.NegativeSign;
             if (text.StartsWith(negativeSign, StringComparison.Ordinal))
             {
                 string magnitudeText = text[negativeSign.Length..];

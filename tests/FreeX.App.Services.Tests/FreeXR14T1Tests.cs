@@ -90,7 +90,7 @@ public sealed class FreeXR14T1Tests
         session.CommitCellText("2").Success.Should().BeTrue();
         session.CommitCellText("3").Success.Should().BeTrue();
 
-        session.MarkSaved(@"C:\FreeXTests\Book.fxl");
+        session.MarkSaved(Path.GetFullPath(Path.Combine("FreeXTests", "Book.fxl")));
         session.IsDirty.Should().BeFalse();
 
         // Undo past the save point, then make a DIFFERENT edit at the same depth (this clears the

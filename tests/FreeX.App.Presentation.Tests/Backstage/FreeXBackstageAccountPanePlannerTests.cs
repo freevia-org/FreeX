@@ -70,6 +70,25 @@ public sealed class FreeXBackstageAccountPanePlannerTests
         plan.Actions.Select(action => action.Id).Should().Equal(FreeXBackstageAccountActionId.LegalNotices);
     }
 
+    [Theory]
+    [InlineData(@"C:\Workbooks\Budget.xlsx")]
+    [InlineData("/workbooks/Budget.xlsx")]
+    public void Build_ExtractsWorkbookNameFromWindowsAndPosixPaths(string workbookPath)
+    {
+        var plan = FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
+            UserName: null,
+            DeviceName: null,
+            VersionText: "Version 1.2.3",
+            OptionsAvailable: false,
+            CurrentWorkbookPath: workbookPath,
+            CurrentWorkbookName: null,
+            TrademarkNotice: "Trademark",
+            LicenseNotice: "License",
+            PrivacyNotice: "Privacy"));
+
+        TextFor(plan, FreeXBackstageAccountDetailId.CurrentWorkbook).Should().Be("Budget.xlsx");
+    }
+
     [Fact]
     public void Build_UsesHostSuppliedLocalReadinessValues()
     {

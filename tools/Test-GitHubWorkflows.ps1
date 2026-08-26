@@ -27,9 +27,10 @@ if ($workflows.Count -eq 0) {
 }
 
 $allowedActionPins = @{
-    "actions/checkout" = "d23441a48e516b6c34aea4fa41551a30e30af803"
-    "actions/download-artifact" = "37930b1c2abaa49bbe596cd826c3c89aef350131"
-    "actions/setup-dotnet" = "26b0ec14cb23fa6904739307f278c14f94c95bf1"
+    "actions/checkout" = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+    "actions/cache" = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+    "actions/download-artifact" = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+    "actions/setup-dotnet" = "a98b56852c35b8e3190ac28c8c2271da59106c68"
     "actions/upload-artifact" = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
     "github/codeql-action/init" = "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"
     "github/codeql-action/analyze" = "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"
@@ -269,6 +270,37 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): workflow must not use the privileged pull_request_target event.")
     }
 
+    $inlineTriggerNames = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in $lines) {
+        if ($line -notmatch '^\s*(?:[''"]?on[''"]?)\s*:\s*(?<events>[^#]*)') {
+            continue
+        }
+
+        $events = $Matches["events"] -replace '[''"]', ""
+        foreach ($eventMatch in [regex]::Matches($events, '[A-Za-z_][A-Za-z0-9_-]*')) {
+            $inlineTriggerNames.Add($eventMatch.Value)
+        }
+    }
+
+    $blockTriggerNames = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($onBlock)) {
+        $onBlockLines = $onBlock -split "\r?\n"
+        $onIndent = [regex]::Match($onBlockLines[0], '^(?<indent>\s*)').Groups["indent"].Value.Length
+        foreach ($line in $onBlockLines | Select-Object -Skip 1) {
+            $eventMatch = [regex]::Match($line, '^(?<indent>\s*)(?:[''"]?)(?<event>[A-Za-z_][A-Za-z0-9_-]*)(?:[''"]?)\s*:')
+            if ($eventMatch.Success -and $eventMatch.Groups["indent"].Value.Length -eq $onIndent + 2) {
+                $blockTriggerNames.Add($eventMatch.Groups["event"].Value)
+            }
+        }
+    }
+
+    $triggerNames = @($inlineTriggerNames + $blockTriggerNames)
+    $hasWorkflowDispatch = $triggerNames -contains "workflow_dispatch"
+    $nonManualTriggerNames = @($triggerNames | Where-Object { $_ -ne "workflow_dispatch" })
+    if (-not $hasWorkflowDispatch -or $nonManualTriggerNames.Count -gt 0) {
+        $errors.Add("$($workflow.Name): workflow must use workflow_dispatch only; automatic triggers are disabled.")
+    }
+
     foreach ($match in [regex]::Matches($content, "(?ms)^\s*runs-on\s*:\s*(?<runner>[^\r\n]*(?:\r?\n\s+-\s+[^\r\n]+)*)")) {
         $runnerBlock = (($match.Value -split "\r?\n") | ForEach-Object { $_ -replace "#.*$", "" }) -join "`n"
         if ($runnerBlock -match "(?i)(^|[\[\s,'`"-])self-hosted($|[\]\s,'`"])") {
@@ -490,7 +522,7 @@ foreach ($workflow in $workflows) {
                     'runner: macos-26',
                     'runner: macos-26-intel',
                     'dotnet-version: 10.0.300',
-                    'FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300.3',
+                    'FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300',
                     'FREEX_MACOS_TFM: net10.0-macos',
                     'FREEX_XCODE_PATH: /Applications/Xcode_26.5.app/Contents/Developer',
                     'sudo xcode-select -s "$FREEX_XCODE_PATH"',

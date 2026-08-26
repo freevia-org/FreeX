@@ -232,7 +232,14 @@ public static partial class NumberFormatter
             normalized = "0";
 
         if (!LocaleFormatCatalog.TryGetValue(normalized, out var separators))
+        {
+            // Numeric LCIDs must be explicitly cataloged. ICU and Windows NLS expose different
+            // additional mappings for numeric values, while culture names are portable.
+            if (int.TryParse(normalized, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _))
+                return false;
+
             return TryCreateCultureInfoLocaleFormats(normalized, out numberFormat, out dateTimeFormat);
+        }
 
         var hasCultureFormats = TryCreateCultureInfoLocaleFormats(
             normalized,

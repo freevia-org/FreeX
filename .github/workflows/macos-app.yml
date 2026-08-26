@@ -13,10 +13,6 @@ on:
         required: false
         type: boolean
         default: false
-  pull_request:
-    branches:
-      - main
-
 permissions:
   contents: read
 
@@ -41,15 +37,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.111
+          dotnet-version: 10.0.300
 
       - name: Capture runner toolchain evidence
         shell: bash
@@ -1178,7 +1174,7 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
-      FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300.3
+      FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300
       FREEX_MACOS_ARCH: ${{ matrix.arch }}
       FREEX_MACOS_TFM: net10.0-macos
       FREEX_MACOS_TFM_EVIDENCE: artifacts/freex-${{ matrix.arch }}-macos-tfm-build-evidence.txt
@@ -1187,13 +1183,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.300
 
@@ -1309,13 +1305,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Download macOS preview artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: "freex-${{ github.run_id }}-${{ github.run_attempt }}-osx-*-macos-*"
           path: artifacts/macos-preview-evidence
@@ -1558,13 +1554,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Download macOS app artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-macos-app
           path: artifacts/macos-distribution-candidate

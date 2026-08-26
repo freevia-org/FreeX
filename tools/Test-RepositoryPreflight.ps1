@@ -7,6 +7,7 @@ param(
     [string]$DotNetSdkReadinessScriptPath = "tools\Test-DotNetSdkReadiness.ps1",
     [string]$DotNetProjectReferencesScriptPath = "tools\Test-DotNetProjectReferences.ps1",
     [string]$SolutionProjectsScriptPath = "tools\Test-SolutionProjects.ps1",
+    [string]$CodeQlSolutionScriptPath = "tools\Test-CodeQlSolution.ps1",
     [string]$MacOsAppReadinessScriptPath = "tools\Test-MacOsAppReadiness.ps1",
     [string]$GeneratedDocsScriptPath = "tools\Test-GeneratedDocs.ps1",
     [string]$ConflictMarkersScriptPath = "tools\Test-ConflictMarkers.ps1",
@@ -43,6 +44,7 @@ Invoke-RepositoryPreflight -ScriptPath $TestGateContractScriptPath -Label "test-
 Invoke-RepositoryPreflight -ScriptPath $DotNetSdkReadinessScriptPath -Label ".NET SDK readiness"
 Invoke-RepositoryPreflight -ScriptPath $DotNetProjectReferencesScriptPath -Label ".NET project references"
 Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "solution projects"
+Invoke-RepositoryPreflight -ScriptPath $CodeQlSolutionScriptPath -Label "CodeQL production solution"
 Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "default test solution projects" -Parameters @{
     SolutionPath = "FreeX.DefaultTests.slnx"
     ProjectPathPrefixes = @("tests/")

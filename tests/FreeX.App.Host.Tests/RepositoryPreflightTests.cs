@@ -17,6 +17,7 @@ public sealed class RepositoryPreflightTests
         script.Should().Contain("Test-DotNetSdkReadiness.ps1");
         script.Should().Contain("Test-DotNetProjectReferences.ps1");
         script.Should().Contain("Test-SolutionProjects.ps1");
+        script.Should().Contain("Test-CodeQlSolution.ps1");
         script.Should().Contain("FreeX.DefaultTests.slnx");
         script.Should().Contain("ExcludedProjectPathPrefixes");
         script.Should().Contain("Test-MacOsAppReadiness.ps1");
@@ -38,6 +39,7 @@ public sealed class RepositoryPreflightTests
         var sdkScript = CreatePassingPreflightScript(temp.Path, "Test-DotNetSdkReadiness.ps1");
         var projectReferencesScript = CreatePassingPreflightScript(temp.Path, "Test-DotNetProjectReferences.ps1");
         var solutionProjectsScript = CreatePassingPreflightScript(temp.Path, "Test-SolutionProjects.ps1");
+        var codeQlSolutionScript = CreatePassingPreflightScript(temp.Path, "Test-CodeQlSolution.ps1");
         var macOsAppReadinessScript = CreatePassingPreflightScript(temp.Path, "Test-MacOsAppReadiness.ps1");
         var linuxPackagingScriptsScript = CreatePassingPreflightScript(temp.Path, "Test-LinuxPackagingScripts.ps1");
         var generatedDocsScript = CreatePassingPreflightScript(temp.Path, "Test-GeneratedDocs.ps1");
@@ -52,6 +54,7 @@ public sealed class RepositoryPreflightTests
             $"-DotNetSdkReadinessScriptPath \"{sdkScript}\" " +
             $"-DotNetProjectReferencesScriptPath \"{projectReferencesScript}\" " +
             $"-SolutionProjectsScriptPath \"{solutionProjectsScript}\" " +
+            $"-CodeQlSolutionScriptPath \"{codeQlSolutionScript}\" " +
             $"-MacOsAppReadinessScriptPath \"{macOsAppReadinessScript}\" " +
             $"-LinuxPackagingScriptsScriptPath \"{linuxPackagingScriptsScript}\" " +
             $"-GeneratedDocsScriptPath \"{generatedDocsScript}\" " +
@@ -65,6 +68,7 @@ public sealed class RepositoryPreflightTests
         result.Output.Should().Contain("Running .NET SDK readiness preflight...");
         result.Output.Should().Contain("Running .NET project references preflight...");
         result.Output.Should().Contain("Running solution projects preflight...");
+        result.Output.Should().Contain("Running CodeQL production solution preflight...");
         result.Output.Should().Contain("Running default test solution projects preflight...");
         result.Output.Should().Contain("Running FreeW solution projects preflight...");
         result.Output.Should().Contain("Running FreeP solution projects preflight...");

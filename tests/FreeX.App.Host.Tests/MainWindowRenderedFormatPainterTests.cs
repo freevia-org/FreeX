@@ -2,13 +2,7 @@ using System;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls.Primitives;
-using FreeX.Core.Calc;
-using FreeX.Core.Commands;
-using FreeX.Core.Formula;
-using FreeX.Core.Model;
 using FluentAssertions;
-using Microsoft.Extensions.Logging.Abstractions;
-using static FreeX.App.Host.Tests.DispatcherTestPump;
 
 namespace FreeX.App.Host.Tests;
 
@@ -23,51 +17,18 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class MainWindowRenderedFormatPainterTests
 {
-    private static MainWindow CreateWindow(WorkbookRef workbookRef)
-    {
-        return new MainWindow(
-            NullLogger<MainWindow>.Instance,
-            new ViewportService(),
-            new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
-            new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()),
-            [],
-            workbookRef,
-            workbookRef.Current,
-            NullUserMessageService.Instance);
-    }
-
-    private static WorkbookRef CreateWorkbookRef()
-    {
-        var initialWorkbook = new Workbook("Book1");
-        initialWorkbook.AddSheet("Sheet1");
-        return new WorkbookRef { Current = initialWorkbook };
-    }
-
     [Fact]
     public void RenderedFormatPainterButton_HasPersistentDoubleClickHandlerWired()
     {
-        StaTestRunner.Run(() =>
+        ReusableFreeXMainWindowSession.Run(window =>
         {
-            var workbookRef = CreateWorkbookRef();
-            var window = CreateWindow(workbookRef);
-            try
-            {
-                window.Show();
-                PumpDispatcher();
+            var button = window.FindRenderedRibbonCommandControlForTest("Format Painter") as ButtonBase;
+            button.Should().NotBeNull("the declarative ribbon should render a 'Format Painter' button");
 
-                var button = window.FindRenderedRibbonCommandControlForTest("Format Painter") as ButtonBase;
-                button.Should().NotBeNull("the declarative ribbon should render a 'Format Painter' button");
-
-                HasPreviewMouseLeftButtonDownHandler(button!, "FormatPainterBtn_PreviewMouseLeftButtonDown")
-                    .Should().BeTrue(
-                        "double-click persistence relies on the PreviewMouseLeftButtonDown handler being " +
-                        "attached to the rendered button (it is not wired through the command registry)");
-            }
-            finally
-            {
-                MainWindowTestCleanup.CloseWithoutSavePrompt(window);
-                PumpDispatcher();
-            }
+            HasPreviewMouseLeftButtonDownHandler(button!, "FormatPainterBtn_PreviewMouseLeftButtonDown")
+                .Should().BeTrue(
+                    "double-click persistence relies on the PreviewMouseLeftButtonDown handler being " +
+                    "attached to the rendered button (it is not wired through the command registry)");
         });
     }
 

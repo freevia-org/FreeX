@@ -17,33 +17,23 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void MainWindow_ConstructsWithSharedChrome()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             window.Should().NotBeNull();
             window.Title.Should().Contain("FreeP");
             window.Icon.Should().NotBeNull("the WPF host must load the canonical owned FreeP icon");
             window.Content.Should().NotBeNull();
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void MainWindow_TitleReflectsApplicationName()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             // WindowTitlePlanner composes "<doc> — FreeP"; the untitled deck still ends in the app name.
             window.Title.Should().EndWith("FreeP");
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     // ── Wave 3A: Editor and seams ─────────────────────────────────────────────────
@@ -51,142 +41,117 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void MainWindow_Editor_IsNotNull()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             window.Editor.Should().NotBeNull();
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void MainWindow_Editor_HasCurrentSlide()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             // CreateEmpty starts with 1 slide — Editor should reflect it.
             window.Editor.CurrentSlide.Should().NotBeNull();
             window.Editor.CurrentSlideIndex.Should().Be(0);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void MainWindow_SlidePaneHost_IsPresent()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             // 3B seam: the pane host container must exist.
             window.SlidePaneHost.Should().NotBeNull();
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void MainWindow_SlideCanvas_IsPresent()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             // 3C seam: the canvas must be accessible.
             window.SlideCanvas.Should().NotBeNull();
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void Editor_InsertSlide_IncreasesSlideCount()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             var before = window.Editor.Presentation.Slides.Count;
             window.Editor.InsertSlide();
             window.Editor.Presentation.Slides.Count.Should().Be(before + 1);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void Editor_DuplicateCurrentSlide_IncreasesSlideCount()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             var before = window.Editor.Presentation.Slides.Count;
             window.Editor.DuplicateCurrentSlide();
             window.Editor.Presentation.Slides.Count.Should().Be(before + 1);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void Editor_DeleteCurrentSlide_DecreasesSlideCount()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             window.Editor.InsertSlide(); // ensure 2 slides
             var before = window.Editor.Presentation.Slides.Count;
             window.Editor.DeleteCurrentSlide();
             window.Editor.Presentation.Slides.Count.Should().Be(before - 1);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void Editor_InsertThenUndo_RestoresPreviousCount()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             var before = window.Editor.Presentation.Slides.Count;
             window.Editor.InsertSlide();
             window.Editor.Undo();
             window.Editor.Presentation.Slides.Count.Should().Be(before);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
 
     [StaFact]
     public void Editor_InsertDefaultRectangle_AddsShapeToCurrentSlide()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
-        try
+        WithWindow(window =>
         {
             var before = window.Editor.CurrentSlide!.Shapes.Count;
             window.Editor.InsertDefaultRectangle();
             window.Editor.CurrentSlide!.Shapes.Count.Should().Be(before + 1);
-        }
-        finally
-        {
-            window.Close();
-        }
+        });
     }
+
+    [StaFact]
+    public void SharedWindowSession_ReusesTheShellAndRestoresTheEmptyPresentation()
+    {
+        MainWindow? firstWindow = null;
+        WithWindow(window =>
+        {
+            firstWindow = window;
+            window.Editor.InsertSlide();
+        });
+
+        WithWindow(window =>
+        {
+            window.Should().BeSameAs(firstWindow);
+            window.Editor.Presentation.Slides.Should().ContainSingle();
+        });
+    }
+
+    private static void WithWindow(Action<MainWindow> assertion) =>
+        ReusableFreePMainWindowSession.Run(assertion);
 }

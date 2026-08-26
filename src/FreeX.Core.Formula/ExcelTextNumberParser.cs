@@ -105,14 +105,15 @@ internal static class ExcelTextNumberParser
     /// <see cref="Calendar.TwoDigitYearMax"/>, which trails ~50 years ahead of the current date
     /// (e.g. 2049 in 2026) and drifts over time. Mirrors <c>BuiltInFunctions.DateTime.cs</c>'s
     /// <c>CreateExcelTwoDigitYearCulture</c> (same pivot, same clone-and-override pattern, and
-    /// likewise using <see cref="CultureInfo.CurrentCulture"/> rather than a fixed en-US culture)
+    /// likewise using the configured current culture rather than a fixed en-US culture)
     /// so VALUE()/implicit-arithmetic text coercion agrees with DATEVALUE and NUMBERVALUE under
     /// the same system locale. Not cached statically - built fresh on every call - because
-    /// <see cref="CultureInfo.CurrentCulture"/> can change at runtime.
+    /// <see cref="CultureInfo.CurrentCulture"/> can change at runtime. An invariant headless
+    /// environment uses the Excel-compatible en-US baseline supplied by <see cref="ExcelCulture"/>.
     /// </summary>
     private static CultureInfo CreateCurrentCultureWithExcelTwoDigitYearCutoff()
     {
-        var culture = (CultureInfo)CultureInfo.CurrentCulture.Clone();
+        var culture = (CultureInfo)ExcelCulture.Current.Clone();
         culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
         return culture;
     }

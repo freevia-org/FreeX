@@ -50,7 +50,7 @@ public sealed class BackstageSharedPlannerSliceTests
 
         rows[1].Invoke();
 
-        openedFolder.Should().Be(Path.GetDirectoryName("C:/Reports/Budget Review.docx"));
+        openedFolder.Should().Be("C:/Reports");
     }
 
     [Fact]

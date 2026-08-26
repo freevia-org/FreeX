@@ -1,0 +1,64 @@
+<Solution>
+  <Folder Name="/shared/">
+    <Project Path="shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <Project Path="shared/Free.Shared.AppServices.Windows/Free.Shared.AppServices.Windows.csproj" />
+    <Project Path="shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
+    <Project Path="shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <Project Path="shared/Free.Shared.Drawing.Avalonia/Free.Shared.Drawing.Avalonia.csproj" />
+    <Project Path="shared/Free.Shared.IO/Free.Shared.IO.csproj" />
+    <Project Path="shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
+    <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
+    <Project Path="shared/Free.Shared.PageSetup/Free.Shared.PageSetup.csproj" />
+    <Project Path="shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
+    <Project Path="shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
+    <Project Path="shared/Free.Shared.Pdf.Wpf/Free.Shared.Pdf.Wpf.csproj" />
+    <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <Project Path="shared/Free.Shared.Ribbon.Avalonia/Free.Shared.Ribbon.Avalonia.csproj" />
+    <Project Path="shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
+    <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <Project Path="shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj" />
+    <Project Path="shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
+    <Project Path="shared/Free.Shared.TextSearch/Free.Shared.TextSearch.csproj" />
+    <Project Path="shared/Free.Shared.Theme/Free.Shared.Theme.csproj" />
+    <Project Path="shared/Free.Shared.Theme.Avalonia/Free.Shared.Theme.Avalonia.csproj" />
+    <Project Path="shared/Free.Shared.Theme.Wpf/Free.Shared.Theme.Wpf.csproj" />
+  </Folder>
+  <Folder Name="/freex/">
+    <Project Path="src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj" />
+    <Project Path="src/FreeX.App.Host/FreeX.App.Host.csproj" />
+    <Project Path="src/FreeX.App.Localization/FreeX.App.Localization.csproj" />
+    <Project Path="src/FreeX.App.Presentation/FreeX.App.Presentation.csproj" />
+    <Project Path="src/FreeX.App.Services/FreeX.App.Services.csproj" />
+    <Project Path="src/FreeX.App.UI/FreeX.App.UI.csproj" />
+    <Project Path="src/FreeX.Core.Calc/FreeX.Core.Calc.csproj" />
+    <Project Path="src/FreeX.Core.Commands/FreeX.Core.Commands.csproj" />
+    <Project Path="src/FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
+    <Project Path="src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
+    <Project Path="src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <Project Path="src/FreeX.Ribbon.Definitions/FreeX.Ribbon.Definitions.csproj" />
+  </Folder>
+  <Folder Name="/freew/">
+    <Project Path="freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj" />
+    <Project Path="freew/FreeW.App.Host/FreeW.App.Host.csproj" />
+    <Project Path="freew/FreeW.App.Localization/FreeW.App.Localization.csproj" />
+    <Project Path="freew/FreeW.App.Presentation/FreeW.App.Presentation.csproj" />
+    <Project Path="freew/FreeW.Core.IO/FreeW.Core.IO.csproj" />
+    <Project Path="freew/FreeW.Core.Model/FreeW.Core.Model.csproj" />
+    <Project Path="freew/FreeW.Ribbon.Definitions/FreeW.Ribbon.Definitions.csproj" />
+  </Folder>
+  <Folder Name="/freep/">
+    <Project Path="freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj" />
+    <Project Path="freep/FreeP.App.Host/FreeP.App.Host.csproj" />
+    <Project Path="freep/FreeP.App.Localization/FreeP.App.Localization.csproj" />
+    <Project Path="freep/FreeP.App.Media/FreeP.App.Media.csproj" />
+    <Project Path="freep/FreeP.App.Ole.Windows/FreeP.App.Ole.Windows.csproj" />
+    <Project Path="freep/FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
+    <Project Path="freep/FreeP.App.Recording/FreeP.App.Recording.csproj" />
+    <Project Path="freep/FreeP.App.Recording.Windows/FreeP.App.Recording.Windows.csproj" />
+    <Project Path="freep/FreeP.App.Rendering.Avalonia/FreeP.App.Rendering.Avalonia.csproj" />
+    <Project Path="freep/FreeP.App.Rendering.Wpf/FreeP.App.Rendering.Wpf.csproj" />
+    <Project Path="freep/FreeP.Core.IO/FreeP.Core.IO.csproj" />
+    <Project Path="freep/FreeP.Core.Model/FreeP.Core.Model.csproj" />
+    <Project Path="freep/FreeP.Ribbon.Definitions/FreeP.Ribbon.Definitions.csproj" />
+  </Folder>
+</Solution>

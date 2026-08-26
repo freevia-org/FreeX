@@ -2,12 +2,8 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using FreeX.Core.Calc;
-using FreeX.Core.Commands;
-using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FluentAssertions;
-using Microsoft.Extensions.Logging.Abstractions;
 using static FreeX.App.Host.Tests.DispatcherTestPump;
 
 namespace FreeX.App.Host.Tests;
@@ -22,26 +18,6 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class MainWindowRenderedPageLayoutComboTests
 {
-    private static MainWindow CreateWindow(WorkbookRef workbookRef)
-    {
-        return new MainWindow(
-            NullLogger<MainWindow>.Instance,
-            new ViewportService(),
-            new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
-            new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()),
-            [],
-            workbookRef,
-            workbookRef.Current,
-            NullUserMessageService.Instance);
-    }
-
-    private static WorkbookRef CreateWorkbookRef()
-    {
-        var initialWorkbook = new Workbook("Book1");
-        initialWorkbook.AddSheet("Sheet1");
-        return new WorkbookRef { Current = initialWorkbook };
-    }
-
     private static void PressEnter(MainWindow window, ComboBox combo)
     {
         var source = PresentationSource.FromVisual(window)
@@ -56,31 +32,18 @@ public sealed class MainWindowRenderedPageLayoutComboTests
     [Fact]
     public void RenderedScaleWidthCombo_CommitText_AppliesFitToPagesWide()
     {
-        StaTestRunner.Run(() =>
+        ReusableFreeXMainWindowSession.Run((window, workbookRef) =>
         {
-            var workbookRef = CreateWorkbookRef();
-            var window = CreateWindow(workbookRef);
-            try
-            {
-                window.Show();
-                PumpDispatcher();
+            var workbook = workbookRef.Current;
+            var sheet = workbook.GetSheetAt(0);
 
-                var workbook = workbookRef.Current;
-                var sheet = workbook.GetSheetAt(0);
+            var widthBox = (ComboBox)window.FindName("PageLayoutScaleWidthBox");
 
-                var widthBox = (ComboBox)window.FindName("PageLayoutScaleWidthBox");
+            widthBox.Text = "1 page";
+            PressEnter(window, widthBox);
+            PumpDispatcher();
 
-                widthBox.Text = "1 page";
-                PressEnter(window, widthBox);
-                PumpDispatcher();
-
-                workbook.GetSheet(sheet.Id)!.ScaleToFit.FitToPagesWide.Should().Be(1);
-            }
-            finally
-            {
-                MainWindowTestCleanup.CloseWithoutSavePrompt(window);
-                PumpDispatcher();
-            }
+            workbook.GetSheet(sheet.Id)!.ScaleToFit.FitToPagesWide.Should().Be(1);
         });
     }
 }

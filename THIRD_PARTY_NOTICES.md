@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 This file summarizes third-party NuGet packages referenced by the FreeX
-solution after restore on 2026-08-22. Each package remains governed by its own
+solution after restore on 2026-08-25. Each package remains governed by its own
 license. This notice does not change those license terms.
 
 See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for bundled common
@@ -10,7 +10,7 @@ license text and package-provided license text found in the restored packages.
 ## Audit Status
 
 - Audit command: `dotnet restore FreeX.slnx --disable-parallel -v:minimal`.
-- Restored package inventory: 97 unique package names (99 name/version
+- Restored package inventory: 98 unique package names (101 name/version
   identities) across 119 `project.assets.json` files.
 - Coverage: every restored package is listed below.
 - Runtime package posture: the publishable app dependency set is covered by
@@ -101,6 +101,7 @@ obtained.
 | SixLabors.ImageSharp | 2.1.11 | Apache-2.0 | https://github.com/SixLabors/ImageSharp |
 | SkiaSharp | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.Linux | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
+| SkiaSharp.NativeAssets.Linux.NoDependencies | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.macOS | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.WebAssembly | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.Win32 | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
@@ -125,6 +126,7 @@ obtained.
 | Package | Version | License | Project |
 | --- | --- | --- | --- |
 | coverlet.collector | 6.0.4 | MIT | https://github.com/coverlet-coverage/coverlet |
+| coverlet.collector | 10.0.1 | MIT | https://github.com/coverlet-coverage/coverlet |
 | FluentAssertions | 8.9.0 | Package license file | https://xceed.com/products/unit-testing/fluent-assertions/ |
 | Microsoft.CodeCoverage | 17.14.1 | MIT | https://github.com/microsoft/vstest |
 | Microsoft.NET.ILLink.Tasks | 10.0.8 | MIT | https://dot.net/ |

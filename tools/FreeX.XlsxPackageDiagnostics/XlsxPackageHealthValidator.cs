@@ -2439,6 +2439,17 @@ public static class XlsxPackageHealthValidator
         if (target.IndexOf('\\') >= 0)
             issues.Add($"{relationshipLabel} Target uses backslashes instead of package URI separators");
 
+        bool resolvesInsidePackage = TryResolvePackageRelationshipTarget(
+            relationshipPart,
+            target,
+            out var resolvedTarget,
+            out var error);
+
+        // OPC package-root-relative targets must win over System.Uri's Unix file-URI
+        // interpretation. If the target resolves to a real package entry, it is internal.
+        if (resolvesInsidePackage && entryNames.Contains(resolvedTarget))
+            return;
+
         if (IsAbsoluteRelationshipTarget(target))
         {
             issues.Add(
@@ -2446,23 +2457,27 @@ public static class XlsxPackageHealthValidator
             return;
         }
 
-        if (!TryResolvePackageRelationshipTarget(relationshipPart, target, out var resolvedTarget, out var error))
+        if (!resolvesInsidePackage)
         {
             issues.Add(
                 $"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has invalid Target {target}: {error}");
             return;
         }
 
-        if (!entryNames.Contains(resolvedTarget))
-            issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} targets missing package part {resolvedTarget}");
+        issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} targets missing package part {resolvedTarget}");
     }
 
     private static string FormatRelationshipIssueId(string? id) =>
         string.IsNullOrWhiteSpace(id) ? "(no Id)" : id;
 
-    private static bool IsAbsoluteRelationshipTarget(string target) =>
-        Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
-        !string.IsNullOrWhiteSpace(uri.Scheme);
+    private static bool IsAbsoluteRelationshipTarget(string target)
+    {
+        int authorityDelimiter = target.IndexOf("://", StringComparison.Ordinal);
+        return authorityDelimiter > 0 ||
+            target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ||
+            target.StartsWith("urn:", StringComparison.OrdinalIgnoreCase) ||
+            target.StartsWith("data:", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool TryResolvePackageRelationshipTarget(
         string relationshipPart,

@@ -139,9 +139,15 @@ public sealed partial class OptionsDialogSourceTests
                 var cancelBounds = cancelButton.TransformToAncestor(content).TransformBounds(new Rect(cancelButton.RenderSize));
 
                 content.ActualWidth.Should().BeApproximately(OptionsDialogPlanner.CaptureWidth, 0.25);
-                content.ActualHeight.Should().BeApproximately(OptionsDialogPlanner.CaptureHeight, 0.25);
+                content.ActualHeight.Should().BeApproximately(
+                    OptionsDialogPlanner.CaptureHeight,
+                    0.75,
+                    "WPF may leave a sub-DIP client-height residual after native chrome rounding");
                 footer.ActualHeight.Should().BeApproximately(OptionsDialogPlanner.FooterHeight, 0.01);
-                footerBounds.Bottom.Should().BeApproximately(OptionsDialogPlanner.CaptureHeight, 0.25);
+                footerBounds.Bottom.Should().BeApproximately(
+                    OptionsDialogPlanner.CaptureHeight,
+                    0.75,
+                    "the footer must reach the captured client edge within WPF's native chrome rounding");
                 okBounds.Bottom.Should().BeLessThan(footerBounds.Bottom);
                 cancelBounds.Bottom.Should().BeLessThan(footerBounds.Bottom);
                 bitmap.PixelWidth.Should().Be((int)OptionsDialogPlanner.CaptureWidth);
