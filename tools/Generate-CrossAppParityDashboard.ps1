@@ -47,6 +47,7 @@ if ($PSVersionTable.PSEdition -eq "Desktop" -and $currentCanonicalHostMarker -ne
 # The generated docs are committed afterward, so deriving this from the current HEAD
 # would make the evidence self-referential and would change the claim on every refresh.
 $wave194TestedSourceCommit = "f7cbd8cbe3f1ac5fbaf14da1c2cacc1a3fb7bf3f"
+$wave194ReviewedIntegrationHead = "2ee42a45efd651ad9ad1c015403d788570ae02d9"
 $wave194AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 $wave194FullReleaseBuildMsBuildElapsed = "00:09:49.19"
 $wave194FullReleaseBuildWrapperElapsed = "00:09:49.4386774"
@@ -909,8 +910,8 @@ try {
         initialReintegrationPreflight = "The current acceptance refresh uses the supplied repository-preflight result and the exact tested-source boundary; no additional source paths are allowlisted by this documentation-only change."
         initialIndependentReview = "Recorded: the initial independent review found two P2 findings: FreeX crop/readiness/transition and physical click geometry were duplicated instead of consuming one contract; FreeP topology evidence did not pin the complete source PPTX and initially over-attributed the residual."
         reviewRemediation = "FreeX now uses one authoritative mixed-type geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved; the color-geometry guard remediation remains retained in the tested source."
-        independentReviewStatus = "pending"
-        independentReview = "Pending: an independent final cross-app acceptance review of tested source commit ${wave194TestedSourceCommit} remains outstanding and must be completed later; this refresh does not claim that review passed. This status does not alter the tested-source boundary, counts, timings, or visual claim boundaries."
+        independentReviewStatus = "passed"
+        independentReview = "Passed: an independent final cross-app acceptance review of tested source commit ${wave194TestedSourceCommit} completed in an isolated worktree at integration head ${wave194ReviewedIntegrationHead}; no findings. This review preserves the tested-source boundary, counts, timings, and visual claim boundaries."
         repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 with isolated SDK C:\Users\quinn\.dotnet-codex-10.0.400 and Git Bash first on PATH exited 0; 294 JSON, 310 XML-backed, 127 PowerShell scripts, 11 GitHub workflows, 12 test gates/48 assigned projects, 13,996 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:01:55.8304515."
         fullReleaseBuildMsBuildElapsed = $wave194FullReleaseBuildMsBuildElapsed
         fullReleaseBuildWrapperElapsed = $wave194FullReleaseBuildWrapperElapsed
@@ -1036,7 +1037,7 @@ try {
         "",
         "> Generated counts prove command/profile routing, route and artifact coverage, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates, physical/no-COM limitations, and authoritative Microsoft Office baseline availability remain explicitly separate from coverage metrics.",
         "",
-        "> Wave194 records an accepted cumulative **$($dashboard.cumulativeAppSlices)** app slices. The supplied Release, default-lane, and repository integration gates passed against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``; independent review remains pending. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
+        "> Wave194 records an accepted cumulative **$($dashboard.cumulativeAppSlices)** app slices. The supplied Release, default-lane, and repository integration gates passed against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``; independent review passed with no findings at integration head ``$wave194ReviewedIntegrationHead``. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
         "",
         "## Summary",
         "",
@@ -1063,7 +1064,7 @@ try {
         "",
         "## Integration Gates",
         "",
-        "Wave194's cumulative 582 app-slice count is **accepted**. The supplied Release, default-lane, and repository integration gates passed against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``; independent review remains pending. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
+        "Wave194's cumulative 582 app-slice count is **accepted**. The supplied Release, default-lane, and repository integration gates passed against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``; independent review passed with no findings at integration head ``$wave194ReviewedIntegrationHead``. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
         "",
         "- Initial independent review: $($dashboard.integrationGateEvidence.initialIndependentReview)",
         "- Slice accounting: $($dashboard.integrationGateEvidence.sliceAccounting)",

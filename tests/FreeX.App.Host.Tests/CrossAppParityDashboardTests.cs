@@ -49,9 +49,9 @@ public sealed class CrossAppParityDashboardTests
         integrationEvidence.GetProperty("defaultNonUiTestLaneWrapperElapsed").GetString().Should().Be("00:16:54.2974514");
         integrationEvidence.GetProperty("defaultNonUiTestLaneTrxTimestampSpan").GetString().Should().Be("14:03:31.8502271 to 14:20:25.1692656 (+03:00)");
         integrationEvidence.GetProperty("defaultNonUiTestLaneTrxDuration").GetString().Should().Be("00:16:53.3190385");
-        integrationEvidence.GetProperty("independentReviewStatus").GetString().Should().Be("pending");
+        integrationEvidence.GetProperty("independentReviewStatus").GetString().Should().Be("passed");
         integrationEvidence.GetProperty("independentReview").GetString().Should().Be(
-            "Pending: an independent final cross-app acceptance review of tested source commit f7cbd8cbe3f1ac5fbaf14da1c2cacc1a3fb7bf3f remains outstanding and must be completed later; this refresh does not claim that review passed. This status does not alter the tested-source boundary, counts, timings, or visual claim boundaries.");
+            "Passed: an independent final cross-app acceptance review of tested source commit f7cbd8cbe3f1ac5fbaf14da1c2cacc1a3fb7bf3f completed in an isolated worktree at integration head 2ee42a45efd651ad9ad1c015403d788570ae02d9; no findings. This review preserves the tested-source boundary, counts, timings, and visual claim boundaries.");
         integrationEvidence.GetProperty("sliceAccounting").GetString().Should().Be(
             "582 cumulative app slices (194 per app) remain the processed Wave194 accounting; later wave feature commits are included in the tested source and do not add Wave194 slices.");
 
