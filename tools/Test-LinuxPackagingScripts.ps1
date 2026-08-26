@@ -4,6 +4,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $errors = New-Object System.Collections.Generic.List[string]
+$isWindowsHost = [System.IO.Path]::DirectorySeparatorChar -eq '\'
 
 function Assert-Packaging {
     param([bool]$Condition, [string]$Message)
@@ -80,6 +81,10 @@ function Write-Utf8NoBom {
 function Convert-ToBashPath {
     param([string]$Path)
 
+    if (-not $script:isWindowsHost) {
+        return [IO.Path]::GetFullPath($Path)
+    }
+
     $result = Invoke-BashScript -ScriptPath "-c" -Arguments @('cygpath -u -- "$1"', 'cygpath', $Path)
     Assert-Packaging ($result.ExitCode -eq 0) "Could not convert path for bash: $Path"
     return $result.Output.Trim()
@@ -97,7 +102,7 @@ function Test-TarballProduct {
     New-Item -ItemType Directory -Force -Path $published, $output, $extract | Out-Null
     $binary = Join-Path $published $Entry.BinaryName
     Set-Content -LiteralPath $binary -Value '#!/usr/bin/env bash' -NoNewline
-    $chmod = Invoke-BashScript -ScriptPath "-c" -Arguments @('chmod +x -- "$1"', 'chmod', $binary)
+    $chmod = Invoke-BashScript -ScriptPath "-c" -Arguments @('chmod +x "$1"', 'chmod', $binary)
     Assert-Packaging ($chmod.ExitCode -eq 0) "Could not mark $($Entry.Product) fixture executable."
     $publishedBash = Convert-ToBashPath $published
     $outputBash = Convert-ToBashPath $output
@@ -254,8 +259,10 @@ foreach ($configName in $configExpectations.Keys) {
 }
 
 $bashCandidates = @(
-    (Join-Path ${env:ProgramFiles} "Git/bin/bash.exe")
-    (Join-Path ${env:ProgramFiles} "Git/usr/bin/bash.exe")
+    if ($isWindowsHost -and ${env:ProgramFiles}) {
+        Join-Path ${env:ProgramFiles} "Git/bin/bash.exe"
+        Join-Path ${env:ProgramFiles} "Git/usr/bin/bash.exe"
+    }
     Get-Command bash -All -ErrorAction SilentlyContinue |
         Where-Object { $_.Source -notmatch '\\Windows\\System32\\|\\WindowsApps\\' } |
         ForEach-Object Source
@@ -327,7 +334,7 @@ if ($bashUsable) {
         New-Item -ItemType Directory -Force -Path $customPublished, $customOutput | Out-Null
         $customBinary = Join-Path $customPublished 'FreeX'
         Set-Content -LiteralPath $customBinary -Value '#!/usr/bin/env bash' -NoNewline
-        Invoke-BashScript -ScriptPath '-c' -Arguments @('chmod +x -- "$1"', 'chmod', $customBinary) | Out-Null
+        Invoke-BashScript -ScriptPath '-c' -Arguments @('chmod +x "$1"', 'chmod', $customBinary) | Out-Null
         $customConfigBash = Convert-ToBashPath $customConfig
         $customAssetDirBash = Convert-ToBashPath $customAssetDir
         $customPublishedBash = Convert-ToBashPath $customPublished

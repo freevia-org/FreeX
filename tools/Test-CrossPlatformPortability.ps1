@@ -67,6 +67,7 @@ $portablePowerShellScripts = @(
     'tools/Test-FreeWWordChromeEvidence.ps1',
     'tools/Test-FreePPowerPointChromeEvidence.ps1',
     'tools/Test-GeneratedDocs.ps1',
+    'tools/Test-LinuxPackagingScripts.ps1',
     'tools/Test-ReleaseInstallation.ps1',
     'tools/Test-ReleasePackageContents.ps1',
     'tools/packaging/New-AppInstallers.ps1'

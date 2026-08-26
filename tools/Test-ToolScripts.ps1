@@ -1121,12 +1121,16 @@ Write-Output "synthetic stdout"
             -FailureMessage "synthetic process probe"
 
         $probe = Get-Content -LiteralPath $probeOutputPath -Raw | ConvertFrom-Json
-        if (-not [System.IO.Path]::GetFullPath($probe.WorkingDirectory).Equals([System.IO.Path]::GetFullPath($workingRoot), [System.StringComparison]::OrdinalIgnoreCase) -or
+        $pathComparison = if ($isWindowsHost) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
+        $observedWorkingDirectory = (Resolve-Path -LiteralPath $probe.WorkingDirectory).Path
+        $expectedWorkingDirectory = (Resolve-Path -LiteralPath $workingRoot).Path
+        $expectedParentWorkingDirectory = (Resolve-Path -LiteralPath $cwdRoot).Path
+        if (-not $observedWorkingDirectory.Equals($expectedWorkingDirectory, $pathComparison) -or
             $probe.First -cne "first value" -or $probe.Second -cne "second value with spaces") {
             throw "Invoke-ToolProcess did not preserve working directory or argument-array forwarding: $($probe | ConvertTo-Json -Compress)."
         }
 
-        if (-not (Get-Location).Path.Equals($cwdRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        if (-not (Resolve-Path -LiteralPath (Get-Location).Path).Path.Equals($expectedParentWorkingDirectory, $pathComparison)) {
             throw "Invoke-ToolProcess did not restore the parent working directory."
         }
 
