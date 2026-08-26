@@ -25,8 +25,8 @@ $requiredPaths = @(
     $summaryPath,
     (Join-Path $resolvedRoot "report.md"),
     (Join-Path $resolvedRoot "report.html"),
-    (Join-Path $resolvedRoot "wpf\manifest.json"),
-    (Join-Path $resolvedRoot "avalonia\manifest.json")
+    (Join-Path $resolvedRoot "wpf/manifest.json"),
+    (Join-Path $resolvedRoot "avalonia/manifest.json")
 )
 foreach ($path in $requiredPaths) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {

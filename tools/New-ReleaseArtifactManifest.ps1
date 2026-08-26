@@ -34,6 +34,21 @@ function Find-One([string]$Name) {
 
 function Hash([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 
+function Get-RepositoryRelativePath([string]$Path) {
+    $root = [System.IO.Path]::GetFullPath($RepositoryRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq '\') {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else {
+        [System.StringComparison]::Ordinal
+    }
+    if (-not $fullPath.StartsWith($root, $comparison)) {
+        throw "Release input is outside the repository root: $Path"
+    }
+    return $fullPath.Substring($root.Length).Replace('\', '/')
+}
+
 function Validate-Checksum([System.IO.FileInfo]$Payload) {
     $checksum = Find-One "$($Payload.Name).sha256"
     $actual = Hash $Payload.FullName
@@ -124,7 +139,7 @@ if ($StageLegalBundle) {
     if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $stage | Out-Null
     foreach ($file in $legalFiles) {
-        $relative = [System.IO.Path]::GetRelativePath($RepositoryRoot, $file.FullName).Replace('\','/')
+        $relative = Get-RepositoryRelativePath $file.FullName
         $destination = Join-Path $stage $relative
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
         Copy-Item -LiteralPath $file.FullName -Destination $destination

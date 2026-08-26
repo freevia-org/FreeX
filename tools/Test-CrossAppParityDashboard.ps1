@@ -90,7 +90,7 @@ function Invoke-AcceptanceBoundaryMutationSelfTest {
         $testedCommit = ([string](Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("rev-parse", "HEAD"))).Trim()
 
         foreach ($path in $acceptanceRefreshAllowedPaths) {
-            $absolutePath = Join-Path $fixturePath ($path.Replace('/', '\'))
+            $absolutePath = Join-Path $fixturePath $path
             $parent = Split-Path -Parent $absolutePath
             if (-not (Test-Path -LiteralPath $parent)) {
                 New-Item -ItemType Directory -Path $parent -Force | Out-Null

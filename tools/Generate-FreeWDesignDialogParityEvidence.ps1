@@ -19,7 +19,18 @@ function Resolve-RepoPath {
 
 function Get-RelativePath {
     param([Parameter(Mandatory = $true)][string]$Path)
-    [System.IO.Path]::GetRelativePath($repoRoot, $Path).Replace('\', '/')
+    $root = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq '\') {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else {
+        [System.StringComparison]::Ordinal
+    }
+    if (-not $fullPath.StartsWith($root, $comparison)) {
+        throw "Evidence source is outside the repository root: $Path"
+    }
+    $fullPath.Substring($root.Length).Replace('\', '/')
 }
 
 function Get-SourceHashes {

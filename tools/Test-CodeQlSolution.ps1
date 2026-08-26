@@ -16,7 +16,13 @@ function ConvertTo-NormalizedRelativePath {
 
     $normalizedRoot = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
     $normalizedPath = [System.IO.Path]::GetFullPath($Path)
-    if (-not $normalizedPath.StartsWith($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq '\') {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else {
+        [System.StringComparison]::Ordinal
+    }
+    if (-not $normalizedPath.StartsWith($normalizedRoot, $comparison)) {
         throw "Path is outside the repository root: $Path"
     }
 

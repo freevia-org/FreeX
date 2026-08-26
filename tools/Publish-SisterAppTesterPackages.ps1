@@ -50,9 +50,9 @@ if ($Runtimes.Count -eq 0) {
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
-$testerReleaseSmokeProjectPath = Join-Path $repoRoot "tools\FreeX.Validation.Wpf\FreeX.Validation.Wpf.csproj"
+$testerReleaseSmokeProjectPath = Join-Path $repoRoot "tools/FreeX.Validation.Wpf/FreeX.Validation.Wpf.csproj"
 if (-not $OutputDir) {
-    $OutputDir = Join-Path $repoRoot "artifacts\sister-tester-release-$Version"
+    $OutputDir = Join-Path $repoRoot "artifacts/sister-tester-release-$Version"
 }
 
 $commitSha = (& git -C $repoRoot rev-parse HEAD).Trim().ToLowerInvariant()
@@ -106,7 +106,7 @@ foreach ($runtime in $Runtimes) {
         throw "Could not find project '$project'."
     }
 
-    $publishDir = Join-Path $OutputDir "publish\$App-$runtime-$hostKind"
+    $publishDir = Join-Path $OutputDir "publish/$App-$runtime-$hostKind"
     $packageType = if ($isWindowsSingleFile) { "singlefile-exe" } else { "zip" }
     $packageExtension = if ($isWindowsSingleFile) { ".exe" } else { ".zip" }
     $packageName = "$App-v$Version-$runtime$packageExtension"
@@ -177,7 +177,7 @@ foreach ($runtime in $Runtimes) {
     $smokeExecutable = $expectedExe
 
     if (-not $isWindowsRuntime) {
-        $validationPublishDir = Join-Path $OutputDir "validation\$App-$runtime"
+        $validationPublishDir = Join-Path $OutputDir "validation/$App-$runtime"
         if (Test-Path -LiteralPath $validationPublishDir) {
             Remove-Item -LiteralPath $validationPublishDir -Recurse -Force
         }
@@ -218,7 +218,7 @@ foreach ($runtime in $Runtimes) {
     if ($isWindowsRuntime -and $App -eq "FreeX") {
         $smokeRan = $true
         $smokeReportPath = Join-Path $OutputDir "$App-$runtime-tester-release-smoke.json"
-        $smokeToolDir = Join-Path $OutputDir "smoke\$runtime"
+        $smokeToolDir = Join-Path $OutputDir "smoke/$runtime"
         if (Test-Path -LiteralPath $smokeToolDir) {
             Remove-Item -LiteralPath $smokeToolDir -Recurse -Force
         }

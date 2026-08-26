@@ -10,10 +10,10 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-$wpfMainRoot = Join-Path $repoRoot "freep\FreeP.App.Host"
-$avaloniaMainRoot = Join-Path $repoRoot "freep\FreeP.App.Avalonia"
-$rendererSharedRoot = Join-Path $repoRoot "freep\RendererShared"
-$workareaSessionPath = Join-Path $repoRoot "freep\FreeP.App.Presentation\PresentationWorkareaSession.cs"
+$wpfMainRoot = Join-Path $repoRoot "freep/FreeP.App.Host"
+$avaloniaMainRoot = Join-Path $repoRoot "freep/FreeP.App.Avalonia"
+$rendererSharedRoot = Join-Path $repoRoot "freep/RendererShared"
+$workareaSessionPath = Join-Path $repoRoot "freep/FreeP.App.Presentation/PresentationWorkareaSession.cs"
 $rendererShared = @(Get-ChildItem -LiteralPath $rendererSharedRoot -Filter "*.cs" -File |
     Sort-Object FullName |
     ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join [Environment]::NewLine
