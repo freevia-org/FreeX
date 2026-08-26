@@ -101,6 +101,17 @@ public sealed class FilePathPolicyTests
         unixDirectory.Should().Be("/home/user");
     }
 
+    [Theory]
+    [InlineData(@"C:\Quarterly Review.docx")]
+    [InlineData("C:/Quarterly Review.docx")]
+    public void TryGetDirectoryName_PreservesWindowsDriveRootSeparator(string path)
+    {
+        FilePathPolicy.TryGetDirectoryName(path, out var directory)
+            .Should().BeTrue();
+
+        directory.Should().Be(path[..3]);
+    }
+
     [Fact]
     public void OutputFileNameStemPolicy_NormalizesPathsExtensionsAndCallerSelectedReplacement()
     {

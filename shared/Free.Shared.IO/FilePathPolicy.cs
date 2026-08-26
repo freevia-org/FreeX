@@ -175,13 +175,13 @@ public static class FilePathPolicy
         if (separatorIndex < 0)
             return false;
 
-        var directoryLength = separatorIndex;
-        if (separatorIndex == 0)
-            directoryLength = 1;
-        else if (separatorIndex == 2 && path.Length > 2 && path[1] == ':')
-            directoryLength = 3;
-
-        directoryName = path[..directoryLength];
+        var isWindowsDriveRoot = separatorIndex == 2 &&
+            path.Length > separatorIndex &&
+            path[1] == ':' &&
+            char.IsAsciiLetter(path[0]);
+        directoryName = separatorIndex == 0 || isWindowsDriveRoot
+            ? path[..(separatorIndex + 1)]
+            : path[..separatorIndex];
         return !string.IsNullOrWhiteSpace(directoryName);
     }
 
