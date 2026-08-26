@@ -24,15 +24,18 @@ public sealed class ToolScriptsPreflightTests
     public void ToolProcessProbe_ResolvesIntermediateUnixSymlinksForDirectAndWrapperComparisons()
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-ToolScripts.ps1");
+        var support = WorkspaceFileLocator.ReadAllText("tools", "ToolScriptSupport.ps1");
 
-        script.Should().Contain("function Resolve-ExistingToolProcessPath");
-        script.Should().Contain("$item.ResolveLinkTarget($true)");
-        script.Should().Contain("Resolve-ExistingToolProcessPath -Path $linkTarget.FullName");
+        script.Should().Contain("ToolScriptSupport.ps1");
+        script.Should().NotContain("function Resolve-ExistingToolProcessPath");
+        support.Should().Contain("function Resolve-ToolExistingPath");
+        support.Should().Contain("$item.ResolveLinkTarget($true)");
+        support.Should().Contain("Resolve-ToolExistingPath -Path $linkTarget.FullName");
         script.Should().Contain("New-Item -ItemType SymbolicLink -Path $workingDirectoryArgument -Target $workingRoot");
-        script.Should().Contain("Resolve-ExistingToolProcessPath -Path $probe.WorkingDirectory");
-        script.Should().Contain("Resolve-ExistingToolProcessPath -Path $workingDirectoryArgument");
-        script.Should().Contain("Resolve-ExistingToolProcessPath -Path $capture.WorkingDirectory");
-        script.Should().Contain("$expectedWrapperWorkingDirectory = Resolve-ExistingToolProcessPath -Path $workingDirectoryArgument");
+        script.Should().Contain("Resolve-ToolExistingPath -Path $probe.WorkingDirectory");
+        script.Should().Contain("Resolve-ToolExistingPath -Path $workingDirectoryArgument");
+        script.Should().Contain("Resolve-ToolExistingPath -Path $capture.WorkingDirectory");
+        script.Should().Contain("$expectedWrapperWorkingDirectory = Resolve-ToolExistingPath -Path $workingDirectoryArgument");
         script.Should().Contain("$observedWrapperWorkingDirectory.Equals($expectedWrapperWorkingDirectory, $pathComparison)");
         script.Should().Contain("Invoke-DotNetRun \"project.csproj\" @(\"--sample\", \"value with spaces\") \"Debug\" $workingDirectoryArgument $syntheticShimPath");
         script.Should().Contain("Invoke-DotNetBuild \"project.csproj\" \"Debug\" $workingDirectoryArgument $syntheticShimPath");

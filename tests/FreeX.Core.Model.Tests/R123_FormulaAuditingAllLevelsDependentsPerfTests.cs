@@ -22,6 +22,7 @@ namespace FreeX.Core.Model.Tests;
 ///   - FormulaAuditingService.GetDependentTraceArrows -- backs the ribbon's Trace Dependents
 ///     command and the keyboard "select all-level dependents" shortcut in both shells.
 /// </summary>
+[Collection("Performance isolation")]
 public sealed class R123_FormulaAuditingAllLevelsDependentsPerfTests
 {
     // Chain length (number of BFS/recursion levels) and workbook-wide "noise" formula count (cells
