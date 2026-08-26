@@ -63,7 +63,7 @@ if ($SearchRoots.Count -eq 0) {
 
         $resolvedTrackedPath = Join-Path $resolvedProjectRoot ($trackedPath.Replace("/", [System.IO.Path]::DirectorySeparatorChar))
         if (Test-Path -LiteralPath $resolvedTrackedPath -PathType Leaf) {
-            Add-CandidateFile -Files $candidateFiles -SeenPaths $seenCandidatePaths -File (Get-Item -LiteralPath $resolvedTrackedPath) -Extensions $normalizedExtensions
+            Add-CandidateFile -Files $candidateFiles -SeenPaths $seenCandidatePaths -File (Get-Item -LiteralPath $resolvedTrackedPath -Force) -Extensions $normalizedExtensions
         }
     }
 } else {
@@ -73,7 +73,7 @@ if ($SearchRoots.Count -eq 0) {
             continue
         }
 
-        $rootItem = Get-Item -LiteralPath $resolvedSearchRoot
+        $rootItem = Get-Item -LiteralPath $resolvedSearchRoot -Force
         if ($rootItem -is [System.IO.FileInfo]) {
             $relativePath = Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $rootItem.FullName
             if (-not (Test-ToolExcludedPath -Path $relativePath -RepoRoot $resolvedProjectRoot -ExcludedDirectoryNames @("bin", "obj", ".git", ".worktrees", ".claude"))) {
@@ -83,7 +83,7 @@ if ($SearchRoots.Count -eq 0) {
             continue
         }
 
-        Get-ChildItem -LiteralPath $rootItem.FullName -File -Recurse |
+        Get-ChildItem -LiteralPath $rootItem.FullName -File -Recurse -Force |
             Where-Object {
                 $relativePath = Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $_.FullName
                 -not (Test-ToolExcludedPath -Path $relativePath -RepoRoot $resolvedProjectRoot -ExcludedDirectoryNames @("bin", "obj", ".git", ".worktrees", ".claude"))

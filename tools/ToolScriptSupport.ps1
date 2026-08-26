@@ -38,6 +38,32 @@ function Resolve-ToolProviderPath([Parameter(Mandatory = $true)][string]$Path) {
     $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
 }
 
+function Resolve-ToolExistingPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    if ([System.IO.Path]::DirectorySeparatorChar -eq [char]92) {
+        return (Resolve-Path -LiteralPath $fullPath).ProviderPath
+    }
+
+    # Resolve every existing segment so lexical Unix aliases such as macOS
+    # /var and their nested targets cannot disagree with child-process paths.
+    $currentPath = [System.IO.Path]::GetPathRoot($fullPath)
+    $relativePath = $fullPath.Substring($currentPath.Length)
+    foreach ($segment in ($relativePath -split '[\\/]' | Where-Object { $_.Length -gt 0 })) {
+        $item = Get-Item -LiteralPath (Join-Path $currentPath $segment) -Force
+        $linkTarget = $item.ResolveLinkTarget($true)
+        $currentPath = if ($null -ne $linkTarget) {
+            Resolve-ToolExistingPath -Path $linkTarget.FullName
+        }
+        else {
+            $item.FullName
+        }
+    }
+
+    return [System.IO.Path]::GetFullPath($currentPath)
+}
+
 function Resolve-ToolRepoPath {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -194,7 +220,8 @@ function Invoke-DotNetRun([string]$ProjectPath, [string[]]$ToolArgs = @(), [stri
 
 function Invoke-ToolGeneratedProject {
     param([Parameter(Mandatory = $true)][hashtable]$Options)
-    $tempRoot = New-ToolTemporaryDirectory -Prefix ($Options.Prefix + "-")
+    $cleanupTempRoot = New-ToolTemporaryDirectory -Prefix ($Options.Prefix + "-")
+    $tempRoot = Resolve-ToolExistingPath -Path $cleanupTempRoot
     try {
         $projectPath = Join-Path $tempRoot "$($Options.Name).csproj"
         $programPath = Join-Path $tempRoot "Program.cs"
@@ -248,7 +275,7 @@ function Invoke-ToolGeneratedProject {
         }
         Write-Host $Options.WriteMessage
     } finally {
-        Remove-ToolTemporaryDirectory -Path $tempRoot
+        Remove-ToolTemporaryDirectory -Path $cleanupTempRoot
     }
 }
 

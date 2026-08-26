@@ -15,6 +15,8 @@ public sealed class ConflictMarkersPreflightTests
         script.Should().Contain("[string[]]$SearchRoots = @()");
         script.Should().Contain("git -C $resolvedProjectRoot ls-files");
         script.Should().Contain("if ($SearchRoots.Count -eq 0)");
+        script.Should().Contain("Get-Item -LiteralPath $resolvedTrackedPath -Force");
+        script.Should().Contain("Get-ChildItem -LiteralPath $rootItem.FullName -File -Recurse -Force");
         script.Should().Contain("\".slnx\"");
         script.Should().Contain("Test-ToolExcludedPath");
         script.Should().Contain("@(\"bin\", \"obj\", \".git\", \".worktrees\", \".claude\")");

@@ -19,6 +19,7 @@ function Assert-ToolSourceCentralization {
             "function ConvertTo-ToolPlatformPath",
             "function Resolve-ToolFullPath",
             "function Resolve-ToolProviderPath",
+            "function Resolve-ToolExistingPath",
             "function New-ToolTemporaryDirectory",
             "function Remove-ToolTemporaryDirectory",
             "function Add-ToolValidationError",
@@ -47,6 +48,14 @@ function Assert-ToolSourceCentralization {
             "function Resolve-FreeXExe")) {
         if (-not $support.Contains($requiredHelper)) {
             throw "ToolScriptSupport.ps1 is missing required helper '$requiredHelper'."
+        }
+    }
+
+    foreach ($requiredGeneratedProjectToken in @(
+            '$tempRoot = Resolve-ToolExistingPath -Path $cleanupTempRoot',
+            'Remove-ToolTemporaryDirectory -Path $cleanupTempRoot')) {
+        if (-not $support.Contains($requiredGeneratedProjectToken)) {
+            throw "Invoke-ToolGeneratedProject must canonicalize its working path while retaining the lexical path for safe cleanup."
         }
     }
 
@@ -1093,39 +1102,6 @@ function Assert-ToolProviderPathBehavior {
     Write-Host "Validated provider-path and tilde resolution behavior."
 }
 
-function Resolve-ExistingToolProcessPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $isWindowsHost = [System.IO.Path]::DirectorySeparatorChar -eq '\'
-    if ($isWindowsHost) {
-        return (Resolve-Path -LiteralPath $fullPath).ProviderPath
-    }
-
-    # Resolve every existing path segment rather than only the leaf. On macOS,
-    # for example, /var is a symlink to /private/var, and a child process reports
-    # the physical working directory even when PowerShell was given the lexical
-    # /var path.
-    $currentPath = [System.IO.Path]::GetPathRoot($fullPath)
-    $relativePath = $fullPath.Substring($currentPath.Length)
-    foreach ($segment in ($relativePath -split '[\\/]' | Where-Object { $_.Length -gt 0 })) {
-        $item = Get-Item -LiteralPath (Join-Path $currentPath $segment) -Force
-        $linkTarget = $item.ResolveLinkTarget($true)
-        # ResolveLinkTarget(true) follows the link itself, but on macOS the
-        # returned target can still contain a lexical ancestor such as /var.
-        # Canonicalize that target from its root before appending any remaining
-        # segments so both sides of the comparison use the same physical path.
-        $currentPath = if ($null -ne $linkTarget) {
-            Resolve-ExistingToolProcessPath -Path $linkTarget.FullName
-        }
-        else {
-            $item.FullName
-        }
-    }
-
-    return [System.IO.Path]::GetFullPath($currentPath)
-}
-
 function Assert-ToolProcessBehavior {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -1198,15 +1174,15 @@ Write-Output "synthetic stdout"
 
         $probe = Get-Content -LiteralPath $probeOutputPath -Raw | ConvertFrom-Json
         $pathComparison = if ($isWindowsHost) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
-        $observedWorkingDirectory = Resolve-ExistingToolProcessPath -Path $probe.WorkingDirectory
-        $expectedWorkingDirectory = Resolve-ExistingToolProcessPath -Path $workingDirectoryArgument
-        $expectedParentWorkingDirectory = Resolve-ExistingToolProcessPath -Path $cwdRoot
+        $observedWorkingDirectory = Resolve-ToolExistingPath -Path $probe.WorkingDirectory
+        $expectedWorkingDirectory = Resolve-ToolExistingPath -Path $workingDirectoryArgument
+        $expectedParentWorkingDirectory = Resolve-ToolExistingPath -Path $cwdRoot
         if (-not $observedWorkingDirectory.Equals($expectedWorkingDirectory, $pathComparison) -or
             $probe.First -cne "first value" -or $probe.Second -cne "second value with spaces") {
             throw "Invoke-ToolProcess did not preserve working directory or argument-array forwarding. Observed working directory: '$observedWorkingDirectory'. Expected working directory: '$expectedWorkingDirectory'. Probe: $($probe | ConvertTo-Json -Compress)."
         }
 
-        if (-not (Resolve-ExistingToolProcessPath -Path (Get-Location).Path).Equals($expectedParentWorkingDirectory, $pathComparison)) {
+        if (-not (Resolve-ToolExistingPath -Path (Get-Location).Path).Equals($expectedParentWorkingDirectory, $pathComparison)) {
             throw "Invoke-ToolProcess did not restore the parent working directory."
         }
 
@@ -1284,8 +1260,8 @@ exec pwsh -NoProfile -File "$(dirname "$0")/capture-process.ps1" "$@"
             $actualArguments = @($capture.Arguments | ForEach-Object { [string]$_ })
             $expectedSerialized = $ExpectedArguments -join "`0"
             $actualSerialized = $actualArguments -join "`0"
-            $observedWrapperWorkingDirectory = Resolve-ExistingToolProcessPath -Path $capture.WorkingDirectory
-            $expectedWrapperWorkingDirectory = Resolve-ExistingToolProcessPath -Path $workingDirectoryArgument
+            $observedWrapperWorkingDirectory = Resolve-ToolExistingPath -Path $capture.WorkingDirectory
+            $expectedWrapperWorkingDirectory = Resolve-ToolExistingPath -Path $workingDirectoryArgument
             if (-not $observedWrapperWorkingDirectory.Equals($expectedWrapperWorkingDirectory, $pathComparison) -or
                 $actualSerialized -cne $expectedSerialized) {
                 throw "$Label did not preserve wrapper argument ordering or working directory. Observed working directory: '$observedWrapperWorkingDirectory'. Expected working directory: '$expectedWrapperWorkingDirectory'. Capture: $($capture | ConvertTo-Json -Compress)."
