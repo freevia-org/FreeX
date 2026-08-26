@@ -18,7 +18,7 @@ namespace FreeX.App.Host.Tests;
 // blank fields on the OS clipboard for every off-screen row.
 public sealed class FreeXCleanupB8Tests
 {
-    [Fact]
+    [WindowsClipboardFact]
     public void Copy_SelectionTallerThanViewport_ClipboardTextIncludesOffScreenRows()
     {
         StaTestRunner.RunClipboardIsolated(() =>

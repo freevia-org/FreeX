@@ -59,9 +59,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
     [Fact]
     public void LegacyAltEditPasteSpecialKeyTip_ES_RoutesToPasteSpecialAndClosesKeyTips()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
-            System.Windows.Clipboard.Clear();
             using var harness = MainWindowHarness.Create();
 
             harness.EnterKeyTipScope("TopLevel");
@@ -71,7 +70,6 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
             harness.KeyTipScope.Should().Be("None");
 
-            System.Windows.Clipboard.Clear();
             harness.HandleDirectTopLevelKeyTip(Key.E).Should().BeTrue();
             harness.KeyTipScope.Should().Be("Commands");
             harness.HandleKeyTip(Key.S);

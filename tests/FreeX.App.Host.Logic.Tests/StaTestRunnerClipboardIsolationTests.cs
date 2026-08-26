@@ -5,7 +5,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class StaTestRunnerClipboardIsolationTests
 {
-    [Fact]
+    [WindowsClipboardFact]
     public void RunClipboardIsolated_DoesNotCarryQueuedDispatcherWorkIntoNextRun()
     {
         var staleCallbackRan = false;

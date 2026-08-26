@@ -37,7 +37,8 @@ public sealed class R91_ObjectClipboardCopyPasteTests
                 [],
                 workbookRef,
                 initialWorkbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard());
 
             try
             {
@@ -106,7 +107,8 @@ public sealed class R91_ObjectClipboardCopyPasteTests
                 [],
                 workbookRef,
                 initialWorkbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard());
 
             try
             {
@@ -158,7 +160,8 @@ public sealed class R91_ObjectClipboardCopyPasteTests
                 [],
                 workbookRef,
                 initialWorkbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard());
 
             try
             {

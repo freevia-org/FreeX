@@ -20,7 +20,7 @@ public sealed class MainWindowClipboardGroupedSheetTests
     [Fact]
     public void Paste_WithGroupedSheets_MirrorsPasteToAllGroupedSheets()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");
@@ -33,7 +33,8 @@ public sealed class MainWindowClipboardGroupedSheetTests
                 [],
                 workbookRef,
                 initialWorkbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard());
 
             try
             {
@@ -77,7 +78,7 @@ public sealed class MainWindowClipboardGroupedSheetTests
     [Fact]
     public void CutThenPaste_WithGroupedSheets_FallsBackToGroupedCopyAndClearInsteadOfSingleSheetMove()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");
@@ -90,7 +91,8 @@ public sealed class MainWindowClipboardGroupedSheetTests
                 [],
                 workbookRef,
                 initialWorkbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard());
 
             try
             {
@@ -138,7 +140,7 @@ public sealed class MainWindowClipboardGroupedSheetTests
     [Fact]
     public void PasteAsPicture_WithGroupedSheets_InsertsPictureOnEveryGroupedSheet()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");
@@ -151,7 +153,8 @@ public sealed class MainWindowClipboardGroupedSheetTests
                 [],
                 workbookRef,
                 initialWorkbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard());
 
             try
             {

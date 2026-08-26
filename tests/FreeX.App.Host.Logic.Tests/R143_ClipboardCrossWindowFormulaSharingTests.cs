@@ -30,14 +30,15 @@ public sealed class R143_ClipboardCrossWindowFormulaSharingTests
     [Fact]
     public void ExecutePaste_AcrossTwoWindows_WithSharedClipboardSession_RelocatesFormula()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             // Models exactly what the production DI singleton registration does: hand both windows
             // the SAME WorkbookClipboardSession instance, as if both were resolved through
             // Services.GetRequiredService<MainWindow>() in one running FreeX.exe process.
             var sharedClipboard = new WorkbookClipboardSession();
-            using var windowA = new Harness(sharedClipboard);
-            using var windowB = new Harness(sharedClipboard);
+            var platformClipboard = new InMemoryPlatformClipboard();
+            using var windowA = new Harness(sharedClipboard, platformClipboard);
+            using var windowB = new Harness(sharedClipboard, platformClipboard);
 
             var sheetA = windowA.Workbook.GetSheetAt(0);
             var a1 = new CellAddress(sheetA.Id, 1, 1); // A1
@@ -71,10 +72,10 @@ public sealed class R143_ClipboardCrossWindowFormulaSharingTests
         // without passing the new optional parameter (exactly like every call site outside the DI
         // container's factory). Two such windows must NOT accidentally share clipboard state -- the
         // fix must not have turned _workbookClipboardSession into a bare process-wide static.
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
-            using var windowA = new Harness(sharedClipboard: null);
-            using var windowB = new Harness(sharedClipboard: null);
+            using var windowA = new Harness(sharedClipboard: null, new InMemoryPlatformClipboard());
+            using var windowB = new Harness(sharedClipboard: null, new InMemoryPlatformClipboard());
 
             var sheetA = windowA.Workbook.GetSheetAt(0);
             var a1 = new CellAddress(sheetA.Id, 1, 1);
@@ -109,7 +110,9 @@ public sealed class R143_ClipboardCrossWindowFormulaSharingTests
         public Workbook Workbook { get; }
         public GridView Grid => (GridView)Window.FindName("SheetGrid");
 
-        public Harness(WorkbookClipboardSession? sharedClipboard)
+        public Harness(
+            WorkbookClipboardSession? sharedClipboard,
+            IPlatformClipboard platformClipboard)
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");
@@ -123,6 +126,7 @@ public sealed class R143_ClipboardCrossWindowFormulaSharingTests
                 workbookRef,
                 initialWorkbook,
                 new RecordingUserMessageService(),
+                platformClipboard: platformClipboard,
                 workbookClipboardSession: sharedClipboard);
 
             Window.Show();

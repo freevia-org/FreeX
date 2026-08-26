@@ -25,7 +25,7 @@ public sealed class FreeXArraySpillEditF1SpillCopyPasteTests
     [Fact]
     public void ExecuteCopy_ThenPaste_OfSpillRange_CarriesNonAnchorSpillValues()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = SpillCopyPasteHarness.Create();
 
@@ -67,7 +67,7 @@ public sealed class FreeXArraySpillEditF1SpillCopyPasteTests
     [Fact]
     public void ExecuteCopy_ThenPaste_OfOrdinaryBlankCell_StillPastesBlank()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = SpillCopyPasteHarness.Create();
 
@@ -152,7 +152,8 @@ public sealed class FreeXArraySpillEditF1SpillCopyPasteTests
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
                 workbook,
-                NullUserMessageService.Instance)
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard())
             {
                 Width = 1280,
                 Height = 720

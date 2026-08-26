@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows;
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeX.App.Presentation.Editing;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -44,7 +45,7 @@ public sealed class R143_CrossWindowClipboardOwnershipTests
     public void NoClipboardIntentActionInWindowB_LeavesWindowAsClipboardAndMarqueeIntact(
         string windowBLocalActionMethodName)
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = TwoWindowClipboardHarness.Create();
 
@@ -118,7 +119,7 @@ public sealed class R143_CrossWindowClipboardOwnershipTests
     [Fact]
     public void GenuineCopyInWindowB_StillReplacesWindowAsSharedClipboardContent()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = TwoWindowClipboardHarness.Create();
 
@@ -191,8 +192,9 @@ public sealed class R143_CrossWindowClipboardOwnershipTests
             // ActivatorUtilities.CreateInstance<MainWindow> produces for every window opened through
             // DI in the real app (see MainWindow.xaml.cs constructor comment).
             var sharedSession = new WorkbookClipboardSession();
-            var aInit = ConstructWindow("A.xlsx", "Sheet1", sharedSession);
-            var bInit = ConstructWindow("B.xlsx", "Sheet1", sharedSession);
+            var platformClipboard = new InMemoryPlatformClipboard();
+            var aInit = ConstructWindow("A.xlsx", "Sheet1", sharedSession, platformClipboard);
+            var bInit = ConstructWindow("B.xlsx", "Sheet1", sharedSession, platformClipboard);
 
             aInit.Window.Show();
             bInit.Window.Show();
@@ -211,7 +213,10 @@ public sealed class R143_CrossWindowClipboardOwnershipTests
         }
 
         private static (MainWindow Window, WorkbookRef WorkbookRef, RecalcEngine RecalcEngine) ConstructWindow(
-            string workbookName, string sheetName, WorkbookClipboardSession sharedSession)
+            string workbookName,
+            string sheetName,
+            WorkbookClipboardSession sharedSession,
+            IPlatformClipboard platformClipboard)
         {
             var initialWorkbook = new Workbook(workbookName);
             initialWorkbook.AddSheet(sheetName);
@@ -226,6 +231,7 @@ public sealed class R143_CrossWindowClipboardOwnershipTests
                 workbookRef,
                 initialWorkbook,
                 NullUserMessageService.Instance,
+                platformClipboard: platformClipboard,
                 workbookClipboardSession: sharedSession);
             return (window, workbookRef, recalcEngine);
         }

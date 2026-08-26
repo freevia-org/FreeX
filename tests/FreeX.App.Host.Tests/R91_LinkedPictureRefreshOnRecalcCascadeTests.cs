@@ -61,7 +61,8 @@ public sealed class R91_LinkedPictureRefreshOnRecalcCascadeTests
             workbookRef.Current,
             NullUserMessageService.Instance,
             new WorkbookDocumentState(),
-            windowRegistry: registry)
+            windowRegistry: registry,
+            platformClipboard: new InMemoryPlatformClipboard())
         {
             WindowState = WindowState.Normal,
             Width = 1280,

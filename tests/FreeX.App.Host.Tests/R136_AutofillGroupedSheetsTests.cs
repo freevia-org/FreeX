@@ -27,7 +27,7 @@ public sealed class R136_AutofillGroupedSheetsTests
     [Fact]
     public void ExecuteAutofill_WithGroupedSheets_FansOutToEveryGroupedSheet()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");
@@ -40,7 +40,8 @@ public sealed class R136_AutofillGroupedSheetsTests
                 [],
                 workbookRef,
                 initialWorkbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard());
 
             try
             {
@@ -93,7 +94,7 @@ public sealed class R136_AutofillGroupedSheetsTests
     [Fact]
     public void ExecuteAutofill_WithGroupedSheets_CarriesCommentToEveryGroupedSheet()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");
@@ -106,7 +107,8 @@ public sealed class R136_AutofillGroupedSheetsTests
                 [],
                 workbookRef,
                 initialWorkbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard());
 
             try
             {
@@ -171,7 +173,7 @@ public sealed class R136_AutofillGroupedSheetsTests
     [Fact]
     public void ExecuteAutofill_WithoutGroupedSheets_OnlyAffectsActiveSheet()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");
@@ -184,7 +186,8 @@ public sealed class R136_AutofillGroupedSheetsTests
                 [],
                 workbookRef,
                 initialWorkbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard());
 
             try
             {

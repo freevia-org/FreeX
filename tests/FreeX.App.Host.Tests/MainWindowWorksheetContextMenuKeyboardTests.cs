@@ -706,7 +706,8 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 [],
                 workbookRef,
                 workbook,
-                messageService)
+                messageService,
+                platformClipboard: new InMemoryPlatformClipboard())
             {
                 WindowState = WindowState.Normal,
                 Width = 1280,

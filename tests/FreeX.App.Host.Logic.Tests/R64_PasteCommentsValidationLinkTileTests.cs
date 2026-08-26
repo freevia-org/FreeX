@@ -33,7 +33,7 @@ public sealed class R64_PasteCommentsValidationLinkTileTests
     [Fact]
     public void ExecutePasteComments_2x2SourceOnto4x4Destination_TilesAcrossWholeSelection()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -74,7 +74,7 @@ public sealed class R64_PasteCommentsValidationLinkTileTests
     [Fact]
     public void ExecutePasteComments_SameSizeDestination_StillPastesOnlySourceFootprint()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -109,7 +109,7 @@ public sealed class R64_PasteCommentsValidationLinkTileTests
     [Fact]
     public void ExecutePasteValidation_2x2SourceOnto4x4Destination_TilesAcrossWholeSelection()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -153,7 +153,7 @@ public sealed class R64_PasteCommentsValidationLinkTileTests
     [Fact]
     public void ExecutePasteValidation_SameSizeDestination_StillPastesSingleRule()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -190,7 +190,7 @@ public sealed class R64_PasteCommentsValidationLinkTileTests
     [Fact]
     public void ExecutePasteLink_2x2SourceOnto4x4Destination_TilesLinkedFormulasAcrossWholeSelection()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -234,7 +234,7 @@ public sealed class R64_PasteCommentsValidationLinkTileTests
     [Fact]
     public void ExecutePasteLink_SameSizeDestination_StillWritesOnlySourceFootprint()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try

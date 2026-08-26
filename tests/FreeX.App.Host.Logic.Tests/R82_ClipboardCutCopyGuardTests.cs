@@ -33,7 +33,7 @@ public sealed class R82_ClipboardCutCopyGuardTests
     [Fact]
     public void ExecuteCopy_NonConformingMultiAreaSelection_IsRejected()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = new Harness();
             var sheet = harness.Workbook.GetSheetAt(0);
@@ -68,7 +68,7 @@ public sealed class R82_ClipboardCutCopyGuardTests
         // Sibling no-regression: a same-row multi-area selection (Excel's allowed "combine
         // side-by-side" shape, already covered by the pre-existing R49 multi-area copy support)
         // must still copy normally -- the new rejection guard must not disturb it.
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = new Harness();
             var sheet = harness.Workbook.GetSheetAt(0);
@@ -98,7 +98,7 @@ public sealed class R82_ClipboardCutCopyGuardTests
     {
         // Real Excel rejects Cut on EVERY multi-area selection, even a same-row/-column shape
         // Copy would accept -- unlike Copy, Cut has no "combine side-by-side/stacked" exception.
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = new Harness();
             var sheet = harness.Workbook.GetSheetAt(0);
@@ -125,7 +125,7 @@ public sealed class R82_ClipboardCutCopyGuardTests
     [Fact]
     public void ExecuteCopy_FilteredRange_InternalPasteExcludesFilterHiddenRow()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = new Harness();
             var sheet = harness.Workbook.GetSheetAt(0);
@@ -170,7 +170,7 @@ public sealed class R82_ClipboardCutCopyGuardTests
         // Sibling no-regression: Excel's visible-cells-only restriction applies ONLY to a
         // filtered range -- a plain manually-hidden row (Format > Hide Row, no AutoFilter
         // involved) must still be copied.
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = new Harness();
             var sheet = harness.Workbook.GetSheetAt(0);
@@ -202,7 +202,7 @@ public sealed class R82_ClipboardCutCopyGuardTests
     [Fact]
     public void CutThenPaste_SecondPasteViaOsClipboardFallback_DoesNothing()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = new Harness();
             var sheet = harness.Workbook.GetSheetAt(0);
@@ -238,7 +238,7 @@ public sealed class R82_ClipboardCutCopyGuardTests
     {
         // Sibling no-regression: an ordinary Copy (not a Cut) must remain repeatedly pasteable --
         // only a Cut's OS-clipboard payload is meant to be invalidated once its move completes.
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = new Harness();
             var sheet = harness.Workbook.GetSheetAt(0);
@@ -286,7 +286,8 @@ public sealed class R82_ClipboardCutCopyGuardTests
                 [],
                 workbookRef,
                 initialWorkbook,
-                new RecordingUserMessageService(Messages));
+                new RecordingUserMessageService(Messages),
+                platformClipboard: new InMemoryPlatformClipboard());
 
             Window.Show();
             PumpDispatcher();

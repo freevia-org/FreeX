@@ -97,7 +97,7 @@ public sealed class FreeXCleanupMED2Tests
     [Fact]
     public void PasteSpecialAsText_AfterInternalCopy_PastesPlainTextNotFormula()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");
@@ -111,7 +111,8 @@ public sealed class FreeXCleanupMED2Tests
                 [],
                 workbookRef,
                 initialWorkbook,
-                NullUserMessageService.Instance);
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard());
 
             try
             {

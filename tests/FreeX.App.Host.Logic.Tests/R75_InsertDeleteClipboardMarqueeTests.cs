@@ -18,7 +18,7 @@ public sealed class R75_InsertDeleteClipboardMarqueeTests
     [Fact]
     public void CopyThenInsertRow_ClearsClipboardMarqueeAndInternalClipboard()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -57,7 +57,7 @@ public sealed class R75_InsertDeleteClipboardMarqueeTests
     public void CutThenInsertRow_ThenDeleteColumn_ClearsClipboardMarqueeOnEachStructuralEdit()
     {
         // Covers both Insert and Delete structural paths, and a Cut (not just Copy) marquee.
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -104,7 +104,7 @@ public sealed class R75_InsertDeleteClipboardMarqueeTests
     {
         // Sibling no-regression: a plain copy-paste with no intervening structural edit must be
         // completely unaffected by the new clipboard-marquee cancellation.
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try

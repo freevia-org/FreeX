@@ -206,7 +206,8 @@ public sealed class R126_UndoRedoInvalidatesClipboardTests
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
                 workbook,
-                NullUserMessageService.Instance)
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard())
             {
                 Width = 1280,
                 Height = 720

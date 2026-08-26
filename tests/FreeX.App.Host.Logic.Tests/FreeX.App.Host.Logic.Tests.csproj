@@ -44,6 +44,7 @@
     <Compile Include="..\FreeX.App.Host.Tests\RibbonXamlCatalogSnapshotReader.cs" Link="RibbonXamlCatalogSnapshotReader.cs" />
     <Compile Include="..\FreeX.App.Host.Tests\StaTestRunner.cs" Link="StaTestRunner.cs" />
     <Compile Include="..\FreeX.App.Host.Tests\WpfTestTree.cs" Link="WpfTestTree.cs" />
+    <Compile Include="..\SharedTestInfrastructure\FreeX\InMemoryPlatformClipboard.cs" Link="TestSupport\InMemoryPlatformClipboard.cs" />
     <Compile Include="..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
     <Compile Include="..\SharedTestInfrastructure\FreeX\RibbonRuntimeCatalogPlanner.cs" Link="TestSupport\RibbonRuntimeCatalogPlanner.cs" />
     <Compile Include="..\FreeX.App.Host.Tests\WorkspaceFileLocator.cs" Link="WorkspaceFileLocator.cs" />

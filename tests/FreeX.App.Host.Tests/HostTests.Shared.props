@@ -43,6 +43,7 @@
 
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\SharedTestInfrastructure\FreeX\InMemoryPlatformClipboard.cs" Link="TestSupport\InMemoryPlatformClipboard.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\SharedTestInfrastructure\Ribbon\RibbonDefinitionValidator.cs"
              Link="TestSupport\RibbonDefinitionValidator.cs" />

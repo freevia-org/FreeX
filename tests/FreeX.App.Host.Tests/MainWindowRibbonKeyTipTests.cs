@@ -829,7 +829,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 [],
                 workbookRef,
                 workbook,
-                messageService);
+                messageService,
+                platformClipboard: new InMemoryPlatformClipboard());
 
             window.WindowState = WindowState.Normal;
             window.Width = 2400;

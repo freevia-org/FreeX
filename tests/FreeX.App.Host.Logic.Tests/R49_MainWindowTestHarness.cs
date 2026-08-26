@@ -21,6 +21,8 @@ internal static class R49MainWindowTestHarness
     public static (MainWindow Window, Workbook Workbook) CreateWindow(
         IPlatformClipboard? platformClipboard = null)
     {
+        platformClipboard ??= new InMemoryPlatformClipboard();
+
         // Closing the last test window must not shut down the shared WPF dispatcher. Several
         // rendering tests run after these window tests and use the same STA for DrawingVisual /
         // RenderTargetBitmap work.

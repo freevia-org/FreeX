@@ -60,7 +60,7 @@ public sealed class R108_PlainCtrlVMultiAreaFormattingCarryTests
     [Fact]
     public void PlainCtrlV_NonTiled_MultiArea_ExcludesGapCellRules()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -125,7 +125,7 @@ public sealed class R108_PlainCtrlVMultiAreaFormattingCarryTests
     [Fact]
     public void PlainCtrlV_Tiled_MultiArea_ExcludesGapCellRules()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -180,7 +180,7 @@ public sealed class R108_PlainCtrlVMultiAreaFormattingCarryTests
     [Fact]
     public void PlainCtrlV_NonTiled_MultiArea_StillCarriesRulesInsideCopiedAreas()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -246,7 +246,7 @@ public sealed class R108_PlainCtrlVMultiAreaFormattingCarryTests
     [Fact]
     public void PlainCtrlV_NonTiled_MultiArea_StraddlingRuleCarriesOnlyCopiedAreaPortion()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -309,7 +309,7 @@ public sealed class R108_PlainCtrlVMultiAreaFormattingCarryTests
     [Fact]
     public void PlainCtrlV_SingleArea_StillCarriesRules()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try

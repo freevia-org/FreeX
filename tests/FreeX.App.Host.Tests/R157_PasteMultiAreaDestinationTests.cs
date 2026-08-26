@@ -29,7 +29,7 @@ public sealed class R157_PasteMultiAreaDestinationTests
     [Fact]
     public void ExecutePaste_MultiAreaDestination_MatchingSizes_FillsEveryArea()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = PasteMultiAreaHarness.Create();
 
@@ -61,7 +61,7 @@ public sealed class R157_PasteMultiAreaDestinationTests
     [Fact]
     public void ExecutePaste_MultiAreaDestination_MismatchedSize_RejectsWithoutPastingEitherArea()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = PasteMultiAreaHarness.Create();
 
@@ -100,7 +100,7 @@ public sealed class R157_PasteMultiAreaDestinationTests
     [Fact]
     public void ExecutePaste_SingleAreaDestination_StillTilesAcrossWholeSelection()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             using var harness = PasteMultiAreaHarness.Create();
 
@@ -197,7 +197,8 @@ public sealed class R157_PasteMultiAreaDestinationTests
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
                 workbook,
-                messages)
+                messages,
+                platformClipboard: new InMemoryPlatformClipboard())
             {
                 Width = 1280,
                 Height = 720

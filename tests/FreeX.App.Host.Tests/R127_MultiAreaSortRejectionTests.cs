@@ -183,7 +183,8 @@ public sealed class R127_MultiAreaSortRejectionTests
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
                 workbook,
-                messages)
+                messages,
+                platformClipboard: new InMemoryPlatformClipboard())
             {
                 Width = 1280,
                 Height = 720

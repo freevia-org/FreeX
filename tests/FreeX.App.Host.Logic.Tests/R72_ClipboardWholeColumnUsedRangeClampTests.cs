@@ -25,7 +25,7 @@ public sealed class R72_ClipboardWholeColumnUsedRangeClampTests
     [Fact]
     public void ExecuteCopy_WholeColumn_ClampsInternalClipboardToUsedRangeExtent()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -70,7 +70,7 @@ public sealed class R72_ClipboardWholeColumnUsedRangeClampTests
     [Fact]
     public void ExecuteCopy_SmallExplicitSelection_IsNotClamped()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -104,7 +104,7 @@ public sealed class R72_ClipboardWholeColumnUsedRangeClampTests
     [Fact]
     public void ExecuteCopy_WholeColumn_EmptySheet_YieldsTrivialPayload()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
