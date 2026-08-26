@@ -17,6 +17,7 @@ public sealed class ToolScriptsPreflightTests
         script.Should().Contain("preflight scripts must set `$ErrorActionPreference = `\"Stop`\".");
         script.Should().Contain("PowerShell fail-fast validation failed");
         script.Should().Contain("Validated $($scripts.Count) PowerShell tool script(s).");
+        script.Should().NotContain("chmod +x --");
     }
 
     [Fact]

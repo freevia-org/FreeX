@@ -17,6 +17,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("MacOs\\**\\*.cs");
         script.Should().Contain("FREEX_MACOS_SHARE_SHEET");
         script.Should().Contain("Avalonia app RuntimeIdentifiers");
+        script.Should().Contain("GetFileNameWithoutExtension($portableInclude)");
         script.Should().Contain("ApplicationTitle");
         script.Should().Contain("CFBundleName");
         script.Should().Contain("Name = ApplicationTitle;");
