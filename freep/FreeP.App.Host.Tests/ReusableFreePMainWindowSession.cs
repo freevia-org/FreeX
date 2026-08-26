@@ -19,9 +19,21 @@ internal static class ReusableFreePMainWindowSession
 
     private static void ResetWindow(MainWindow window)
     {
-        typeof(MainWindow)
-            .GetMethod("FileNew", BindingFlags.Instance | BindingFlags.NonPublic, Type.EmptyTypes)!
-            .Invoke(window, null);
-        window.UpdateLayout();
+        // FileNew replaces the presentation but does not complete the window's autosave session.
+        // Stop first so a dirty borrower cannot leave a recovery snapshot behind in the real test
+        // user's app-data store, then resume the timer for the next borrower.
+        var autosave = window.AutosaveCoordinatorForCrashHandler;
+        autosave?.Stop();
+        try
+        {
+            typeof(MainWindow)
+                .GetMethod("FileNew", BindingFlags.Instance | BindingFlags.NonPublic, Type.EmptyTypes)!
+                .Invoke(window, null);
+            window.UpdateLayout();
+        }
+        finally
+        {
+            autosave?.Start();
+        }
     }
 }
