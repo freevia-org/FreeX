@@ -1007,6 +1007,30 @@ function Assert-ToolProviderPathBehavior {
     Write-Host "Validated provider-path and tilde resolution behavior."
 }
 
+function Resolve-ExistingToolProcessPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $isWindowsHost = [System.IO.Path]::DirectorySeparatorChar -eq '\'
+    if ($isWindowsHost) {
+        return (Resolve-Path -LiteralPath $fullPath).ProviderPath
+    }
+
+    # Resolve every existing path segment rather than only the leaf. On macOS,
+    # for example, /var is a symlink to /private/var, and a child process reports
+    # the physical working directory even when PowerShell was given the lexical
+    # /var path.
+    $currentPath = [System.IO.Path]::GetPathRoot($fullPath)
+    $relativePath = $fullPath.Substring($currentPath.Length)
+    foreach ($segment in ($relativePath -split '[\\/]' | Where-Object { $_.Length -gt 0 })) {
+        $item = Get-Item -LiteralPath (Join-Path $currentPath $segment) -Force
+        $linkTarget = $item.ResolveLinkTarget($true)
+        $currentPath = if ($null -ne $linkTarget) { $linkTarget.FullName } else { $item.FullName }
+    }
+
+    return [System.IO.Path]::GetFullPath($currentPath)
+}
+
 function Assert-ToolProcessBehavior {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -1060,6 +1084,12 @@ Write-Output "synthetic stdout"
         if ($isWindowsHost) {
             $powerShellFilePrefix += @("-ExecutionPolicy", "Bypass")
         }
+        $workingDirectoryArgument = $workingRoot
+        if (-not $isWindowsHost) {
+            $workingDirectoryArgument = Join-Path $tempRoot "working-root-link"
+            New-Item -ItemType SymbolicLink -Path $workingDirectoryArgument -Target $workingRoot | Out-Null
+        }
+
         Invoke-ToolProcess `
             -FilePath $powerShell `
             -Arguments ($powerShellFilePrefix + @(
@@ -1068,20 +1098,20 @@ Write-Output "synthetic stdout"
                 "first value",
                 "second value with spaces"
             )) `
-            -WorkingDirectory ($workingRoot.Replace([string][char]92, "/")) `
+            -WorkingDirectory ($workingDirectoryArgument.Replace([string][char]92, "/")) `
             -FailureMessage "synthetic process probe"
 
         $probe = Get-Content -LiteralPath $probeOutputPath -Raw | ConvertFrom-Json
         $pathComparison = if ($isWindowsHost) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
-        $observedWorkingDirectory = (Resolve-Path -LiteralPath $probe.WorkingDirectory).Path
-        $expectedWorkingDirectory = (Resolve-Path -LiteralPath $workingRoot).Path
-        $expectedParentWorkingDirectory = (Resolve-Path -LiteralPath $cwdRoot).Path
+        $observedWorkingDirectory = Resolve-ExistingToolProcessPath -Path $probe.WorkingDirectory
+        $expectedWorkingDirectory = Resolve-ExistingToolProcessPath -Path $workingDirectoryArgument
+        $expectedParentWorkingDirectory = Resolve-ExistingToolProcessPath -Path $cwdRoot
         if (-not $observedWorkingDirectory.Equals($expectedWorkingDirectory, $pathComparison) -or
             $probe.First -cne "first value" -or $probe.Second -cne "second value with spaces") {
             throw "Invoke-ToolProcess did not preserve working directory or argument-array forwarding: $($probe | ConvertTo-Json -Compress)."
         }
 
-        if (-not (Resolve-Path -LiteralPath (Get-Location).Path).Path.Equals($expectedParentWorkingDirectory, $pathComparison)) {
+        if (-not (Resolve-ExistingToolProcessPath -Path (Get-Location).Path).Equals($expectedParentWorkingDirectory, $pathComparison)) {
             throw "Invoke-ToolProcess did not restore the parent working directory."
         }
 

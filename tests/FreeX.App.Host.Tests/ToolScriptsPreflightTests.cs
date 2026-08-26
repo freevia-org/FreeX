@@ -21,6 +21,20 @@ public sealed class ToolScriptsPreflightTests
     }
 
     [Fact]
+    public void ToolProcessProbe_ResolvesIntermediateUnixSymlinksBeforeComparingWorkingDirectories()
+    {
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-ToolScripts.ps1");
+
+        script.Should().Contain("function Resolve-ExistingToolProcessPath");
+        script.Should().Contain("$item.ResolveLinkTarget($true)");
+        script.Should().Contain("New-Item -ItemType SymbolicLink -Path $workingDirectoryArgument -Target $workingRoot");
+        script.Should().Contain("Resolve-ExistingToolProcessPath -Path $probe.WorkingDirectory");
+        script.Should().Contain("Resolve-ExistingToolProcessPath -Path $workingDirectoryArgument");
+        script.Should().Contain("$pathComparison = if ($isWindowsHost) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }");
+        script.Should().Contain("$probe.First -cne \"first value\" -or $probe.Second -cne \"second value with spaces\"");
+    }
+
+    [Fact]
     public void ToolScriptsPreflight_FailsWhenPreflightScriptOmitsFailFastMode()
     {
         using var temp = new TestTemporaryDirectory();
