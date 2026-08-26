@@ -189,6 +189,23 @@ function Test-CrossAppDashboardGeneratorHosts {
 
         Write-Host "Cross-app dashboard generator -Check passed under $($hostCommand.Label)."
     }
+
+    # Linux release runners can use globalization-invariant mode. Exercise that
+    # exact formatting environment even when this preflight runs on Windows.
+    $previousInvariantMode = [Environment]::GetEnvironmentVariable("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT", "Process")
+    try {
+        [Environment]::SetEnvironmentVariable("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT", "1", "Process")
+        $output = @(& $hostCommands[0].Path -NoProfile -ExecutionPolicy Bypass -File $generatorPath -Check 2>&1)
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0) {
+            throw "Cross-app dashboard generator -Check failed under invariant globalization: $($output -join "`n")"
+        }
+
+        Write-Host "Cross-app dashboard generator -Check passed under invariant globalization."
+    }
+    finally {
+        [Environment]::SetEnvironmentVariable("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT", $previousInvariantMode, "Process")
+    }
 }
 
 if ($BoundarySelfTest) {
