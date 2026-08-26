@@ -50,10 +50,10 @@ This monorepo also hosts **FreeW**, a sibling `.docx` word processor built on th
 
 ## Development
 
-The repository and every GitHub workflow use **.NET SDK 10.0.300**. Install that SDK on each developer or build machine before opening the solution; `global.json` rejects older feature bands:
+The repository and every GitHub workflow use **.NET SDK 10.0.400**. Install that SDK on each developer or build machine before opening the solution; `global.json` rejects older feature bands:
 
 ```powershell
-winget install --id Microsoft.DotNet.SDK.10 --version 10.0.300 --exact
+winget install --id Microsoft.DotNet.SDK.10 --version 10.0.400 --exact
 dotnet --version
 ```
 

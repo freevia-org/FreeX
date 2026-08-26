@@ -26,7 +26,7 @@ public sealed class GitHubWorkflowPreflightTests
         (workflow.Split("fetch-depth: 0", StringSplitOptions.None).Length - 1).Should().Be(3);
         (workflow.Split("fetch-depth: 1", StringSplitOptions.None).Length - 1).Should().Be(1);
         workflow.Should().Contain("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68");
-        workflow.Should().Contain("dotnet-version: 10.0.300");
+        workflow.Should().Contain("dotnet-version: 10.0.400");
         workflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("concurrency:");
         workflow.Should().Contain("group: ci-${{ github.ref }}");
@@ -101,7 +101,7 @@ public sealed class GitHubWorkflowPreflightTests
     {
         var globalJson = WorkspaceFileLocator.ReadAllText("global.json");
 
-        globalJson.Should().Contain("\"version\": \"10.0.300\"");
+        globalJson.Should().Contain("\"version\": \"10.0.400\"");
         globalJson.Should().Contain("\"rollForward\": \"latestPatch\"");
     }
 
@@ -151,7 +151,7 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("macOS release publication must validate downloaded evidence run identity against the current run");
         script.Should().Contain("macOS app workflow must run focused hosted tests before package/upload step");
         script.Should().Contain("validate_macos_tfm");
-        script.Should().Contain("FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300");
+        script.Should().Contain("FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.400");
         script.Should().Contain("runner: macos-26");
         script.Should().Contain("dotnet workload install macos --version");
         script.Should().Contain("-p:EnableMacOsTargetFramework=true");
@@ -1338,7 +1338,7 @@ public sealed class GitHubWorkflowPreflightTests
                 env:
                   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
                   DOTNET_NOLOGO: "1"
-                  FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300
+                  FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.400
                   FREEX_MACOS_ARCH: ${{ matrix.arch }}
                   FREEX_MACOS_TFM: net10.0-macos
                   FREEX_MACOS_TFM_EVIDENCE: artifacts/freex-${{ matrix.arch }}-macos-tfm-build-evidence.txt
@@ -1355,7 +1355,7 @@ public sealed class GitHubWorkflowPreflightTests
                   - name: Setup .NET
                     uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
                     with:
-                      dotnet-version: 10.0.300
+                      dotnet-version: 10.0.400
 
                   - name: Capture macOS TFM toolchain evidence
                     shell: bash
