@@ -3,6 +3,7 @@ param()
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $errors = New-Object System.Collections.Generic.List[string]
 $isWindowsHost = [System.IO.Path]::DirectorySeparatorChar -eq '\'
 

@@ -34,12 +34,40 @@ foreach ($requiredRule in @('*.sh text eol=lf', '*.ps1 text eol=lf', '*.psm1 tex
     }
 }
 
+$portableTextPaths = @($trackedPaths | Where-Object {
+    $_ -match '(?i)\.(?:ps1|psm1|sh|ya?ml)$'
+})
+foreach ($relativePath in $portableTextPaths) {
+    $bytes = [System.IO.File]::ReadAllBytes((Join-Path $repoRoot $relativePath))
+    if ($bytes -contains 13) {
+        Add-PortabilityError "$relativePath contains CR/CRLF bytes; scripts and workflows must use LF endings."
+    }
+}
+
 $shellScripts = @($trackedPaths | Where-Object { $_.EndsWith('.sh', [System.StringComparison]::OrdinalIgnoreCase) })
 foreach ($relativePath in $shellScripts) {
     $path = Join-Path $repoRoot $relativePath
     & bash -n $path
     if ($LASTEXITCODE -ne 0) {
         Add-PortabilityError "Bash syntax validation failed: $relativePath"
+    }
+}
+
+$powerShellScripts = @($trackedPaths | Where-Object {
+    $_.EndsWith('.ps1', [System.StringComparison]::OrdinalIgnoreCase) -or
+        $_.EndsWith('.psm1', [System.StringComparison]::OrdinalIgnoreCase)
+})
+$powerShellAsts = @{}
+foreach ($relativePath in $powerShellScripts) {
+    $path = Join-Path $repoRoot $relativePath
+    $tokens = $null
+    $parseErrors = $null
+    $powerShellAsts[$relativePath] = [System.Management.Automation.Language.Parser]::ParseFile(
+        $path,
+        [ref]$tokens,
+        [ref]$parseErrors)
+    foreach ($parseError in @($parseErrors)) {
+        Add-PortabilityError "$relativePath has a PowerShell parse error: $($parseError.Message)"
     }
 }
 
@@ -75,15 +103,14 @@ $portablePowerShellScripts = @(
 foreach ($relativePath in $portablePowerShellScripts) {
     $path = Join-Path $repoRoot $relativePath
     $source = Get-Content -LiteralPath $path -Raw
+    if (-not $source.Contains('ToolScriptSupport.ps1') -and
+        -not $source.Contains('VisualEvidenceScriptSupport.ps1')) {
+        Add-PortabilityError "$relativePath must dot-source ToolScriptSupport.ps1 instead of owning platform-sensitive helpers."
+    }
     if ($source.Contains('pwsh.exe')) {
         Add-PortabilityError "$relativePath uses Windows-specific pwsh.exe instead of the portable pwsh command."
     }
-    $tokens = $null
-    $parseErrors = $null
-    $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors)
-    foreach ($parseError in @($parseErrors)) {
-        Add-PortabilityError "$relativePath has a PowerShell parse error: $($parseError.Message)"
-    }
+    $ast = $powerShellAsts[$relativePath]
 
     $commands = @($ast.FindAll({
         param($node)
@@ -96,6 +123,17 @@ foreach ($relativePath in $portablePowerShellScripts) {
         if ($command.GetCommandName() -eq 'Join-Path' -and $command.Extent.Text.Contains('\')) {
             Add-PortabilityError "$relativePath passes a Windows-separated child path to Join-Path at line $($command.Extent.StartLineNumber)."
         }
+    }
+}
+
+foreach ($relativePath in $powerShellScripts) {
+    if ($relativePath -in @('tools/ToolScriptSupport.ps1', 'tools/Test-CrossPlatformPortability.ps1')) {
+        continue
+    }
+
+    $source = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+    if ($source.Contains('.ResolveLinkTarget(')) {
+        Add-PortabilityError "$relativePath bypasses the shared canonical-path resolver in ToolScriptSupport.ps1."
     }
 }
 
@@ -121,4 +159,4 @@ if ($errors.Count -gt 0) {
     throw "Cross-platform portability validation failed:`n - $($errors -join "`n - ")"
 }
 
-Write-Host "Cross-platform portability checks passed for $($trackedPaths.Count) tracked paths, $($shellScripts.Count) shell scripts, and $($portablePowerShellScripts.Count) release/preflight scripts."
+Write-Host "Cross-platform portability checks passed for $($trackedPaths.Count) tracked paths, $($portableTextPaths.Count) LF-normalized scripts/workflows, $($powerShellScripts.Count) PowerShell scripts, $($shellScripts.Count) shell scripts, and $($portablePowerShellScripts.Count) release/preflight scripts."

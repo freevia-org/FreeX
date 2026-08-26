@@ -13,6 +13,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'ToolScriptSupport.ps1')
 $InputRoot = (Resolve-Path -LiteralPath $InputRoot).Path
 $SbomToolPath = (Resolve-Path -LiteralPath $SbomToolPath).Path
 if (-not $RepositoryRoot) { $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path }

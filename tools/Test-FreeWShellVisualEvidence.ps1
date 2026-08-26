@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'ToolScriptSupport.ps1')
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 & (Join-Path $PSScriptRoot 'Generate-FreeWShellVisualEvidence.ps1') -Check
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

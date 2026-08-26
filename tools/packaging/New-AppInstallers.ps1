@@ -45,6 +45,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+. (Join-Path (Split-Path -Parent $PSScriptRoot) "ToolScriptSupport.ps1")
 
 if ($Suite -and (@($Apps | Sort-Object -Unique).Count -ne 3)) {
     throw "The suite installer requires FreeX, FreeW, and FreeP."

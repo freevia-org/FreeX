@@ -34,6 +34,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 # `powershell -File ... -Runtimes linux-x64,linux-arm64` reaches a string[]
 # parameter as one comma-delimited value. Normalize both that invocation shape

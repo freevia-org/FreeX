@@ -134,6 +134,9 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
+      - name: Repository preflight on Linux
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1
       - name: Build Avalonia project
         shell: pwsh
         run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
@@ -162,6 +165,9 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
+      - name: Repository preflight on macOS
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1
       - name: Build Avalonia project
         shell: pwsh
         run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release

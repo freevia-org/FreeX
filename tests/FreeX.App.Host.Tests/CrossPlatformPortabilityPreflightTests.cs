@@ -18,7 +18,15 @@ public sealed class CrossPlatformPortabilityPreflightTests
         script.Should().Contain("Test-LinuxPackagingScripts.ps1");
 
         var toolScriptTests = WorkspaceFileLocator.ReadAllText("tools", "Test-ToolScripts.ps1");
-        toolScriptTests.Should().Contain("ResolveLinkTarget($true)");
+        toolScriptTests.Should().Contain("ToolScriptSupport.ps1");
+
+        var toolScriptSupport = WorkspaceFileLocator.ReadAllText("tools", "ToolScriptSupport.ps1");
+        toolScriptSupport.Should().Contain("ResolveLinkTarget($true)");
+
+        var ciWorkflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "ci.yml");
+        ciWorkflow.Should().Contain("Repository preflight on Linux");
+        ciWorkflow.Should().Contain("Repository preflight on macOS");
+        ciWorkflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
 
         var linuxPackagingTests = WorkspaceFileLocator.ReadAllText("tools", "Test-LinuxPackagingScripts.ps1");
         linuxPackagingTests.Should().Contain("DirectorySeparatorChar -eq '\\'");

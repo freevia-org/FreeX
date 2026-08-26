@@ -10,6 +10,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $InputRoot = (Resolve-Path -LiteralPath $InputRoot).Path
 if ($Suite -and @($Apps | Sort-Object -Unique).Count -ne 3) { throw 'Suite smoke requires all three apps.' }
 if (-not $Suite -and $Apps.Count -ne 1) { throw 'Individual smoke requires one app.' }
