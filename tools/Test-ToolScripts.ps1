@@ -636,7 +636,7 @@ exit /b %ERRORLEVEL%
 #!/bin/sh
 exec pwsh -NoProfile -File "$(dirname "$0")/synthetic-dotnet.ps1" "$@"
 '@ | Set-Content -LiteralPath $shimPath -Encoding ASCII
-            chmod +x -- $shimPath
+            chmod +x $shimPath
             if ($LASTEXITCODE -ne 0) {
                 throw "Could not make the synthetic dotnet shim executable."
             }
@@ -1187,7 +1187,7 @@ exit /b %ERRORLEVEL%
 #!/bin/sh
 exec pwsh -NoProfile -File "$(dirname "$0")/capture-process.ps1" "$@"
 '@ | Set-Content -LiteralPath $syntheticShimPath -Encoding ASCII
-            chmod +x -- $syntheticShimPath
+            chmod +x $syntheticShimPath
             if ($LASTEXITCODE -ne 0) {
                 throw "Could not make the synthetic tool shim executable."
             }

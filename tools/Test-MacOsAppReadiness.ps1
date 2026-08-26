@@ -475,7 +475,8 @@ function Test-AvaloniaProject {
 
     foreach ($reference in $projectReferences) {
         $include = [string]$reference.Include
-        $name = [System.IO.Path]::GetFileNameWithoutExtension($include)
+        $portableInclude = $include.Replace('\', '/')
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($portableInclude)
         $isPortableParityCaptureSupport = $include.Replace("/", "\").Equals(
             "..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj",
             [System.StringComparison]::OrdinalIgnoreCase)
