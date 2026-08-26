@@ -584,9 +584,8 @@ exit /b %ERRORLEVEL%
         }
         else {
             @'
-#!/usr/bin/env pwsh
-& (Join-Path $PSScriptRoot "synthetic-dotnet.ps1") @args
-exit $LASTEXITCODE
+#!/bin/sh
+exec pwsh -NoProfile -File "$(dirname "$0")/synthetic-dotnet.ps1" "$@"
 '@ | Set-Content -LiteralPath $shimPath -Encoding ASCII
             chmod +x -- $shimPath
             if ($LASTEXITCODE -ne 0) {
