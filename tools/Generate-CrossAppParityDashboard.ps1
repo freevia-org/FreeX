@@ -48,6 +48,9 @@ if ($PSVersionTable.PSEdition -eq "Desktop" -and $currentCanonicalHostMarker -ne
 # would make the evidence self-referential and would change the claim on every refresh.
 $wave194TestedSourceCommit = "dd17f21fd06bd03aa0b3f151de311affa01adcbe"
 $wave194AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
+$wave194EvidenceStatus = "stale-pending-rerun"
+$wave194EvidenceStaleReason = "The retained Wave194 evidence was produced before origin/main portability tooling hardening at cbddefd732; rerun the Release, default non-UI, focused evidence, and repository integration gates before re-anchoring current acceptance."
+$wave194PendingIntegrationGate = "Rerun Wave194 Release, default non-UI, focused evidence, and repository integration gates after origin/main portability tooling hardening at cbddefd732."
 $wave194FullReleaseBuildMsBuildElapsed = "00:13:46.21"
 $wave194FullReleaseBuildWrapperElapsed = "00:13:46.4785808"
 $wave194DefaultLaneWrapperElapsed = "00:17:37.4967641"
@@ -903,8 +906,10 @@ try {
 
     $wave194IntegrationGateEvidence = [ordered]@{
         testedSourceCommit = $wave194TestedSourceCommit
+        evidenceStatus = $wave194EvidenceStatus
+        staleReason = $wave194EvidenceStaleReason
         acceptanceRefreshNote = $wave194AcceptanceRefreshNote
-        reintegration = "The current integration branch is anchored to tested source commit ${wave194TestedSourceCommit}; the acceptance refresh records only evidence from that tested source and does not claim that the documentation commit itself was rebuilt."
+        reintegration = "The retained acceptance evidence is anchored to tested source commit ${wave194TestedSourceCommit}; after origin/main portability tooling hardening at cbddefd732, that evidence is stale pending rerun and is not a current integration acceptance claim."
         focusedTests = "At tested source commit ${wave194TestedSourceCommit}: FreeX Avalonia Wave194 9/9; FreeX Presentation Wave194 1/1; FreeX Core.IO Wave194 plus five foreground-capture guards 8/8; FreeW Avalonia 2,175/2,175; FreeW host 1,835/1,835; FreeW Presentation 2,892/2,892; FreeW Ribbon definitions 62/62; FreeP Avalonia 724/724; FreeP host 2,418/2,418; FreeP Presentation 5,496/5,496; FreeP Ribbon definitions 34/34; FreeP responsive evidence 64/64; FreeP localization focused 1/1; FreeP resources 14/14; FreeP Hide Slide assertions 2/2; FreeP ChartRenderPlanner 264/264."
         initialReintegrationPreflight = "The current acceptance refresh uses the supplied repository-preflight result and the exact tested-source boundary; no additional source paths are allowlisted by this documentation-only change."
         initialIndependentReview = "Recorded: the initial independent review found two P2 findings: FreeX crop/readiness/transition and physical click geometry were duplicated instead of consuming one contract; FreeP topology evidence did not pin the complete source PPTX and initially over-attributed the residual."
@@ -921,7 +926,7 @@ try {
         defaultNonUiTestLane = "Passed at tested source commit ${wave194TestedSourceCommit}: final default non-UI lane produced 31 unique TRXs and matching console aggregation: 43,548 passed, 134 intentional skips, 0 failed, 43,682 total; wrapper stopwatch $wave194DefaultLaneWrapperElapsed; independently parsed 31-TRX timestamp span $wave194DefaultLaneTrxTimestampSpan; duration $wave194DefaultLaneTrxDuration."
         initialDefaultLane = "Earlier default-lane remediation history is retained in the Wave194 report; the current rerun is the authoritative 43,548 passed, 134 intentional skips, 0 failed, 43,682 total result."
         sliceAccounting = "582 cumulative app slices (194 per app) remain the processed Wave194 accounting; later wave feature commits are included in the tested source and do not add Wave194 slices."
-        sourceTestRemediation = "The current source is accepted only with the focused and full-lane evidence recorded above; generated inventory and visual manifests remain the authority for coverage and comparison counts."
+        sourceTestRemediation = "The retained source evidence remains historical until the focused and full-lane gates are rerun after portability tooling hardening; generated inventory and visual manifests remain the authority for coverage and comparison counts."
         workerVerification = "Current focused evidence is recorded for FreeW and FreeP above; FreeX physical and generated metrics remain retained below. Functional/source evidence and visual comparison evidence are intentionally separate."
     }
 
@@ -929,9 +934,9 @@ try {
         schema = "freex.parity.cross-app-dashboard.v3"
         wave = 194
         cumulativeAppSlices = 582
-        cumulativeAppSlicesStatus = "accepted-final-integration-gates"
-        integrationGateStatus = "accepted"
-        pendingIntegrationGates = @()
+        cumulativeAppSlicesStatus = "accepted-historical-pending-refresh"
+        integrationGateStatus = "pending"
+        pendingIntegrationGates = @($wave194PendingIntegrationGate)
         integrationGateEvidence = $wave194IntegrationGateEvidence
         scopeBoundary = "Functional/source parity evidence is represented by generated command/profile routing, focused test gates, route coverage, and artifact coverage. Visual parity remains a separate claim: current generated FreeW evidence has $($freeW.renderedEvidence.artifactCoverage.evidenceRowCount) dialog rows with $($freeW.renderedEvidence.pairedEvidence.passCount) pass, $($freeW.renderedEvidence.pairedEvidence.mismatchCount) genuine visual mismatches, and $($freeW.renderedEvidence.pairedEvidence.avaloniaOnlyScenarioCount) Avalonia extensions; FreeX retains Excel triage deltas; FreeP has paired app-owned evidence but its Office reference lane is not a raw Office-to-host equivalence result. These metrics do not prove complete visual parity, workflow completeness, or pixel-level equivalence."
         sources = @(
@@ -1036,7 +1041,7 @@ try {
         "",
         "> Generated counts prove command/profile routing, route and artifact coverage, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates, physical/no-COM limitations, and authoritative Microsoft Office baseline availability remain explicitly separate from coverage metrics.",
         "",
-        "> Wave194 records an accepted cumulative **$($dashboard.cumulativeAppSlices)** app slices. The supplied Release, default-lane, and repository integration gates passed against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``; independent review remains pending. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
+        "> Wave194 retains a historically accepted cumulative **$($dashboard.cumulativeAppSlices)** app-slice count, but its tested-source evidence is **stale/pending rerun** after origin/main portability tooling hardening at ``cbddefd732``. The prior Release, default-lane, focused evidence, and repository gates must not be treated as current integration acceptance. Independent review remains pending. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
         "",
         "## Summary",
         "",
@@ -1063,9 +1068,11 @@ try {
         "",
         "## Integration Gates",
         "",
-        "Wave194's cumulative 582 app-slice count is **accepted**. The supplied Release, default-lane, and repository integration gates passed against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``; independent review remains pending. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
+        "Wave194's cumulative 582 app-slice count remains historically accepted, but the tested-source evidence is **stale/pending rerun** after origin/main portability tooling hardening at ``cbddefd732``. The prior Release, default-lane, focused evidence, and repository gates must not be treated as current integration acceptance. Independent review remains pending. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
         "",
         "- Initial independent review: $($dashboard.integrationGateEvidence.initialIndependentReview)",
+        "- Evidence status: $($dashboard.integrationGateEvidence.evidenceStatus). $($dashboard.integrationGateEvidence.staleReason)",
+        "- Pending integration gate: $($wave194PendingIntegrationGate)",
         "- Slice accounting: $($dashboard.integrationGateEvidence.sliceAccounting)",
         "- Elapsed-time provenance: Release build MSBuild-retained ``Time Elapsed $($dashboard.integrationGateEvidence.fullReleaseBuildMsBuildElapsed)`` versus wrapper stopwatch ``$($dashboard.integrationGateEvidence.fullReleaseBuildWrapperElapsed)``; default lane wrapper stopwatch ``$($dashboard.integrationGateEvidence.defaultNonUiTestLaneWrapperElapsed)`` versus independently parsed 31-TRX timestamp span ``$($dashboard.integrationGateEvidence.defaultNonUiTestLaneTrxTimestampSpan)`` with duration ``$($dashboard.integrationGateEvidence.defaultNonUiTestLaneTrxDuration)``.",
         "- Reintegration: $($dashboard.integrationGateEvidence.reintegration)",

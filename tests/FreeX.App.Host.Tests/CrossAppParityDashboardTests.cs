@@ -32,6 +32,13 @@ public sealed class CrossAppParityDashboardTests
 
         var integrationEvidence = root.GetProperty("integrationGateEvidence");
         integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("dd17f21fd06bd03aa0b3f151de311affa01adcbe");
+        integrationEvidence.GetProperty("evidenceStatus").GetString().Should().Be("stale-pending-rerun");
+        integrationEvidence.GetProperty("staleReason").GetString().Should().Be(
+            "The retained Wave194 evidence was produced before origin/main portability tooling hardening at cbddefd732; rerun the Release, default non-UI, focused evidence, and repository integration gates before re-anchoring current acceptance.");
+        root.GetProperty("cumulativeAppSlicesStatus").GetString().Should().Be("accepted-historical-pending-refresh");
+        root.GetProperty("integrationGateStatus").GetString().Should().Be("pending");
+        root.GetProperty("pendingIntegrationGates")[0].GetString().Should().Be(
+            "Rerun Wave194 Release, default non-UI, focused evidence, and repository integration gates after origin/main portability tooling hardening at cbddefd732.");
         integrationEvidence.TryGetProperty("integrationHead", out _).Should().BeFalse();
         integrationEvidence.GetProperty("acceptanceRefreshNote").GetString().Should().Be(
             "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit.");

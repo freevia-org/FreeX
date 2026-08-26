@@ -10,6 +10,9 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 $acceptanceRefreshTestedSourceCommit = "dd17f21fd06bd03aa0b3f151de311affa01adcbe"
 $acceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
+$staleEvidenceStatus = "stale-pending-rerun"
+$staleEvidenceReason = "The retained Wave194 evidence was produced before origin/main portability tooling hardening at cbddefd732; rerun the Release, default non-UI, focused evidence, and repository integration gates before re-anchoring current acceptance."
+$pendingIntegrationGate = "Rerun Wave194 Release, default non-UI, focused evidence, and repository integration gates after origin/main portability tooling hardening at cbddefd732."
 $acceptanceRefreshAllowedPaths = @(
     "docs/parity/avalonia-parity-wave194-integration-20260824.md",
     "docs/parity/avalonia-wpf-cross-app-dashboard.json",
@@ -203,13 +206,15 @@ $dashboard = Read-ToolJson -Path $DashboardPath -RepoRoot $repoRoot -MissingMess
 Assert-DashboardCondition ($dashboard.schema -eq "freex.parity.cross-app-dashboard.v3") "Cross-app dashboard schema must be v3."
 Assert-DashboardCondition ($dashboard.wave -eq 194) "Cross-app dashboard must describe Wave194."
 Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 582) "Wave194 cumulative app-slice count must be 582."
-Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "accepted-final-integration-gates") "Wave194 app-slice count must be accepted after final integration gates pass."
-Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "accepted") "Wave194 integration gates must be accepted after final results are recorded."
-Assert-DashboardCondition (@($dashboard.pendingIntegrationGates).Count -eq 0) "Wave194 must not retain pending integration gates."
+Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "accepted-historical-pending-refresh") "Wave194 app-slice count must retain its historical status while current evidence is stale."
+Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "pending") "Wave194 integration gates must remain pending until rerun after portability hardening."
+Assert-DashboardCondition (@($dashboard.pendingIntegrationGates).Count -eq 1 -and [string]$dashboard.pendingIntegrationGates[0] -eq $pendingIntegrationGate) "Wave194 must name the pending post-hardening evidence rerun."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.testedSourceCommit -eq $acceptanceRefreshTestedSourceCommit) "Wave194 integration evidence must name tested source commit $acceptanceRefreshTestedSourceCommit."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.evidenceStatus -eq $staleEvidenceStatus) "Wave194 tested-source evidence must be marked stale pending rerun."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.staleReason -eq $staleEvidenceReason) "Wave194 stale evidence reason must identify the portability-hardening merge and required rerun."
 Assert-DashboardCondition ($null -eq $dashboard.integrationGateEvidence.PSObject.Properties["integrationHead"]) "Wave194 integration evidence must not use a recursive current-HEAD claim."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.acceptanceRefreshNote -eq $acceptanceRefreshNote) "Wave194 acceptance evidence must state that the acceptance-only documentation/tooling refresh does not alter tested source."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.reintegration -eq "The current integration branch is anchored to tested source commit ${acceptanceRefreshTestedSourceCommit}; the acceptance refresh records only evidence from that tested source and does not claim that the documentation commit itself was rebuilt.") "Wave194 reintegration evidence must name the current tested-source boundary."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.reintegration -eq "The retained acceptance evidence is anchored to tested source commit ${acceptanceRefreshTestedSourceCommit}; after origin/main portability tooling hardening at cbddefd732, that evidence is stale pending rerun and is not a current integration acceptance claim.") "Wave194 reintegration evidence must identify stale post-merge evidence without claiming current acceptance."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.focusedTests -eq "At tested source commit ${acceptanceRefreshTestedSourceCommit}: FreeX Avalonia Wave194 9/9; FreeX Presentation Wave194 1/1; FreeX Core.IO Wave194 plus five foreground-capture guards 8/8; FreeW Avalonia 2,175/2,175; FreeW host 1,835/1,835; FreeW Presentation 2,892/2,892; FreeW Ribbon definitions 62/62; FreeP Avalonia 724/724; FreeP host 2,418/2,418; FreeP Presentation 5,496/5,496; FreeP Ribbon definitions 34/34; FreeP responsive evidence 64/64; FreeP localization focused 1/1; FreeP resources 14/14; FreeP Hide Slide assertions 2/2; FreeP ChartRenderPlanner 264/264.") "Wave194 focused-test evidence must record each supplied current-source lane."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.initialReintegrationPreflight -eq "The current acceptance refresh uses the supplied repository-preflight result and the exact tested-source boundary; no additional source paths are allowlisted by this documentation-only change.") "Wave194 acceptance evidence must record the supplied preflight and exact boundary."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.initialIndependentReview -match "two P2 findings.*FreeX.*FreeP") "Wave194 initial independent-review findings must be recorded."
