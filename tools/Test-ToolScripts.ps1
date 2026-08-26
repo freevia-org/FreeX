@@ -1074,7 +1074,16 @@ function Resolve-ExistingToolProcessPath {
     foreach ($segment in ($relativePath -split '[\\/]' | Where-Object { $_.Length -gt 0 })) {
         $item = Get-Item -LiteralPath (Join-Path $currentPath $segment) -Force
         $linkTarget = $item.ResolveLinkTarget($true)
-        $currentPath = if ($null -ne $linkTarget) { $linkTarget.FullName } else { $item.FullName }
+        # ResolveLinkTarget(true) follows the link itself, but on macOS the
+        # returned target can still contain a lexical ancestor such as /var.
+        # Canonicalize that target from its root before appending any remaining
+        # segments so both sides of the comparison use the same physical path.
+        $currentPath = if ($null -ne $linkTarget) {
+            Resolve-ExistingToolProcessPath -Path $linkTarget.FullName
+        }
+        else {
+            $item.FullName
+        }
     }
 
     return [System.IO.Path]::GetFullPath($currentPath)
@@ -1157,7 +1166,7 @@ Write-Output "synthetic stdout"
         $expectedParentWorkingDirectory = Resolve-ExistingToolProcessPath -Path $cwdRoot
         if (-not $observedWorkingDirectory.Equals($expectedWorkingDirectory, $pathComparison) -or
             $probe.First -cne "first value" -or $probe.Second -cne "second value with spaces") {
-            throw "Invoke-ToolProcess did not preserve working directory or argument-array forwarding: $($probe | ConvertTo-Json -Compress)."
+            throw "Invoke-ToolProcess did not preserve working directory or argument-array forwarding. Observed working directory: '$observedWorkingDirectory'. Expected working directory: '$expectedWorkingDirectory'. Probe: $($probe | ConvertTo-Json -Compress)."
         }
 
         if (-not (Resolve-ExistingToolProcessPath -Path (Get-Location).Path).Equals($expectedParentWorkingDirectory, $pathComparison)) {
