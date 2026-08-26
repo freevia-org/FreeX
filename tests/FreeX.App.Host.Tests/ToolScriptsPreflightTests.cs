@@ -21,7 +21,7 @@ public sealed class ToolScriptsPreflightTests
     }
 
     [Fact]
-    public void ToolProcessProbe_ResolvesIntermediateUnixSymlinksBeforeComparingWorkingDirectories()
+    public void ToolProcessProbe_ResolvesIntermediateUnixSymlinksForDirectAndWrapperComparisons()
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-ToolScripts.ps1");
 
@@ -31,6 +31,14 @@ public sealed class ToolScriptsPreflightTests
         script.Should().Contain("New-Item -ItemType SymbolicLink -Path $workingDirectoryArgument -Target $workingRoot");
         script.Should().Contain("Resolve-ExistingToolProcessPath -Path $probe.WorkingDirectory");
         script.Should().Contain("Resolve-ExistingToolProcessPath -Path $workingDirectoryArgument");
+        script.Should().Contain("Resolve-ExistingToolProcessPath -Path $capture.WorkingDirectory");
+        script.Should().Contain("$expectedWrapperWorkingDirectory = Resolve-ExistingToolProcessPath -Path $workingDirectoryArgument");
+        script.Should().Contain("$observedWrapperWorkingDirectory.Equals($expectedWrapperWorkingDirectory, $pathComparison)");
+        script.Should().Contain("Invoke-DotNetRun \"project.csproj\" @(\"--sample\", \"value with spaces\") \"Debug\" $workingDirectoryArgument $syntheticShimPath");
+        script.Should().Contain("Invoke-DotNetBuild \"project.csproj\" \"Debug\" $workingDirectoryArgument $syntheticShimPath");
+        script.Should().Contain("Invoke-DotNetRunNoBuild \"project.csproj\" @(\"--sample\", \"value with spaces\") \"Debug\" $workingDirectoryArgument $syntheticShimPath");
+        script.Should().Contain("Invoke-DotNetStep \"Synthetic dotnet step\" @(\"run\", \"--sample\", \"value with spaces\") $workingDirectoryArgument $syntheticShimPath");
+        script.Should().Contain("Invoke-PowerShellStep \"Synthetic PowerShell step\" $targetScriptPath @(\"--sample\", \"value with spaces\") $workingDirectoryArgument $syntheticShimPath");
         script.Should().Contain("$pathComparison = if ($isWindowsHost) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }");
         script.Should().Contain("$probe.First -cne \"first value\" -or $probe.Second -cne \"second value with spaces\"");
         script.Should().Contain("Observed working directory: '$observedWorkingDirectory'. Expected working directory: '$expectedWorkingDirectory'.");

@@ -1247,31 +1247,33 @@ exec pwsh -NoProfile -File "$(dirname "$0")/capture-process.ps1" "$@"
             $actualArguments = @($capture.Arguments | ForEach-Object { [string]$_ })
             $expectedSerialized = $ExpectedArguments -join "`0"
             $actualSerialized = $actualArguments -join "`0"
-            if (-not [System.IO.Path]::GetFullPath($capture.WorkingDirectory).Equals([System.IO.Path]::GetFullPath($workingRoot), [System.StringComparison]::OrdinalIgnoreCase) -or
+            $observedWrapperWorkingDirectory = Resolve-ExistingToolProcessPath -Path $capture.WorkingDirectory
+            $expectedWrapperWorkingDirectory = Resolve-ExistingToolProcessPath -Path $workingDirectoryArgument
+            if (-not $observedWrapperWorkingDirectory.Equals($expectedWrapperWorkingDirectory, $pathComparison) -or
                 $actualSerialized -cne $expectedSerialized) {
-                throw "$Label did not preserve wrapper argument ordering or working directory: $($capture | ConvertTo-Json -Compress)."
+                throw "$Label did not preserve wrapper argument ordering or working directory. Observed working directory: '$observedWrapperWorkingDirectory'. Expected working directory: '$expectedWrapperWorkingDirectory'. Capture: $($capture | ConvertTo-Json -Compress)."
             }
         }
 
-        Invoke-DotNetRun "project.csproj" @("--sample", "value with spaces") "Debug" $workingRoot $syntheticShimPath
+        Invoke-DotNetRun "project.csproj" @("--sample", "value with spaces") "Debug" $workingDirectoryArgument $syntheticShimPath
         & $assertWrapperCapture "Invoke-DotNetRun" @("run", "--project", "project.csproj", "--configuration", "Debug", "--", "--sample", "value with spaces")
 
-        Invoke-DotNetBuild "project.csproj" "Debug" $workingRoot $syntheticShimPath
+        Invoke-DotNetBuild "project.csproj" "Debug" $workingDirectoryArgument $syntheticShimPath
         & $assertWrapperCapture "Invoke-DotNetBuild" @("build", "project.csproj", "--configuration", "Debug")
 
-        Invoke-DotNetRunNoBuild "project.csproj" @("--sample", "value with spaces") "Debug" $workingRoot $syntheticShimPath
+        Invoke-DotNetRunNoBuild "project.csproj" @("--sample", "value with spaces") "Debug" $workingDirectoryArgument $syntheticShimPath
         & $assertWrapperCapture "Invoke-DotNetRunNoBuild" @("run", "--no-restore", "--no-build", "--project", "project.csproj", "--configuration", "Debug", "--", "--sample", "value with spaces")
 
-        Invoke-DotNetStep "Synthetic dotnet step" @("run", "--sample", "value with spaces") $workingRoot $syntheticShimPath
+        Invoke-DotNetStep "Synthetic dotnet step" @("run", "--sample", "value with spaces") $workingDirectoryArgument $syntheticShimPath
         & $assertWrapperCapture "Invoke-DotNetStep" @("run", "--sample", "value with spaces")
 
-        Invoke-PowerShellStep "Synthetic PowerShell step" $targetScriptPath @("--sample", "value with spaces") $workingRoot $syntheticShimPath
+        Invoke-PowerShellStep "Synthetic PowerShell step" $targetScriptPath @("--sample", "value with spaces") $workingDirectoryArgument $syntheticShimPath
         & $assertWrapperCapture "Invoke-PowerShellStep" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $targetScriptPath, "--sample", "value with spaces")
 
         $env:FREEX_TOOL_PROCESS_EXIT_CODE = "23"
         $dotNetFailure = $null
         try {
-            Invoke-DotNetRun "project.csproj" @() "Debug" $workingRoot $syntheticShimPath
+            Invoke-DotNetRun "project.csproj" @() "Debug" $workingDirectoryArgument $syntheticShimPath
         }
         catch {
             $dotNetFailure = $_.Exception.Message
@@ -1283,7 +1285,7 @@ exec pwsh -NoProfile -File "$(dirname "$0")/capture-process.ps1" "$@"
         $env:FREEX_TOOL_PROCESS_EXIT_CODE = "27"
         $dotNetStepFailure = $null
         try {
-            Invoke-DotNetStep "Synthetic dotnet step failure" @("test", "project.csproj") $workingRoot $syntheticShimPath
+            Invoke-DotNetStep "Synthetic dotnet step failure" @("test", "project.csproj") $workingDirectoryArgument $syntheticShimPath
         }
         catch {
             $dotNetStepFailure = $_.Exception.Message
@@ -1295,7 +1297,7 @@ exec pwsh -NoProfile -File "$(dirname "$0")/capture-process.ps1" "$@"
         $env:FREEX_TOOL_PROCESS_EXIT_CODE = "29"
         $powerShellFailure = $null
         try {
-            Invoke-PowerShellStep "Synthetic PowerShell failure" $targetScriptPath @() $workingRoot $syntheticShimPath
+            Invoke-PowerShellStep "Synthetic PowerShell failure" $targetScriptPath @() $workingDirectoryArgument $syntheticShimPath
         }
         catch {
             $powerShellFailure = $_.Exception.Message
