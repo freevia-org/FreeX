@@ -256,6 +256,7 @@ function Assert-ToolSourceCentralization {
             "function Add-VisualEvidenceResultReferences",
             "function Get-VisualEvidenceFileSha256",
             "function Get-VisualEvidenceNormalizedTextSha256",
+            "function Get-VisualEvidenceRepoRelativePath",
             "function Get-VisualEvidenceArtifactInventory")) {
         if (-not $visualEvidenceSupport.Contains($requiredHelper)) {
             throw "VisualEvidenceScriptSupport.ps1 is missing required helper '$requiredHelper'."
@@ -271,6 +272,42 @@ function Assert-ToolSourceCentralization {
     }
     if ($visualEvidenceSupport.Contains("Get-FileHash")) {
         throw "VisualEvidenceScriptSupport.ps1 must not depend on the optional Get-FileHash cmdlet."
+    }
+
+    . $visualEvidenceSupportPath
+    $relativePathProbeTempRoot = New-ToolTemporaryDirectory -Prefix "freex-visual-evidence-relative-path-"
+    try {
+        $relativePathProbeRoot = Join-Path $relativePathProbeTempRoot "repo"
+        $relativePathProbeFile = Join-Path $relativePathProbeRoot "nested/evidence.png"
+        New-Item -ItemType Directory -Path (Split-Path -Parent $relativePathProbeFile) -Force | Out-Null
+        [IO.File]::WriteAllBytes($relativePathProbeFile, [byte[]]@(1))
+        $relativePathProbe = Get-VisualEvidenceRepoRelativePath -RepoRoot $relativePathProbeRoot -Path $relativePathProbeFile
+        if ($relativePathProbe -ne "nested/evidence.png") {
+            throw "Visual-evidence repository-relative paths must be separator-neutral; received '$relativePathProbe'."
+        }
+
+        $outsideRelativePathRejected = $false
+        try {
+            Get-VisualEvidenceRepoRelativePath `
+                -RepoRoot $relativePathProbeRoot `
+                -Path (Join-Path $relativePathProbeTempRoot "repo-sibling/evidence.png") | Out-Null
+        }
+        catch {
+            $outsideRelativePathRejected = $true
+        }
+        if (-not $outsideRelativePathRejected) {
+            throw "Visual-evidence repository-relative path conversion must reject sibling-prefix paths."
+        }
+    }
+    finally {
+        Remove-ToolTemporaryDirectory -Path $relativePathProbeTempRoot
+    }
+
+    $freeWShellVisualGenerator = Get-Content -LiteralPath (Join-Path $ToolRoot "Generate-FreeWShellVisualEvidence.ps1") -Raw
+    if (-not $freeWShellVisualGenerator.Contains("Get-VisualEvidenceRepoRelativePath") -or
+        $freeWShellVisualGenerator -match 'function\s+Relative\b' -or
+        $freeWShellVisualGenerator.Contains("TrimStart('\\')")) {
+        throw "Generate-FreeWShellVisualEvidence.ps1 must use shared cross-platform repository-relative path conversion."
     }
 
     foreach ($readinessScriptName in @(

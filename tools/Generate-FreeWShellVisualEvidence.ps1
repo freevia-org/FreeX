@@ -15,14 +15,6 @@ function Read-Json([string]$path) {
     return Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
 }
 
-function Relative([string]$path) {
-    $fullPath = [IO.Path]::GetFullPath($path)
-    if (-not $fullPath.StartsWith($repo, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Evidence path escapes the repository: $fullPath"
-    }
-    return $fullPath.Substring($repo.Length).TrimStart('\').Replace('\', '/')
-}
-
 $avaloniaManifestPath = Join-Path $root 'avalonia/freew_avalonia_shell_capture_manifest.json'
 $avalonia = Read-Json $avaloniaManifestPath
 if ([string]$avalonia.schema -ne 'freex.freew.shell-visual-capture.v1') { throw 'Unexpected Avalonia shell capture manifest schema.' }
@@ -112,8 +104,8 @@ foreach ($width in $widths) {
             height = 720
             tab = $tabId
             classification = 'paired-capture-review-required'
-            wpfPath = Relative $wpfFile
-            avaloniaPath = Relative $avaFile
+            wpfPath = Get-VisualEvidenceRepoRelativePath -RepoRoot $repo -Path $wpfFile
+            avaloniaPath = Get-VisualEvidenceRepoRelativePath -RepoRoot $repo -Path $avaFile
             wpfSha256 = Get-VisualEvidenceFileSha256 -Path $wpfFile
             avaloniaSha256 = Get-VisualEvidenceFileSha256 -Path $avaFile
             note = 'Whole-window capture is present for both hosts. No pixel pass/fail is inferred because the WPF and Avalonia shell chrome intentionally use different native/window-frame and toolbar structures.'
@@ -143,8 +135,8 @@ foreach ($width in $widths) {
             avaloniaTabId = $avaloniaTabId
             avaloniaFixture = [string]$avaCapture[0].fixture
             classification = 'paired-contextual-capture-review-required'
-            wpfPath = Relative $wpfFile
-            avaloniaPath = Relative $avaFile
+            wpfPath = Get-VisualEvidenceRepoRelativePath -RepoRoot $repo -Path $wpfFile
+            avaloniaPath = Get-VisualEvidenceRepoRelativePath -RepoRoot $repo -Path $avaFile
             wpfSha256 = Get-VisualEvidenceFileSha256 -Path $wpfFile
             avaloniaSha256 = Get-VisualEvidenceFileSha256 -Path $avaFile
             note = 'Both hosts render the contextual ribbon state. WPF uses its established visible-tab driver; Avalonia activates the named state through a real editor fixture before the shell frame is captured. No pixel pass/fail is inferred because host chrome remains structurally different.'
@@ -171,7 +163,7 @@ $evidence = [ordered]@{
         expectedCaptureCount = [int]$wordChrome.expectedCaptureCount
         actualCaptureCount = [int]$wordChrome.actualCaptureCount
         normalizedDpi = [int]$wordChrome.normalizedDpi
-        manifestPath = Relative $wordChromeManifestPath
+        manifestPath = Get-VisualEvidenceRepoRelativePath -RepoRoot $repo -Path $wordChromeManifestPath
         comparisonBoundary = [string]$wordChrome.comparisonBoundary
     }
     counts = [ordered]@{
