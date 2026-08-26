@@ -43,9 +43,38 @@ if ($gates.Count -eq 0) {
 }
 
 $seenProjects = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$seenBuildProjects = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($testGate in $gates) {
     Write-Host ""
     Write-Host "Gate $($testGate.id) ($($testGate.app), $($testGate.gate), $Platform)"
+    if (-not $NoBuild) {
+        $buildProjects = if ($testGate.PSObject.Properties.Name -contains "buildProjects") {
+            @($testGate.buildProjects)
+        }
+        else {
+            @()
+        }
+        foreach ($projectPath in $buildProjects) {
+            if (-not $seenBuildProjects.Add($projectPath)) {
+                continue
+            }
+
+            $projectFullPath = Join-Path $repoRoot $projectPath
+            if (-not (Test-Path -LiteralPath $projectFullPath -PathType Leaf)) {
+                throw "Gate '$($testGate.id)' references missing build prerequisite '$projectPath'."
+            }
+
+            $arguments = @("build", $projectFullPath, "--configuration", $Configuration)
+            if ($NoRestore) { $arguments += "--no-restore" }
+
+            Write-Host "dotnet $($arguments -join ' ')"
+            & dotnet @arguments
+            if ($LASTEXITCODE -ne 0) {
+                throw "Gate '$($testGate.id)' build prerequisite '$projectPath' failed with exit code $LASTEXITCODE."
+            }
+        }
+    }
+
     foreach ($projectPath in @($testGate.projects)) {
         if (-not $seenProjects.Add($projectPath)) {
             continue

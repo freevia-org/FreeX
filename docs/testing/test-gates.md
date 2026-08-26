@@ -35,6 +35,12 @@ The runner is serial by project. Existing explicit batch projects remain separat
 they provide process isolation for UI or renderer resources. A project may belong to one gate only;
 the release gate inherits commit coverage rather than duplicating a second project list.
 
+A gate may declare `buildProjects` for shipping assemblies that its tests inspect but do not
+reference in their normal configuration. `Invoke-TestGate.ps1` builds each declared prerequisite
+once before the gate's tests (unless `-NoBuild` is used because an earlier workflow build already
+produced it). The FreeW and FreeP Windows desktop gates use this contract for both their WPF and
+Avalonia shipping hosts, keeping commit and release execution consistent.
+
 CI may select one manifest entry with `-GateId` so independent gates can run on separate hosted
 runners. Projects within a selected gate remain serial, and the aggregate required check succeeds
 only after every shard succeeds.

@@ -41,6 +41,26 @@ foreach ($gate in @($manifest.gates)) {
         continue
     }
 
+    $buildProjectsInGate = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $buildProjects = if ($gate.PSObject.Properties.Name -contains "buildProjects") {
+        @($gate.buildProjects)
+    }
+    else {
+        @()
+    }
+    foreach ($projectPath in $buildProjects) {
+        if ($projectPath -isnot [string] -or [string]::IsNullOrWhiteSpace($projectPath)) {
+            $errors.Add("Gate '$($gate.id)' contains an invalid build prerequisite path.")
+            continue
+        }
+        if (-not $buildProjectsInGate.Add($projectPath)) {
+            $errors.Add("Gate '$($gate.id)' references build prerequisite '$projectPath' more than once.")
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $projectPath) -PathType Leaf)) {
+            $errors.Add("Gate '$($gate.id)' references missing build prerequisite '$projectPath'.")
+        }
+    }
+
     $projectsInGate = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($projectPath in @($gate.projects)) {
         if ($projectPath -isnot [string] -or [string]::IsNullOrWhiteSpace($projectPath)) {
@@ -54,6 +74,22 @@ foreach ($gate in @($manifest.gates)) {
             $errors.Add("Gate '$($gate.id)' references missing project '$projectPath'.")
         }
         [void]$coveredProjects.Add($projectPath.Replace('\\', '/'))
+    }
+}
+
+$gateById = @{}
+foreach ($gate in @($manifest.gates)) {
+    $gateById[[string]$gate.id] = $gate
+}
+foreach ($required in @(
+    @{ Gate = "freew-desktop"; Project = "freew/FreeW.App.Host/FreeW.App.Host.csproj" },
+    @{ Gate = "freew-desktop"; Project = "freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj" },
+    @{ Gate = "freep-desktop"; Project = "freep/FreeP.App.Host/FreeP.App.Host.csproj" },
+    @{ Gate = "freep-desktop"; Project = "freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj" }
+)) {
+    if (-not $gateById.ContainsKey($required.Gate) -or
+        @($gateById[$required.Gate].buildProjects) -notcontains $required.Project) {
+        $errors.Add("Gate '$($required.Gate)' must build shipping prerequisite '$($required.Project)'.")
     }
 }
 
