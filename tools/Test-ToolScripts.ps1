@@ -542,7 +542,8 @@ function Assert-GeneratedProjectOrchestrationBehavior {
     New-Item -ItemType Directory -Force -Path $shimRoot, $destinationRoot | Out-Null
 
     $shimScript = Join-Path $shimRoot "synthetic-dotnet.ps1"
-    $shimPath = Join-Path $shimRoot "synthetic-dotnet.cmd"
+    $isWindowsHost = [System.IO.Path]::DirectorySeparatorChar -eq '\'
+    $shimPath = Join-Path $shimRoot $(if ($isWindowsHost) { "synthetic-dotnet.cmd" } else { "synthetic-dotnet" })
     $capturePath = Join-Path $tempRoot "captured.json"
     $projectCapturePath = Join-Path $tempRoot "project-path.txt"
     $previousExitCode = $env:FREEX_TOOL_GENERATOR_EXIT_CODE
@@ -574,11 +575,24 @@ $outputPaths = @($arguments[($separatorIndex + 1)..($arguments.Count - 1)])
 [IO.File]::WriteAllText($outputPaths[1], "synthetic-markdown")
 exit 0
 '@ | Set-Content -LiteralPath $shimScript -Encoding UTF8
-        @"
+        if ($isWindowsHost) {
+            @"
 @echo off
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$shimScript" %*
 exit /b %ERRORLEVEL%
 "@ | Set-Content -LiteralPath $shimPath -Encoding ASCII
+        }
+        else {
+            @'
+#!/usr/bin/env pwsh
+& (Join-Path $PSScriptRoot "synthetic-dotnet.ps1") @args
+exit $LASTEXITCODE
+'@ | Set-Content -LiteralPath $shimPath -Encoding ASCII
+            chmod +x -- $shimPath
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not make the synthetic dotnet shim executable."
+            }
+        }
 
         $env:FREEX_TOOL_GENERATOR_EXIT_CODE = "0"
         $env:FREEX_TOOL_GENERATOR_CAPTURE = $capturePath
