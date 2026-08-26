@@ -18,7 +18,7 @@ public sealed class CrossPlatformPortabilityPreflightTests
         script.Should().Contain("Test-LinuxPackagingScripts.ps1");
 
         var toolScriptTests = WorkspaceFileLocator.ReadAllText("tools", "Test-ToolScripts.ps1");
-        toolScriptTests.Should().Contain("Resolve-Path -LiteralPath $probe.WorkingDirectory");
+        toolScriptTests.Should().Contain("ResolveLinkTarget($true)");
 
         var linuxPackagingTests = WorkspaceFileLocator.ReadAllText("tools", "Test-LinuxPackagingScripts.ps1");
         linuxPackagingTests.Should().Contain("DirectorySeparatorChar -eq '\\'");
