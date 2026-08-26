@@ -31,23 +31,24 @@ public sealed class CrossAppParityDashboardTests
         root.GetProperty("scopeBoundary").GetString().Should().Contain("do not prove complete visual parity");
 
         var integrationEvidence = root.GetProperty("integrationGateEvidence");
-        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("e4f40ebcaadc624421b9c0a985330100f10af8df");
+        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("dd17f21fd06bd03aa0b3f151de311affa01adcbe");
         integrationEvidence.TryGetProperty("integrationHead", out _).Should().BeFalse();
         integrationEvidence.GetProperty("acceptanceRefreshNote").GetString().Should().Be(
             "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit.");
         integrationEvidence.GetProperty("repositoryPreflight").GetString().Should().Be(
-            "Passed at tested source commit e4f40ebcaadc624421b9c0a985330100f10af8df: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 309 XML-backed, 125 PowerShell scripts, 11 GitHub workflows, 10 test gates/48 assigned projects, 13,951 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:03:10.419.");
+            "Passed at tested source commit dd17f21fd06bd03aa0b3f151de311affa01adcbe: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 310 XML-backed, 126 PowerShell scripts, 11 GitHub workflows, 12 test gates/48 assigned projects, 13,994 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:03:23.3371196.");
         integrationEvidence.GetProperty("fullReleaseBuild").GetString().Should().Be(
-            "Passed at tested source commit e4f40ebcaadc624421b9c0a985330100f10af8df: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; MSBuild-retained Time Elapsed 00:08:44.31; wrapper stopwatch 00:08:44.581.");
-        integrationEvidence.GetProperty("fullReleaseBuildMsBuildElapsed").GetString().Should().Be("00:08:44.31");
-        integrationEvidence.GetProperty("fullReleaseBuildWrapperElapsed").GetString().Should().Be("00:08:44.581");
-        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("43,505 passed, 134 intentional skips, 0 failed, 43,639 total");
-        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("wrapper stopwatch 00:17:18.449; independently parsed 31-TRX timestamp span 00:17:17.5738434");
-        integrationEvidence.GetProperty("defaultNonUiTestLaneWrapperElapsed").GetString().Should().Be("00:17:18.449");
-        integrationEvidence.GetProperty("defaultNonUiTestLaneTrxTimestampSpan").GetString().Should().Be("00:17:17.5738434");
-        integrationEvidence.GetProperty("independentReviewStatus").GetString().Should().Be("passed");
+            "Passed at tested source commit dd17f21fd06bd03aa0b3f151de311affa01adcbe: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; MSBuild-retained Time Elapsed 00:13:46.21; wrapper stopwatch 00:13:46.4785808.");
+        integrationEvidence.GetProperty("fullReleaseBuildMsBuildElapsed").GetString().Should().Be("00:13:46.21");
+        integrationEvidence.GetProperty("fullReleaseBuildWrapperElapsed").GetString().Should().Be("00:13:46.4785808");
+        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("43,548 passed, 134 intentional skips, 0 failed, 43,682 total");
+        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("wrapper stopwatch 00:17:37.4967641; independently parsed 31-TRX timestamp span 12:41:31.975 to 12:59:08.603 (+03:00); duration 00:17:36.628");
+        integrationEvidence.GetProperty("defaultNonUiTestLaneWrapperElapsed").GetString().Should().Be("00:17:37.4967641");
+        integrationEvidence.GetProperty("defaultNonUiTestLaneTrxTimestampSpan").GetString().Should().Be("12:41:31.975 to 12:59:08.603 (+03:00)");
+        integrationEvidence.GetProperty("defaultNonUiTestLaneTrxDuration").GetString().Should().Be("00:17:36.628");
+        integrationEvidence.GetProperty("independentReviewStatus").GetString().Should().Be("pending");
         integrationEvidence.GetProperty("independentReview").GetString().Should().Be(
-            "Passed: the clean independent final acceptance review rechecked tested source commit e4f40ebcaadc624421b9c0a985330100f10af8df after remediation of both P3 acceptance findings (Desktop PowerShell host determinism and elapsed-time provenance); no remaining acceptance findings were identified. This review does not alter the tested-source boundary, counts, timings, or visual claim boundaries.");
+            "Pending: an independent final cross-app acceptance review of tested source commit dd17f21fd06bd03aa0b3f151de311affa01adcbe remains outstanding and must be completed later; this refresh does not claim that review passed. This status does not alter the tested-source boundary, counts, timings, or visual claim boundaries.");
         integrationEvidence.GetProperty("sliceAccounting").GetString().Should().Be(
             "582 cumulative app slices (194 per app) remain the processed Wave194 accounting; later wave feature commits are included in the tested source and do not add Wave194 slices.");
 
