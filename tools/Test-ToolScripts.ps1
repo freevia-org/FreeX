@@ -1053,17 +1053,21 @@ Write-Output "synthetic stdout"
 } | ConvertTo-Json | Set-Content -LiteralPath $OutputPath
 '@ | Set-Content -LiteralPath $probePath -Encoding UTF8
 
-        $powerShell = (Get-Command powershell.exe -ErrorAction Stop).Path
+        $isWindowsHost = [System.IO.Path]::DirectorySeparatorChar -eq '\'
+        $powerShellCommand = if ($isWindowsHost) { "powershell.exe" } else { "pwsh" }
+        $powerShell = (Get-Command $powerShellCommand -ErrorAction Stop).Path
+        $powerShellFilePrefix = @("-NoProfile")
+        if ($isWindowsHost) {
+            $powerShellFilePrefix += @("-ExecutionPolicy", "Bypass")
+        }
         Invoke-ToolProcess `
             -FilePath $powerShell `
-            -Arguments @(
-                "-NoProfile",
-                "-ExecutionPolicy", "Bypass",
+            -Arguments ($powerShellFilePrefix + @(
                 "-File", $probePath,
                 "-OutputPath", $probeOutputPath,
                 "first value",
                 "second value with spaces"
-            ) `
+            )) `
             -WorkingDirectory ($workingRoot.Replace([string][char]92, "/")) `
             -FailureMessage "synthetic process probe"
 
@@ -1084,14 +1088,12 @@ Write-Output "synthetic stdout"
             $ErrorActionPreference = "Continue"
             $teeOutput = @(Invoke-ToolProcess `
                 -FilePath $powerShell `
-                -Arguments @(
-                    "-NoProfile",
-                    "-ExecutionPolicy", "Bypass",
+                -Arguments ($powerShellFilePrefix + @(
                     "-File", $probePath,
                     "-OutputPath", $teeProbeOutputPath,
                     "first tee value",
                     "second tee value"
-                ) `
+                )) `
                 -WorkingDirectory $workingRoot `
                 -OutputPath $teeStreamPath)
         }
@@ -1123,15 +1125,27 @@ $outputPath = $env:FREEX_TOOL_PROCESS_OUTPUT
 exit ([int]$env:FREEX_TOOL_PROCESS_EXIT_CODE)
 '@ | Set-Content -LiteralPath $capturePath -Encoding UTF8
 
-        $syntheticShimPath = Join-Path $shimRoot "synthetic-tool.cmd"
-        @"
+        $syntheticShimPath = Join-Path $shimRoot $(if ($isWindowsHost) { "synthetic-tool.cmd" } else { "synthetic-tool" })
+        if ($isWindowsHost) {
+            @"
 @echo off
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$capturePath" %*
 exit /b %ERRORLEVEL%
 "@ | Set-Content -LiteralPath $syntheticShimPath -Encoding ASCII
+        }
+        else {
+            @'
+#!/bin/sh
+exec pwsh -NoProfile -File "$(dirname "$0")/capture-process.ps1" "$@"
+'@ | Set-Content -LiteralPath $syntheticShimPath -Encoding ASCII
+            chmod +x -- $syntheticShimPath
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not make the synthetic tool shim executable."
+            }
+        }
         $targetScriptPath = Join-Path $tempRoot "synthetic-target.ps1"
         New-Item -ItemType File -Path $targetScriptPath | Out-Null
-        $env:Path = "$shimRoot;$previousPath"
+        $env:Path = "$shimRoot$([System.IO.Path]::PathSeparator)$previousPath"
         $env:FREEX_TOOL_PROCESS_OUTPUT = $wrapperOutputPath
         $env:FREEX_TOOL_PROCESS_EXIT_CODE = "0"
 
