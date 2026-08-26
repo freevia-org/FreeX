@@ -31,31 +31,27 @@ public sealed class CrossAppParityDashboardTests
         root.GetProperty("scopeBoundary").GetString().Should().Contain("do not prove complete visual parity");
 
         var integrationEvidence = root.GetProperty("integrationGateEvidence");
-        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("dd17f21fd06bd03aa0b3f151de311affa01adcbe");
-        integrationEvidence.GetProperty("evidenceStatus").GetString().Should().Be("stale-pending-rerun");
-        integrationEvidence.GetProperty("staleReason").GetString().Should().Be(
-            "The retained Wave194 evidence was produced before origin/main portability tooling hardening at cbddefd732; rerun the Release, default non-UI, focused evidence, and repository integration gates before re-anchoring current acceptance.");
-        root.GetProperty("cumulativeAppSlicesStatus").GetString().Should().Be("accepted-historical-pending-refresh");
-        root.GetProperty("integrationGateStatus").GetString().Should().Be("pending");
-        root.GetProperty("pendingIntegrationGates")[0].GetString().Should().Be(
-            "Rerun Wave194 Release, default non-UI, focused evidence, and repository integration gates after origin/main portability tooling hardening at cbddefd732.");
+        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("f7cbd8cbe3f1ac5fbaf14da1c2cacc1a3fb7bf3f");
+        root.GetProperty("cumulativeAppSlicesStatus").GetString().Should().Be("accepted-final-integration-gates");
+        root.GetProperty("integrationGateStatus").GetString().Should().Be("accepted");
+        root.GetProperty("pendingIntegrationGates").GetArrayLength().Should().Be(0);
         integrationEvidence.TryGetProperty("integrationHead", out _).Should().BeFalse();
         integrationEvidence.GetProperty("acceptanceRefreshNote").GetString().Should().Be(
             "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit.");
         integrationEvidence.GetProperty("repositoryPreflight").GetString().Should().Be(
-            "Passed at tested source commit dd17f21fd06bd03aa0b3f151de311affa01adcbe: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0; 294 JSON, 310 XML-backed, 126 PowerShell scripts, 11 GitHub workflows, 12 test gates/48 assigned projects, 13,994 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:03:23.3371196.");
+            "Passed at tested source commit f7cbd8cbe3f1ac5fbaf14da1c2cacc1a3fb7bf3f: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 with isolated SDK C:\\Users\\quinn\\.dotnet-codex-10.0.400 and Git Bash first on PATH exited 0; 294 JSON, 310 XML-backed, 127 PowerShell scripts, 11 GitHub workflows, 12 test gates/48 assigned projects, 13,996 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:01:55.8304515.");
         integrationEvidence.GetProperty("fullReleaseBuild").GetString().Should().Be(
-            "Passed at tested source commit dd17f21fd06bd03aa0b3f151de311affa01adcbe: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; MSBuild-retained Time Elapsed 00:13:46.21; wrapper stopwatch 00:13:46.4785808.");
-        integrationEvidence.GetProperty("fullReleaseBuildMsBuildElapsed").GetString().Should().Be("00:13:46.21");
-        integrationEvidence.GetProperty("fullReleaseBuildWrapperElapsed").GetString().Should().Be("00:13:46.4785808");
+            "Passed at tested source commit f7cbd8cbe3f1ac5fbaf14da1c2cacc1a3fb7bf3f: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; MSBuild-retained Time Elapsed 00:09:49.19; wrapper stopwatch 00:09:49.4386774.");
+        integrationEvidence.GetProperty("fullReleaseBuildMsBuildElapsed").GetString().Should().Be("00:09:49.19");
+        integrationEvidence.GetProperty("fullReleaseBuildWrapperElapsed").GetString().Should().Be("00:09:49.4386774");
         integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("43,548 passed, 134 intentional skips, 0 failed, 43,682 total");
-        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("wrapper stopwatch 00:17:37.4967641; independently parsed 31-TRX timestamp span 12:41:31.975 to 12:59:08.603 (+03:00); duration 00:17:36.628");
-        integrationEvidence.GetProperty("defaultNonUiTestLaneWrapperElapsed").GetString().Should().Be("00:17:37.4967641");
-        integrationEvidence.GetProperty("defaultNonUiTestLaneTrxTimestampSpan").GetString().Should().Be("12:41:31.975 to 12:59:08.603 (+03:00)");
-        integrationEvidence.GetProperty("defaultNonUiTestLaneTrxDuration").GetString().Should().Be("00:17:36.628");
+        integrationEvidence.GetProperty("defaultNonUiTestLane").GetString().Should().Contain("wrapper stopwatch 00:16:54.2974514; independently parsed 31-TRX timestamp span 14:03:31.8502271 to 14:20:25.1692656 (+03:00); duration 00:16:53.3190385");
+        integrationEvidence.GetProperty("defaultNonUiTestLaneWrapperElapsed").GetString().Should().Be("00:16:54.2974514");
+        integrationEvidence.GetProperty("defaultNonUiTestLaneTrxTimestampSpan").GetString().Should().Be("14:03:31.8502271 to 14:20:25.1692656 (+03:00)");
+        integrationEvidence.GetProperty("defaultNonUiTestLaneTrxDuration").GetString().Should().Be("00:16:53.3190385");
         integrationEvidence.GetProperty("independentReviewStatus").GetString().Should().Be("pending");
         integrationEvidence.GetProperty("independentReview").GetString().Should().Be(
-            "Pending: an independent final cross-app acceptance review of tested source commit dd17f21fd06bd03aa0b3f151de311affa01adcbe remains outstanding and must be completed later; this refresh does not claim that review passed. This status does not alter the tested-source boundary, counts, timings, or visual claim boundaries.");
+            "Pending: an independent final cross-app acceptance review of tested source commit f7cbd8cbe3f1ac5fbaf14da1c2cacc1a3fb7bf3f remains outstanding and must be completed later; this refresh does not claim that review passed. This status does not alter the tested-source boundary, counts, timings, or visual claim boundaries.");
         integrationEvidence.GetProperty("sliceAccounting").GetString().Should().Be(
             "582 cumulative app slices (194 per app) remain the processed Wave194 accounting; later wave feature commits are included in the tested source and do not add Wave194 slices.");
 
