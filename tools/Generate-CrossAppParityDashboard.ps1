@@ -14,7 +14,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $canonicalHostMarker = "FREEX_CROSS_APP_PARITY_DASHBOARD_CANONICAL_HOST"
 $currentCanonicalHostMarker = [Environment]::GetEnvironmentVariable($canonicalHostMarker, "Process")
 if ($PSVersionTable.PSEdition -eq "Desktop" -and $currentCanonicalHostMarker -ne "1") {
-    $pwshCommand = Get-Command pwsh.exe -ErrorAction Stop
+    $pwshCommand = Get-Command pwsh -ErrorAction Stop
     $forwardedArguments = @()
     if ($PSBoundParameters.ContainsKey("JsonPath")) {
         $forwardedArguments += "-JsonPath"

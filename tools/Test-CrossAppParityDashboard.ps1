@@ -169,7 +169,7 @@ function Test-CrossAppDashboardGeneratorHosts {
     $hostCommands = @(
         [pscustomobject]@{
             Label = "pwsh"
-            Path = (Get-Command pwsh.exe -ErrorAction Stop).Source
+            Path = (Get-Command pwsh -ErrorAction Stop).Source
         }
     )
 

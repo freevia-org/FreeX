@@ -192,7 +192,8 @@ $entrypoints = @(
 Assert-Packaging (Test-Path -LiteralPath $sharedPath -PathType Leaf) "Shared Linux packaging implementation is missing: $sharedPath"
 $shared = if (Test-Path -LiteralPath $sharedPath) { Get-Content -LiteralPath $sharedPath -Raw } else { "" }
 Assert-Packaging $shared.Contains("set -euo pipefail") "Shared packaging implementation must be fail-fast."
-Assert-Packaging $shared.Contains("declare -A config_values") "Shared packaging implementation must parse data-only config."
+Assert-Packaging $shared.Contains('printf -v "$key"') "Shared packaging implementation must parse data-only config without executing it."
+Assert-Packaging (-not $shared.Contains("declare -A")) "Shared packaging implementation must remain compatible with macOS Bash 3.2."
 Assert-Packaging $shared.Contains('ARCH="$arch" "$appimagetool"') "Shared implementation must preserve direct AppImage tool invocation."
 Assert-Packaging $shared.Contains("dpkg-deb --root-owner-group --build") "Shared implementation must preserve direct dpkg-deb invocation."
 Assert-Packaging $shared.Contains("--dry-run") "Shared implementation must expose the offline test seam."

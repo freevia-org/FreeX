@@ -74,6 +74,10 @@ $portablePowerShellScripts = @(
 )
 foreach ($relativePath in $portablePowerShellScripts) {
     $path = Join-Path $repoRoot $relativePath
+    $source = Get-Content -LiteralPath $path -Raw
+    if ($source.Contains('pwsh.exe')) {
+        Add-PortabilityError "$relativePath uses Windows-specific pwsh.exe instead of the portable pwsh command."
+    }
     $tokens = $null
     $parseErrors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors)

@@ -114,7 +114,21 @@ validate_path_argument "$output" "--output"
 validate_component_argument "$runtime" "--runtime"
 validate_component_argument "$version" "--version"
 
-declare -A config_values=()
+product_key=""
+display_name=""
+binary_name=""
+launcher_name=""
+library_dir=""
+app_id=""
+appimage_prefix=""
+stage_prefix=""
+package_name=""
+maintainer=""
+description=""
+description_long_1=""
+description_long_2=""
+mime_asset=""
+cache_mime=""
 
 load_config() {
   local line key value
@@ -129,7 +143,7 @@ load_config() {
     [[ ! "$value" =~ [[:cntrl:]] ]] || die_config "control characters are not allowed in $key"
     case "$key" in
       product_key|display_name|binary_name|launcher_name|library_dir|app_id|appimage_prefix|stage_prefix|package_name|maintainer|description|description_long_1|description_long_2|mime_asset|cache_mime)
-        config_values["$key"]="$value"
+        printf -v "$key" '%s' "$value"
         ;;
       *)
         die_config "unknown key: $key"
@@ -143,27 +157,11 @@ validate_config() {
   local required_keys=(product_key display_name binary_name launcher_name library_dir app_id appimage_prefix stage_prefix package_name maintainer description description_long_1 description_long_2 cache_mime)
 
   for key in "${required_keys[@]}"; do
-    [[ -n "${config_values[$key]-}" ]] || die_config "missing value for $key"
+    [[ -n "${!key}" ]] || die_config "missing value for $key"
   done
 
-  product_key="${config_values[product_key]}"
-  display_name="${config_values[display_name]}"
-  binary_name="${config_values[binary_name]}"
-  launcher_name="${config_values[launcher_name]}"
-  library_dir="${config_values[library_dir]}"
-  app_id="${config_values[app_id]}"
-  appimage_prefix="${config_values[appimage_prefix]}"
-  stage_prefix="${config_values[stage_prefix]}"
-  package_name="${config_values[package_name]}"
-  maintainer="${config_values[maintainer]}"
-  description="${config_values[description]}"
-  description_long_1="${config_values[description_long_1]}"
-  description_long_2="${config_values[description_long_2]}"
-  mime_asset="${config_values[mime_asset]-}"
-  cache_mime="${config_values[cache_mime]}"
-
   for key in product_key binary_name launcher_name library_dir app_id appimage_prefix stage_prefix package_name; do
-    value="${config_values[$key]}"
+    value="${!key}"
     [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die_config "$key must be a single safe path component"
   done
   if [[ -n "$mime_asset" && ! "$mime_asset" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
