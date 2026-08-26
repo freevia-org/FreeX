@@ -14,7 +14,13 @@ if (-not (Test-Path -LiteralPath $resolvedSolutionPath -PathType Leaf)) {
 function ConvertTo-NormalizedRelativePath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    return [System.IO.Path]::GetRelativePath($repoRoot, $Path).Replace('\', '/')
+    $normalizedRoot = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    $normalizedPath = [System.IO.Path]::GetFullPath($Path)
+    if (-not $normalizedPath.StartsWith($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Path is outside the repository root: $Path"
+    }
+
+    return $normalizedPath.Substring($normalizedRoot.Length).Replace('\', '/')
 }
 
 function Test-IsProductionProject {

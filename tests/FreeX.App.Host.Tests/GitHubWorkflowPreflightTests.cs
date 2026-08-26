@@ -23,6 +23,8 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("timeout-minutes: 120");
         workflow.Should().Contain("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
         workflow.Should().Contain("persist-credentials: false");
+        (workflow.Split("fetch-depth: 0", StringSplitOptions.None).Length - 1).Should().Be(3);
+        (workflow.Split("fetch-depth: 1", StringSplitOptions.None).Length - 1).Should().Be(1);
         workflow.Should().Contain("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68");
         workflow.Should().Contain("dotnet-version: 10.0.400");
         workflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
