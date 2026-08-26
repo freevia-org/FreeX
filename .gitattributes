@@ -1,4 +1,9 @@
 /.gitattributes text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=lf
+*.psm1 text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
 tools/packaging/linux/*.conf text eol=lf
 tools/LinuxInteractiveDocker/*.sh text eol=lf
 

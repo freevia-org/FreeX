@@ -17,7 +17,7 @@ $summaryPath = Join-Path $resolvedRoot "summary.json"
 $markdownPath = Join-Path $resolvedRoot "report.md"
 $htmlPath = Join-Path $resolvedRoot "report.html"
 
-foreach ($requiredPath in @($summaryPath, $markdownPath, $htmlPath, (Join-Path $resolvedRoot "wpf\manifest.json"), (Join-Path $resolvedRoot "avalonia\manifest.json"))) {
+foreach ($requiredPath in @($summaryPath, $markdownPath, $htmlPath, (Join-Path $resolvedRoot "wpf/manifest.json"), (Join-Path $resolvedRoot "avalonia/manifest.json"))) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "FreeP dialog/pane visual evidence artifact is missing: $requiredPath"
     }

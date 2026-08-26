@@ -34,7 +34,7 @@ foreach ($pattern in $Patterns) {
 }
 
 function Get-AvaloniaParityDialogIds {
-    $sourcePath = Join-Path $repoRoot "tools\FreeX.ParityCapture.Avalonia\Capture\MainWindow.ParityCapture.cs"
+    $sourcePath = Join-Path $repoRoot "tools/FreeX.ParityCapture.Avalonia/Capture/MainWindow.ParityCapture.cs"
     if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
         return @()
     }
@@ -50,7 +50,7 @@ function Get-CaptureAssetEvidence {
         [Parameter(Mandatory = $true)][string]$Shell
     )
 
-    $assetRoot = Join-Path $repoRoot "docs\parity\dialog-visual-assets\$Shell-capture"
+    $assetRoot = Join-Path $repoRoot "docs/parity/dialog-visual-assets/$Shell-capture"
     $manifestPath = Join-Path $assetRoot "manifest.json"
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
         return @()

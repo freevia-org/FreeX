@@ -27,7 +27,7 @@ foreach ($payloadName in $PayloadNames) {
 $namespace = "https://github.com/tony-xmelon/FreeX/releases/$CommitSha/$Name/$Runtime"
 & $SbomToolPath generate -b $stage -bc $RepositoryRoot -pn $Name -pv $Version -ps 'FreeX contributors' -nsb $namespace
 if ($LASTEXITCODE -ne 0) { throw "sbom-tool failed with exit code $LASTEXITCODE." }
-$generated = Join-Path $stage '_manifest\spdx_2.2\manifest.spdx.json'
+$generated = Join-Path $stage '_manifest/spdx_2.2/manifest.spdx.json'
 if (-not (Test-Path -LiteralPath $generated)) { throw "SBOM output missing: $generated" }
 Copy-Item -LiteralPath $generated -Destination $OutputPath -Force
 $outputName = Split-Path -Leaf $OutputPath

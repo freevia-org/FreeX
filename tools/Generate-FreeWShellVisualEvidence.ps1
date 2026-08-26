@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 . (Join-Path $PSScriptRoot 'VisualEvidenceScriptSupport.ps1')
-$root = Join-Path $repo 'docs\parity\freew-shell-visual-2026-08-16'
+$root = Join-Path $repo 'docs/parity/freew-shell-visual-2026-08-16'
 $jsonPath = Join-Path $root 'freew_shell_visual_evidence.json'
 $markdownPath = Join-Path $root 'README.md'
 $widths = @(1500, 1100, 900, 750)
@@ -23,11 +23,11 @@ function Relative([string]$path) {
     return $fullPath.Substring($repo.Length).TrimStart('\').Replace('\', '/')
 }
 
-$avaloniaManifestPath = Join-Path $root 'avalonia\freew_avalonia_shell_capture_manifest.json'
+$avaloniaManifestPath = Join-Path $root 'avalonia/freew_avalonia_shell_capture_manifest.json'
 $avalonia = Read-Json $avaloniaManifestPath
 if ([string]$avalonia.schema -ne 'freex.freew.shell-visual-capture.v1') { throw 'Unexpected Avalonia shell capture manifest schema.' }
 
-$wordChromeRoot = Join-Path $repo 'docs\parity\freew-word-chrome-2026-08-16'
+$wordChromeRoot = Join-Path $repo 'docs/parity/freew-word-chrome-2026-08-16'
 $wordChromeManifestPath = Join-Path $wordChromeRoot 'manifest.json'
 $wordChrome = Read-Json $wordChromeManifestPath
 if ($wordChrome.schemaVersion -ne 1 -or [string]$wordChrome.captureStatus -ne 'complete' -or
@@ -45,7 +45,7 @@ foreach ($capture in $wordChrome.captures) {
 
 $wpfByWidth = @{}
 foreach ($width in $widths) {
-    $manifestPath = Join-Path $root "wpf\$width\freew_ribbonshot_manifest.json"
+    $manifestPath = Join-Path $root "wpf/$width/freew_ribbonshot_manifest.json"
     $manifest = Read-Json $manifestPath
     if ([int]$manifest.RenderWidth -ne $width -or [int]$manifest.RenderHeight -ne 720) {
         throw "WPF shell manifest has an unexpected geometry: $manifestPath"
@@ -78,7 +78,7 @@ $sourceSha256 = [ordered]@{}
 foreach ($relativePath in $sourceFiles) {
     # Source freshness must not change when Git checks the same text out with CRLF on Windows and
     # LF on Linux/macOS. Binary capture artifacts continue to use byte-exact hashes below.
-    $sourceSha256[$relativePath] = Get-VisualEvidenceNormalizedTextSha256 -Path (Join-Path $repo ($relativePath -replace '/', '\\'))
+    $sourceSha256[$relativePath] = Get-VisualEvidenceNormalizedTextSha256 -Path (Join-Path $repo $relativePath)
 }
 
 $standardTabs = @('home', 'insert', 'design', 'layout', 'references', 'mailings', 'review', 'view', 'help', 'developer')
@@ -102,8 +102,8 @@ foreach ($width in $widths) {
         $wpfCapture = @($wpf | Where-Object { ([string]$_.TabName).ToLowerInvariant() -eq $tabId } | Select-Object -First 1)
         $avaCapture = @($ava | Where-Object { ([string]$_.tabId).ToLowerInvariant() -eq $tabId } | Select-Object -First 1)
         if ($wpfCapture.Count -ne 1 -or $avaCapture.Count -ne 1) { throw "Missing paired shell capture for width=$width tab=$tabId." }
-        $wpfFile = Join-Path $root "wpf\$width\$($wpfCapture[0].Path)"
-        $avaFile = Join-Path $root "avalonia\$($avaCapture[0].fileName)"
+        $wpfFile = Join-Path $root "wpf/$width/$($wpfCapture[0].Path)"
+        $avaFile = Join-Path $root "avalonia/$($avaCapture[0].fileName)"
         foreach ($file in @($wpfFile, $avaFile)) {
             if (-not (Test-Path -LiteralPath $file) -or (Get-Item -LiteralPath $file).Length -le 0) { throw "Invalid shell PNG: $file" }
         }
@@ -130,8 +130,8 @@ foreach ($width in $widths) {
         if ([string]$avaCapture[0].fixture -eq 'static') {
             throw "Avalonia contextual shell capture was not produced by a context fixture: width=$width tab=$avaloniaTabId."
         }
-        $wpfFile = Join-Path $root "wpf\$width\$($wpfCapture[0].Path)"
-        $avaFile = Join-Path $root "avalonia\$($avaCapture[0].fileName)"
+        $wpfFile = Join-Path $root "wpf/$width/$($wpfCapture[0].Path)"
+        $avaFile = Join-Path $root "avalonia/$($avaCapture[0].fileName)"
         foreach ($file in @($wpfFile, $avaFile)) {
             if (-not (Test-Path -LiteralPath $file) -or (Get-Item -LiteralPath $file).Length -le 0) { throw "Invalid contextual shell PNG: $file" }
         }

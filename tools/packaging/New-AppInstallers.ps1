@@ -61,7 +61,7 @@ if (($Platform -eq "windows" -and $Runtime -notlike "win-*") -or
 $InputRoot = (Resolve-Path -LiteralPath $InputRoot).Path
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 $OutputDir = (Resolve-Path -LiteralPath $OutputDir).Path
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $workRoot = Join-Path $OutputDir ".installer-work"
 New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
 
@@ -140,7 +140,7 @@ function New-WindowsInstaller {
     $lines.Add('RestartApplications=no')
     $lines.Add("OutputDir=$(Escape-InnoValue $OutputDir)")
     $lines.Add("OutputBaseFilename=$outputBase")
-    $lines.Add("SetupIconFile=$(Escape-InnoValue (Join-Path $repoRoot "shared\Free.Shared.Shell\Resources\$($Apps[0]).ico"))")
+    $lines.Add("SetupIconFile=$(Escape-InnoValue (Join-Path $repoRoot "shared/Free.Shared.Shell/Resources/$($Apps[0]).ico"))")
     if (-not $Suite) { $lines.Add("UninstallDisplayIcon={app}\$($Apps[0]).exe") }
     $lines.Add('WizardStyle=modern')
     $lines.Add('')
@@ -221,7 +221,7 @@ function New-LinuxInstaller {
     foreach ($app in $Apps) {
         $inputName = if ($Suite) { "$app-v$Version-$Runtime-installer.zip" } else { "$app-v$Version-$Runtime.zip" }
         $zip = Find-UniqueInput $inputName
-        Copy-Item -LiteralPath $zip -Destination (Join-Path $stage "payload\$app.zip")
+        Copy-Item -LiteralPath $zip -Destination (Join-Path $stage "payload/$app.zip")
     }
     if ($Suite) {
         $common = @('#!/usr/bin/env bash','set -euo pipefail','here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"','prefix="${1:-$HOME/.local}"','temp_root="$(mktemp -d)"','trap ''rm -rf "$temp_root"'' EXIT')
@@ -241,7 +241,7 @@ function New-LinuxInstaller {
         $app = $Apps[0]
         $lower = $app.ToLowerInvariant()
         $appId = "io.github.tony-xmelon.$lower"
-        Copy-Item -LiteralPath (Join-Path $repoRoot "shared\Free.Shared.Shell\Resources\$app.svg") -Destination (Join-Path $stage "payload\$app.svg")
+        Copy-Item -LiteralPath (Join-Path $repoRoot "shared/Free.Shared.Shell/Resources/$app.svg") -Destination (Join-Path $stage "payload/$app.svg")
         $install += "rm -rf `"`$prefix/lib/$lower`""
         $install += "mkdir -p `"`$prefix/lib/$lower`""
         $install += "unzip -q `"`$here/payload/$app.zip`" -d `"`$prefix/lib/$lower`""
@@ -285,7 +285,7 @@ function New-MacInstaller {
         New-Item -ItemType Directory -Force -Path (Join-Path $stage 'payload') | Out-Null
         foreach ($app in $Apps) {
             $child = Find-UniqueInput "$app-v$Version-$Runtime-apps.zip"
-            Copy-Item -LiteralPath $child -Destination (Join-Path $stage "payload\$app.zip")
+            Copy-Item -LiteralPath $child -Destination (Join-Path $stage "payload/$app.zip")
         }
         $common = @('#!/usr/bin/env bash','set -euo pipefail','here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"','destination="${1:-$HOME/Applications}"','temp_root="$(mktemp -d)"','trap ''rm -rf "$temp_root"'' EXIT')
         $installLines = @($common)
@@ -315,11 +315,11 @@ function New-MacInstaller {
     foreach ($app in $Apps) {
         $portable = Find-UniqueInput "$app-v$Version-$Runtime.zip"
         $bundle = Join-Path $stage "$app.app"
-        $macos = Join-Path $bundle 'Contents\MacOS'
-        $resources = Join-Path $bundle 'Contents\Resources'
+        $macos = Join-Path $bundle 'Contents/MacOS'
+        $resources = Join-Path $bundle 'Contents/Resources'
         New-Item -ItemType Directory -Force -Path $macos, $resources | Out-Null
         Expand-Archive -LiteralPath $portable -DestinationPath $macos -Force
-        Copy-Item -LiteralPath (Join-Path $repoRoot "shared\Free.Shared.Shell\Resources\$app.icns") -Destination (Join-Path $resources "$app.icns")
+        Copy-Item -LiteralPath (Join-Path $repoRoot "shared/Free.Shared.Shell/Resources/$app.icns") -Destination (Join-Path $resources "$app.icns")
         $bundleId = "io.github.tony-xmelon.$($app.ToLowerInvariant())"
         $plist = @"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -337,7 +337,7 @@ function New-MacInstaller {
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 "@
-        $plist.TrimStart() | Set-Content -LiteralPath (Join-Path $bundle 'Contents\Info.plist') -Encoding utf8NoBOM
+        $plist.TrimStart() | Set-Content -LiteralPath (Join-Path $bundle 'Contents/Info.plist') -Encoding utf8NoBOM
         if (-not $IsWindows) { & chmod +x (Join-Path $macos $app) }
     }
     $installLines = @('#!/usr/bin/env bash','set -euo pipefail','here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"','destination="${1:-$HOME/Applications}"','mkdir -p "$destination"')

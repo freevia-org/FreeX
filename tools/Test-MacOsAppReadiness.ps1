@@ -49,7 +49,13 @@ function Get-RepoRelativePath {
         $root += [System.IO.Path]::DirectorySeparatorChar
     }
 
-    if ($fullPath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
+    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq '\') {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else {
+        [System.StringComparison]::Ordinal
+    }
+    if ($fullPath.StartsWith($root, $comparison)) {
         return $fullPath.Substring($root.Length).Replace("\", "/")
     }
 

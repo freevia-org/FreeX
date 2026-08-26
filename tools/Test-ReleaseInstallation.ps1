@@ -78,10 +78,10 @@ try {
         Run $bash @((Join-Path $expanded 'install.sh'), $destination)
         foreach ($app in $Apps) {
             if ($Platform -eq 'linux') {
-                $exe = Join-Path $destination "lib\$($app.ToLowerInvariant())\$app"
+                $exe = Join-Path $destination "lib/$($app.ToLowerInvariant())/$app"
                 if (-not (Test-Path -LiteralPath $exe)) { throw "Installed Linux executable missing: $exe" }
             } else {
-                $exe = Join-Path $destination "$app.app\Contents\MacOS\$app"
+                $exe = Join-Path $destination "$app.app/Contents/MacOS/$app"
                 if (-not (Test-Path -LiteralPath $exe)) { throw "Installed macOS executable missing: $exe" }
             }
         }

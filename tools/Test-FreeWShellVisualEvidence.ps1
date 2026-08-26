@@ -3,7 +3,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 & (Join-Path $PSScriptRoot 'Generate-FreeWShellVisualEvidence.ps1') -Check
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$path = Join-Path $repo 'docs\parity\freew-shell-visual-2026-08-16\freew_shell_visual_evidence.json'
+$path = Join-Path $repo 'docs/parity/freew-shell-visual-2026-08-16/freew_shell_visual_evidence.json'
 $evidence = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
 if ($evidence.counts.pairedStaticChrome -ne 40) { throw 'FreeW shell matrix must retain 40 static WPF/Avalonia pairs.' }
 if ($evidence.counts.pairedContextualChrome -ne 32) { throw 'FreeW shell matrix must retain 32 paired contextual WPF/Avalonia captures.' }
@@ -16,7 +16,7 @@ if ($evidence.counts.wordOfficeChromeReferences -ne 36 -or
 foreach ($row in $evidence.pairedStaticChrome) {
     if ($row.classification -ne 'paired-capture-review-required') { throw "Unexpected static shell classification: $($row.classification)" }
     foreach ($relative in @($row.wpfPath, $row.avaloniaPath)) {
-        $file = Join-Path $repo ($relative -replace '/', '\\')
+        $file = Join-Path $repo $relative
         if (-not (Test-Path -LiteralPath $file) -or (Get-Item -LiteralPath $file).Length -le 0) { throw "Missing or empty shell PNG: $relative" }
     }
 }
@@ -26,7 +26,7 @@ foreach ($row in $evidence.pairedContextualChrome) {
         throw "Contextual row has no real Avalonia editor fixture: $($row.avaloniaTabId)"
     }
     foreach ($relative in @($row.wpfPath, $row.avaloniaPath)) {
-        $file = Join-Path $repo ($relative -replace '/', '\\')
+        $file = Join-Path $repo $relative
         if (-not (Test-Path -LiteralPath $file) -or (Get-Item -LiteralPath $file).Length -le 0) { throw "Missing or empty contextual shell PNG: $relative" }
     }
 }
