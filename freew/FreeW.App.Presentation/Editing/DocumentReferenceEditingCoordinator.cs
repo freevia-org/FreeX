@@ -479,6 +479,12 @@ public sealed class DocumentReferenceEditingCoordinator
         Func<int, IndexPageReferenceAddress?>? pageReferenceOf)
     {
         DocumentIndex.EnsureStyles(_session.Document, identifier);
+        // No region-title predicate here, unlike RefreshTableOfFigures below: DocumentIndex.Build only
+        // emits its "Index" title under IndexOptions.IncludeTitle, which defaults to false and is off
+        // on this path, so a generated index normally opens with a letter-group heading that is
+        // indistinguishable from the ones inside it. Two independent same-identifier index regions
+        // therefore have no structural boundary to cut at and are still refreshed as one merged
+        // region -- see GeneratedRegionIndices.
         var deleteIndices = GeneratedRegionIndices(
             block => DocumentIndex.IsIndexParagraph(block, identifier));
         var insertIndex = deleteIndices.Count > 0
@@ -525,7 +531,10 @@ public sealed class DocumentReferenceEditingCoordinator
         var normalizedLabel = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_session.Document, normalizedLabel);
         var deleteIndices = GeneratedRegionIndices(
-            block => TableOfFigures.IsTableOfFiguresParagraph(block, normalizedLabel));
+            block => TableOfFigures.IsTableOfFiguresParagraph(block, normalizedLabel),
+            IsRegionTitle(
+                TableOfFigures.HeadingStyleIdFor(normalizedLabel),
+                TableOfFigures.HeadingText(normalizedLabel)));
         var insertIndex = deleteIndices.Count > 0
             ? deleteIndices[0]
             : _session.Document.Blocks.Count;
@@ -795,12 +804,8 @@ public sealed class DocumentReferenceEditingCoordinator
         string undoLabel)
     {
         ArgumentNullException.ThrowIfNull(isGeneratedBlock);
-        var deleteIndices = _session.Document.Blocks
-            .Select((block, index) => (block, index))
-            .Where(item => isGeneratedBlock(item.block))
-            .Select(item => item.index)
-            .ToArray();
-        var insertIndex = deleteIndices.Length > 0
+        var deleteIndices = GeneratedRegionIndices(isGeneratedBlock);
+        var insertIndex = deleteIndices.Count > 0
             ? deleteIndices[0]
             : fallbackInsertIndex;
         return ApplyGeneratedRegion(deleteIndices, insertIndex, paragraphs, undoLabel);
@@ -974,14 +979,50 @@ public sealed class DocumentReferenceEditingCoordinator
             new DocumentTextPosition(targetBlock, Math.Max(0, caret.Offset)));
     }
 
-    private IReadOnlyList<int> GeneratedRegionIndices(Func<Block, bool> isGeneratedBlock)
+    /// <summary>
+    /// Model indices of the generated region a refresh targets. The r142 label/identifier parameters
+    /// separate regions generated for *different* labels, but a document can legitimately hold two
+    /// independent regions sharing one label (a Table of Figures per volume, an index repeated per
+    /// part) and <paramref name="isGeneratedBlock"/> matches every one of them indiscriminately -- so
+    /// without narrowing, "Update Table of Figures"/"Update Index" deleted them all and reinserted a
+    /// single merged region at the first. Pass <paramref name="isRegionTitle"/> to scope the result to
+    /// the first region, which ends where the next region's title paragraph begins.
+    /// <para>
+    /// The cut is keyed on the region title rather than on contiguity (the rule the TOC path uses in
+    /// ApplyStabilizedTableOfContentsRegion via <see cref="FirstContiguousRun"/>) because a single
+    /// generated region is not necessarily contiguous: the user can type an ordinary paragraph into
+    /// the middle of one, and cutting at that gap would strand every entry past it as undeleted stale
+    /// text -- IndexRefreshRemapsCaretsAcrossSparseGeneratedRegion pins exactly that sparse shape.
+    /// It is keyed on the title specifically, not on the heading <em>style</em>, because an index
+    /// reuses its heading style for each letter-group heading inside one region (see
+    /// <see cref="DocumentIndex.Build"/>), so "next heading-styled paragraph" would cut a single index
+    /// after its first letter group.
+    /// </para>
+    /// <para>
+    /// Callers whose regions carry no title paragraph pass null and keep the old whole-document
+    /// behaviour; RefreshIndex is one, and documents its reason at the call site.
+    /// </para>
+    /// </summary>
+    private IReadOnlyList<int> GeneratedRegionIndices(
+        Func<Block, bool> isGeneratedBlock,
+        Func<Block, bool>? isRegionTitle = null)
     {
         ArgumentNullException.ThrowIfNull(isGeneratedBlock);
-        return _session.Document.Blocks
+        var matched = _session.Document.Blocks
             .Select((block, index) => (block, index))
             .Where(item => isGeneratedBlock(item.block))
             .Select(item => item.index)
             .ToArray();
+        if (isRegionTitle is null || matched.Length == 0)
+            return matched;
+
+        for (var position = 1; position < matched.Length; position++)
+        {
+            if (isRegionTitle(_session.Document.Blocks[matched[position]]))
+                return matched[..position];
+        }
+
+        return matched;
     }
 
     /// <summary>
@@ -1001,6 +1042,15 @@ public sealed class DocumentReferenceEditingCoordinator
 
         return fallbackIndex;
     }
+
+    /// <summary>
+    /// Matches the title paragraph a generated region opens with: the region's heading style carrying
+    /// the region's own title text. See <see cref="GeneratedRegionIndices"/> for why both halves matter.
+    /// </summary>
+    private static Func<Block, bool> IsRegionTitle(string headingStyleId, string titleText) =>
+        block => block is Paragraph paragraph
+            && string.Equals(paragraph.StyleId, headingStyleId, StringComparison.Ordinal)
+            && string.Equals(paragraph.PlainText.Trim(), titleText, StringComparison.Ordinal);
 
     private int ResolveGeneratedReferenceInsertionIndex(int caretBlockIndex) =>
         caretBlockIndex < 0 || caretBlockIndex > _session.Document.Blocks.Count

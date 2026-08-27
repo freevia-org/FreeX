@@ -317,7 +317,7 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             // Every InsertText below lands on editor.Commands as its own DocumentCommandBus entry; without
             // this group, N replacements become N separate undo-stack entries and one Ctrl+Z only reverts
             // the last match instead of the whole Replace All (matches the BeginUndoGroup/CommitUndoGroup
-            // idiom other multi-step coordinators already use, e.g. MultilevelListMutationCoordinator).
+            // idiom other multi-step edits already use, e.g. DocumentEditingSession.ApplyMultilevelListDefinition).
             // notifyOnEachExecute: true -- unlike those coordinators, each replacement here is FOUND by
             // walking the rendered surface (TryFind below), so the redraw between edits must still happen
             // mid-batch or the next edit's CommitToModel() re-reads the stale surface and silently discards

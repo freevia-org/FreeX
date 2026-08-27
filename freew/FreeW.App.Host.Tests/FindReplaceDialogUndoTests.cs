@@ -8,7 +8,7 @@ namespace FreeW.App.Host.Tests;
 /// Word's Replace All is one undoable action: a single Ctrl+Z restores every replaced occurrence.
 /// FreeW's <see cref="FindReplaceDialog"/> WPF command host must wrap its replace-all loop in a
 /// <see cref="DocumentCommandBus"/> undo group (mirroring the coordinators that already do this, e.g.
-/// FreeW.App.Presentation/DocumentView/MultilevelListMutationCoordinator.cs) so N replacements collapse
+/// DocumentEditingSession.ApplyMultilevelListDefinition) so N replacements collapse
 /// into one undo-stack entry instead of N. See freew/FreeW.App.Host/FindReplaceDialog.cs ReplaceAll().
 /// </summary>
 public sealed class FindReplaceDialogUndoTests

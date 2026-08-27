@@ -158,8 +158,8 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
     private List<IDocumentCommand>? _batch;
 
     // Set by BeginUndoGroup(notifyOnEachExecute: true). Most callers batch several commands that were
-    // each computed against the model directly (e.g. MultilevelListMutationCoordinator), so they neither
-    // need nor want a redraw between commands. Find & Replace's Replace All is different: each replacement
+    // each computed against the model directly (e.g. DocumentEditingSession.ApplyMultilevelListDefinition),
+    // so they neither need nor want a redraw between commands. Find & Replace's Replace All is different: each replacement
     // is found by walking the *rendered* surface via TextPointer, and the WPF host's per-edit pipeline
     // (TryApplyBodyTextInput -> CommitToModel/PlaceCaretAtModelTextOffset) only stays correct if Changed's
     // Render() runs between edits -- otherwise the next edit's CommitToModel() re-reads the stale rendered
