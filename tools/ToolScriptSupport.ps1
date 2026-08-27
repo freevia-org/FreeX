@@ -330,6 +330,7 @@ function Invoke-ToolGeneratedProject {
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="$($Options.Reference)" />
@@ -341,6 +342,7 @@ function Invoke-ToolGeneratedProject {
         & $Options.DotNetPath @(
             "build", $projectPath,
             "--configuration", "Release",
+            "--no-incremental",
             "--disable-build-servers",
             "-p:UseSharedCompilation=false",
             "-p:NodeReuse=false",
@@ -362,14 +364,17 @@ function Invoke-ToolGeneratedProject {
         }
         if ($Options.Check) {
             foreach ($generatedFile in $outputPaths) {
-                Test-ToolGeneratedFileContentMatches -ExpectedPath $generatedFile.TempPath -ActualPath $generatedFile.DestinationPath -Label $generatedFile.Label -GeneratorScriptName $Options.Script
+                Test-ToolGeneratedFileContentMatches -ExpectedPath $generatedFile.TempPath -ActualPath $generatedFile.DestinationPath -Label $generatedFile.Label -GeneratorScriptName $Options.Script -NormalizeNewlines
             }
             Write-Host $Options.CheckMessage
             return
         }
         foreach ($generatedFile in $outputPaths) {
             $destinationDirectory = Split-Path -Parent $generatedFile.DestinationPath
-            New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null; Copy-Item -LiteralPath $generatedFile.TempPath -Destination $generatedFile.DestinationPath -Force
+            New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
+            $utf8 = [System.Text.UTF8Encoding]::new($false, $true)
+            $content = [System.IO.File]::ReadAllText($generatedFile.TempPath, $utf8).Replace("`r`n", "`n").Replace("`r", "`n")
+            [System.IO.File]::WriteAllText($generatedFile.DestinationPath, $content, $utf8)
         }
         Write-Host $Options.WriteMessage
     } finally {

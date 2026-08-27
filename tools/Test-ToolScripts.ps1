@@ -599,8 +599,11 @@ function Assert-CommandInventoryGeneratedProjectCentralization {
             "function Invoke-ToolGeneratedProject",
             '<Project Sdk="Microsoft.NET.Sdk">',
             '<ProjectReference Include="$($Options.Reference)" />',
+            '<NuGetAudit>false</NuGetAudit>',
+            '"--no-incremental"',
             "Test-ToolGeneratedFileContentMatches",
-            'Copy-Item -LiteralPath $generatedFile.TempPath')) {
+            '-NormalizeNewlines',
+            '[System.IO.File]::WriteAllText($generatedFile.DestinationPath')) {
         if (-not $support.Contains($requiredSource)) {
             throw "Shared generated-project helper is missing '$requiredSource'."
         }
@@ -768,7 +771,7 @@ exec pwsh -NoProfile -File "$(dirname "$0")/synthetic-dotnet.ps1" "$@"
         Invoke-ToolGeneratedProject $invokeArguments
         if ((Get-Content -LiteralPath $jsonDestination -Raw) -cne "synthetic-json" -or
             (Get-Content -LiteralPath $markdownDestination -Raw) -cne "synthetic-markdown") {
-            throw "Invoke-ToolGeneratedProject did not copy generated output bytes to nested destinations."
+            throw "Invoke-ToolGeneratedProject did not write normalized generated text to nested destinations."
         }
 
         $capture = Get-Content -LiteralPath $capturePath -Raw | ConvertFrom-Json
