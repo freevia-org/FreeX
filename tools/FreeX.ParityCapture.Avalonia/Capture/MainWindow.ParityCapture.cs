@@ -4198,12 +4198,7 @@ public sealed partial class MainWindow
     private static void RenderVisualToPng(Visual visual, int width, int height, string path)
     {
         using var bitmap = RenderVisualToBitmap(visual, width, height);
-
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-        using var stream = File.Create(path);
-        bitmap.Save(stream);
+        SaveBitmap(bitmap, path);
     }
 
     /// <summary>

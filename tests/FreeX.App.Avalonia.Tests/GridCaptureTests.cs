@@ -34,6 +34,22 @@ public sealed class GridCaptureTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
+    [Fact]
+    public void ParityCapture_AllBitmapWritesUseHardenedPortableEncoder()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"),
+            "tools",
+            "FreeX.ParityCapture.Avalonia",
+            "Capture",
+            "MainWindow.ParityCapture.cs"));
+
+        source.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Should().Contain("using var bitmap = RenderVisualToBitmap(visual, width, height);\n        SaveBitmap(bitmap, path);");
+        source.Split("bitmap.Save(stream);", StringSplitOptions.None).Should().HaveCount(2,
+            "only SaveBitmap may call Avalonia's encoder directly so every render gets the Skia fallback");
+    }
+
     // ── Sizing-helper unit test (no UI thread needed) ────────────────────────────────────────────
 
     [Fact]
