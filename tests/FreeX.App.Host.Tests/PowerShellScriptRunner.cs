@@ -28,6 +28,9 @@ internal static class PowerShellScriptRunner
 
     public static PowerShellResult RunToolScriptWithPwsh(string scriptName, string workingDirectory, string arguments)
     {
+        // Callers must be marked [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]:
+        // pwsh is not part of the repository and is not on every machine, and a missing prerequisite
+        // has to be skipped at discovery time (xunit 2.9.3 has no dynamic skip).
         var scriptPath = WorkspaceFileLocator.FindToolScript(scriptName);
         return TestProcessRunner.Run(
             "pwsh",

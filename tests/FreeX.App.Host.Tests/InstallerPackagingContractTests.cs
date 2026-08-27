@@ -62,7 +62,7 @@ public sealed class InstallerPackagingContractTests
         manifest.Should().Contain("Checksum mismatch or non-canonical checksum content");
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void ReleaseManifest_PrefersCanonicalRootArtifactsOverNestedWorkingCopies()
     {
         using var temp = new TestTemporaryDirectory();

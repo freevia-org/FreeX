@@ -6,7 +6,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class CrossAppParityDashboardTests
 {
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void CrossAppParityDashboard_DistinguishesCoverageFromVisualReview()
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();

@@ -15,7 +15,7 @@ public sealed class GeneratedDocsPreflightTests
         script.Should().Contain("Generated documentation checks passed.");
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void GeneratedDocsPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
         var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory("Test-GeneratedDocs.ps1");
