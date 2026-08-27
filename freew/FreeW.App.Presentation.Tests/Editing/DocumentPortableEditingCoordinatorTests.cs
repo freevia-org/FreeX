@@ -1645,19 +1645,25 @@ public sealed class DocumentReferenceEditingCoordinatorTests
                 "Figure 1: Diagram\t1");
     }
 
-    // Index counterpart of the above, pinning the CURRENT (still-merging) behaviour so the asymmetry
-    // is deliberate rather than accidental. RefreshTableOfFigures can scope a refresh to one region
-    // because every generated table opens with a title paragraph; a generated index cannot, because
-    // DocumentIndex.Build only emits its "Index" title under IndexOptions.IncludeTitle (default false,
-    // and off on this path), leaving nothing to tell a second region's first letter-group heading
-    // apart from the ones inside the first region. Two independent same-identifier indexes are
-    // therefore still rebuilt as one merged region here. If index regions ever gain a stable identity
-    // (a title, a region id, a block content control), narrow RefreshIndex the same way and flip this
-    // test to the RefreshTableOfFigures shape.
+    // Index counterpart of the above. A generated index has no title paragraph to cut at
+    // (DocumentIndex.Build emits one only under IndexOptions.IncludeTitle, default false and off on
+    // this path) and reuses its heading style for every letter-group heading, so neither contiguity
+    // nor "next heading" can find the boundary. GeneratedRegionIndices uses the spanning field that
+    // owns each region instead: DocumentIndex.Build stamps each build's paragraphs with one freshly
+    // constructed ComplexField, so two inserts leave two distinct owners.
     [Fact]
-    public void RefreshIndexStillMergesASecondIndependentSameIdentifierRegion()
+    public void RefreshIndexPreservesASecondIndependentSameIdentifierRegion()
     {
-        var marked = new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha")) } };
+        // Two terms so the first region spans several paragraphs, including more than one
+        // letter-group heading -- those must not be mistaken for a region boundary.
+        var marked = new Paragraph
+        {
+            Runs =
+            {
+                DocumentIndex.MarkRun(new IndexMark("Alpha")),
+                DocumentIndex.MarkRun(new IndexMark("Beta")),
+            }
+        };
         var document = new TextDocument { Blocks = { marked } };
         var session = new DocumentEditingSession();
         session.LoadDocument(document);
@@ -1665,23 +1671,32 @@ public sealed class DocumentReferenceEditingCoordinatorTests
         session.References
             .InsertIndex(new DocumentTextPosition(0, 0), identifier: null, pageReferenceOf: null)
             .Applied.Should().BeTrue();
-        var afterFirstInsert = IndexRegionParagraphTexts(document);
+        var oneRegion = IndexRegionParagraphTexts(document);
+        oneRegion.Should().HaveCountGreaterThan(
+            2,
+            "the region needs several paragraphs, with a letter-group heading inside it, to be a " +
+            "meaningful test of the boundary rule");
         session.References.InsertIndex(
             new DocumentTextPosition(document.Blocks.Count, 0),
             identifier: null,
             pageReferenceOf: null).Applied.Should().BeTrue();
+
         IndexRegionParagraphTexts(document).Should().HaveCount(
-            afterFirstInsert.Count * 2,
+            oneRegion.Count * 2,
             "two independently inserted indexes should be two distinct regions before any refresh");
+        IndexRegionOwners(document).Should().HaveCount(
+            2,
+            "each insert stamps its own paragraphs with a distinct spanning field owner");
 
         session.References
             .RefreshIndex(new DocumentTextPosition(0, 0), identifier: null, pageReferenceOf: null)
             .Applied.Should().BeTrue();
 
-        IndexRegionParagraphTexts(document).Should().Equal(
-            afterFirstInsert,
-            "both regions collapse into one -- the known limitation described above, not a silent " +
-            "regression of RefreshTableOfFigures's region scoping");
+        IndexRegionParagraphTexts(document).Should().HaveCount(
+            oneRegion.Count * 2,
+            "Update Index must rebuild only the region it targets -- a second, separately-located " +
+            "index region with the same identifier must survive intact");
+        IndexRegionOwners(document).Should().HaveCount(2);
     }
 
     private static IReadOnlyList<string> IndexRegionParagraphTexts(TextDocument document) =>
@@ -1689,6 +1704,16 @@ public sealed class DocumentReferenceEditingCoordinatorTests
             .Where(block => DocumentIndex.IsIndexParagraph(block, null))
             .Cast<Paragraph>()
             .Select(paragraph => paragraph.PlainText)
+            .ToArray();
+
+    private static IReadOnlyList<ComplexField> IndexRegionOwners(TextDocument document) =>
+        document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, null))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.SpanningFieldOwner)
+            .OfType<ComplexField>()
+            .Distinct(ReferenceEqualityComparer.Instance)
+            .Cast<ComplexField>()
             .ToArray();
 
     [Fact]

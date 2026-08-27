@@ -2108,11 +2108,23 @@ public static class DocxReader
         public System.Text.StringBuilder Instruction { get; } = new();
         public bool IsActive => Depth > 0;
 
+        /// <summary>
+        /// The single <see cref="ComplexField"/> shared by every paragraph of the field currently being
+        /// read, so one spanning field reads back as one object rather than one object per paragraph.
+        /// Reference identity is how a generated region (a Table of Contents, an index, a bibliography)
+        /// is told apart from its siblings — see DocumentReferenceEditingCoordinator.GeneratedRegionIndices
+        /// — and the builders in FreeW.Core.Model stamp one instance across a region for that reason.
+        /// Minting a fresh instance per paragraph here made the identity a session-only property that a
+        /// save/load quietly destroyed, leaving every reloaded paragraph looking like its own region.
+        /// </summary>
+        public ComplexField? Owner { get; set; }
+
         public void Reset()
         {
             Depth = 0;
             PastSeparate = false;
             Metadata = null;
+            Owner = null;
             Instruction.Clear();
         }
     }
@@ -2253,9 +2265,21 @@ public static class DocxReader
         }
 
         if (state.Instruction.Length > 0)
-            fieldOwner = new ComplexField(
-                state.Instruction.ToString(),
-                Sequence: state.Metadata);
+        {
+            // Reuse the field object across the paragraphs this one field spans (see
+            // SpanningFieldReadState.Owner). A later paragraph can still extend the instruction --
+            // Word may split instrText across runs and paragraphs -- so rebuild only when the text
+            // it accumulates actually changes.
+            var instruction = state.Instruction.ToString();
+            if (state.Owner is null
+                || !string.Equals(state.Owner.Instruction, instruction, StringComparison.Ordinal)
+                || state.Owner.Sequence != state.Metadata)
+            {
+                state.Owner = new ComplexField(instruction, Sequence: state.Metadata);
+            }
+
+            fieldOwner = state.Owner;
+        }
         if (startedHere)
             fieldStart = fieldOwner;
 
