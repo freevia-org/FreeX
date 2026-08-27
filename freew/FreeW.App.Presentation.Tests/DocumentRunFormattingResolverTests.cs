@@ -68,6 +68,32 @@ public sealed class DocumentRunFormattingResolverTests
     }
 
     [Fact]
+    public void Resolve_keeps_grandparent_run_formatting_after_the_middle_style_is_deleted()
+    {
+        // Run-resolver sibling of DocumentParagraphFormattingResolverTests'
+        // Resolve_keeps_grandparent_formatting_after_the_middle_style_is_deleted (freew-styles-inheritance
+        // F2): Grandparent carries real run formatting, Middle is based on it (contributing nothing of its
+        // own), Child is based on Middle. Deleting Middle through StyleManager.DeleteStyle must promote
+        // Child onto Grandparent so this resolver -- the same walk a run in the live editor goes through --
+        // still picks up Grandparent's Bold afterwards, instead of the walk dying the instant it hits
+        // Child's now-dangling BasedOnStyleId.
+        var document = TextDocument.CreateEmpty();
+        var grandparent = StyleManager.CreateStyle(
+            document, "Grandparent", null, new RunFormatting { Bold = true }, ParagraphFormatting.Default);
+        var middle = StyleManager.CreateStyle(document, "Middle", grandparent.Id, RunFormatting.Default, ParagraphFormatting.Default);
+        var child = StyleManager.CreateStyle(document, "Child", middle.Id, RunFormatting.Default, ParagraphFormatting.Default);
+        var paragraph = new Paragraph { StyleId = child.Id };
+
+        DocumentRunFormattingResolver.Resolve(document, paragraph, RunFormatting.Default)
+            .Bold.Should().BeTrue();
+
+        StyleManager.DeleteStyle(document, middle.Id).Should().BeTrue();
+
+        DocumentRunFormattingResolver.Resolve(document, paragraph, RunFormatting.Default)
+            .Bold.Should().BeTrue("deleting the in-between style must not drop the grandparent's contribution from the cascade");
+    }
+
+    [Fact]
     public void Resolve_terminates_a_cyclic_style_chain_deterministically()
     {
         var document = TextDocument.CreateEmpty();

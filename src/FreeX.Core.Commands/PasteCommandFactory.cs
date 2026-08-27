@@ -25,7 +25,7 @@ public static class PasteCommandFactory
     // well under a second and a few hundred MB on the reference hardware used to measure this
     // (10.5M cells measured at ~3.1s / ~1.1GB), rather than letting an oversized selection either
     // hang the UI for tens of seconds or crash the app outright.
-    private const long MaxTiledPasteCellCount = 4_000_000;
+    internal const long MaxTiledPasteCellCount = 4_000_000;
 
     public static IWorkbookCommand CreateExternalTextPasteCommand(
         SheetId targetSheetId,

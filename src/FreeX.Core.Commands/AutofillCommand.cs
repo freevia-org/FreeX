@@ -84,6 +84,21 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
     {
         var sheet = ctx.GetSheet(_sheetId);
 
+        // r163 remediation, shared-large-document-limits-F1: the fill handle is the fourth path that
+        // materialises one entry per destination cell with no ceiling, after the internal-clipboard
+        // paste, the external-clipboard paste, and Paste Link. GetFillCellCapacity below sizes FIVE
+        // per-cell snapshot lists from _fillRange.CellCount, so selecting a whole row and dragging
+        // (or double-clicking) the fill handle to the last row asks for ~17.18 billion entries on the
+        // synchronous UI thread, which OOMs or hangs with no warning. This guard is placed at the top
+        // of Apply because every one of those sizing sites -- here, ApplyInwardClear, and the
+        // uniform-merge tiling path -- is reached through it.
+        if (_fillRange.CellCount > PasteCommandFactory.MaxTiledPasteCellCount)
+        {
+            return new CommandOutcome(
+                false,
+                $"Fill range is too large ({_fillRange.RowCount:N0} x {_fillRange.ColCount:N0} = {_fillRange.CellCount:N0} cells; the limit is {PasteCommandFactory.MaxTiledPasteCellCount:N0}). Select a smaller range and fill again.");
+        }
+
         if (_sourceRange.Contains(_fillRange) && _fillRange != _sourceRange)
             return ApplyInwardClear(ctx, sheet);
 

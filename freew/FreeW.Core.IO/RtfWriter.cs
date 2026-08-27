@@ -24,12 +24,13 @@ namespace FreeW.Core.IO;
 public static class RtfWriter
 {
     // ---- list-table constants ------------------------------------------------------------------
-    // One \list per ListKind, deterministic IDs. \ls{id} references are emitted per paragraph.
-    // The IDs are chosen to be small positive integers that cannot collide with anything else we emit.
-    // Internal so RtfReader can use them for round-trip MultiLevel detection.
-    internal const int ListIdBullet     = 1; // bullet  (•)
-    internal const int ListIdNumber     = 2; // decimal (1., 2., …)
+    // \ls{id} references are emitted per paragraph. MultiLevel has no per-paragraph marker identity to
+    // key on (ListNumberFormat/ListMarkerText are never populated for it), so it keeps this single fixed
+    // id -- internal so RtfReader can use it for round-trip MultiLevel detection (ResolveListKind).
+    // Bullet/Number identities are keyed on their actual marker (see ListMarkerTable) and get dynamically
+    // assigned ids starting at DynamicListIdBase, well clear of this fixed id.
     internal const int ListIdMultiLevel = 3; // multilevel decimal (1., 1.1., …)
+    private const int DynamicListIdBase = 10;
 
     public static void Write(TextDocument document, Stream stream)
     {
@@ -42,23 +43,27 @@ public static class RtfWriter
         foreach (var block in document.Blocks)
             CollectBlock(block, fonts, colors);
 
-        // Determine which list kinds are actually used so we only emit needed \list entries.
-        bool hasBullet = false, hasNumber = false, hasMultiLevel = false;
+        // Collect the distinct list marker identities actually used (round 163, meta U1: keyed on the full
+        // identity -- a Bullet's marker glyph, a Number's counter format -- not just the ListKind, so a
+        // foreign lower-roman/lettered numbered list (or a custom bullet glyph carried over from another
+        // format) gets its own \list entry instead of collapsing onto one hardcoded style per kind. Mirrors
+        // OdtFileAdapter.OdtStyleWriter.ListStyleName (round 163, meta F2).
+        var listTable = new ListMarkerTable();
         foreach (var block in document.Blocks)
-            CollectListKinds(block, ref hasBullet, ref hasNumber, ref hasMultiLevel);
+            CollectListMarkers(block, listTable);
 
         var sb = new StringBuilder();
         sb.Append(@"{\rtf1\ansi\ansicpg1252\deff0");
         WriteFontTable(sb, fonts);
         WriteColorTable(sb, colors);
-        if (hasBullet || hasNumber || hasMultiLevel)
-            WriteListTable(sb, hasBullet, hasNumber, hasMultiLevel);
+        if (listTable.HasBullet || listTable.HasNumber || listTable.HasMultiLevel)
+            WriteListTable(sb, listTable);
 
         // \uc1: every \uN Unicode escape is followed by exactly one ASCII fallback byte.
         sb.Append(@"\uc1");
 
         foreach (var block in document.Blocks)
-            WriteBlock(sb, block, fonts, colors);
+            WriteBlock(sb, block, fonts, colors, listTable);
 
         sb.Append('}');
 
@@ -99,7 +104,13 @@ public static class RtfWriter
         }
     }
 
-    private static void CollectListKinds(Block block, ref bool hasBullet, ref bool hasNumber, ref bool hasMultiLevel)
+    /// <summary>
+    /// Interns each list paragraph's full marker identity into <paramref name="table"/>: a Bullet's
+    /// <see cref="ParagraphFormatting.ListMarkerText"/> glyph, or a Number's
+    /// <see cref="ParagraphFormatting.ListNumberFormat"/> counter format. MultiLevel has no per-paragraph
+    /// identity to key on (see <see cref="ListMarkerTable"/>'s doc comment), so it's just flagged present.
+    /// </summary>
+    private static void CollectListMarkers(Block block, ListMarkerTable table)
     {
         IEnumerable<Paragraph> paragraphs = block switch
         {
@@ -111,9 +122,9 @@ public static class RtfWriter
         {
             switch (p.Formatting.ListKind)
             {
-                case ListKind.Bullet:     hasBullet     = true; break;
-                case ListKind.Number:     hasNumber     = true; break;
-                case ListKind.MultiLevel: hasMultiLevel = true; break;
+                case ListKind.Bullet:     table.InternBullet(p.Formatting.ListMarkerText); break;
+                case ListKind.Number:     table.InternNumber(p.Formatting.ListNumberFormat); break;
+                case ListKind.MultiLevel: table.InternMultiLevel(); break;
             }
         }
     }
@@ -148,34 +159,69 @@ public static class RtfWriter
     }
 
     /// <summary>
-    /// Emits <c>{\listtable … }{\listoverridetable … }</c> header groups. One <c>\list</c> per
-    /// list kind (Bullet/Number/MultiLevel), each with 9 levels. Each list gets a matching
-    /// <c>\listoverride</c> so paragraphs can reference it via <c>\ls{id}</c>.
+    /// Emits <c>{\listtable … }{\listoverridetable … }</c> header groups. One <c>\list</c> per distinct
+    /// list marker identity actually used (round 163, meta U1) — every Bullet glyph and every Number
+    /// counter format gets its own entry, not just one hardcoded style per <see cref="ListKind"/> — each
+    /// with 9 levels. Each list gets a matching <c>\listoverride</c> so paragraphs can reference it via
+    /// <c>\ls{id}</c>.
     /// </summary>
-    private static void WriteListTable(StringBuilder sb, bool hasBullet, bool hasNumber, bool hasMultiLevel)
+    private static void WriteListTable(StringBuilder sb, ListMarkerTable listTable)
     {
         sb.Append(@"{\listtable");
 
-        // Emit one \list per kind that is actually used. Each defines 9 levels (\listlevel) so that
+        // Emit one \list per identity that is actually used. Each defines 9 levels (\listlevel) so that
         // \ilvl 0..8 are valid references from paragraph \ls\ilvl control words.
-        if (hasBullet)
-            WriteListEntry(sb, ListIdBullet, numFmt: 23, levelText: @"\'b7"); // 23 = bullet, •
-        if (hasNumber)
-            WriteListEntry(sb, ListIdNumber, numFmt: 0, levelText: "%1.");    // 0  = decimal
-        if (hasMultiLevel)
+        foreach (var (id, markerText) in listTable.BulletEntries())
+            WriteListEntry(sb, id, numFmt: 23, levelText: BulletLevelText(markerText)); // 23 = bullet
+        foreach (var (id, format) in listTable.NumberEntries())
+            WriteListEntry(sb, id, numFmt: MapListNumberFormatToRtfLevelNfc(format), levelText: "%1.");
+        if (listTable.HasMultiLevel)
             WriteListEntry(sb, ListIdMultiLevel, numFmt: 0, levelText: null); // multi: per-level text
 
         sb.Append('}');
 
         // \listoverridetable: one \listoverride per list, mapping \ls{id} → the list.
         sb.Append(@"{\listoverridetable");
-        if (hasBullet)
-            WriteListOverride(sb, ListIdBullet);
-        if (hasNumber)
-            WriteListOverride(sb, ListIdNumber);
-        if (hasMultiLevel)
+        foreach (var (id, _) in listTable.BulletEntries())
+            WriteListOverride(sb, id);
+        foreach (var (id, _) in listTable.NumberEntries())
+            WriteListOverride(sb, id);
+        if (listTable.HasMultiLevel)
             WriteListOverride(sb, ListIdMultiLevel);
         sb.Append('}');
+    }
+
+    /// <summary>Inverse of <see cref="RtfReader"/>'s <c>MapRtfLevelNfc</c> — the round-trip partner that
+    /// lets a captured <see cref="ListNumberFormat"/> survive a save with no edits (round 163, meta U1;
+    /// previously <see cref="WriteListEntry"/> hardcoded <c>numFmt: 0</c> for every Number list, silently
+    /// normalizing a foreign lower-roman/letter numbered list back to decimal the moment it was saved).
+    /// Every <see cref="ListNumberFormat"/> value maps onto a standard RTF <c>\levelnfc</c> code, so there
+    /// is no "no representation" case here.</summary>
+    private static int MapListNumberFormatToRtfLevelNfc(ListNumberFormat format) => format switch
+    {
+        ListNumberFormat.UpperRoman  => 1,
+        ListNumberFormat.LowerRoman  => 2,
+        ListNumberFormat.UpperLetter => 3,
+        ListNumberFormat.LowerLetter => 4,
+        _                            => 0, // Decimal
+    };
+
+    /// <summary>
+    /// The <c>\leveltext</c> body for a Bullet list: the literal marker glyph carried over from another
+    /// format's reader (ODT/DOCX/HTML all capture <see cref="ParagraphFormatting.ListMarkerText"/> for a
+    /// bullet; RTF's own reader deliberately does not — see <see cref="RtfReader"/>'s
+    /// <c>_listNumberFormatTable</c> doc comment — so a marker reaching this writer never came from RTF
+    /// itself), escaped the same way run text is so any Unicode glyph survives. Falls back to FreeW's own
+    /// default round bullet only when no marker was captured at all (null/empty) — the one case that
+    /// genuinely has nothing to represent, as opposed to substituting the default over real data.
+    /// </summary>
+    private static string BulletLevelText(string? markerText)
+    {
+        if (string.IsNullOrEmpty(markerText))
+            return @"\'b7"; // FreeW's own default: round bullet, •
+        var text = new StringBuilder();
+        AppendEscaped(text, markerText);
+        return text.ToString();
     }
 
     private static void WriteListEntry(StringBuilder sb, int listId, int numFmt, string? levelText)
@@ -217,29 +263,29 @@ public static class RtfWriter
 
     // ---- body -------------------------------------------------------------------------------------------
 
-    private static void WriteBlock(StringBuilder sb, Block block, FontTable fonts, ColorTable colors)
+    private static void WriteBlock(StringBuilder sb, Block block, FontTable fonts, ColorTable colors, ListMarkerTable listTable)
     {
         switch (block)
         {
             case Paragraph paragraph:
-                WriteParagraph(sb, paragraph, fonts, colors);
+                WriteParagraph(sb, paragraph, fonts, colors, listTable);
                 break;
             case Table table:
-                WriteTable(sb, table, fonts, colors);
+                WriteTable(sb, table, fonts, colors, listTable);
                 break;
         }
     }
 
-    private static void WriteParagraph(StringBuilder sb, Paragraph paragraph, FontTable fonts, ColorTable colors)
+    private static void WriteParagraph(StringBuilder sb, Paragraph paragraph, FontTable fonts, ColorTable colors, ListMarkerTable listTable)
     {
         sb.Append(@"\pard");
-        WriteParagraphProperties(sb, paragraph.Formatting);
+        WriteParagraphProperties(sb, paragraph.Formatting, listTable);
         WriteRuns(sb, paragraph.Runs, fonts, colors);
         sb.Append(@"\par");
         sb.Append('\n');
     }
 
-    private static void WriteParagraphProperties(StringBuilder sb, ParagraphFormatting f)
+    private static void WriteParagraphProperties(StringBuilder sb, ParagraphFormatting f, ListMarkerTable listTable)
     {
         switch (f.Alignment)
         {
@@ -249,15 +295,18 @@ public static class RtfWriter
             default: sb.Append(@"\ql"); break;
         }
 
-        // List identity: \ls{id}\ilvl{level} map to the \listtable entries above.
+        // List identity: \ls{id}\ilvl{level} map to the \listtable entries above. The listId now resolves
+        // to the specific marker identity this paragraph uses (round 163, meta U1), not just a fixed
+        // per-kind id, so distinct Bullet glyphs / Number counter formats in the same document each get
+        // the \list entry that actually matches them.
         // Emitted before indents so the indent values the author set override the list-level defaults.
         if (f.ListKind != ListKind.None)
         {
             var listId = f.ListKind switch
             {
-                ListKind.Number     => ListIdNumber,
+                ListKind.Number     => listTable.NumberId(f.ListNumberFormat),
                 ListKind.MultiLevel => ListIdMultiLevel,
-                _                   => ListIdBullet
+                _                   => listTable.BulletId(f.ListMarkerText)
             };
             var level = Math.Clamp(f.ListLevel, 0, 8);
             sb.Append(@"\ls").Append(listId.ToString(CultureInfo.InvariantCulture));
@@ -340,13 +389,13 @@ public static class RtfWriter
 
     // ---- tables ----------------------------------------------------------------------------------------
 
-    private static void WriteTable(StringBuilder sb, Table table, FontTable fonts, ColorTable colors)
+    private static void WriteTable(StringBuilder sb, Table table, FontTable fonts, ColorTable colors, ListMarkerTable listTable)
     {
         foreach (var row in table.Rows)
-            WriteTableRow(sb, table, row, fonts, colors);
+            WriteTableRow(sb, table, row, fonts, colors, listTable);
     }
 
-    private static void WriteTableRow(StringBuilder sb, Table table, TableRow row, FontTable fonts, ColorTable colors)
+    private static void WriteTableRow(StringBuilder sb, Table table, TableRow row, FontTable fonts, ColorTable colors, ListMarkerTable listTable)
     {
         // Compute cumulative cell boundaries (\cellxN) in twips. Use the explicit grid when present,
         // otherwise fall back to a uniform division of a default 6-inch (8640 twip) text width.
@@ -361,7 +410,7 @@ public static class RtfWriter
         for (var i = 0; i < row.Cells.Count; i++)
         {
             var cell = row.Cells[i];
-            WriteCellContent(sb, cell, fonts, colors);
+            WriteCellContent(sb, cell, fonts, colors, listTable);
             sb.Append(@"\cell");
         }
 
@@ -393,14 +442,14 @@ public static class RtfWriter
         return boundaries;
     }
 
-    private static void WriteCellContent(StringBuilder sb, TableCell cell, FontTable fonts, ColorTable colors)
+    private static void WriteCellContent(StringBuilder sb, TableCell cell, FontTable fonts, ColorTable colors, ListMarkerTable listTable)
     {
         for (var i = 0; i < cell.Paragraphs.Count; i++)
         {
             var paragraph = cell.Paragraphs[i];
 
             sb.Append(@"\pard\intbl");
-            WriteParagraphProperties(sb, paragraph.Formatting);
+            WriteParagraphProperties(sb, paragraph.Formatting, listTable);
             sb.Append(' ');
             WriteRuns(sb, paragraph.Runs, fonts, colors);
             // Paragraphs inside a cell are separated by \par; the final one is terminated by \cell.
@@ -419,7 +468,7 @@ public static class RtfWriter
         foreach (var nestedTable in cell.NestedTables)
         {
             sb.Append(@"{\nestedtbl ");
-            WriteTable(sb, nestedTable, fonts, colors);
+            WriteTable(sb, nestedTable, fonts, colors, listTable);
             sb.Append('}');
         }
     }
@@ -557,6 +606,80 @@ public static class RtfWriter
                 return true;
             }
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Interns and assigns deterministic <c>\listid</c>s for every distinct Bullet marker glyph / Number
+    /// counter format used in the document (round 163, meta U1). Mirrors
+    /// <c>OdtFileAdapter.OdtStyleWriter.ListStyleName</c> (round 163, meta F2): the cache key is the full
+    /// marker identity, not just the <see cref="ListKind"/>, so a save-and-reload of an untouched foreign
+    /// document reproduces the exact <c>\levelnfc</c>/glyph it read instead of collapsing every list of a
+    /// kind onto FreeW's own hardcoded default.
+    /// <para>
+    /// MultiLevel is deliberately NOT keyed here: no reader (RtfReader included) ever populates
+    /// <see cref="ParagraphFormatting.ListNumberFormat"/> or <see cref="ParagraphFormatting.ListMarkerText"/>
+    /// for a MultiLevel paragraph, so its identity never varies. It keeps <see cref="ListIdMultiLevel"/>,
+    /// a fixed id <see cref="RtfReader"/> also relies on to detect MultiLevel on our own round trip.
+    /// </para>
+    /// </summary>
+    private sealed class ListMarkerTable
+    {
+        // Bullet identity = the marker glyph; "" (StringComparer.Ordinal-sorted first) stands in for "no
+        // marker captured" (ListMarkerText null), i.e. FreeW's own default bullet.
+        private readonly SortedSet<string> _bulletKeys = new(StringComparer.Ordinal);
+        // Number identity = the counter format.
+        private readonly SortedSet<ListNumberFormat> _numberKeys = new();
+        private bool _hasMultiLevel;
+
+        private Dictionary<string, int>? _bulletIds;
+        private Dictionary<ListNumberFormat, int>? _numberIds;
+
+        public void InternBullet(string? markerText) => _bulletKeys.Add(markerText ?? "");
+        public void InternNumber(ListNumberFormat format) => _numberKeys.Add(format);
+        public void InternMultiLevel() => _hasMultiLevel = true;
+
+        public bool HasBullet => _bulletKeys.Count > 0;
+        public bool HasNumber => _numberKeys.Count > 0;
+        public bool HasMultiLevel => _hasMultiLevel;
+
+        public int BulletId(string? markerText)
+        {
+            Build();
+            return _bulletIds!.TryGetValue(markerText ?? "", out var id) ? id : DynamicListIdBase;
+        }
+
+        public int NumberId(ListNumberFormat format)
+        {
+            Build();
+            return _numberIds!.TryGetValue(format, out var id) ? id : DynamicListIdBase;
+        }
+
+        public IEnumerable<(int Id, string? MarkerText)> BulletEntries()
+        {
+            Build();
+            foreach (var key in _bulletKeys)
+                yield return (_bulletIds![key], key.Length == 0 ? null : key);
+        }
+
+        public IEnumerable<(int Id, ListNumberFormat Format)> NumberEntries()
+        {
+            Build();
+            foreach (var format in _numberKeys)
+                yield return (_numberIds![format], format);
+        }
+
+        private void Build()
+        {
+            if (_bulletIds is not null)
+                return;
+            _bulletIds = new Dictionary<string, int>(StringComparer.Ordinal);
+            _numberIds = new Dictionary<ListNumberFormat, int>();
+            var id = DynamicListIdBase;
+            foreach (var key in _bulletKeys)
+                _bulletIds[key] = id++;
+            foreach (var format in _numberKeys)
+                _numberIds[format] = id++;
         }
     }
 }

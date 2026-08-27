@@ -47,6 +47,22 @@ public static class PasteLinkService
         if (!WorksheetBounds.TryGetRectangleEnd(destination, targetRowCount, targetColCount, out _))
             return [];
 
+        // U2-shared-large-document-limits-F1: mirror PasteCommandFactory's tiled-destination cell
+        // count cap (MaxTiledPasteCellCount) for Paste Link's own tiling loop below. The
+        // WorksheetBounds check above only rejects a rectangle that overruns the worksheet edges --
+        // a whole-sheet destination (reachable via Ctrl+A, then Paste Special > Paste Link from a
+        // 1x1 copied cell) passes it every time, and this loop does one Cell.FromFormula plus string
+        // formatting per destination cell, measured at ~45x the per-cell cost of the (now capped)
+        // external-clipboard tiling path in PasteCommandFactory -- so leaving this uncapped is at
+        // least as severe an OOM/hang. Reuse the SAME constant PasteCommandFactory introduced rather
+        // than a second limit that could drift from it. Rejection here follows the exact contract
+        // the WorksheetBounds check above already established for this method: return an empty
+        // list rather than throw or format a message, since this method has no IWorkbookCommand
+        // result type to carry a RejectedWorkbookCommand-style error through.
+        var targetCellCount = (long)targetRowCount * targetColCount;
+        if (targetCellCount > PasteCommandFactory.MaxTiledPasteCellCount)
+            return [];
+
         var multiAreaSources = sourceAreas is { Count: > 1 } areas ? areas : null;
         var linkedCells = new List<(CellAddress Address, Cell Cell)>();
         for (var rowOffset = 0U; rowOffset < targetRowCount; rowOffset++)

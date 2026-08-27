@@ -1862,6 +1862,72 @@ public sealed class DocumentReferenceEditingCoordinatorTests
         return regionCount;
     }
 
+    // freew-toc-fields F2, coordinator wiring: TableOfContents.Build sizes its entries' right tab stop
+    // from the section the TOC is inserted into (see TableOfContentsTests.
+    // Build_EntryRightTabStopUsesInsertionSectionWidth_NotFinalSectionWidth), but that model-level test
+    // calls Build directly with an explicit insertionBlockIndex. Nothing exercised the coordinator itself
+    // computing that index from the caller's insertion point and threading it through
+    // ApplyStabilizedTableOfContentsRegion's three TableOfContents.Build calls -- so a refactor that
+    // dropped the third argument at those call sites reintroduced the original bug with zero test
+    // failures. This goes through DocumentReferenceEditingCoordinator.InsertTableOfContents (the shipping
+    // path) instead of calling TableOfContents.Build directly.
+    [Fact]
+    public void InsertTableOfContentsSizesTheGeneratedTabStopFromTheInsertionSection_NotTheFinalSection()
+    {
+        var document = new TextDocument();
+        // Front (front-matter) section: default portrait Letter -> 612 - 72 - 72 = 468pt usable.
+        document.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        document.Blocks.Add(new Paragraph("End of front matter")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+        });
+        document.Blocks.Add(new Paragraph("Appendix heading") { StyleId = "Heading1" });
+
+        // Final section: landscape Letter -> 792 - 72 - 72 = 648pt usable, wider than the front section.
+        document.Page.WidthPt = 792;
+        document.Page.HeightPt = 612;
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        // Inserted at block 0 -- front matter, inside the narrower front (portrait) section, not the
+        // wider final (landscape) one.
+        session.References.InsertTableOfContents(0, pageTextResolver: null).Applied.Should().BeTrue();
+
+        var entry = document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfContents.EntryStyleId(1)
+                && paragraph.PlainText.StartsWith("Chapter One", StringComparison.Ordinal));
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Should().Be(new TabStop(468, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    // Sibling/no-regression case: when the TOC genuinely is inserted into the final (here, landscape)
+    // section, the coordinator must still size the tab stop from that section's own (wider) width --
+    // proving the fix threads the *actual* insertion point through, not a hardcoded front-section index.
+    [Fact]
+    public void InsertTableOfContentsSizesTheGeneratedTabStopFromTheFinalSection_WhenInsertedThere()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        document.Blocks.Add(new Paragraph("End of front matter")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+        });
+        document.Blocks.Add(new Paragraph("Appendix heading") { StyleId = "Heading1" });
+        document.Page.WidthPt = 792;
+        document.Page.HeightPt = 612;
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        // Inserted at block 2 -- the appendix heading's own index, inside the final (landscape) section.
+        session.References.InsertTableOfContents(2, pageTextResolver: null).Applied.Should().BeTrue();
+
+        var entry = document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfContents.EntryStyleId(1)
+                && paragraph.PlainText.StartsWith("Chapter One", StringComparison.Ordinal));
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Should().Be(new TabStop(648, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
     [Fact]
     public void TocInsertStabilizesPageTextInsideOnePortableUndoGroup()
     {
