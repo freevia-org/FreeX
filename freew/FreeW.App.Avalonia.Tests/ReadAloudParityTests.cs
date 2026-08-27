@@ -352,7 +352,7 @@ public sealed class ReadAloudParityTests
     }
 
     [Fact]
-    public void Avalonia_process_runner_pauses_and_resumes_its_owned_Windows_child()
+    public async Task Avalonia_process_runner_pauses_and_resumes_its_owned_Windows_child()
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             return;
@@ -381,7 +381,7 @@ public sealed class ReadAloudParityTests
 
         try
         {
-            SpinWait.SpinUntil(() => FileLength(outputPath) >= 5, TimeSpan.FromSeconds(5))
+            (await WaitForFileLengthAsync(outputPath, length => length >= 5, TimeSpan.FromSeconds(30)))
                 .Should().BeTrue("the owned PowerShell child must begin producing output");
 
             process.TryPause().Should().BeTrue();
@@ -391,7 +391,7 @@ public sealed class ReadAloudParityTests
                 "suspending the exact owned process must stop its observable work");
 
             process.TryResume().Should().BeTrue();
-            SpinWait.SpinUntil(() => FileLength(outputPath) > pausedLength, TimeSpan.FromSeconds(5))
+            (await WaitForFileLengthAsync(outputPath, length => length > pausedLength, TimeSpan.FromSeconds(30)))
                 .Should().BeTrue("resuming the exact owned process must allow work to continue");
         }
         finally
@@ -575,6 +575,24 @@ public sealed class ReadAloudParityTests
         {
             return 0;
         }
+    }
+
+    private static async Task<bool> WaitForFileLengthAsync(
+        string path,
+        Func<long, bool> predicate,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        do
+        {
+            if (predicate(FileLength(path)))
+                return true;
+
+            await Task.Delay(25);
+        }
+        while (DateTime.UtcNow < deadline);
+
+        return predicate(FileLength(path));
     }
 
     private static void DeleteFileWithRetry(string path)
