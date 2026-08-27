@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 using FreeW.Core.Model;
 
 namespace FreeW.Core.IO;
