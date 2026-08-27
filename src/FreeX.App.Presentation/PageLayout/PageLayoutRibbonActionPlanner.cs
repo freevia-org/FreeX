@@ -120,7 +120,6 @@ public static class PageLayoutRibbonActionPlanner
         new(FreeXRibbonCommandIds.PageLayoutPrintAreaClear, PageLayoutRibbonActionKind.ClearPrintArea),
 
         new("Page Setup", PageLayoutRibbonActionKind.OpenPageSetupDialog),
-        new("Page Setup dialog", PageLayoutRibbonActionKind.OpenPageSetupDialog),
         new("Scale to Fit", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ScaleToFit),
         new("Print Gridlines", PageLayoutRibbonActionKind.TogglePrintGridlines),

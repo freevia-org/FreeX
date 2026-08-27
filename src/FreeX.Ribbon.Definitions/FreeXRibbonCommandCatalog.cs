@@ -30,22 +30,27 @@ public static class FreeXRibbonCommandCatalog
 
         foreach (var tab in definition.Tabs)
         foreach (var group in tab.Groups)
-        foreach (var control in group.Controls)
         {
-            if (!string.IsNullOrEmpty(control.CommandId.Value))
-                yield return control.CommandId;
+            if (group.Launcher is { CommandId: { } launcherCommandId } && !string.IsNullOrEmpty(launcherCommandId.Value))
+                yield return launcherCommandId;
 
-            var menu = control switch
+            foreach (var control in group.Controls)
             {
-                RibbonSplitButton split => split.Menu,
-                RibbonDropdown dropdown => dropdown.Menu,
-                _ => null,
-            };
-            if (menu is null)
-                continue;
+                if (!string.IsNullOrEmpty(control.CommandId.Value))
+                    yield return control.CommandId;
 
-            foreach (var commandId in Enumerate(menu.Items))
-                yield return commandId;
+                var menu = control switch
+                {
+                    RibbonSplitButton split => split.Menu,
+                    RibbonDropdown dropdown => dropdown.Menu,
+                    _ => null,
+                };
+                if (menu is null)
+                    continue;
+
+                foreach (var commandId in Enumerate(menu.Items))
+                    yield return commandId;
+            }
         }
     }
 

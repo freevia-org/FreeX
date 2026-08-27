@@ -12,6 +12,7 @@ public sealed class FreeXRibbonCommandCatalogOwnershipTests
     public void CanonicalCatalog_RejectsUnknownIdsAndPreservesHandlerSuffixes()
     {
         FreeXRibbonCommandCatalog.GetRequired("Bold").Value.Should().Be("Bold");
+        FreeXRibbonCommandCatalog.GetRequired("Page Setup").Value.Should().Be("Page Setup");
         FreeXRibbonCommandCatalog.GetRequired(FreeXRibbonCommandIds.ChartChangeType).Value
             .Should().Be(FreeXRibbonCommandIds.ChartChangeType);
         FreeXRibbonCommandCatalog.TryGet("legacy.home.bold", out _).Should().BeFalse();
