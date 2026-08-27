@@ -292,6 +292,12 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("git fetch origin main:refs/remotes/origin/main --no-tags");
         workflow.Should().Contain("git merge-base --is-ancestor origin/main HEAD");
         workflow.Should().Contain("Full release branches must contain the current origin/main commit.");
+        Regex.IsMatch(
+                workflow,
+                @"if \(\$isFullReleaseBranch\) \{\s+git fetch origin main:refs/remotes/origin/main --no-tags",
+                RegexOptions.CultureInvariant)
+            .Should().BeTrue("moving origin/main must only gate explicit full-release branches, not an immutable main dispatch");
+        Regex.Matches(workflow, "git fetch origin main:refs/remotes/origin/main --no-tags").Count.Should().Be(1);
         workflow.Should().Contain("$verifyLanes");
         workflow.Should().Contain("$preflightLanes");
         workflow.Should().Contain("needs: [prepare, preflight]");
