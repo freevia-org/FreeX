@@ -343,7 +343,11 @@ public sealed partial class MainWindow : Window
             _editor,
             _fileWorkflow.Workflow,
             recoverInNewWindowAsync: OpenNewWindowWithRecoveredSnapshotAsync,
-            confirmDiscardOrSaveAsync: () => _fileWorkflow.ConfirmCloseAllowedAsync("recovering an unsaved document"));
+            confirmDiscardOrSaveAsync: () => _fileWorkflow.ConfirmCloseAllowedAsync("recovering an unsaved document"),
+            // Deferred accessor: _mailMerge is only built later, when the Mailings tab's commands are
+            // wired up in BuildRibbon(). Null unless Mailings > Preview Results is currently showing a
+            // merged record, in which case the autosave snapshot must capture the template instead.
+            getMailMergeTemplate: () => _mailMerge?.Session.Template);
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: ConfirmCloseAllowedAndStopAutosaveAsync,
             requestClose: () =>
@@ -4133,8 +4137,22 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Swaps the whole document out from under the window (File &gt; New / Open / recovery restore).
+    ///
+    /// <para>
+    /// The mail-merge session lives for the lifetime of the WINDOW, but its
+    /// <see cref="FreeW.App.Presentation.Ribbon.MailMergeSession.Template"/> belongs to ONE document.
+    /// Now that the autosave port prefers that template whenever a preview is active, a preview left
+    /// running on document A would otherwise be snapshotted under document B the moment the user opened
+    /// B -- the same wider blast radius the WPF host closed in <c>FileCommands</c>'
+    /// <c>AbandonStaleMailMergePreview</c>. Ending the preview here only drops the template; the loaded
+    /// recipients and field mapping survive, so re-running a merge in this window need not start over.
+    /// </para>
+    /// </summary>
     private void LoadDocumentContent(TextDocument document)
     {
+        _mailMerge?.Session.EndPreview();
         StopReadAloud();
         ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);
         _suppressEditorDirty = true;

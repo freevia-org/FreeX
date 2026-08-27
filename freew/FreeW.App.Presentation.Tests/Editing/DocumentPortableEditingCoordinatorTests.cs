@@ -1872,6 +1872,46 @@ public sealed class DocumentReferenceEditingCoordinatorTests
             .Should().Contain(paragraph => paragraph.PlainText == "Appendix A");
     }
 
+    // The gain from moving the TOC path off contiguity onto spanning-field owner identity. A user can
+    // type an ordinary paragraph into the middle of a generated TOC; the region is then sparse, and
+    // "first contiguous run" saw only the entries before the gap -- so a refresh replaced those and
+    // left every entry after the gap behind as stale duplicates. Owner identity spans the gap, because
+    // TableOfContents.Build stamped all of those paragraphs with the same field.
+    [Fact]
+    public void RefreshTableOfContentsReplacesTheWholeRegionWhenTheUserTypedIntoTheMiddleOfIt()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        document.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1" });
+        document.Blocks.Add(new Paragraph("Chapter Three") { StyleId = "Heading1" });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.InsertTableOfContents(0, pageTextResolver: null).Applied.Should().BeTrue();
+        var regionSize = document.Blocks.Count(TableOfContents.IsTocParagraph);
+        regionSize.Should().BeGreaterThan(
+            2,
+            "the region needs enough paragraphs to have an interior for the user to type into");
+
+        // Type an ordinary paragraph into the middle of the generated region, splitting it in two.
+        var typed = new Paragraph("Typed by the user");
+        document.Blocks.Insert(regionSize - 1, typed);
+        CountContiguousTocRegions(document).Should().Be(
+            2,
+            "the typed paragraph splits one region into two contiguous runs -- which is exactly what " +
+            "made contiguity the wrong boundary rule");
+
+        session.References.RefreshTableOfContents(pageTextResolver: null).Applied.Should().BeTrue();
+
+        document.Blocks.Count(TableOfContents.IsTocParagraph).Should().Be(
+            regionSize,
+            "the whole region is replaced -- no entry from beyond the gap survives as a stale duplicate");
+        document.Blocks.OfType<Paragraph>()
+            .Count(paragraph => paragraph.StyleId == TableOfContents.HeadingStyleId)
+            .Should().Be(1, "one region means one generated heading, not two");
+        document.Blocks.Should().Contain(typed, "the user's own paragraph must not be deleted");
+    }
+
     private static int CountContiguousTocRegions(TextDocument document)
     {
         var regionCount = 0;
