@@ -37,7 +37,7 @@ public sealed class CrossPlatformPortabilityPreflightTests
         linuxPackagingTests.Should().NotContain("chmod +x --");
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7, ExternalToolPreconditions.Python)]
     public void CrossPlatformPortabilityPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
         var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(

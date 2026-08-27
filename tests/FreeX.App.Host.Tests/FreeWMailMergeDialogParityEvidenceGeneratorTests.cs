@@ -6,7 +6,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class FreeWMailMergeDialogParityEvidenceGeneratorTests
 {
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void Check_PassesAgainstTheCommittedEvidenceOnTheRealRepositoryTree()
     {
         var repositoryRoot = WorkspaceFileLocator.FindWorkspaceRoot();

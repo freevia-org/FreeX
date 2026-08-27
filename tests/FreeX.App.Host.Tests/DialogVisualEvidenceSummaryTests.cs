@@ -8,7 +8,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class DialogVisualEvidenceSummaryTests
 {
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_ReportsDeterministicPngTriageAndCheckMode()
     {
         using var temp = new TestTemporaryDirectory();
@@ -182,7 +182,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         checkResult.Output.Should().Contain("Dialog visual evidence summary is up to date.");
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_ClassifiesKnownDimensionMismatchBuckets()
     {
         using var temp = new TestTemporaryDirectory();
@@ -302,7 +302,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         optionsComparison.GetProperty("policyAcceptance").GetProperty("family").GetString().Should().Be("Options host frame");
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_NormalizesCaptureDpiBeforeCountingDimensionMismatches()
     {
         using var temp = new TestTemporaryDirectory();
@@ -409,7 +409,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         comparison.GetProperty("captureScaleNormalizedDimensionMatch").GetBoolean().Should().BeTrue();
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_FlagsWorkbookFileDialogExpectedSizeEvidenceMismatch()
     {
         using var temp = new TestTemporaryDirectory();
@@ -524,7 +524,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeTrue();
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_FlagsPlannerSizeEvidenceMismatchOnlyOnStaleSide()
     {
         using var temp = new TestTemporaryDirectory();
@@ -622,7 +622,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeFalse();
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_FlagsShapeGradientPromotedEvidenceAgainstSharedPlannerSize()
     {
         using var temp = new TestTemporaryDirectory();
@@ -721,7 +721,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeTrue();
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_FlagsSymbolPickerPromotedEvidenceAgainstSharedDialogSize()
     {
         using var temp = new TestTemporaryDirectory();
@@ -820,7 +820,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeTrue();
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_FlagsSortPromotedEvidenceAgainstCurrentDialogSize()
     {
         using var temp = new TestTemporaryDirectory();
@@ -919,7 +919,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeTrue();
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_FlagsConditionalFormatNewRuleAgainstSharedRuleEditorSize()
     {
         using var temp = new TestTemporaryDirectory();
@@ -1011,7 +1011,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeFalse();
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_FlagsConsolidateAgainstSharedDialogSize()
     {
         using var temp = new TestTemporaryDirectory();
@@ -1103,7 +1103,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeFalse();
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_FlagsPivotTableOptionsEvidenceAgainstSharedDialogSize()
     {
         using var temp = new TestTemporaryDirectory();
@@ -1195,7 +1195,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeFalse();
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_TreatsResolvedPriorityRowsAsExpectedSizeMatches()
     {
         using var temp = new TestTemporaryDirectory();
@@ -1454,7 +1454,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         }
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_FlagsWorkbookStatisticsEvidenceAgainstSharedDialogSize()
     {
         using var temp = new TestTemporaryDirectory();
@@ -1552,7 +1552,7 @@ public sealed class DialogVisualEvidenceSummaryTests
         comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeFalse();
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void DialogVisualEvidenceSummary_FlagsBlankPngEvidence()
     {
         using var temp = new TestTemporaryDirectory();

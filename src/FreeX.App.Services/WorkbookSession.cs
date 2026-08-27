@@ -3526,6 +3526,21 @@ public sealed class WorkbookSession : IDisposable
         var selectedRanges = SelectedRanges.Count > 0
             ? SelectedRanges.ToArray()
             : [primaryRange];
+        // r164 remediation, dense whole-sheet enumeration: Ctrl+Enter writes the typed text into
+        // EVERY selected cell, so unlike Clear or Copy there is no populated-cells shortcut -- the
+        // empty cells are precisely the ones being filled. Ctrl+A followed by Ctrl+Enter therefore
+        // asked for 17,179,869,184 addresses on the synchronous UI thread; cap it like the other
+        // genuinely per-destination-cell paths (tiled paste/fill, Merge, Format Painter).
+        var totalCells = selectedRanges.Sum(range => range.CellCount);
+        if (totalCells > PasteCommandFactory.MaxTiledPasteCellCount)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                $"Selection is too large to fill ({totalCells:N0} cells; the limit is {PasteCommandFactory.MaxTiledPasteCellCount:N0}). Select a smaller range and try again.",
+                [],
+                RecalcReport: null);
+        }
+
         var addresses = new List<CellAddress>();
         var seenAddresses = new HashSet<CellAddress>();
         foreach (var range in selectedRanges)
@@ -3870,10 +3885,17 @@ public sealed class WorkbookSession : IDisposable
         // to begin with, independent of CaptureInternalClipboard's own IsRowFilterHidden guard.
         // Confirmed empirically: wrapping this in an additional filter-hidden-row exclusion changed
         // nothing observable in either payload.
-        var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
-        var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
+        // r164 remediation, dense whole-sheet enumeration: the clipboard viewport, the text
+        // serializer and CaptureInternalClipboard all materialise one entry per cell of the
+        // selection, so Ctrl+A followed by Ctrl+C/Ctrl+X never returned. A bounded selection is
+        // still copied in full -- its blank cells are what clear the paste destination -- but an
+        // unbounded one is clamped to the data it covers, which is all a paste could consume
+        // anyway (PasteCommandFactory caps a tiled destination at MaxTiledPasteCellCount).
+        var copyRange = ClipboardCopyRange(SelectedRange);
+        var fullRangeViewport = BuildFullRangeViewportForClipboard(copyRange);
+        var text = ClipboardSerializer.Serialize(fullRangeViewport, copyRange);
         var snapshot = _workbookClipboardSession.Capture(
-            CaptureInternalClipboard(SelectedRange, text, isCut: false, fullRangeViewport),
+            CaptureInternalClipboard(copyRange, text, isCut: false, fullRangeViewport),
             owner: this);
         return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport, snapshot.Marker);
     }
@@ -3900,10 +3922,17 @@ public sealed class WorkbookSession : IDisposable
         // off-screen part of the clipboard payload (R14-clipboard-formats-deep-1). See
         // TryCopySelectedRangeText's own comment for why an additional filter-hidden-row exclusion
         // here would be a no-op (R136-services-clipboard-formats-payload-parity, REFUTED).
-        var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
-        var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
+        // r164 remediation, dense whole-sheet enumeration: the clipboard viewport, the text
+        // serializer and CaptureInternalClipboard all materialise one entry per cell of the
+        // selection, so Ctrl+A followed by Ctrl+C/Ctrl+X never returned. A bounded selection is
+        // still copied in full -- its blank cells are what clear the paste destination -- but an
+        // unbounded one is clamped to the data it covers, which is all a paste could consume
+        // anyway (PasteCommandFactory caps a tiled destination at MaxTiledPasteCellCount).
+        var copyRange = ClipboardCopyRange(SelectedRange);
+        var fullRangeViewport = BuildFullRangeViewportForClipboard(copyRange);
+        var text = ClipboardSerializer.Serialize(fullRangeViewport, copyRange);
         var snapshot = _workbookClipboardSession.Capture(
-            CaptureInternalClipboard(SelectedRange, text, isCut: true, fullRangeViewport),
+            CaptureInternalClipboard(copyRange, text, isCut: true, fullRangeViewport),
             owner: this);
         return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport, snapshot.Marker);
     }
@@ -3920,6 +3949,17 @@ public sealed class WorkbookSession : IDisposable
             Workbook,
             range.Start.Sheet,
             ClipboardViewportPlanner.BuildFullRangeViewportRequest(range));
+
+    /// <summary>
+    /// r164 remediation, dense whole-sheet enumeration: the range a copy/cut actually captures. Only
+    /// an UNBOUNDED selection (a column header click, or Ctrl+A) is narrowed, and only in the
+    /// dimension that is unbounded -- a bounded selection is copied exactly as chosen, because its
+    /// blank cells are meaningful (pasting them is what clears the destination).
+    /// </summary>
+    private GridRange ClipboardCopyRange(GridRange range) =>
+        Workbook.GetSheet(range.Start.Sheet) is { } sheet
+            ? SheetRangeScope.ClampUnboundedToPopulated(sheet, range)
+            : range;
 
     public WorkbookCellEditResult PasteClipboardTextAtActiveCell(
         string? text,
@@ -5407,7 +5447,11 @@ public sealed class WorkbookSession : IDisposable
         var targetSheetIds = CurrentGroupedEditSheetIds();
 
         var commands = new List<IWorkbookCommand>();
-        foreach (var address in range.AllCells())
+        // r164 remediation, dense whole-sheet enumeration: one single-cell command per address, so
+        // an unbounded selection asked for up to 17,179,869,184 command objects on the synchronous
+        // UI thread -- the session-level twin of the BorderDrawPlanner loop fixed alongside it. The
+        // full range still feeds CreateCellDiff, so outline-vs-inside edge decisions are unchanged.
+        foreach (var address in BorderCommandScanRange(range).AllCells())
         {
             var diff = BorderDrawPlanner.CreateCellDiff(mode, range, address, borderStyle, color);
             if (!BorderShortcutService.HasBorderChanges(diff))
@@ -6101,7 +6145,9 @@ public sealed class WorkbookSession : IDisposable
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
         var commands = new List<IWorkbookCommand>();
-        foreach (var address in range.AllCells())
+        // r164 remediation, dense whole-sheet enumeration: same per-cell command explosion as
+        // SetSelectedRangeDrawBorder above, for the presets that need per-cell planning.
+        foreach (var address in BorderCommandScanRange(range).AllCells())
         {
             var diff = CellBorderPresetPlanner.Plan(preset, range, address, borderStyle, borderColor);
             if (!BorderShortcutService.HasBorderChanges(diff))
@@ -6599,6 +6645,17 @@ public sealed class WorkbookSession : IDisposable
             : FailedScenarioManagerResult(plan.StatusText);
     }
 
+    /// <summary>
+    /// r164 remediation, dense whole-sheet enumeration: the range the per-cell border builders walk.
+    /// Matches what <see cref="ApplyStyleCommand.StyleOnlyCreateZone"/> does for the two other
+    /// per-cell border builders (SelectionStyleCommandPlanner and the WPF host's own): a bounded
+    /// selection is honoured exactly, an unbounded one is clamped to the data it covers.
+    /// </summary>
+    private GridRange BorderCommandScanRange(GridRange range) =>
+        Workbook.GetSheet(range.Start.Sheet) is { } sheet
+            ? ApplyStyleCommand.StyleOnlyCreateZone(sheet, range) ?? range
+            : range;
+
     private static WorkbookCellEditResult FailedScenarioManagerResult(string errorMessage) =>
         new(false, errorMessage, [], RecalcReport: null);
 
@@ -6655,7 +6712,7 @@ public sealed class WorkbookSession : IDisposable
     private static double GetFittingRowHeight(double fontSize) =>
         Math.Min(AutoFitSizingService.MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
 
-    private static bool HasBorderPresetChanges(
+    private bool HasBorderPresetChanges(
         GridRange range,
         CellBorderPreset preset,
         BorderStyle borderStyle = BorderStyle.Thin,
@@ -6664,7 +6721,12 @@ public sealed class WorkbookSession : IDisposable
         if (!CellBorderPresetPlanner.RequiresPerCellPlanning(preset))
             return true;
 
-        return range
+        // r164 remediation, dense whole-sheet enumeration: Any() short-circuits on the first cell
+        // with changes, but a selection where NOTHING changes walked all 17,179,869,184 addresses.
+        // Scanning exactly the range the per-cell command builder will visit
+        // (CreateBorderPresetCommand, via the same BorderCommandScanRange clamp) keeps this gate and
+        // that builder in agreement -- a wider scan could answer "yes" for cells no command covers.
+        return BorderCommandScanRange(range)
             .AllCells()
             .Any(address => BorderShortcutService.HasBorderChanges(CellBorderPresetPlanner.Plan(preset, range, address, borderStyle, borderColor)));
     }
@@ -7642,6 +7704,11 @@ public sealed class WorkbookSession : IDisposable
         foreach (var cell in viewport.Cells)
             displayCells[(cell.Row, cell.Col)] = cell;
 
+        // r164 remediation, dense whole-sheet enumeration: this walk is intentionally still dense --
+        // a picture of a range needs a snapshot cell at EVERY offset, and the fallback branch below
+        // supplies one for any address the viewport did not materialise, so driving the loop from
+        // the viewport instead would silently drop those cells. It is bounded instead by its caller:
+        // ClipboardCopyRange narrows an unbounded selection before the capture starts.
         var result = new List<(CellAddress, PictureCellSnapshot)>();
         foreach (var address in range.AllCells())
         {

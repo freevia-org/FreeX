@@ -35,7 +35,7 @@ public static partial class FormulaAuditingService
 
             case RangeRefNode rangeRef:
                 if (ResolveSheet(workbook, hostSheetId, rangeRef.SheetName ?? rangeRef.Start.SheetName) is { } rangeSheet)
-                    AddRange(result, rangeSheet.Id, rangeRef);
+                    AddRange(result, rangeSheet, rangeRef);
                 break;
 
             case NamedRangeNode namedRange:
@@ -49,9 +49,9 @@ public static partial class FormulaAuditingService
                 // workbook-global named RANGE at the resolved scope -- mirrors
                 // RecalcEngine.CollectReferences's NamedRangeNode handling). See
                 // NamedRangeNodeScopeResolver for the shared rule.
-                if (NamedRangeNodeScopeResolver.TryResolveNamedRange(workbook, namedRange, hostSheetId, out var range))
-                    foreach (var address in range.AllCells())
-                        result.Add(address);
+                if (NamedRangeNodeScopeResolver.TryResolveNamedRange(workbook, namedRange, hostSheetId, out var range) &&
+                    workbook.GetSheet(range.Start.Sheet) is { } namedRangeSheet)
+                    AddCellsOfReferencedRange(result, namedRangeSheet, range);
                 break;
 
             case StructuredReferenceNode structured:
@@ -59,9 +59,9 @@ public static partial class FormulaAuditingService
                         workbook,
                         workbook.GetSheet(hostSheetId),
                         structured.TableName,
-                        structured.ColumnName) is { } structuredRange)
-                    foreach (var address in structuredRange.AllCells())
-                        result.Add(address);
+                        structured.ColumnName) is { } structuredRange &&
+                    workbook.GetSheet(structuredRange.Start.Sheet) is { } structuredSheet)
+                    AddCellsOfReferencedRange(result, structuredSheet, structuredRange);
                 break;
 
             case BinaryOpNode binary:
@@ -455,16 +455,33 @@ public static partial class FormulaAuditingService
         }
     }
 
-    private static void AddRange(HashSet<CellAddress> result, SheetId sheetId, RangeRefNode range)
+    private static void AddRange(HashSet<CellAddress> result, Sheet sheet, RangeRefNode range)
     {
         var startRow = Math.Min(range.Start.Row, range.End.Row);
         var endRow = Math.Max(range.Start.Row, range.End.Row);
         var startCol = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
         var endCol = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
 
-        for (var row = startRow; row <= endRow; row++)
-            for (var col = startCol; col <= endCol; col++)
-                result.Add(new CellAddress(sheetId, row, col));
+        AddCellsOfReferencedRange(
+            result,
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, startRow, startCol),
+                new CellAddress(sheet.Id, endRow, endCol)));
+    }
+
+    /// <summary>
+    /// r164 remediation, dense whole-sheet enumeration: Trace Precedents expands each referenced
+    /// range into individual addresses, so a formula over a whole-sheet reference or named range
+    /// (=SUM(A1:XFD1048576), =SUM(Everything)) walked 17,179,869,184 addresses on the synchronous UI
+    /// thread. A reference the author BOUNDED is expanded exactly as written -- its blank cells are
+    /// still precedents -- while an unbounded one is narrowed to the data it covers, which is what
+    /// the trace arrow points at anyway (GetDirectPrecedentRegions reports the region itself).
+    /// </summary>
+    private static void AddCellsOfReferencedRange(HashSet<CellAddress> result, Sheet sheet, GridRange range)
+    {
+        foreach (var address in SheetRangeScope.ClampUnboundedToPopulated(sheet, range).AllCells())
+            result.Add(address);
     }
 
     private static IEnumerable<CellAddress> SortByWorkbookOrder(Workbook workbook, IEnumerable<CellAddress> addresses)

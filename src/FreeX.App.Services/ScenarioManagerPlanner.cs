@@ -58,6 +58,30 @@ public sealed record ScenarioManagerPlan(
 
 public static class ScenarioManagerPlanner
 {
+    /// <summary>
+    /// r164 remediation, dense whole-sheet enumeration: both hosts expand the typed changing-cells
+    /// and result-cells references into one <c>ScenarioCellValue</c> per address, so a reference
+    /// like <c>A:A</c> -- let alone <c>A1:XFD1048576</c> -- walked up to 17,179,869,184 addresses on
+    /// the synchronous UI thread. Excel's own limit is far stricter (32 changing cells per
+    /// scenario); this only rejects references no scenario could sensibly hold, and reuses the
+    /// hosts' existing "enter a valid reference" error path rather than inventing a new message.
+    /// </summary>
+    public const long MaxScenarioCellCount = 100_000;
+
+    /// <summary>True when the parsed references cover more cells than a scenario may hold.</summary>
+    public static bool ExceedsScenarioCellLimit(IEnumerable<GridRange> ranges)
+    {
+        long total = 0;
+        foreach (var range in ranges)
+        {
+            total += range.CellCount;
+            if (total > MaxScenarioCellCount)
+                return true;
+        }
+
+        return false;
+    }
+
     public static ScenarioManagerAction GetDefaultAction(int scenarioCount) =>
         scenarioCount == 0 ? ScenarioManagerAction.Save : ScenarioManagerAction.Show;
 

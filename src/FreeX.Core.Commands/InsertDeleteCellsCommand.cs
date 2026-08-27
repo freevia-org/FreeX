@@ -82,6 +82,14 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r164 remediation, dense whole-sheet enumeration: the affected-cells list at the end of
+        // this method expands _range.AllCells(), exactly like DeleteCellsCommand's did. Today the
+        // whole-sheet case is unreachable here -- the "data would be pushed past the last row"
+        // bounds check below rejects it first -- but that guard fires on where data LANDS, not on
+        // the size of the selection, so it is not a bound on this expansion. Captured before the
+        // shift mutates the sheet, same as the delete side.
+        var affectedScope = SheetRangeScope.ClampToPopulated(sheet, _range);
+
         _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
         // chart-binding F1: capture every chart's DataRange workbook-wide BEFORE any band shift
         // below runs, mirroring InsertDeleteRowsCommand/InsertDeleteColumnsCommand's own
@@ -306,7 +314,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         // covered by _range.AllCells() are harmless duplicates, de-duped by
         // BuildAffectedCellsForFormulaRewrite.
         _affectedCells = _mutationSnapshot!.BuildAffectedCells(
-            _range.AllCells()
+            (affectedScope?.AllCells() ?? [])
                 .Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>())
                 .Concat(VacatedAddressesForRelocatedFormulaCells(_capturedCells ?? [])));
         return new CommandOutcome(true, AffectedCells: _affectedCells);

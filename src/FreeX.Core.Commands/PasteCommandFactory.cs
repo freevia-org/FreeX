@@ -31,7 +31,9 @@ public static class PasteCommandFactory
     // after this one, the internal-clipboard paste, Paste Link, and the fill handle -- can share
     // this exact constant instead of declaring a sixth limit that could drift from it. No other
     // assembly boundary changes: every existing internal-assembly caller is unaffected by widening
-    // the access modifier.
+    // the access modifier. The same ceiling now also gates per-destination-cell work in
+    // FreeX.App.Services (WorkbookSession's Ctrl+Enter fill-selection), not just the paste and
+    // fill commands.
     public const long MaxTiledPasteCellCount = 4_000_000;
 
     public static IWorkbookCommand CreateExternalTextPasteCommand(

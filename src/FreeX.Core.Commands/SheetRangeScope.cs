@@ -96,6 +96,44 @@ public static class SheetRangeScope
     }
 
     /// <summary>
+    /// Clamps only the dimension(s) in which <paramref name="range"/> runs to the edge of the grid --
+    /// a whole-column selection keeps its columns and clamps its rows, a whole-row selection keeps
+    /// its rows and clamps its columns, and a select-all clamps both. A range the caller bounded
+    /// itself is returned untouched.
+    /// </summary>
+    /// <remarks>
+    /// For operations where trimming a deliberately-chosen bounded range would change the result --
+    /// copying A1:Z100 has to carry the blank cells too, because pasting them is what clears the
+    /// destination -- but where an UNBOUNDED selection cannot have meant "and also the 17 billion
+    /// empty cells". Mirrors <see cref="ApplyStyleCommand.StyleOnlyCreateZone"/>'s clamp-only-the-
+    /// unbounded-dimension rule.
+    /// </remarks>
+    public static GridRange ClampUnboundedToPopulated(Sheet sheet, GridRange range)
+    {
+        var unboundedRows = range.End.Row >= CellAddress.MaxRow;
+        var unboundedCols = range.End.Col >= CellAddress.MaxCol;
+        if (!unboundedRows && !unboundedCols)
+            return range;
+
+        if (ClampToPopulated(sheet, range) is not { } populated)
+        {
+            // Nothing at all in the selection: keep a single cell so callers that assume a
+            // non-empty range (and produce an empty payload from it) keep working.
+            return new GridRange(range.Start, range.Start);
+        }
+
+        return new GridRange(
+            new CellAddress(
+                sheet.Id,
+                unboundedRows ? Math.Max(populated.Start.Row, range.Start.Row) : range.Start.Row,
+                unboundedCols ? Math.Max(populated.Start.Col, range.Start.Col) : range.Start.Col),
+            new CellAddress(
+                sheet.Id,
+                unboundedRows ? Math.Min(populated.End.Row, range.End.Row) : range.End.Row,
+                unboundedCols ? Math.Min(populated.End.Col, range.End.Col) : range.End.Col));
+    }
+
+    /// <summary>
     /// Shrinks only the END of <paramref name="range"/> down to the last populated row/column inside
     /// it, leaving the start where the caller put it. Returns null when the range holds nothing.
     /// </summary>
