@@ -39,14 +39,8 @@ public static class Wordml2003Writer
     /// </summary>
     public static void Write(TextDocument document, Stream stream)
     {
+        // BuildDocument already sanitizes the finished tree, so nothing illegal reaches the writer.
         var xml = BuildDocument(document);
-
-        // Run text, field instructions, comments and style names all reach BuildDocument straight from
-        // the model, where a C0 control code or lone surrogate can arrive by paste or by import. This
-        // writer serializes the whole document in one go, so one such character anywhere in it would
-        // abort the entire save with no file written. Drop them here, at the single boundary, rather
-        // than at each of the element-building sites (which is what DocxWriter.SanitizeXmlText does).
-        Free.Shared.Opc.OoxmlXmlText.SanitizeInPlace(xml);
 
         using var writer = XmlWriter.Create(stream, new XmlWriterSettings
         {
