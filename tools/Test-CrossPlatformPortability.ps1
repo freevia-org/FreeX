@@ -336,6 +336,14 @@ foreach ($script in $toolScripts) {
     }
 }
 
+$managedSourceFiles = @($trackedPaths | Where-Object { $_ -match '(?i)\.(?:cs|csx|fs|fsx|vb)$' })
+foreach ($relativePath in $managedSourceFiles) {
+    $source = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+    if ($source -match '\.Split\s*\(\s*Environment\.NewLine\b') {
+        Add-PortabilityError "$relativePath splits text on Environment.NewLine; normalize external/file text with ReplaceLineEndings before splitting so LF checkouts work on Windows."
+    }
+}
+
 $msbuildFiles = @($trackedPaths | Where-Object { $_ -match '(?i)\.(?:csproj|props|targets|slnx)$' })
 $msbuildPathAttributeNames = @('Include', 'Exclude', 'Update', 'Remove', 'Link', 'Project', 'Path')
 foreach ($relativePath in $msbuildFiles) {

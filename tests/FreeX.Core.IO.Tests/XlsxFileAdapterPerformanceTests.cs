@@ -62,7 +62,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             {
                 stopwatch.Stop();
                 var stackTop = ex.StackTrace?
-                    .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+                    .ReplaceLineEndings("\n")
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries)
                     .FirstOrDefault()?
                     .Trim()
                     .Replace("\"", "'", StringComparison.Ordinal) ?? "";

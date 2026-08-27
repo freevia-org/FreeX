@@ -181,11 +181,17 @@ public sealed class CustomDictionaryStoreTests
                 throw new IOException("simulated atomic write failure");
             }
 
-            Files[path] = content.Length == 0
-                ? []
-                : content[..^Environment.NewLine.Length]
-                    .Split(Environment.NewLine, StringSplitOptions.None)
-                    .ToList();
+            if (content.Length == 0)
+            {
+                Files[path] = [];
+            }
+            else
+            {
+                var normalized = content.ReplaceLineEndings("\n");
+                if (normalized.EndsWith('\n'))
+                    normalized = normalized[..^1];
+                Files[path] = normalized.Split('\n', StringSplitOptions.None).ToList();
+            }
             WriteCount++;
         }
 

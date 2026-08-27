@@ -1556,7 +1556,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             .ToArray();
         var matrixMarkdown = markdown[
             markdown.IndexOf("## Matrix", StringComparison.Ordinal)..];
-        var markdownCommandIds = matrixMarkdown.Split(Environment.NewLine)
+        var markdownCommandIds = matrixMarkdown.ReplaceLineEndings("\n").Split('\n')
             .Where(line => line.StartsWith("| `freep.", StringComparison.Ordinal))
             .Select(line =>
             {

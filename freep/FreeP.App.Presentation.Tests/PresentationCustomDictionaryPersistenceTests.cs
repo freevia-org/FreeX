@@ -166,10 +166,15 @@ public sealed class PresentationCustomDictionaryPersistenceTests
                 throw new IOException("simulated dictionary file-system failure");
         }
 
-        private static string[] ParseLines(string content) =>
-            content.Length == 0
-                ? []
-                : content[..^Environment.NewLine.Length]
-                    .Split(Environment.NewLine, StringSplitOptions.None);
+        private static string[] ParseLines(string content)
+        {
+            if (content.Length == 0)
+                return [];
+
+            var normalized = content.ReplaceLineEndings("\n");
+            if (normalized.EndsWith('\n'))
+                normalized = normalized[..^1];
+            return normalized.Split('\n', StringSplitOptions.None);
+        }
     }
 }
