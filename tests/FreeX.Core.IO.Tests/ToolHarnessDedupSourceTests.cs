@@ -265,8 +265,11 @@ public sealed class ToolHarnessDedupSourceTests
         support.Should().Contain("function Invoke-ToolGeneratedProject");
         support.Should().Contain("<Project Sdk=\"Microsoft.NET.Sdk\">");
         support.Should().Contain("<ProjectReference Include=\"$($Options.Reference)\" />");
+        support.Should().Contain("<NuGetAudit>false</NuGetAudit>");
+        support.Should().Contain("\"--no-incremental\"");
         support.Should().Contain("Test-ToolGeneratedFileContentMatches");
-        support.Should().Contain("Copy-Item -LiteralPath $generatedFile.TempPath");
+        support.Should().Contain("-NormalizeNewlines");
+        support.Should().Contain("[System.IO.File]::WriteAllText($generatedFile.DestinationPath");
 
         generators.Should().OnlyContain(script =>
             script.Contains("Invoke-ToolGeneratedProject @", StringComparison.Ordinal) &&
