@@ -19,6 +19,7 @@ function Assert-ToolSourceCentralization {
             "function Test-ToolIsWindows",
             "function Get-ToolPathComparison",
             "function Get-ToolPowerShellPath",
+            "function Get-ToolNormalizedTextSha256",
             "function ConvertTo-ToolPlatformPath",
             "function Resolve-ToolFullPath",
             "function Resolve-ToolProviderPath",
@@ -453,6 +454,34 @@ function Assert-ToolSourceCentralization {
             $hashConsumer -match 'function\s+Sha\b') {
             throw "$hashConsumerName must use shared portable visual-evidence file hashing."
         }
+    }
+
+    foreach ($sourceEvidenceGeneratorName in @(
+            "Generate-FreeWDesignDialogParityEvidence.ps1",
+            "Generate-FreeWMailMergeDialogParityEvidence.ps1",
+            "Generate-FreeWMediaDialogParityEvidence.ps1",
+            "Generate-FreeWShellPlatformParityEvidence.ps1")) {
+        $sourceEvidenceGenerator = Get-Content -LiteralPath (Join-Path $ToolRoot $sourceEvidenceGeneratorName) -Raw
+        if (-not $sourceEvidenceGenerator.Contains("ToolScriptSupport.ps1") -or
+            -not $sourceEvidenceGenerator.Contains("Get-ToolNormalizedTextSha256") -or
+            $sourceEvidenceGenerator.Contains("Get-FileHash")) {
+            throw "$sourceEvidenceGeneratorName must use shared newline-independent source hashing."
+        }
+    }
+
+    $textHashTempRoot = New-ToolTemporaryDirectory -Prefix "freex-normalized-text-hash-"
+    try {
+        $lfPath = Join-Path $textHashTempRoot "lf.txt"
+        $crlfPath = Join-Path $textHashTempRoot "crlf.txt"
+        $utf8 = [System.Text.UTF8Encoding]::new($false)
+        [System.IO.File]::WriteAllText($lfPath, "alpha`nbeta`n", $utf8)
+        [System.IO.File]::WriteAllText($crlfPath, "alpha`r`nbeta`r`n", $utf8)
+        if ((Get-ToolNormalizedTextSha256 -Path $lfPath) -cne (Get-ToolNormalizedTextSha256 -Path $crlfPath)) {
+            throw "Get-ToolNormalizedTextSha256 must produce identical hashes for LF and CRLF source text."
+        }
+    }
+    finally {
+        Remove-ToolTemporaryDirectory -Path $textHashTempRoot
     }
 
     $scopedPropsPath = Join-Path $ToolRoot "ToolProjects.props"

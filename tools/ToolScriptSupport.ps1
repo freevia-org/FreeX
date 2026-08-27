@@ -38,6 +38,26 @@ function Get-ToolPowerShellPath {
     throw "A supported PowerShell host was not found. Install pwsh on Linux/macOS or pwsh/Windows PowerShell on Windows."
 }
 
+function Get-ToolNormalizedTextSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Text file not found: $Path"
+    }
+
+    $utf8 = [System.Text.UTF8Encoding]::new($false, $true)
+    $text = [System.IO.File]::ReadAllText($Path, $utf8)
+    $normalized = $text.Replace("`r`n", "`n").Replace("`r", "`n")
+    $bytes = $utf8.GetBytes($normalized)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([System.BitConverter]::ToString($sha256.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        $sha256.Dispose()
+    }
+}
+
 function ConvertTo-ToolPlatformPath {
     param([Parameter(Mandatory = $true)][string]$Path)
 

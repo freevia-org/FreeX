@@ -187,6 +187,11 @@ foreach ($script in $toolScripts) {
     if ($source.Contains('[System.IO.Path]::GetRelativePath(') -or $source.Contains('[IO.Path]::GetRelativePath(')) {
         Add-PortabilityError "$($script.FullName.Substring($repoRoot.Length + 1)) uses Path.GetRelativePath, which is unavailable in Windows PowerShell 5.1."
     }
+    if ($script.Name.StartsWith('Generate-', [System.StringComparison]::OrdinalIgnoreCase) -and
+        ($source.Contains('sourceSha256') -or $source.Contains('SourceHashes')) -and
+        $source.Contains('Get-FileHash')) {
+        Add-PortabilityError "$($script.FullName.Substring($repoRoot.Length + 1)) hashes source bytes directly; use Get-ToolNormalizedTextSha256 so checkout line endings do not stale generated evidence."
+    }
 }
 
 $shellIndexEntries = @(& git -C $repoRoot ls-files --stage -- '*.sh')

@@ -17,7 +17,7 @@ function Get-SourceHashes {
         if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
             throw "Evidence source is missing: $relativePath"
         }
-        $hashes[(ConvertTo-ToolNormalizedRelativePath -Path $relativePath)] = (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash.ToLowerInvariant()
+        $hashes[(ConvertTo-ToolNormalizedRelativePath -Path $relativePath)] = Get-ToolNormalizedTextSha256 -Path $resolved
     }
     $hashes
 }

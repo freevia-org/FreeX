@@ -4,6 +4,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'ToolScriptSupport.ps1')
 $jsonPath = Join-Path $repo 'docs/parity/freew-mail-merge-dialog-parity-20260720.json'
 $markdownPath = Join-Path $repo 'docs/parity/freew-mail-merge-dialog-parity-20260720.md'
 
@@ -49,7 +50,7 @@ $hashes = [ordered]@{}
 foreach ($relative in $sourceFiles) {
     $path = Join-Path $repo $relative
     if (-not (Test-Path -LiteralPath $path)) { throw "Missing evidence input: $relative" }
-    $hashes[$relative] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hashes[$relative] = Get-ToolNormalizedTextSha256 -Path $path
 }
 
 $evidence = [ordered]@{
@@ -95,7 +96,8 @@ The JSON records SHA-256 hashes for every authority, implementation, and focused
 
 if ($Check) {
     if (-not (Test-Path -LiteralPath $jsonPath) -or -not (Test-Path -LiteralPath $markdownPath)) { throw 'Generated evidence files are missing.' }
-    if ([IO.File]::ReadAllText($jsonPath) -ne $jsonText -or [IO.File]::ReadAllText($markdownPath) -ne $markdownText) { throw 'Generated evidence is stale. Run the generator without -Check.' }
+    Test-ToolGeneratedContentMatches -ExpectedContent $jsonText -ActualPath $jsonPath -Label 'FreeW mail-merge dialog parity JSON' -GeneratorScriptName 'tools/Generate-FreeWMailMergeDialogParityEvidence.ps1' -NormalizeNewlines
+    Test-ToolGeneratedContentMatches -ExpectedContent $markdownText -ActualPath $markdownPath -Label 'FreeW mail-merge dialog parity Markdown' -GeneratorScriptName 'tools/Generate-FreeWMailMergeDialogParityEvidence.ps1' -NormalizeNewlines
     Write-Output "Fresh: $jsonPath"
     Write-Output "Fresh: $markdownPath"
     exit 0
