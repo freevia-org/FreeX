@@ -128,7 +128,10 @@ public partial class MainWindow
     private bool TryParseScenarioChangingCells(string? changingCellsText, out IReadOnlyList<GridRange> ranges)
     {
         if (!string.IsNullOrWhiteSpace(changingCellsText) &&
-            WorkbookRangeTextCodec.TryParseMany(_currentSheetId, changingCellsText, ResolveSheetIdByName, out ranges))
+            WorkbookRangeTextCodec.TryParseMany(_currentSheetId, changingCellsText, ResolveSheetIdByName, out ranges) &&
+            // r164: an unbounded reference (A:A, or a select-all) would expand to one
+            // ScenarioCellValue per address below; treat it as an invalid reference instead.
+            !ScenarioManagerPlanner.ExceedsScenarioCellLimit(ranges))
             return true;
 
         ranges = [];
@@ -186,7 +189,9 @@ public partial class MainWindow
     private IReadOnlyList<CellAddress> ParseScenarioResultCells(string? resultCellsText)
     {
         if (!string.IsNullOrWhiteSpace(resultCellsText) &&
-            WorkbookRangeTextCodec.TryParseMany(_currentSheetId, resultCellsText, ResolveSheetIdByName, out var ranges))
+            WorkbookRangeTextCodec.TryParseMany(_currentSheetId, resultCellsText, ResolveSheetIdByName, out var ranges) &&
+            // r164: same expansion, same ceiling as the changing-cells reference above.
+            !ScenarioManagerPlanner.ExceedsScenarioCellLimit(ranges))
             return ranges.SelectMany(range => range.AllCells()).Distinct().ToList();
 
         return [];

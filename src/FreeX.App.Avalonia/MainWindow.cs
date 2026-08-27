@@ -22183,11 +22183,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return true;
             }
 
+            // r164: an unbounded reference (A:A, or a select-all) would expand to one
+            // ScenarioCellValue per address in CaptureScenarioManagerChangingCells; reject it as an
+            // invalid reference instead, which the caller already reports.
             return WorkbookRangeTextCodec.TryParseMany(
                 _session.ActiveSheet.Id,
                 text,
                 ResolveScenarioManagerSheetIdByName,
-                out ranges);
+                out ranges) &&
+                !ScenarioManagerPlanner.ExceedsScenarioCellLimit(ranges);
         }
 
         void ReportScenarioManagerFailure(WorkbookCellEditResult result)
@@ -22319,7 +22323,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         _session.ActiveSheet.Id,
                         resultCellsBox.Text,
                         ResolveScenarioManagerSheetIdByName,
-                        out var resultRanges))
+                        out var resultRanges) ||
+                    // r164: same expansion, same ceiling as the changing-cells reference.
+                    ScenarioManagerPlanner.ExceedsScenarioCellLimit(resultRanges))
                 {
                     var message = UiText.Get("ScenarioManager_EnterValidResultCellsReference");
                     errorText.Text = message;
