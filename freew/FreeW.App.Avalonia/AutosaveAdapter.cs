@@ -36,7 +36,8 @@ internal sealed partial class AutosaveAdapter : IDisposable
         FileCommandWorkflow workflow,
         Func<FreeWAutosavePorts, FreeWAutosaveSession>? sessionFactory = null,
         Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null,
-        Func<Task<bool>>? confirmDiscardOrSaveAsync = null)
+        Func<Task<bool>>? confirmDiscardOrSaveAsync = null,
+        Func<TextDocument?>? getMailMergeTemplate = null)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(workflow);
@@ -48,7 +49,16 @@ internal sealed partial class AutosaveAdapter : IDisposable
             GetDisplayName: () => workflow.DisplayName,
             GetIsDirty: () => workflow.IsDirty,
             GetDirtyGeneration: () => workflow.DirtyGeneration,
-            ExecuteWithDocument: writeDocument => writeDocument(editor.Document));
+            // Same guard the WPF host's AutosaveCoordinator applies in its own ExecuteWithDocument port:
+            // while Mailings > Preview Results is active, editor.Document is the merged, single-record
+            // preview document that MailMergeEngine loaded for on-screen display (Realize ->
+            // DocumentView.LoadDocument), NOT the mail-merge template. Autosave snapshots -- and the
+            // crash-recovery snapshot that reuses this same port via TryEmergencySnapshot -- must persist
+            // the still-live template, or an untimely tick/crash leaves the recovered document with every
+            // merge field baked away into one recipient's literal values. When no preview is active the
+            // accessor returns null and the live editor document is snapshotted exactly as before.
+            ExecuteWithDocument: writeDocument =>
+                writeDocument(getMailMergeTemplate?.Invoke() ?? editor.Document));
         _session = sessionFactory?.Invoke(ports) ?? new FreeWAutosaveSession(ports);
         _periodicLoop = new AutosavePeriodicTaskLoop(
             FreeWAutosaveSession.DefaultInterval,
