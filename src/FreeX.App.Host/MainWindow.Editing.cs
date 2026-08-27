@@ -43,26 +43,6 @@ public partial class MainWindow
 
     private bool FunctionAutocompleteIsOpen => _functionAutocompletePopup?.IsOpen == true;
 
-    /// <summary>
-    /// R162-formulabar-spill-readback: resolves the <see cref="Cell"/> to hand to
-    /// <see cref="FormatFormulaBarText"/> for <paramref name="address"/>. <see cref="Sheet.GetCell"/>
-    /// returns null for a non-anchor dynamic-array spill member (its value lives only in the spill
-    /// overlay, never in cell storage -- see the remarks on <see cref="Sheet.GetCell(CellAddress)"/>),
-    /// so passing that null straight through makes the formula bar go blank for a cell the grid is
-    /// visibly painting a value into (GridView reads via <see cref="Sheet.GetValue(CellAddress)"/>,
-    /// which does consult the overlay). When <paramref name="cell"/> is null, this falls back to a
-    /// value-only <see cref="Cell"/> synthesized from <c>Sheet.GetValue</c>, so the formula bar shows
-    /// the spilled value (matching Excel) instead of nothing. For a genuinely blank address this
-    /// synthesizes a cell wrapping <c>BlankValue</c>, which formats identically to the null it
-    /// replaces, so ordinary blank cells are unaffected.
-    /// Deliberately used only for the text passed to <see cref="FormatFormulaBarText"/> -- callers
-    /// that also inspect the raw <paramref name="cell"/> for style/alignment/reading-order (e.g.
-    /// <see cref="ResolveInlineEditorFlowDirection"/>) must keep using the original possibly-null
-    /// cell, since a spill member has no style/formula of its own to borrow from a synthetic cell.
-    /// </summary>
-    private static Cell? ResolveFormulaBarDisplayCell(Sheet? sheet, Cell? cell, CellAddress address) =>
-        cell ?? (sheet is null ? null : Cell.FromValue(sheet.GetValue(address)));
-
     private void EnterEditMode(double? clickX = null)
     {
         if (_selectionAnchor.HasValue)
@@ -87,7 +67,7 @@ public partial class MainWindow
         {
             var sheet = _workbook.GetSheet(_currentSheetId);
             var cell = sheet?.GetCell(address);
-            FormulaBar.Text = FormatFormulaBarText(ResolveFormulaBarDisplayCell(sheet, cell, address), address);
+            FormulaBar.Text = FormatFormulaBarText(SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, cell, address), address);
             // R88-render-rtl-bidi-5-3: this is the "click straight into the Formula Bar" edit-start
             // path (the inline editor is never shown here), so the Formula Bar itself must get the
             // RTL/LTR base paragraph direction -- ShowInlineEditor only sets it on the in-cell editor.
@@ -126,7 +106,7 @@ public partial class MainWindow
 
         var sheet = _workbook.GetSheet(_currentSheetId);
         var cell = sheet?.GetCell(addr);
-        var text = FormatFormulaBarText(ResolveFormulaBarDisplayCell(sheet, cell, addr), addr);
+        var text = FormatFormulaBarText(SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, cell, addr), addr);
         _formulaEditCell = addr;
         _formulaRangeEditingSession.SetPointMode(false);
         _formulaEditEnteredViaEditKey = true;
@@ -811,7 +791,7 @@ public partial class MainWindow
             {
                 var sheet = _workbook.GetSheet(addr.Value.Sheet);
                 var cell = sheet?.GetCell(addr.Value);
-                FormulaBar.Text = FormatFormulaBarText(ResolveFormulaBarDisplayCell(sheet, cell, addr.Value), addr.Value);
+                FormulaBar.Text = FormatFormulaBarText(SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, cell, addr.Value), addr.Value);
                 RestoreFormulaEditCellSelection(addr.Value);
             }
             ClearFormulaRangeEntryState();
@@ -1049,7 +1029,7 @@ public partial class MainWindow
             return true;
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var currentText = FormatFormulaBarText(ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(activeCell), activeCell), activeCell);
+        var currentText = FormatFormulaBarText(SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(activeCell), activeCell), activeCell);
         if (string.Equals(FormulaBar.Text, currentText, StringComparison.Ordinal))
             return true;
 
@@ -1165,7 +1145,7 @@ public partial class MainWindow
             {
                 var sheet = _workbook.GetSheet(addr.Value.Sheet);
                 var cell = sheet?.GetCell(addr.Value);
-                FormulaBar.Text = FormatFormulaBarText(ResolveFormulaBarDisplayCell(sheet, cell, addr.Value), addr.Value);
+                FormulaBar.Text = FormatFormulaBarText(SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, cell, addr.Value), addr.Value);
                 RestoreFormulaEditCellSelection(addr.Value);
             }
             HideInlineEditor(commit: false);
@@ -1276,7 +1256,7 @@ public partial class MainWindow
         {
             var sheet = _workbook.GetSheet(addr.Value.Sheet);
             var cell = sheet?.GetCell(addr.Value);
-            FormulaBar.Text = FormatFormulaBarText(ResolveFormulaBarDisplayCell(sheet, cell, addr.Value), addr.Value);
+            FormulaBar.Text = FormatFormulaBarText(SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, cell, addr.Value), addr.Value);
             RestoreFormulaEditCellSelection(addr.Value);
         }
 
@@ -1611,7 +1591,7 @@ public partial class MainWindow
         HideInlineEditor(commit: false);
         var sheet = _workbook.GetSheet(_currentSheetId);
         var cell = sheet?.GetCell(addr);
-        FormulaBar.Text = FormatFormulaBarText(ResolveFormulaBarDisplayCell(sheet, cell, addr), addr);
+        FormulaBar.Text = FormatFormulaBarText(SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, cell, addr), addr);
         ClearFormulaRangeEntryState();
     }
 
