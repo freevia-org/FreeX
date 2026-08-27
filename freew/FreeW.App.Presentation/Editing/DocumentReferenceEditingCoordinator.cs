@@ -479,12 +479,6 @@ public sealed class DocumentReferenceEditingCoordinator
         Func<int, IndexPageReferenceAddress?>? pageReferenceOf)
     {
         DocumentIndex.EnsureStyles(_session.Document, identifier);
-        // No region-title predicate here, unlike RefreshTableOfFigures below: DocumentIndex.Build only
-        // emits its "Index" title under IndexOptions.IncludeTitle, which defaults to false and is off
-        // on this path, so a generated index normally opens with a letter-group heading that is
-        // indistinguishable from the ones inside it. Two independent same-identifier index regions
-        // therefore have no structural boundary to cut at and are still refreshed as one merged
-        // region -- see GeneratedRegionIndices.
         var deleteIndices = GeneratedRegionIndices(
             block => DocumentIndex.IsIndexParagraph(block, identifier));
         var insertIndex = deleteIndices.Count > 0
@@ -531,10 +525,7 @@ public sealed class DocumentReferenceEditingCoordinator
         var normalizedLabel = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_session.Document, normalizedLabel);
         var deleteIndices = GeneratedRegionIndices(
-            block => TableOfFigures.IsTableOfFiguresParagraph(block, normalizedLabel),
-            IsRegionTitle(
-                TableOfFigures.HeadingStyleIdFor(normalizedLabel),
-                TableOfFigures.HeadingText(normalizedLabel)));
+            block => TableOfFigures.IsTableOfFiguresParagraph(block, normalizedLabel));
         var insertIndex = deleteIndices.Count > 0
             ? deleteIndices[0]
             : _session.Document.Blocks.Count;
@@ -985,45 +976,71 @@ public sealed class DocumentReferenceEditingCoordinator
     /// independent regions sharing one label (a Table of Figures per volume, an index repeated per
     /// part) and <paramref name="isGeneratedBlock"/> matches every one of them indiscriminately -- so
     /// without narrowing, "Update Table of Figures"/"Update Index" deleted them all and reinserted a
-    /// single merged region at the first. Pass <paramref name="isRegionTitle"/> to scope the result to
-    /// the first region, which ends where the next region's title paragraph begins.
+    /// single merged region at the first. This scopes the result to the region the first match belongs
+    /// to, identified by the spanning field that owns it.
     /// <para>
-    /// The cut is keyed on the region title rather than on contiguity (the rule the TOC path uses in
-    /// ApplyStabilizedTableOfContentsRegion via <see cref="FirstContiguousRun"/>) because a single
-    /// generated region is not necessarily contiguous: the user can type an ordinary paragraph into
-    /// the middle of one, and cutting at that gap would strand every entry past it as undeleted stale
-    /// text -- IndexRefreshRemapsCaretsAcrossSparseGeneratedRegion pins exactly that sparse shape.
-    /// It is keyed on the title specifically, not on the heading <em>style</em>, because an index
-    /// reuses its heading style for each letter-group heading inside one region (see
-    /// <see cref="DocumentIndex.Build"/>), so "next heading-styled paragraph" would cut a single index
-    /// after its first letter group.
+    /// <see cref="Paragraph.SpanningFieldOwner"/> is the region's real identity: every generated-region
+    /// builder (<see cref="DocumentIndex.Build"/>, <see cref="TableOfFigures.Build"/>,
+    /// <see cref="TableOfContents.Build"/>, <see cref="TableOfAuthorities"/>, <see cref="Citations"/>)
+    /// stamps its paragraphs with one freshly constructed <see cref="ComplexField"/>, so two separately
+    /// inserted regions hold two distinct instances even when their instruction text is identical.
+    /// DocxReader/DocxWriter round-trip it and DocumentModelCloner preserves it, so the identity
+    /// survives save/load rather than living only inside one session.
     /// </para>
     /// <para>
-    /// Callers whose regions carry no title paragraph pass null and keep the old whole-document
-    /// behaviour; RefreshIndex is one, and documents its reason at the call site.
+    /// Reference identity is what makes this work where the two obvious structural rules fail.
+    /// Contiguity (the rule the TOC path still uses in ApplyStabilizedTableOfContentsRegion via
+    /// <see cref="FirstContiguousRun"/>) is wrong because a region is not necessarily contiguous -- the
+    /// user can type an ordinary paragraph into the middle of one, and cutting at that gap strands
+    /// every entry past it as undeleted stale text (IndexRefreshRemapsCaretsAcrossSparseGeneratedRegion
+    /// pins exactly that shape). Cutting at the next heading-styled paragraph is wrong because an index
+    /// reuses its heading style for each letter-group heading inside a single region. Owner identity
+    /// spans the gaps and ignores the internal headings, because it does not infer structure at all.
+    /// </para>
+    /// <para>
+    /// Blocks with no owner are absorbed rather than treated as boundaries, for two reasons. A region's
+    /// title paragraph is deliberately unowned -- <see cref="TableOfFigures.Build"/>,
+    /// <see cref="TableOfContents.Build"/> and <see cref="Citations"/> all start the spanning field at
+    /// the paragraph *after* the heading, matching where Word's field actually begins -- so the search
+    /// starts at the first owned block and, on finding the next region, backs up over that region's own
+    /// unowned title so the title is cut away with the region it introduces rather than left behind.
+    /// And when nothing in the match set is owned at all, the whole set is returned: legacy and
+    /// hand-built documents carry the styles without the spanning field, and they keep the previous
+    /// whole-document behaviour instead of silently refreshing only their first block.
     /// </para>
     /// </summary>
-    private IReadOnlyList<int> GeneratedRegionIndices(
-        Func<Block, bool> isGeneratedBlock,
-        Func<Block, bool>? isRegionTitle = null)
+    private IReadOnlyList<int> GeneratedRegionIndices(Func<Block, bool> isGeneratedBlock)
     {
         ArgumentNullException.ThrowIfNull(isGeneratedBlock);
-        var matched = _session.Document.Blocks
+        var blocks = _session.Document.Blocks;
+        var matched = blocks
             .Select((block, index) => (block, index))
             .Where(item => isGeneratedBlock(item.block))
             .Select(item => item.index)
             .ToArray();
-        if (isRegionTitle is null || matched.Length == 0)
+
+        var first = Array.FindIndex(matched, blockIndex => RegionOwner(blocks[blockIndex]) is not null);
+        if (first < 0)
             return matched;
 
-        for (var position = 1; position < matched.Length; position++)
+        var owner = RegionOwner(blocks[matched[first]]);
+        for (var position = first + 1; position < matched.Length; position++)
         {
-            if (isRegionTitle(_session.Document.Blocks[matched[position]]))
-                return matched[..position];
+            var next = RegionOwner(blocks[matched[position]]);
+            if (next is null || ReferenceEquals(next, owner))
+                continue;
+
+            var cut = position;
+            while (cut > first + 1 && RegionOwner(blocks[matched[cut - 1]]) is null)
+                cut--;
+            return matched[..cut];
         }
 
         return matched;
     }
+
+    private static ComplexField? RegionOwner(Block block) =>
+        block is Paragraph paragraph ? paragraph.SpanningFieldOwner : null;
 
     /// <summary>
     /// The index of the first block matching <paramref name="isGeneratedBlock"/>, or
@@ -1042,15 +1059,6 @@ public sealed class DocumentReferenceEditingCoordinator
 
         return fallbackIndex;
     }
-
-    /// <summary>
-    /// Matches the title paragraph a generated region opens with: the region's heading style carrying
-    /// the region's own title text. See <see cref="GeneratedRegionIndices"/> for why both halves matter.
-    /// </summary>
-    private static Func<Block, bool> IsRegionTitle(string headingStyleId, string titleText) =>
-        block => block is Paragraph paragraph
-            && string.Equals(paragraph.StyleId, headingStyleId, StringComparison.Ordinal)
-            && string.Equals(paragraph.PlainText.Trim(), titleText, StringComparison.Ordinal);
 
     private int ResolveGeneratedReferenceInsertionIndex(int caretBlockIndex) =>
         caretBlockIndex < 0 || caretBlockIndex > _session.Document.Blocks.Count
