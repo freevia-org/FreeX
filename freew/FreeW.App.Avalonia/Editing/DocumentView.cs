@@ -17880,7 +17880,12 @@ public sealed partial class DocumentView : Control
             // the same defect the WPF shell was fixed for in this round, disclosed by that fixer
             // as still present here. Mirrors the tracked-insert shape used for ordinary typing
             // (see the CellsForInsertedText helper below).
-            replacement.Add(new Cell(result.Insert[index], fmt)); // TEMP-REVERT-PROBE
+            replacement.Add(new Cell(
+                result.Insert[index],
+                fmt,
+                Revision: TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None,
+                RevisionAuthor: TrackChangesEnabled ? RevisionAuthor : null,
+                RevisionDateXml: TrackChangesEnabled ? _editingSession.RevisionDateXmlForEdit() : null));
         }
 
         var block = _caret.Block;
