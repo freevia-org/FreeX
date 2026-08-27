@@ -28,9 +28,7 @@ if (-not $RepositoryRoot) { $RepositoryRoot = (Resolve-Path (Join-Path $PSScript
 else { $RepositoryRoot = (Resolve-Path -LiteralPath $RepositoryRoot).Path }
 
 function Find-One([string]$Name) {
-    $matches = @(Get-ChildItem -LiteralPath $InputRoot -Recurse -File -Filter $Name)
-    if ($matches.Count -ne 1) { throw "Expected exactly one '$Name' below '$InputRoot'; found $($matches.Count)." }
-    $matches[0]
+    Find-ToolReleaseArtifact -InputRoot $InputRoot -Name $Name
 }
 
 function Hash([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }

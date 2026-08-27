@@ -3,6 +3,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+. (Join-Path $PSScriptRoot 'ToolScriptSupport.ps1')
+Invoke-ToolCanonicalPwshHost -ScriptPath $PSCommandPath -ForwardedArguments @("-Check:$([bool]$Check)")
+
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 . (Join-Path $PSScriptRoot 'VisualEvidenceScriptSupport.ps1')
 $root = Join-Path $repo 'docs/parity/freew-shell-visual-2026-08-16'

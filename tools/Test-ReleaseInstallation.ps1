@@ -18,9 +18,7 @@ $scratch = Join-Path ([System.IO.Path]::GetTempPath()) "free-release-install-$([
 New-Item -ItemType Directory -Force -Path $scratch | Out-Null
 
 function Find-One([string]$Name) {
-    $matches = @(Get-ChildItem -LiteralPath $InputRoot -Recurse -File -Filter $Name)
-    if ($matches.Count -ne 1) { throw "Expected exactly one '$Name'; found $($matches.Count)." }
-    $matches[0].FullName
+    (Find-ToolReleaseArtifact -InputRoot $InputRoot -Name $Name).FullName
 }
 function Run([string]$File, [string[]]$Arguments) {
     $parameters = @{ FilePath = $File; ArgumentList = $Arguments; Wait = $true; PassThru = $true }

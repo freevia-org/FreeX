@@ -1,3 +1,6 @@
+using System.IO;
+using System.Security.Cryptography;
+using System.Text.Json;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -58,6 +61,58 @@ public sealed class InstallerPackagingContractTests
     }
 
     [Fact]
+    public void ReleaseManifest_PrefersCanonicalRootArtifactsOverNestedWorkingCopies()
+    {
+        using var temp = new TestTemporaryDirectory();
+        const string version = "1.2.3";
+        const string prefix = "FreeW-v1.2.3-win-x64";
+        var nestedStage = Path.Combine(temp.Path, ".sbom-FreeW-win-x64");
+        Directory.CreateDirectory(nestedStage);
+
+        WriteArtifactWithChecksum(temp.Path, $"{prefix}.exe", [0x4d, 0x5a, 0x01]);
+        WriteArtifactWithChecksum(temp.Path, $"{prefix}-setup.exe", [0x4d, 0x5a, 0x02]);
+        WriteArtifactWithChecksum(temp.Path, $"{prefix}.spdx.json", "{}"u8.ToArray());
+        File.WriteAllBytes(Path.Combine(nestedStage, $"{prefix}.exe"), [0x00]);
+
+        var outputPath = Path.Combine(temp.Path, $"{prefix}-manifest.json");
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
+            "New-ReleaseArtifactManifest.ps1",
+            temp.Path,
+            $"-Scope App -Apps FreeW -Version {version} -CommitSha {new string('a', 40)} " +
+            $"-Runtimes win-x64 -InputRoot \"{temp.Path}\" -OutputPath \"{outputPath}\"");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        using var manifest = JsonDocument.Parse(File.ReadAllText(outputPath));
+        var portable = manifest.RootElement.GetProperty("artifacts").EnumerateArray()
+            .Single(entry => entry.GetProperty("name").GetString() == $"{prefix}.exe");
+        portable.GetProperty("size").GetInt64().Should().Be(3);
+    }
+
+    [Fact]
+    public void ReleaseArtifactLookup_RejectsAmbiguousNestedWrappersWhenNoRootArtifactExists()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var first = Path.Combine(temp.Path, "artifact-one");
+        var second = Path.Combine(temp.Path, "artifact-two");
+        Directory.CreateDirectory(first);
+        Directory.CreateDirectory(second);
+        File.WriteAllText(Path.Combine(first, "sample.zip"), "one");
+        File.WriteAllText(Path.Combine(second, "sample.zip"), "two");
+
+        var supportPath = WorkspaceFileLocator.FindToolScript("ToolScriptSupport.ps1");
+        var probePath = Path.Combine(temp.Path, "probe.ps1");
+        File.WriteAllText(
+            probePath,
+            $"$ErrorActionPreference = 'Stop'\n. '{supportPath.Replace("'", "''")}'\n" +
+            $"Find-ToolReleaseArtifact -InputRoot '{temp.Path.Replace("'", "''")}' -Name 'sample.zip'\n");
+
+        var result = PowerShellScriptRunner.Run(probePath, temp.Path);
+
+        result.ExitCode.Should().NotBe(0);
+        result.NormalizedCombinedOutput.Should().Contain("found 2");
+    }
+
+    [Fact]
     public void PortablePublisher_EnforcesOptimizedReleasePayloadsWithoutDebugSidecars()
     {
         var publisher = WorkspaceFileLocator.ReadAllText("tools", "Publish-SisterAppTesterPackages.ps1");
@@ -70,5 +125,13 @@ public sealed class InstallerPackagingContractTests
         contentGate.Should().Contain("Debug artifact");
         contentGate.Should().Contain("Standalone executable missing");
         contentGate.Should().Contain("Windows installer missing");
+    }
+
+    private static void WriteArtifactWithChecksum(string directory, string name, byte[] contents)
+    {
+        var path = Path.Combine(directory, name);
+        File.WriteAllBytes(path, contents);
+        var hash = Convert.ToHexString(SHA256.HashData(contents)).ToLowerInvariant();
+        File.WriteAllText(path + ".sha256", $"{hash}  {name}");
     }
 }

@@ -10,6 +10,9 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
+$canonicalArguments = @("-JsonPath", $JsonPath, "-MarkdownPath", $MarkdownPath, "-Check:$([bool]$Check)")
+Invoke-ToolCanonicalPwshHost -ScriptPath $PSCommandPath -ForwardedArguments $canonicalArguments
+
 function Read-SourceSet {
     param([string[]]$Paths)
 
