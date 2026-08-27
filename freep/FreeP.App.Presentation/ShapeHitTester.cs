@@ -88,7 +88,7 @@ public static class ShapeHitTester
             // skips composing the shape's children. Hit-testing must skip it (and its subtree)
             // the same way, or an invisible shape silently steals clicks meant for whatever is
             // actually visible underneath it.
-            if (shape.IsHidden)
+            if (IsHiddenForHitTest(shape))
                 continue;
 
             var childHit = HitTestChildren(shape.Children, slide, presentation, point);
@@ -131,7 +131,7 @@ public static class ShapeHitTester
         {
             // Same rationale as HitTest: a hidden shape is never rendered, so a drag-select
             // marquee must not pick it up either.
-            if (shape.IsHidden)
+            if (IsHiddenForHitTest(shape))
                 continue;
 
             if (DrawingObjectInteractionPlanner.Intersects(
@@ -179,7 +179,7 @@ public static class ShapeHitTester
         for (var i = children.Count - 1; i >= 0; i--)
         {
             var child = children[i];
-            if (child.IsHidden)
+            if (IsHiddenForHitTest(child))
                 continue;
 
             var descendantHit = HitTestChildren(child.Children, slide, presentation, point);
@@ -197,6 +197,22 @@ public static class ShapeHitTester
 
         return null;
     }
+
+    /// <summary>
+    /// R164: the full set of hide rules the renderer applies, so hit-testing and marquee selection
+    /// agree with what is actually on the canvas. <see cref="SlideShape.IsHidden"/> was already
+    /// honoured; the explicit-zero-extent placeholder rule (an <c>&lt;a:xfrm&gt;</c> with
+    /// <c>&lt;a:ext cx="0" cy="0"/&gt;</c>, PowerPoint's way of suppressing an inherited placeholder
+    /// without deleting it -- see <c>SlideCompositor.ComposeAutoShape</c>) was not, and mattered
+    /// more here than a plain zero-extent shape would: <see cref="GetShapeBoundsDip"/> runs the
+    /// shape through <see cref="PlaceholderResolver.ResolveAnchor"/>, which walks a zero-extent
+    /// placeholder up to its layout/master and hands back that ancestor's full-size box. So an
+    /// explicitly hidden placeholder had a large, invisible, fully clickable rectangle sitting at
+    /// the inherited layout position, stealing clicks and marquee hits from the shapes under it.
+    /// </summary>
+    private static bool IsHiddenForHitTest(SlideShape shape) =>
+        shape.IsHidden ||
+        (shape.HasExplicitZeroExtentTransform && shape.Placeholder is not null);
 
     private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
     {

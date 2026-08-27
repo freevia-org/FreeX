@@ -111,4 +111,99 @@ public sealed class ShapeHitTesterHiddenShapeTests
         hits.Should().Contain(visible.Id);
         hits.Should().NotContain(hidden.Id);
     }
+
+    // ─── Explicit zero-extent placeholders (R164) ────────────────────────────────────────────
+
+    /// <summary>
+    /// A slide whose layout carries a full-size Body placeholder, so
+    /// <see cref="PlaceholderResolver.ResolveAnchor"/> has something to inherit from.
+    /// </summary>
+    private static PresentationModel WithBodyPlaceholderLayout(out Slide slide)
+    {
+        var p = new PresentationModel();
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 100 * 9525,
+            ExtentCyEmu = 100 * 9525,
+        });
+        p.Layouts.Add(layout);
+
+        slide = new Slide { LayoutId = "l1" };
+        p.Slides.Add(slide);
+        return p;
+    }
+
+    private static SlideShape ExplicitlyHiddenPlaceholder(uint id) => new()
+    {
+        Id = id,
+        Kind = SlideShapeKind.AutoShape,
+        Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+        HasExplicitZeroExtentTransform = true,
+    };
+
+    [Fact]
+    public void HitTest_ExplicitZeroExtentPlaceholderOnTop_FallsThroughToVisibleShapeBeneath()
+    {
+        // The placeholder's own extent is 0x0, but ResolveAnchor inherits the layout's full-size
+        // box for it -- so before R164 this invisible shape covered the whole slide and swallowed
+        // every click meant for what is actually drawn underneath.
+        var p = WithBodyPlaceholderLayout(out var slide);
+        var rectangle = MakeRect(1, 0, 0, 100, 100);
+        var hiddenPlaceholder = ExplicitlyHiddenPlaceholder(2);
+        slide.Shapes.Add(rectangle);
+        slide.Shapes.Add(hiddenPlaceholder);
+
+        ShapeHitTester.HitTest(slide, p, 50, 50).Should().Be(rectangle.Id);
+    }
+
+    [Fact]
+    public void HitTest_InheritingPlaceholderWithoutExplicitTransform_StillWins()
+    {
+        // Sibling/no-regression: an ordinary inheriting placeholder (no explicit <a:xfrm>) is
+        // visible at its inherited layout position and must keep taking the hit.
+        var p = WithBodyPlaceholderLayout(out var slide);
+        slide.Shapes.Add(MakeRect(1, 0, 0, 100, 100));
+        var inheriting = ExplicitlyHiddenPlaceholder(2);
+        inheriting.HasExplicitZeroExtentTransform = false;
+        slide.Shapes.Add(inheriting);
+
+        ShapeHitTester.HitTest(slide, p, 50, 50).Should().Be(inheriting.Id);
+    }
+
+    [Fact]
+    public void MarqueeHitTest_ExcludesExplicitZeroExtentPlaceholders()
+    {
+        var p = WithBodyPlaceholderLayout(out var slide);
+        var visible = MakeRect(1, 0, 0, 100, 100);
+        var hiddenPlaceholder = ExplicitlyHiddenPlaceholder(2);
+        slide.Shapes.Add(visible);
+        slide.Shapes.Add(hiddenPlaceholder);
+
+        var hits = ShapeHitTester.MarqueeHitTest(slide, p, 0, 0, 100, 100);
+
+        hits.Should().Contain(visible.Id);
+        hits.Should().NotContain(hiddenPlaceholder.Id);
+    }
+
+    [Fact]
+    public void HitTest_ExplicitZeroExtentNonPlaceholder_IsUnaffected()
+    {
+        // The rule is placeholder-scoped, mirroring SlideCompositor: a non-placeholder shape with
+        // the flag set inherits nothing, so it has a genuinely empty box and misses on its own.
+        var p = WithBodyPlaceholderLayout(out var slide);
+        var rectangle = MakeRect(1, 0, 0, 100, 100);
+        slide.Shapes.Add(rectangle);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Kind = SlideShapeKind.AutoShape,
+            HasExplicitZeroExtentTransform = true,
+        });
+
+        ShapeHitTester.HitTest(slide, p, 50, 50).Should().Be(rectangle.Id);
+    }
 }

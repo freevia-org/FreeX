@@ -195,6 +195,11 @@ public static class PresentationPdfExporter
             s.Placeholder is null ||
             (includePlaceholderShapeText && s.Placeholder.Type is not (PlaceholderType.Title or PlaceholderType.CenteredTitle))))
         {
+            // R164: hidden shapes never reach the page -- checked here (rather than only inside
+            // TryAppendPositionedShape) so an Ink annotation takes the same rule as every other kind.
+            if (IsHiddenForRender(shape))
+                continue;
+
             if (shape.Kind == SlideShapeKind.Ink)
             {
                 if (includeCommentsAndInkMarkup)
@@ -242,6 +247,13 @@ public static class PresentationPdfExporter
         double slideHeightPoints,
         int groupDepth)
     {
+        // R164: also guards group/SmartArt children, which reach this method through
+        // AppendComposedShapeContent rather than the slide-level loop. Returning true (not false)
+        // is what suppresses the shape entirely: false would send the caller into the flowed-text
+        // fallback, which is exactly how a hidden shape used to leak into the PDF.
+        if (IsHiddenForRender(shape))
+            return true;
+
         var shapeOps = new List<PdfDrawOp>();
         var shapeBox = TryAppendShapeGeometry(shapeOps, linkOverlays, shape, slideHeightPoints, groupDepth);
         if (shapeBox is not { } box)
@@ -279,6 +291,31 @@ public static class PresentationPdfExporter
 
         return true;
     }
+
+    /// <summary>
+    /// R164: whether <paramref name="shape"/> is hidden and must be left out of the page entirely.
+    /// Mirrors the two hide rules <c>SlideCompositor.ComposeShape</c>/<c>ComposeAutoShape</c> apply
+    /// on the live canvas in FreeP.App.Presentation -- duplicated here for the same reason the
+    /// group-nesting-depth guard and <see cref="TransformGroupChild"/> are (App depends on Core.IO,
+    /// not the other way around), so this portable exporter cannot reach across that layering
+    /// boundary:
+    /// <list type="bullet">
+    /// <item><see cref="SlideShape.IsHidden"/> -- <c>&lt;p:cNvPr hidden="1"/&gt;</c>.</item>
+    /// <item>An explicit <c>&lt;a:xfrm&gt;</c> whose <c>&lt;a:ext&gt;</c> is 0x0 on a shape that IS a
+    /// placeholder: PowerPoint's way of suppressing an inherited layout/master placeholder without
+    /// deleting it (see <see cref="SlideShape.HasExplicitZeroExtentTransform"/>, which the reader
+    /// sets and the writer round-trips). The placeholder test matters: a non-placeholder shape that
+    /// merely has no usable box is not hidden, and keeps this exporter's flowed-text fallback.</item>
+    /// </list>
+    /// Without this, a shape hidden on the canvas still reached every exported and printed PDF: an
+    /// <c>IsHidden</c> shape was drawn in full at its own position, while a zero-extent placeholder
+    /// -- whose degenerate box makes <see cref="TryAppendShapeGeometry"/> return null -- came
+    /// through the caller's flowed-text fallback, stamping the placeholder's text (or the "[Kind]"
+    /// debug label, for a text-less Picture/Media/Ole/Zoom shape) down the page's left margin.
+    /// </summary>
+    private static bool IsHiddenForRender(SlideShape shape) =>
+        shape.IsHidden ||
+        (shape.HasExplicitZeroExtentTransform && shape.Placeholder is not null);
 
     /// <summary>
     /// The internal-hyperlink target name for <paramref name="slideId"/>'s own page (see
