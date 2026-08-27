@@ -336,6 +336,61 @@ public sealed class GridCaptureTests
     // ── Headless integration smoke ────────────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task CellOnlyGridCapture_RetriesAttachedGridWhenRootFrameIsTransparent()
+    {
+        using var outputDirectory = new TestTemporaryDirectory("freex-grid-capture-root-fallback-");
+        var pngPath = Path.Combine(outputDirectory.Path, "fallback.png");
+
+        await Session.Dispatch(() =>
+        {
+            var grid = new global::Avalonia.Controls.Grid
+            {
+                Width = 80,
+                Height = 40,
+                Background = global::Avalonia.Media.Brushes.White,
+            };
+            grid.Children.Add(new global::Avalonia.Controls.Border
+            {
+                Width = 40,
+                Height = 40,
+                HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+                Background = global::Avalonia.Media.Brushes.Red,
+            });
+
+            var window = new global::Avalonia.Controls.Window
+            {
+                Width = 120,
+                Height = 80,
+                Content = grid,
+            };
+            try
+            {
+                window.Show();
+                window.Measure(new global::Avalonia.Size(120, 80));
+                window.Arrange(new global::Avalonia.Rect(0, 0, 120, 80));
+                window.UpdateLayout();
+
+                var transparentPrimary = new global::Avalonia.Controls.Border
+                {
+                    Width = 80,
+                    Height = 40,
+                    Background = global::Avalonia.Media.Brushes.Transparent,
+                };
+                MainWindow.RenderCellOnlyGridCaptureToPng(transparentPrimary, grid, 80, 40, pngPath);
+            }
+            finally
+            {
+                window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+
+        File.Exists(pngPath).Should().BeTrue();
+        ParityCaptureOutputGuard.ValidateGridPngOutput(pngPath, [], []).Should().BeNull();
+    }
+
+    [Fact]
     public async Task CaptureGridRange_WritesPngAndJsonLog_ForNewWorkbook()
     {
         // Arrange: write a minimal new workbook to a temp xlsx file, then capture A1:B5 from it.

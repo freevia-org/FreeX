@@ -4981,10 +4981,7 @@ public sealed partial class MainWindow
 
             if (overlays.Length == 0)
             {
-                // Preserve the established single-layer host path exactly for ordinary cell-only
-                // captures. The two-layer composition below is only needed when a drawing overlay
-                // exists, and the headless backend is sensitive to that extra bitmap path.
-                RenderVisualToPngWithOverlay(_sheetGridHost, width, height, path);
+                RenderCellOnlyGridCaptureToPng(_sheetGridHost, gridControl, width, height, path);
                 return;
             }
 
@@ -5061,6 +5058,31 @@ public sealed partial class MainWindow
             _sheetGridHost.UpdateLayout();
             Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
         }
+    }
+
+    /// <summary>
+    /// Renders an ordinary cell-only grid through its rooted host, then retries the attached grid
+    /// directly if that frame is empty. Avalonia's Intel macOS headless renderer can occasionally
+    /// return a transparent frame for the parent <see cref="ContentControl"/> even though its child
+    /// has completed layout. Rendering that same child while it remains attached preserves inherited
+    /// resources and the visual root, while avoiding the backend-specific parent snapshot failure.
+    /// </summary>
+    internal static void RenderCellOnlyGridCaptureToPng(
+        Visual rootedHost,
+        Control attachedGrid,
+        int width,
+        int height,
+        string path)
+    {
+        RenderVisualToPngWithOverlay(rootedHost, width, height, path);
+        if (ParityCaptureOutputGuard.ValidateGridPngOutput(path, [], []) is null)
+            return;
+
+        attachedGrid.Measure(new Size(Math.Max(1, width), Math.Max(1, height)));
+        attachedGrid.Arrange(new Rect(0, 0, Math.Max(1, width), Math.Max(1, height)));
+        attachedGrid.UpdateLayout();
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+        RenderVisualToPng(attachedGrid, width, height, path);
     }
 
     private static void CompositeDrawingOverlayPng(
