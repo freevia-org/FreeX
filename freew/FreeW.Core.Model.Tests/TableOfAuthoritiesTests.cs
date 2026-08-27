@@ -834,4 +834,91 @@ public class TableOfAuthoritiesTests
             mark.Formatting = formatting;
         return new Paragraph { Runs = { mark } };
     }
+
+    // The generated entries' right tab stop must be sized from the section the table is inserted INTO,
+    // not from document.Page -- which only ever describes the document's FINAL section. A table of
+    // authorities is normally front matter, so a wide landscape appendix at the end of the document
+    // would otherwise push the page-number column past the front section's own right margin. Mirrors
+    // TableOfContents.Build's own insertionBlockIndex parameter.
+    [Fact]
+    public void Build_EntryRightTabStopUsesInsertionSectionWidth_NotFinalSectionWidth()
+    {
+        var doc = SectionedFrontMatterDocument();
+
+        var table = TableOfAuthorities.Build(
+            doc,
+            ToaOptions.Default,
+            pageResolver: null,
+            insertionBlockIndex: 0);
+
+        table.Single(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .Formatting.TabStops.Should().Equal(
+                new TabStop(468, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    [Fact]
+    public void BuildWithTableAddresses_EntryRightTabStopUsesInsertionSectionWidth_NotFinalSectionWidth()
+    {
+        var doc = SectionedFrontMatterDocument();
+
+        var table = TableOfAuthorities.BuildWithTableAddresses(
+            doc,
+            ToaOptions.Default,
+            pageResolver: null,
+            insertionBlockIndex: 0);
+
+        table.Single(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .Formatting.TabStops.Should().Equal(
+                new TabStop(468, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    // No-regression sibling: callers that have not been updated to pass an insertion index must keep
+    // the pre-fix behavior of sizing from the final section's page settings.
+    [Fact]
+    public void Build_EntryRightTabStopUsesFinalSectionWidth_WhenInsertionIndexOmitted()
+    {
+        var doc = SectionedFrontMatterDocument();
+
+        var table = TableOfAuthorities.Build(doc, ToaOptions.Default);
+
+        table.Single(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .Formatting.TabStops.Should().Equal(
+                new TabStop(648, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    // No-regression sibling: when the table genuinely is inserted into the final (landscape) section,
+    // it must still be sized from that section.
+    [Fact]
+    public void Build_EntryRightTabStopUsesFinalSectionWidth_WhenInsertedIntoTheFinalSection()
+    {
+        var doc = SectionedFrontMatterDocument();
+
+        var table = TableOfAuthorities.Build(
+            doc,
+            ToaOptions.Default,
+            pageResolver: null,
+            insertionBlockIndex: doc.Blocks.Count);
+
+        table.Single(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .Formatting.TabStops.Should().Equal(
+                new TabStop(648, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    // First (front-matter) section: default portrait Letter -> 612 - 72 - 72 = 468pt usable.
+    // Final section: landscape Letter -> 792 - 72 - 72 = 648pt usable, wider than the front section.
+    private static TextDocument SectionedFrontMatterDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(CitationMarkParagraph("Case A"));
+        doc.Blocks.Add(new Paragraph("End of front matter")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+        });
+        doc.Blocks.Add(new Paragraph("Appendix body"));
+
+        doc.Page.WidthPt = 792;
+        doc.Page.HeightPt = 612;
+        return doc;
+    }
 }

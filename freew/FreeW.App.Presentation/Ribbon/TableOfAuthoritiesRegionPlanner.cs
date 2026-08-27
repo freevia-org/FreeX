@@ -48,10 +48,11 @@ public static class TableOfAuthoritiesRegionPlanner
         var resolvedOptions = options ?? ToaOptions.Default;
         TableOfAuthorities.EnsureStyles(document);
 
+        var insertIndex = Math.Clamp(insertAt, 0, document.Blocks.Count);
         return new TableOfAuthoritiesRegionPlan(
             DeleteIndicesDescending: [],
-            InsertIndex: Math.Clamp(insertAt, 0, document.Blocks.Count),
-            Paragraphs: TableOfAuthorities.Build(document, resolvedOptions, pageResolver));
+            InsertIndex: insertIndex,
+            Paragraphs: TableOfAuthorities.Build(document, resolvedOptions, pageResolver, insertIndex));
     }
 
     public static TableOfAuthoritiesRegionPlan BuildInsertPlanWithTableAddresses(
@@ -65,10 +66,15 @@ public static class TableOfAuthoritiesRegionPlanner
         var resolvedOptions = options ?? ToaOptions.Default;
         TableOfAuthorities.EnsureStyles(document);
 
+        var insertIndex = Math.Clamp(insertAt, 0, document.Blocks.Count);
         return new TableOfAuthoritiesRegionPlan(
             DeleteIndicesDescending: [],
-            InsertIndex: Math.Clamp(insertAt, 0, document.Blocks.Count),
-            Paragraphs: TableOfAuthorities.BuildWithTableAddresses(document, resolvedOptions, pageResolver));
+            InsertIndex: insertIndex,
+            Paragraphs: TableOfAuthorities.BuildWithTableAddresses(
+                document,
+                resolvedOptions,
+                pageResolver,
+                insertIndex));
     }
 
     public static TableOfAuthoritiesRegionPlan BuildRefreshPlan(
@@ -92,10 +98,11 @@ public static class TableOfAuthoritiesRegionPlanner
 
         existingIndices.Reverse();
 
+        var insertIndex = Math.Clamp(insertAt, 0, document.Blocks.Count);
         return new TableOfAuthoritiesRegionPlan(
             DeleteIndicesDescending: existingIndices,
-            InsertIndex: Math.Clamp(insertAt, 0, document.Blocks.Count),
-            Paragraphs: TableOfAuthorities.Build(document, resolvedOptions, pageResolver));
+            InsertIndex: insertIndex,
+            Paragraphs: TableOfAuthorities.Build(document, resolvedOptions, pageResolver, insertIndex));
     }
 
     public static TableOfAuthoritiesRegionPlan BuildRefreshPlanWithTableAddresses(
@@ -119,9 +126,14 @@ public static class TableOfAuthoritiesRegionPlanner
 
         existingIndices.Reverse();
 
+        var insertIndex = Math.Clamp(insertAt, 0, document.Blocks.Count);
         return new TableOfAuthoritiesRegionPlan(
             DeleteIndicesDescending: existingIndices,
-            InsertIndex: Math.Clamp(insertAt, 0, document.Blocks.Count),
-            Paragraphs: TableOfAuthorities.BuildWithTableAddresses(document, resolvedOptions, pageResolver));
+            InsertIndex: insertIndex,
+            Paragraphs: TableOfAuthorities.BuildWithTableAddresses(
+                document,
+                resolvedOptions,
+                pageResolver,
+                insertIndex));
     }
 }

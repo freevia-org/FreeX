@@ -1405,6 +1405,131 @@ public sealed class DocumentReferenceEditingCoordinatorTests
             .Should().Contain("Figure 1: First\t2");
     }
 
+    // The coordinator must hand the model the block index it is actually inserting at, so the generated
+    // entries' page-number tab stop is sized from the front (portrait) section the table lands in rather
+    // than from document.Page -- the document's FINAL section, here a wide landscape appendix. Without
+    // the insertion index the tab stop would be 648pt, past the front section's own right margin.
+    [Fact]
+    public void InsertTableOfFiguresSizesTheGeneratedTabStopFromTheInsertionSection_NotTheFinalSection()
+    {
+        var document = SectionedFrontMatterCaptionDocument();
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.InsertTableOfFigures(
+            new DocumentTextPosition(0, 0),
+            Captions.FigureLabelText,
+            pageTextResolver: null).Region.InsertedCount.Should().BeGreaterThan(1);
+
+        FirstGeneratedEntryTabStop(document, TableOfFigures.IsTableOfFiguresParagraph, TableOfFigures.EntryStyleId)
+            .Should().Be(new TabStop(468, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    // No-regression sibling: a table of figures genuinely inserted into the final (landscape) section
+    // must still be sized from that section.
+    [Fact]
+    public void InsertTableOfFiguresIntoTheFinalSectionStillSizesTheGeneratedTabStopFromIt()
+    {
+        var document = SectionedFrontMatterCaptionDocument();
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.InsertTableOfFigures(
+            new DocumentTextPosition(document.Blocks.Count, 0),
+            Captions.FigureLabelText,
+            pageTextResolver: null).Region.InsertedCount.Should().BeGreaterThan(1);
+
+        FirstGeneratedEntryTabStop(document, TableOfFigures.IsTableOfFiguresParagraph, TableOfFigures.EntryStyleId)
+            .Should().Be(new TabStop(648, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    [Fact]
+    public void InsertTableOfAuthoritiesSizesTheGeneratedTabStopFromTheInsertionSection_NotTheFinalSection()
+    {
+        var document = SectionedFrontMatterCitationDocument();
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.InsertTableOfAuthorities(
+            new DocumentTextPosition(0, 0),
+            ToaOptions.Default,
+            () => null).Region.InsertedCount.Should().BeGreaterThan(1);
+
+        FirstGeneratedEntryTabStop(
+                document,
+                TableOfAuthorities.IsTableOfAuthoritiesParagraph,
+                TableOfAuthorities.EntryStyleId)
+            .Should().Be(new TabStop(468, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    // No-regression sibling: a table of authorities genuinely inserted into the final (landscape)
+    // section must still be sized from that section -- and a later refresh, which re-derives the
+    // insertion index from the region's own position, must not resize it.
+    [Fact]
+    public void InsertAndRefreshTableOfAuthoritiesInTheFinalSectionStillSizeTheTabStopFromIt()
+    {
+        var document = SectionedFrontMatterCitationDocument();
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.InsertTableOfAuthorities(
+            new DocumentTextPosition(document.Blocks.Count, 0),
+            ToaOptions.Default,
+            () => null).Region.InsertedCount.Should().BeGreaterThan(1);
+
+        FirstGeneratedEntryTabStop(
+                document,
+                TableOfAuthorities.IsTableOfAuthoritiesParagraph,
+                TableOfAuthorities.EntryStyleId)
+            .Should().Be(new TabStop(648, TabStopAlignment.Right, TabLeader.Dots));
+
+        session.References.RefreshTableOfAuthorities(
+            new DocumentTextPosition(0, 0),
+            ToaOptions.Default,
+            () => null);
+
+        FirstGeneratedEntryTabStop(
+                document,
+                TableOfAuthorities.IsTableOfAuthoritiesParagraph,
+                TableOfAuthorities.EntryStyleId)
+            .Should().Be(new TabStop(648, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    private static TabStop FirstGeneratedEntryTabStop(
+        TextDocument document,
+        Func<Block, bool> isGeneratedBlock,
+        string entryStyleId) =>
+        document.Blocks
+            .Where(isGeneratedBlock)
+            .Cast<Paragraph>()
+            .First(paragraph => paragraph.StyleId == entryStyleId)
+            .Formatting.TabStops
+            .Single();
+
+    // First (front-matter) section: default portrait Letter -> 612 - 72 - 72 = 468pt usable.
+    // Final section: landscape Letter -> 792 - 72 - 72 = 648pt usable, wider than the front section.
+    private static TextDocument SectionedFrontMatterCaptionDocument() =>
+        SectionedFrontMatterDocument(Captions.BuildCaption(CaptionLabel.Figure, 1, "Front matter"));
+
+    private static TextDocument SectionedFrontMatterCitationDocument() =>
+        SectionedFrontMatterDocument(
+            new Paragraph { Runs = { Run.CitationMark(new Citation("Case A", CitationCategory.Cases)) } });
+
+    private static TextDocument SectionedFrontMatterDocument(Paragraph frontMatter)
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(frontMatter);
+        document.Blocks.Add(new Paragraph("End of front matter")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+        });
+        document.Blocks.Add(new Paragraph("Appendix body"));
+
+        document.Page.WidthPt = 792;
+        document.Page.HeightPt = 612;
+        return document;
+    }
+
     // r142 tof-refresh-cross-label-deletion: RefreshTableOfFigures for one caption label (e.g. "Table",
     // via References > Update Table on a Table of Tables) must not delete a *different* label's own
     // caption-table region (e.g. a pre-existing Table of Figures). Before the fix,

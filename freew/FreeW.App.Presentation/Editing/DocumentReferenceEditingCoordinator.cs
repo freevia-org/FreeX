@@ -503,14 +503,16 @@ public sealed class DocumentReferenceEditingCoordinator
     {
         var normalizedLabel = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_session.Document, normalizedLabel);
+        var insertIndex = ResolveGeneratedReferenceInsertionIndex(caret.BlockIndex);
         var paragraphs = TableOfFigures.BuildWithTableAddresses(
             _session.Document,
             normalizedLabel,
-            pageTextResolver);
+            pageTextResolver,
+            insertIndex);
         return ApplyGeneratedReferenceRegion(
             caret,
             Array.Empty<int>(),
-            ResolveGeneratedReferenceInsertionIndex(caret.BlockIndex),
+            insertIndex,
             paragraphs,
             InsertTableOfFiguresUndoLabel);
     }
@@ -530,7 +532,8 @@ public sealed class DocumentReferenceEditingCoordinator
         var paragraphs = TableOfFigures.BuildWithTableAddresses(
             _session.Document,
             normalizedLabel,
-            pageTextResolver);
+            pageTextResolver,
+            insertIndex);
         return ApplyGeneratedReferenceRegion(
             caret,
             deleteIndices,
@@ -981,6 +984,24 @@ public sealed class DocumentReferenceEditingCoordinator
             .ToArray();
     }
 
+    /// <summary>
+    /// The index of the first block matching <paramref name="isGeneratedBlock"/>, or
+    /// <paramref name="fallbackIndex"/> when the document has no such block — the same insert-index rule
+    /// <see cref="RefreshGeneratedRegion"/> applies, exposed so a caller can build the replacement
+    /// paragraphs against the section that region sits in before the edit is planned.
+    /// </summary>
+    private static int FirstIndexOrFallback(
+        TextDocument document,
+        Func<Block, bool> isGeneratedBlock,
+        int fallbackIndex)
+    {
+        for (var index = 0; index < document.Blocks.Count; index++)
+            if (isGeneratedBlock(document.Blocks[index]))
+                return index;
+
+        return fallbackIndex;
+    }
+
     private int ResolveGeneratedReferenceInsertionIndex(int caretBlockIndex) =>
         caretBlockIndex < 0 || caretBlockIndex > _session.Document.Blocks.Count
             ? _session.Document.Blocks.Count
@@ -1213,15 +1234,23 @@ public sealed class DocumentReferenceEditingCoordinator
         {
             var labelText = TableOfFigures.ExistingLabelText(document) ?? Captions.FigureLabelText;
             TableOfFigures.EnsureStyles(document, labelText);
+            // Mirror RefreshGeneratedRegion's own insert-index choice so the rebuilt entries' tab stop is
+            // sized from the section the existing region actually lives in.
+            var figuresInsertIndex = FirstIndexOrFallback(
+                document,
+                block => TableOfFigures.IsTableOfFiguresParagraph(block, labelText),
+                document.Blocks.Count);
             var paragraphs = figurePageTextResolverFactory is null
                 ? TableOfFigures.Build(
                     document,
                     labelText,
-                    BuildPageTextResolver(ResolveBlockPages(blockPageResolutionFactory)))
+                    BuildPageTextResolver(ResolveBlockPages(blockPageResolutionFactory)),
+                    figuresInsertIndex)
                 : TableOfFigures.BuildWithTableAddresses(
                     document,
                     labelText,
-                    figurePageTextResolverFactory());
+                    figurePageTextResolverFactory(),
+                    figuresInsertIndex);
             if (RefreshGeneratedRegion(
                     block => TableOfFigures.IsTableOfFiguresParagraph(block, labelText),
                     document.Blocks.Count,

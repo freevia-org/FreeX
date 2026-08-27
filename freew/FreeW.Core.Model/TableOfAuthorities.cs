@@ -235,10 +235,21 @@ public static class TableOfAuthorities
     /// returns a page reference for a citation mark, that reference is used for the generated entry; otherwise
     /// the legacy explicit-break fallback is used.
     /// </summary>
+    /// <param name="document">The document to build the table for.</param>
+    /// <param name="options">Generation options.</param>
+    /// <param name="pageResolver">Optional host pagination evidence.</param>
+    /// <param name="insertionBlockIndex">
+    /// The block index the generated paragraphs are about to be inserted before, used to resolve which
+    /// section's <see cref="PageSettings"/> sizes the entries' right tab stop (via
+    /// <see cref="PageSettingsSectionResolver"/>). A negative value (the default) preserves the historical
+    /// behavior of always using the final section's page settings, for callers that do not yet know (or
+    /// care about) the insertion point.
+    /// </param>
     public static IReadOnlyList<Paragraph> Build(
         TextDocument document,
         ToaOptions options,
-        ToaCitationPageResolver? pageResolver)
+        ToaCitationPageResolver? pageResolver,
+        int insertionBlockIndex = -1)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(options);
@@ -249,7 +260,8 @@ public static class TableOfAuthorities
             pageResolver is null
                 ? null
                 : (source, blockIndex, _, runIndex, citation) =>
-                    pageResolver(source, blockIndex, runIndex, citation));
+                    pageResolver(source, blockIndex, runIndex, citation),
+            insertionBlockIndex);
     }
 
     /// <summary>
@@ -260,17 +272,19 @@ public static class TableOfAuthorities
     public static IReadOnlyList<Paragraph> BuildWithTableAddresses(
         TextDocument document,
         ToaOptions options,
-        ToaCitationPageAddressResolver? pageResolver)
+        ToaCitationPageAddressResolver? pageResolver,
+        int insertionBlockIndex = -1)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(options);
-        return BuildCore(document, options, pageResolver);
+        return BuildCore(document, options, pageResolver, insertionBlockIndex);
     }
 
     private static IReadOnlyList<Paragraph> BuildCore(
         TextDocument document,
         ToaOptions options,
-        ToaCitationPageAddressResolver? pageResolver)
+        ToaCitationPageAddressResolver? pageResolver,
+        int insertionBlockIndex)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(options);
@@ -288,11 +302,19 @@ public static class TableOfAuthorities
             ? CollectFirstCitationFormatting(occurrences)
             : null;
 
+        // Size the page-number column from the section this table is being inserted into, not from
+        // document.Page -- which only ever describes the document's FINAL section. A table of authorities
+        // is normally front matter, so a wide landscape appendix as the last section would otherwise push
+        // the tab stop past the front section's own right margin.
+        var tablePage = PageSettingsSectionResolver.Resolve(
+            document,
+            PageSettingsSectionResolver.ResolveSectionIndex(document, insertionBlockIndex));
+
         return Build(
             occurrences,
             options,
             occurrenceCounts,
-            EntryRightTabStopPt(document.Page),
+            EntryRightTabStopPt(tablePage),
             formatting,
             BuildPageReferences(occurrences));
     }

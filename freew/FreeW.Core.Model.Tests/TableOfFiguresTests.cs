@@ -368,4 +368,82 @@ public class TableOfFiguresTests
 
         doc.Styles[TableOfFigures.HeadingStyleId].Name.Should().Be("Custom");
     }
+
+    // The generated entries' right tab stop must be sized from the section the table is inserted INTO,
+    // not from document.Page -- which only ever describes the document's FINAL section. A table of
+    // figures is normally front matter, so a wide landscape appendix at the end of the document would
+    // otherwise push the page-number column past the front section's own right margin. Same fix as
+    // TableOfContents.Build's own insertionBlockIndex parameter.
+    [Fact]
+    public void Build_EntryRightTabStopUsesInsertionSectionWidth_NotFinalSectionWidth()
+    {
+        var doc = SectionedFrontMatterDocument();
+
+        var entry = TableOfFigures.Build(doc, CaptionLabel.Figure, pageTextOf: null, insertionBlockIndex: 0)[1];
+
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Should().Be(new TabStop(468, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    [Fact]
+    public void BuildWithTableAddresses_EntryRightTabStopUsesInsertionSectionWidth_NotFinalSectionWidth()
+    {
+        var doc = SectionedFrontMatterDocument();
+
+        var entry = TableOfFigures.BuildWithTableAddresses(
+            doc,
+            Captions.FigureLabelText,
+            pageTextOf: null,
+            insertionBlockIndex: 0)[1];
+
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Should().Be(new TabStop(468, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    // No-regression sibling: callers that have not been updated to pass an insertion index must keep
+    // the pre-fix behavior of sizing from the final section's page settings.
+    [Fact]
+    public void Build_EntryRightTabStopUsesFinalSectionWidth_WhenInsertionIndexOmitted()
+    {
+        var doc = SectionedFrontMatterDocument();
+
+        var entry = TableOfFigures.Build(doc)[1];
+
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Should().Be(new TabStop(648, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    // No-regression sibling: when the table genuinely is inserted into the final (landscape) section,
+    // it must still be sized from that section.
+    [Fact]
+    public void Build_EntryRightTabStopUsesFinalSectionWidth_WhenInsertedIntoTheFinalSection()
+    {
+        var doc = SectionedFrontMatterDocument();
+
+        var entry = TableOfFigures.Build(
+            doc,
+            CaptionLabel.Figure,
+            pageTextOf: null,
+            insertionBlockIndex: doc.Blocks.Count)[1];
+
+        entry.Formatting.TabStops.Should().ContainSingle()
+            .Which.Should().Be(new TabStop(648, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    // First (front-matter) section: default portrait Letter -> 612 - 72 - 72 = 468pt usable.
+    // Final section: landscape Letter -> 792 - 72 - 72 = 648pt usable, wider than the front section.
+    private static TextDocument SectionedFrontMatterDocument()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 1, "Front matter diagram"));
+        doc.Blocks.Add(new Paragraph("End of front matter")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+        });
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 2, "Appendix diagram"));
+
+        doc.Page.WidthPt = 792;
+        doc.Page.HeightPt = 612;
+        return doc;
+    }
 }

@@ -53,61 +53,88 @@ public static class TableOfFigures
     /// caption of <paramref name="label"/> found in document order. Each entry carries the caption text,
     /// a dotted right tab, the caption page label, the <see cref="EntryStyleId"/> style, and shared native
     /// field ownership. A document with no matching captions yields just the heading paragraph.
+    /// The dotted right tab stop is sized from the writable width of the section the table is being
+    /// inserted into (see <paramref name="insertionBlockIndex"/>) — not necessarily the document's final
+    /// section, since <see cref="TextDocument.Page"/> only describes that last section and a table of
+    /// figures is normally inserted as front matter in the first one.
     /// Deterministic and side-effect free; it never mutates <paramref name="document"/>.
     /// </summary>
+    /// <param name="document">The document to build the table for.</param>
+    /// <param name="label">The caption label whose captions are listed.</param>
+    /// <param name="pageTextOf">Optional per-caption page-text override.</param>
+    /// <param name="insertionBlockIndex">
+    /// The block index the generated paragraphs are about to be inserted before, used to resolve which
+    /// section's <see cref="PageSettings"/> sizes the entries' right tab stop (via
+    /// <see cref="PageSettingsSectionResolver"/>). A negative value (the default) preserves the historical
+    /// behavior of always using the final section's page settings, for callers that do not yet know (or
+    /// care about) the insertion point.
+    /// </param>
     public static IReadOnlyList<Paragraph> Build(
         TextDocument document,
         CaptionLabel label = CaptionLabel.Figure,
-        Func<int, string?>? pageTextOf = null)
+        Func<int, string?>? pageTextOf = null,
+        int insertionBlockIndex = -1)
     {
         return BuildCore(
             document,
             Captions.LabelText(label),
-            pageTextOf is null ? null : (blockIndex, _) => pageTextOf(blockIndex));
+            pageTextOf is null ? null : (blockIndex, _) => pageTextOf(blockIndex),
+            insertionBlockIndex);
     }
 
     /// <summary>
     /// Builds the table-of-figures paragraphs while exposing a recursive table-cell address to the
-    /// page resolver. Top-level captions receive a null address.
+    /// page resolver. Top-level captions receive a null address. See
+    /// <see cref="Build(TextDocument, CaptionLabel, Func{int, string}, int)"/> for
+    /// <paramref name="insertionBlockIndex"/>.
     /// </summary>
     public static IReadOnlyList<Paragraph> BuildWithTableAddresses(
         TextDocument document,
         CaptionLabel label,
-        Func<int, TableParagraphAddress?, string?>? pageTextOf)
+        Func<int, TableParagraphAddress?, string?>? pageTextOf,
+        int insertionBlockIndex = -1)
     {
-        return BuildCore(document, Captions.LabelText(label), pageTextOf);
+        return BuildCore(document, Captions.LabelText(label), pageTextOf, insertionBlockIndex);
     }
 
     /// <summary>
-    /// Builds the table-of-figures paragraphs for a built-in or custom caption label.
+    /// Builds the table-of-figures paragraphs for a built-in or custom caption label. See
+    /// <see cref="Build(TextDocument, CaptionLabel, Func{int, string}, int)"/> for
+    /// <paramref name="insertionBlockIndex"/>.
     /// </summary>
     public static IReadOnlyList<Paragraph> Build(
         TextDocument document,
         string labelText,
-        Func<int, string?>? pageTextOf = null)
+        Func<int, string?>? pageTextOf = null,
+        int insertionBlockIndex = -1)
     {
         return BuildCore(
             document,
             labelText,
-            pageTextOf is null ? null : (blockIndex, _) => pageTextOf(blockIndex));
+            pageTextOf is null ? null : (blockIndex, _) => pageTextOf(blockIndex),
+            insertionBlockIndex);
     }
 
     /// <summary>
     /// Builds the table-of-figures paragraphs for a built-in or custom label while exposing a recursive
-    /// table-cell address to the page resolver. Top-level captions receive a null address.
+    /// table-cell address to the page resolver. Top-level captions receive a null address. See
+    /// <see cref="Build(TextDocument, CaptionLabel, Func{int, string}, int)"/> for
+    /// <paramref name="insertionBlockIndex"/>.
     /// </summary>
     public static IReadOnlyList<Paragraph> BuildWithTableAddresses(
         TextDocument document,
         string labelText,
-        Func<int, TableParagraphAddress?, string?>? pageTextOf)
+        Func<int, TableParagraphAddress?, string?>? pageTextOf,
+        int insertionBlockIndex = -1)
     {
-        return BuildCore(document, labelText, pageTextOf);
+        return BuildCore(document, labelText, pageTextOf, insertionBlockIndex);
     }
 
     private static IReadOnlyList<Paragraph> BuildCore(
         TextDocument document,
         string labelText,
-        Func<int, TableParagraphAddress?, string?>? pageTextOf)
+        Func<int, TableParagraphAddress?, string?>? pageTextOf,
+        int insertionBlockIndex)
     {
         ArgumentNullException.ThrowIfNull(document);
         var label = Captions.NormalizeLabelText(labelText);
@@ -117,9 +144,16 @@ public static class TableOfFigures
             new(HeadingText(label)) { StyleId = HeadingStyleIdFor(label) }
         };
 
+        // Size the page-number column from the section this table is being inserted into, not from
+        // document.Page -- which only ever describes the document's FINAL section. A table of figures is
+        // normally front matter, so a wide landscape appendix as the last section would otherwise push the
+        // tab stop past the front section's own right margin.
+        var tablePage = PageSettingsSectionResolver.Resolve(
+            document,
+            PageSettingsSectionResolver.ResolveSectionIndex(document, insertionBlockIndex));
         var entryRightTabStopPt = Math.Max(
             0,
-            document.Page.WidthPt - document.Page.MarginLeftPt - document.Page.MarginRightPt);
+            tablePage.WidthPt - tablePage.MarginLeftPt - tablePage.MarginRightPt);
         foreach (var (blockIndex, paragraph, tableParagraph) in DocumentBodyParagraphs.Enumerate(document))
         {
             if (!Captions.IsCaptionOf(paragraph, label))
