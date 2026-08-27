@@ -1,20 +1,27 @@
 using System.Text;
 using System.Xml.Linq;
 
-namespace Free.Shared.Opc;
+namespace Free.Shared.IO;
 
 /// <summary>
-/// Drops characters that XML 1.0 cannot represent from model-originated text on the way out to an
-/// OOXML part.
+/// Drops characters that XML 1.0 cannot represent from model-originated text on the way out to any
+/// XML part, OOXML or OpenDocument.
 /// <para>
 /// A document can legitimately contain characters the format cannot: C0/C1 control codes and lone
 /// UTF-16 surrogates arrive by pasting from another application or by importing a file, and nothing
 /// in the editors rejects them. <c>XmlWriter</c> validates on write, so a single such character
 /// aborts the whole save with an ArgumentException rather than degrading — the user loses the save,
-/// not the character. Dropping it is what Word and PowerPoint do with the same input.
+/// not the character. Dropping it is what Word, Excel, PowerPoint and LibreOffice all do with the
+/// same input.
+/// </para>
+/// <para>
+/// This lives in Free.Shared.IO rather than beside the OOXML packaging helpers that were its first
+/// caller because BOTH package writers need it, and Free.Shared.Opc already references this
+/// assembly — hosting it there and calling in from <see cref="OpenDocumentPackageWriter"/> would be
+/// a reference cycle.
 /// </para>
 /// </summary>
-public static class OoxmlXmlText
+public static class XmlTextSanitizer
 {
     /// <summary>
     /// Sanitizes every text node and attribute value in <paramref name="document"/> in place.

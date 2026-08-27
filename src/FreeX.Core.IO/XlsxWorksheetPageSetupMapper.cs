@@ -160,11 +160,11 @@ internal static class XlsxWorksheetPageSetupMapper
         // rather than at the package boundary: ClosedXML streams the worksheet part itself, and a
         // character XML 1.0 cannot represent would abort the whole workbook save inside its writer.
         if (!string.IsNullOrEmpty(value.Left))
-            target.Left.AddText(OoxmlXmlText.Sanitize(ToHeaderFooterText(value.Left)), occurrence);
+            target.Left.AddText(XmlTextSanitizer.Sanitize(ToHeaderFooterText(value.Left)), occurrence);
         if (!string.IsNullOrEmpty(value.Center))
-            target.Center.AddText(OoxmlXmlText.Sanitize(ToHeaderFooterText(value.Center)), occurrence);
+            target.Center.AddText(XmlTextSanitizer.Sanitize(ToHeaderFooterText(value.Center)), occurrence);
         if (!string.IsNullOrEmpty(value.Right))
-            target.Right.AddText(OoxmlXmlText.Sanitize(ToHeaderFooterText(value.Right)), occurrence);
+            target.Right.AddText(XmlTextSanitizer.Sanitize(ToHeaderFooterText(value.Right)), occurrence);
     }
 
     private static string ReplaceHeaderFooterTokens(

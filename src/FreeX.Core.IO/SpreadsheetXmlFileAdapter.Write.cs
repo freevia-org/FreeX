@@ -350,7 +350,7 @@ public sealed partial class SpreadsheetXmlFileAdapter
                 break;
             case TextValue textValue:
                 WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "String");
-                writer.WriteString(OoxmlXmlText.Sanitize(textValue.Value));
+                writer.WriteString(XmlTextSanitizer.Sanitize(textValue.Value));
                 break;
             default:
                 WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "String");
@@ -370,7 +370,7 @@ public sealed partial class SpreadsheetXmlFileAdapter
     private static void WriteSpreadsheetTextElement(XmlWriter writer, string localName, string value)
     {
         WriteSpreadsheetStartElement(writer, localName);
-        writer.WriteString(OoxmlXmlText.Sanitize(value));
+        writer.WriteString(XmlTextSanitizer.Sanitize(value));
         writer.WriteEndElement();
     }
 
@@ -413,7 +413,7 @@ public sealed partial class SpreadsheetXmlFileAdapter
     }
 
     private static void WriteSpreadsheetAttribute(XmlWriter writer, XName name, string value) =>
-        writer.WriteAttributeString("ss", name.LocalName, SpreadsheetNs.NamespaceName, OoxmlXmlText.Sanitize(value));
+        writer.WriteAttributeString("ss", name.LocalName, SpreadsheetNs.NamespaceName, XmlTextSanitizer.Sanitize(value));
 
     private static void WriteExcelEmptyElement(XmlWriter writer, string localName)
     {
@@ -424,7 +424,7 @@ public sealed partial class SpreadsheetXmlFileAdapter
     private static void WriteExcelTextElement(XmlWriter writer, string localName, string value)
     {
         writer.WriteStartElement("x", localName, ExcelNs.NamespaceName);
-        writer.WriteString(OoxmlXmlText.Sanitize(value));
+        writer.WriteString(XmlTextSanitizer.Sanitize(value));
         writer.WriteEndElement();
     }
 

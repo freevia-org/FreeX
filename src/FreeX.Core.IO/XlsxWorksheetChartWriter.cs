@@ -267,7 +267,7 @@ internal static class XlsxWorksheetChartWriter
             // XlsxPackageXmlEditor/OpcXml, so it needs its own pass of the sanitizing those apply --
             // the chart part is built entirely from free-form model text (title, axis titles, series
             // names, alt text), any of which can carry a character XML 1.0 cannot represent.
-            OoxmlXmlText.SanitizeInPlace(chartXml);
+            XmlTextSanitizer.SanitizeInPlace(chartXml);
 
             var chartEntry = archive.CreateEntry(chartPath);
             using (var chartStream = chartEntry.Open())

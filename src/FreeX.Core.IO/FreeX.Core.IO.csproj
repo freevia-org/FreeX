@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Using Include="Free.Shared.Drawing" />
+    <Using Include="Free.Shared.IO" />
     <Using Include="Free.Shared.IO.FileFormatDescriptor" Alias="FileFormatDescriptor" />
     <Using Include="Free.Shared.Opc" />
     <Using Include="Free.Shared.Pdf.Import" />

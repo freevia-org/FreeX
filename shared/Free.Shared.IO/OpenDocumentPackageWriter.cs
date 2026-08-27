@@ -46,6 +46,14 @@ public static class OpenDocumentPackageWriter
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(options);
 
+        // Every ODF part is built from model text somewhere (cell strings and sheet names in a
+        // spreadsheet; runs, styles and document properties in a text document), and a document can
+        // legitimately hold characters XML 1.0 cannot represent. Save() below validates on write, so
+        // one of them would abort the WHOLE save with an ArgumentException and leave no file at all.
+        // Sanitizing at this single chokepoint means no ODF writer -- present or future -- can
+        // reintroduce that crash by adding a part or a text-bearing element.
+        XmlTextSanitizer.SanitizeInPlace(document);
+
         var entry = archive.CreateEntry(name, CompressionLevel.Optimal);
         using var stream = entry.Open();
         using var writer = XmlWriter.Create(stream, new XmlWriterSettings

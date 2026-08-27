@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
-using Free.Shared.Opc;
 using FreeW.Core.Model;
 
 namespace FreeW.Core.IO;
@@ -61,7 +60,7 @@ public static class Wordml2003Writer
     /// makes <see cref="XDocument.Save(XmlWriter)"/> throw <see cref="ArgumentException"/> and abort the
     /// save with no file written. Rather than sanitizing at each of the several places above that build a
     /// <c>w:t</c>/attribute from model text (easy to miss one, as a sibling writer for this same model
-    /// once did), <see cref="OoxmlXmlText.SanitizeInPlace"/> is applied once here, to the finished tree,
+    /// once did), <see cref="XmlTextSanitizer.SanitizeInPlace"/> is applied once here, to the finished tree,
     /// so every text node and attribute value is covered regardless of how it was built.
     /// </para>
     /// </summary>
@@ -74,7 +73,7 @@ public static class Wordml2003Writer
             new XProcessingInstruction("mso-application", "progid=\"Word.Document\""),
             root);
 
-        OoxmlXmlText.SanitizeInPlace(xml);
+        XmlTextSanitizer.SanitizeInPlace(xml);
         return xml;
     }
 

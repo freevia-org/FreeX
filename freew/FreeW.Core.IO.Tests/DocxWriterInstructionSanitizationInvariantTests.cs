@@ -46,7 +46,7 @@ namespace FreeW.Core.IO.Tests;
 /// Both evasions above were demonstrated against this file's own scan logic in round 163 and are real,
 /// not hypothetical. Wordml2003Writer's fix (round 163) deliberately does NOT extend this per-call-site
 /// pattern: it sanitizes the whole built <see cref="System.Xml.Linq.XDocument"/> once, immediately before
-/// serialization (see <c>Free.Shared.Opc.OoxmlXmlText.SanitizeInPlace</c>, already used the same way by
+/// serialization (see <c>Free.Shared.IO.XmlTextSanitizer.SanitizeInPlace</c>, already used the same way by
 /// FreeP's PptxPackageWriter), which is immune to both evasions above because it walks the finished tree
 /// rather than trusting any particular call-site shape in the source text. The corresponding behavioral
 /// guard for that writer -- exercising the real Save As gesture rather than scanning source text -- lives

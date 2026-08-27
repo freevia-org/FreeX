@@ -508,13 +508,13 @@ public sealed partial class XlsxFileAdapter
                     if (sheet.CommentAuthors.TryGetValue(address, out var author) &&
                         !string.IsNullOrEmpty(author))
                     {
-                        xlComment.Author = OoxmlXmlText.Sanitize(author);
+                        xlComment.Author = XmlTextSanitizer.Sanitize(author);
                     }
                     else
                     {
                         xlComment.Author = string.Empty;
                     }
-                    xlComment.AddText(OoxmlXmlText.Sanitize(commentText));
+                    xlComment.AddText(XmlTextSanitizer.Sanitize(commentText));
                 }
                 catch (Exception ex)
                 {

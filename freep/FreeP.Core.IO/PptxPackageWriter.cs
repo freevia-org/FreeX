@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
+using Free.Shared.IO;
 using Free.Shared.Opc;
 using FreeP.Core.Model;
 using static Free.Shared.Opc.OpcPathHelper;
@@ -6962,7 +6963,7 @@ public static class PptxPackageWriter
         // save with an ArgumentException — losing the file rather than the character. Drop them here,
         // at the one point every part passes through, so no individual build site can miss it.
         // (FreeW's DOCX writer applies the same rule per site; FreeX's patch-save path escapes.)
-        OoxmlXmlText.SanitizeInPlace(doc);
+        XmlTextSanitizer.SanitizeInPlace(doc);
 
         var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
         using var stream = entry.Open();

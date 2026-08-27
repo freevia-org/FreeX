@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.IO;
 
 namespace Free.Shared.Opc;
 
@@ -82,7 +83,7 @@ public static class OpcXml
     /// <summary>
     /// Writes <paramref name="document"/> over any existing entries named <paramref name="entryName"/>.
     /// <para>
-    /// The document is sanitized (see <see cref="OoxmlXmlText.SanitizeInPlace"/>) on the way out: the
+    /// The document is sanitized (see <see cref="XmlTextSanitizer.SanitizeInPlace"/>) on the way out: the
     /// hand-rolled part writers above this build elements straight from model text, and one C0 control
     /// code or lone surrogate anywhere in that text makes <c>XDocument.Save</c> throw and takes the
     /// WHOLE document save down with it. Doing it here, at the one boundary every such writer funnels
@@ -102,7 +103,7 @@ public static class OpcXml
             existing.Delete();
         }
 
-        OoxmlXmlText.SanitizeInPlace(document);
+        XmlTextSanitizer.SanitizeInPlace(document);
 
         var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
         using var stream = entry.Open();
@@ -111,7 +112,7 @@ public static class OpcXml
 
     public static void WriteXmlEntry(ZipArchive archive, string entryPath, XDocument document)
     {
-        OoxmlXmlText.SanitizeInPlace(document);
+        XmlTextSanitizer.SanitizeInPlace(document);
 
         var entry = archive.CreateEntry(entryPath, CompressionLevel.Optimal);
         using var stream = entry.Open();
