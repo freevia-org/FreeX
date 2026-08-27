@@ -1603,17 +1603,59 @@ public static class AvaloniaRibbonRenderer
             BorderBrush = palette.DividerBrush,
             BorderThickness = new Thickness(0, 1, 0, 0),
             MinHeight = RibbonVisualMetrics.GroupLabelHeight,
-            Child = new TextBlock
-            {
-                Text = group.Header,
-                FontSize = 12,
-                FontFamily = RibbonFontFamily,
-                Foreground = palette.GroupLabelBrush,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                TextAlignment = TextAlignment.Center,
-            },
         };
+        var labelPanel = new Grid();
+        labelPanel.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        if (group.Launcher is not null)
+            labelPanel.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+        labelPanel.Children.Add(new TextBlock
+        {
+            Text = group.Header,
+            FontSize = 12,
+            FontFamily = RibbonFontFamily,
+            Foreground = palette.GroupLabelBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+        });
+
+        if (group.Launcher is { } launcher)
+        {
+            var launcherControl = new RibbonButton(launcher.CommandId, launcher.TooltipTitle)
+            {
+                KeyTip = launcher.KeyTip,
+                TooltipTitle = launcher.TooltipTitle,
+                TooltipDescription = launcher.TooltipDescription,
+            };
+            var launcherButton = new Button
+            {
+                Tag = launcher.CommandId.Value,
+                Content = new TextBlock
+                {
+                    Text = "↗",
+                    FontSize = 11,
+                    Foreground = palette.GroupLabelBrush,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+                Background = Brushes.Transparent,
+                BorderBrush = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(2, 0),
+                MinWidth = 18,
+                Height = RibbonVisualMetrics.GroupLabelHeight,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            ToolTip.SetTip(launcherButton, launcher.TooltipDescription ?? launcher.TooltipTitle);
+            SetKeyTip(launcherButton, launcher.KeyTip);
+            WireControl(launcherButton, launcherControl, registry, afterExecute, palette, attachMenu: false);
+            Grid.SetColumn(launcherButton, 1);
+            labelPanel.Children.Add(launcherButton);
+        }
+
+        labelBorder.Child = labelPanel;
         Grid.SetRow(labelBorder, 1);
         grid.Children.Add(labelBorder);
 
@@ -1656,7 +1698,8 @@ public static class AvaloniaRibbonRenderer
         if (rest.Any(c => c is RibbonRowBreak))
             lane.Children.Add(BuildExplicitRows(rest, registry, afterExecute, palette));
         else
-            BuildAutoColumns(rest, lane, registry, afterExecute, palette);
+            BuildAutoColumns(rest, lane, registry, afterExecute, palette,
+                group.Sizing.MaximumRowsPerColumn ?? MaxRowsPerColumn);
 
         return lane;
     }
@@ -1725,14 +1768,17 @@ public static class AvaloniaRibbonRenderer
         Margin = new Thickness(0, isFirst ? 0 : 2, 0, 0),
     };
 
-    // Groups without explicit rows pack medium/small/combo controls into columns of up to three.
+    // Groups without explicit rows pack medium/small/combo controls into columns. Individual groups
+    // may opt into a denser two-row Office layout without changing the default ribbon vocabulary.
     private static void BuildAutoColumns(
         IReadOnlyList<RibbonControl> controls,
         StackPanel lane,
         IRibbonCommandRegistry? registry,
         Action? afterExecute,
-        AvaloniaRibbonPalette palette)
+        AvaloniaRibbonPalette palette,
+        int maximumRowsPerColumn)
     {
+        maximumRowsPerColumn = Math.Max(1, maximumRowsPerColumn);
         StackPanel? column = null;
         var columnIsCombo = false;
 
@@ -1768,7 +1814,7 @@ public static class AvaloniaRibbonRenderer
                     column ??= NewColumn();
                     columnIsCombo = isCombo;
                     column.Children.Add(BuildInlineControl(control, registry, afterExecute, palette));
-                    if (column.Children.Count >= MaxRowsPerColumn)
+                    if (column.Children.Count >= maximumRowsPerColumn)
                         Flush();
                     break;
             }

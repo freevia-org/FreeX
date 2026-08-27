@@ -147,6 +147,33 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
+    public Task GroupDialogLauncher_RendersAndRoutesItsCommand() => RunOnUiThread(() =>
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("layout", "Page Layout", "P", tab =>
+                tab.Group("pageSetup", "Page Setup", "PS", 100, group =>
+                    group.DialogLauncher("pageSetup.open", "Page Setup", "Open Page Setup.")
+                        .Button("margins", "Margins")))
+            .Build();
+        var executed = false;
+        var registry = new RibbonCommandRegistry();
+        registry.Register("pageSetup.open", new RecordingCommand(() => executed = true));
+        registry.Register("margins", new NoOpCommand());
+
+        var content = AvaloniaRibbonRenderer.BuildTabContent(definition.FindTab("layout")!, registry);
+        var window = new Window { Width = 480, Height = 180, Content = content };
+        window.Show();
+        window.Measure(new Size(480, 180));
+        window.Arrange(new Rect(0, 0, 480, 180));
+
+        var launcher = content.GetLogicalDescendants().OfType<Button>()
+            .Single(button => Equals(button.Tag, "pageSetup.open"));
+        launcher.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+
+        Assert.True(executed);
+    });
+
+    [Fact]
     public Task BuildTabContent_NarrowWidth_CollapsesRibbonGroups() => RunOnUiThread(() =>
     {
         var tab = BuildHomeTab();
@@ -966,7 +993,7 @@ public sealed class AvaloniaRibbonRendererTests
     [InlineData("Selection Pane")]
     [InlineData("Remove Duplicates#RemoveDuplicatesBtn_Click")]
         [InlineData("Advanced")]
-        [InlineData("Page Setup dialog")]
+    [InlineData("Page Setup")]
         [InlineData("View Gridlines")]
         [InlineData("View Headings")]
         [InlineData("Shape Gradient")]

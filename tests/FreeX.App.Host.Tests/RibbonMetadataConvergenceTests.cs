@@ -34,6 +34,22 @@ public sealed class RibbonMetadataConvergenceTests
     }
 
     [Fact]
+    public void PageLayoutPageSetup_UsesTheSharedGroupDialogLauncher()
+    {
+        var pageSetup = FreeXRibbon.Build().Tabs
+            .Single(tab => tab.Id == "PageLayoutTab")
+            .Groups.Single(group => group.Id == "PageLayoutPageSetupGroup");
+
+        pageSetup.Launcher.Should().NotBeNull();
+        pageSetup.Launcher!.CommandId.Value.Should().Be("Page Setup");
+        pageSetup.Sizing.MaximumRowsPerColumn.Should().Be(2);
+        pageSetup.Controls.Single(control => control.CommandId.Value == "Margins")
+            .PreferredLayout.Should().Be(RibbonCommandLayoutKind.Medium);
+        pageSetup.Controls.Select(control => control.CommandId.Value)
+            .Should().NotContain(["Page Setup", "Page Setup dialog"]);
+    }
+
+    [Fact]
     public void MainWindowXaml_ContainsNoStaticRibbonTabCatalog()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");

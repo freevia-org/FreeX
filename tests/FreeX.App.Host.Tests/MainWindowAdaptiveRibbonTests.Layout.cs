@@ -48,13 +48,12 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .Should()
                 .ContainInOrder(
                     "Margins",
-                    "Page Orientation",
-                    "Paper Size",
+                    "Orientation",
+                    "Size",
                     "Print Area",
                     "Breaks",
                     "Background",
-                    "Print Titles",
-                    "Page Setup");
+                    "Print Titles");
         });
     }
 
@@ -137,7 +136,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 0.5,
                 "Excel lays out Page Setup as compact command rows instead of letting the command stack clip behind the group label");
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["Margins", "Page Orientation", "Paper Size", "Print Area", "Breaks", "Background", "Print Titles", "Page Setup"]);
+                ["Margins", "Orientation", "Size", "Print Area", "Breaks", "Background", "Print Titles"]);
         });
     }
 
@@ -153,12 +152,12 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             // At 1100px the live ribbon keeps the primary Page Setup group expanded and folds only
             // lower-priority groups (Themes, Scale To Fit, Sheet Options) into overflow buttons. The live
-            // command captions are the full Excel names ("Page Orientation"/"Paper Size").
+            // command captions match Excel's compact labels ("Orientation"/"Size").
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
                 "Page Setup",
                 "Excel keeps the primary Page Setup commands directly reachable at 1100px");
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["Margins", "Page Orientation", "Paper Size", "Page Setup"],
+                ["Margins", "Orientation", "Size"],
                 "Page Layout should collapse lower-priority groups before the primary Page Setup group");
             harness.ActiveRibbonGroupCommandOverflow("Page Setup").Should().BeLessThanOrEqualTo(
                 0.5,
@@ -181,7 +180,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 "Page Setup",
                 $"Page Layout should spend available 900px row width on the primary Page Setup group before collapsing it; {harness.DebugActiveRibbonChildren}");
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["Margins", "Page Orientation", "Paper Size", "Page Setup"],
+                ["Margins", "Orientation", "Size"],
                 $"Page Setup commands should remain directly reachable at 900px; {harness.DebugActiveRibbonChildren}");
             harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                 0.5,

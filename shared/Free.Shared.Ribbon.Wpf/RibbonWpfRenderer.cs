@@ -247,6 +247,7 @@ public static class RibbonWpfRenderer
             ApplyStyle(launcherButton, resourceHost, "RibbonGroupDialogLauncher");
             launcherButton.Content = new TextBlock { Text = "\u2197" };
             WireMetadata(launcherButton, launcherControl, registry, stateStore, options, attachMenu: false, resourceHost: resourceHost);
+            RibbonMetadata.SetRole(launcherButton, RibbonMetadataRole.GroupDialogLauncher);
             Grid.SetColumn(launcherButton, 1);
             labelPanel.Children.Add(launcherButton);
         }
@@ -292,7 +293,8 @@ public static class RibbonWpfRenderer
         if (rest.Any(c => c is RibbonRowBreak))
             lane.Children.Add(BuildExplicitRows(rest, resourceHost, registry, stateStore, options));
         else
-            BuildAutoColumns(rest, lane, resourceHost, registry, stateStore, options);
+            BuildAutoColumns(rest, lane, resourceHost, registry, stateStore, options,
+                group.Sizing.MaximumRowsPerColumn ?? MaxRowsPerColumn);
 
         return lane;
     }
@@ -363,15 +365,18 @@ public static class RibbonWpfRenderer
         Margin = new Thickness(0, isFirst ? 0 : 2, 0, 0)
     };
 
-    // Groups without explicit rows pack medium/small/combo controls into columns of up to three.
+    // Groups without explicit rows pack medium/small/combo controls into columns. Individual groups
+    // may opt into a denser two-row Office layout without changing the default ribbon vocabulary.
     private static void BuildAutoColumns(
         IReadOnlyList<RibbonControl> controls,
         StackPanel lane,
         FrameworkElement resourceHost,
         IRibbonCommandRegistry? registry,
         IRibbonStateStore? stateStore,
-        RibbonWpfRendererOptions options)
+        RibbonWpfRendererOptions options,
+        int maximumRowsPerColumn)
     {
+        maximumRowsPerColumn = Math.Max(1, maximumRowsPerColumn);
         StackPanel? column = null;
         var columnIsCombo = false;
 
@@ -403,7 +408,7 @@ public static class RibbonWpfRenderer
                     column ??= new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(1, 1, 1, 0) };
                     columnIsCombo = isCombo;
                     column.Children.Add(BuildInlineControl(control, resourceHost, registry, stateStore, options));
-                    if (column.Children.Count >= MaxRowsPerColumn)
+                    if (column.Children.Count >= maximumRowsPerColumn)
                         Flush();
                     break;
             }

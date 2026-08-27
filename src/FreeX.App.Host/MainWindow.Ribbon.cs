@@ -1475,6 +1475,7 @@ public partial class MainWindow
 
     private static bool IsVisibleLabeledRibbonCommandButton(ButtonBase button) =>
         button.Visibility == Visibility.Visible &&
+        !RibbonMetadata.IsGroupDialogLauncher(button) &&
         FindRibbonContentLabel(button.Content) is not null;
 
     private static bool IsVisibleStackedSmallRibbonCommandButton(ButtonBase button)

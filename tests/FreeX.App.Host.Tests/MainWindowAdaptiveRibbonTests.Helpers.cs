@@ -493,6 +493,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .OfType<ButtonBase>()
                 .Where(IsEffectivelyVisible)
                 .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
+                .Where(button => !RibbonMetadata.IsGroupDialogLauncher(button))
                 .Select(button =>
                 {
                     var top = button.TransformToAncestor(group).Transform(new Point(0, 0)).Y;
