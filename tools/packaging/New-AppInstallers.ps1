@@ -227,10 +227,10 @@ function New-LinuxInstaller {
         foreach ($app in $Apps) {
             $install += "mkdir -p `"`$temp_root/$app`""
             $install += "unzip -q `"`$here/payload/$app.zip`" -d `"`$temp_root/$app`""
-            $install += "`"`$temp_root/$app/install.sh`" `"`$prefix`""
+            $install += "bash `"`$temp_root/$app/install.sh`" `"`$prefix`""
             $uninstall += "mkdir -p `"`$temp_root/$app`""
             $uninstall += "unzip -q `"`$here/payload/$app.zip`" -d `"`$temp_root/$app`""
-            $uninstall += "`"`$temp_root/$app/uninstall.sh`" `"`$prefix`""
+            $uninstall += "bash `"`$temp_root/$app/uninstall.sh`" `"`$prefix`""
         }
     } else {
         $install = @('#!/usr/bin/env bash','set -euo pipefail','here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"','prefix="${1:-$HOME/.local}"','mkdir -p "$prefix/lib" "$prefix/bin" "$prefix/share/applications" "$prefix/share/icons/hicolor/scalable/apps"')
@@ -290,10 +290,10 @@ function New-MacInstaller {
         foreach ($app in $Apps) {
             $installLines += "mkdir -p `"`$temp_root/$app`""
             $installLines += "unzip -q `"`$here/payload/$app.zip`" -d `"`$temp_root/$app`""
-            $installLines += "`"`$temp_root/$app/install.sh`" `"`$destination`""
+            $installLines += "bash `"`$temp_root/$app/install.sh`" `"`$destination`""
             $uninstallLines += "mkdir -p `"`$temp_root/$app`""
             $uninstallLines += "unzip -q `"`$here/payload/$app.zip`" -d `"`$temp_root/$app`""
-            $uninstallLines += "`"`$temp_root/$app/uninstall.sh`" `"`$destination`""
+            $uninstallLines += "bash `"`$temp_root/$app/uninstall.sh`" `"`$destination`""
         }
         Write-UnixScript (Join-Path $stage 'install.sh') $installLines
         Write-UnixScript (Join-Path $stage 'uninstall.sh') $uninstallLines

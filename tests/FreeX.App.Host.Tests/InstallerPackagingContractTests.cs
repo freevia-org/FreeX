@@ -40,6 +40,8 @@ public sealed class InstallerPackagingContractTests
         packager.Should().Contain("{param:TestInstallRoot|}");
         packager.Should().Contain("$inputName = if ($Suite) { \"$app-v$Version-$Runtime-installer.zip\"");
         packager.Should().Contain("Find-UniqueInput \"$app-v$Version-$Runtime-apps.zip\"");
+        packager.Should().Contain("bash `\"`$temp_root/$app/install.sh`\"");
+        packager.Should().Contain("bash `\"`$temp_root/$app/uninstall.sh`\"");
         packager.Should().Contain("Uninstallable=no");
     }
 
@@ -86,6 +88,44 @@ public sealed class InstallerPackagingContractTests
         var portable = manifest.RootElement.GetProperty("artifacts").EnumerateArray()
             .Single(entry => entry.GetProperty("name").GetString() == $"{prefix}.exe");
         portable.GetProperty("size").GetInt64().Should().Be(3);
+    }
+
+    [Fact]
+    public void ReleaseSbom_RemovesItsPayloadStagingDirectoryAfterGeneration()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var payloadPath = Path.Combine(temp.Path, "payload.bin");
+        var outputPath = Path.Combine(temp.Path, "sample.spdx.json");
+        File.WriteAllText(payloadPath, "payload");
+
+        var fakeToolPath = Path.Combine(temp.Path, OperatingSystem.IsWindows() ? "fake-sbom.cmd" : "fake-sbom");
+        if (OperatingSystem.IsWindows())
+        {
+            File.WriteAllText(fakeToolPath,
+                "@echo off\r\nset stage=\r\n:args\r\nif \"%~1\"==\"\" goto run\r\n" +
+                "if \"%~1\"==\"-b\" (set \"stage=%~2\"& shift & shift & goto args)\r\n" +
+                "shift\r\ngoto args\r\n:run\r\nmkdir \"%stage%\\_manifest\\spdx_2.2\"\r\n" +
+                ">\"%stage%\\_manifest\\spdx_2.2\\manifest.spdx.json\" echo {}\r\n");
+        }
+        else
+        {
+            File.WriteAllText(fakeToolPath,
+                "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-b\" ]; then stage=$2; shift 2; else shift; fi\ndone\n" +
+                "mkdir -p \"$stage/_manifest/spdx_2.2\"\nprintf '{}' > \"$stage/_manifest/spdx_2.2/manifest.spdx.json\"\n");
+            File.SetUnixFileMode(fakeToolPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
+            "New-ReleaseSbom.ps1",
+            temp.Path,
+            $"-Name Sample -Version 1.2.3 -CommitSha {new string('a', 40)} -Runtime win-x64 " +
+            $"-InputRoot \"{temp.Path}\" -PayloadNames payload.bin -OutputPath \"{outputPath}\" " +
+            $"-SbomToolPath \"{fakeToolPath}\" -RepositoryRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        File.Exists(outputPath).Should().BeTrue();
+        Directory.Exists(Path.Combine(temp.Path, ".sbom-Sample-win-x64")).Should().BeFalse();
     }
 
     [Fact]

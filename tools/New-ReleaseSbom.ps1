@@ -20,17 +20,22 @@ if (-not $RepositoryRoot) { $RepositoryRoot = (Resolve-Path (Join-Path $PSScript
 $stage = Join-Path (Split-Path -Parent $OutputPath) ".sbom-$Name-$Runtime"
 if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
-foreach ($payloadName in $PayloadNames) {
-    $payload = Find-ToolReleaseArtifact -InputRoot $InputRoot -Name $payloadName
-    Copy-Item -LiteralPath $payload.FullName -Destination (Join-Path $stage $payload.Name)
+try {
+    foreach ($payloadName in $PayloadNames) {
+        $payload = Find-ToolReleaseArtifact -InputRoot $InputRoot -Name $payloadName
+        Copy-Item -LiteralPath $payload.FullName -Destination (Join-Path $stage $payload.Name)
+    }
+    $namespace = "https://github.com/tony-xmelon/FreeX/releases/$CommitSha/$Name/$Runtime"
+    & $SbomToolPath generate -b $stage -bc $RepositoryRoot -pn $Name -pv $Version -ps 'FreeX contributors' -nsb $namespace
+    if ($LASTEXITCODE -ne 0) { throw "sbom-tool failed with exit code $LASTEXITCODE." }
+    $generated = Join-Path $stage '_manifest/spdx_2.2/manifest.spdx.json'
+    if (-not (Test-Path -LiteralPath $generated)) { throw "SBOM output missing: $generated" }
+    Copy-Item -LiteralPath $generated -Destination $OutputPath -Force
+    $outputName = Split-Path -Leaf $OutputPath
+    $hash = (Get-FileHash -LiteralPath $OutputPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    "$hash  $outputName" | Set-Content -LiteralPath "$OutputPath.sha256" -NoNewline -Encoding ascii
+    Write-Host "Produced $OutputPath"
 }
-$namespace = "https://github.com/tony-xmelon/FreeX/releases/$CommitSha/$Name/$Runtime"
-& $SbomToolPath generate -b $stage -bc $RepositoryRoot -pn $Name -pv $Version -ps 'FreeX contributors' -nsb $namespace
-if ($LASTEXITCODE -ne 0) { throw "sbom-tool failed with exit code $LASTEXITCODE." }
-$generated = Join-Path $stage '_manifest/spdx_2.2/manifest.spdx.json'
-if (-not (Test-Path -LiteralPath $generated)) { throw "SBOM output missing: $generated" }
-Copy-Item -LiteralPath $generated -Destination $OutputPath -Force
-$outputName = Split-Path -Leaf $OutputPath
-$hash = (Get-FileHash -LiteralPath $OutputPath -Algorithm SHA256).Hash.ToLowerInvariant()
-"$hash  $outputName" | Set-Content -LiteralPath "$OutputPath.sha256" -NoNewline -Encoding ascii
-Write-Host "Produced $OutputPath"
+finally {
+    if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+}
