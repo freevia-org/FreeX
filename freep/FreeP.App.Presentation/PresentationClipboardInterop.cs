@@ -227,12 +227,12 @@ public static class PresentationClipboardPastePlanner
             return PresentationClipboardPasteSource.Internal;
         if (hasNativeSelection)
             return PresentationClipboardPasteSource.NativeSelection;
-        if (hasImage)
-            return PresentationClipboardPasteSource.Image;
         if (hasRichText)
             return PresentationClipboardPasteSource.RichText;
         if (hasXamlPackage)
             return PresentationClipboardPasteSource.XamlPackage;
+        if (hasImage)
+            return PresentationClipboardPasteSource.Image;
         if (hasText)
             return PresentationClipboardPasteSource.Text;
         if (internalHasData)

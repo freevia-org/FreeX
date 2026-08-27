@@ -268,7 +268,24 @@ public partial class MainWindow
         }
 
         RebuildQuickAccessToolbar();
+
+        // The Quick Access Toolbar is an Excel-instance-wide preference, not scoped to this
+        // window's own document (it lives in the single process-wide AppOptions instance every
+        // MainWindow shares) -- every other open window (any document) must reflect the change
+        // immediately too, exactly like the sibling Show Formula Bar broadcast
+        // (MainWindow.ViewCommands.cs, R83-app-view-modes-5-2).
+        _windowRegistry?.BroadcastQuickAccessToolbarChanged(this);
     }
+
+    /// <summary>
+    /// IWorkbookWindow.ApplyQuickAccessToolbarChanged: rebuilds this window's Quick Access
+    /// Toolbar after another window in the process customized the shared
+    /// QuickAccessToolbarCommands / QuickAccessToolbarBelowRibbon options (see
+    /// WorkbookWindowRegistry.BroadcastQuickAccessToolbarChanged). _options is the same shared
+    /// AppOptions instance the acting window already mutated, so this only needs to rebuild the
+    /// chrome from its current values -- no re-fetch required.
+    /// </summary>
+    public void ApplyQuickAccessToolbarChanged() => RebuildQuickAccessToolbar();
 
     private void RegisterQuickAccessToolbarName(string name, FrameworkElement element)
     {

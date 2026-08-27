@@ -272,6 +272,48 @@ public sealed class OsClipboardServiceTests
         source.Should().Be(PresentationClipboardPasteSource.RichText);
     }
 
+    /// <summary>
+    /// shared-clipboard-formats F2: a real Office/Word copy (and FreeX's own cell-range copy)
+    /// places a picture flavor (EMF/CF_BITMAP) alongside RTF/XAML on every Copy. The planner
+    /// must still prefer the richer, editable RichText payload over the flat image so paste
+    /// doesn't collapse formatted text into a non-editable picture.
+    /// </summary>
+    [Fact]
+    public void SharedPlanner_ImageAndRichText_RichTextWins()
+    {
+        var action = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: false,
+            hasImage: true,
+            hasText: true,
+            internalHasData: false,
+            ownCopyIsCurrent: false,
+            hasRichText: true,
+            hasXamlPackage: false);
+
+        action.Should().Be(PresentationClipboardPasteSource.RichText,
+            "F2: rich text must win over an image flavor riding alongside it (Office/Word copy convention)");
+    }
+
+    /// <summary>
+    /// shared-clipboard-formats F2 sibling: same image-alongside-rich-content scenario, but the
+    /// only rich format present is XamlPackage (no RichText). It must still beat the image.
+    /// </summary>
+    [Fact]
+    public void SharedPlanner_ImageAndXamlPackage_XamlPackageWins()
+    {
+        var action = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: false,
+            hasImage: true,
+            hasText: true,
+            internalHasData: false,
+            ownCopyIsCurrent: false,
+            hasRichText: false,
+            hasXamlPackage: true);
+
+        action.Should().Be(PresentationClipboardPasteSource.XamlPackage,
+            "F2: XAML package must win over an image flavor riding alongside it");
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     //  Copy payload builder (with fake renderer, no real clipboard)
     // ════════════════════════════════════════════════════════════════════════════════

@@ -39,6 +39,7 @@ public sealed class R91_KeyboardEditGateSuppressesWholeCellShortcutsTests
         public void TileToWorkArea(Rect bounds) { }
         public void ApplyFormulaBarVisibility(bool visible) { }
         public void ApplySaveInProgress(bool inProgress) { }
+        public void ApplyQuickAccessToolbarChanged() { }
     }
 
     private static (MainWindow Window, Workbook Workbook, Sheet Sheet) CreateAdoptedWindow()

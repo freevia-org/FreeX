@@ -265,20 +265,136 @@ public sealed class EditingSessionTests
 
         sess.SetCurrentSlideNotesText("Bold and italic plus");
 
+        // The trailing " plus" extends the last existing run's own span rather than spawning a
+        // separate new run -- see AppendNotesLineRuns (round-164 freep-notes-handouts F2): the
+        // last template absorbs every remaining character, so appended text merges into the run
+        // whose formatting it inherits instead of fragmenting into one run per edit.
         var runs = sess.CurrentSlideNotes!.Paragraphs.Single().Runs;
-        runs.Select(run => run.Text).Should().Equal("Bold", " and italic", " plus");
+        runs.Select(run => run.Text).Should().Equal("Bold", " and italic plus");
         runs[0].Bold.Should().BeTrue();
         runs[0].Italic.Should().BeFalse();
         runs[1].Italic.Should().BeTrue();
         runs[1].Bold.Should().BeFalse();
-        runs[2].Italic.Should().BeTrue();
 
         sess.Undo();
         sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Select(run => run.Text)
             .Should().Equal("Bold", " and italic");
         sess.Redo();
         sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Select(run => run.Text)
-            .Should().Equal("Bold", " and italic", " plus");
+            .Should().Equal("Bold", " and italic plus");
+    }
+
+    [Fact]
+    public void SetSlideNotesText_CoalescesConsecutiveKeystrokesIntoOneUndoEntry()
+    {
+        // Round-164 freep-notes-handouts F1: both hosts call SetCurrentSlideNotesText once per
+        // keystroke (TextChanged fires per character). Reproduce that exactly: five ordinary
+        // edits, then a paragraph of notes typed one character at a time, growing the same way
+        // real typing does. Before the fix each keystroke pushed its own undo entry and the
+        // 200-deep cap silently evicted the five title edits (and the first several keystrokes)
+        // long before Undo() ever got back to them.
+        var sess = Make();
+        var originalTitle = sess.Presentation.Slides[0].Title;
+
+        for (var i = 1; i <= 5; i++)
+            sess.SetSlideTitle(0, $"Renamed {i}");
+
+        var notes = new string('x', 206);
+        for (var i = 1; i <= notes.Length; i++)
+            sess.SetCurrentSlideNotesText(notes[..i]);
+
+        var undoCount = 0;
+        while (sess.CanUndo)
+        {
+            sess.Undo();
+            undoCount++;
+        }
+
+        // 5 title edits + 1 coalesced notes entry, however many keystrokes were actually typed.
+        undoCount.Should().Be(6);
+        sess.Presentation.Slides[0].Title.Should().Be(originalTitle);
+    }
+
+    [Fact]
+    public void SetSlideNotesText_DoesNotCoalesceAcrossAnUnrelatedEditOrExplicitUndo()
+    {
+        // Sibling/no-regression case for the F1 fix: coalescing must only ever merge an
+        // uninterrupted run of notes keystrokes on the same slide. An unrelated command (or an
+        // explicit Undo) executing in between must still start a fresh, separately-undoable
+        // entry -- merging across it would silently fold an unrelated edit's revert into the
+        // notes entry (or corrupt whatever the unrelated command just did).
+        var sess = Make();
+        var originalTitle = sess.Presentation.Slides[0].Title;
+
+        sess.SetCurrentSlideNotesText("A");
+        sess.SetSlideTitle(0, "Renamed");
+        sess.SetCurrentSlideNotesText("AB");
+
+        sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Single().Text.Should().Be("AB");
+
+        sess.Undo();
+        sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Single().Text.Should().Be("A");
+        sess.Presentation.Slides[0].Title.Should().Be("Renamed");
+
+        sess.Undo();
+        sess.Presentation.Slides[0].Title.Should().Be(originalTitle);
+        sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Single().Text.Should().Be("A");
+
+        sess.Undo();
+        sess.CurrentSlideNotes.Should().BeNull();
+        sess.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetSlideNotesText_TypingCharacterByCharacterDoesNotFragmentIntoOneRunPerCharacter()
+    {
+        // Round-164 freep-notes-handouts F2: AppendNotesLineRuns rebuilds the notes TextBody from
+        // scratch on every keystroke. Before the fix, once a trailing run's length settled at 1
+        // (immediately -- the very first keystroke has no template and produces a one-character
+        // run), every later keystroke's leftover character spilled into a brand-new one-character
+        // run instead of extending it, so typing a sentence one character at a time left it as one
+        // Run object per character (and Runs[0].Text stuck at just the first character typed).
+        var sess = Make();
+        const string sentence = "This sentence is typed one character at a time to catch run fragmentation.";
+        for (var i = 1; i <= sentence.Length; i++)
+            sess.SetCurrentSlideNotesText(sentence[..i]);
+
+        var runs = sess.CurrentSlideNotes!.Paragraphs.Single().Runs;
+        runs.Should().HaveCount(1, "ordinary typing should extend the one run, not spawn a new run per keystroke");
+        runs[0].Text.Should().Be(sentence);
+    }
+
+    [Fact]
+    public void SetSlideNotesText_PreservesEarlierFormattedSpanWhenAppendingTrailingText()
+    {
+        // Sibling/no-regression case for the F2 fix: only the LAST run's span should stretch to
+        // absorb appended text. An earlier run that carries its own distinct formatting (and was
+        // never adjacent to the appended text) must stay a separate run with its formatting
+        // intact -- the fix must not collapse the whole paragraph into a single run.
+        var sess = Make();
+        sess.Presentation.Slides[0].Notes = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "Bold", Bold = true, BoldSet = true },
+                        new Run { Text = " tail", Italic = true, ItalicSet = true },
+                    }
+                }
+            }
+        };
+
+        sess.SetCurrentSlideNotesText("Bold tail!");
+
+        var runs = sess.CurrentSlideNotes!.Paragraphs.Single().Runs;
+        runs.Should().HaveCount(2, "the earlier Bold span must stay separate from the trailing span it never shared formatting with");
+        runs[0].Text.Should().Be("Bold");
+        runs[0].Bold.Should().BeTrue();
+        runs[1].Text.Should().Be(" tail!");
+        runs[1].Italic.Should().BeTrue();
     }
 
     [Fact]

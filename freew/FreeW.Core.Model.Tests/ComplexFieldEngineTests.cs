@@ -1049,6 +1049,63 @@ public class ComplexFieldEngineTests
         ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("4");
     }
 
+    [Fact]
+    public void Formula_NestedSeqReferenceCountsRealPrecedingOccurrences()
+    {
+        // Word's documented technique for arithmetic on a running caption counter: a SEQ reference nested
+        // inside another field's instruction, e.g. "{ ={SEQ Figure}+1 }". Two real Figure captions precede
+        // it, so the nested SEQ must read 2 (not the synthetic-run fallback of 1), making the outer formula
+        // 2+1 = 3.
+        var doc = new TextDocument();
+        AddField(doc, " SEQ Figure ", cached: "?"); // real 1st Figure caption -> 1
+        AddField(doc, " SEQ Figure ", cached: "?"); // real 2nd Figure caption -> 2
+        var run = AddField(doc, " =0+1 ", cached: "stale").Runs.Single();
+        run.ComplexField = run.ComplexField! with
+        {
+            NestedFields =
+            [
+                new NestedComplexField(
+                    new ComplexField(" SEQ Figure "),
+                    "0",
+                    NestedComplexFieldPlacement.Instruction,
+                    Offset: 2,
+                    Length: 1)
+            ]
+        };
+
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("3");
+
+        run.ComplexField!.NestedFields.Should().ContainSingle()
+            .Which.CachedResult.Should().Be("2");
+    }
+
+    [Fact]
+    public void Seq_NestedReferenceDoesNotConsumeARealSequenceSlot()
+    {
+        // Adjacent-case guard for the fix above: a SEQ field nested inside another field's instruction must
+        // not itself count as an occurrence of the sequence, so a real SEQ field appearing after it still
+        // reports the next real ordinal rather than being skipped or double-counted.
+        var doc = new TextDocument();
+        AddField(doc, " SEQ Figure ", cached: "?"); // real 1st Figure caption -> 1
+        var run = AddField(doc, " =0+1 ", cached: "stale").Runs.Single();
+        run.ComplexField = run.ComplexField! with
+        {
+            NestedFields =
+            [
+                new NestedComplexField(
+                    new ComplexField(" SEQ Figure "),
+                    "0",
+                    NestedComplexFieldPlacement.Instruction,
+                    Offset: 2,
+                    Length: 1)
+            ]
+        };
+        AddField(doc, " SEQ Figure ", cached: "?"); // real 2nd Figure caption
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("2");   // nested SEQ = 1, +1 = 2
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("2");   // still the 2nd real occurrence
+    }
+
     [Theory]
     [InlineData("ROMAN", 14, "XIV")]
     [InlineData("roman", 14, "xiv")]

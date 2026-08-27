@@ -313,6 +313,73 @@ public sealed class DocumentAccessibilityNodePlannerTests
             .Which.Kind.Should().Be(DocumentAccessibilityNodeKind.Paragraph);
     }
 
+    /// <summary>
+    /// F2: the on-screen renderers (<c>DocumentView.Render()</c> in both shells) replay a table's own
+    /// numbered cell paragraphs through the SAME live <see cref="DocumentListMarkerSequencePlanner"/> used
+    /// for body paragraphs (<see cref="TableCellListMarkerPlanner.AdvanceThroughTable"/>), so a numbered
+    /// list that continues into a table cell and resumes afterward in the body keeps counting correctly.
+    /// Before the fix, <see cref="DocumentAccessibilityNodePlanner"/> never made that call, so the body
+    /// paragraph after the table reported a marker one behind what is actually drawn on screen.
+    /// </summary>
+    [Fact]
+    public void Build_advances_shared_list_counter_through_a_table_cells_numbered_paragraph()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(ListParagraph("Body item 1", ListKind.Number));
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(ListParagraph("Table cell item", ListKind.Number));
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+        document.Blocks.Add(ListParagraph("Body item after table", ListKind.Number));
+
+        var tree = DocumentAccessibilityNodePlanner.Build(document);
+
+        tree.Children.Select(node => node.Kind).Should().Equal(
+            DocumentAccessibilityNodeKind.List,
+            DocumentAccessibilityNodeKind.Table,
+            DocumentAccessibilityNodeKind.List);
+        var postTableItem = tree.Children[2].SemanticChildren.Should().ContainSingle().Subject;
+        postTableItem.ListMarker.Should().Be("3.",
+            "the table cell's own numbered paragraph consumed number 2, so the body list resuming after " +
+            "the table must report 3 -- matching what DocumentView.Render() actually draws on screen -- " +
+            "not 2");
+    }
+
+    /// <summary>
+    /// Sibling/no-regression: a body list positioned after a table but carrying its own explicit
+    /// <see cref="ParagraphFormatting.ListStartOverride"/> (a genuinely independent list instance, the
+    /// reader's signal for a different numId) must still restart at its override value regardless of how
+    /// many numbered items the preceding table's cells contained -- advancing the shared sequence through
+    /// the table must not disturb an explicit restart.
+    /// </summary>
+    [Fact]
+    public void Build_still_honors_an_explicit_restart_for_a_list_that_follows_a_table()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(ListParagraph("Body item 1", ListKind.Number));
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(ListParagraph("Table cell item", ListKind.Number));
+        cell.Paragraphs.Add(ListParagraph("Second table cell item", ListKind.Number));
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+        document.Blocks.Add(ListParagraph("Independent restart", ListKind.Number, startAt: 1));
+
+        var tree = DocumentAccessibilityNodePlanner.Build(document);
+
+        var restarted = tree.Children[2].SemanticChildren.Should().ContainSingle().Subject;
+        restarted.ListMarker.Should().Be("1.",
+            "an explicit ListStartOverride marks a genuinely independent list instance and must restart " +
+            "at its own value no matter how far the table advanced the shared counter");
+    }
+
     [Fact]
     public void Build_coalesces_formatted_runs_that_belong_to_one_link()
     {

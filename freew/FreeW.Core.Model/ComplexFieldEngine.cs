@@ -108,7 +108,22 @@ public static class ComplexFieldEngine
         int blockIndex,
         Run run,
         Func<int, int?>? pageOf = null,
-        Func<int, string?>? pageTextOf = null)
+        Func<int, string?>? pageTextOf = null) =>
+        Recompute(document, blockIndex, run, nestedOwner: null, pageOf, pageTextOf);
+
+    // Nested-field variant: nestedOwner is the real, document-attached Run that owns the field this run
+    // is a synthetic stand-in for (RefreshNestedFields builds an unattached Run to recompute a field
+    // nested inside another field's instruction/result). It is null for a genuine top-level field, and is
+    // threaded down to ResolveSeq so a nested SEQ reference can find "where it sits" in the document by
+    // the owning run's real position instead of by reference-matching a run that is never actually in any
+    // paragraph's Runs list.
+    private static string Recompute(
+        TextDocument document,
+        int blockIndex,
+        Run run,
+        Run? nestedOwner,
+        Func<int, int?>? pageOf,
+        Func<int, string?>? pageTextOf)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(run);
@@ -125,7 +140,7 @@ public static class ComplexFieldEngine
             "=" => ResolveFormula(field),
             "REF" => ResolveRef(document, field, run.Text),
             "PAGEREF" => ResolvePageRef(document, field, run.Text, pageOf, pageTextOf),
-            "SEQ" => ResolveSeq(document, field, run),
+            "SEQ" => ResolveSeq(document, field, run, nestedOwner),
             "CITATION" => Citations.ResolveCitationField(document, field, run.Text),
             "STYLEREF" => ResolveStyleRef(document, field, blockIndex, run.Text),
             "IF" => ResolveIf(document, FieldForIfEvaluation(field), run.Text),
@@ -252,7 +267,7 @@ public static class ComplexFieldEngine
             };
             var nestedResult = nested.Field.IsLocked
                 ? nested.CachedResult
-                : Recompute(document, blockIndex, nestedRun, pageOf, pageTextOf);
+                : Recompute(document, blockIndex, nestedRun, owner, pageOf, pageTextOf);
             nestedRun.Text = nestedResult;
 
             var delta = nested.Placement == NestedComplexFieldPlacement.Instruction
@@ -1038,7 +1053,7 @@ public static class ComplexFieldEngine
     // table-cell paragraphs. \r N resets at the current field; \c repeats; \n explicitly advances; and
     // \s N resets the first matching sequence after a heading at level N or higher. Word consumes a
     // pending heading when it encounters that sequence name even if the field's own \s level does not match.
-    private static string ResolveSeq(TextDocument document, ComplexField field, Run targetRun)
+    private static string ResolveSeq(TextDocument document, ComplexField field, Run targetRun, Run? nestedOwner = null)
     {
         var name = Argument(field.Instruction);
         if (name.Length == 0)
@@ -1056,6 +1071,15 @@ public static class ComplexFieldEngine
 
             for (var r = 0; r < paragraph.Runs.Count; r++)
             {
+                // A SEQ field nested inside another field's instruction has no run of its own in the
+                // document -- it is embedded in the owning field's text, not stored as a separate entry in
+                // any paragraph's Runs. It logically sits at that owning run's document position, so once
+                // the walk reaches the real owning run, stop and report the count accumulated so far
+                // instead of falling through to "not found" (targetRun, the synthetic run built for this
+                // recompute, can never reference-equal a real run in the walk).
+                if (nestedOwner is not null && ReferenceEquals(paragraph.Runs[r], nestedOwner))
+                    return hidden ? string.Empty : FormatIntegerFieldValue(value, field.Instruction);
+
                 if (paragraph.Runs[r].ComplexField is not { } cf
                     || cf.Keyword != "SEQ"
                     || !string.Equals(Argument(cf.Instruction), name, StringComparison.Ordinal))
@@ -1077,13 +1101,15 @@ public static class ComplexFieldEngine
                     value++;                   // ordinary SEQ advances; \c repeats the current value
 
                 pendingHeadingLevel = null;
-                if (ReferenceEquals(paragraph.Runs[r], targetRun))
+                if (nestedOwner is null && ReferenceEquals(paragraph.Runs[r], targetRun))
                     return hidden ? string.Empty : FormatIntegerFieldValue(value, field.Instruction);
             }
         }
         // The target field was not found among the document's SEQ fields (shouldn't happen for an in-doc
-        // field): fall back to a bare first ordinal.
-        return hidden ? string.Empty : FormatIntegerFieldValue(1, field.Instruction);
+        // field, and for a nested field means its owner sits somewhere this walk doesn't cover, e.g. a
+        // header/footer): fall back to a bare first ordinal for a genuine top-level miss, or to whatever
+        // was actually counted for a nested reference so it does not silently discard real precedents.
+        return hidden ? string.Empty : FormatIntegerFieldValue(nestedOwner is null ? 1 : value, field.Instruction);
     }
 
     /// <summary>

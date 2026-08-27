@@ -893,7 +893,7 @@ internal static class FreeWRibbonCommands
 
         var headerFooterPageSettings = HeaderFooterRibbonWorkflow.CreatePageSettingCommands(
             new HeaderFooterPageSettingsPorts(
-                GetPageSettings: () => editor.Model.Page,
+                GetPageSettings: () => editor.CurrentSectionPageSettings(),
                 ApplyPageSettings: editor.ApplyPageSettings,
                 IsEnabled: static () => true,
                 ResolveSelectedValue: ComboValue));
@@ -6813,6 +6813,11 @@ internal static class FreeWRibbonCommands
 
     // Insert > Header & Footer: prompt for the header/footer text and store it on the model. An empty
     // entry clears the header/footer. A page-number field already present is preserved by re-appending.
+    // Targets the SectionHeadersFooters that owns the default header/footer slot for the caret's own
+    // section (walking backward through "link to previous" sections via HeaderFooterPagePlanner), not
+    // always the document's final section -- so a caret sitting in an earlier section (e.g. before a
+    // Next-Page section break) edits that section's own header/footer instead of silently overwriting
+    // the final section's.
     private sealed class HeaderFooterCommand(
         DocumentView editor,
         bool isFooter,
@@ -6821,7 +6826,9 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             var model = editor.Model;
-            var existing = isFooter ? model.Footer : model.Header;
+            var slot = isFooter ? HeaderFooterSlotKind.Footer : HeaderFooterSlotKind.Header;
+            var owner = HeaderFooterPagePlanner.ResolveSlotOwner(model.Sections, editor.CurrentSectionIndex(), slot);
+            var existing = isFooter ? owner.Footer : owner.Header;
             var seed = existing?.PlainText ?? string.Empty;
             var label = isFooter
                 ? UiText.Get("HeaderFooter_Footer_Label")
@@ -6840,9 +6847,9 @@ internal static class FreeWRibbonCommands
             var value = HeaderFooterDialogPlanner.BuildPlainTextHeaderFooter(text, existing);
 
             if (isFooter)
-                model.Footer = value;
+                owner.Footer = value;
             else
-                model.Header = value;
+                owner.Header = value;
 
             editor.Focus();
         }

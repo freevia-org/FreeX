@@ -211,6 +211,14 @@ public static class DocumentAccessibilityNodePlanner
                 case Table table:
                     tableNumber++;
                     children.Add(BuildTable(document, table, blockIndex, tableNumber, $"block:{blockIndex}:table"));
+                    // A table's cells are numbered through their own freshly-recomputed marker plan inside
+                    // BuildTable, not through this loop's live listMarkerSequence. Replay the table's list
+                    // paragraphs through THIS sequence too (without re-emitting nodes for them) so a body
+                    // list that resumes after the table reports the same number the on-screen renderers
+                    // (DocumentView.Render() in both shells) draw, instead of staying frozen at the
+                    // pre-table count. Mirrors each host's own Render() synchronization step -- see
+                    // TableCellListMarkerPlanner.AdvanceThroughTable's doc comment.
+                    TableCellListMarkerPlanner.AdvanceThroughTable(table, listMarkerSequence);
                     break;
             }
         }

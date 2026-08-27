@@ -259,6 +259,14 @@ public partial class MainWindow
 
     internal void RebuildQuickAccessToolbarForTest() => RebuildQuickAccessToolbar();
 
+    internal void ApplyQuickAccessToolbarCustomizationForTest(
+        string commandId,
+        QuickAccessToolbarCustomizationAction action) =>
+        ApplyQuickAccessToolbarCustomization(commandId, action);
+
+    internal Button? GetQuickAccessToolbarButtonForTest(string commandId) =>
+        GetQuickAccessToolbarButton(commandId);
+
     internal void OpenCustomZoomDialogForTest() =>
         ZoomCustomMenuItem_Click(this, new RoutedEventArgs());
 

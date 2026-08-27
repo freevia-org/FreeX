@@ -218,7 +218,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // headless registry callers deterministic and retains the old region-creation behavior.
         var headerFooterPageSettings = HeaderFooterRibbonWorkflow.CreatePageSettingCommands(
             new HeaderFooterPageSettingsPorts(
-                GetPageSettings: () => editor.Document.Page,
+                GetPageSettings: () => editor.CurrentSectionPageSettings(),
                 ApplyPageSettings: editor.ApplyPageSettings,
                 IsEnabled: () => !editor.IsEditingLocked));
         HeaderFooterRibbonWorkflow.Register(

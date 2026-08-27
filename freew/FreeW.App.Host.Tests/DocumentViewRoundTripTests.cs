@@ -2367,4 +2367,66 @@ public sealed class DocumentViewRoundTripTests
     // A valid 1x1 PNG so the WPF image decoder in BuildImageRun succeeds under test.
     private static byte[] OnePixelPng() => System.Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+
+    // freew-fields-update F1: Ctrl+F11 ("Lock Field") must stop a complex field's live-resolving keywords
+    // (DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES) from being recomputed on render and re-saved. AUTHOR is
+    // used here (rather than DATE/TIME) because its live value (document.Properties.Author) is fully
+    // deterministic, unlike DateTime.Now, so the test cannot flake on a clock/culture boundary.
+    [StaFact]
+    public void LockedComplexField_KeepsCachedValue_ThroughRenderAndCommit()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Properties.Author = "Live Author";
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Cached Author")
+        {
+            ComplexField = new ComplexField(
+                " AUTHOR ",
+                Sequence: new ComplexFieldSequenceMetadata(IsLocked: true))
+        });
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        // The render path (BuildComplexFieldRun -> ResolveComplexFieldText) must not have overwritten the
+        // displayed text with the live document property while the field is locked.
+        var rendered = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var renderedRun = rendered.Inlines.OfType<System.Windows.Documents.Run>().Single();
+        renderedRun.Text.Should().Be("Cached Author");
+
+        view.CommitToModel();
+        var recovered = FirstRun(view.Model);
+        recovered.Text.Should().Be("Cached Author");
+        recovered.ComplexField!.IsLocked.Should().BeTrue();
+    }
+
+    // Sibling/regression case: an *unlocked* AUTHOR field must keep resolving live on render and commit,
+    // exactly as before this fix -- the lock check must not suppress recompute for the common case.
+    [StaFact]
+    public void UnlockedComplexField_StillResolvesLiveValue_ThroughRenderAndCommit()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Properties.Author = "Live Author";
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Cached Author")
+        {
+            ComplexField = new ComplexField(" AUTHOR ")
+        });
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var rendered = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var renderedRun = rendered.Inlines.OfType<System.Windows.Documents.Run>().Single();
+        renderedRun.Text.Should().Be("Live Author");
+
+        view.CommitToModel();
+        var recovered = FirstRun(view.Model);
+        recovered.Text.Should().Be("Live Author");
+        recovered.ComplexField!.IsLocked.Should().BeFalse();
+    }
 }

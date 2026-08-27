@@ -96,6 +96,35 @@ public sealed class PresentationClipboardWorkflowTests
         ExtractText(slide.Shapes[^1]).Should().Be("Portable rich text");
     }
 
+    /// <summary>
+    /// shared-clipboard-formats F2: real Office/Word copies (and FreeX's own cell-range copy)
+    /// place a picture flavor (EMF/CF_BITMAP) alongside RTF/XAML on every Copy. Before the fix,
+    /// PresentationClipboardPastePlanner.Decide checked hasImage before hasRichText, so this
+    /// combination collapsed to a flat, non-editable picture and silently discarded the rich
+    /// text. It must now paste as an editable text box built from the rich content.
+    /// </summary>
+    [Fact]
+    public void ApplyPaste_ImageAlongsideRichText_PastesEditableTextNotPicture()
+    {
+        var (editor, slide) = CreateEditor();
+        var payload = InCanvasRichClipboardPayload.FromPlainText("Formatted Word text");
+        var content = new PresentationClipboardContent(
+            PngBytes: [10, 20, 30],
+            RichTextBytes: InCanvasRichClipboardPlanner.Serialize(payload));
+
+        var source = PresentationClipboardWorkflow.ApplyPaste(
+            PresentationClipboardWorkflow.PreparePaste(editor),
+            content,
+            ownCopyIsCurrent: false);
+
+        source.Should().Be(PresentationClipboardPasteSource.RichText,
+            "F2: rich text must win over an image flavor riding alongside it");
+        slide.Shapes.Should().HaveCount(3);
+        slide.Shapes[^1].Kind.Should().NotBe(SlideShapeKind.Picture,
+            "F2: the paste must not collapse to a flat picture when rich text is available");
+        ExtractText(slide.Shapes[^1]).Should().Be("Formatted Word text");
+    }
+
     [Fact]
     public void ApplyPaste_PreferInternalIgnoresAvailableSystemImage()
     {

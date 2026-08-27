@@ -76,6 +76,17 @@ public interface IWorkbookWindow
     /// and input must stay blocked until every hold has released.
     /// </summary>
     void ApplySaveInProgress(bool inProgress);
+
+    /// <summary>
+    /// Rebuilds this window's Quick Access Toolbar chrome after ANOTHER window in the same
+    /// process customized it (added/removed a command, or toggled "Show below the Ribbon"),
+    /// via the Options dialog or the QAT's own context menu. Like Show Formula Bar (see
+    /// <see cref="ApplyFormulaBarVisibility"/>), the Quick Access Toolbar customization lives in
+    /// the single process-wide AppOptions instance shared by every window, so every open window
+    /// -- across every document -- must reflect a change immediately instead of only picking it
+    /// up the next time it happens to rebuild its own QAT for an unrelated reason.
+    /// </summary>
+    void ApplyQuickAccessToolbarChanged();
 }
 
 /// <summary>
@@ -301,6 +312,22 @@ public sealed class WorkbookWindowRegistry
             origin,
             WorkbookWindowNotificationAudience.SameDocumentExceptOrigin,
             window => window.ApplySaveInProgress(inProgress));
+    }
+
+    /// <summary>
+    /// Broadcasts a Quick Access Toolbar customization (command set or below-ribbon placement)
+    /// to every OTHER registered window in the process, regardless of document. The QAT
+    /// customization is stored in the single process-wide AppOptions instance every window
+    /// shares (same pattern as <see cref="BroadcastFormulaBarVisibility"/>), so a change applied
+    /// in one window must be reflected live in every sibling window's toolbar chrome too.
+    /// </summary>
+    public void BroadcastQuickAccessToolbarChanged(IWorkbookWindow origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        _core.Notify(
+            origin,
+            WorkbookWindowNotificationAudience.AllExceptOrigin,
+            static window => window.ApplyQuickAccessToolbarChanged());
     }
 
     /// <summary>

@@ -1660,6 +1660,14 @@ public sealed partial class DocumentView : RichTextBox
         PageSettingsSectionResolver.Resolve(_model, CurrentPageSettingsSectionIndex());
 
     /// <summary>
+    /// The 0-based index into <see cref="TextDocument.Sections"/> of the section containing the caret,
+    /// resolved the same way <see cref="CurrentSectionPageSettings"/> resolves its target section (via
+    /// <see cref="PageSettingsSectionResolver"/>). Header/footer ribbon commands use this so they read
+    /// and write the section the caret is actually in instead of always the document's final section.
+    /// </summary>
+    public int CurrentSectionIndex() => CurrentPageSettingsSectionIndex();
+
+    /// <summary>
     /// Apply a document theme (colour/font scheme) to the model's style catalog and re-render so the
     /// new heading colours/fonts and body face show immediately. Pending edits are committed first, then
     /// the shared catalog command snapshots the affected defaults, theme, and styles for one-step Undo.
@@ -9086,7 +9094,10 @@ public sealed partial class DocumentView : RichTextBox
                 // A complex (w:fldChar/w:instrText) field round-trips its raw instruction + show-code toggle.
                 // When field codes are shown the visible text is the code, so the cached result is taken from
                 // the marker; otherwise the visible text IS the resolved result and is kept as the cache.
-                var complexCached = complexMarker.Field.ShowCode || complexFieldRun.Text.Length == 0
+                // A locked field (Ctrl+F11) must never have a recomputed/displayed value committed back —
+                // it keeps the value that was cached at the start of this render pass, same as the F9
+                // update path, which skips locked fields entirely.
+                var complexCached = complexMarker.Field.IsLocked || complexMarker.Field.ShowCode || complexFieldRun.Text.Length == 0
                     ? complexMarker.Cached
                     : complexFieldRun.Text;
                 var complexFormatting = ReadRunFormatting(complexFieldRun);
@@ -12885,6 +12896,13 @@ public sealed partial class DocumentView : RichTextBox
     private static string ResolveComplexFieldText(ModelRun run, TextDocument document, string? fileName)
     {
         var field = run.ComplexField!;
+        // A locked field (Ctrl+F11) must not recompute on render, matching the F9 update path
+        // (DocumentReferenceEditingCoordinator.SetComplexFieldsLocked callers skip locked fields via
+        // "if (complexField.IsLocked) continue;"). Without this, DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES
+        // fields kept recalculating from live state on every render even after being locked, and the
+        // recomputed value then got written back into the model by CommitToModel.
+        if (field.IsLocked)
+            return run.Text;
         var fallback = ResolveFieldText(
             ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword),
             run.Text,

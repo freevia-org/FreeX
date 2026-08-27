@@ -2222,8 +2222,32 @@ public static class PptxPackageWriter
     /// </summary>
     private static XElement? BuildTransitionEl(SlideTransition? transition, string? soundRelId = null)
     {
-        if (transition is null || transition.Kind == TransitionKind.None)
+        if (transition is null)
             return null;
+
+        // F1: Kind.None means "no visual transition effect" -- it does NOT mean "no
+        // p:transition element at all". advClick/advTm/sndAc are independent of the
+        // effect child in CT_SlideTransition, and Rehearse-Timings / the ribbon's bare
+        // "Advance Slide After" control both set AdvanceAfterMs without ever touching
+        // Kind. Only skip the element entirely when every one of those is at its
+        // PowerPoint default (click-advance on, no auto-advance timer, no sound) --
+        // that keeps the common "nothing customized" slide byte-identical to before.
+        if (transition.Kind == TransitionKind.None)
+        {
+            if (transition.AdvanceOnClick && transition.AdvanceAfterMs is null && soundRelId is null)
+                return null;
+
+            var bareAttrs = new List<object?>();
+            if (!transition.AdvanceOnClick)
+                bareAttrs.Add(new XAttribute("advClick", "0"));
+            if (transition.AdvanceAfterMs.HasValue)
+                bareAttrs.Add(new XAttribute("advTm", transition.AdvanceAfterMs.Value));
+            if (soundRelId is not null)
+                bareAttrs.Add(BuildSndAcEl(soundRelId, transition.Sound));
+
+            return new XElement(P + "transition",
+                bareAttrs.Where(x => x is not null).Cast<object>().ToArray());
+        }
 
         // ── Other / unrecognized: re-emit the verbatim raw XML ────────────────────
         // This guarantees NO transition is silently dropped on round-trip, even for

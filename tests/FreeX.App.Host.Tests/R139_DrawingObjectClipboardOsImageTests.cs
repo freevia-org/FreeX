@@ -333,27 +333,58 @@ public sealed class R139_DrawingObjectClipboardOsImageTests
         method!.Invoke(window, [window, new RoutedEventArgs()]);
     }
 
+    /// <summary>
+    /// shared-clipboard-formats-F1: ReadAsync now actually returns whatever was last written
+    /// (filtered to the requested formats), instead of unconditionally reporting Empty. Once
+    /// ExecutePaste's drawing-object branch started re-reading the OS clipboard's marker before
+    /// trusting the internal object clip (see MainWindow.ClipboardCommands.cs), a fake whose
+    /// ReadAsync never reflects a prior WriteAsync would make every paste in these tests look like
+    /// the clipboard had been externally replaced -- these tests are about the OS-clipboard WRITE
+    /// (LastWritten/WriteCount), not about clipboard staleness detection, so the fake must still
+    /// round-trip like a real clipboard for the paste half of CopyThenPaste_* to keep working.
+    /// </summary>
     private sealed class FakePlatformClipboard : IPlatformClipboard
     {
+        private PlatformClipboardContent? _content;
+
         public PlatformClipboardContent? LastWritten { get; private set; }
         public int WriteCount { get; private set; }
 
         public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
             PlatformClipboardReadRequest request,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(PlatformClipboardReadResult<PlatformClipboardContent>.Empty());
+            CancellationToken cancellationToken = default)
+        {
+            if (_content is null)
+                return ValueTask.FromResult(PlatformClipboardReadResult<PlatformClipboardContent>.Empty());
+
+            var content = new PlatformClipboardContent(
+                Text: request.IncludeText ? _content.Text : null,
+                FilePaths: request.IncludeFiles ? _content.FilePaths : [],
+                Image: request.IncludeImage ? _content.Image : null,
+                CustomData: request.CustomFormats.Count == 0
+                    ? []
+                    : _content.CustomData.Where(item => request.CustomFormats.Contains(item.Format)).ToArray());
+
+            return ValueTask.FromResult(content.IsEmpty
+                ? PlatformClipboardReadResult<PlatformClipboardContent>.Empty()
+                : PlatformClipboardReadResult<PlatformClipboardContent>.Success(content));
+        }
 
         public ValueTask<PlatformClipboardWriteResult> WriteAsync(
             PlatformClipboardContent content,
             CancellationToken cancellationToken = default)
         {
+            _content = content;
             LastWritten = content;
             WriteCount++;
             return ValueTask.FromResult(PlatformClipboardWriteResult.Success());
         }
 
         public ValueTask<PlatformClipboardWriteResult> ClearAsync(
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+            CancellationToken cancellationToken = default)
+        {
+            _content = null;
+            return ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+        }
     }
 }

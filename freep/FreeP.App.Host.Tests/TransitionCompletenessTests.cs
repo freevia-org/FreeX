@@ -959,6 +959,91 @@ public class TransitionCompletenessTests
         using var stream = entry.Open();
         doc.Save(stream);
     }
+
+    // ── F1: None-kind timing/click-advance/sound must not be silently dropped ────
+
+    /// <summary>
+    /// F1 repro: a slide with no chosen transition effect (Kind == None) but an
+    /// auto-advance timer and click-advance disabled -- exactly what Rehearse Timings
+    /// and the ribbon's bare "Advance Slide After" control produce on a slide that
+    /// never had an effect picked. Before the fix, BuildTransitionEl bailed out on
+    /// `Kind == TransitionKind.None` and dropped the whole &lt;p:transition&gt; element,
+    /// silently discarding AdvanceOnClick/AdvanceAfterMs on every save/reload.
+    /// </summary>
+    [Fact]
+    public void RoundTrip_NoneKind_PreservesAdvanceTimingAndClickFlag()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition
+        {
+            Kind = TransitionKind.None,
+            AdvanceOnClick = false,
+            AdvanceAfterMs = 3_000,
+        };
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+
+        // The writer must emit a bare <p:transition> (no effect child, no
+        // mc:AlternateContent wrapper needed since there is no dur to preserve)
+        // carrying advClick/advTm so old and new readers alike pick it up.
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var slideEntry = zip.GetEntry("ppt/slides/slide1.xml");
+            Assert.NotNull(slideEntry);
+            using var stream = slideEntry!.Open();
+            var slideXml = XDocument.Load(stream);
+            var transEl = slideXml.Descendants(P + "transition").Single();
+            Assert.Equal("0", transEl.Attribute("advClick")?.Value);
+            Assert.Equal("3000", transEl.Attribute("advTm")?.Value);
+            Assert.Empty(transEl.Elements()); // no effect child, no sndAc
+        }
+
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+        var transition = loaded.Slides[0].Transition;
+        Assert.NotNull(transition);
+        Assert.Equal(TransitionKind.None, transition!.Kind);
+        Assert.False(transition.AdvanceOnClick);
+        Assert.Equal(3_000, transition.AdvanceAfterMs);
+    }
+
+    /// <summary>
+    /// Sibling no-regression case: a slide that never had ANY transition customization
+    /// (Kind == None, click-advance on, no timer, no sound -- i.e. brand-new slide
+    /// default) must still round-trip to no &lt;p:transition&gt; element at all, exactly
+    /// as before the fix. The fix must only stop discarding non-default settings; it
+    /// must not start emitting a no-op element for the common untouched slide.
+    /// </summary>
+    [Fact]
+    public void RoundTrip_NoneKind_AllDefaults_EmitsNoTransitionElement()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition
+        {
+            Kind = TransitionKind.None,
+            AdvanceOnClick = true,
+            AdvanceAfterMs = null,
+        };
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var slideEntry = zip.GetEntry("ppt/slides/slide1.xml");
+            Assert.NotNull(slideEntry);
+            using var stream = slideEntry!.Open();
+            var slideXml = XDocument.Load(stream);
+            Assert.Empty(slideXml.Descendants(P + "transition"));
+        }
+
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+        Assert.Null(loaded.Slides[0].Transition);
+    }
 }
 
 /// <summary>

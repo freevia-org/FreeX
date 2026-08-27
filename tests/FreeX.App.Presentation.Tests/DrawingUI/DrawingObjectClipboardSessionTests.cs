@@ -51,6 +51,35 @@ public sealed class DrawingObjectClipboardSessionTests
         session.TryCaptureExisting(sheet, kind, Guid.NewGuid()).Should().BeFalse();
     }
 
+    /// <summary>
+    /// shared-clipboard-formats-F1: TryCapture must mint a fresh Marker every time, and MatchesMarker
+    /// must only agree with the value stored for the CURRENT Content -- both Clear() and a
+    /// cut-completing CompletePaste() must drop the marker alongside Content so a later, unrelated
+    /// Capture never gets mistaken for a marker that predates it.
+    /// </summary>
+    [Fact]
+    public void Marker_IsFreshPerCaptureAndClearedAlongsideContent()
+    {
+        var session = new DrawingObjectClipboardSession();
+        session.Marker.Should().BeNull();
+        session.MatchesMarker(null).Should().BeFalse();
+
+        session.TryCapture(SheetId.New(), SelectionPaneObjectKind.Shape, Guid.NewGuid());
+        var firstMarker = session.Marker;
+        firstMarker.Should().NotBeNullOrEmpty();
+        session.MatchesMarker(firstMarker).Should().BeTrue();
+        session.MatchesMarker("some-other-app-wrote-this").Should().BeFalse();
+        session.MatchesMarker(null).Should().BeFalse();
+
+        session.TryCapture(SheetId.New(), SelectionPaneObjectKind.Picture, Guid.NewGuid());
+        session.Marker.Should().NotBe(firstMarker, "a new Capture must mint a new marker");
+        session.MatchesMarker(firstMarker).Should().BeFalse("the previous marker must no longer match once a new object was captured");
+
+        session.Clear();
+        session.Marker.Should().BeNull();
+        session.MatchesMarker(null).Should().BeFalse();
+    }
+
     [Fact]
     public void CreatePasteCommand_UsesSnapshotAndCutCompletionClearsOnlyMatchingContent()
     {

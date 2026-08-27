@@ -24271,6 +24271,16 @@ public sealed partial class DocumentView : Control
         PageSettingsSectionResolver.ResolveSectionIndex(_doc, _caret.Block);
 
     /// <summary>
+    /// The <see cref="PageSettings"/> for the section the caret is actually in (resolved via
+    /// <see cref="PageSettingsSectionResolver"/>), not unconditionally <see cref="TextDocument.Page"/>
+    /// (the document's final section). Page-setup-family ribbon controls call this to seed themselves
+    /// from the caret's actual section, matching what <see cref="ApplyPageSettings"/> will write to.
+    /// Mirrors <c>FreeW.App.Host.Editing.DocumentView.CurrentSectionPageSettings</c>.
+    /// </summary>
+    public PageSettings CurrentSectionPageSettings() =>
+        PageSettingsSectionResolver.Resolve(_doc, CurrentPageSettingsSectionIndex());
+
+    /// <summary>
     /// AV-STYLES: clear any named paragraph style from the spanned paragraphs (revert to the document
     /// default — Word's "Clear Formatting" / "Normal" reset at the paragraph level), model-backed and
     /// undoable. Equivalent to applying the empty (null) style id via <see cref="SetParagraphStyleCommand"/>.

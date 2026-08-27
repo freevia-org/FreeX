@@ -27,6 +27,7 @@ internal sealed class TestWorkbookWindow : IWorkbookWindow
     public int SaveGateHoldCount { get; private set; }
     public int SaveInProgressAppliedCount { get; private set; }
     public bool? LastAppliedSaveInProgress { get; private set; }
+    public int QuickAccessToolbarChangedAppliedCount { get; private set; }
 
     public void ApplyWindowTitleSuffix(string suffix) => Suffix = suffix;
 
@@ -67,4 +68,6 @@ internal sealed class TestWorkbookWindow : IWorkbookWindow
         SaveInProgressAppliedCount++;
         SaveGateHoldCount = inProgress ? SaveGateHoldCount + 1 : Math.Max(0, SaveGateHoldCount - 1);
     }
+
+    public void ApplyQuickAccessToolbarChanged() => QuickAccessToolbarChangedAppliedCount++;
 }

@@ -359,25 +359,53 @@ public sealed class DocumentEditingSession
     /// ribbon Numbering button: only the first paragraph of each newly-unrelated Number run is forced to
     /// restart at 1 (a paragraph that already carries an explicit override -- the source's own deliberate
     /// restart/continue mark -- is left untouched); every following paragraph in that same run keeps
-    /// counting from there. A run interrupted by a non-Number paragraph (or a table) partway through the
-    /// pasted content is itself unrelated to whatever came before it, so it restarts too.
+    /// counting from there. A run interrupted by a non-Number paragraph partway through the pasted content
+    /// is itself unrelated to whatever came before it, so it restarts too. A pasted <see cref="Table"/>'s
+    /// cell paragraphs are walked in the same row/cell/paragraph document order
+    /// <see cref="TableCellListMarkerPlanner"/> and the body renderers use for the shared marker counter,
+    /// so a Number-kind cell paragraph is subject to exactly the same adjacency check as a top-level one
+    /// instead of being skipped over.
     /// </summary>
     private static void RestartUnrelatedNumberListRuns(IReadOnlyList<Block> blocks, bool precedingContinuesNumberList)
     {
         var previousWasNumberList = precedingContinuesNumberList;
         foreach (var block in blocks)
         {
-            if (block is not Paragraph paragraph || paragraph.Formatting.ListKind != ListKind.Number)
+            switch (block)
             {
-                previousWasNumberList = false;
-                continue;
+                case Paragraph paragraph:
+                    previousWasNumberList = RestartIfUnrelatedNumberListParagraph(paragraph, previousWasNumberList);
+                    break;
+
+                case Table table:
+                    foreach (var cell in table.Rows.SelectMany(row => row.Cells))
+                    foreach (var cellParagraph in cell.Paragraphs)
+                        previousWasNumberList = RestartIfUnrelatedNumberListParagraph(cellParagraph, previousWasNumberList);
+                    break;
+
+                default:
+                    previousWasNumberList = false;
+                    break;
             }
-
-            if (!previousWasNumberList && paragraph.Formatting.ListStartOverride is null)
-                paragraph.Formatting = paragraph.Formatting with { ListStartOverride = 1 };
-
-            previousWasNumberList = true;
         }
+    }
+
+    /// <summary>
+    /// Forces <paramref name="paragraph"/>'s <see cref="ParagraphFormatting.ListStartOverride"/> to 1 when
+    /// it is a Number-kind paragraph that does not continue the immediately preceding one (and does not
+    /// already carry its own explicit override); every other paragraph kind is left untouched. Returns
+    /// whether this paragraph counts as an open Number list for the NEXT paragraph in document order to
+    /// check itself against.
+    /// </summary>
+    private static bool RestartIfUnrelatedNumberListParagraph(Paragraph paragraph, bool previousWasNumberList)
+    {
+        if (paragraph.Formatting.ListKind != ListKind.Number)
+            return false;
+
+        if (!previousWasNumberList && paragraph.Formatting.ListStartOverride is null)
+            paragraph.Formatting = paragraph.Formatting with { ListStartOverride = 1 };
+
+        return true;
     }
 
     /// <summary>

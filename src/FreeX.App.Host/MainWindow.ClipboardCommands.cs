@@ -335,8 +335,21 @@ public partial class MainWindow
         _workbookClipboardSession.Clear();
         ClearClipboardVisualState();
 
-        if (TryRenderDrawingObjectClipboardImage(kind!.Value, objectId) is { } clipboardImage)
-            SetClipboardDataWithRetry(new PlatformClipboardContent(Image: clipboardImage));
+        // shared-clipboard-formats-F1: attach the SAME marker custom format the cell-range copy
+        // path uses (WorkbookClipboardSession.AttachMarker/MarkerFormat) to whatever gets written
+        // to the OS clipboard here -- unconditionally, even when no preview image could be
+        // rendered -- so ExecutePaste can later tell a genuinely stale _drawingObjectClipboard
+        // (the OS clipboard moved on to some other app, or no window ever captured this exact
+        // object) apart from "still the same clipboard this window just captured". Reusing the
+        // marker format rather than inventing a second one keeps a single read request
+        // (ReadWorkbookClipboardForPastePlanning) sufficient for both clipboards, and the two
+        // never carry an ambiguous value at once: at most one of _workbookClipboardSession/
+        // _drawingObjectClipboard has Content at any moment (ExecuteCopy always clears the other
+        // before capturing into either).
+        var clipboardImage = TryRenderDrawingObjectClipboardImage(kind!.Value, objectId);
+        SetClipboardDataWithRetry(WorkbookClipboardSession.AttachMarker(
+            new PlatformClipboardContent(Image: clipboardImage),
+            _drawingObjectClipboard.Marker));
 
         return true;
     }
@@ -739,10 +752,43 @@ public partial class MainWindow
         // R91-io-clipboard-image-formats-5-1: the Ctrl+V side of a chart/shape Ctrl+C (see
         // TryCopySelectedDrawingObject) -- duplicate the copied object instead of falling through to
         // the cell-range paste logic below, which has no concept of an object clipboard at all.
+        //
+        // shared-clipboard-formats-F1: unlike the cell-range clipboard just below (which always
+        // re-reads the OS clipboard and compares a marker before trusting its own internal
+        // snapshot), this branch used to trust _drawingObjectClipboard.Content unconditionally --
+        // Alt-Tabbing to another app, copying plain text there, then Alt-Tabbing back and pressing
+        // Ctrl+V here silently repasted the stale chart/shape/picture/text box instead of the text
+        // just copied elsewhere. Re-read the OS clipboard's marker (the same WorkbookClipboardSession
+        // custom marker format TryCopySelectedDrawingObject now always attaches via AttachMarker) and
+        // only trust objectClip when it is still the exact thing that marker was written for.
         if (_drawingObjectClipboard.Content is { } objectClip)
         {
-            PasteClipboardObject(objectClip);
-            return;
+            var drawingClipObservation = ReadWorkbookClipboardForPastePlanning();
+            if (drawingClipObservation.ReadFailed)
+            {
+                // Mirrors the identical ReadFailed handling for the cell-range clipboard below: a
+                // transient OS-clipboard read failure must not silently fall back to pasting the
+                // (possibly stale) internal object clip anyway.
+                ShowCommandError(
+                    new CommandOutcome(
+                        false,
+                        ClipboardFeedbackPlanner.ReadFailed.Resolve(UiText.Get)),
+                    "Paste");
+                return;
+            }
+
+            if (_drawingObjectClipboard.MatchesMarker(drawingClipObservation.Marker))
+            {
+                PasteClipboardObject(objectClip);
+                return;
+            }
+
+            // The OS clipboard moved on without us (another app, or a plain in-app cell copy that
+            // never routed through TryCopySelectedDrawingObject) -- discard the now-stale object
+            // clip and fall through to the ordinary cell-range / external-clipboard paste logic
+            // below, which reads the OS clipboard fresh and has no notion this object clip ever
+            // existed.
+            _drawingObjectClipboard.Clear();
         }
 
         if (SheetGrid.SelectedRange is not { } range) return;

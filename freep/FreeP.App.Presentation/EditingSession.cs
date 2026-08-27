@@ -72,6 +72,20 @@ public sealed class EditingSession : ICanvasGestureEditingSession
     private RunFormatSnapshot?  _fmtRun;
     private bool                 _formatPainterActive;
 
+    // ── Notes-pane undo coalescing ────────────────────────────────────────────────
+
+    // Slide index of the still-open "typing session" started by the most recent
+    // SetSlideNotesText/SetCurrentSlideNotesText call, or null when there isn't one. See
+    // SetSlideNotesText for why this exists (round-164 freep-notes-handouts F1): without it,
+    // every keystroke in the notes pane pushes its own undo entry and the 200-deep cap silently
+    // evicts unrelated earlier edits after a single paragraph of typing.
+    private int?  _notesCoalesceSlideIndex;
+    // True only while this class is itself driving Bus.Undo()/Bus.Execute() to merge a keystroke
+    // into the open session. OnBusChangedInvalidateNotesCoalescing uses this to tell "our own
+    // merge" apart from any other mutation (a different command, an explicit Undo/Redo, a direct
+    // SetCurrentSlideNotes/format-toggle call) so only genuine outside activity closes the session.
+    private bool  _notesCoalescingInProgress;
+
     // ── Construction ──────────────────────────────────────────────────────────────
 
     public EditingSession(Presentation presentation, PresentationCommandBus bus)
@@ -81,6 +95,17 @@ public sealed class EditingSession : ICanvasGestureEditingSession
         // Initialize index to -1 so the clamp sets it correctly.
         _currentSlideIndex = -1;
         ClampCurrentSlide();
+        Bus.Changed += OnBusChangedInvalidateNotesCoalescing;
+    }
+
+    private void OnBusChangedInvalidateNotesCoalescing()
+    {
+        if (_notesCoalescingInProgress)
+            return;
+        // Some other command executed (or an explicit Undo/Redo ran) since the last notes-pane
+        // keystroke -- the open session's entry is no longer safely mergeable (it may not even be
+        // on top of the undo stack any more), so the next keystroke must start a fresh entry.
+        _notesCoalesceSlideIndex = null;
     }
 
     // ── Public model access ───────────────────────────────────────────────────────
@@ -1937,14 +1962,38 @@ public sealed class EditingSession : ICanvasGestureEditingSession
     /// mutation entry point for workflows that can navigate independently of the editor's
     /// selected slide, such as Presenter View. The operation remains undoable.
     /// </summary>
+    /// <remarks>
+    /// Both hosts wire their notes text box's TextChanged straight into this method, so it runs
+    /// once per keystroke. Without coalescing, a single typed paragraph would push one undo entry
+    /// per character and -- once the 200-entry depth cap is hit -- silently evict that many
+    /// unrelated earlier edits with no warning (round-164 freep-notes-handouts F1). As long as the
+    /// immediately preceding call was this same method for the same slide, and nothing else has
+    /// touched the undo stack since (see <see cref="OnBusChangedInvalidateNotesCoalescing"/>), this
+    /// merges the new keystroke into the still-open entry instead of pushing a new one: it undoes
+    /// that entry (restoring the pre-session notes) and re-executes with the latest full text, so
+    /// the whole uninterrupted typing session collapses into a single undo step.
+    /// </remarks>
     public void SetSlideNotesText(int slideIndex, string? text)
     {
         if (slideIndex < 0 || slideIndex >= Presentation.Slides.Count)
             return;
 
-        Bus.Execute(new SetSlideNotesCommand(
-            slideIndex,
-            BuildNotesTextBody(text, Presentation.Slides[slideIndex].Notes)));
+        var newNotes = BuildNotesTextBody(text, Presentation.Slides[slideIndex].Notes);
+
+        _notesCoalescingInProgress = true;
+        try
+        {
+            if (_notesCoalesceSlideIndex == slideIndex && Bus.CanUndo)
+                Bus.Undo();
+
+            Bus.Execute(new SetSlideNotesCommand(slideIndex, newNotes));
+        }
+        finally
+        {
+            _notesCoalescingInProgress = false;
+        }
+
+        _notesCoalesceSlideIndex = slideIndex;
     }
 
     /// <summary>
@@ -2130,24 +2179,32 @@ public sealed class EditingSession : ICanvasGestureEditingSession
             return;
         }
 
+        // Distribute the new line's characters across the old runs' character-style spans, in
+        // order, so formatting the source paragraph carried (bold word, colored span, ...) lines
+        // up with the same stretch of text it applied to before. The LAST template absorbs every
+        // remaining character instead of being capped at its own original length: typing (or
+        // deleting) at the end of a paragraph only ever changes how much text that trailing span
+        // covers, not the number of spans. Capping it and then spilling the rest into a brand-new
+        // run was the bug (round-164 freep-notes-handouts F2) -- since the very first keystroke
+        // has no template yet and always produces a single one-character run, every later
+        // keystroke's "leftover" character landed in yet another new one-character run, so a
+        // paragraph typed one key at a time ended up as one Run object per character instead of a
+        // single coherent run.
         var offset = 0;
-        foreach (var runTemplate in templates)
+        for (var i = 0; i < templates.Length; i++)
         {
             if (offset >= line.Length)
                 break;
 
-            var length = Math.Min(runTemplate.Text.Length, line.Length - offset);
+            var runTemplate = templates[i];
+            var isLastTemplate = i == templates.Length - 1;
+            var length = isLastTemplate
+                ? line.Length - offset
+                : Math.Min(runTemplate.Text.Length, line.Length - offset);
             destination.Runs.Add(CreatePlainNotesRun(
                 line.Substring(offset, length),
                 runTemplate));
             offset += length;
-        }
-
-        if (offset < line.Length)
-        {
-            destination.Runs.Add(CreatePlainNotesRun(
-                line[offset..],
-                templates[^1]));
         }
     }
 

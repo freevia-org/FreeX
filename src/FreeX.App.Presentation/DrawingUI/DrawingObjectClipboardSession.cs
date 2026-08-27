@@ -20,6 +20,20 @@ public sealed class DrawingObjectClipboardSession
 
     public bool HasContent => Content is not null;
 
+    /// <summary>
+    /// shared-clipboard-formats-F1: an opaque token generated fresh every time <see
+    /// cref="TryCapture"/> succeeds, alongside <see cref="Content"/>. The host shell writes this
+    /// same value onto the real OS clipboard's marker custom format (see
+    /// <c>WorkbookClipboardSession.AttachMarker</c>/<c>MarkerFormat</c>, reused here rather than
+    /// inventing a second format name) every time it captures a drawing object, so a later Paste
+    /// can re-read the OS clipboard and call <see cref="MatchesMarker"/> before trusting <see
+    /// cref="Content"/>. Without this, nothing ever detected that some OTHER application (or even
+    /// a plain-text copy typed into a different window) replaced the real OS clipboard since this
+    /// object was captured -- Paste kept silently repasting the stale chart/shape/picture/text box
+    /// forever. Always null exactly when <see cref="Content"/> is null.
+    /// </summary>
+    public string? Marker { get; private set; }
+
     public bool TryCapture(
         SheetId sourceSheetId,
         SelectionPaneObjectKind? kind,
@@ -30,8 +44,21 @@ public sealed class DrawingObjectClipboardSession
             return false;
 
         Content = new DrawingObjectClipboardSnapshot(sourceSheetId, kind.Value, objectId, isCut);
+        Marker = Guid.NewGuid().ToString("N");
         return true;
     }
+
+    /// <summary>
+    /// True when <see cref="Content"/> is present AND <paramref name="observedMarker"/> (read back
+    /// from the OS clipboard at Paste time) is the exact value this session wrote at Capture time --
+    /// see <see cref="Marker"/>. A null/different observed marker means some other application (or
+    /// window) replaced the OS clipboard since this Capture, so <see cref="Content"/> must be
+    /// treated as stale rather than pasted.
+    /// </summary>
+    public bool MatchesMarker(string? observedMarker) =>
+        Content is not null &&
+        Marker is not null &&
+        string.Equals(Marker, observedMarker, StringComparison.Ordinal);
 
     public bool TryCaptureExisting(
         Sheet sourceSheet,
@@ -46,14 +73,21 @@ public sealed class DrawingObjectClipboardSession
                TryCapture(sourceSheet.Id, resolvedKind, objectId, isCut);
     }
 
-    public void Clear() => Content = null;
+    public void Clear()
+    {
+        Content = null;
+        Marker = null;
+    }
 
     public void CompletePaste(DrawingObjectClipboardSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
         if (snapshot.IsCut && Content == snapshot)
+        {
             Content = null;
+            Marker = null;
+        }
     }
 
     public static DuplicateDrawingObjectCommand CreatePasteCommand(

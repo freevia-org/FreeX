@@ -45,6 +45,7 @@ public sealed class R114_CommandBusWorkbookSwapRetireTests
         public void TileToWorkArea(Rect bounds) { }
         public void ApplyFormulaBarVisibility(bool visible) { }
         public void ApplySaveInProgress(bool inProgress) { }
+        public void ApplyQuickAccessToolbarChanged() { }
     }
 
     private static MainWindow CreateWindow(

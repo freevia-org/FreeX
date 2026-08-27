@@ -38,6 +38,7 @@ public sealed class R127_ReviewDeleteCommentNoteEnablementTests
         public void TileToWorkArea(Rect bounds) { }
         public void ApplyFormulaBarVisibility(bool visible) { }
         public void ApplySaveInProgress(bool inProgress) { }
+        public void ApplyQuickAccessToolbarChanged() { }
     }
 
     /// <summary>Records every ShowInfo call so the click-handler no-op path can be asserted on
