@@ -1,5 +1,5 @@
 param(
-    [string]$JsonPath = "freew\FreeW.Ribbon.Definitions.Tests\freew-canonical-ribbon-evidence.json",
+    [string]$JsonPath = "freew/FreeW.Ribbon.Definitions.Tests/freew-canonical-ribbon-evidence.json",
     [switch]$Check
 )
 
@@ -7,11 +7,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-. (Join-Path $repoRoot "tools\ToolScriptSupport.ps1")
+. (Join-Path $repoRoot "tools/ToolScriptSupport.ps1")
 
 $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
 $definitionsProject = ConvertTo-ToolXmlAttribute (Resolve-ToolRepoPath `
-    -Path "freew\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj" `
+    -Path "freew/FreeW.Ribbon.Definitions/FreeW.Ribbon.Definitions.csproj" `
     -RepoRoot $repoRoot)
 
 $programSource = @'

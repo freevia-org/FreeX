@@ -18,12 +18,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$resolvedOutput = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
+$resolvedOutput = Resolve-ToolRepoPath -Path $OutputDir -RepoRoot $repoRoot
 New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 $metadataPath = Join-Path $resolvedOutput "session.json"
 $logPath = Join-Path $resolvedOutput "app.log"
@@ -41,8 +38,10 @@ try {
     )
     if ($SkipPublish) { $runnerArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $runnerArguments += "-SkipImageBuild" }
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner @runnerArguments
-    if ($LASTEXITCODE -ne 0) { throw "Linux harness start failed with exit code $LASTEXITCODE." }
+    Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) `
+        -Arguments (@("-NoProfile", "-File", $runner) + $runnerArguments) `
+        -WorkingDirectory $repoRoot `
+        -FailureMessage "Linux harness start failed"
 
     $session = Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
     $sourceLog = Join-Path ([string]$session.sessionDirectory) "logs/app.log"
@@ -63,9 +62,10 @@ try {
         Start-Sleep -Milliseconds 200
     }
     if (-not $KeepContainer) {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner `
-            -Action Stop -App FreeW -Port $Port -OutputDir $resolvedOutput
-        if ($LASTEXITCODE -ne 0) { throw "Linux harness stop failed with exit code $LASTEXITCODE." }
+        Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) `
+            -Arguments @("-NoProfile", "-File", $runner, "-Action", "Stop", "-App", "FreeW", "-Port", "$Port", "-OutputDir", $resolvedOutput) `
+            -WorkingDirectory $repoRoot `
+            -FailureMessage "Linux harness stop failed"
         $cleanupRequired = $false
         $log = [IO.File]::ReadAllText($sourceLog)
     }
@@ -124,8 +124,10 @@ try {
 finally {
     if ($cleanupRequired -and -not $KeepContainer) {
         try {
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner `
-                -Action Stop -App FreeW -Port $Port -OutputDir $resolvedOutput
+            Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) `
+                -Arguments @("-NoProfile", "-File", $runner, "-Action", "Stop", "-App", "FreeW", "-Port", "$Port", "-OutputDir", $resolvedOutput) `
+                -WorkingDirectory $repoRoot `
+                -FailureMessage "Linux harness cleanup failed"
         } catch {
             Write-Warning "Could not stop the harness-owned FreeW container: $($_.Exception.Message)"
         }

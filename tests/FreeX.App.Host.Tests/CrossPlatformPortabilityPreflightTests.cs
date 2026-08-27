@@ -15,7 +15,10 @@ public sealed class CrossPlatformPortabilityPreflightTests
         script.Should().Contain("passes a Windows-separated child path to Join-Path");
         script.Should().Contain("Path.GetRelativePath, which is unavailable in Windows PowerShell 5.1");
         script.Should().Contain("app-tester-release.yml");
-        script.Should().Contain("Test-LinuxPackagingScripts.ps1");
+        script.Should().Contain("all $($powerShellScripts.Count) PowerShell scripts");
+        script.Should().Contain("Unicode/case-normalized tracked-path collision");
+        script.Should().Contain("must use LF endings");
+        script.Should().Contain("must be tracked executable (Git mode 100755)");
 
         var toolScriptTests = WorkspaceFileLocator.ReadAllText("tools", "Test-ToolScripts.ps1");
         toolScriptTests.Should().Contain("ToolScriptSupport.ps1");

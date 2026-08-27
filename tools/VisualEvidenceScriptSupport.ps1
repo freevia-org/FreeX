@@ -146,7 +146,7 @@ function Get-VisualEvidenceRelativePath {
         [Parameter(Mandatory = $true)][string]$Path
     )
 
-    return $Path.Substring($EvidenceRoot.Length).TrimStart('\', '/').Replace('\', '/')
+    return ConvertTo-ToolRepoRelativePath -Path $Path -RepoRoot $EvidenceRoot
 }
 
 function Get-VisualEvidenceRepoRelativePath {
@@ -155,21 +155,7 @@ function Get-VisualEvidenceRepoRelativePath {
         [Parameter(Mandatory = $true)][string]$Path
     )
 
-    $separator = [IO.Path]::DirectorySeparatorChar
-    $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/') + $separator
-    $fullPath = [IO.Path]::GetFullPath($Path)
-    $comparison = if ($separator -eq '\') {
-        [StringComparison]::OrdinalIgnoreCase
-    }
-    else {
-        [StringComparison]::Ordinal
-    }
-
-    if (-not $fullPath.StartsWith($root, $comparison)) {
-        throw "Visual-evidence path escapes the repository: $fullPath"
-    }
-
-    return $fullPath.Substring($root.Length).Replace('\', '/')
+    return ConvertTo-ToolRepoRelativePath -Path $Path -RepoRoot $RepoRoot
 }
 
 function Get-VisualEvidenceArtifactInventory {

@@ -16,6 +16,9 @@ function Assert-ToolSourceCentralization {
     foreach ($requiredHelper in @(
             "function Resolve-ToolRepoPath",
             "function Test-ToolPathRooted",
+            "function Test-ToolIsWindows",
+            "function Get-ToolPathComparison",
+            "function Get-ToolPowerShellPath",
             "function ConvertTo-ToolPlatformPath",
             "function Resolve-ToolFullPath",
             "function Resolve-ToolProviderPath",
@@ -691,8 +694,8 @@ exec pwsh -NoProfile -File "$(dirname "$0")/synthetic-dotnet.ps1" "$@"
         $env:FREEX_TOOL_GENERATOR_EXIT_CODE = "0"
         $env:FREEX_TOOL_GENERATOR_CAPTURE = $capturePath
         $env:FREEX_TOOL_GENERATOR_PROJECT = $projectCapturePath
-        $jsonDestination = Join-Path $destinationRoot "nested\inventory.json"
-        $markdownDestination = Join-Path $destinationRoot "nested\inventory.md"
+        $jsonDestination = Join-Path $destinationRoot "nested/inventory.json"
+        $markdownDestination = Join-Path $destinationRoot "nested/inventory.md"
         $invokeArguments = @{
             Prefix = "freex-generated-project-probe"
             Name = "Synthetic.Generator"
@@ -1028,7 +1031,7 @@ function Assert-SharedToolHelperBehavior {
     try {
         Set-Location ([System.IO.Path]::GetTempPath())
 
-        $expectedRelativePath = "src\bin\sample.json"
+        $expectedRelativePath = "src/bin/sample.json"
         $relativeForwardSlashPath = "src/bin/sample.json"
         $relativeBackslashPath = "src\bin\sample.json"
         $absolutePath = Join-Path (Join-Path (Join-Path $syntheticRepoRoot "src") "bin") "sample.json"
@@ -1053,6 +1056,31 @@ function Assert-SharedToolHelperBehavior {
         $relativeFromRoot = Get-ToolRelativePath -RootPath $syntheticRepoRoot -Path $absoluteForwardSlashPath
         if ($relativeFromRoot -cne "src/bin/sample.json") {
             throw "Get-ToolRelativePath returned '$relativeFromRoot' for a linked-worktree path."
+        }
+
+        $outsidePathRejected = $false
+        try {
+            ConvertTo-ToolRepoRelativePath -Path (Join-Path $tempRoot "repo-sibling/sample.json") -RepoRoot $syntheticRepoRoot | Out-Null
+        }
+        catch {
+            $outsidePathRejected = $true
+        }
+        if (-not $outsidePathRejected) {
+            throw "ConvertTo-ToolRepoRelativePath must reject paths outside the repository root."
+        }
+
+        $powerShellPath = Get-ToolPowerShellPath
+        if ([string]::IsNullOrWhiteSpace($powerShellPath) -or -not (Test-Path -LiteralPath $powerShellPath -PathType Leaf)) {
+            throw "Get-ToolPowerShellPath did not resolve an installed host."
+        }
+        $expectedComparison = if (Test-ToolIsWindows) {
+            [System.StringComparison]::OrdinalIgnoreCase
+        }
+        else {
+            [System.StringComparison]::Ordinal
+        }
+        if ((Get-ToolPathComparison) -ne $expectedComparison) {
+            throw "Get-ToolPathComparison returned the wrong case-sensitivity contract for this platform."
         }
 
         $resolvedTools = Resolve-ToolRepoPath -Path "tools\ToolScriptSupport.ps1" -RepoRoot $RepoRoot
@@ -1119,13 +1147,13 @@ function Assert-ToolProcessBehavior {
     try {
         Set-Location -LiteralPath $cwdRoot
         $cwdResolved = Resolve-ToolFullPath -Path "child\cwd.txt"
-        $expectedCwdPath = Join-Path $cwdRoot "child\cwd.txt"
+        $expectedCwdPath = Join-Path $cwdRoot "child/cwd.txt"
         if (-not [System.IO.Path]::GetFullPath($cwdResolved).Equals([System.IO.Path]::GetFullPath($expectedCwdPath), [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Resolve-ToolFullPath did not preserve cwd-relative resolution: '$cwdResolved'."
         }
 
         $repoPath = Resolve-ToolRepoPath -Path "src/tools\child.txt" -RepoRoot $syntheticRepoRoot.Replace([string][char]92, "/")
-        $expectedRepoPath = Join-Path $syntheticRepoRoot "src\tools\child.txt"
+        $expectedRepoPath = Join-Path $syntheticRepoRoot "src/tools/child.txt"
         if (-not [System.IO.Path]::GetFullPath($repoPath).Equals([System.IO.Path]::GetFullPath($expectedRepoPath), [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Resolve-ToolRepoPath did not preserve repo-relative resolution or slash handling: '$repoPath'."
         }

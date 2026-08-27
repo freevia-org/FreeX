@@ -18,7 +18,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-if (-not $OutDir) { $OutDir = Join-Path $scriptDir '..\files' }
+if (-not $OutDir) { $OutDir = Join-Path $scriptDir '../files' }
 $OutDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutDir)
 $null = New-Item -ItemType Directory -Force $OutDir
 

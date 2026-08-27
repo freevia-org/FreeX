@@ -12,7 +12,11 @@ param(
     [string]$FreeWShellVisualEvidenceScriptPath = "tools\Test-FreeWShellVisualEvidence.ps1",
     [string]$FreeWWordChromeEvidenceScriptPath = "tools\Test-FreeWWordChromeEvidence.ps1",
     [string]$FreeWEditingReferenceParityEvidenceScriptPath = "tools\Generate-FreeWEditingReferenceParityEvidence.ps1",
+    [string]$FreeWDesignDialogParityEvidenceScriptPath = "tools\Generate-FreeWDesignDialogParityEvidence.ps1",
+    [string]$FreeWMailMergeDialogParityEvidenceScriptPath = "tools\Generate-FreeWMailMergeDialogParityEvidence.ps1",
+    [string]$FreeWMediaDialogParityEvidenceScriptPath = "tools\Generate-FreeWMediaDialogParityEvidence.ps1",
     [string]$FreeWPageLayoutDialogParityEvidenceScriptPath = "tools\Generate-FreeWPageLayoutDialogParityEvidence.ps1",
+    [string]$FreeWShellPlatformParityEvidenceScriptPath = "tools\Generate-FreeWShellPlatformParityEvidence.ps1",
     [string]$FreeWCommandInventoryScriptPath = "tools\Generate-FreeWCommandInventory.ps1",
     [string]$CrossAppParityDashboardBehaviorScriptPath = "tools\Test-CrossAppParityDashboard.ps1",
     [string]$FreeWDialogVisualEvidenceCheckScriptPath = "tools\Test-FreeWDialogVisualEvidence.ps1"
@@ -54,7 +58,11 @@ Invoke-GeneratedDocsCheck -ScriptPath $FreePPowerPointChromeEvidenceScriptPath -
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWShellVisualEvidenceScriptPath -Label "FreeW shell visual evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWWordChromeEvidenceScriptPath -Label "FreeW Word chrome evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWEditingReferenceParityEvidenceScriptPath -Label "FreeW editing/reference parity evidence"
+Invoke-GeneratedDocsCheck -ScriptPath $FreeWDesignDialogParityEvidenceScriptPath -Label "FreeW design-dialog parity evidence"
+Invoke-GeneratedDocsCheck -ScriptPath $FreeWMailMergeDialogParityEvidenceScriptPath -Label "FreeW mail-merge dialog parity evidence"
+Invoke-GeneratedDocsCheck -ScriptPath $FreeWMediaDialogParityEvidenceScriptPath -Label "FreeW media-dialog parity evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWPageLayoutDialogParityEvidenceScriptPath -Label "FreeW page-layout dialog parity evidence"
+Invoke-GeneratedDocsCheck -ScriptPath $FreeWShellPlatformParityEvidenceScriptPath -Label "FreeW shell platform parity evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWCommandInventoryScriptPath -Label "FreeW command inventory"
 
 $resolvedCrossAppParityDashboardBehaviorScriptPath = Resolve-ToolRepoPath -Path $CrossAppParityDashboardBehaviorScriptPath -RepoRoot $repoRoot

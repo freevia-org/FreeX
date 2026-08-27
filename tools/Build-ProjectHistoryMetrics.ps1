@@ -125,10 +125,10 @@ $LegacyProjectRoots = $KnownLegacyProjectNames | ForEach-Object {
     (Join-Path (Split-Path -Parent $RepoRoot) $_).TrimEnd('\', '/')
 }
 
-if (-not $OutputDir) { $OutputDir = Join-Path $RepoRoot 'docs\history' }
+if (-not $OutputDir) { $OutputDir = Join-Path $RepoRoot 'docs/history' }
 if (-not (Test-Path $OutputDir)) { New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null }
 
-$docsDir = Join-Path $RepoRoot 'docs\history'
+$docsDir = Join-Path $RepoRoot 'docs/history'
 if (-not (Test-Path $docsDir)) { New-Item -ItemType Directory -Path $docsDir -Force | Out-Null }
 
 $startDt = [datetime]::ParseExact($StartDate, 'yyyy-MM-dd', $null)
@@ -596,7 +596,7 @@ $anthropicFileBytesAttributedDates = @{} # file -> set of dates already charged 
 
 if (-not $SkipAnthropic) {
     Write-Progress2 'Scanning Claude Code (Anthropic) project logs for FreeX...'
-    $claudeProjectsRoot = Join-Path $env:USERPROFILE '.claude\projects'
+    $claudeProjectsRoot = Join-Path $env:USERPROFILE '.claude/projects'
     $claudeEventCount = 0
     $claudeFileCount = 0
     if (Test-Path $claudeProjectsRoot) {
@@ -1213,8 +1213,8 @@ if ($codexNotesSeen.Count -gt 0) {
 [void]$sb.AppendLine("- Current docs LOC: $(Format-N0 $docsLoc)")
 [void]$sb.AppendLine("- Observed Codex JSONL sessions/logs (this machine, all projects, unfiltered): $(Format-N0 $codexTotalJsonlObserved)")
 $claudeTotalFreeXFiles = 0
-if (Test-Path (Join-Path $env:USERPROFILE '.claude\projects')) {
-    $claudeTotalFreeXFiles = (Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.claude\projects') -Directory -ErrorAction SilentlyContinue |
+if (Test-Path (Join-Path $env:USERPROFILE '.claude/projects')) {
+    $claudeTotalFreeXFiles = (Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.claude/projects') -Directory -ErrorAction SilentlyContinue |
         Where-Object { Test-IsFreeXClaudeProjectDirName $_.Name } |
         ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Filter '*.jsonl' -File -Recurse -ErrorAction SilentlyContinue } |
         Measure-Object).Count

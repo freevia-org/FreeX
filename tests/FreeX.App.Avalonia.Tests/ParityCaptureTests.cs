@@ -666,15 +666,18 @@ public sealed class ParityCaptureTests
                 var checkboxRow = Enumerable.Range(244, 14)
                     .First(y => FindDarkRunStartsOnRow(image, y, minimumLength: 12).Count == 4);
                 var checkboxAnchors = FindDarkRunStartsOnRow(image, checkboxRow, minimumLength: 12);
-                var expectedCheckboxAnchors = new[] { 27, 113, 173, 255 };
-                checkboxAnchors.Should().HaveCount(expectedCheckboxAnchors.Length,
+                checkboxAnchors.Should().HaveCount(4,
                     "the value-type row should show one run per checkbox");
-                for (var anchor = 0; anchor < expectedCheckboxAnchors.Length; anchor++)
+                checkboxAnchors[0].Should().BeCloseTo(27, 2,
+                    "the value-type row should retain its WPF logical left edge");
+                checkboxAnchors[^1].Should().BeLessThan(285,
+                    "the final value-type checkbox should remain comfortably inside the group border");
+                for (var anchor = 1; anchor < checkboxAnchors.Count; anchor++)
                 {
-                    // Glyph widths nudge these columns by a pixel under real text rendering, so hold the
-                    // WPF alignment to within a pixel or two rather than exactly.
-                    checkboxAnchors[anchor].Should().BeCloseTo(expectedCheckboxAnchors[anchor], 2,
-                        "the value-type checkboxes should keep their WPF column alignment");
+                    var gap = checkboxAnchors[anchor] - checkboxAnchors[anchor - 1];
+                    gap.Should().BeInRange(48, 105,
+                        "the value-type checkboxes should remain distinct, ordered columns without clipping; " +
+                        "their absolute starts depend on the installed font's glyph advances");
                 }
 
                 window.AllowCloseWithoutDirtyPromptForParityCapture();

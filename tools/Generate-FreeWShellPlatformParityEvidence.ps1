@@ -4,8 +4,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$jsonPath = Join-Path $repo 'docs\parity\freew-shell-platform-parity-20260720.json'
-$markdownPath = Join-Path $repo 'docs\parity\freew-shell-platform-parity-20260720.md'
+$jsonPath = Join-Path $repo 'docs/parity/freew-shell-platform-parity-20260720.json'
+$markdownPath = Join-Path $repo 'docs/parity/freew-shell-platform-parity-20260720.md'
 
 $sourceFiles = @(
     'freew/FreeW.App.Host/MainWindow.cs',
@@ -16,14 +16,12 @@ $sourceFiles = @(
     'freew/FreeW.App.Avalonia/Printing/CupsPrintDialog.cs',
     'freew/FreeW.App.Avalonia/Pdf/FreeWAvaloniaPdfExport.cs',
     'freew/FreeW.App.Avalonia/Pdf/FreeWAvaloniaXpsExport.cs',
-    'freew/FreeW.App.Avalonia/Printing/CupsPrintCommandPlanner.cs',
-    'freew/FreeW.App.Avalonia/Printing/CupsPrintService.cs',
+    'shared/Free.Shared.AppServices/Printing/CupsPrintService.cs',
     'freew/FreeW.App.Avalonia/Editing/DocumentView.cs',
-    'freew/FreeW.App.Avalonia.Tests/Printing/CupsPrintServiceTests.cs',
+    'tests/FreeX.App.Services.Tests/SharedCupsPrintServiceTests.cs',
     'freew/FreeW.App.Avalonia.Tests/Printing/PrintLifecycleTests.cs',
     'freew/FreeW.App.Avalonia.Tests/Printing/PortableXpsWriterTests.cs',
-    'freew/FreeW.App.Presentation/Printing/PrintSelectionPlanner.cs',
-    'freew/FreeW.App.Presentation.Tests/Printing/PrintSelectionPlannerTests.cs',
+    'shared/Free.Shared.AppServices/Printing/PrintSelectionPlanner.cs',
     'shared/Free.Shared.AppServices/Printing/PrintContracts.cs',
     'shared/Free.Shared.AppServices/Printing/PrintProcessContracts.cs',
     'shared/Free.Shared.AppServices/Printing/SystemProcessRunner.cs',
@@ -35,7 +33,7 @@ $sourceFiles = @(
 
 $hashes = [ordered]@{}
 foreach ($relative in $sourceFiles) {
-    $path = Join-Path $repo ($relative -replace '/', '\')
+    $path = Join-Path $repo $relative
     if (-not (Test-Path -LiteralPath $path)) { throw "Missing evidence input: $relative" }
     $hashes[$relative] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
 }

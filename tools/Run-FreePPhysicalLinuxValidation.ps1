@@ -91,7 +91,7 @@ function Start-ValidationRun {
 
     $started = $false
     try {
-        Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $arguments -WorkingDirectory $repoRoot -OutputToHost
+        Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments $arguments -WorkingDirectory $repoRoot -OutputToHost
         $started = $true
         $run = Read-RunManifest -RunRoot $runRoot
         Assert-Manifest -Run $run -ExpectedCupsMode $Mode
@@ -99,7 +99,7 @@ function Start-ValidationRun {
     } finally {
         if ($started) {
             try {
-                Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
+                Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
                     "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                     "-Action", "Stop", "-App", "FreeP", "-Port", "$Port",
                     "-OutputDir", $runRoot) -WorkingDirectory $repoRoot -OutputToHost

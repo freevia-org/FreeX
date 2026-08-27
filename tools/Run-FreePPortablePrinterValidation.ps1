@@ -120,7 +120,7 @@ try {
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
-    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot -OutputToHost
+    Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArguments -WorkingDirectory $repoRoot -OutputToHost
     $started = $true
 
     $sessionPath = Join-Path $resolvedOutputRoot "freep/current-session.json"
@@ -159,7 +159,7 @@ try {
 } finally {
     if ($started) {
         try {
-            Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
+            Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot -OutputToHost
         } catch { Write-Warning "Could not stop harness-owned FreeP container '$($session.containerName)': $($_.Exception.Message)" }

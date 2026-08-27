@@ -103,7 +103,7 @@ try {
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
-    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
+    Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $sessionMetadataPath = Join-Path $resolvedOutputRoot "freew/current-session.json"
@@ -173,7 +173,7 @@ try {
 } finally {
     if ($started -and -not $KeepContainer) {
         try {
-            Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
+            Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", "FreeW", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot
             ) -WorkingDirectory $repoRoot

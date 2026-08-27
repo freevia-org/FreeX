@@ -110,7 +110,7 @@ public sealed class GitHubWorkflowPreflightTests
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-GitHubWorkflows.ps1");
 
-        script.Should().Contain(".github\\workflows");
+        script.Should().Contain(".github/workflows");
         script.Should().Contain("(?:-\\s*)?uses:");
         script.Should().Contain("pull_request_target");
         script.Should().Contain("self-hosted");

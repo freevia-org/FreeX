@@ -1,44 +1,23 @@
 param(
-    [string]$MarkdownPath = "docs\parity\freew-design-dialog-parity-20260720.md",
-    [string]$JsonPath = "docs\parity\freew-design-dialog-parity-20260720.json",
+    [string]$MarkdownPath = "docs/parity/freew-design-dialog-parity-20260720.md",
+    [string]$JsonPath = "docs/parity/freew-design-dialog-parity-20260720.json",
     [switch]$Check
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$RelativePath)
-    $path = Join-Path $repoRoot $RelativePath
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-        throw "Evidence source is missing: $RelativePath"
-    }
-    $path
-}
-
-function Get-RelativePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    $root = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq '\') {
-        [System.StringComparison]::OrdinalIgnoreCase
-    }
-    else {
-        [System.StringComparison]::Ordinal
-    }
-    if (-not $fullPath.StartsWith($root, $comparison)) {
-        throw "Evidence source is outside the repository root: $Path"
-    }
-    $fullPath.Substring($root.Length).Replace('\', '/')
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Get-SourceHashes {
     param([Parameter(Mandatory = $true)][string[]]$RelativePaths)
     $hashes = [ordered]@{}
     foreach ($relativePath in ($RelativePaths | Sort-Object -Unique)) {
-        $resolved = Resolve-RepoPath $relativePath
-        $hashes[$relativePath.Replace('\', '/')] = (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash.ToLowerInvariant()
+        $resolved = Resolve-ToolRepoPath -Path $relativePath -RepoRoot $repoRoot
+        if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+            throw "Evidence source is missing: $relativePath"
+        }
+        $hashes[(ConvertTo-ToolNormalizedRelativePath -Path $relativePath)] = (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash.ToLowerInvariant()
     }
     $hashes
 }
@@ -58,7 +37,13 @@ $routes = @(
 )
 
 $sourcePaths = @()
-$sourcePaths += @("freew/FreeW.App.Avalonia/MainWindow.cs", "freew/FreeW.Ribbon.Definitions/FreeWAvaloniaRibbonDefinition.cs")
+$sourcePaths += @(
+    "freew/FreeW.App.Avalonia/MainWindow.cs",
+    "freew/FreeW.Ribbon.Definitions/FreeWRibbon.cs",
+    "freew/FreeW.Ribbon.Definitions/FreeWCanonicalRibbonTabs.cs",
+    "freew/FreeW.Ribbon.Definitions/FreeWCanonicalRibbonTabs.Ordinary.cs",
+    "freew/FreeW.Ribbon.Definitions/FreeWCanonicalRibbonTabs.Contextual.cs"
+)
 foreach ($route in $routes) {
     $sourcePaths += $route.Authority.Split(';')
     $sourcePaths += $route.Implementation.Split(';')

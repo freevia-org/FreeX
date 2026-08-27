@@ -8,7 +8,7 @@ $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDirectory
 
 if ([string]::IsNullOrWhiteSpace($WorkflowDirectory)) {
-    $WorkflowDirectory = Join-Path $repoRoot ".github\workflows"
+    $WorkflowDirectory = Join-Path $repoRoot ".github/workflows"
 }
 
 $resolvedWorkflowDirectory = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($WorkflowDirectory)

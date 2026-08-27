@@ -14,13 +14,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$resolvedOutputDir = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
-$testProject = Join-Path $repoRoot "freep\FreeP.App.Avalonia.Tests\FreeP.App.Avalonia.Tests.csproj"
+$resolvedOutputDir = Resolve-ToolRepoPath -Path $OutputDir -RepoRoot $repoRoot
+$testProject = Join-Path $repoRoot "freep/FreeP.App.Avalonia.Tests/FreeP.App.Avalonia.Tests.csproj"
 $trxPath = Join-Path $resolvedOutputDir "native-picker-workflow.trx"
 $reportPath = Join-Path $resolvedOutputDir "native-picker-workflow-evidence.json"
 $testResultsDirectory = Join-Path (Split-Path $testProject -Parent) "TestResults"

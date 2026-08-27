@@ -4,15 +4,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$jsonPath = Join-Path $repo 'docs\parity\freew-mail-merge-dialog-parity-20260720.json'
-$markdownPath = Join-Path $repo 'docs\parity\freew-mail-merge-dialog-parity-20260720.md'
+$jsonPath = Join-Path $repo 'docs/parity/freew-mail-merge-dialog-parity-20260720.json'
+$markdownPath = Join-Path $repo 'docs/parity/freew-mail-merge-dialog-parity-20260720.md'
 
 $sourceFiles = @(
     'freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs',
     'freew/FreeW.App.Avalonia/MailMergeDialogs.cs',
     'freew/FreeW.App.Avalonia/MainWindow.cs',
     'freew/FreeW.App.Avalonia/Ribbon/FreeWAvaloniaRibbonCommands.cs',
-    'freew/FreeW.Ribbon.Definitions/FreeWAvaloniaRibbonDefinition.cs',
+    'freew/FreeW.Ribbon.Definitions/FreeWRibbon.cs',
+    'freew/FreeW.Ribbon.Definitions/FreeWCanonicalRibbonTabs.cs',
+    'freew/FreeW.Ribbon.Definitions/FreeWCanonicalRibbonTabs.Ordinary.cs',
+    'freew/FreeW.Ribbon.Definitions/FreeWCanonicalRibbonTabs.Contextual.cs',
     'freew/FreeW.App.Presentation/Ribbon/MailMergeDialogPlanners.cs',
     'freew/FreeW.App.Presentation/Ribbon/MailMergeFinishPlanner.cs',
     'freew/FreeW.App.Presentation/Ribbon/MailingsEnvelopeLabelPlanner.cs',
@@ -44,7 +47,7 @@ $surfaces = @(
 
 $hashes = [ordered]@{}
 foreach ($relative in $sourceFiles) {
-    $path = Join-Path $repo ($relative -replace '/', '\')
+    $path = Join-Path $repo $relative
     if (-not (Test-Path -LiteralPath $path)) { throw "Missing evidence input: $relative" }
     $hashes[$relative] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
 }

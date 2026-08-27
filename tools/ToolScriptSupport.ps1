@@ -8,6 +8,36 @@ function Test-ToolPathRooted {
     return $Path -match '^(?:[A-Za-z]:[\\/]|[\\/]{2})'
 }
 
+function Test-ToolIsWindows {
+    return [System.IO.Path]::DirectorySeparatorChar -eq [char]92
+}
+
+function Get-ToolPathComparison {
+    if (Test-ToolIsWindows) {
+        return [System.StringComparison]::OrdinalIgnoreCase
+    }
+
+    return [System.StringComparison]::Ordinal
+}
+
+function Get-ToolPowerShellPath {
+    $commandNames = if (Test-ToolIsWindows) {
+        @("pwsh", "powershell.exe")
+    }
+    else {
+        @("pwsh")
+    }
+
+    foreach ($commandName in $commandNames) {
+        $command = Get-Command $commandName -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace($command.Source)) {
+            return $command.Source
+        }
+    }
+
+    throw "A supported PowerShell host was not found. Install pwsh on Linux/macOS or pwsh/Windows PowerShell on Windows."
+}
+
 function ConvertTo-ToolPlatformPath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -42,7 +72,7 @@ function Resolve-ToolExistingPath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
     $fullPath = [System.IO.Path]::GetFullPath($Path)
-    if ([System.IO.Path]::DirectorySeparatorChar -eq [char]92) {
+    if (Test-ToolIsWindows) {
         return (Resolve-Path -LiteralPath $fullPath).ProviderPath
     }
 
@@ -99,12 +129,7 @@ function Remove-ToolTemporaryDirectory {
     $rootPrefix = $temporaryRoot.TrimEnd(
         [System.IO.Path]::DirectorySeparatorChar,
         [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
-    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq [char]92) {
-        [System.StringComparison]::OrdinalIgnoreCase
-    }
-    else {
-        [System.StringComparison]::Ordinal
-    }
+    $comparison = Get-ToolPathComparison
     if (-not $resolvedPath.StartsWith($rootPrefix, $comparison)) {
         throw "Refusing to remove a temporary directory outside '$temporaryRoot': $resolvedPath"
     }
@@ -472,12 +497,7 @@ function ConvertTo-ToolRepoRelativePath {
     $fullRoot = Resolve-ToolFullPath -Path $RepoRoot
     $fullPath = Resolve-ToolFullPath -Path $Path -BasePath $fullRoot
     $trimmedRoot = $fullRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq [char]92) {
-        [System.StringComparison]::OrdinalIgnoreCase
-    }
-    else {
-        [System.StringComparison]::Ordinal
-    }
+    $comparison = Get-ToolPathComparison
 
     if ($fullPath.Equals($trimmedRoot, $comparison)) {
         return ""
@@ -485,10 +505,10 @@ function ConvertTo-ToolRepoRelativePath {
 
     $rootPrefix = $trimmedRoot + [System.IO.Path]::DirectorySeparatorChar
     if ($fullPath.StartsWith($rootPrefix, $comparison)) {
-        return $fullPath.Substring($rootPrefix.Length).Replace([string][char]47, [string][char]92)
+        return ConvertTo-ToolNormalizedRelativePath -Path $fullPath.Substring($rootPrefix.Length)
     }
 
-    return $fullPath.Replace([string][char]47, [string][char]92)
+    throw "Path '$fullPath' is outside repository root '$trimmedRoot'."
 }
 
 function Read-ToolJson {

@@ -208,7 +208,7 @@ try {
     if ($Replace) { $startArguments += "-Replace" }
     if ($App -eq "FreeW") { $startArguments += "-CupsDryRun" }
 
-    Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
+    Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $currentSessionPath = Join-Path $resolvedOutputRoot "$appKey/current-session.json"
@@ -402,7 +402,7 @@ try {
 } finally {
     if ($started -and -not $KeepContainer) {
         try {
-            Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
+            Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", $App, "-Port", "$Port",
                 "-OutputDir", $resolvedOutputRoot

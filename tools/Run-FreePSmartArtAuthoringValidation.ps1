@@ -62,7 +62,7 @@ function Start-Session {
     if ($SkipPublish -or $ReusePublishedImage) { $args += "-SkipPublish" }
     if ($SkipImageBuild -or $ReusePublishedImage) { $args += "-SkipImageBuild" }
     if ($Replace) { $args += "-Replace" }
-    Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $args -WorkingDirectory $repoRoot
+    Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments $args -WorkingDirectory $repoRoot
     Get-Session
 }
 
@@ -104,7 +104,7 @@ function Invoke-Probe {
 
 function Stop-Session {
     try {
-        Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
+        Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
             "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
             "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot
     } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" }

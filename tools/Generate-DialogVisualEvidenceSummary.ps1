@@ -584,7 +584,7 @@ function ConvertTo-JsonMetric {
     )
 
     $model = [ordered]@{
-        relativePath = ConvertTo-ToolRepoRelativePath -Path $Metric.Path -RepoRoot $repoRoot
+        relativePath = Get-ToolRelativePath -RootPath $repoRoot -Path $Metric.Path
         fileBytes = $Metric.FileBytes
         width = $Metric.Width
         height = $Metric.Height
@@ -801,12 +801,12 @@ $policyAcceptedNativeDifferenceGroups = @(
         Sort-Object -Property Name
 )
 
-$wpfManifestRelativePath = ConvertTo-ToolRepoRelativePath -Path (Resolve-ToolRepoPath -Path $WpfManifestPath -RepoRoot $repoRoot) -RepoRoot $repoRoot
-$avaloniaManifestRelativePath = ConvertTo-ToolRepoRelativePath -Path (Resolve-ToolRepoPath -Path $AvaloniaManifestPath -RepoRoot $repoRoot) -RepoRoot $repoRoot
-$inventoryRelativePath = ConvertTo-ToolRepoRelativePath -Path (Resolve-ToolRepoPath -Path $InventoryPath -RepoRoot $repoRoot) -RepoRoot $repoRoot
+$wpfManifestRelativePath = Get-ToolRelativePath -RootPath $repoRoot -Path (Resolve-ToolRepoPath -Path $WpfManifestPath -RepoRoot $repoRoot)
+$avaloniaManifestRelativePath = Get-ToolRelativePath -RootPath $repoRoot -Path (Resolve-ToolRepoPath -Path $AvaloniaManifestPath -RepoRoot $repoRoot)
+$inventoryRelativePath = Get-ToolRelativePath -RootPath $repoRoot -Path (Resolve-ToolRepoPath -Path $InventoryPath -RepoRoot $repoRoot)
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
-$jsonRelativePath = ConvertTo-ToolRepoRelativePath -Path $resolvedJsonPath -RepoRoot $repoRoot
+$jsonRelativePath = Get-ToolRelativePath -RootPath $repoRoot -Path $resolvedJsonPath
 
 $jsonModel = [ordered]@{
     schemaVersion = 1
@@ -1189,5 +1189,5 @@ Write-Host "Policy-accepted native/control differences: $($policyAcceptedNativeD
 foreach ($group in $dimensionMismatchBucketGroups) {
     Write-Host "Dimension mismatch bucket '$($group.Name)': $($group.Count)"
 }
-Write-Host "Wrote $(ConvertTo-ToolRepoRelativePath -Path $resolvedMarkdownPath -RepoRoot $repoRoot)"
-Write-Host "Wrote $(ConvertTo-ToolRepoRelativePath -Path $resolvedJsonPath -RepoRoot $repoRoot)"
+Write-Host "Wrote $(Get-ToolRelativePath -RootPath $repoRoot -Path $resolvedMarkdownPath)"
+Write-Host "Wrote $(Get-ToolRelativePath -RootPath $repoRoot -Path $resolvedJsonPath)"

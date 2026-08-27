@@ -56,7 +56,9 @@ public sealed class Wave89MultiSelectionEvidenceContractTests
     {
         var runner = ReadWorkspaceFile("tools", "Run-FreePMultiSelectionX11Validation.ps1");
 
-        runner.Should().Contain("Invoke-External powershell.exe $startArgs");
+        runner.Should().Contain("Invoke-External (Get-ToolPowerShellPath) $startArgs");
+        runner.Should().NotContain("Invoke-External powershell.exe",
+            "the cross-platform runner must resolve the available PowerShell host through shared tooling");
         runner.Should().Contain("$manifestPath = Join-Path $sessionDirectory");
         runner.Should().Contain("probe evidence is");
         runner.Should().Contain("already present on the host");

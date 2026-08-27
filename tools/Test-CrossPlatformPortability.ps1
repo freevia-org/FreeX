@@ -18,6 +18,16 @@ if ($LASTEXITCODE -ne 0) {
 foreach ($group in @($trackedPaths | Group-Object { $_.ToLowerInvariant() } | Where-Object Count -gt 1)) {
     Add-PortabilityError "Case-insensitive tracked-path collision: $($group.Group -join '; ')"
 }
+foreach ($group in @($trackedPaths | Group-Object { $_.Normalize([Text.NormalizationForm]::FormC).ToLowerInvariant() } | Where-Object Count -gt 1)) {
+    Add-PortabilityError "Unicode/case-normalized tracked-path collision: $($group.Group -join '; ')"
+}
+
+$trackedPathSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+$trackedPathByCaseFold = @{}
+foreach ($trackedPath in $trackedPaths) {
+    [void]$trackedPathSet.Add($trackedPath)
+    $trackedPathByCaseFold[$trackedPath.ToLowerInvariant()] = $trackedPath
+}
 
 $reservedLeafPattern = '^(?i:(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$))'
 foreach ($path in $trackedPaths) {
@@ -71,43 +81,54 @@ foreach ($relativePath in $powerShellScripts) {
     }
 }
 
-$portablePowerShellScripts = @(
-    'tools/Generate-CommandInventoryDocs.ps1',
-    'tools/Generate-ConditionalFormatOpenedStateEvidence.ps1',
-    'tools/Generate-CrossAppParityDashboard.ps1',
-    'tools/Generate-DialogParityInventory.ps1',
-    'tools/Generate-DialogVisualEvidenceSummary.ps1',
-    'tools/Generate-FreePCommandParityInventory.ps1',
-    'tools/Generate-FreePDialogPaneParityInventory.ps1',
-    'tools/Generate-FreePDialogPaneVisualEvidenceManifest.ps1',
-    'tools/Generate-FreePWholeWindowVisualEvidenceManifest.ps1',
-    'tools/Generate-FreeWCommandInventory.ps1',
-    'tools/Generate-FreeWEditingReferenceParityEvidence.ps1',
-    'tools/Generate-FreeWPageLayoutDialogParityEvidence.ps1',
-    'tools/Generate-FreeWShellVisualEvidence.ps1',
-    'tools/Invoke-TestGate.ps1',
-    'tools/New-ReleaseArtifactManifest.ps1',
-    'tools/New-ReleaseSbom.ps1',
-    'tools/Publish-SisterAppTesterPackages.ps1',
-    'tools/Test-CrossAppParityDashboard.ps1',
-    'tools/Test-FreeWShellVisualEvidence.ps1',
-    'tools/Test-FreeWDialogVisualEvidence.ps1',
-    'tools/Test-FreeWWordChromeEvidence.ps1',
-    'tools/Test-FreePPowerPointChromeEvidence.ps1',
-    'tools/Test-GeneratedDocs.ps1',
-    'tools/Test-LinuxPackagingScripts.ps1',
-    'tools/Test-ReleaseInstallation.ps1',
-    'tools/Test-ReleasePackageContents.ps1',
-    'tools/packaging/New-AppInstallers.ps1'
+# A path can work on Windows and fail only after checkout on a case-sensitive file system.
+# Check every static repository path mentioned by PowerShell, but report only proven case
+# mismatches (not paths that may intentionally name generated output).
+foreach ($relativePath in $powerShellScripts) {
+    $strings = @($powerShellAsts[$relativePath].FindAll({
+        param($node)
+        $node -is [System.Management.Automation.Language.StringConstantExpressionAst] -or
+            $node -is [System.Management.Automation.Language.ExpandableStringExpressionAst]
+    }, $true))
+    foreach ($stringNode in $strings) {
+        $candidate = ([string]$stringNode.Value).Replace([string][char]92, '/').TrimStart('./')
+        if ($candidate -notmatch '^(?:\.github|tools|eng|src|shared|freew|freep|tests|docs|release)/' -or
+            $candidate -match '[*?`${}%]' -or $candidate -match '\s') {
+            continue
+        }
+        $folded = $candidate.ToLowerInvariant()
+        if (-not $trackedPathSet.Contains($candidate) -and $trackedPathByCaseFold.ContainsKey($folded)) {
+            Add-PortabilityError "$relativePath references '$candidate' with incorrect case; tracked path is '$($trackedPathByCaseFold[$folded])'."
+        }
+    }
+}
+
+$windowsOnlyPowerShellScripts = @(
+    'tools/Capture-FreePPowerPointChrome.ps1',
+    'tools/Capture-FreePResponsiveChrome.ps1',
+    'tools/Capture-FreeWWordChrome.ps1',
+    'tools/FreeW.RenderCompare/Export-WordPdfs.ps1',
+    'tools/FreeW.RenderCompare/Export-WordPdfsVisible.ps1',
+    'tools/Invoke-ForegroundCapture.ps1',
+    'tools/Publish-UserTestBuild.ps1',
+    'tools/Run-FidelityBatch.ps1',
+    'tools/Run-FreeWWordBaselineEvidence.ps1',
+    'tools/Run-UxParityScenarioBatch.ps1',
+    'tools/Run-UxParitySuite.ps1',
+    'tools/ScreenshotCaptureSupport.ps1',
+    'tools/screenshot_excel.ps1',
+    'tools/screenshot_ribbon.ps1',
+    'tools/screenshot_ribbon_avalonia.ps1',
+    'freew-fidelity-corpus/tools/Render-WordBaseline.ps1',
+    'freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1',
+    'freew-fidelity-corpus/tools/Run-VisualFidelity.ps1',
+    'freew/build/publish-windows.ps1'
 )
+$portablePowerShellScripts = @($powerShellScripts | Where-Object { $_ -notin $windowsOnlyPowerShellScripts })
 foreach ($relativePath in $portablePowerShellScripts) {
     $path = Join-Path $repoRoot $relativePath
     $source = Get-Content -LiteralPath $path -Raw
-    if (-not $source.Contains('ToolScriptSupport.ps1') -and
-        -not $source.Contains('VisualEvidenceScriptSupport.ps1')) {
-        Add-PortabilityError "$relativePath must dot-source ToolScriptSupport.ps1 instead of owning platform-sensitive helpers."
-    }
-    if ($source.Contains('pwsh.exe')) {
+    if ($relativePath -ne 'tools/Test-CrossPlatformPortability.ps1' -and $source.Contains('pwsh.exe')) {
         Add-PortabilityError "$relativePath uses Windows-specific pwsh.exe instead of the portable pwsh command."
     }
     $ast = $powerShellAsts[$relativePath]
@@ -123,6 +144,26 @@ foreach ($relativePath in $portablePowerShellScripts) {
         if ($command.GetCommandName() -eq 'Join-Path' -and $command.Extent.Text.Contains('\')) {
             Add-PortabilityError "$relativePath passes a Windows-separated child path to Join-Path at line $($command.Extent.StartLineNumber)."
         }
+    }
+
+    if ($source -match '(?m)\$env:PATH\s*=.*;|\$env:PATH\s*\+=\s*["''];') {
+        Add-PortabilityError "$relativePath hardcodes the Windows PATH separator instead of [IO.Path]::PathSeparator."
+    }
+    if ($source -match '(?m)\bchmod\s+[^\r\n]*\s--(?:\s|["''])') {
+        Add-PortabilityError "$relativePath uses GNU-only chmod '--' syntax, which is not accepted by BSD chmod."
+    }
+    if ($source -match '(?m)\.Trim(?:Start|End)\(\s*["'']\\["'']\s*\)') {
+        Add-PortabilityError "$relativePath trims only a Windows directory separator; use both platform separators or a shared helper."
+    }
+    if (($source.Contains('ProgramFiles') -or $source.Contains('ProgramFiles(x86)')) -and
+        $source -notmatch '(?m)(Test-ToolIsWindows|DirectorySeparatorChar\s+-eq\s+["'']\\)') {
+        Add-PortabilityError "$relativePath reads Windows ProgramFiles without an explicit Windows-host guard."
+    }
+}
+
+foreach ($relativePath in $windowsOnlyPowerShellScripts) {
+    if ($relativePath -notin $powerShellScripts) {
+        Add-PortabilityError "Windows-only script classification is stale or case-mismatched: $relativePath"
     }
 }
 
@@ -148,6 +189,57 @@ foreach ($script in $toolScripts) {
     }
 }
 
+$shellIndexEntries = @(& git -C $repoRoot ls-files --stage -- '*.sh')
+foreach ($entry in $shellIndexEntries) {
+    if ($entry -notmatch '^(?<mode>\d{6})\s+[0-9a-f]+\s+\d+\s+(?<path>.+)$') {
+        Add-PortabilityError "Could not parse shell-script Git index entry: $entry"
+        continue
+    }
+    if ($Matches.mode -ne '100755') {
+        Add-PortabilityError "$($Matches.path) must be tracked executable (Git mode 100755)."
+    }
+}
+
+$allIndexEntries = @(& git -C $repoRoot ls-files --stage)
+foreach ($entry in $allIndexEntries) {
+    if ($entry -notmatch '^(?<mode>\d{6})\s+[0-9a-f]+\s+\d+\s+(?<path>.+)$' -or $Matches.mode -ne '120000') {
+        continue
+    }
+    $linkPath = $Matches.path
+    $target = (Get-Content -LiteralPath (Join-Path $repoRoot $linkPath) -Raw).Replace([string][char]92, '/')
+    if ([IO.Path]::IsPathRooted($target)) {
+        Add-PortabilityError "$linkPath is an absolute symlink; repository links must be relative."
+        continue
+    }
+    $linkDirectory = Split-Path -Parent $linkPath
+    $fullTargetPath = [IO.Path]::GetFullPath((Join-Path (Join-Path $repoRoot $linkDirectory) $target))
+    $rootPrefix = [IO.Path]::GetFullPath($repoRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    $pathComparison = if ([IO.Path]::DirectorySeparatorChar -eq [char]92) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    $targetPath = if ($fullTargetPath.StartsWith($rootPrefix, $pathComparison)) {
+        $fullTargetPath.Substring($rootPrefix.Length).Replace([string][char]92, '/')
+    }
+    else {
+        $null
+    }
+    if ([string]::IsNullOrWhiteSpace($targetPath) -or -not $trackedPathSet.Contains($targetPath)) {
+        Add-PortabilityError "$linkPath has a missing or escaping symlink target '$target'."
+    }
+}
+
+foreach ($relativePath in $shellScripts) {
+    $source = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+    $firstLine = ($source -split "`n", 2)[0].TrimEnd("`r")
+    if ($firstLine -notmatch '^#!(?:/usr/bin/env (?:bash|sh)|/bin/(?:bash|sh))$') {
+        Add-PortabilityError "$relativePath must use a portable bash/sh shebang."
+    }
+    if ($source -match '(?m)\bchmod\s+[^\r\n]*\s--(?:\s|["''])') {
+        Add-PortabilityError "$relativePath uses GNU-only chmod '--' syntax, which is not accepted by BSD chmod."
+    }
+    if ($source -match '(?m)(?:^|[;&|]\s*)(?:powershell(?:\.exe)?|cmd(?:\.exe)?)\b') {
+        Add-PortabilityError "$relativePath invokes a Windows-only shell from a Unix script."
+    }
+}
+
 $appReleaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/app-tester-release.yml') -Raw
 foreach ($windowsOnlyToken in @('powershell.exe', 'cmd.exe')) {
     if ($appReleaseWorkflow.Contains($windowsOnlyToken)) {
@@ -159,4 +251,4 @@ if ($errors.Count -gt 0) {
     throw "Cross-platform portability validation failed:`n - $($errors -join "`n - ")"
 }
 
-Write-Host "Cross-platform portability checks passed for $($trackedPaths.Count) tracked paths, $($portableTextPaths.Count) LF-normalized scripts/workflows, $($powerShellScripts.Count) PowerShell scripts, $($shellScripts.Count) shell scripts, and $($portablePowerShellScripts.Count) release/preflight scripts."
+Write-Host "Cross-platform portability checks passed for $($trackedPaths.Count) tracked paths, $($portableTextPaths.Count) LF-normalized scripts/workflows, all $($powerShellScripts.Count) PowerShell scripts ($($portablePowerShellScripts.Count) portable, $($windowsOnlyPowerShellScripts.Count) explicitly Windows-only), and all $($shellScripts.Count) executable shell scripts."
