@@ -2911,7 +2911,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     case WorkbookApplicationCommandIntent.FillRight:
                     Header = UiText.Get("Backstage_Home_NoRecentWorkbooks"),
                     OpenRecentWorkbookMenuPlanner.Create(
-                    _recentFiles.Snapshot()
+                    ReloadRecentFilesStore().Snapshot()
                     File.Exists
                     path => _fileWorkflow.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null
                     plan.ItemCount == 0

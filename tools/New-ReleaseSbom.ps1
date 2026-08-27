@@ -21,9 +21,8 @@ $stage = Join-Path (Split-Path -Parent $OutputPath) ".sbom-$Name-$Runtime"
 if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 foreach ($payloadName in $PayloadNames) {
-    $matches = @(Get-ChildItem -LiteralPath $InputRoot -Recurse -File -Filter $payloadName)
-    if ($matches.Count -ne 1) { throw "Expected exactly one SBOM payload '$payloadName'; found $($matches.Count)." }
-    Copy-Item -LiteralPath $matches[0].FullName -Destination (Join-Path $stage $matches[0].Name)
+    $payload = Find-ToolReleaseArtifact -InputRoot $InputRoot -Name $payloadName
+    Copy-Item -LiteralPath $payload.FullName -Destination (Join-Path $stage $payload.Name)
 }
 $namespace = "https://github.com/tony-xmelon/FreeX/releases/$CommitSha/$Name/$Runtime"
 & $SbomToolPath generate -b $stage -bc $RepositoryRoot -pn $Name -pv $Version -ps 'FreeX contributors' -nsb $namespace

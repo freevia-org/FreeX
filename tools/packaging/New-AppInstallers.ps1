@@ -68,11 +68,7 @@ New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
 
 function Find-UniqueInput {
     param([string]$Pattern)
-    $matches = @(Get-ChildItem -LiteralPath $InputRoot -Recurse -File -Filter $Pattern)
-    if ($matches.Count -ne 1) {
-        throw "Expected exactly one '$Pattern' below '$InputRoot'; found $($matches.Count)."
-    }
-    return $matches[0].FullName
+    return (Find-ToolReleaseArtifact -InputRoot $InputRoot -Name $Pattern).FullName
 }
 
 function Write-Sha256 {

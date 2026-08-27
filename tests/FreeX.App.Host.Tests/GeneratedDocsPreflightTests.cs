@@ -25,4 +25,28 @@ public sealed class GeneratedDocsPreflightTests
         result.Output.Should().Contain("Checking FreeW command inventory generated docs...");
         result.Output.Should().Contain("Generated documentation checks passed.");
     }
+
+    [Fact]
+    public void FreeWJsonEvidenceGenerators_UseOneCanonicalJsonHostAcrossPlatforms()
+    {
+        var support = WorkspaceFileLocator.ReadAllText("tools", "ToolScriptSupport.ps1");
+        support.Should().Contain("function Invoke-ToolCanonicalPwshHost");
+        support.Should().Contain("if ($PSVersionTable.PSEdition -ne 'Desktop')");
+        support.Should().Contain("& $pwshCommand.Source -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @ForwardedArguments");
+
+        var generators = new[]
+        {
+            "Generate-FreeWEditingReferenceParityEvidence.ps1",
+            "Generate-FreeWMailMergeDialogParityEvidence.ps1",
+            "Generate-FreeWPageLayoutDialogParityEvidence.ps1",
+            "Generate-FreeWShellPlatformParityEvidence.ps1",
+            "Generate-FreeWShellVisualEvidence.ps1"
+        };
+
+        foreach (var generator in generators)
+        {
+            var script = WorkspaceFileLocator.ReadAllText("tools", generator);
+            script.Should().Contain("Invoke-ToolCanonicalPwshHost", $"{generator} emits deterministic JSON");
+        }
+    }
 }

@@ -167,6 +167,30 @@ function Resolve-ToolExistingPath {
     return [System.IO.Path]::GetFullPath($currentPath)
 }
 
+function Find-ToolReleaseArtifact {
+    param(
+        [Parameter(Mandatory = $true)][string]$InputRoot,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $resolvedRoot = (Resolve-Path -LiteralPath $InputRoot).Path
+    $rootArtifact = Join-Path $resolvedRoot $Name
+    if (Test-Path -LiteralPath $rootArtifact -PathType Leaf) {
+        return Get-Item -LiteralPath $rootArtifact
+    }
+
+    # Downloaded GitHub artifacts are wrapped in per-artifact directories, so
+    # callers sometimes need a recursive fallback. A canonical file staged at
+    # the distribution root always wins over build, installer, or SBOM working
+    # copies below that root.
+    $matches = @(Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File -Filter $Name)
+    if ($matches.Count -ne 1) {
+        throw "Expected exactly one release artifact '$Name' below '$resolvedRoot'; found $($matches.Count)."
+    }
+
+    return $matches[0]
+}
+
 function Resolve-ToolRepoPath {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -708,6 +732,33 @@ function Test-ToolGeneratedContentMatches {
     if ($expected -cne $actual) {
         throw "$Label is out of date. Run $GeneratorScriptName to refresh it."
     }
+}
+
+function Invoke-ToolCanonicalPwshHost {
+    <#
+    .SYNOPSIS
+    Re-launches a deterministic generator under cross-platform PowerShell.
+
+    .DESCRIPTION
+    Windows PowerShell 5.1 and pwsh serialize the same object differently in
+    ConvertTo-Json. Generators that commit or compare byte-for-byte artifacts
+    call this helper before producing content so Windows, Linux, macOS, local
+    tests, and hosted workflows all use the same PowerShell implementation.
+    The helper returns normally under pwsh and exits the calling script with
+    the child exit code after re-launching from Windows PowerShell.
+    #>
+    param(
+        [Parameter(Mandatory = $true)][string]$ScriptPath,
+        [string[]]$ForwardedArguments = @()
+    )
+
+    if ($PSVersionTable.PSEdition -ne 'Desktop') {
+        return
+    }
+
+    $pwshCommand = Get-Command pwsh -ErrorAction Stop
+    & $pwshCommand.Source -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @ForwardedArguments
+    exit $LASTEXITCODE
 }
 
 function Invoke-FidelityCorpusDownload {

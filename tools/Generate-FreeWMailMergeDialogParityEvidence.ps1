@@ -5,6 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 . (Join-Path $PSScriptRoot 'ToolScriptSupport.ps1')
+Invoke-ToolCanonicalPwshHost -ScriptPath $PSCommandPath -ForwardedArguments @("-Check:$([bool]$Check)")
 $jsonPath = Join-Path $repo 'docs/parity/freew-mail-merge-dialog-parity-20260720.json'
 $markdownPath = Join-Path $repo 'docs/parity/freew-mail-merge-dialog-parity-20260720.md'
 

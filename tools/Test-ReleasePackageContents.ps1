@@ -17,9 +17,7 @@ if ($Scope -eq 'Suite' -and @($Apps | Sort-Object -Unique).Count -ne 3) { throw 
 $InputRoot = (Resolve-Path -LiteralPath $InputRoot).Path
 
 function Find-One([string]$Name) {
-    $matches = @(Get-ChildItem -LiteralPath $InputRoot -Recurse -File -Filter $Name)
-    if ($matches.Count -ne 1) { throw "Expected exactly one '$Name'; found $($matches.Count)." }
-    $matches[0]
+    Find-ToolReleaseArtifact -InputRoot $InputRoot -Name $Name
 }
 
 function Assert-Pe([System.IO.FileInfo]$File, [string]$Description) {
