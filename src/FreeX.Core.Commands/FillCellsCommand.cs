@@ -55,6 +55,24 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+
+        // r164 remediation, destination-sized tiling with no ceiling: Fill Down/Right/Up/Left
+        // (Ctrl+D/Ctrl+R) has the same shape already capped in the internal/external tiled paste,
+        // Paste Link, the fill handle (AutofillCommand) and Fill > Series -- everything below sizes
+        // from the DESTINATION selection, never from a bounded source range. GetTargetAddresses()
+        // .ToList() materialises one CellAddress per target and the five per-cell undo snapshot
+        // lists below add an entry each on top of that, so selecting a whole column and pressing
+        // Ctrl+D asks for ~1.05 billion entries on the synchronous UI thread, which OOMs or hangs
+        // with no warning. The guard sits at the very top of Apply because every one of those
+        // sizing sites -- the target list, the snapshots, and the uniform-merge tiling path -- is
+        // reached through it.
+        if (_range.CellCount > PasteCommandFactory.MaxTiledPasteCellCount)
+        {
+            return new CommandOutcome(
+                false,
+                $"Fill range is too large ({_range.RowCount:N0} x {_range.ColCount:N0} = {_range.CellCount:N0} cells; the limit is {PasteCommandFactory.MaxTiledPasteCellCount:N0}). Select a smaller range and fill again.");
+        }
+
         var targets = GetTargetAddresses().ToList();
         if (targets.Count == 0)
             return new CommandOutcome(false, "The fill range must include at least one target cell.");
