@@ -1044,7 +1044,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
         source.Should().Contain("OpenRecentWorkbookMenuPlanner.Create(");
         // Snapshot() (a copy taken under the store lock) rather than enumerating the live Entries.
-        source.Should().Contain("_recentFiles.Snapshot()");
+        // r163: this used to pin "_recentFiles.Snapshot()" -- reading the constructor-time store.
+        // That is exactly the stale read shared-recent-files-jumplist F2 was filed against: with
+        // several windows in one process (View > New Window), a sibling window's registered, pinned
+        // or removed entry was never observed by this window's cached instance. The WPF host already
+        // reloaded from disk for this reason; the Avalonia shell now does too, so the contract pins
+        // the reload rather than the field it replaced.
+        source.Should().Contain("ReloadRecentFilesStore().Snapshot()");
         // R152-shared-recent-files-F1: the cache (not a raw File.Exists) so an unreachable UNC/
         // network recent entry never blocks the UI thread rebuilding this menu after every Open/Save.
         source.Should().Contain("_recentFilePathExistenceCache.Exists");
