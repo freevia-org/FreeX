@@ -884,7 +884,10 @@ public partial class MainWindow
                     SheetGrid.SelectedRange ?? range,
                     plan.Mode,
                     plan.Style,
-                    plan.Color)))
+                    plan.Color,
+                    // r164: lets the planner clamp an unbounded selection through
+                    // ApplyStyleCommand.StyleOnlyCreateZone instead of emitting one command per cell.
+                    _session.Workbook.GetSheet(sheetId))))
             return;
 
         UpdateViewport();

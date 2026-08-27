@@ -69,6 +69,19 @@ public sealed class MergeCellsCommand : IWorkbookCommand, IAffectedCellsCommand,
         if (!WorksheetBounds.IsValidAddress(_range.Start) || !WorksheetBounds.IsValidAddress(_range.End))
             return new CommandOutcome(false, "Merge range is outside the worksheet bounds.");
 
+        // r164 remediation, dense whole-sheet enumeration: five separate loops below walk
+        // _range.AllCells(), and unlike Clear Contents the work here is genuinely per destination
+        // cell -- every covered cell's value is blanked and its pre-merge StyleId recorded so a
+        // later Unmerge can restore it -- so there is no populated-cells shortcut. Ctrl+A followed
+        // by Merge & Center therefore asked for 17,179,869,184 iterations on the synchronous UI
+        // thread. Cap it the way the tiled paste/fill paths are capped.
+        if (_range.CellCount > PasteCommandFactory.MaxTiledPasteCellCount)
+        {
+            return new CommandOutcome(
+                false,
+                $"Merge range is too large ({_range.RowCount:N0} x {_range.ColCount:N0} = {_range.CellCount:N0} cells; the limit is {PasteCommandFactory.MaxTiledPasteCellCount:N0}). Select a smaller range and merge again.");
+        }
+
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatCells) is { } protectedOutcome)
             return protectedOutcome;

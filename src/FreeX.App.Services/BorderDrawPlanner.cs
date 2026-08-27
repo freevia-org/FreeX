@@ -18,14 +18,15 @@ public static class BorderDrawPlanner
         GridRange range,
         BorderDrawMode mode,
         BorderStyle style,
-        CellColor color)
+        CellColor color,
+        Sheet? sheet = null)
     {
         if (mode == BorderDrawMode.None)
             throw new ArgumentException("Border draw mode must be active.", nameof(mode));
 
         var sheetRange = StyleSelectionRangePlanner.RemapRangeToSheet(range, sheetId);
         return mode == BorderDrawMode.Draw
-            ? CreateDrawBorderCommand(sheetId, sheetRange, style, color)
+            ? CreateDrawBorderCommand(sheetId, sheetRange, style, color, sheet)
             : new BorderDrawWorkbookCommand(
                 CommandTitle(mode),
                 new ApplyStyleCommand(sheetId, sheetRange, CreateDiff(mode, style, color)),
@@ -68,9 +69,22 @@ public static class BorderDrawPlanner
         SheetId sheetId,
         GridRange range,
         BorderStyle style,
-        CellColor color)
+        CellColor color,
+        Sheet? sheet)
     {
-        var commands = range
+        // r164 remediation, dense whole-sheet enumeration: this builds one single-cell
+        // ApplyStyleCommand per address, so an unbounded selection asked for up to 17,179,869,184
+        // command objects on the synchronous UI thread. The two siblings that build per-cell border
+        // commands the same way -- SelectionStyleCommandPlanner.CreateBorderCommands and
+        // MainWindow.CellsCommands' CreateBorderCommands -- already clamp through
+        // ApplyStyleCommand.StyleOnlyCreateZone ("this prevents creating millions of single-cell
+        // commands"); this one never got it. The full range still feeds CreateCellDiff, so
+        // outline-vs-inside edge decisions are unchanged.
+        var iterRange = sheet is not null
+            ? ApplyStyleCommand.StyleOnlyCreateZone(sheet, range) ?? range
+            : range;
+
+        var commands = iterRange
             .AllCells()
             .Select(address => (Address: address, Diff: CreateCellDiff(BorderDrawMode.Draw, range, address, style, color)))
             .Where(plan => BorderShortcutService.HasBorderChanges(plan.Diff))

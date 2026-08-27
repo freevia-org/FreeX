@@ -168,10 +168,15 @@ public static class TranslateDialogPlanner
         // Multi-cell target: map each non-final newline-delimited line to a successive cell, row by
         // row, capped at the range's capacity. Any overflow lines are appended to the last cell so no
         // text is silently lost and nothing is written outside the chosen range.
+        // r164 remediation, dense whole-sheet enumeration: this materialised one CellAddress per
+        // cell of the target range before writing anything, so a select-all target asked for a
+        // 17,179,869,184-entry list. At most one cell per line is ever written (overflow lines are
+        // appended to the last written cell), so only that many addresses are taken -- `capacity`
+        // still means the range's full cell count, which is what decides whether overflow happens.
         var lines = translation.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
-        var cells = target.AllCells().ToList();
+        var capacity = target.CellCount;
+        var cells = target.AllCells().Take(lines.Length).ToList();
         var writes = new List<TranslateCellWrite>(cells.Count);
-        var capacity = cells.Count;
 
         for (var i = 0; i < capacity && i < lines.Length; i++)
         {

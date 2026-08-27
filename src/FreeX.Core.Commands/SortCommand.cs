@@ -34,7 +34,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     private const int BytesPerCell = 400;
 
     private readonly SheetId _sheetId;
-    private readonly GridRange _range;
+    // r164 remediation, dense whole-sheet enumeration: narrowed once at the top of Apply to the
+    // populated part of the caller-supplied selection -- see the comment there. Every later use
+    // (including Revert, whose snapshots are built from the same narrowed range) reads the narrowed
+    // value, so the command stays internally consistent.
+    private GridRange _range;
     private readonly IReadOnlyList<SortKey> _sortKeys;
     private readonly SortOptions _options;
 
@@ -183,6 +187,19 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         // Guard against inverted ranges — uint subtraction would wrap to ~4B
         if (_range.End.Row < _range.Start.Row || _range.End.Col < _range.Start.Col)
             return new CommandOutcome(true); // nothing to sort
+
+        // r164 remediation, dense whole-sheet enumeration: the protection scan just below, the
+        // snapshot builders and the row/column swaps all walk every address of _range, so Ctrl+A
+        // followed by Sort A-Z asked for 17,179,869,184 iterations on the synchronous UI thread.
+        // Sorting empty rows is a no-op (blanks sort last and swapping two blank rows changes
+        // nothing), so dropping the trailing empty part of the selection is behaviour-preserving --
+        // and unlike a cell limit it does not reject the select-all sort outright. Only the END is
+        // trimmed: the sort key is an OFFSET from _range.Start.Col and the header is _range.Start.Row,
+        // so moving the start would re-point the key at a different column.
+        if (SheetRangeScope.ClampEndToPopulated(sheet, _range) is not { } populated)
+            return new CommandOutcome(true); // nothing populated to sort
+
+        _range = populated;
 
         // R27-protection-eval-deep-2: Excel documents that Sort is blocked on any range
         // containing locked cells on a protected worksheet "whether or not this element is

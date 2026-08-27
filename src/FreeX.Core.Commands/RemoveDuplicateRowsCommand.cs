@@ -21,7 +21,11 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
     private const int BytesPerCell = 400;
 
     private readonly SheetId _sheetId;
-    private readonly GridRange _range;
+    // r164 remediation, dense whole-sheet enumeration: trimmed once at the top of Apply to drop the
+    // trailing empty part of the caller's selection -- see the comment there. Every later use
+    // (including Revert, whose snapshots are built from the same trimmed range) reads the trimmed
+    // value, so the command stays internally consistent.
+    private GridRange _range;
     private readonly IReadOnlyList<uint>? _columnOffsets;
 
     // Snapshot of every in-range cell before Apply, used by Revert.
@@ -72,6 +76,17 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
+
+        // r164 remediation, dense whole-sheet enumeration: the per-row scans and the
+        // _range.AllCells() snapshot below are sized by the selection, so Ctrl+A followed by
+        // Data > Remove Duplicates took ~46 s before the sheet even got big. Trailing empty rows
+        // hold no duplicates to remove, so trimming them is behaviour-preserving. Only the END is
+        // trimmed: _columnOffsets are OFFSETS from _range.Start.Col and the first row is the
+        // header, so moving the start would re-point them at different columns.
+        if (SheetRangeScope.ClampEndToPopulated(sheet, _range) is not { } populated)
+            return new CommandOutcome(true); // nothing populated, so no duplicates to remove
+
+        _range = populated;
 
         // R47-sibling-guard-asymmetry-sweep-5: mirror ClearContentsCommand's CSE-array/dynamic-spill
         // split guard for this command's identical "clear then possibly rewrite" primitive (see step

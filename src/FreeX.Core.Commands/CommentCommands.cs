@@ -358,7 +358,19 @@ public sealed class ClearCommentsCommand : IWorkbookCommand
         _threadedSnapshot = [];
         _authorSnapshot = [];
         _shownSnapshot = [];
-        foreach (var addr in _range.AllCells())
+        // r164 remediation, dense whole-sheet enumeration: this walked _range.AllCells(), so
+        // Ctrl+A followed by Clear > Comments asked for 17,179,869,184 iterations on the
+        // synchronous UI thread and never came back. The body is four dictionary lookups, so
+        // visiting the cells that actually carry a note or comment is exactly equivalent and costs
+        // the size of the document instead of the size of the selection.
+        var addresses = sheet.Comments.Keys
+            .Concat(sheet.ThreadedComments.Keys)
+            .Concat(sheet.CommentAuthors.Keys)
+            .Concat(sheet.ShownComments)
+            .Where(_range.Contains)
+            .Distinct()
+            .ToList();
+        foreach (var addr in addresses)
         {
             if (sheet.Comments.TryGetValue(addr, out var comment))
             {

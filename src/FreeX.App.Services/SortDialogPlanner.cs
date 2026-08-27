@@ -442,7 +442,7 @@ public static class SortDialogPlanner
             return [new SortColorChoice("")];
 
         var colors = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var address in range.AllCells())
+        foreach (var address in ScanPopulated(sheet, range))
         {
             var style = GetCellStyle(workbook, sheet, address);
             if (style.FillColor is { } fillColor)
@@ -464,7 +464,7 @@ public static class SortDialogPlanner
             return [new SortColorChoice("")];
 
         var colors = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var address in range.AllCells())
+        foreach (var address in ScanPopulated(sheet, range))
         {
             var style = GetCellStyle(workbook, sheet, address);
             var color = sortOn == SortOn.FontColor
@@ -506,7 +506,7 @@ public static class SortDialogPlanner
         var dataRange = ExcludeHeaderRow(columnRange, hasHeaders);
 
         var colors = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var address in dataRange.AllCells())
+        foreach (var address in ScanPopulated(sheet, dataRange))
         {
             var style = GetCellStyle(workbook, sheet, address);
             var color = sortOn == SortOn.FontColor
@@ -563,7 +563,7 @@ public static class SortDialogPlanner
         var dataRange = ExcludeHeaderRow(columnRange, hasHeaders);
 
         var icons = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var address in dataRange.AllCells())
+        foreach (var address in ScanPopulated(sheet, dataRange))
         {
             // R150-sort-dialog-icon-spill: a non-anchor spill member has no entry in Sheet's
             // _cells dictionary (GetCell returns null for it), so its live value only lives in
@@ -592,6 +592,17 @@ public static class SortDialogPlanner
             ? iconChoices
             : [new SortIconChoice("")];
     }
+
+    /// <summary>
+    /// r164 remediation, dense whole-sheet enumeration: the swatch/icon scans above walked every
+    /// address of the caller's range, so opening the Sort dialog on a select-all selection never
+    /// returned (17,179,869,184 style lookups on the synchronous UI thread). They only build the
+    /// list of colors/icons the user can pick, and a color that appears on no populated cell is not
+    /// something the sort itself could ever order by, so the scan is narrowed to the populated part
+    /// of the range.
+    /// </summary>
+    private static IEnumerable<CellAddress> ScanPopulated(Sheet sheet, GridRange range) =>
+        SheetRangeScope.ClampToPopulated(sheet, range)?.AllCells() ?? [];
 
     public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)
     {

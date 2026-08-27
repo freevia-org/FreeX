@@ -79,6 +79,19 @@ public static class FormatPainterCommandFactory
         // tiled source address can be redirected to its merge's anchor instead.
         var sourceMerges = sourceSheet.MergedRegions.Where(sourceRange.Contains).ToList();
 
+        // r164 remediation, dense whole-sheet enumeration: this tiling loop builds one
+        // ApplyStyleCommand per TARGET cell, so painting a multi-cell source onto a select-all
+        // target asked for 17,179,869,184 command objects on the synchronous UI thread. Unlike the
+        // 1x1-source branch above -- which paints the whole target with a single range-level command
+        // and stays fast -- there is no way to express a tiled multi-cell format without touching
+        // every destination cell, so cap it like the other tiled destination paths.
+        if (targetRange.CellCount > PasteCommandFactory.MaxTiledPasteCellCount)
+        {
+            return new RejectedWorkbookCommand(
+                "Format Painter",
+                $"Format Painter target is too large ({targetRange.RowCount:N0} x {targetRange.ColCount:N0} = {targetRange.CellCount:N0} cells; the limit is {PasteCommandFactory.MaxTiledPasteCellCount:N0}). Select a smaller target range and paint again.");
+        }
+
         foreach (var targetAddress in targetRange.AllCells())
         {
             var sourceAddress = new CellAddress(
@@ -235,4 +248,5 @@ public static class FormatPainterCommandFactory
             }
         }
     }
+
 }

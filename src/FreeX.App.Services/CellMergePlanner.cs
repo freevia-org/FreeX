@@ -344,8 +344,22 @@ public static class CellMergePlanner
         var spillTargetsInRange = new HashSet<CellAddress>(
             sheet.EnumerateSpillTargetCells().Where(range.Contains));
 
+        // r164 remediation, dense whole-sheet enumeration: this walked range.AllCells(), so the
+        // merge-warning scan for a select-all Merge & Center never returned. Only a cell with
+        // content or a spill value can produce an entry, so visiting the occupied cells and the
+        // spill targets is exactly equivalent and costs the size of the document instead of the
+        // size of the selection. Sorted to keep the row-major order the dense walk produced, which
+        // is the order the "would lose content" preview lists cells in.
+        var candidates = sheet.GetOccupiedCells()
+            .Select(cell => new CellAddress(sheet.Id, cell.Row, cell.Col))
+            .Where(range.Contains)
+            .Concat(spillTargetsInRange)
+            .Distinct()
+            .OrderBy(address => address.Row)
+            .ThenBy(address => address.Col);
+
         var entries = new List<MergeCellContentEntry>();
-        foreach (var address in range.AllCells())
+        foreach (var address in candidates)
         {
             var isTopLeft = perRow ? address.Col == range.Start.Col : address == range.Start;
             if (sheet.GetCell(address) is { } cell && HasContent(cell))

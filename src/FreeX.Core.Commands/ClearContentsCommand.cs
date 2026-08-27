@@ -44,9 +44,24 @@ public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+
+        // r164 remediation, dense whole-sheet enumeration: every loop below walked _range.AllCells(),
+        // so Ctrl+A followed by the Delete key asked for 17,179,869,184 iterations on the
+        // synchronous UI thread and never came back. Clearing only ever touches cells that hold
+        // something, so narrow the range to the part that can (see SheetRangeScope) instead of
+        // capping the selection -- a cap would reject select-all Delete outright, and today a
+        // whole-column Clear Contents completes in ~100 ms.
+        var scope = SheetRangeScope.ClampToPopulated(sheet, _range);
+        if (scope is null)
+        {
+            _snapshot = [];
+            return new CommandOutcome(true, AffectedCells: []);
+        }
+
+        var effectiveRange = scope.Value;
         if (sheet.IsProtected)
         {
-            foreach (var address in _range.AllCells())
+            foreach (var address in effectiveRange.AllCells())
             {
                 if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, address))
                     return CommandGuards.RejectSheetProtected();
@@ -58,7 +73,7 @@ public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
         // anchor alone, which removes the formula and its entire spill along with it. That
         // anchor-alone carve-out (and its narrower legacy-CSE exclusion) now lives centrally in
         // CommandGuards.RejectIfSplitsArray, so the full range can be passed through unfiltered here.
-        if (CommandGuards.RejectIfSplitsArray(sheet, _range.AllCells(), allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, effectiveRange.AllCells(), allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
         _snapshot = [];
@@ -90,7 +105,7 @@ public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
         }
 
         var affected = new List<CellAddress>();
-        foreach (var address in _range.AllCells())
+        foreach (var address in effectiveRange.AllCells())
         {
             var oldCell = sheet.GetCell(address)?.Clone();
             var oldStyleOnly = sheet.GetStyleOnly(address.Row, address.Col);

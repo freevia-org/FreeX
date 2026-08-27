@@ -624,11 +624,21 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
     internal static void ClearRange(Sheet sheet, GridRange range)
     {
-        for (var row = range.Start.Row; row <= range.End.Row; row++)
-        {
-            for (var col = range.Start.Col; col <= range.End.Col; col++)
-                sheet.ClearCell(row, col);
-        }
+        // r164 remediation, dense whole-sheet enumeration: this was a double loop over every address
+        // in the range, so Ctrl+A followed by Delete Cells asked for 17,179,869,184 ClearCell calls
+        // on the synchronous UI thread. ClearCell on an address that holds nothing is a no-op (it
+        // clears a spill rooted there, then removes the cell if one exists), so visiting the sheet's
+        // occupied cells and spill roots inside the range is exactly equivalent. Materialised first
+        // because ClearCell mutates the collections being enumerated.
+        var addresses = sheet.GetOccupiedCells()
+            .Select(cell => new CellAddress(sheet.Id, cell.Row, cell.Col))
+            .Concat(sheet.EnumerateSpillTargetCells())
+            .Where(range.Contains)
+            .Distinct()
+            .ToList();
+
+        foreach (var address in addresses)
+            sheet.ClearCell(address);
     }
 
     // ── Merge guard ──────────────────────────────────────────────────────────
@@ -1904,6 +1914,14 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r164 remediation, dense whole-sheet enumeration: the affected-cells list at the end of
+        // this method expands _range.AllCells(), so Ctrl+A followed by Delete Cells asked for
+        // 17,179,869,184 addresses on the synchronous UI thread. That list only drives recalc and
+        // repaint, and an address that held nothing before the delete and nothing after it has
+        // nothing to recalculate, so reporting the populated part of the range is enough. Captured
+        // HERE, before the shift mutates the sheet, so it reflects what the delete actually touched.
+        var affectedScope = SheetRangeScope.ClampToPopulated(sheet, _range);
+
         _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
         // chart-binding F1: see InsertCellsCommand.Apply's capture of the same name/rationale.
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
@@ -2094,7 +2112,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         // VacatedAddressesForRelocatedFormulaCells yields every captured formula cell's original
         // Address unconditionally, which covers both cases (duplicates de-duped downstream).
         _affectedCells = _mutationSnapshot!.BuildAffectedCells(
-            _range.AllCells()
+            (affectedScope?.AllCells() ?? [])
                 .Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>())
                 .Concat(InsertCellsCommand.VacatedAddressesForRelocatedFormulaCells(_capturedCells ?? [])));
         return new CommandOutcome(true, AffectedCells: _affectedCells);
