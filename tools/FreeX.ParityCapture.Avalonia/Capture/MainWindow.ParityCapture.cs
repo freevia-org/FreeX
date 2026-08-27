@@ -5068,16 +5068,39 @@ public sealed partial class MainWindow
         int width,
         int height,
         string path)
+        => RenderCellOnlyGridCaptureToPng(
+            rootedHost,
+            attachedGrid,
+            width,
+            height,
+            path,
+            RenderVisualToPngWithOverlay,
+            RenderVisualToPng,
+            candidatePath => ParityCaptureOutputGuard.ValidateGridPngOutput(candidatePath, [], []) is null);
+
+    internal static void RenderCellOnlyGridCaptureToPng(
+        Visual rootedHost,
+        Control attachedGrid,
+        int width,
+        int height,
+        string path,
+        Action<Visual, int, int, string> renderRootedHost,
+        Action<Visual, int, int, string> renderAttachedGrid,
+        Func<string, bool> isValidCapture)
     {
-        RenderVisualToPngWithOverlay(rootedHost, width, height, path);
-        if (ParityCaptureOutputGuard.ValidateGridPngOutput(path, [], []) is null)
+        ArgumentNullException.ThrowIfNull(renderRootedHost);
+        ArgumentNullException.ThrowIfNull(renderAttachedGrid);
+        ArgumentNullException.ThrowIfNull(isValidCapture);
+
+        renderRootedHost(rootedHost, width, height, path);
+        if (isValidCapture(path))
             return;
 
         attachedGrid.Measure(new Size(Math.Max(1, width), Math.Max(1, height)));
         attachedGrid.Arrange(new Rect(0, 0, Math.Max(1, width), Math.Max(1, height)));
         attachedGrid.UpdateLayout();
         Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
-        RenderVisualToPng(attachedGrid, width, height, path);
+        renderAttachedGrid(attachedGrid, width, height, path);
     }
 
     private static void CompositeDrawingOverlayPng(
