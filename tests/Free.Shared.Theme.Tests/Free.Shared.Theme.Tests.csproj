@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme/Free.Shared.Theme.csproj" />
   </ItemGroup>
 
 </Project>

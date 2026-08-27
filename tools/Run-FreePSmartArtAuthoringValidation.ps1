@@ -120,7 +120,7 @@ function Assert-EvidenceReference {
 
     $root = [IO.Path]::GetFullPath($evidenceDirectory).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
     $path = [IO.Path]::GetFullPath((Join-Path $evidenceDirectory $Reference))
-    if (-not $path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) -or
+    if (-not (Test-ToolPathWithinRoot -Path $path -RootPath $root) -or
         -not (Test-Path -LiteralPath $path -PathType Leaf) -or
         (Get-Item -LiteralPath $path).Length -le 0) {
         throw "Evidence reference is missing, empty, or outside the combined evidence directory: '$Reference'."

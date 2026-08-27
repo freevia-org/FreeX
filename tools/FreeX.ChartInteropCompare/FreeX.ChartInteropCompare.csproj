@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeX.ToolsShared\FreeX.ToolsShared.csproj" />
-    <ProjectReference Include="..\FreeX.ToolsShared.Wpf\FreeX.ToolsShared.Wpf.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.UI\FreeX.App.UI.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../FreeX.ToolsShared/FreeX.ToolsShared.csproj" />
+    <ProjectReference Include="../FreeX.ToolsShared.Wpf/FreeX.ToolsShared.Wpf.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.UI/FreeX.App.UI.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -13,6 +13,6 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
   </PropertyGroup>
-  <Import Project="..\ToolProjects.props" />
+  <Import Project="../ToolProjects.props" />
 
 </Project>

@@ -345,7 +345,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             "private Control BuildStatusBar()",
             "private static double ResolveTokenDouble(");
 
-        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
+        project.Should().Contain("../../shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj");
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
 
         buildContentBlock.Should().Contain("SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(");

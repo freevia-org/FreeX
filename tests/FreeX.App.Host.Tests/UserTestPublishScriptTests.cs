@@ -78,7 +78,7 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("if ($PublishMode -eq \"SingleFile\")");
         script.Should().Contain("-p:FreeXTesterReleaseEnglishOnly=true");
         project.Should().Contain("Condition=\"'$(FreeXTesterReleaseEnglishOnly)' == 'true'\"");
-        project.Should().Contain("EmbeddedResource Remove=\"Resources\\Strings.*.resx\"");
+        project.Should().Contain("EmbeddedResource Remove=\"Resources/Strings.*.resx\"");
         project.Should().NotContain("EmbeddedResource Remove=\"Resources\\Strings.resx\"");
     }
 

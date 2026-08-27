@@ -158,9 +158,9 @@ public sealed class FilePickerPlannerSourceTests
         (source + ports).Should().NotContain("PptxPackageWriter.");
         (source + ports).Should().NotContain("File.Create(");
         source.Should().NotContain("new PresentationHandoutSlideSlot(");
-        project.Should().Contain(@"..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj");
-        project.Should().Contain(@"..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj");
-        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
+        project.Should().Contain("../../shared/Free.Shared.IO/Free.Shared.IO.csproj");
+        project.Should().Contain("../../shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj");
+        project.Should().Contain("../../shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj");
     }
 
 }

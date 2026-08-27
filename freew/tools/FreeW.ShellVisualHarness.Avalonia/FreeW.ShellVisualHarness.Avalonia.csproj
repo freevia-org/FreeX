@@ -10,6 +10,6 @@
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="Avalonia.Skia" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
-    <ProjectReference Include="..\..\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj" />
+    <ProjectReference Include="../../FreeW.App.Avalonia/FreeW.App.Avalonia.csproj" />
   </ItemGroup>
 </Project>

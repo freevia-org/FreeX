@@ -7,8 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
   </ItemGroup>
 
 </Project>

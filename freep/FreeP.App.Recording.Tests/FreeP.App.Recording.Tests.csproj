@@ -24,12 +24,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\TestSupport\SlideShowRecordingHostAdapterParityPlanner.cs"
-             Link="TestSupport\SlideShowRecordingHostAdapterParityPlanner.cs" />
+    <Compile Include="../TestSupport/SlideShowRecordingHostAdapterParityPlanner.cs"
+             Link="TestSupport/SlideShowRecordingHostAdapterParityPlanner.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
+    <ProjectReference Include="../FreeP.App.Recording/FreeP.App.Recording.csproj" />
   </ItemGroup>
 
 </Project>

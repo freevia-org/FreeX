@@ -17,8 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Free.Shared.IO\Free.Shared.IO.csproj" />
-    <ProjectReference Include="..\Free.Shared.Localization\Free.Shared.Localization.csproj" />
+    <ProjectReference Include="../Free.Shared.IO/Free.Shared.IO.csproj" />
+    <ProjectReference Include="../Free.Shared.Localization/Free.Shared.Localization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

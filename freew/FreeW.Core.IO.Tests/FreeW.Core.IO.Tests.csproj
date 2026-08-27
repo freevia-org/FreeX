@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
+    <ProjectReference Include="../FreeW.Core.IO/FreeW.Core.IO.csproj" />
   </ItemGroup>
 
 </Project>

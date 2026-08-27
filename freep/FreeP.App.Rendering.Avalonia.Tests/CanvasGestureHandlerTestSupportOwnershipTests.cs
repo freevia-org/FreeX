@@ -51,7 +51,7 @@ public sealed class CanvasGestureHandlerTestSupportOwnershipTests
             .Should().NotContain("HasTransientInteractionVisualsForTests");
         File.Exists(supportFile).Should().BeTrue();
         File.ReadAllText(Path.Combine(rendererDirectory, "FreeP.App.Rendering.Avalonia.csproj"))
-            .Should().Contain("<ItemGroup Condition=\"'$(FreePRendererTestSupport)' == 'true'\">\r\n    <AssemblyAttribute Include=\"System.Runtime.CompilerServices.InternalsVisibleTo\">");
+            .Should().Contain("<ItemGroup Condition=\"'$(FreePRendererTestSupport)' == 'true'\">\n    <AssemblyAttribute Include=\"System.Runtime.CompilerServices.InternalsVisibleTo\">");
         File.ReadAllText(Path.Combine(
                 root,
                 "freep",

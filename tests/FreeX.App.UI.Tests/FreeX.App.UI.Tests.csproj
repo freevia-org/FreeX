@@ -24,10 +24,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FreeX.App.UI\FreeX.App.UI.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.UI/FreeX.App.UI.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
   </ItemGroup>
 
 </Project>

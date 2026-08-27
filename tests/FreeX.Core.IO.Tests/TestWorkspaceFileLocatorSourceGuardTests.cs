@@ -82,8 +82,8 @@ public sealed class TestWorkspaceFileLocatorSourceGuardTests
     {
         var targets = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("Directory.Build.targets");
 
-        targets.Should().Contain("tests\\SharedTestInfrastructure\\*.cs");
-        targets.Should().Contain("tests\\SharedTestInfrastructure\\ReusableWpfWindowSession.cs");
+        targets.Should().Contain("tests/SharedTestInfrastructure/*.cs");
+        targets.Should().Contain("tests/SharedTestInfrastructure/ReusableWpfWindowSession.cs");
         targets.Should().Contain("Condition=\"'$(UseWPF)' == 'true'\"");
     }
 
@@ -97,7 +97,7 @@ public sealed class TestWorkspaceFileLocatorSourceGuardTests
             @"class\s+TestCommandContext\(Workbook workbook\).*?Workbook\.GetSheet\(sheetId\)\s*\?\?\s*throw new KeyNotFoundException\(\$""Sheet \{sheetId\} not found""\)",
             RegexOptions.Compiled | RegexOptions.Singleline);
 
-        project.Should().Contain("..\\CommandTestInfrastructure\\TestCommandContext.cs");
+        project.Should().Contain("../CommandTestInfrastructure/TestCommandContext.cs");
         EnumerateSourceFiles(projectRoot)
             .Where(file => exactCopy.IsMatch(File.ReadAllText(file)))
             .Select(file => Path.GetRelativePath(workspaceRoot, file))

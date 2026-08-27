@@ -22,13 +22,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />
-    <ProjectReference Include="..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="../FreeP.App.Localization/FreeP.App.Localization.csproj" />
+    <ProjectReference Include="../FreeP.Ribbon.Definitions/FreeP.Ribbon.Definitions.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\tests\SharedTestInfrastructure\Ribbon\RibbonDefinitionValidator.cs"
-             Link="TestSupport\RibbonDefinitionValidator.cs" />
+    <Compile Include="../../tests/SharedTestInfrastructure/Ribbon/RibbonDefinitionValidator.cs"
+             Link="TestSupport/RibbonDefinitionValidator.cs" />
   </ItemGroup>
 
 </Project>

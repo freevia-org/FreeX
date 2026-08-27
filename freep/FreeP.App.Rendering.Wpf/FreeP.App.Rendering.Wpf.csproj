@@ -15,21 +15,21 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(FreePRendererTestSupport)' == 'true'">
-    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+    <OutputPath>bin/TestSupport/$(Configuration)/</OutputPath>
+    <IntermediateOutputPath>obj/TestSupport/$(Configuration)/$(TargetFramework)/</IntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(FreePRendererTestSupport)' == 'true'">
-    <Compile Include="..\TestSupport\Rendering.Wpf\CanvasGestureHandler.TestAccess.cs"
+    <Compile Include="../TestSupport/Rendering.Wpf/CanvasGestureHandler.TestAccess.cs"
              Link="CanvasGestureHandler.TestAccess.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\FreeP.App.Ole.Windows\FreeP.App.Ole.Windows.csproj" />
-    <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
-    <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../FreeP.App.Ole.Windows/FreeP.App.Ole.Windows.csproj" />
+    <ProjectReference Include="../FreeP.Core.Model/FreeP.Core.Model.csproj" />
+    <ProjectReference Include="../FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePRendererTestSupport)' == 'true'">

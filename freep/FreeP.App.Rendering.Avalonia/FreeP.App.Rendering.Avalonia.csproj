@@ -15,12 +15,12 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(FreePRendererTestSupport)' == 'true'">
-    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+    <OutputPath>bin/TestSupport/$(Configuration)/</OutputPath>
+    <IntermediateOutputPath>obj/TestSupport/$(Configuration)/$(TargetFramework)/</IntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(FreePRendererTestSupport)' == 'true'">
-    <Compile Include="..\TestSupport\Rendering.Avalonia\AvaloniaCanvasGestureHandler.TestAccess.cs"
+    <Compile Include="../TestSupport/Rendering.Avalonia/AvaloniaCanvasGestureHandler.TestAccess.cs"
              Link="AvaloniaCanvasGestureHandler.TestAccess.cs" />
   </ItemGroup>
 
@@ -35,12 +35,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing.Avalonia\Free.Shared.Drawing.Avalonia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj" />
-    <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
-    <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing.Avalonia/Free.Shared.Drawing.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj" />
+    <ProjectReference Include="../FreeP.Core.Model/FreeP.Core.Model.csproj" />
+    <ProjectReference Include="../FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePRendererTestSupport)' == 'true'">

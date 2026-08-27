@@ -1,26 +1,26 @@
 <Project>
   <ItemGroup Condition="'$(IsTestProject)' == 'true'">
-    <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\*.cs"
-             Exclude="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\LocalizationWrapperContractTestSupport.cs;
-                      $(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\RecordingUserMessageService.cs;
-                      $(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\ReusableWpfWindowSession.cs;
-                      $(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\XunitDisableTestParallelization.cs"
+    <Compile Include="$(MSBuildThisFileDirectory)tests/SharedTestInfrastructure/*.cs"
+             Exclude="$(MSBuildThisFileDirectory)tests/SharedTestInfrastructure/LocalizationWrapperContractTestSupport.cs;
+                      $(MSBuildThisFileDirectory)tests/SharedTestInfrastructure/RecordingUserMessageService.cs;
+                      $(MSBuildThisFileDirectory)tests/SharedTestInfrastructure/ReusableWpfWindowSession.cs;
+                      $(MSBuildThisFileDirectory)tests/SharedTestInfrastructure/XunitDisableTestParallelization.cs"
              Link="%(Filename)%(Extension)" />
-    <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\ReusableWpfWindowSession.cs"
+    <Compile Include="$(MSBuildThisFileDirectory)tests/SharedTestInfrastructure/ReusableWpfWindowSession.cs"
              Link="%(Filename)%(Extension)"
              Condition="'$(UseWPF)' == 'true'" />
-    <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\LocalizationWrapperContractTestSupport.cs"
+    <Compile Include="$(MSBuildThisFileDirectory)tests/SharedTestInfrastructure/LocalizationWrapperContractTestSupport.cs"
              Link="%(Filename)%(Extension)"
              Condition="'$(MSBuildProjectName)' == 'FreeX.App.Localization.Tests' Or
                         '$(MSBuildProjectName)' == 'FreeW.App.Localization.Tests' Or
                         '$(MSBuildProjectName)' == 'FreeP.App.Localization.Tests'" />
-    <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\RecordingUserMessageService.cs"
+    <Compile Include="$(MSBuildThisFileDirectory)tests/SharedTestInfrastructure/RecordingUserMessageService.cs"
              Link="%(Filename)%(Extension)"
              Condition="'$(MSBuildProjectName)' == 'FreeW.App.Host.Tests' Or
                         '$(MSBuildProjectName)' == 'FreeP.App.Host.Tests' Or
                         '$(MSBuildProjectName)' == 'FreeW.App.Avalonia.Tests' Or
                         '$(MSBuildProjectName)' == 'FreeP.App.Avalonia.Tests'" />
-    <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\XunitDisableTestParallelization.cs"
+    <Compile Include="$(MSBuildThisFileDirectory)tests/SharedTestInfrastructure/XunitDisableTestParallelization.cs"
              Link="%(Filename)%(Extension)"
              Condition="'$(MSBuildProjectName)' == 'FreeP.App.Host.Tests' Or
                         '$(MSBuildProjectName)' == 'FreeP.App.Rendering.Avalonia.Tests' Or
@@ -45,7 +45,7 @@
           AfterTargets="_CopyFilesMarkedCopyLocal"
           Condition="'$(FreeSharedLocalizationFilterAllSatellites)' == 'true'">
     <ItemGroup>
-      <_FreeSharedLocalizationEnglishOnlySatellite Include="$(TargetDir)**\Free.Shared.Localization.resources.dll" />
+      <_FreeSharedLocalizationEnglishOnlySatellite Include="$(TargetDir)**/Free.Shared.Localization.resources.dll" />
     </ItemGroup>
     <Delete Files="@(_FreeSharedLocalizationEnglishOnlySatellite)" />
   </Target>

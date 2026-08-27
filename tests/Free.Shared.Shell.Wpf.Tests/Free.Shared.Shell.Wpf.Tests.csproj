@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,18 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
-    <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Avalonia\FreeX.ParityCapture.Avalonia.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj" Aliases="ProductionAvalonia" />
-    <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Avalonia\Free.Shared.Theme.Avalonia.csproj" />
-    <ProjectReference Include="..\..\tools\FreeX.ParityCompare.Core\FreeX.ParityCompare.Core.csproj" />
+    <ProjectReference Include="../../tools/FreeX.ParityCapture.Avalonia/FreeX.ParityCapture.Avalonia.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj" Aliases="ProductionAvalonia" />
+    <ProjectReference Include="../../tools/FreeX.ParityCapture.Support/FreeX.ParityCapture.Support.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Services/FreeX.App.Services.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon.Avalonia/Free.Shared.Ribbon.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme/Free.Shared.Theme.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme.Avalonia/Free.Shared.Theme.Avalonia.csproj" />
+    <ProjectReference Include="../../tools/FreeX.ParityCompare.Core/FreeX.ParityCompare.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,8 +31,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
-    <Compile Include="..\SharedTestInfrastructure\FreeX\RibbonRuntimeCatalogPlanner.cs" Link="TestSupport\RibbonRuntimeCatalogPlanner.cs" />
+    <Compile Include="../CommandTestInfrastructure/TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="../SharedTestInfrastructure/FreeX/RibbonRuntimeCatalogPlanner.cs" Link="TestSupport/RibbonRuntimeCatalogPlanner.cs" />
   </ItemGroup>
 
   <PropertyGroup>

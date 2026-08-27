@@ -9,15 +9,15 @@
     <RootNamespace>FreeP.VisualEvidence.Avalonia</RootNamespace>
     <StartupObject>FreeP.VisualEvidence.Avalonia.Program</StartupObject>
   </PropertyGroup>
-  <Import Project="..\..\..\tools\ToolProjects.props" />
+  <Import Project="../../../tools/ToolProjects.props" />
 
   <ItemGroup>
     <!-- The adapter is compiled into the isolated renderer variant so its MainWindow partial
          retains private access without entering the normal shipping assembly. -->
     <Compile Remove="MainWindow.VisualCaptureAdapter.cs" />
-    <ProjectReference Include="..\VisualEvidence\FreeP.VisualEvidence.csproj" />
-    <ProjectReference Include="..\..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
-    <ProjectReference Include="..\..\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj"
+    <ProjectReference Include="../VisualEvidence/FreeP.VisualEvidence.csproj" />
+    <ProjectReference Include="../../../tools/Free.ToolsShared/Free.ToolsShared.csproj" />
+    <ProjectReference Include="../../FreeP.App.Avalonia/FreeP.App.Avalonia.csproj"
                       AdditionalProperties="FreePVisualEvidenceHost=true" />
   </ItemGroup>
 

@@ -453,13 +453,13 @@ public sealed class WindowsRecordingCaptureBackendTests
         wpfSource.Should().Contain("new WindowsNativeRecordingDeviceCatalog()");
 
         Read(root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj")
-            .Should().Contain("FreeP.App.Recording\\FreeP.App.Recording.csproj");
+            .Should().Contain("FreeP.App.Recording/FreeP.App.Recording.csproj");
         Read(root, "freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj")
-            .Should().Contain("FreeP.App.Recording\\FreeP.App.Recording.csproj");
+            .Should().Contain("FreeP.App.Recording/FreeP.App.Recording.csproj");
         Read(root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj")
             .Should().Contain("FrameworkReference Include=\"Microsoft.Windows.SDK.NET.Ref\"");
         Read(root, "freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj")
-            .Should().Contain("FreeP.App.Recording.Windows\\FreeP.App.Recording.Windows.csproj");
+            .Should().Contain("FreeP.App.Recording.Windows/FreeP.App.Recording.Windows.csproj");
         Read(root, "freep", "FreeP.App.Recording.Windows", "FreeP.App.Recording.Windows.csproj")
             .Should().Contain("FrameworkReference Include=\"Microsoft.Windows.SDK.NET.Ref\"");
         AssertNoHostLocalRecordingSources(root, "FreeP.App.Avalonia");
@@ -486,7 +486,7 @@ public sealed class WindowsRecordingCaptureBackendTests
             "WindowsRecordingCaptureEngine.cs");
 
         portableProject.Should().NotContain("FreeP.App.Recording.Windows");
-        windowsProject.Should().Contain("FreeP.App.Recording\\FreeP.App.Recording.csproj");
+        windowsProject.Should().Contain("FreeP.App.Recording/FreeP.App.Recording.csproj");
         portableSource.Should().NotContain("winmm.dll");
         portableSource.Should().NotContain("setupapi.dll");
         portableSource.Should().NotContain("class WindowsRecordingCaptureEngine");

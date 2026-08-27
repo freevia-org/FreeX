@@ -160,7 +160,7 @@ public sealed class ParityCaptureAssemblyOwnershipTests
 
         Directory.GetFiles(supportDirectory, "*.cs", SearchOption.TopDirectoryOnly)
             .Should().HaveCountGreaterThan(20);
-        parityProject.Should().Contain("<Compile Include=\"TestSupport\\**\\*.cs\" />");
+        parityProject.Should().Contain("<Compile Include=\"TestSupport/**/*.cs\" />");
         shippingProject.Should().NotContain("FreeX.App.Avalonia.Tests");
         shippingProject.Should().NotContain("FreeX.App.Avalonia.CaptureTests");
 
@@ -205,9 +205,9 @@ public sealed class ParityCaptureAssemblyOwnershipTests
 
         shippingProject.Should().Contain("Condition=\"'$(FreeXValidationHost)' == 'true'\"");
         shippingProject.Should().Contain("<GlobalPropertiesToRemove>FreeXValidationHost</GlobalPropertiesToRemove>");
-        shippingProject.Should().Contain("..\\..\\tools\\FreeX.Validation.Avalonia\\RendererHost");
+        shippingProject.Should().Contain("../../tools/FreeX.Validation.Avalonia/RendererHost");
         shippingProject.Should().Contain("MainWindow.DialogInspectionAccess.cs");
-        validationProject.Should().Contain("Compile Remove=\"RendererHost\\**\\*.cs\"");
+        validationProject.Should().Contain("Compile Remove=\"RendererHost/**/*.cs\"");
         validationProject.Should().Contain("AdditionalProperties=\"FreeXValidationHost=true\"");
         shippingProgram.Should().NotContain("RunValidationToolHost");
         shippingProgram.Should().NotContain("RendererValidationAccess");

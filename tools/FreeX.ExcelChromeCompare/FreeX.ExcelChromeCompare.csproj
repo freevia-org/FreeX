@@ -6,10 +6,10 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
-  <Import Project="..\ToolProjects.props" />
+  <Import Project="../ToolProjects.props" />
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeX.ParityCompare.Core\FreeX.ParityCompare.Core.csproj" />
+    <ProjectReference Include="../FreeX.ParityCompare.Core/FreeX.ParityCompare.Core.csproj" />
   </ItemGroup>
 
 </Project>

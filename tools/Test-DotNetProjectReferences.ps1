@@ -119,9 +119,7 @@ $resolvedRepoRootPath = [System.IO.Path]::GetFullPath($repoRoot)
 if (-not $resolvedRepoRootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
     $resolvedRepoRootPath += [System.IO.Path]::DirectorySeparatorChar
 }
-$validateRendererExceptionInventory = $resolvedProjectRootPath.Equals(
-    $resolvedRepoRootPath,
-    [System.StringComparison]::OrdinalIgnoreCase)
+$validateRendererExceptionInventory = $resolvedProjectRootPath.Equals($resolvedRepoRootPath, (Get-ToolPathComparison))
 
 $projectFiles = @(
     Get-ToolProjectFiles -Directory (Get-Item -LiteralPath $resolvedProjectRoot) |
@@ -136,11 +134,11 @@ $missingReferences = New-Object System.Collections.Generic.List[string]
 $escapedReferences = New-Object System.Collections.Generic.List[string]
 $duplicateReferences = New-Object System.Collections.Generic.List[string]
 $architectureBoundaryViolations = New-Object System.Collections.Generic.List[string]
-$projectsByResolvedPath = @{}
+$projectsByResolvedPath = [System.Collections.Generic.Dictionary[string, object]]::new((Get-ToolPathComparer))
 
 foreach ($projectFile in $projectFiles) {
     [xml]$projectXml = Get-Content -LiteralPath $projectFile.FullName -Raw
-    $projectsByResolvedPath[$projectFile.FullName.ToUpperInvariant()] = [pscustomobject]@{
+    $projectsByResolvedPath[$projectFile.FullName] = [pscustomobject]@{
         File = $projectFile
         Xml = $projectXml
         RelativePath = Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $projectFile.FullName
@@ -149,7 +147,7 @@ foreach ($projectFile in $projectFiles) {
 
 foreach ($exception in $rendererSharedProjectExceptions.GetEnumerator()) {
     $exceptionPath = Resolve-ToolFullPath -Path $exception.Key -BasePath $resolvedProjectRoot
-    $exceptionKey = $exceptionPath.ToUpperInvariant()
+    $exceptionKey = $exceptionPath
     if ([string]::IsNullOrWhiteSpace($exception.Value)) {
         $architectureBoundaryViolations.Add("Renderer exception has no documented reason: $($exception.Key)")
         continue
@@ -168,10 +166,10 @@ foreach ($exception in $rendererSharedProjectExceptions.GetEnumerator()) {
 }
 
 foreach ($projectFile in $projectFiles) {
-    $projectRecord = $projectsByResolvedPath[$projectFile.FullName.ToUpperInvariant()]
+    $projectRecord = $projectsByResolvedPath[$projectFile.FullName]
     [xml]$projectXml = $projectRecord.Xml
     $projectReferences = @(Get-ProjectXmlItemIncludes -ProjectXml $projectXml -ItemName "ProjectReference")
-    $referencesByResolvedPath = @{}
+    $referencesByResolvedPath = [System.Collections.Generic.Dictionary[string, string]]::new((Get-ToolPathComparer))
     $relativeProjectPath = $projectRecord.RelativePath
     $isNeutralSharedProject = $relativeProjectPath.StartsWith("shared/", [System.StringComparison]::OrdinalIgnoreCase) -and
         -not $rendererSharedProjectExceptions.Contains($relativeProjectPath)
@@ -191,7 +189,7 @@ foreach ($projectFile in $projectFiles) {
 
         $referencedProjectPath = Join-Path $projectFile.DirectoryName $include
         $resolvedReferencePath = [System.IO.Path]::GetFullPath($referencedProjectPath)
-        $resolvedReferenceKey = $resolvedReferencePath.ToUpperInvariant()
+        $resolvedReferenceKey = $resolvedReferencePath
 
         if ($referencesByResolvedPath.ContainsKey($resolvedReferenceKey)) {
             $duplicateReferences.Add("${relativeProjectPath}: $include")
@@ -199,7 +197,7 @@ foreach ($projectFile in $projectFiles) {
             $referencesByResolvedPath[$resolvedReferenceKey] = $include
         }
 
-        if (-not $resolvedReferencePath.StartsWith($resolvedProjectRootPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+        if (-not (Test-ToolPathWithinRoot -Path $resolvedReferencePath -RootPath $resolvedProjectRootPath)) {
             $escapedReferences.Add("${relativeProjectPath}: $include")
             continue
         }

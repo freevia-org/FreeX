@@ -63,9 +63,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$normalizedRepoRoot = [IO.Path]::GetFullPath($repoRoot).TrimEnd(
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+$normalizedRepoRoot = (Resolve-ToolExistingPath -Path $repoRoot).TrimEnd(
     [IO.Path]::DirectorySeparatorChar,
-    [IO.Path]::AltDirectorySeparatorChar).ToLowerInvariant()
+    [IO.Path]::AltDirectorySeparatorChar)
+if (Test-ToolIsWindows) { $normalizedRepoRoot = $normalizedRepoRoot.ToLowerInvariant() }
 $workspaceHasher = [Security.Cryptography.SHA256]::Create()
 try {
     $workspaceHashBytes = $workspaceHasher.ComputeHash([Text.Encoding]::UTF8.GetBytes($normalizedRepoRoot))

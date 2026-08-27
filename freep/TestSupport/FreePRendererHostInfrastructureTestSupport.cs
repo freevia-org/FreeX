@@ -94,7 +94,7 @@ internal static class FreePRendererHostInfrastructureTestSupport
         var evidenceProject = File.ReadAllText(Path.Combine(evidenceDirectory, profile.VisualEvidenceProjectFileName));
         shippingProject.Should().Contain("Condition=\"'$(FreePVisualEvidenceHost)' == 'true'\"");
         shippingProject.Should().Contain(
-            $"..\\TestSupport\\{profile.VisualEvidenceDirectory}\\MainWindow.VisualCaptureAdapter.cs");
+            $"../TestSupport/{profile.VisualEvidenceDirectory}/MainWindow.VisualCaptureAdapter.cs");
         evidenceProject.Should().Contain("Compile Remove=\"MainWindow.VisualCaptureAdapter.cs\"");
         evidenceProject.Should().Contain("AdditionalProperties=\"FreePVisualEvidenceHost=true\"");
     }
@@ -111,8 +111,8 @@ internal static class FreePRendererHostInfrastructureTestSupport
 
         var project = File.ReadAllText(projectPath);
         project.Should().Contain("'$(FreePHostAccess)' == 'true'");
-        project.Should().Contain($"..\\TestSupport\\{profile.HostAccessDirectory}\\MainWindow.TestAccess.cs");
-        project.Should().Contain($"..\\TestSupport\\{profile.HostAccessDirectory}\\MainWindow.DiagnosticsAccess.cs");
+        project.Should().Contain($"../TestSupport/{profile.HostAccessDirectory}/MainWindow.TestAccess.cs");
+        project.Should().Contain($"../TestSupport/{profile.HostAccessDirectory}/MainWindow.DiagnosticsAccess.cs");
 
         foreach (var friend in profile.FriendAssemblies)
         {
@@ -126,7 +126,7 @@ internal static class FreePRendererHostInfrastructureTestSupport
 
         ShippingTestHookOwnershipAssertions.FindUnconditionalSupportItems(
                 projectPath,
-                $"TestSupport\\{profile.HostAccessDirectory}",
+                $"TestSupport/{profile.HostAccessDirectory}",
                 "FreePHostAccess")
             .Should().BeEmpty();
     }
@@ -139,7 +139,7 @@ internal static class FreePRendererHostInfrastructureTestSupport
         var project = XDocument.Load(projectPath);
         project.Descendants("Import")
             .Select(element => (string?)element.Attribute("Project"))
-            .Should().Contain("..\\FreeP.RendererHostVariants.props");
+            .Should().Contain("../FreeP.RendererHostVariants.props");
         project.Descendants("OutputPath").Should().BeEmpty(
             "renderer-host output variants are owned by the shared props file");
         project.Descendants("IntermediateOutputPath").Should().BeEmpty(

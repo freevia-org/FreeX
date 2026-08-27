@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
+    <ProjectReference Include="../FreeW.Core.Model/FreeW.Core.Model.csproj" />
   </ItemGroup>
 
 </Project>

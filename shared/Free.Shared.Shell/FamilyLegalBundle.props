@@ -5,10 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="$(FreeFamilyRepositoryRoot)LICENSE" Link="Legal\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="$(FreeFamilyRepositoryRoot)docs\legal\legal-notices.md" Link="Legal\legal-notices.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="$(FreeFamilyRepositoryRoot)docs\legal\privacy.md" Link="Legal\privacy.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="$(FreeFamilyRepositoryRoot)THIRD_PARTY_NOTICES.md" Link="Legal\THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="$(FreeFamilyRepositoryRoot)THIRD_PARTY_LICENSES.md" Link="Legal\THIRD_PARTY_LICENSES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(FreeFamilyRepositoryRoot)LICENSE" Link="Legal/LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(FreeFamilyRepositoryRoot)docs/legal/legal-notices.md" Link="Legal/legal-notices.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(FreeFamilyRepositoryRoot)docs/legal/privacy.md" Link="Legal/privacy.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(FreeFamilyRepositoryRoot)THIRD_PARTY_NOTICES.md" Link="Legal/THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(FreeFamilyRepositoryRoot)THIRD_PARTY_LICENSES.md" Link="Legal/THIRD_PARTY_LICENSES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

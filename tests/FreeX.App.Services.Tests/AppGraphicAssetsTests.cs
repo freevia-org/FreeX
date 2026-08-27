@@ -149,9 +149,9 @@ public sealed class AppGraphicAssetsTests
     private static void AssertProjectUsesBrandAssets(string project, string product, bool isWpf)
     {
         project.Should().Contain($">{product}</FreeBrand>");
-        project.Should().Contain(@"shared\Free.Shared.Shell\BrandAssets.props");
+        project.Should().Contain("shared/Free.Shared.Shell/BrandAssets.props");
         project.Should().Contain("$(BrandWindowsIconPath)");
-        project.Should().Contain("Resources\\$(BrandWindowsIconFileName)");
+        project.Should().Contain("Resources/$(BrandWindowsIconFileName)");
 
         if (isWpf)
         {

@@ -10,9 +10,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
-    <ProjectReference Include="..\..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
-    <ProjectReference Include="..\..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
+    <ProjectReference Include="../../../tools/Free.ToolsShared/Free.ToolsShared.csproj" />
+    <ProjectReference Include="../../FreeW.Core.Model/FreeW.Core.Model.csproj" />
+    <ProjectReference Include="../../FreeW.Core.IO/FreeW.Core.IO.csproj" />
   </ItemGroup>
 
 </Project>

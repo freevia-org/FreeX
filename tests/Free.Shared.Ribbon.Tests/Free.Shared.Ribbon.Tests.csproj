@@ -25,18 +25,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon.Avalonia/Free.Shared.Ribbon.Avalonia.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\SharedTestInfrastructure\Ribbon\RibbonDefinitionValidator.cs"
-             Link="TestSupport\RibbonDefinitionValidator.cs" />
+    <Compile Include="../SharedTestInfrastructure/Ribbon/RibbonDefinitionValidator.cs"
+             Link="TestSupport/RibbonDefinitionValidator.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
-             Link="Resources\FreeX.ico"
+    <Content Include="../../shared/Free.Shared.Shell/Resources/FreeX.ico"
+             Link="Resources/FreeX.ico"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

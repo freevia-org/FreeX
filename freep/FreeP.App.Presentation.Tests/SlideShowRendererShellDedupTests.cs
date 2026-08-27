@@ -179,7 +179,7 @@ public sealed class SlideShowRendererShellDedupTests
             var projectSource = File.ReadAllText(Path.Combine(projectDirectory, $"{project}.csproj"));
             var windowSource = File.ReadAllText(Path.Combine(projectDirectory, "SlideShowWindow.cs"));
 
-            projectSource.Should().Contain("RendererShared\\SlideShowWindow.PortableSurface.cs");
+            projectSource.Should().Contain("RendererShared/SlideShowWindow.PortableSurface.cs");
             windowSource.Should().NotContain("public SlideShowWindow(Presentation presentation, int startIndex = 0)");
             windowSource.Should().NotContain("private void CloseSlideShow(DateTimeOffset nowUtc)");
             windowSource.Should().NotContain("private void DisplayCurrentSlide(");

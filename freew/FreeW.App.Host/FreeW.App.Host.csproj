@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup><FreeBrand Condition="'$(FreeBrand)' == ''">FreeW</FreeBrand></PropertyGroup>
-  <Import Project="..\..\shared\Free.Shared.Shell\BrandAssets.props" />
+  <Import Project="../../shared/Free.Shared.Shell/BrandAssets.props" />
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -14,34 +14,34 @@
     <StartupObject>FreeW.App.Host.Program</StartupObject>
   </PropertyGroup>
 
-  <Import Project="..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Assets.props" />
+  <Import Project="../FreeW.Ribbon.Definitions/FreeW.Ribbon.Assets.props" />
 
   <PropertyGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
-    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+    <OutputPath>bin/TestSupport/$(Configuration)/</OutputPath>
+    <IntermediateOutputPath>obj/TestSupport/$(Configuration)/$(TargetFramework)/</IntermediateOutputPath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
-    <OutputPath>bin\DialogHarness\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\DialogHarness\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+    <OutputPath>bin/DialogHarness/$(Configuration)/</OutputPath>
+    <IntermediateOutputPath>obj/DialogHarness/$(Configuration)/$(TargetFramework)/</IntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
-    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/MainWindow.TestAccess.cs"
              Link="MainWindow.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\DocumentView.TestAccess.cs"
-             Link="Editing\DocumentView.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\AutosaveCoordinator.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/DocumentView.TestAccess.cs"
+             Link="Editing/DocumentView.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Wpf/AutosaveCoordinator.TestAccess.cs"
              Link="AutosaveCoordinator.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\Dialogs.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/Dialogs.TestAccess.cs"
              Link="Dialogs.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\Backstage.TestAccess.cs"
-             Link="Backstage\Backstage.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\ScreenClipOverlay.TestAccess.cs"
-             Link="Editing\ScreenClipOverlay.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\OutlineView.TestAccess.cs"
-             Link="Editing\OutlineView.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\XpsExport.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/Backstage.TestAccess.cs"
+             Link="Backstage/Backstage.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Wpf/ScreenClipOverlay.TestAccess.cs"
+             Link="Editing/ScreenClipOverlay.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Wpf/OutlineView.TestAccess.cs"
+             Link="Editing/OutlineView.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Wpf/XpsExport.TestAccess.cs"
              Link="XpsExport.TestAccess.cs" />
   </ItemGroup>
 
@@ -82,35 +82,35 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
-    <Compile Include="..\TestSupport\HostAccess.Wpf\Dialogs.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/Dialogs.TestAccess.cs"
              Link="Dialogs.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\DialogHarness.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/DialogHarness.TestAccess.cs"
              Link="DialogHarness.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\Backstage.TestAccess.cs"
-             Link="Backstage\Backstage.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\ScreenClipOverlay.TestAccess.cs"
-             Link="Editing\ScreenClipOverlay.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Wpf/Backstage.TestAccess.cs"
+             Link="Backstage/Backstage.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Wpf/ScreenClipOverlay.TestAccess.cs"
+             Link="Editing/ScreenClipOverlay.TestAccess.cs" />
     <InternalsVisibleTo Include="FreeW.DialogVisualHarness.Wpf" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Wpf\Free.Shared.Pdf.Wpf.csproj" />
-    <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
-    <ProjectReference Include="..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
-    <ProjectReference Include="..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj" />
-    <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
-    <ProjectReference Include="..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme/Free.Shared.Theme.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme.Wpf/Free.Shared.Theme.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf.Wpf/Free.Shared.Pdf.Wpf.csproj" />
+    <ProjectReference Include="../FreeW.App.Localization/FreeW.App.Localization.csproj" />
+    <ProjectReference Include="../FreeW.App.Presentation/FreeW.App.Presentation.csproj" />
+    <ProjectReference Include="../FreeW.Ribbon.Definitions/FreeW.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="../FreeW.Core.Model/FreeW.Core.Model.csproj" />
+    <ProjectReference Include="../FreeW.Core.IO/FreeW.Core.IO.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -138,17 +138,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="$(BrandWindowsIconPath)" Link="Resources\$(BrandWindowsIconFileName)" />
-    <EmbeddedResource Include="..\..\LICENSE" LogicalName="FreeW.Legal.ProjectLicense.txt" />
-    <EmbeddedResource Include="..\..\docs\legal\legal-notices.md" LogicalName="FreeW.Legal.LegalNotices.md" />
-    <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeW.Legal.PrivacyNotice.md" />
-    <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeW.Legal.ThirdPartyNotices.md" />
-    <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeW.Legal.ThirdPartyLicenses.md" />
+    <Resource Include="$(BrandWindowsIconPath)" Link="Resources/$(BrandWindowsIconFileName)" />
+    <EmbeddedResource Include="../../LICENSE" LogicalName="FreeW.Legal.ProjectLicense.txt" />
+    <EmbeddedResource Include="../../docs/legal/legal-notices.md" LogicalName="FreeW.Legal.LegalNotices.md" />
+    <EmbeddedResource Include="../../docs/legal/privacy.md" LogicalName="FreeW.Legal.PrivacyNotice.md" />
+    <EmbeddedResource Include="../../THIRD_PARTY_NOTICES.md" LogicalName="FreeW.Legal.ThirdPartyNotices.md" />
+    <EmbeddedResource Include="../../THIRD_PARTY_LICENSES.md" LogicalName="FreeW.Legal.ThirdPartyLicenses.md" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="$(BrandWindowsIconPath)"
-             Link="Resources\$(BrandWindowsIconFileName)"
+             Link="Resources/$(BrandWindowsIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

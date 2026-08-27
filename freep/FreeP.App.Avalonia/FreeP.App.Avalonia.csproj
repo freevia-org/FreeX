@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup><FreeBrand Condition="'$(FreeBrand)' == ''">FreeP</FreeBrand></PropertyGroup>
-  <Import Project="..\..\shared\Free.Shared.Shell\BrandAssets.props" />
-  <Import Project="..\..\shared\Free.Shared.Shell\FamilyLegalBundle.props" />
+  <Import Project="../../shared/Free.Shared.Shell/BrandAssets.props" />
+  <Import Project="../../shared/Free.Shared.Shell/FamilyLegalBundle.props" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -31,82 +31,82 @@
     <DefineConstants>$(DefineConstants);FREEP_WINDOWS_CAPTURE</DefineConstants>
   </PropertyGroup>
 
-  <Import Project="..\FreeP.RendererHostVariants.props" />
+  <Import Project="../FreeP.RendererHostVariants.props" />
 
   <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true' Or '$(FreePValidationHost)' == 'true'">
-    <Compile Include="..\TestSupport\AvaloniaToolHost\Program.ToolHost.cs"
+    <Compile Include="../TestSupport/AvaloniaToolHost/Program.ToolHost.cs"
              Link="Program.ToolHost.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
-    <Compile Include="..\TestSupport\VisualEvidence.Avalonia\MainWindow.VisualCaptureAdapter.cs"
+    <Compile Include="../TestSupport/VisualEvidence.Avalonia/MainWindow.VisualCaptureAdapter.cs"
              Link="MainWindow.VisualCaptureAdapter.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePValidationHost)' == 'true'">
-    <Compile Include="..\TestSupport\Validation.Avalonia\App.ValidationHost.cs"
+    <Compile Include="../TestSupport/Validation.Avalonia/App.ValidationHost.cs"
              Link="App.ValidationHost.cs" />
-    <Compile Include="..\TestSupport\Validation.Avalonia\MainWindow.StartupDirtyTrace.cs"
+    <Compile Include="../TestSupport/Validation.Avalonia/MainWindow.StartupDirtyTrace.cs"
              Link="MainWindow.StartupDirtyTrace.cs" />
-    <Compile Include="..\TestSupport\Validation.Avalonia\MainWindow.ValidationAccessAdapter.cs"
+    <Compile Include="../TestSupport/Validation.Avalonia/MainWindow.ValidationAccessAdapter.cs"
              Link="MainWindow.ValidationAccessAdapter.cs" />
-    <Compile Include="..\TestSupport\Validation.Avalonia\Program.ValidationHost.cs"
+    <Compile Include="../TestSupport/Validation.Avalonia/Program.ValidationHost.cs"
              Link="Program.ValidationHost.cs" />
-    <Compile Include="..\TestSupport\Validation.Avalonia\StartupDirtyTrace.cs"
+    <Compile Include="../TestSupport/Validation.Avalonia/StartupDirtyTrace.cs"
              Link="StartupDirtyTrace.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePHostAccess)' == 'true' Or '$(FreePVisualEvidenceHost)' == 'true' Or '$(FreePValidationHost)' == 'true'">
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/MainWindow.TestAccess.cs"
              Link="MainWindow.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.DiagnosticsAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/MainWindow.DiagnosticsAccess.cs"
              Link="MainWindow.DiagnosticsAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\BackstageView.TestAccess.cs"
-             Link="Backstage\BackstageView.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\BasicDialogs.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/BackstageView.TestAccess.cs"
+             Link="Backstage/BackstageView.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Avalonia/BasicDialogs.TestAccess.cs"
              Link="BasicDialogs.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\EditingDialogs.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/EditingDialogs.TestAccess.cs"
              Link="EditingDialogs.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\PaneAndCustomShow.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/PaneAndCustomShow.TestAccess.cs"
              Link="PaneAndCustomShow.TestAccess.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\ChartOptionsDialogs.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/ChartOptionsDialogs.TestAccess.cs"
              Link="ChartOptionsDialogs.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.ShellTestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/MainWindow.ShellTestAccess.cs"
              Link="MainWindow.ShellTestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.CommandsTestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/MainWindow.CommandsTestAccess.cs"
              Link="MainWindow.CommandsTestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.FeaturesTestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/MainWindow.FeaturesTestAccess.cs"
              Link="MainWindow.FeaturesTestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.TailTestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/MainWindow.TailTestAccess.cs"
              Link="MainWindow.TailTestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\AutosaveAdapter.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/AutosaveAdapter.TestAccess.cs"
              Link="AutosaveAdapter.TestAccess.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePHostAccess)' == 'true' Or '$(FreePValidationHost)' == 'true'">
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.AccessibilityTestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/MainWindow.AccessibilityTestAccess.cs"
              Link="MainWindow.AccessibilityTestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\PaneAccessibility.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/PaneAccessibility.TestAccess.cs"
              Link="PaneAccessibility.TestAccess.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePSlideShowTestSupport)' == 'true' Or '$(FreePValidationHost)' == 'true'">
-    <Compile Include="..\TestSupport\SlideShow.Avalonia\AvaloniaSlideShowMediaController.TestAccess.cs"
+    <Compile Include="../TestSupport/SlideShow.Avalonia/AvaloniaSlideShowMediaController.TestAccess.cs"
              Link="AvaloniaSlideShowMediaController.TestAccess.cs" />
-    <Compile Include="..\TestSupport\SlideShow.Avalonia\SlideShowWindow.TestAccess.cs"
+    <Compile Include="../TestSupport/SlideShow.Avalonia/SlideShowWindow.TestAccess.cs"
              Link="SlideShowWindow.TestAccess.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\RendererShared\SlideShowWindow.RuntimeSession.cs"
+    <Compile Include="../RendererShared/SlideShowWindow.RuntimeSession.cs"
              Link="SlideShowWindow.RuntimeSession.cs" />
-    <Compile Include="..\RendererShared\SlideShowWindow.PortableSurface.cs"
+    <Compile Include="../RendererShared/SlideShowWindow.PortableSurface.cs"
              Link="SlideShowWindow.PortableSurface.cs" />
-    <Compile Include="..\RendererShared\MainWindow.RibbonActionProfile.cs"
+    <Compile Include="../RendererShared/MainWindow.RibbonActionProfile.cs"
              Link="MainWindow.RibbonActionProfile.cs" />
-    <Compile Include="..\RendererShared\MainWindow.ChartDialogEndpoints.cs"
+    <Compile Include="../RendererShared/MainWindow.ChartDialogEndpoints.cs"
              Link="MainWindow.ChartDialogEndpoints.cs" />
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
@@ -119,40 +119,40 @@
   <ItemGroup>
     <!-- Runtime and package assets derive from one FreeP identity source in the shared shell. -->
     <Content Include="$(BrandWindowsIconPath)"
-             Link="Resources\$(BrandWindowsIconFileName)"
+             Link="Resources/$(BrandWindowsIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(BrandScalableIconPath)"
-             Link="Resources\$(BrandScalableIconFileName)"
+             Link="Resources/$(BrandScalableIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(BrandMacOsIconPath)"
              Link="$(BrandMacOsIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
-    <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
-    <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
-    <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
-    <ProjectReference Include="..\FreeP.App.Recording.Windows\FreeP.App.Recording.Windows.csproj"
+    <ProjectReference Include="../FreeP.Core.Model/FreeP.Core.Model.csproj" />
+    <ProjectReference Include="../FreeP.Core.IO/FreeP.Core.IO.csproj" />
+    <ProjectReference Include="../FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
+    <ProjectReference Include="../FreeP.App.Recording/FreeP.App.Recording.csproj" />
+    <ProjectReference Include="../FreeP.App.Recording.Windows/FreeP.App.Recording.Windows.csproj"
                       Condition="'$(TargetPlatformIdentifier)' == 'Windows'" />
-    <ProjectReference Include="..\FreeP.App.Ole.Windows\FreeP.App.Ole.Windows.csproj"
+    <ProjectReference Include="../FreeP.App.Ole.Windows/FreeP.App.Ole.Windows.csproj"
                       Condition="'$(TargetPlatformIdentifier)' == 'Windows'" />
-    <ProjectReference Include="..\FreeP.App.Media\FreeP.App.Media.csproj" />
-    <ProjectReference Include="..\FreeP.App.Rendering.Avalonia\FreeP.App.Rendering.Avalonia.csproj" />
-    <ProjectReference Include="..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" />
-    <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj"
+    <ProjectReference Include="../FreeP.App.Media/FreeP.App.Media.csproj" />
+    <ProjectReference Include="../FreeP.App.Rendering.Avalonia/FreeP.App.Rendering.Avalonia.csproj" />
+    <ProjectReference Include="../FreeP.Ribbon.Definitions/FreeP.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="../FreeP.App.Localization/FreeP.App.Localization.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices.Windows/Free.Shared.AppServices.Windows.csproj"
                       Condition="'$(TargetPlatformIdentifier)' == 'Windows'" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Avalonia\Free.Shared.Theme.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.IO/Free.Shared.IO.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon.Avalonia/Free.Shared.Ribbon.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme/Free.Shared.Theme.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme.Avalonia/Free.Shared.Theme.Avalonia.csproj" />
   </ItemGroup>
 
   <ItemGroup>

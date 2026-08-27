@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$JsonPath = "docs\parity\avalonia-wpf-cross-app-dashboard.json",
     [string]$MarkdownPath = "docs\parity\avalonia-wpf-cross-app-dashboard.md",
     [switch]$Check

@@ -7,10 +7,10 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
-  <Import Project="..\ToolProjects.props" />
+  <Import Project="../ToolProjects.props" />
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeX.ToolsShared.Wpf\FreeX.ToolsShared.Wpf.csproj" />
+    <ProjectReference Include="../FreeX.ToolsShared.Wpf/FreeX.ToolsShared.Wpf.csproj" />
   </ItemGroup>
 
 </Project>

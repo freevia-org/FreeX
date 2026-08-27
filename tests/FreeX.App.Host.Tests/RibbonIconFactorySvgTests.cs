@@ -297,9 +297,9 @@ public sealed class RibbonIconFactorySvgTests
         var ribbonDefinitions = DialogSourceTestSupport.ReadRibbonDefinitionFile("FreeX.Ribbon.Definitions.csproj");
         var host = DialogSourceTestSupport.ReadHostSourceFile("FreeX.App.Host.csproj");
 
-        ribbonDefinitions.Should().Contain(@"Resources\CommandIconsSvg\**\*.svg");
-        ribbonDefinitions.Should().NotContain(@"Resources\CommandIcons\**\*.png");
-        host.Should().NotContain(@"Resources\CommandIcons\**\*.png");
+        ribbonDefinitions.Should().Contain("Resources/CommandIconsSvg/**/*.svg");
+        ribbonDefinitions.Should().NotContain("Resources/CommandIcons/**/*.png");
+        host.Should().NotContain("Resources/CommandIcons/**/*.png");
     }
 
     [Fact]

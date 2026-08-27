@@ -6,7 +6,8 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$resolvedSolutionPath = Join-Path $repoRoot $SolutionPath
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+$resolvedSolutionPath = Resolve-ToolRepoPath -Path $SolutionPath -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedSolutionPath -PathType Leaf)) {
     throw "CodeQL solution was not found: $resolvedSolutionPath"
 }
@@ -14,19 +15,7 @@ if (-not (Test-Path -LiteralPath $resolvedSolutionPath -PathType Leaf)) {
 function ConvertTo-NormalizedRelativePath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $normalizedRoot = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
-    $normalizedPath = [System.IO.Path]::GetFullPath($Path)
-    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq '\') {
-        [System.StringComparison]::OrdinalIgnoreCase
-    }
-    else {
-        [System.StringComparison]::Ordinal
-    }
-    if (-not $normalizedPath.StartsWith($normalizedRoot, $comparison)) {
-        throw "Path is outside the repository root: $Path"
-    }
-
-    return $normalizedPath.Substring($normalizedRoot.Length).Replace('\', '/')
+    return ConvertTo-ToolRepoRelativePath -Path $Path -RepoRoot $repoRoot
 }
 
 function Test-IsProductionProject {

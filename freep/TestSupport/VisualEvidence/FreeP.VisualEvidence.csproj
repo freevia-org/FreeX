@@ -6,7 +6,7 @@
     <IsPublishable>false</IsPublishable>
     <RootNamespace>FreeP.VisualEvidence</RootNamespace>
   </PropertyGroup>
-  <Import Project="..\..\..\tools\ToolProjects.props" />
+  <Import Project="../../../tools/ToolProjects.props" />
 
   <ItemGroup>
     <InternalsVisibleTo Include="FreeP.VisualEvidence.Wpf" />
@@ -16,11 +16,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
-    <ProjectReference Include="..\..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
-    <ProjectReference Include="..\..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
+    <ProjectReference Include="../../FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
+    <ProjectReference Include="../../FreeP.Core.Model/FreeP.Core.Model.csproj" />
+    <ProjectReference Include="../../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../../tools/Free.ToolsShared/Free.ToolsShared.csproj" />
   </ItemGroup>
 
 </Project>

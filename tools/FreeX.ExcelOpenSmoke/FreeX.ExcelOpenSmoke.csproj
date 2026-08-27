@@ -2,13 +2,13 @@
 
   <ItemGroup>
     <PackageReference Include="DocumentFormat.OpenXml" />
-    <ProjectReference Include="..\FreeX.ToolsShared\FreeX.ToolsShared.csproj" />
-    <ProjectReference Include="..\FreeX.ToolsShared.Wpf\FreeX.ToolsShared.Wpf.csproj" />
-    <ProjectReference Include="..\FreeX.XlsxPackageDiagnostics\FreeX.XlsxPackageDiagnostics.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../FreeX.ToolsShared/FreeX.ToolsShared.csproj" />
+    <ProjectReference Include="../FreeX.ToolsShared.Wpf/FreeX.ToolsShared.Wpf.csproj" />
+    <ProjectReference Include="../FreeX.XlsxPackageDiagnostics/FreeX.XlsxPackageDiagnostics.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -16,15 +16,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\tests\SharedTestInfrastructure\TestWorkspaceFileLocator.cs" Link="CorpusFixtures\%(Filename)%(Extension)" />
-    <Compile Include="..\..\tests\FreeX.Core.IO.Tests\TestWorkspaceFiles.cs" Link="CorpusFixtures\%(Filename)%(Extension)" />
-    <Compile Include="..\..\tests\FreeX.Core.IO.Tests\XlsxCorpusFixtureFactory*.cs" Link="CorpusFixtures\%(Filename)%(Extension)" />
+    <Compile Include="../../tests/SharedTestInfrastructure/TestWorkspaceFileLocator.cs" Link="CorpusFixtures/%(Filename)%(Extension)" />
+    <Compile Include="../../tests/FreeX.Core.IO.Tests/TestWorkspaceFiles.cs" Link="CorpusFixtures/%(Filename)%(Extension)" />
+    <Compile Include="../../tests/FreeX.Core.IO.Tests/XlsxCorpusFixtureFactory*.cs" Link="CorpusFixtures/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
   </PropertyGroup>
-  <Import Project="..\ToolProjects.props" />
+  <Import Project="../ToolProjects.props" />
 
 </Project>

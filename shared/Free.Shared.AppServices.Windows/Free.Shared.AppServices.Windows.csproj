@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <!-- Portable seam + neutral FileAssociationDefinition this Windows registrar realizes. -->
-    <ProjectReference Include="..\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">

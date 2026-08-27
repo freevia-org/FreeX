@@ -211,7 +211,7 @@ function New-WindowsInstaller {
 function Write-UnixScript {
     param([string]$Path, [string[]]$Lines)
     ($Lines -join "`n") + "`n" | Set-Content -LiteralPath $Path -NoNewline -Encoding utf8NoBOM
-    if (-not $IsWindows) { & chmod +x $Path }
+    if (-not (Test-ToolIsWindows)) { & chmod +x $Path }
 }
 
 function New-LinuxInstaller {
@@ -304,7 +304,7 @@ function New-MacInstaller {
         @("# Free Suite macOS bootstrapper", "", "This delegates to the same individual app bundles and installation destinations.", "All included app bundles are currently unsigned and unnotarized.") |
             Set-Content -LiteralPath (Join-Path $stage 'README.md') -Encoding utf8
         $suiteResult = Join-Path $OutputDir "$packageName-v$Version-$Runtime-apps.zip"
-        if ($IsMacOS -and (Get-Command ditto -ErrorAction SilentlyContinue)) {
+        if ((Test-ToolIsMacOS) -and (Get-Command ditto -ErrorAction SilentlyContinue)) {
             & ditto -c -k --sequesterRsrc $stage $suiteResult
             if ($LASTEXITCODE -ne 0) { throw "ditto failed with exit code $LASTEXITCODE." }
         } else {
@@ -339,7 +339,7 @@ function New-MacInstaller {
 </dict></plist>
 "@
         $plist.TrimStart() | Set-Content -LiteralPath (Join-Path $bundle 'Contents/Info.plist') -Encoding utf8NoBOM
-        if (-not $IsWindows) { & chmod +x (Join-Path $macos $app) }
+        if (-not (Test-ToolIsWindows)) { & chmod +x (Join-Path $macos $app) }
     }
     $installLines = @('#!/usr/bin/env bash','set -euo pipefail','here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"','destination="${1:-$HOME/Applications}"','mkdir -p "$destination"')
     $uninstallLines = @('#!/usr/bin/env bash','set -euo pipefail','destination="${1:-$HOME/Applications}"')
@@ -355,7 +355,7 @@ function New-MacInstaller {
     @("# $packageName macOS bundle", "", "These apps are currently unsigned and unnotarized.", "Run ``./install.sh`` to copy them to ``~/Applications``, or drag each app there manually.") |
         Set-Content -LiteralPath (Join-Path $stage 'README.md') -Encoding utf8
     $result = Join-Path $OutputDir "$packageName-v$Version-$Runtime-apps.zip"
-    if ($IsMacOS -and (Get-Command ditto -ErrorAction SilentlyContinue)) {
+    if ((Test-ToolIsMacOS) -and (Get-Command ditto -ErrorAction SilentlyContinue)) {
         & ditto -c -k --sequesterRsrc $stage $result
         if ($LASTEXITCODE -ne 0) { throw "ditto failed with exit code $LASTEXITCODE." }
     } else {

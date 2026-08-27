@@ -4,10 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <IsPublishable>false</IsPublishable>
   </PropertyGroup>
-  <Import Project="..\..\..\tools\ToolProjects.props" />
+  <Import Project="../../../tools/ToolProjects.props" />
   <ItemGroup>
     <PackageReference Include="SkiaSharp" />
-    <ProjectReference Include="..\..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
-    <ProjectReference Include="..\..\tests\FreeW.VisualEvidence.TestSupport\FreeW.VisualEvidence.TestSupport.csproj" />
+    <ProjectReference Include="../../FreeW.App.Presentation/FreeW.App.Presentation.csproj" />
+    <ProjectReference Include="../../tests/FreeW.VisualEvidence.TestSupport/FreeW.VisualEvidence.TestSupport.csproj" />
   </ItemGroup>
 </Project>

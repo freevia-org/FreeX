@@ -53,8 +53,8 @@ public sealed class ValidationHostOwnershipTests
             "FreeP.Validation.Avalonia.csproj"));
 
         shippingProject.Should().Contain("Condition=\"'$(FreePValidationHost)' == 'true'\"");
-        shippingProject.Should().Contain("..\\TestSupport\\Validation.Avalonia\\MainWindow.ValidationAccessAdapter.cs");
-        shippingProject.Should().Contain("..\\TestSupport\\Validation.Avalonia\\StartupDirtyTrace.cs");
+        shippingProject.Should().Contain("../TestSupport/Validation.Avalonia/MainWindow.ValidationAccessAdapter.cs");
+        shippingProject.Should().Contain("../TestSupport/Validation.Avalonia/StartupDirtyTrace.cs");
         validationProject.Should().Contain("Compile Remove=\"MainWindow.ValidationAccessAdapter.cs\"");
         validationProject.Should().Contain("Compile Remove=\"StartupDirtyTrace.cs\"");
         validationProject.Should().Contain("AdditionalProperties=\"FreePValidationHost=true\"");

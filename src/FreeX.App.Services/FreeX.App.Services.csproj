@@ -1,27 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <ProjectReference Include="..\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
-    <ProjectReference Include="..\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
-    <ProjectReference Include="..\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
-    <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
-    <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <ProjectReference Include="..\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
-    <ProjectReference Include="..\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
+    <ProjectReference Include="../FreeX.Core.Calc/FreeX.Core.Calc.csproj" />
+    <ProjectReference Include="../FreeX.Core.Commands/FreeX.Core.Commands.csproj" />
+    <ProjectReference Include="../FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
+    <ProjectReference Include="../FreeX.Core.IO/FreeX.Core.IO.csproj" />
+    <ProjectReference Include="../FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../FreeX.App.Presentation/FreeX.App.Presentation.csproj" />
+    <ProjectReference Include="../FreeX.Ribbon.Definitions/FreeX.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme/Free.Shared.Theme.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="..\..\LICENSE" LogicalName="FreeX.Legal.ProjectLicense.txt" />
-    <EmbeddedResource Include="..\..\docs\legal\legal-notices.md" LogicalName="FreeX.Legal.LegalNotices.md" />
-    <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeX.Legal.PrivacyNotice.md" />
-    <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeX.Legal.ThirdPartyNotices.md" />
-    <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeX.Legal.ThirdPartyLicenses.md" />
+    <EmbeddedResource Include="../../LICENSE" LogicalName="FreeX.Legal.ProjectLicense.txt" />
+    <EmbeddedResource Include="../../docs/legal/legal-notices.md" LogicalName="FreeX.Legal.LegalNotices.md" />
+    <EmbeddedResource Include="../../docs/legal/privacy.md" LogicalName="FreeX.Legal.PrivacyNotice.md" />
+    <EmbeddedResource Include="../../THIRD_PARTY_NOTICES.md" LogicalName="FreeX.Legal.ThirdPartyNotices.md" />
+    <EmbeddedResource Include="../../THIRD_PARTY_LICENSES.md" LogicalName="FreeX.Legal.ThirdPartyLicenses.md" />
   </ItemGroup>
 
   <ItemGroup>

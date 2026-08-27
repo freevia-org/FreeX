@@ -994,8 +994,8 @@ public sealed class FreePRibbonDefinitionProfileTests
     public void Definition_project_stays_platform_neutral()
     {
         var project = File.ReadAllText(RepoFile("freep", "FreeP.Ribbon.Definitions", "FreeP.Ribbon.Definitions.csproj"));
-        project.Should().Contain(@"..\FreeP.App.Localization\FreeP.App.Localization.csproj");
-        project.Should().Contain(@"..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj");
+        project.Should().Contain("../FreeP.App.Localization/FreeP.App.Localization.csproj");
+        project.Should().Contain("../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj");
         project.Should().NotContain("UseWPF");
         project.Should().NotContain("Free.Shared.Ribbon.Wpf");
         project.Should().NotContain("Free.Shared.Ribbon.Avalonia");
@@ -1185,10 +1185,10 @@ public sealed class FreePRibbonDefinitionProfileTests
     {
         File.ReadAllText(RepoFile("freep", "FreeP.App.Host", "FreeP.App.Host.csproj"))
             .Should()
-            .Contain(@"..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj");
+            .Contain("../FreeP.Ribbon.Definitions/FreeP.Ribbon.Definitions.csproj");
         File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"))
             .Should()
-            .Contain(@"..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj");
+            .Contain("../FreeP.Ribbon.Definitions/FreeP.Ribbon.Definitions.csproj");
     }
 
     [Fact]

@@ -1,17 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeX.ToolsShared\FreeX.ToolsShared.csproj" />
-    <ProjectReference Include="..\FreeX.ToolsShared.Wpf\FreeX.ToolsShared.Wpf.csproj" />
+    <ProjectReference Include="../FreeX.ToolsShared/FreeX.ToolsShared.csproj" />
+    <ProjectReference Include="../FreeX.ToolsShared.Wpf/FreeX.ToolsShared.Wpf.csproj" />
     <!-- Mirror FreeX.SheetImageCompare references -->
-    <ProjectReference Include="..\..\src\FreeX.App.UI\FreeX.App.UI.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.UI/FreeX.App.UI.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Presentation/FreeX.App.Presentation.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Calc/FreeX.Core.Calc.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Commands/FreeX.Core.Commands.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Services/FreeX.App.Services.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -25,7 +25,7 @@
     <!-- Suppress WinForms obsolete warning inherited from App.Host chain -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
-  <Import Project="..\ToolProjects.props" />
+  <Import Project="../ToolProjects.props" />
 
   <ItemGroup>
     <Using Remove="System.Drawing" />

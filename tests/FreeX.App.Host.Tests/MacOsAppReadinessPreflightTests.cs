@@ -14,7 +14,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("EnableMacOsTargetFramework");
         script.Should().Contain("net10.0-macos");
         script.Should().Contain("SupportedOSPlatformVersion");
-        script.Should().Contain("MacOs\\**\\*.cs");
+        script.Should().Contain("MacOs/**/*.cs");
         script.Should().Contain("FREEX_MACOS_SHARE_SHEET");
         script.Should().Contain("Avalonia app RuntimeIdentifiers");
         script.Should().Contain("GetFileNameWithoutExtension($portableInclude)");
@@ -22,7 +22,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CFBundleName");
         script.Should().Contain("Name = ApplicationTitle;");
         script.Should().Contain("NativeDock.SetMenu(app, menu);");
-        script.Should().Contain("Path = \"tools\\FreeX.Validation.Avalonia\\RendererHost\\MainWindow.RendererValidationAccess.cs\"");
+        script.Should().Contain("Path = \"tools/FreeX.Validation.Avalonia/RendererHost/MainWindow.RendererValidationAccess.cs\"");
         script.Should().Contain("internal NativeMenu? NativeDockMenu =>");
         script.Should().Contain("NativeDock.GetMenu(app)");
         script.Should().Contain("CFBundleIconFile");
@@ -71,11 +71,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests");
         script.Should().Contain("LocalAppDiagnostics.Create(");
-        script.Should().Contain("Path = \"shared\\Free.Shared.AppServices\\LocalAppDiagnostics.cs\"");
+        script.Should().Contain("Path = \"shared/Free.Shared.AppServices/LocalAppDiagnostics.cs\"");
         script.Should().Contain("string.IsNullOrWhiteSpace(diagnosticsDirectory)");
         script.Should().Contain("? defaults.DiagnosticsDirectory");
         script.Should().Contain(": diagnosticsDirectory,");
-        script.Should().Contain("Path = \"shared\\Free.Shared.AppServices\\AppCrashHandlers.cs\"");
+        script.Should().Contain("Path = \"shared/Free.Shared.AppServices/AppCrashHandlers.cs\"");
         script.Should().Contain("dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj");
         script.Should().Contain("FullyQualifiedName~FreeX.Core.Model.Tests.ExportPathPlannerTests");
         script.Should().Contain("freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx");
@@ -153,19 +153,19 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("opened_source_path=.*freex-$runtime-default-open.fxl");
         script.Should().Contain("launchservices_default_open_app_override=false");
         script.Should().Contain("launchservices_default_open_document_extension=fxl");
-        script.Should().Contain("src\\FreeX.App.Services\\PortablePdfDocumentExporter.cs");
-        script.Should().Contain("shared\\Free.Shared.AppServices\\DocumentSharePlanner.cs");
+        script.Should().Contain("src/FreeX.App.Services/PortablePdfDocumentExporter.cs");
+        script.Should().Contain("shared/Free.Shared.AppServices/DocumentSharePlanner.cs");
         script.Should().Contain("public static DocumentShareActionSurface MacOsPreview");
         script.Should().Contain("surface.CanShowShareSheet || surface.CanOpenContainingFolder");
-        script.Should().Contain("src\\FreeX.App.Services\\WorkbookViewportScrollPlanner.cs");
+        script.Should().Contain("src/FreeX.App.Services/WorkbookViewportScrollPlanner.cs");
         script.Should().Contain("public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)");
         script.Should().Contain("public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(");
         script.Should().Contain("WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)");
         script.Should().Contain("WorkbookViewportScrollPlanner.CalculateViewportOrigin(");
-        script.Should().Contain("shared\\Free.Shared.AppServices\\LocalFilePath.cs");
+        script.Should().Contain("shared/Free.Shared.AppServices/LocalFilePath.cs");
         script.Should().Contain("public static bool TryNormalize(string? candidate, out string normalizedPath)");
         script.Should().Contain("TryCreateExplicitUri(path, out var uri)");
-        script.Should().Contain("src\\FreeX.App.Services\\OpenRecentWorkbookMenuPlanner.cs");
+        script.Should().Contain("src/FreeX.App.Services/OpenRecentWorkbookMenuPlanner.cs");
         script.Should().Contain("OpenRecentWorkbookMenuPlanner.Create(");
         script.Should().Contain("public const int DefaultMaximumItems = 10;");
         script.Should().Contain("Func<string, string?> resolveOpenWorkbookPath");
@@ -175,7 +175,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
         script.Should().Contain("built-in Helvetica/WinAnsi set");
         script.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
-        script.Should().Contain("shared\\Free.Shared.AppServices\\AtomicExportExecutor.cs");
+        script.Should().Contain("shared/Free.Shared.AppServices/AtomicExportExecutor.cs");
         script.Should().Contain("public sealed class AtomicExportExecutor");
         script.Should().Contain("AtomicFileWriter.CreateTempLease");
         script.Should().Contain("_replaceDestination(temporaryFile.Path, fullDestinationPath!);");
@@ -495,7 +495,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);");
         script.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);");
         script.Should().Contain("ApplyNativeFileMenuAvailability(isIdle);");
-        script.Should().Contain("src\\FreeX.App.Presentation\\Shell\\NativeMenuCatalog.cs");
+        script.Should().Contain("src/FreeX.App.Presentation/Shell/NativeMenuCatalog.cs");
         script.Should().Contain("new(NativeMenuTopLevelId.View, `\"View`\")");
         script.Should().Contain("new(NativeMenuTopLevelId.Sheet, `\"Sheet`\")");
         script.Should().Contain("new(NativeMenuTopLevelId.Window, `\"Window`\")");
@@ -923,7 +923,7 @@ public sealed class MacOsAppReadinessPreflightTests
         result.ExitCode.Should().NotBe(0);
         var combinedOutput = result.Output + result.Error;
         combinedOutput.Should().Contain(
-            "RegisterCrashHandlers' in shared\\Free.Shared.AppServices\\LocalAppDiagnostics.cs");
+            "RegisterCrashHandlers' in shared/Free.Shared.AppServices/LocalAppDiagnostics.cs");
         combinedOutput.Should().Contain("AppCrashHandlers.Register('");
     }
 
@@ -950,7 +950,7 @@ public sealed class MacOsAppReadinessPreflightTests
         result.ExitCode.Should().NotBe(0);
         var combinedOutput = result.Output + result.Error;
         combinedOutput.Should().Contain("AtomicFileWriter.CreateTempLease");
-        combinedOutput.Should().Contain("shared\\Free.Shared.AppServices\\AtomicExportExecutor.cs");
+        combinedOutput.Should().Contain("shared/Free.Shared.AppServices/AtomicExportExecutor.cs");
     }
 
     [Fact]

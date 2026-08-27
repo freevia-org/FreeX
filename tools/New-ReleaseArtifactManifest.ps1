@@ -36,18 +36,7 @@ function Find-One([string]$Name) {
 function Hash([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 
 function Get-RepositoryRelativePath([string]$Path) {
-    $root = [System.IO.Path]::GetFullPath($RepositoryRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq '\') {
-        [System.StringComparison]::OrdinalIgnoreCase
-    }
-    else {
-        [System.StringComparison]::Ordinal
-    }
-    if (-not $fullPath.StartsWith($root, $comparison)) {
-        throw "Release input is outside the repository root: $Path"
-    }
-    return $fullPath.Substring($root.Length).Replace('\', '/')
+    return ConvertTo-ToolRepoRelativePath -Path $Path -RepoRoot $RepositoryRoot
 }
 
 function Validate-Checksum([System.IO.FileInfo]$Payload) {

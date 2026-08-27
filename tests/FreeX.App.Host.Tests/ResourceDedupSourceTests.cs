@@ -29,7 +29,7 @@ public sealed class ResourceDedupSourceTests
 
         project.Should().Contain("<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>");
         project.Should().Contain("<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>");
-        project.Should().Contain("Resources\\CommandIconsSvg\\**\\*.svg");
+        project.Should().Contain("Resources/CommandIconsSvg/**/*.svg");
     }
 
     [Fact]

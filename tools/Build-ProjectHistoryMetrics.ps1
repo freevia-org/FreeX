@@ -93,6 +93,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'ToolScriptSupport.ps1')
+$pathComparison = Get-ToolPathComparison
+
 function Write-Progress2 {
     param([string]$Message)
     Write-Host "[history-metrics] $Message"
@@ -501,10 +504,10 @@ function ConvertTo-RepoRelativePath {
         # incorrectly satisfy a plain prefix compare, then get the "FreeX" chars stripped off
         # leaving a bogus "...somethingelse/..." remainder that silently misclassifies as a fake
         # top-level path instead of being excluded outright).
-        if ($p.Length -eq $root.Length -and $p.ToLowerInvariant() -eq $root.ToLowerInvariant()) {
+        if ($p.Equals($root, $pathComparison)) {
             $p = ''
             break
-        } elseif ($p.Length -gt $root.Length -and $p.Substring(0, $root.Length).ToLowerInvariant() -eq $root.ToLowerInvariant() -and $p[$root.Length] -eq '/') {
+        } elseif ($p.StartsWith($root + '/', $pathComparison)) {
             $p = $p.Substring($root.Length + 1)
             break
         }
@@ -526,12 +529,10 @@ function Test-IsFreeXCwd {
     param([string]$Cwd)
     if (-not $Cwd) { return $false }
     $norm = ($Cwd -replace '\\', '/').TrimEnd('/')
-    $normLower = $norm.ToLowerInvariant()
     foreach ($candidateRoot in $AllProjectRoots) {
         $rootNorm = ($candidateRoot -replace '\\', '/').TrimEnd('/')
-        $rootNormLower = $rootNorm.ToLowerInvariant()
-        if ($normLower -eq $rootNormLower) { return $true }
-        if ($normLower.StartsWith($rootNormLower + '/')) { return $true }
+        if ($norm.Equals($rootNorm, $pathComparison)) { return $true }
+        if ($norm.StartsWith($rootNorm + '/', $pathComparison)) { return $true }
         $leafName = [System.IO.Path]::GetFileName($rootNorm)
         if ($norm -match "(?i)(^|/)$([regex]::Escape($leafName))(/|`$)") { return $true }
     }

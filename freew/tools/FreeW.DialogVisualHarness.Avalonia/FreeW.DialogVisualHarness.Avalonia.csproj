@@ -10,8 +10,8 @@
     <PackageReference Include="Avalonia.Skia" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="SkiaSharp" />
-    <ProjectReference Include="..\FreeW.DialogVisualHarness\FreeW.DialogVisualHarness.csproj" />
-    <ProjectReference Include="..\..\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj"
+    <ProjectReference Include="../FreeW.DialogVisualHarness/FreeW.DialogVisualHarness.csproj" />
+    <ProjectReference Include="../../FreeW.App.Avalonia/FreeW.App.Avalonia.csproj"
                       AdditionalProperties="FreeWDialogHarnessSupport=true" />
   </ItemGroup>
 </Project>

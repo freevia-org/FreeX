@@ -6,10 +6,10 @@
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
   </PropertyGroup>
-  <Import Project="..\ToolProjects.props" />
+  <Import Project="../ToolProjects.props" />
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeX.ToolsShared.Wpf\FreeX.ToolsShared.Wpf.csproj" />
+    <ProjectReference Include="../FreeX.ToolsShared.Wpf/FreeX.ToolsShared.Wpf.csproj" />
   </ItemGroup>
 
 </Project>

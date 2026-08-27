@@ -8,7 +8,7 @@
     <IsPublishable>false</IsPublishable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\FreeW.App.Host\FreeW.App.Host.csproj" />
-    <ProjectReference Include="..\..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../FreeW.App.Host/FreeW.App.Host.csproj" />
+    <ProjectReference Include="../../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
   </ItemGroup>
 </Project>

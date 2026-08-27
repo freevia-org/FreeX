@@ -49,6 +49,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $harness = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $containerName = "freex-linux-interactive-freex-$Port"
 $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-input-probes.sh"
@@ -84,9 +85,10 @@ New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
 $provenancePath = Join-Path $reportDirectory "resume-provenance.json"
 $workspaceHasher = [Security.Cryptography.SHA256]::Create()
 try {
-    $normalizedRepoRoot = [IO.Path]::GetFullPath($repoRoot).TrimEnd(
+    $normalizedRepoRoot = (Resolve-ToolExistingPath -Path $repoRoot).TrimEnd(
         [IO.Path]::DirectorySeparatorChar,
-        [IO.Path]::AltDirectorySeparatorChar).ToLowerInvariant()
+        [IO.Path]::AltDirectorySeparatorChar)
+    if (Test-ToolIsWindows) { $normalizedRepoRoot = $normalizedRepoRoot.ToLowerInvariant() }
     $workspaceHashBytes = $workspaceHasher.ComputeHash([Text.Encoding]::UTF8.GetBytes($normalizedRepoRoot))
     $workspaceKey = -join ($workspaceHashBytes[0..5] | ForEach-Object { $_.ToString("x2") })
 } finally {
@@ -117,11 +119,16 @@ function Copy-LongPathSafeFile {
 
     $sourcePath = [IO.Path]::GetFullPath($Source)
     $destinationPath = [IO.Path]::GetFullPath($Destination)
-    if ([string]::Equals($sourcePath, $destinationPath, [StringComparison]::OrdinalIgnoreCase)) {
+    if ([string]::Equals($sourcePath, $destinationPath, (Get-ToolPathComparison))) {
         return
     }
 
-    [IO.File]::Copy("\\?\$sourcePath", "\\?\$destinationPath", $true)
+    if (Test-ToolIsWindows) {
+        [IO.File]::Copy("\\?\$sourcePath", "\\?\$destinationPath", $true)
+    }
+    else {
+        [IO.File]::Copy($sourcePath, $destinationPath, $true)
+    }
 }
 
 function Get-DirectoryFingerprint {

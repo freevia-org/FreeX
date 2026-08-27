@@ -11,7 +11,7 @@
     <!-- WPF/PDFsharp companion to the neutral Free.Shared.Pdf tier: rasterized-page + overlay
          emission used by both FreeX and FreeW host (Windows) PDF export. Mirrors the
          Free.Shared.Shell / Free.Shared.Shell.Wpf split. -->
-    <ProjectReference Include="..\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="../Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
   </ItemGroup>
 
   <ItemGroup>

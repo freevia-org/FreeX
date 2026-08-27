@@ -10,7 +10,7 @@
     <RootNamespace>FreeP.Validation.Avalonia</RootNamespace>
     <StartupObject>FreeP.Validation.Avalonia.Program</StartupObject>
   </PropertyGroup>
-  <Import Project="..\..\..\tools\ToolProjects.props" />
+  <Import Project="../../../tools/ToolProjects.props" />
 
   <ItemGroup>
     <!-- These partials are compiled into the isolated renderer variant, not this coordinator assembly. -->
@@ -19,11 +19,11 @@
     <Compile Remove="MainWindow.ValidationAccessAdapter.cs" />
     <Compile Remove="Program.ValidationHost.cs" />
     <Compile Remove="StartupDirtyTrace.cs" />
-    <ProjectReference Include="..\..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj"
+    <ProjectReference Include="../../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../FreeP.App.Avalonia/FreeP.App.Avalonia.csproj"
                       AdditionalProperties="FreePValidationHost=true" />
-    <ProjectReference Include="..\..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
-    <ProjectReference Include="..\..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
+    <ProjectReference Include="../../FreeP.Core.IO/FreeP.Core.IO.csproj" />
+    <ProjectReference Include="../../FreeP.Core.Model/FreeP.Core.Model.csproj" />
   </ItemGroup>
 
   <ItemGroup>

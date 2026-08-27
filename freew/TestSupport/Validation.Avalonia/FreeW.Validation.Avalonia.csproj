@@ -8,11 +8,11 @@
     <RootNamespace>FreeW.Validation.Avalonia</RootNamespace>
     <StartupObject>FreeW.Validation.Avalonia.Program</StartupObject>
   </PropertyGroup>
-  <Import Project="..\..\..\tools\ToolProjects.props" />
+  <Import Project="../../../tools/ToolProjects.props" />
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj"
+    <ProjectReference Include="../../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../FreeW.App.Avalonia/FreeW.App.Avalonia.csproj"
                       AdditionalProperties="FreeWValidationHost=true" />
   </ItemGroup>
 

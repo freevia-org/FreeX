@@ -97,8 +97,8 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().NotContain("PresentationFilePersistenceWorkflow.Save(");
         source.Should().NotContain("PresentationFileDialogPlanner.");
         source.Should().NotContain("v1: proceed without a save-changes dialog");
-        project.Should().Contain(@"..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj");
-        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
+        project.Should().Contain("../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj");
+        project.Should().Contain("../../shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj");
     }
 
     [Fact]

@@ -10,8 +10,8 @@
     <!-- Neutral draw-op model lives in Free.Shared.Pdf; this companion adds the SkiaSharp emitter
          (HarfBuzz shaping + automatic font embedding/subsetting) so non-WinAnsi text exports
          without bundling a font. Mirrors the Free.Shared.Shell / Free.Shared.Shell.Wpf split. -->
-    <ProjectReference Include="..\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
-    <ProjectReference Include="..\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="../Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

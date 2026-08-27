@@ -17,7 +17,12 @@ function Assert-ToolSourceCentralization {
             "function Resolve-ToolRepoPath",
             "function Test-ToolPathRooted",
             "function Test-ToolIsWindows",
+            "function Test-ToolIsLinux",
+            "function Test-ToolIsMacOS",
             "function Get-ToolPathComparison",
+            "function Get-ToolPathComparer",
+            "function Test-ToolPathEquals",
+            "function Test-ToolPathWithinRoot",
             "function Get-ToolPowerShellPath",
             "function Get-ToolNormalizedTextSha256",
             "function ConvertTo-ToolPlatformPath",
@@ -52,6 +57,23 @@ function Assert-ToolSourceCentralization {
             "function Resolve-FreeXExe")) {
         if (-not $support.Contains($requiredHelper)) {
             throw "ToolScriptSupport.ps1 is missing required helper '$requiredHelper'."
+        }
+    }
+
+    $portabilityGate = Get-Content -LiteralPath (Join-Path $ToolRoot 'Test-CrossPlatformPortability.ps1') -Raw
+    foreach ($requiredPortabilityContract in @(
+            'NormalizationForm]::FormD',
+            'Test-StaticRepositoryPathCase',
+            'python3, python',
+            'nodeCommand.Source --check',
+            'linuxOnlyShellPrefixes',
+            'GNU readlink -f',
+            'PowerShell 6+ automatic platform variable',
+            'case-folds a physical path',
+            'Windows-separated MSBuild',
+            'repository-escaping project/import reference')) {
+        if (-not $portabilityGate.Contains($requiredPortabilityContract)) {
+            throw "Test-CrossPlatformPortability.ps1 is missing required contract '$requiredPortabilityContract'."
         }
     }
 
@@ -502,7 +524,7 @@ function Assert-ToolSourceCentralization {
             continue
         }
 
-        if (-not $projectText.Contains('Import Project="..\ToolProjects.props"')) {
+        if (-not $projectText.Contains('Import Project="../ToolProjects.props"')) {
             throw "$($project.FullName) does not import tools/ToolProjects.props."
         }
 
@@ -512,16 +534,16 @@ function Assert-ToolSourceCentralization {
     }
 
     $externalToolSupportProjects = @(
-        "..\freep\TestSupport\VisualEvidence\FreeP.VisualEvidence.csproj",
-        "..\freep\TestSupport\VisualEvidence.Avalonia\FreeP.VisualEvidence.Avalonia.csproj",
-        "..\freep\TestSupport\VisualEvidence.Wpf\FreeP.VisualEvidence.Wpf.csproj",
-        "..\freew\tests\FreeW.VisualEvidence.TestSupport\FreeW.VisualEvidence.TestSupport.csproj",
-        "..\freew\tools\FreeW.VisualEvidenceSummary\FreeW.VisualEvidenceSummary.csproj"
+        "../freep/TestSupport/VisualEvidence/FreeP.VisualEvidence.csproj",
+        "../freep/TestSupport/VisualEvidence.Avalonia/FreeP.VisualEvidence.Avalonia.csproj",
+        "../freep/TestSupport/VisualEvidence.Wpf/FreeP.VisualEvidence.Wpf.csproj",
+        "../freew/tests/FreeW.VisualEvidence.TestSupport/FreeW.VisualEvidence.TestSupport.csproj",
+        "../freew/tools/FreeW.VisualEvidenceSummary/FreeW.VisualEvidenceSummary.csproj"
     )
     foreach ($relativeProjectPath in $externalToolSupportProjects) {
         $projectPath = Join-Path $ToolRoot $relativeProjectPath
         $projectText = Get-Content -LiteralPath $projectPath -Raw
-        if (-not $projectText.Contains('Import Project="..\..\..\tools\ToolProjects.props"')) {
+        if (-not $projectText.Contains('Import Project="../../../tools/ToolProjects.props"')) {
             throw "$projectPath does not import tools/ToolProjects.props."
         }
 

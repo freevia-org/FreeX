@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />
+    <ProjectReference Include="../FreeP.App.Localization/FreeP.App.Localization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

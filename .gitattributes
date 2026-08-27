@@ -4,6 +4,24 @@
 *.psm1 text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+*.py text eol=lf
+*.mjs text eol=lf
+*.csproj text eol=lf
+*.props text eol=lf
+*.targets text eol=lf
+*.slnx text eol=lf
+*.json text eol=lf
+*.xml text eol=lf
+*.xaml text eol=lf
+*.resx text eol=lf
+*.plist text eol=lf
+*.desktop text eol=lf
+*.conf text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.csv text eol=lf
+*.html text eol=lf
+*.toml text eol=lf
 tools/packaging/linux/*.conf text eol=lf
 tools/LinuxInteractiveDocker/*.sh text eol=lf
 

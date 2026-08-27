@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="..\ToolProjects.props" />
+  <Import Project="../ToolProjects.props" />
   <PropertyGroup>
     <AssemblyName>FreeX.Validation.Wpf</AssemblyName>
     <OutputType>Exe</OutputType>
@@ -8,12 +8,12 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.UI\FreeX.App.UI.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Host/FreeX.App.Host.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.UI/FreeX.App.UI.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../../src/FreeX.Ribbon.Definitions/FreeX.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="FreeX.App.Host.Tests" />

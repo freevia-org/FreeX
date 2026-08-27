@@ -34,14 +34,14 @@
 
   <ItemGroup>
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
-    <Compile Include="..\TestSupport\HostAccessOwnershipAssertions.cs"
-             Link="TestSupport\HostAccessOwnershipAssertions.cs" />
-    <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
-    <ProjectReference Include="..\FreeW.App.Host\FreeW.App.Host.csproj"
+    <Compile Include="../TestSupport/HostAccessOwnershipAssertions.cs"
+             Link="TestSupport/HostAccessOwnershipAssertions.cs" />
+    <ProjectReference Include="../FreeW.App.Localization/FreeW.App.Localization.csproj" />
+    <ProjectReference Include="../FreeW.App.Host/FreeW.App.Host.csproj"
                       AdditionalProperties="FreeWHostTestSupport=true" />
-    <ProjectReference Include="..\tests\FreeW.VisualEvidence.TestSupport\FreeW.VisualEvidence.TestSupport.csproj" />
-    <ProjectReference Include="..\tools\FreeW.DialogVisualHarness\FreeW.DialogVisualHarness.csproj" Aliases="Harness" />
-    <Compile Include="..\tests\SharedTestInfrastructure\FreeWDialogEvidenceCatalogContractTests.cs"
+    <ProjectReference Include="../tests/FreeW.VisualEvidence.TestSupport/FreeW.VisualEvidence.TestSupport.csproj" />
+    <ProjectReference Include="../tools/FreeW.DialogVisualHarness/FreeW.DialogVisualHarness.csproj" Aliases="Harness" />
+    <Compile Include="../tests/SharedTestInfrastructure/FreeWDialogEvidenceCatalogContractTests.cs"
              Link="FreeWDialogEvidenceCatalogContractTests.cs" />
   </ItemGroup>
 

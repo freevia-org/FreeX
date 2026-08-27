@@ -42,21 +42,21 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)..\SharedTestInfrastructure\FreeX\InMemoryPlatformClipboard.cs" Link="TestSupport\InMemoryPlatformClipboard.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)..\SharedTestInfrastructure\Ribbon\RibbonDefinitionValidator.cs"
-             Link="TestSupport\RibbonDefinitionValidator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../CommandTestInfrastructure/TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../SharedTestInfrastructure/FreeX/InMemoryPlatformClipboard.cs" Link="TestSupport/InMemoryPlatformClipboard.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../SharedTestInfrastructure/FreeX/TestFileAdapter.cs" Link="TestFileAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../SharedTestInfrastructure/Ribbon/RibbonDefinitionValidator.cs"
+             Link="TestSupport/RibbonDefinitionValidator.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\tools\FreeX.ParityCapture.Wpf\FreeX.ParityCapture.Wpf.csproj" />
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\tools\FreeX.Validation.Wpf\FreeX.Validation.Wpf.csproj" Aliases="ValidationWpf" />
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" Aliases="ProductionWpf" />
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../tools/FreeX.ParityCapture.Wpf/FreeX.ParityCapture.Wpf.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../tools/FreeX.Validation.Wpf/FreeX.Validation.Wpf.csproj" Aliases="ValidationWpf" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../src/FreeX.App.Host/FreeX.App.Host.csproj" Aliases="ProductionWpf" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../tools/FreeX.ParityCapture.Support/FreeX.ParityCapture.Support.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../shared/Free.Shared.Theme.Wpf/Free.Shared.Theme.Wpf.csproj" />
   </ItemGroup>
 
   <ItemGroup>

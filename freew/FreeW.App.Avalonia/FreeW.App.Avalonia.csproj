@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup><FreeBrand Condition="'$(FreeBrand)' == ''">FreeW</FreeBrand></PropertyGroup>
-  <Import Project="..\..\shared\Free.Shared.Shell\BrandAssets.props" />
+  <Import Project="../../shared/Free.Shared.Shell/BrandAssets.props" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -15,38 +15,38 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
   </PropertyGroup>
 
-  <Import Project="..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Assets.props" />
+  <Import Project="../FreeW.Ribbon.Definitions/FreeW.Ribbon.Assets.props" />
 
   <PropertyGroup Condition="'$(FreeWValidationHost)' == 'true'">
-    <OutputPath>bin\Validation\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\Validation\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+    <OutputPath>bin/Validation/$(Configuration)/</OutputPath>
+    <IntermediateOutputPath>obj/Validation/$(Configuration)/$(TargetFramework)/</IntermediateOutputPath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
-    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+    <OutputPath>bin/TestSupport/$(Configuration)/</OutputPath>
+    <IntermediateOutputPath>obj/TestSupport/$(Configuration)/$(TargetFramework)/</IntermediateOutputPath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
-    <OutputPath>bin\DialogHarness\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\DialogHarness\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+    <OutputPath>bin/DialogHarness/$(Configuration)/</OutputPath>
+    <IntermediateOutputPath>obj/DialogHarness/$(Configuration)/$(TargetFramework)/</IntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/MainWindow.TestAccess.cs"
              Link="MainWindow.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\DocumentView.TestAccess.cs"
-             Link="Editing\DocumentView.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\AutosaveAdapter.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/DocumentView.TestAccess.cs"
+             Link="Editing/DocumentView.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Avalonia/AutosaveAdapter.TestAccess.cs"
              Link="AutosaveAdapter.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\DialogsAndPanes.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/DialogsAndPanes.TestAccess.cs"
              Link="DialogsAndPanes.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\Backstage.TestAccess.cs"
-             Link="Backstage\Backstage.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\CupsPrintDialog.TestAccess.cs"
-             Link="Printing\CupsPrintDialog.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\EditingControls.TestAccess.cs"
-             Link="Editing\EditingControls.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Avalonia/Backstage.TestAccess.cs"
+             Link="Backstage/Backstage.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Avalonia/CupsPrintDialog.TestAccess.cs"
+             Link="Printing/CupsPrintDialog.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Avalonia/EditingControls.TestAccess.cs"
+             Link="Editing/EditingControls.TestAccess.cs" />
   </ItemGroup>
 
   <ItemDefinitionGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
@@ -62,11 +62,11 @@
   </ItemDefinitionGroup>
 
   <ItemGroup Condition="'$(FreeWValidationHost)' == 'true'">
-    <Compile Include="..\TestSupport\Validation.Avalonia\Program.ValidationHost.cs"
+    <Compile Include="../TestSupport/Validation.Avalonia/Program.ValidationHost.cs"
              Link="Program.ValidationHost.cs" />
-    <Compile Include="..\TestSupport\Validation.Avalonia\MainWindow.ValidationAccessAdapter.cs"
+    <Compile Include="../TestSupport/Validation.Avalonia/MainWindow.ValidationAccessAdapter.cs"
              Link="MainWindow.ValidationAccessAdapter.cs" />
-    <Compile Include="..\TestSupport\Validation.Avalonia\AvaloniaSpeechEngine.ValidationAccess.cs"
+    <Compile Include="../TestSupport/Validation.Avalonia/AvaloniaSpeechEngine.ValidationAccess.cs"
              Link="AvaloniaSpeechEngine.ValidationAccess.cs" />
   </ItemGroup>
 
@@ -84,22 +84,22 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
-    <ProjectReference Include="..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
-    <ProjectReference Include="..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
-    <ProjectReference Include="..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj" />
-    <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Avalonia\Free.Shared.Theme.Avalonia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../FreeW.Core.Model/FreeW.Core.Model.csproj" />
+    <ProjectReference Include="../FreeW.Core.IO/FreeW.Core.IO.csproj" />
+    <ProjectReference Include="../FreeW.App.Presentation/FreeW.App.Presentation.csproj" />
+    <ProjectReference Include="../FreeW.Ribbon.Definitions/FreeW.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="../FreeW.App.Localization/FreeW.App.Localization.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices.Windows/Free.Shared.AppServices.Windows.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon.Avalonia/Free.Shared.Ribbon.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme/Free.Shared.Theme.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme.Avalonia/Free.Shared.Theme.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
@@ -109,14 +109,14 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\DialogsAndPanes.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Avalonia/DialogsAndPanes.TestAccess.cs"
              Link="DialogsAndPanes.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\ScreenClipOverlay.DialogHarnessAccess.cs"
-             Link="Editing\ScreenClipOverlay.DialogHarnessAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\Backstage.TestAccess.cs"
-             Link="Backstage\Backstage.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\CupsPrintDialog.TestAccess.cs"
-             Link="Printing\CupsPrintDialog.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Avalonia/ScreenClipOverlay.DialogHarnessAccess.cs"
+             Link="Editing/ScreenClipOverlay.DialogHarnessAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Avalonia/Backstage.TestAccess.cs"
+             Link="Backstage/Backstage.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Avalonia/CupsPrintDialog.TestAccess.cs"
+             Link="Printing/CupsPrintDialog.TestAccess.cs" />
     <InternalsVisibleTo Include="FreeW.DialogVisualHarness.Avalonia" />
   </ItemGroup>
 
@@ -131,11 +131,11 @@
   <ItemGroup>
     <!-- Runtime and package assets derive from one owned FreeW identity source in the shared shell. -->
     <Content Include="$(BrandWindowsIconPath)"
-             Link="Resources\$(BrandWindowsIconFileName)"
+             Link="Resources/$(BrandWindowsIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(BrandScalableIconPath)"
-             Link="Resources\$(BrandScalableIconFileName)"
+             Link="Resources/$(BrandScalableIconFileName)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(BrandMacOsIconPath)"
@@ -145,11 +145,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="..\..\LICENSE" LogicalName="FreeW.Legal.ProjectLicense.txt" />
-    <EmbeddedResource Include="..\..\docs\legal\legal-notices.md" LogicalName="FreeW.Legal.LegalNotices.md" />
-    <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeW.Legal.PrivacyNotice.md" />
-    <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeW.Legal.ThirdPartyNotices.md" />
-    <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeW.Legal.ThirdPartyLicenses.md" />
+    <EmbeddedResource Include="../../LICENSE" LogicalName="FreeW.Legal.ProjectLicense.txt" />
+    <EmbeddedResource Include="../../docs/legal/legal-notices.md" LogicalName="FreeW.Legal.LegalNotices.md" />
+    <EmbeddedResource Include="../../docs/legal/privacy.md" LogicalName="FreeW.Legal.PrivacyNotice.md" />
+    <EmbeddedResource Include="../../THIRD_PARTY_NOTICES.md" LogicalName="FreeW.Legal.ThirdPartyNotices.md" />
+    <EmbeddedResource Include="../../THIRD_PARTY_LICENSES.md" LogicalName="FreeW.Legal.ThirdPartyLicenses.md" />
   </ItemGroup>
 
   <ItemGroup>

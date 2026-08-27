@@ -1,7 +1,7 @@
 <Project>
-  <Import Project="..\..\Directory.Build.props" />
+  <Import Project="../../Directory.Build.props" />
   <PropertyGroup>
-    <BaseIntermediateOutputPath>obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
-    <BaseOutputPath>bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <BaseOutputPath>bin/$(MSBuildProjectName)/</BaseOutputPath>
   </PropertyGroup>
 </Project>

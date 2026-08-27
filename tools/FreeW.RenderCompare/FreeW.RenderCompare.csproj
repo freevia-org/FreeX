@@ -13,14 +13,14 @@
     <UseWPF>true</UseWPF>
     <StartupObject>FreeW.RenderCompare.Program</StartupObject>
   </PropertyGroup>
-  <Import Project="..\ToolProjects.props" />
+  <Import Project="../ToolProjects.props" />
 
   <ItemGroup>
     <!-- InternalsVisibleTo is unconditional, so share the solution's normal host build instead of
          creating a second global-property configuration that races for the same obj/ref assembly. -->
-    <ProjectReference Include="..\..\freew\FreeW.App.Host\FreeW.App.Host.csproj" />
-    <ProjectReference Include="..\..\freew\FreeW.Core.IO\FreeW.Core.IO.csproj" />
-    <ProjectReference Include="..\..\freew\FreeW.Core.Model\FreeW.Core.Model.csproj" />
+    <ProjectReference Include="../../freew/FreeW.App.Host/FreeW.App.Host.csproj" />
+    <ProjectReference Include="../../freew/FreeW.Core.IO/FreeW.Core.IO.csproj" />
+    <ProjectReference Include="../../freew/FreeW.Core.Model/FreeW.Core.Model.csproj" />
   </ItemGroup>
 
 </Project>

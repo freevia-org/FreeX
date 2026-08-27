@@ -24,7 +24,7 @@ function Find-One([string]$Name) {
 }
 function Run([string]$File, [string[]]$Arguments) {
     $parameters = @{ FilePath = $File; ArgumentList = $Arguments; Wait = $true; PassThru = $true }
-    if ($IsWindows) { $parameters.WindowStyle = 'Hidden' }
+    if (Test-ToolIsWindows) { $parameters.WindowStyle = 'Hidden' }
     $process = Start-Process @parameters
     if ($process.ExitCode -ne 0) { throw "'$File' exited with $($process.ExitCode)." }
 }

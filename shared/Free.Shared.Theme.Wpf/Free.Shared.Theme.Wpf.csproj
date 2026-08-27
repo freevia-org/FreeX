@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Free.Shared.Theme\Free.Shared.Theme.csproj" />
+    <ProjectReference Include="../Free.Shared.Theme/Free.Shared.Theme.csproj" />
   </ItemGroup>
 
 </Project>

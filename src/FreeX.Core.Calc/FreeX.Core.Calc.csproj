@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <ProjectReference Include="..\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

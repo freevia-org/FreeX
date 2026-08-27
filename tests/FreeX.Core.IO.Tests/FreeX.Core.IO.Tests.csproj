@@ -24,24 +24,24 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\tools\FreeX.XlsxPackageDiagnostics\FreeX.XlsxPackageDiagnostics.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Calc/FreeX.Core.Calc.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Commands/FreeX.Core.Commands.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../tools/FreeX.XlsxPackageDiagnostics/FreeX.XlsxPackageDiagnostics.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
-    <Compile Include="..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
+    <Compile Include="../CommandTestInfrastructure/TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="../SharedTestInfrastructure/FreeX/TestFileAdapter.cs" Link="TestFileAdapter.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="Fixtures\Simple.xls" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Fixtures\Simple.xlsb" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Fixtures\CellGradientFillLinear.xlsx" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Fixtures\Excel_native_shapes_fill_outline_004.xlsx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Fixtures/Simple.xls" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Fixtures/Simple.xlsb" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Fixtures/CellGradientFillLinear.xlsx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Fixtures/Excel_native_shapes_fill_outline_004.xlsx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

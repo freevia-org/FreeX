@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FreeX.App.Localization\FreeX.App.Localization.csproj" />
-    <ProjectReference Include="..\..\freew\FreeW.App.Localization\FreeW.App.Localization.csproj" />
-    <ProjectReference Include="..\..\freep\FreeP.App.Localization\FreeP.App.Localization.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Localization/FreeX.App.Localization.csproj" />
+    <ProjectReference Include="../../freew/FreeW.App.Localization/FreeW.App.Localization.csproj" />
+    <ProjectReference Include="../../freep/FreeP.App.Localization/FreeP.App.Localization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -36,6 +36,7 @@ function Write-GitHubErrorAnnotation {
 }
 
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+$pathComparison = Get-ToolPathComparison
 
 function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -357,7 +358,7 @@ function Get-ArtifactDownloadIdentity {
             }
         }
 
-        if ([System.StringComparer]::OrdinalIgnoreCase.Equals($current.FullName, $rootInfo.FullName)) {
+        if ($current.FullName.Equals($rootInfo.FullName, $pathComparison)) {
             break
         }
 
@@ -386,7 +387,7 @@ function Get-ReleaseArtifactDownloadIdentity {
             }
         }
 
-        if ([System.StringComparer]::OrdinalIgnoreCase.Equals($current.FullName, $rootInfo.FullName)) {
+        if ($current.FullName.Equals($rootInfo.FullName, $pathComparison)) {
             break
         }
 
@@ -415,7 +416,7 @@ function Get-AggregateReadinessArtifactDownloadIdentity {
             }
         }
 
-        if ([System.StringComparer]::OrdinalIgnoreCase.Equals($current.FullName, $rootInfo.FullName)) {
+        if ($current.FullName.Equals($rootInfo.FullName, $pathComparison)) {
             break
         }
 
@@ -921,7 +922,7 @@ function Test-ReleasePublicationArtifact {
     $manifestPath = $manifestFiles[0].FullName
     $manifestDirectory = $manifestFiles[0].Directory.FullName
     $instructionsDirectory = $instructionsFiles[0].Directory.FullName
-    if (-not [System.StringComparer]::OrdinalIgnoreCase.Equals($manifestDirectory, $instructionsDirectory)) {
+    if (-not $manifestDirectory.Equals($instructionsDirectory, $pathComparison)) {
         Add-ValidationError "macOS release publication manifest and instructions must be in the same downloaded release-assets wrapper directory. Manifest: '$manifestDirectory'. Instructions: '$instructionsDirectory'. cleanup_action=remove_split_or_stale_release_assets. Remove split or stale release-assets artifact folders under $Root."
         return
     }
@@ -1167,7 +1168,7 @@ function Test-AggregateReadinessArtifact {
     $manifestDirectory = $manifestFiles[0].Directory.FullName
     $summaryPath = $summaryFiles[0].FullName
     $summaryDirectory = $summaryFiles[0].Directory.FullName
-    if (-not [System.StringComparer]::OrdinalIgnoreCase.Equals($manifestDirectory, $summaryDirectory)) {
+    if (-not $manifestDirectory.Equals($summaryDirectory, $pathComparison)) {
         Add-ValidationError "macOS aggregate readiness manifest and summary must be in the same downloaded preview-readiness wrapper directory. Manifest: '$manifestDirectory'. Summary: '$summaryDirectory'. Remove split or stale preview-readiness artifact folders under $Root."
         return
     }

@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup><FreeBrand Condition="'$(FreeBrand)' == ''">FreeP</FreeBrand></PropertyGroup>
-  <Import Project="..\..\shared\Free.Shared.Shell\BrandAssets.props" />
-  <Import Project="..\..\shared\Free.Shared.Shell\FamilyLegalBundle.props" />
+  <Import Project="../../shared/Free.Shared.Shell/BrandAssets.props" />
+  <Import Project="../../shared/Free.Shared.Shell/FamilyLegalBundle.props" />
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -24,56 +24,56 @@
     <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 
-  <Import Project="..\FreeP.RendererHostVariants.props" />
+  <Import Project="../FreeP.RendererHostVariants.props" />
 
   <ItemGroup Condition="'$(FreePHostAccess)' == 'true' Or '$(FreePVisualEvidenceHost)' == 'true'">
-    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/MainWindow.TestAccess.cs"
              Link="MainWindow.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.DiagnosticsAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/MainWindow.DiagnosticsAccess.cs"
              Link="MainWindow.DiagnosticsAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\BackstageView.TestAccess.cs"
-             Link="Backstage\BackstageView.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\BasicDialogs.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/BackstageView.TestAccess.cs"
+             Link="Backstage/BackstageView.TestAccess.cs" />
+    <Compile Include="../TestSupport/HostAccess.Wpf/BasicDialogs.TestAccess.cs"
              Link="BasicDialogs.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\EditingDialogs.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/EditingDialogs.TestAccess.cs"
              Link="EditingDialogs.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\PaneAndCustomShow.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/PaneAndCustomShow.TestAccess.cs"
              Link="PaneAndCustomShow.TestAccess.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
-    <Compile Include="..\TestSupport\HostAccess.Wpf\ChartOptionsDialogs.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/ChartOptionsDialogs.TestAccess.cs"
              Link="ChartOptionsDialogs.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.ExtendedTestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/MainWindow.ExtendedTestAccess.cs"
              Link="MainWindow.ExtendedTestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.AccessibilityTestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/MainWindow.AccessibilityTestAccess.cs"
              Link="MainWindow.AccessibilityTestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\AutosaveCoordinator.TestAccess.cs"
+    <Compile Include="../TestSupport/HostAccess.Wpf/AutosaveCoordinator.TestAccess.cs"
              Link="AutosaveCoordinator.TestAccess.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
-    <Compile Include="..\TestSupport\VisualEvidence.Wpf\MainWindow.VisualCaptureAdapter.cs"
+    <Compile Include="../TestSupport/VisualEvidence.Wpf/MainWindow.VisualCaptureAdapter.cs"
              Link="MainWindow.VisualCaptureAdapter.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePSlideShowTestSupport)' == 'true'">
-    <Compile Include="..\TestSupport\SlideShow.Wpf\SlideShowMediaController.TestAccess.cs"
+    <Compile Include="../TestSupport/SlideShow.Wpf/SlideShowMediaController.TestAccess.cs"
              Link="SlideShowMediaController.TestAccess.cs" />
-    <Compile Include="..\TestSupport\SlideShow.Wpf\SlideShowWindow.TestAccess.cs"
+    <Compile Include="../TestSupport/SlideShow.Wpf/SlideShowWindow.TestAccess.cs"
              Link="SlideShowWindow.TestAccess.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\RendererShared\SlideShowWindow.RuntimeSession.cs"
+    <Compile Include="../RendererShared/SlideShowWindow.RuntimeSession.cs"
              Link="SlideShowWindow.RuntimeSession.cs" />
-    <Compile Include="..\RendererShared\SlideShowWindow.PortableSurface.cs"
+    <Compile Include="../RendererShared/SlideShowWindow.PortableSurface.cs"
              Link="SlideShowWindow.PortableSurface.cs" />
-    <Compile Include="..\RendererShared\MainWindow.RibbonActionProfile.cs"
+    <Compile Include="../RendererShared/MainWindow.RibbonActionProfile.cs"
              Link="MainWindow.RibbonActionProfile.cs" />
-    <Compile Include="..\RendererShared\MainWindow.ChartDialogEndpoints.cs"
+    <Compile Include="../RendererShared/MainWindow.ChartDialogEndpoints.cs"
              Link="MainWindow.ChartDialogEndpoints.cs" />
-    <Resource Include="$(BrandWindowsIconPath)" Link="Resources\$(BrandWindowsIconFileName)" />
+    <Resource Include="$(BrandWindowsIconPath)" Link="Resources/$(BrandWindowsIconFileName)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
@@ -86,29 +86,29 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.Windows.SDK.NET.Ref" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Wpf\Free.Shared.Pdf.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />
-    <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />
-    <ProjectReference Include="..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" />
-    <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
-    <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
-    <ProjectReference Include="..\FreeP.App.Media\FreeP.App.Media.csproj" />
-    <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
-    <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
-    <ProjectReference Include="..\FreeP.App.Recording.Windows\FreeP.App.Recording.Windows.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme/Free.Shared.Theme.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme.Wpf/Free.Shared.Theme.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.IO/Free.Shared.IO.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf.Wpf/Free.Shared.Pdf.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
+    <ProjectReference Include="../FreeP.App.Localization/FreeP.App.Localization.csproj" />
+    <ProjectReference Include="../FreeP.Ribbon.Definitions/FreeP.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="../FreeP.Core.Model/FreeP.Core.Model.csproj" />
+    <ProjectReference Include="../FreeP.Core.IO/FreeP.Core.IO.csproj" />
+    <ProjectReference Include="../FreeP.App.Media/FreeP.App.Media.csproj" />
+    <ProjectReference Include="../FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
+    <ProjectReference Include="../FreeP.App.Recording/FreeP.App.Recording.csproj" />
+    <ProjectReference Include="../FreeP.App.Recording.Windows/FreeP.App.Recording.Windows.csproj" />
     <!-- SlideShowController was relocated to FreeP.App.Presentation for cross-platform reuse. -->
-    <ProjectReference Include="..\FreeP.App.Rendering.Wpf\FreeP.App.Rendering.Wpf.csproj" />
+    <ProjectReference Include="../FreeP.App.Rendering.Wpf/FreeP.App.Rendering.Wpf.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -124,12 +124,12 @@
 
   <ItemGroup>
     <Content Include="$(BrandWindowsIconPath)"
-             Link="Resources\$(BrandWindowsIconFileName)"
+             Link="Resources/$(BrandWindowsIconFileName)"
              CopyToOutputDirectory="PreserveNewest" />
     <!-- Reuse FreeX's Office-quality command icons (single source of truth) so any FreeP command sharing a
          FreeX equivalent draws the identical glyph. Linked, not copied — mirrors FreeW. -->
-    <Content Include="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
-             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
+    <Content Include="../../src/FreeX.Ribbon.Definitions/Resources/CommandIconsSvg/**/*.svg"
+             Link="Resources/CommandIconsSvg/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

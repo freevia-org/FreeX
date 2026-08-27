@@ -1,27 +1,29 @@
 param(
     [string]$ProjectRoot = "",
-    [string]$AvaloniaProjectPath = "src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj",
-    [string]$InfoPlistPath = "src\FreeX.App.Avalonia\Packaging\macos\Info.plist",
-    [string]$IconPath = "shared\Free.Shared.Shell\Resources\FreeX.icns",
-    [string]$WorkflowPath = ".github\workflows\macos-app.yml",
+    [string]$AvaloniaProjectPath = "src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj",
+    [string]$InfoPlistPath = "src/FreeX.App.Avalonia/Packaging/macos/Info.plist",
+    [string]$IconPath = "shared/Free.Shared.Shell/Resources/FreeX.icns",
+    [string]$WorkflowPath = ".github/workflows/macos-app.yml",
     [string[]]$PortableSourceRoots = @(
-        "src\FreeX.App.Avalonia",
-        "src\FreeX.App.Presentation",
-        "src\FreeX.App.Services",
-        "shared\Free.Shared.Ribbon.Avalonia",
-        "shared\Free.Shared.AppServices",
-        "shared\Free.Shared.Drawing",
-        "shared\Free.Shared.Drawing.Avalonia",
-        "shared\Free.Shared.IO",
-        "shared\Free.Shared.Pdf",
-        "shared\Free.Shared.Pdf.Skia",
-        "shared\Free.Shared.Ribbon",
-        "shared\Free.Shared.Shell.Avalonia",
-        "tools\FreeX.ParityCapture.Support"
+        "src/FreeX.App.Avalonia",
+        "src/FreeX.App.Presentation",
+        "src/FreeX.App.Services",
+        "shared/Free.Shared.Ribbon.Avalonia",
+        "shared/Free.Shared.AppServices",
+        "shared/Free.Shared.Drawing",
+        "shared/Free.Shared.Drawing.Avalonia",
+        "shared/Free.Shared.IO",
+        "shared/Free.Shared.Pdf",
+        "shared/Free.Shared.Pdf.Skia",
+        "shared/Free.Shared.Ribbon",
+        "shared/Free.Shared.Shell.Avalonia",
+        "tools/FreeX.ParityCapture.Support"
     )
 )
 
 $ErrorActionPreference = "Stop"
+
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
     $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -33,33 +35,13 @@ else {
 function Resolve-RepoPath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return [System.IO.Path]::GetFullPath($Path)
-    }
-
-    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
+    return Resolve-ToolRepoPath -Path $Path -RepoRoot $repoRoot
 }
 
 function Get-RepoRelativePath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $root = [System.IO.Path]::GetFullPath($repoRoot)
-    if (-not $root.EndsWith([System.IO.Path]::DirectorySeparatorChar.ToString(), [System.StringComparison]::Ordinal)) {
-        $root += [System.IO.Path]::DirectorySeparatorChar
-    }
-
-    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq '\') {
-        [System.StringComparison]::OrdinalIgnoreCase
-    }
-    else {
-        [System.StringComparison]::Ordinal
-    }
-    if ($fullPath.StartsWith($root, $comparison)) {
-        return $fullPath.Substring($root.Length).Replace("\", "/")
-    }
-
-    return $Path.Replace("\", "/")
+    return ConvertTo-ToolRepoRelativePath -Path $Path -RepoRoot $repoRoot
 }
 
 function Assert-True {
@@ -435,7 +417,7 @@ function Test-AvaloniaProject {
     }
 
     $brandAssetImports = @($project.Project.Import | Where-Object {
-        [string]$_.Project -eq "..\..\shared\Free.Shared.Shell\BrandAssets.props"
+        ([string]$_.Project).Replace('\', '/') -eq "../../shared/Free.Shared.Shell/BrandAssets.props"
     })
     Assert-True -Condition ($brandAssetImports.Count -eq 1) -Message "Avalonia app project must import the shared brand asset definitions."
     Assert-True -Condition ((Get-ProjectProperty -Project $project -Name "FreeBrand") -eq "FreeX") -Message "Avalonia app project must select the FreeX brand assets."
@@ -446,7 +428,9 @@ function Test-AvaloniaProject {
     Assert-True -Condition ($macOsIconItems.Count -eq 1) -Message "Avalonia app project must include the configured shared macOS app icon as content."
     Assert-True -Condition ($macOsIconItems[0].GetAttribute("Link") -eq "`$(BrandMacOsIconFileName)") -Message "Avalonia app macOS icon content must retain the configured brand file name."
 
-    $macOsSourceRemoves = @(Get-ProjectItemNodes -Project $project -Name "Compile" | Where-Object { $_.GetAttribute("Remove") -eq "MacOs\**\*.cs" })
+    $macOsSourceRemoves = @(Get-ProjectItemNodes -Project $project -Name "Compile" | Where-Object {
+        $_.GetAttribute("Remove").Replace('\', '/') -eq "MacOs/**/*.cs"
+    })
     Assert-True -Condition ($macOsSourceRemoves.Count -eq 1) -Message "Avalonia app project must exclude MacOs source from non-macOS target frameworks."
     Assert-True -Condition ((Get-ProjectNodeCondition $macOsSourceRemoves[0]) -eq "'`$(TargetFramework)' != 'net10.0-macos'") -Message "Avalonia app MacOs source exclusion must apply outside net10.0-macos."
 
@@ -483,9 +467,9 @@ function Test-AvaloniaProject {
         $include = [string]$reference.Include
         $portableInclude = $include.Replace('\', '/')
         $name = [System.IO.Path]::GetFileNameWithoutExtension($portableInclude)
-        $isPortableParityCaptureSupport = $include.Replace("/", "\").Equals(
-            "..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj",
-            [System.StringComparison]::OrdinalIgnoreCase)
+        $isPortableParityCaptureSupport = $portableInclude.Equals(
+            "../../tools/FreeX.ParityCapture.Support/FreeX.ParityCapture.Support.csproj",
+            [System.StringComparison]::Ordinal)
         Assert-True -Condition ($allowedProjectReferences -contains $name) -Message "Avalonia app ProjectReference '$include' is not in the portable allowlist."
         Assert-True -Condition ($include.IndexOf("FreeX.App.Host", [System.StringComparison]::OrdinalIgnoreCase) -lt 0) -Message "Avalonia app must not reference FreeX.App.Host."
         Assert-True -Condition ($include.IndexOf("FreeX.App.UI", [System.StringComparison]::OrdinalIgnoreCase) -lt 0) -Message "Avalonia app must not reference FreeX.App.UI."
@@ -1118,7 +1102,7 @@ function Test-MacOsWorkflow {
 function Test-SourceWiring {
     $sourceContracts = @(
         @{
-            Path = "src\FreeX.App.Avalonia\Program.cs"
+            Path = "src/FreeX.App.Avalonia/Program.cs"
             Markers = @(
                 "LocalAppDiagnostics.Create(",
                 "AppHelpInfo.GetVersionText(typeof(Program).Assembly)",
@@ -1137,7 +1121,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "tools\FreeX.Validation.Avalonia\RendererHost\Program.ValidationHost.cs"
+            Path = "tools/FreeX.Validation.Avalonia/RendererHost/Program.ValidationHost.cs"
             Markers = @(
                 "internal static int RunValidationToolHost(",
                 "Action<MainWindow.RendererValidationAccess, LocalAppDiagnostics?> externalStartupCoordinator",
@@ -1147,7 +1131,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "tools\FreeX.Validation.Avalonia\RendererHost\MainWindow.RendererValidationAccess.cs"
+            Path = "tools/FreeX.Validation.Avalonia/RendererHost/MainWindow.RendererValidationAccess.cs"
             Markers = @(
                 "internal sealed class RendererValidationAccess",
                 "internal NativeMenu? NativeDockMenu =>",
@@ -1156,7 +1140,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "tools\FreeX.Validation.Avalonia\RendererHost\MainWindow.DialogInspectionAccess.cs"
+            Path = "tools/FreeX.Validation.Avalonia/RendererHost/MainWindow.DialogInspectionAccess.cs"
             Markers = @(
                 "private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogInspection> inspectionCallback)",
                 "private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogInspection> inspectionCallback)",
@@ -1165,7 +1149,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "shared\Free.Shared.Shell.Avalonia\SisterAvaloniaApplicationStartupRunner.cs"
+            Path = "shared/Free.Shared.Shell.Avalonia/SisterAvaloniaApplicationStartupRunner.cs"
             Markers = @(
                 "spec.RegisterUnhandledExceptionHandlers();",
                 "spec.RegisterRibbonCommandFaultHandler(",
@@ -1177,7 +1161,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Avalonia\App.cs"
+            Path = "src/FreeX.App.Avalonia/App.cs"
             Markers = @(
                 "internal static LocalAppDiagnostics? Diagnostics { get; set; }",
                 "Diagnostics?.RecordEvent(`"app_ready`"",
@@ -1190,7 +1174,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "tools\FreeX.Validation.Avalonia\Program.cs"
+            Path = "tools/FreeX.Validation.Avalonia/Program.cs"
             Markers = @(
                 "ValidationHostCommandRouteExecutor.Run(",
                 "ValidationHostCommandRouteExecutor.Immediate(",
@@ -1203,7 +1187,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "shared\Free.Shared.AppServices\LocalAppDiagnostics.cs"
+            Path = "shared/Free.Shared.AppServices/LocalAppDiagnostics.cs"
             Markers = @(
                 "public class LocalAppDiagnostics",
                 "public static LocalAppDiagnostics Create(",
@@ -1236,7 +1220,7 @@ function Test-SourceWiring {
             )
         },
         @{
-            Path = "shared\Free.Shared.AppServices\AppCrashHandlers.cs"
+            Path = "shared/Free.Shared.AppServices/AppCrashHandlers.cs"
             Markers = @(
                 "AppDomain.CurrentDomain.UnhandledException +=",
                 "TaskScheduler.UnobservedTaskException +="
@@ -1244,7 +1228,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "shared\Free.Shared.AppServices\AppDiagnosticsFileStore.cs"
+            Path = "shared/Free.Shared.AppServices/AppDiagnosticsFileStore.cs"
             Markers = @(
                 "AllowedPropertyNames",
                 '"grantKind"',
@@ -1254,7 +1238,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Avalonia\WorkbookFileAccessService.cs"
+            Path = "src/FreeX.App.Avalonia/WorkbookFileAccessService.cs"
             Markers = @(
                 "Create(LocalAppDiagnostics? diagnostics = null)",
                 "new AvaloniaWorkbookFileAccessService(diagnostics)",
@@ -1278,7 +1262,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Avalonia\App.cs"
+            Path = "src/FreeX.App.Avalonia/App.cs"
             Markers = @(
                 "private const string ApplicationTitle = `"FreeX`";",
                 "Name = ApplicationTitle;"
@@ -1286,17 +1270,17 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Avalonia\MainWindow.cs"
+            Path = "src/FreeX.App.Avalonia/MainWindow.cs"
             AdditionalPathPattern = "MainWindow*.cs"
             AdditionalPaths = @(
-                "..\..\tools\FreeX.Validation.Avalonia\MacOsLaunchSmoke.cs",
+                "../../tools/FreeX.Validation.Avalonia/MacOsLaunchSmoke.cs",
                 "AboutDialog.cs",
                 "LegalNoticesDialog.cs",
                 "FormatCellsFillEditor.cs",
-                "..\FreeX.App.Presentation\Shell\WorkbookApplicationCommandRouter.cs",
-                "..\FreeX.App.Presentation\Shell\WorkbookApplicationWorkareaCommandEndpoint.cs",
-                "..\FreeX.App.Services\FormatCellsDialogPlanner.cs",
-                "..\..\shared\Free.Shared.Shell.Avalonia\AvaloniaLegalNoticesDialog.cs"
+                "../FreeX.App.Presentation/Shell/WorkbookApplicationCommandRouter.cs",
+                "../FreeX.App.Presentation/Shell/WorkbookApplicationWorkareaCommandEndpoint.cs",
+                "../FreeX.App.Services/FormatCellsDialogPlanner.cs",
+                "../../shared/Free.Shared.Shell.Avalonia/AvaloniaLegalNoticesDialog.cs"
             )
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
@@ -2246,7 +2230,7 @@ function Test-SourceWiring {
             # WorkbookPdfContentBuilder, then emits bytes via the shared PortablePdfWriter. The WinAnsi
             # byte-format guarantees (WinAnsiEncoding, EncodeWinAnsiByte, etc.) live in
             # shared/Free.Shared.Pdf/PortablePdfWriter.cs — see the block below.
-            Path = "src\FreeX.App.Services\PortablePdfDocumentExporter.cs"
+            Path = "src/FreeX.App.Services/PortablePdfDocumentExporter.cs"
             Markers = @(
                 "public static class PortablePdfDocumentExporter",
                 "PortablePdfTextCapabilityPlanner.CreatePlan(workbook, exportPlan, options)",
@@ -2258,7 +2242,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\WorkbookPdfContentBuilder.cs"
+            Path = "src/FreeX.App.Services/WorkbookPdfContentBuilder.cs"
             Markers = @(
                 "public static class WorkbookPdfContentBuilder",
                 "PortablePdfPageContentPlanner.CreatePlan(workbook, request)",
@@ -2270,7 +2254,7 @@ function Test-SourceWiring {
             # WinAnsi byte-format guarantees moved to the shared tier in the shared-pdf M2 refactor.
             # Assert here so the macOS fallback path (no-Skia export) can never silently regress to
             # non-WinAnsi or font-embedding that requires system DLLs.
-            Path = "shared\Free.Shared.Pdf\PortablePdfWriter.cs"
+            Path = "shared/Free.Shared.Pdf/PortablePdfWriter.cs"
             Markers = @(
                 "/Encoding /WinAnsiEncoding",
                 "EncodeWinAnsiHexText(normalized)",
@@ -2282,7 +2266,7 @@ function Test-SourceWiring {
         @{
             # File > Export to PDF prefers Skia (Unicode) but MUST keep the dependency-free WinAnsi
             # PortablePdfDocumentExporter as the fallback so the macOS bundle can export without Skia.
-            Path = "src\FreeX.App.Avalonia\Pdf\AvaloniaPdfDocumentExporter.cs"
+            Path = "src/FreeX.App.Avalonia/Pdf/AvaloniaPdfDocumentExporter.cs"
             Markers = @(
                 "public static class AvaloniaPdfDocumentExporter",
                 "PdfBackendFallbackExecutor.Execute(",
@@ -2292,7 +2276,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.Core.Calc\CellTextOrientationLayoutPlanner.cs"
+            Path = "src/FreeX.Core.Calc/CellTextOrientationLayoutPlanner.cs"
             Markers = @(
                 "public readonly record struct CellTextLayoutPoint",
                 "public readonly record struct CellTextLayoutRect",
@@ -2308,7 +2292,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Presentation\Shell\NativeMenuCatalog.cs"
+            Path = "src/FreeX.App.Presentation/Shell/NativeMenuCatalog.cs"
             Markers = @(
                 "public static IReadOnlyList<NativeMenuTopLevelPlan> TopLevelMenus",
                 "new(NativeMenuTopLevelId.File, `"File`")",
@@ -2394,7 +2378,7 @@ function Test-SourceWiring {
             )
         },
         @{
-            Path = "tools\FreeX.Validation.Avalonia\MacOsLaunchSmoke.cs"
+            Path = "tools/FreeX.Validation.Avalonia/MacOsLaunchSmoke.cs"
             Markers = @(
                 "public const string Argument = `"--macos-launch-smoke`";",
                 "public const string DiagnosticsDirectoryArgument = `"--macos-launch-smoke-diagnostics-dir`";",
@@ -2820,7 +2804,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\WorkbookSessionFactory.cs"
+            Path = "src/FreeX.App.Services/WorkbookSessionFactory.cs"
             Markers = @(
                 "public WorkbookSession CreateNew(",
                 "WorkbookFactory.Create(options)",
@@ -2831,7 +2815,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\WorkbookSession.cs"
+            Path = "src/FreeX.App.Services/WorkbookSession.cs"
             Markers = @(
                 "public WorkbookCellEditResult AddSheet(SheetId? insertBeforeSheetId = null)",
                 "ExecuteRepeatableCommandPreservingSelection(() =>",
@@ -3004,7 +2988,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\FlashFillRangePlanner.cs"
+            Path = "src/FreeX.App.Services/FlashFillRangePlanner.cs"
             Markers = @(
                 "public readonly record struct FlashFillCommandPlan(",
                 "public FlashFillCommand CreateCommand(SheetId sheetId)",
@@ -3014,7 +2998,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.Core.Commands\FindReplaceService.cs"
+            Path = "src/FreeX.Core.Commands/FindReplaceService.cs"
             Markers = @(
                 "public enum FindResultTarget",
                 "ThreadedCommentReply",
@@ -3024,7 +3008,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.Core.Commands\FindReplaceSearchPlanner.cs"
+            Path = "src/FreeX.Core.Commands/FindReplaceSearchPlanner.cs"
             Markers = @(
                 "public readonly record struct SearchText(",
                 "comment.Replies[replyIndex].Text",
@@ -3033,7 +3017,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\WorkbookReferenceNavigator.cs"
+            Path = "src/FreeX.App.Services/WorkbookReferenceNavigator.cs"
             Markers = @(
                 "public static class WorkbookReferenceNavigator",
                 "public static bool TryParseAddress(string text, SheetId sheetId, out CellAddress address)",
@@ -3048,7 +3032,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "shared\Free.Shared.AppServices\LocalFilePath.cs"
+            Path = "shared/Free.Shared.AppServices/LocalFilePath.cs"
             Markers = @(
                 "using Free.Shared.IO;",
                 "public static class LocalFilePath",
@@ -3069,7 +3053,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\OpenRecentWorkbookMenuPlanner.cs"
+            Path = "src/FreeX.App.Services/OpenRecentWorkbookMenuPlanner.cs"
             Markers = @(
                 "public sealed record OpenRecentWorkbookMenuItemPlan(",
                 "public sealed record OpenRecentWorkbookMenuPlan(",
@@ -3097,7 +3081,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "shared\Free.Shared.AppServices\DocumentSharePlanner.cs"
+            Path = "shared/Free.Shared.AppServices/DocumentSharePlanner.cs"
             Markers = @(
                 "public enum DocumentShareActionPlanKind",
                 "ShareSheet,",
@@ -3122,7 +3106,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\WorkbookViewportScrollPlanner.cs"
+            Path = "src/FreeX.App.Services/WorkbookViewportScrollPlanner.cs"
             Markers = @(
                 "public readonly record struct WorkbookViewportScrollAxis(",
                 "public readonly record struct WorkbookViewportScrollState(",
@@ -3142,7 +3126,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\FormatCellsCompactPlanner.cs"
+            Path = "src/FreeX.App.Services/FormatCellsCompactPlanner.cs"
             Markers = @(
                 "public sealed record FormatCellsCompactRequest(",
                 "bool? DoubleUnderline = null",
@@ -3172,7 +3156,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\CellBorderPresetPlanner.cs"
+            Path = "src/FreeX.App.Services/CellBorderPresetPlanner.cs"
             Markers = @(
                 "public enum CellBorderPreset",
                 "CellBorderPreset.All",
@@ -3190,7 +3174,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\CellMergePlanner.cs"
+            Path = "src/FreeX.App.Services/CellMergePlanner.cs"
             Markers = @(
                 "public static class CellMergePlanner",
                 "public static bool IsSelectionMerged(Sheet sheet, GridRange range)",
@@ -3205,7 +3189,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "shared\Free.Shared.AppServices\RecentFilesStore.cs"
+            Path = "shared/Free.Shared.AppServices/RecentFilesStore.cs"
             Markers = @(
                 "public sealed class RecentFileEntry",
                 "public sealed class RecentFilesStore",
@@ -3218,7 +3202,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "shared\Free.Shared.AppServices\AtomicFileWriter.cs"
+            Path = "shared/Free.Shared.AppServices/AtomicFileWriter.cs"
             Markers = @(
                 "public static class AtomicFileWriter",
                 "fileStream.Flush(flushToDisk: true);",
@@ -3227,7 +3211,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "shared\Free.Shared.AppServices\AtomicExportExecutor.cs"
+            Path = "shared/Free.Shared.AppServices/AtomicExportExecutor.cs"
             Markers = @(
                 "public sealed class AtomicExportExecutor",
                 "AtomicFileWriter.CreateTempLease",
@@ -3244,7 +3228,7 @@ function Test-SourceWiring {
             )
         },
         @{
-            Path = "tools\FreeX.Validation.Avalonia\PackagingSmokeValidation.cs"
+            Path = "tools/FreeX.Validation.Avalonia/PackagingSmokeValidation.cs"
             Markers = @(
                 "private const string RoundTripExtension = `".fxl`";",
                 "_sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth, includeObjects: true)",
@@ -3264,7 +3248,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\PortPreviewWorkbookFactory.cs"
+            Path = "src/FreeX.App.Services/PortPreviewWorkbookFactory.cs"
             Markers = @(
                 "public const string PreviewShapeName = `"Port readiness shape`";",
                 "public const string PreviewTextBoxName = `"Port preview note`";",
@@ -3278,7 +3262,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.Core.IO\NativeJsonAdapter.cs"
+            Path = "src/FreeX.Core.IO/NativeJsonAdapter.cs"
             Markers = @(
                 "public string Extension => `".fxl`";",
                 "public string FormatName => `"FreeX Workbook`";"

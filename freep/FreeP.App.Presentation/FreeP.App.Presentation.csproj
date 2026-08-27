@@ -20,28 +20,28 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
-    <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
-    <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
+    <ProjectReference Include="../FreeP.App.Localization/FreeP.App.Localization.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.IO/Free.Shared.IO.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme/Free.Shared.Theme.csproj" />
+    <ProjectReference Include="../FreeP.Core.IO/FreeP.Core.IO.csproj" />
+    <ProjectReference Include="../FreeP.Core.Model/FreeP.Core.Model.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- One renderer-independent embedded copy keeps Legal Notices available without network or
          reliance on files beside the executable. The host projects also import FamilyLegalBundle.props
          so the same source documents remain visible in packaged distributions. -->
-    <EmbeddedResource Include="..\..\LICENSE" LogicalName="FreeP.Legal.ProjectLicense.txt" />
-    <EmbeddedResource Include="..\..\docs\legal\legal-notices.md" LogicalName="FreeP.Legal.LegalNotices.md" />
-    <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeP.Legal.PrivacyNotice.md" />
-    <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeP.Legal.ThirdPartyNotices.md" />
-    <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeP.Legal.ThirdPartyLicenses.md" />
+    <EmbeddedResource Include="../../LICENSE" LogicalName="FreeP.Legal.ProjectLicense.txt" />
+    <EmbeddedResource Include="../../docs/legal/legal-notices.md" LogicalName="FreeP.Legal.LegalNotices.md" />
+    <EmbeddedResource Include="../../docs/legal/privacy.md" LogicalName="FreeP.Legal.PrivacyNotice.md" />
+    <EmbeddedResource Include="../../THIRD_PARTY_NOTICES.md" LogicalName="FreeP.Legal.ThirdPartyNotices.md" />
+    <EmbeddedResource Include="../../THIRD_PARTY_LICENSES.md" LogicalName="FreeP.Legal.ThirdPartyLicenses.md" />
   </ItemGroup>
 
 </Project>

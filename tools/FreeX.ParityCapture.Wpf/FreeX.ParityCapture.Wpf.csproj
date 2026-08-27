@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="..\ToolProjects.props" />
+  <Import Project="../ToolProjects.props" />
   <PropertyGroup>
     <AssemblyName>FreeX.ParityCapture.Wpf</AssemblyName>
     <ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeX.ico</ApplicationIcon>
@@ -29,36 +29,36 @@
       state. Linking the WPF renderer remains narrower than exposing that state through hundreds of
       production accessors; capture startup and state still live exclusively under this tool.
     -->
-    <Compile Include="..\..\src\FreeX.App.Host\**\*.cs"
-             Exclude="..\..\src\FreeX.App.Host\bin\**;..\..\src\FreeX.App.Host\obj\**"
+    <Compile Include="../../src/FreeX.App.Host/**/*.cs"
+             Exclude="../../src/FreeX.App.Host/bin/**;../../src/FreeX.App.Host/obj/**"
              LinkBase="Renderer" />
-    <Compile Include="Capture\**\*.cs" />
-    <Page Include="..\..\src\FreeX.App.Host\**\*.xaml"
+    <Compile Include="Capture/**/*.cs" />
+    <Page Include="../../src/FreeX.App.Host/**/*.xaml"
           Link="%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Localization\FreeX.App.Localization.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
-    <ProjectReference Include="..\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.UI\FreeX.App.UI.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Wpf\Free.Shared.Pdf.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Calc/FreeX.Core.Calc.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Commands/FreeX.Core.Commands.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
+    <ProjectReference Include="../../src/FreeX.Ribbon.Definitions/FreeX.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Services/FreeX.App.Services.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Localization/FreeX.App.Localization.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Presentation/FreeX.App.Presentation.csproj" />
+    <ProjectReference Include="../FreeX.ParityCapture.Support/FreeX.ParityCapture.Support.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.UI/FreeX.App.UI.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices.Windows/Free.Shared.AppServices.Windows.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf.Wpf/Free.Shared.Pdf.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme.Wpf/Free.Shared.Theme.Wpf.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -75,9 +75,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico" Link="Resources\FreeX.ico" />
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
-             Link="Resources\FreeX.ico"
+    <Resource Include="../../shared/Free.Shared.Shell/Resources/FreeX.ico" Link="Resources/FreeX.ico" />
+    <Content Include="../../shared/Free.Shared.Shell/Resources/FreeX.ico"
+             Link="Resources/FreeX.ico"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

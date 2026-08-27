@@ -11,11 +11,11 @@
   <!-- Strip non-English satellite resx files from the tester-release single-file build to
        keep the artifact small. Propagated from FreeX.App.Host via -p:FreeXTesterReleaseEnglishOnly=true. -->
   <ItemGroup Condition="'$(FreeXTesterReleaseEnglishOnly)' == 'true'">
-    <EmbeddedResource Remove="Resources\Strings.*.resx" />
+    <EmbeddedResource Remove="Resources/Strings.*.resx" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

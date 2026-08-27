@@ -15,13 +15,13 @@ function Test-IsIncludedProjectPath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
 
     foreach ($prefix in $ExcludedProjectPathPrefixes) {
-        if ($RelativePath.StartsWith((ConvertTo-ToolNormalizedRelativePath $prefix), [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($RelativePath.StartsWith((ConvertTo-ToolNormalizedRelativePath $prefix), [System.StringComparison]::Ordinal)) {
             return $false
         }
     }
 
     foreach ($prefix in $ProjectPathPrefixes) {
-        if ($RelativePath.StartsWith((ConvertTo-ToolNormalizedRelativePath $prefix), [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($RelativePath.StartsWith((ConvertTo-ToolNormalizedRelativePath $prefix), [System.StringComparison]::Ordinal)) {
             return $true
         }
     }
@@ -69,7 +69,7 @@ $escapedSolutionProjectPaths = @(
         Where-Object {
             $projectPath = if ([System.IO.Path]::IsPathRooted($_)) { $_ } else { Join-Path $solutionRoot $_ }
             $resolvedProjectPath = [System.IO.Path]::GetFullPath($projectPath)
-            -not $resolvedProjectPath.StartsWith($solutionRootPath, [System.StringComparison]::OrdinalIgnoreCase)
+            -not (Test-ToolPathWithinRoot -Path $resolvedProjectPath -RootPath $solutionRootPath)
         }
 )
 

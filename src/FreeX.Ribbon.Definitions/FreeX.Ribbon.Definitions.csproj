@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
   </ItemGroup>
 
   <!--
@@ -18,7 +18,7 @@
     Linux/macOS show the identical glyphs as Windows.
   -->
   <ItemGroup>
-    <Content Include="Resources\CommandIconsSvg\**\*.svg">
+    <Content Include="Resources/CommandIconsSvg/**/*.svg">
       <Link>Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

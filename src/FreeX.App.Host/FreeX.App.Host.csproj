@@ -1,30 +1,30 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup><FreeBrand Condition="'$(FreeBrand)' == ''">FreeX</FreeBrand></PropertyGroup>
-  <Import Project="..\..\shared\Free.Shared.Shell\BrandAssets.props" />
+  <Import Project="../../shared/Free.Shared.Shell/BrandAssets.props" />
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <ProjectReference Include="..\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
-    <ProjectReference Include="..\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
-    <ProjectReference Include="..\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
-    <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
-    <ProjectReference Include="..\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
-    <ProjectReference Include="..\FreeX.App.Services\FreeX.App.Services.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
+    <ProjectReference Include="../FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
+    <ProjectReference Include="../FreeX.Core.Calc/FreeX.Core.Calc.csproj" />
+    <ProjectReference Include="../FreeX.Core.Commands/FreeX.Core.Commands.csproj" />
+    <ProjectReference Include="../FreeX.Core.IO/FreeX.Core.IO.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
+    <ProjectReference Include="../FreeX.Ribbon.Definitions/FreeX.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="../FreeX.App.Services/FreeX.App.Services.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
     <!-- Single source of the pseudo-localization Expand() rules (also used by the portable catalog). -->
-    <ProjectReference Include="..\FreeX.App.Localization\FreeX.App.Localization.csproj" />
-    <ProjectReference Include="..\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
-    <ProjectReference Include="..\FreeX.App.UI\FreeX.App.UI.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Wpf\Free.Shared.Pdf.Wpf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
+    <ProjectReference Include="../FreeX.App.Localization/FreeX.App.Localization.csproj" />
+    <ProjectReference Include="../FreeX.App.Presentation/FreeX.App.Presentation.csproj" />
+    <ProjectReference Include="../FreeX.App.UI/FreeX.App.UI.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices.Windows/Free.Shared.AppServices.Windows.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf.Wpf/Free.Shared.Pdf.Wpf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme.Wpf/Free.Shared.Theme.Wpf.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -41,7 +41,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="$(BrandWindowsIconPath)" Link="Resources\$(BrandWindowsIconFileName)" />
+    <Resource Include="$(BrandWindowsIconPath)" Link="Resources/$(BrandWindowsIconFileName)" />
   </ItemGroup>
 
   <!-- Compile App.xaml as a Page so the WPF SDK does not generate its own Main; the explicit
@@ -52,7 +52,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreeXTesterReleaseEnglishOnly)' == 'true'">
-    <EmbeddedResource Remove="Resources\Strings.*.resx" />
+    <EmbeddedResource Remove="Resources/Strings.*.resx" />
   </ItemGroup>
 
   <!-- FreeX.Legal.* notice resources are embedded once in FreeX.App.Services (referenced above);
@@ -73,7 +73,7 @@
 
   <ItemGroup>
     <Content Include="$(BrandWindowsIconPath)"
-             Link="Resources\$(BrandWindowsIconFileName)"
+             Link="Resources/$(BrandWindowsIconFileName)"
              CopyToOutputDirectory="PreserveNewest" />
     <!-- CommandIconsSvg now live in FreeX.Ribbon.Definitions (shared with the Avalonia app) and are
          copied to this app's output transitively at Resources\CommandIconsSvg\ — the same path

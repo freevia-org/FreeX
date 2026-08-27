@@ -9,13 +9,13 @@
     <StartupObject>FreeX.Validation.Avalonia.Program</StartupObject>
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
-  <Import Project="..\ToolProjects.props" />
+  <Import Project="../ToolProjects.props" />
 
   <ItemGroup>
     <!-- These partials belong to the isolated renderer variant, not the tool assembly itself. -->
-    <Compile Remove="RendererHost\**\*.cs" />
-    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj"
+    <Compile Remove="RendererHost/**/*.cs" />
+    <ProjectReference Include="../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj"
                       AdditionalProperties="FreeXValidationHost=true" />
   </ItemGroup>
 

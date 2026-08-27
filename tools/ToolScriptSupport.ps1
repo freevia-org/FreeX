@@ -12,12 +12,65 @@ function Test-ToolIsWindows {
     return [System.IO.Path]::DirectorySeparatorChar -eq [char]92
 }
 
+function Test-ToolIsLinux {
+    return [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Linux)
+}
+
+function Test-ToolIsMacOS {
+    return [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::OSX)
+}
+
 function Get-ToolPathComparison {
     if (Test-ToolIsWindows) {
         return [System.StringComparison]::OrdinalIgnoreCase
     }
 
     return [System.StringComparison]::Ordinal
+}
+
+function Get-ToolPathComparer {
+    if (Test-ToolIsWindows) {
+        return [System.StringComparer]::OrdinalIgnoreCase
+    }
+
+    return [System.StringComparer]::Ordinal
+}
+
+function Test-ToolPathEquals {
+    param(
+        [Parameter(Mandatory = $true)][string]$Left,
+        [Parameter(Mandatory = $true)][string]$Right,
+        [switch]$ResolveExisting
+    )
+
+    $leftPath = if ($ResolveExisting) { Resolve-ToolExistingPath -Path $Left } else { Resolve-ToolFullPath -Path $Left }
+    $rightPath = if ($ResolveExisting) { Resolve-ToolExistingPath -Path $Right } else { Resolve-ToolFullPath -Path $Right }
+    return $leftPath.Equals($rightPath, (Get-ToolPathComparison))
+}
+
+function Test-ToolPathWithinRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$RootPath,
+        [switch]$AllowRoot,
+        [switch]$ResolveExisting
+    )
+
+    $fullRoot = if ($ResolveExisting) { Resolve-ToolExistingPath -Path $RootPath } else { Resolve-ToolFullPath -Path $RootPath }
+    $fullPath = if ($ResolveExisting) { Resolve-ToolExistingPath -Path $Path } else { Resolve-ToolFullPath -Path $Path -BasePath $fullRoot }
+    $trimmedRoot = $fullRoot.TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar)
+    $comparison = Get-ToolPathComparison
+
+    if ($AllowRoot -and $fullPath.Equals($trimmedRoot, $comparison)) {
+        return $true
+    }
+
+    $rootPrefix = $trimmedRoot + [System.IO.Path]::DirectorySeparatorChar
+    return $fullPath.StartsWith($rootPrefix, $comparison)
 }
 
 function Get-ToolPowerShellPath {
@@ -523,12 +576,12 @@ function ConvertTo-ToolRepoRelativePath {
         return ""
     }
 
-    $rootPrefix = $trimmedRoot + [System.IO.Path]::DirectorySeparatorChar
-    if ($fullPath.StartsWith($rootPrefix, $comparison)) {
-        return ConvertTo-ToolNormalizedRelativePath -Path $fullPath.Substring($rootPrefix.Length)
+    if (-not (Test-ToolPathWithinRoot -Path $fullPath -RootPath $trimmedRoot)) {
+        throw "Path '$fullPath' is outside repository root '$trimmedRoot'."
     }
 
-    throw "Path '$fullPath' is outside repository root '$trimmedRoot'."
+    $rootPrefix = $trimmedRoot + [System.IO.Path]::DirectorySeparatorChar
+    return ConvertTo-ToolNormalizedRelativePath -Path $fullPath.Substring($rootPrefix.Length)
 }
 
 function Read-ToolJson {

@@ -154,7 +154,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         supportedOsVersion.Value.Trim().Should().Be("12.0");
 
         var macOsCompileRemove = PortableBoundaryGuard.ProjectItemElements(project, "Compile")
-            .Where(element => element.Attribute("Remove")?.Value == @"MacOs\**\*.cs")
+            .Where(element => element.Attribute("Remove")?.Value == "MacOs/**/*.cs")
             .Should()
             .ContainSingle("native macOS source must be excluded from every non-macOS target framework")
             .Subject;

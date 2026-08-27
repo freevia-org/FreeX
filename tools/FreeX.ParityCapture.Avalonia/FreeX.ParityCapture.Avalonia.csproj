@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="..\ToolProjects.props" />
+  <Import Project="../ToolProjects.props" />
   <PropertyGroup>
     <AssemblyName>FreeX.ParityCapture.Avalonia</AssemblyName>
     <ApplicationTitle>FreeX Parity Capture</ApplicationTitle>
@@ -11,15 +11,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\src\FreeX.App.Avalonia\**\*.cs"
-             Exclude="..\..\src\FreeX.App.Avalonia\bin\**;..\..\src\FreeX.App.Avalonia\obj\**;..\..\src\FreeX.App.Avalonia\MacOs\**\*.cs;..\..\src\FreeX.App.Avalonia\Program.cs"
+    <Compile Include="../../src/FreeX.App.Avalonia/**/*.cs"
+             Exclude="../../src/FreeX.App.Avalonia/bin/**;../../src/FreeX.App.Avalonia/obj/**;../../src/FreeX.App.Avalonia/MacOs/**/*.cs;../../src/FreeX.App.Avalonia/Program.cs"
              LinkBase="Renderer" />
-    <Compile Include="..\FreeX.Validation.Avalonia\RendererHost\MainWindow.RendererValidationAccess.cs"
-             Link="Renderer\MainWindow.RendererValidationAccess.cs" />
-    <Compile Include="..\FreeX.Validation.Avalonia\RendererHost\MainWindow.DialogInspectionAccess.cs"
-             Link="Renderer\MainWindow.DialogInspectionAccess.cs" />
-    <Compile Include="TestSupport\**\*.cs" />
-    <Compile Include="Capture\**\*.cs" />
+    <Compile Include="../FreeX.Validation.Avalonia/RendererHost/MainWindow.RendererValidationAccess.cs"
+             Link="Renderer/MainWindow.RendererValidationAccess.cs" />
+    <Compile Include="../FreeX.Validation.Avalonia/RendererHost/MainWindow.DialogInspectionAccess.cs"
+             Link="Renderer/MainWindow.DialogInspectionAccess.cs" />
+    <Compile Include="TestSupport/**/*.cs" />
+    <Compile Include="Capture/**/*.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -35,25 +35,25 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FreeX.App.Localization\FreeX.App.Localization.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
-    <ProjectReference Include="..\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing.Avalonia\Free.Shared.Drawing.Avalonia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Avalonia\Free.Shared.Theme.Avalonia.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Localization/FreeX.App.Localization.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Presentation/FreeX.App.Presentation.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Services/FreeX.App.Services.csproj" />
+    <ProjectReference Include="../FreeX.ParityCapture.Support/FreeX.ParityCapture.Support.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Calc/FreeX.Core.Calc.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Commands/FreeX.Core.Commands.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.IO/FreeX.Core.IO.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing.Avalonia/Free.Shared.Drawing.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <ProjectReference Include="../../src/FreeX.Ribbon.Definitions/FreeX.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Ribbon.Avalonia/Free.Shared.Ribbon.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Theme.Avalonia/Free.Shared.Theme.Avalonia.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -65,8 +65,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
-             Link="Resources\FreeX.ico"
+    <Content Include="../../shared/Free.Shared.Shell/Resources/FreeX.ico"
+             Link="Resources/FreeX.ico"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

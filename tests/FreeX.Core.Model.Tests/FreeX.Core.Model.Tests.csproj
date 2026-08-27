@@ -22,15 +22,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="../CommandTestInfrastructure/TestCommandContext.cs" Link="TestCommandContext.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
-    <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
-    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Model/FreeX.Core.Model.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Presentation/FreeX.App.Presentation.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
+    <ProjectReference Include="../../src/FreeX.Core.Commands/FreeX.Core.Commands.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
   </ItemGroup>
 
 </Project>
