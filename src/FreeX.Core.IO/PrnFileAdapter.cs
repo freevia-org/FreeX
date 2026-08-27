@@ -51,7 +51,11 @@ namespace FreeX.Core.IO;
 /// re-separating on whitespace is how Excel re-imports one.
 /// </para>
 /// <para>
-/// Encoding: UTF-8 without BOM (matching Excel's plain "Text" Save-As types).
+/// Encoding: the OS's current-culture ANSI code page, no byte-order mark (matching Excel's plain
+/// "Text" Save-As types, which predate Unicode -- see
+/// <see cref="DelimitedTextWorkbookWriter.ResolveAnsiEncoding"/>). Loading mirrors this: a strict
+/// UTF-8 decode is tried first (so genuinely UTF-8/BOM-marked files still round-trip), falling
+/// back to the same current-culture ANSI resolution on decode failure.
 /// </para>
 /// </remarks>
 public sealed class PrnFileAdapter : IFileAdapter
@@ -75,10 +79,6 @@ public sealed class PrnFileAdapter : IFileAdapter
 
 internal static class PrnWorkbookWriter
 {
-    /// <summary>UTF-8 without BOM — matches Excel's plain text Save-As output.</summary>
-    private static readonly Encoding Utf8NoBom =
-        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-
     public static void Save(Workbook workbook, Stream stream)
     {
         SaveStreamPreparer.TruncateFromCurrentPosition(stream);
@@ -155,7 +155,12 @@ internal static class PrnWorkbookWriter
             colRightAlign[c] = colHasContent[c] && !colHasLeftAlignContent[c];
 
         // --- Pass 2: write rows ---
-        using var writer = new StreamWriter(stream, Utf8NoBom, leaveOpen: true);
+        // Excel's "Formatted Text (Space delimited)" Save-As is part of the same pre-Unicode
+        // legacy-text family as its plain CSV/TXT Save-As types, which write the OS's current-
+        // culture ANSI code page rather than UTF-8 (see DelimitedTextWorkbookWriter.ResolveAnsiEncoding).
+        // Writing UTF-8 here would mojibake non-ASCII text when the .prn is later reopened by real
+        // Excel, which assumes ANSI for this format rather than sniffing UTF-8.
+        using var writer = new StreamWriter(stream, DelimitedTextWorkbookWriter.ResolveAnsiEncoding(), leaveOpen: true);
 
         for (var r = 0; r < rowCount; r++)
         {
@@ -456,8 +461,14 @@ internal static class PrnWorkbookReader
         }
         catch (DecoderFallbackException)
         {
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-            return Encoding.GetEncoding(1252).GetString(bytes);
+            // Mirror DelimitedTextWorkbookReader.DecodeText's fallback (R111): a plain, BOM-less
+            // .prn that isn't valid UTF-8 was almost certainly produced -- by this app or by real
+            // Excel's "Formatted Text (Space delimited)" Save-As -- using the OS's current-culture
+            // ANSI code page (e.g. 1252 on English Windows, 932/Shift-JIS on Japanese, 1251/Cyrillic
+            // on Russian). A hard-coded Windows-1252 fallback regardless of locale would mojibake
+            // any non-Western-European Windows install's own files. Share the exact same resolution
+            // the CSV/TXT sibling uses.
+            return DelimitedTextWorkbookWriter.ResolveAnsiEncoding().GetString(bytes);
         }
     }
 }

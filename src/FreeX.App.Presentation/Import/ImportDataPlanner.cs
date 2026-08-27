@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 using FreeX.App.Presentation.TextToColumns;
@@ -8,7 +9,8 @@ namespace FreeX.App.Presentation.Import;
 /// Portable, UI-free planner for the Get Data / From Text-CSV import flow. It owns every non-UI decision a
 /// host shell would otherwise duplicate: resolving an <see cref="ImportEncodingKind"/> to a concrete
 /// <see cref="Encoding"/> and decoding the raw file bytes (honouring a byte-order mark and falling back
-/// from UTF-8 to Windows-1252, matching the delimited-text reader), resolving an
+/// from UTF-8 to the OS's current-culture ANSI code page, matching the delimited-text reader),
+    /// resolving an
 /// <see cref="ImportDelimiterKind"/> to a single delimiter character (including sniffing one from the
 /// sampled text), and projecting a bounded preview of how the text would split. Field splitting reuses
 /// <see cref="TextToColumnsPlanner.Split"/> so the import and Text-to-Columns share one splitter. The host
@@ -113,8 +115,12 @@ public static class ImportDataPlanner
     /// <summary>
     /// Decodes the raw file bytes to text using the chosen encoding. <see cref="ImportEncodingKind.Detect"/>
     /// honours a leading byte-order mark (UTF-8/UTF-16/UTF-32) and otherwise tries strict UTF-8, falling
-    /// back to Windows-1252 — the same precedence the delimited-text reader uses — so a "detect" import and
-    /// a plain file open agree. An explicit encoding is applied verbatim (after stripping its own BOM).
+    /// back to the OS's current-culture ANSI code page (e.g. 1252 on English Windows, 932/Shift-JIS on
+    /// Japanese, 1251/Cyrillic on Russian, 936/GBK on Chinese) — the same precedence the delimited-text
+    /// reader's fallback uses (<c>DelimitedTextWorkbookReader.DecodeText</c> /
+    /// <c>DelimitedTextWorkbookWriter.ResolveAnsiEncoding</c>) — so a "detect" import and a plain file open
+    /// agree on every locale, not only Western-European ones. An explicit encoding is applied verbatim
+    /// (after stripping its own BOM).
     /// </summary>
     public static string DecodeBytes(ReadOnlySpan<byte> bytes, ImportEncodingKind kind)
     {
@@ -131,7 +137,7 @@ public static class ImportDataPlanner
         }
         catch (DecoderFallbackException)
         {
-            return GetCodePage(1252).GetString(bytes);
+            return ResolveDetectAnsiFallbackEncoding().GetString(bytes);
         }
     }
 
@@ -314,5 +320,25 @@ public static class ImportDataPlanner
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         return Encoding.GetEncoding(codePage);
+    }
+
+    /// <summary>
+    /// Resolves the non-UTF-8 fallback encoding for <see cref="ImportEncodingKind.Detect"/>: the OS's
+    /// current-culture ANSI code page (e.g. 1252 on English Windows, 932/Shift-JIS on Japanese, 1251 on
+    /// Russian, 936 on Chinese). This mirrors <c>DelimitedTextWorkbookWriter.ResolveAnsiEncoding</c> /
+    /// <c>DelimitedTextWorkbookReader.DecodeText</c>'s fallback (R111) so a "detect" Get Data import and a
+    /// plain File&gt;Open of the same bytes agree on every locale instead of only Western-European ones.
+    /// Falls back to Windows-1252 itself if the culture's reported code page turns out to be unsupported.
+    /// </summary>
+    private static Encoding ResolveDetectAnsiFallbackEncoding()
+    {
+        try
+        {
+            return GetCodePage(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return GetCodePage(1252);
+        }
     }
 }

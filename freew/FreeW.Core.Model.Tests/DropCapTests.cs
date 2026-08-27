@@ -55,6 +55,42 @@ public class DropCapTests
     }
 
     [Fact]
+    public void ApplyDropCap_MultiCharacterRun_PreservesStyleIdOnCapAndRemainder()
+    {
+        var doc = new TextDocument();
+        var run = new Run("Hello world") { StyleId = "Emphasis" };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(run);
+        doc.Blocks.Add(paragraph);
+
+        DropCap.ApplyDropCap(paragraph);
+
+        paragraph.Runs.Should().HaveCount(2);
+        paragraph.Runs[0].Text.Should().Be("H");
+        paragraph.Runs[0].StyleId.Should().Be("Emphasis",
+            "the drop-cap letter must keep the character style the rest of the run carries");
+        paragraph.Runs[1].Text.Should().Be("ello world");
+        paragraph.Runs[1].StyleId.Should().Be("Emphasis");
+    }
+
+    [Fact]
+    public void ApplyDropCap_MultiCharacterRun_StillPreservesHyperlinkOnCap()
+    {
+        // Sibling no-regression check: the hyperlink-preservation behaviour this helper already
+        // had (HyperlinkUrl/HyperlinkAnchor copied onto the split-off cap run) must stay intact.
+        var doc = new TextDocument();
+        var run = new Run("Hello world") { HyperlinkUrl = "https://example.com" };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(run);
+        doc.Blocks.Add(paragraph);
+
+        DropCap.ApplyDropCap(paragraph);
+
+        paragraph.Runs[0].HyperlinkUrl.Should().Be("https://example.com");
+        paragraph.Runs[1].HyperlinkUrl.Should().Be("https://example.com");
+    }
+
+    [Fact]
     public void ApplyDropCap_InMarginRetainsDistinctLayoutIntent()
     {
         var paragraph = new Paragraph("Margin");

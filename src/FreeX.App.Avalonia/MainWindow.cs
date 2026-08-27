@@ -12422,19 +12422,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     internal void SelectClickedCell(CellAddress address, KeyModifiers modifiers)
     {
+        // A click onto a locked cell on a protected sheet with "Select locked cells" unchecked
+        // must be refused outright -- Excel neither moves the active cell there nor opens it for
+        // editing (R75-services-protection-security-4-1), and a Shift-click/F8-extend click must
+        // not be allowed to pull the highlighted selection onto that locked cell either
+        // (matching the WPF host's TryHandleCellAreaExtendClick /
+        // R87-commands-protection-lock-5-1). Checked once, up front, so it gates both the
+        // extend branch below and the plain-click branch further down.
+        if (!CommandGuards.CanSelectCell(_session.Workbook, _session.ActiveSheet, address))
+            return;
+
         if (modifiers.HasFlag(KeyModifiers.Shift) || _keyboardSelectionMode == ExcelSelectionMode.Extend)
         {
             SelectRange(address);
             return;
         }
-
-        // A plain click onto a locked cell on a protected sheet with "Select locked cells"
-        // unchecked must be refused outright -- Excel neither moves the active cell there nor
-        // opens it for editing (R75-services-protection-security-4-1). Shift-click/F8 extend
-        // above is left ungated for now; CommandGuards.CanSelectCell already exists for exactly
-        // this check (it returns true unconditionally on an unprotected sheet).
-        if (!CommandGuards.CanSelectCell(_session.Workbook, _session.ActiveSheet, address))
-            return;
 
         // Ctrl+click (without Shift, checked above) adds the clicked cell as a disjoint SECOND
         // (or later) selection area instead of collapsing the selection down to just this cell --
@@ -26730,11 +26732,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Arrow/Tab/Enter navigation on a protected sheet must SKIP a locked cell it would
         // otherwise land the active cell on (when "Select locked cells" is unchecked), stepping
         // further in the same direction of travel until a selectable cell is found -- matching
-        // Excel -- rather than moving onto it (R75-services-protection-security-4-1). Only
-        // applies when this navigation will actually MOVE the active cell (not extend a range).
-        bool willMoveActiveCell = !(extendSelection && !moveOnly);
-        if (willMoveActiveCell &&
-            sheet is { IsProtected: true })
+        // Excel -- rather than moving onto it (R75-services-protection-security-4-1). This also
+        // applies to Shift/F8 "extend selection" (extendSelection && !moveOnly): the extending
+        // end of the selection must not land on/pass a locked cell either, matching the WPF
+        // host's willSetActiveCell || willExtendSelection gating
+        // (MainWindow.Selection.cs, R87-commands-protection-lock-5-1). Avalonia's keyboard
+        // navigation has no Add-selection-mode branch (unlike WPF's), so unlike WPF there is no
+        // case here where the guard should be skipped -- it always applies on a protected sheet.
+        if (sheet is { IsProtected: true })
         {
             var adjustedTarget = ExcelWorksheetNavigationPlanner.ResolveProtectedSheetTarget(
                 _session.Workbook,

@@ -76,7 +76,12 @@ public static class DropCap
         var capRun = new Run(first.Text[..1], capFormatting)
         {
             HyperlinkUrl = first.HyperlinkUrl,
-            HyperlinkAnchor = first.HyperlinkAnchor
+            HyperlinkAnchor = first.HyperlinkAnchor,
+            // r163 wave B taught the canonical run copiers (DocumentModelCloner.CloneRunCore,
+            // RevisionEditPlanner.CloneRunWithText, CommentCommands.CloneRun) to carry a run's
+            // character-style link across a split; this hand-written composer needs the same fix
+            // or the drop-cap letter silently unlinks from its style.
+            StyleId = first.StyleId
         };
         first.Text = first.Text[1..];
         paragraph.Runs.Insert(firstTextIndex, capRun);

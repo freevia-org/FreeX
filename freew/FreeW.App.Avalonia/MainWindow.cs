@@ -271,7 +271,15 @@ public sealed partial class MainWindow : Window
             _fileWorkflow.Workflow,
             _documentPersistence,
             new FreeWDocumentFilePorts(
-                GetDocument: () => _editor.Document,
+                // r164: mirrors FreeW.App.Host/FileCommands.cs's r163 fix. While Mailings > Preview
+                // Results is active, _editor.Document holds the merged, single-record document the
+                // preview loaded for on-screen display (MailMergeSessionWorkflow.TogglePreview/
+                // NavigatePreview -> MailMergeEngine.Realize -> _editor.LoadDocument), not the mail-merge
+                // template -- so Ctrl+S (routed through this same GetDocument port, for Save/Save As/Save
+                // a Copy alike) would bake the previewed recipient's literal values over every
+                // MERGEFIELD/ADDRESSBLOCK/GREETINGLINE in the user's template. Prefer the session's
+                // still-live Template whenever a preview is active, exactly as the WPF host does.
+                GetDocument: () => _mailMerge?.Session.Template ?? _editor.Document,
                 LoadDocumentAsync: (document, _) =>
                 {
                     LoadDocumentContent(document);
@@ -4152,6 +4160,13 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void LoadDocumentContent(TextDocument document)
     {
+        // r164 remediation (paired with the GetDocument fallback above). _mailMerge is built once per
+        // WINDOW, but its Session.Template is captured per DOCUMENT by TogglePreview; nothing cleared it
+        // when a different document was loaded here. With Save now preferring Template whenever one is
+        // set, a preview left active on document A would otherwise get written over document B the
+        // moment this window loaded B and the user pressed Ctrl+S -- a document that has nothing to do
+        // with the mail merge. This is a no-op on a fresh window (Session.Template is already null) and
+        // does not touch the recipient data/mapping, only the stashed template.
         _mailMerge?.Session.EndPreview();
         StopReadAloud();
         ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);

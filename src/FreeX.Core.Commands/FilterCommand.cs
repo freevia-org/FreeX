@@ -29,6 +29,15 @@ public sealed class FilterCommand : IWorkbookCommand
     // silently lost the moment the workbook is saved and reopened. -1 = no table matched this range.
     private int _tableId = -1;
     private List<StructuredTableFilterColumnModel>? _previousTableFilterColumns;
+    // R164-commands-filter-slicer-desync-1: a Table Slicer widget (SlicerModel.SourceTableId/
+    // SourceTableColumnId) can be bound to the very same table column this ordinary header-cell
+    // AutoFilter dropdown just edited. SetSlicerSelectionCommand.ApplyTableSlicer is the only other
+    // writer of SlicerModel.SelectedItems, and the slicer renderer (SlicerLayoutModel.BuildFull/
+    // Toggle) reads ONLY SlicerModel.SelectedItems to decide which tiles are highlighted -- so
+    // without mirroring the new allowed-values selection into any bound slicer here too, the widget
+    // keeps showing its old (now wrong) selection even though the sheet is actually filtered
+    // differently, and the next tile click computes the new selection against that stale baseline.
+    private List<SlicerSelectionSyncSnapshot>? _slicerSyncSnapshots;
     // R33-commands-autofilter-slicer-1: when _range is a plain worksheet-level AutoFilter range
     // (sheet.AutoFilter.Reference, not a structured table), sheet.AutoFilter.FilterColumns (the
     // model XlsxWorksheetAutoFilterXmlMapper.Save serializes into the worksheet's own
@@ -60,6 +69,10 @@ public sealed class FilterCommand : IWorkbookCommand
 
         _undoSnapshot.Reset();
         _undoSnapshot.CaptureIfNeeded(sheet);
+        // R164-commands-filter-slicer-desync-1: cleared every Apply (mirrors _undoSnapshot.Reset()
+        // above) so a redo re-running Apply captures a FRESH pre-this-call slicer snapshot instead of
+        // accumulating stale entries from an earlier Apply/Revert cycle.
+        _slicerSyncSnapshots = null;
 
         uint filterCol  = _range.Start.Col + _filterColOffset;
 
@@ -88,7 +101,7 @@ public sealed class FilterCommand : IWorkbookCommand
 
         RecomputeHiddenRows(sheet, _range);
 
-        ApplyToStructuredTableIfMatched(sheet);
+        ApplyToStructuredTableIfMatched(ctx.Workbook, sheet);
 
         WorksheetAutoFilterColumnModel? newAutoFilterColumn = null;
         if (_allowedValues.Count > 0)
@@ -121,7 +134,7 @@ public sealed class FilterCommand : IWorkbookCommand
     /// filter dropdown), mirror the applied/cleared filter into that table's FilterColumns model so
     /// it round-trips through XlsxStructuredTableWriter instead of being silently dropped on save.
     /// </summary>
-    private void ApplyToStructuredTableIfMatched(Sheet sheet)
+    private void ApplyToStructuredTableIfMatched(Workbook workbook, Sheet sheet)
     {
         for (var i = 0; i < sheet.StructuredTables.Count; i++)
         {
@@ -143,7 +156,46 @@ public sealed class FilterCommand : IWorkbookCommand
             filterColumns.Sort(static (a, b) => a.ColumnId.CompareTo(b.ColumnId));
 
             sheet.StructuredTables[i] = StructuredTableDesignCommandHelpers.CopyTable(table, filterColumns: filterColumns);
+
+            // R164-commands-filter-slicer-desync-1: keep any Table Slicer bound to this exact column
+            // showing the selection this header-dropdown edit just applied.
+            SyncBoundSlicerSelection(workbook, table);
             return;
+        }
+    }
+
+    /// <summary>
+    /// R164-commands-filter-slicer-desync-1: mirrors the just-applied value-list selection into
+    /// every <see cref="SlicerModel"/> bound to <paramref name="table"/>'s <see cref="_filterColOffset"/>
+    /// column (<see cref="SlicerModel.SourceTableId"/>/<see cref="SlicerModel.SourceTableColumnId"/>),
+    /// using the identical normalization <see cref="SetSlicerSelectionCommand.ApplyTableSlicer"/> itself
+    /// applies to a slicer-tile-click selection (blank/whitespace entries dropped, case-insensitive
+    /// de-dup) -- so a filter set via the header dropdown produces the exact same
+    /// <see cref="SlicerModel.SelectedItems"/> shape as one set via the slicer widget for the identical
+    /// value set. A no-op when no slicer is bound to this table/column.
+    /// </summary>
+    private void SyncBoundSlicerSelection(Workbook workbook, StructuredTableModel table)
+    {
+        if (_filterColOffset >= (uint)table.Columns.Count)
+            return;
+
+        var columnId = table.Columns[(int)_filterColOffset].Id;
+        var normalizedSelection = _allowedValues
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        foreach (var slicer in workbook.Slicers)
+        {
+            if (slicer.SourceTableId != table.Id || slicer.SourceTableColumnId != columnId)
+                continue;
+
+            (_slicerSyncSnapshots ??= []).Add(new SlicerSelectionSyncSnapshot(
+                slicer.Name, [.. slicer.SelectedItems], slicer.SelectionCaptured));
+
+            slicer.SelectedItems.Clear();
+            slicer.SelectedItems.AddRange(normalizedSelection);
+            slicer.SelectionCaptured = true;
         }
     }
 
@@ -260,6 +312,24 @@ public sealed class FilterCommand : IWorkbookCommand
             var table = sheet.StructuredTables[tableIndex];
             sheet.StructuredTables[tableIndex] = StructuredTableDesignCommandHelpers.CopyTable(
                 table, filterColumns: _previousTableFilterColumns);
+        }
+
+        // R164-commands-filter-slicer-desync-1: put every slicer this Apply call synced back to its
+        // exact pre-Apply selection. SlicerModel.Name is init-only (never renamed after construction),
+        // so a by-name lookup here is safe.
+        if (_slicerSyncSnapshots is not null)
+        {
+            foreach (var snapshot in _slicerSyncSnapshots)
+            {
+                var slicer = ctx.Workbook.Slicers.FirstOrDefault(
+                    s => string.Equals(s.Name, snapshot.SlicerName, StringComparison.Ordinal));
+                if (slicer is null)
+                    continue;
+
+                slicer.SelectedItems.Clear();
+                slicer.SelectedItems.AddRange(snapshot.PreviousSelectedItems);
+                slicer.SelectionCaptured = snapshot.PreviousSelectionCaptured;
+            }
         }
 
         // R91-meta-3: undoing a filter restores the previous hidden-row set, which just as much
@@ -598,6 +668,15 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
         _undoSnapshot.Restore(sheet);
     }
 }
+
+/// <summary>
+/// R164-commands-filter-slicer-desync-1: snapshot of one <see cref="SlicerModel"/>'s pre-Apply
+/// selection, captured by <see cref="FilterCommand.SyncBoundSlicerSelection"/> for <see cref="FilterCommand.Revert"/>.
+/// </summary>
+internal readonly record struct SlicerSelectionSyncSnapshot(
+    string SlicerName,
+    List<string> PreviousSelectedItems,
+    bool PreviousSelectionCaptured);
 
 internal struct FilterUndoSnapshot
 {

@@ -178,6 +178,17 @@ public sealed partial class MainWindow
 
             var range = _session.SelectedRange;
             var sheet = _session.ActiveSheet;
+
+            // round-164 meta-F4: BuildSeriesEdits builds one edit per destination cell with no
+            // ceiling of its own, so a full-column/whole-sheet selection must be rejected here --
+            // before it ever runs -- rather than relying on its internal empty-list fallback, which
+            // would otherwise close this dialog having silently done nothing.
+            if (FillSeriesPlanner.IsRangeTooLargeToFill(range))
+            {
+                ShowWarning(FillSeriesPlanner.DescribeRangeTooLarge(range).Resolve(UiText.Get, UiText.Format));
+                return;
+            }
+
             var edits = FillSeriesPlanner.BuildSeriesEdits(sheet, range, options);
             if (edits.Count == 0)
             {

@@ -25,7 +25,14 @@ public static class PasteCommandFactory
     // well under a second and a few hundred MB on the reference hardware used to measure this
     // (10.5M cells measured at ~3.1s / ~1.1GB), rather than letting an oversized selection either
     // hang the UI for tens of seconds or crash the app outright.
-    internal const long MaxTiledPasteCellCount = 4_000_000;
+    //
+    // round-164 meta-F4: made public (was internal) so FreeX.App.Presentation's
+    // FillSeriesPlanner -- Home > Fill > Series, the fifth destination-sized tiling path found
+    // after this one, the internal-clipboard paste, Paste Link, and the fill handle -- can share
+    // this exact constant instead of declaring a sixth limit that could drift from it. No other
+    // assembly boundary changes: every existing internal-assembly caller is unaffected by widening
+    // the access modifier.
+    public const long MaxTiledPasteCellCount = 4_000_000;
 
     public static IWorkbookCommand CreateExternalTextPasteCommand(
         SheetId targetSheetId,

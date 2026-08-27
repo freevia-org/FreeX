@@ -4,7 +4,6 @@ using System.IO.Compression;
 using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
-using Free.Shared.Opc;
 using FreeW.Core.Model;
 
 namespace FreeW.Core.IO;
@@ -583,6 +582,11 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         var contentDoc = BuildContentXml(bodyText, styleWriter);
         var stylesDoc = BuildStylesXml(document, styleWriter);
         var metaDoc = BuildMetaXml(document);
+
+        // r164: the XML-illegal-character sanitize that used to happen here now runs inside
+        // OpenDocumentPackageWriter.WriteXmlEntry, the boundary every OpenDocument part from every app
+        // passes through, so content.xml, styles.xml and meta.xml below are covered without this
+        // adapter carrying its own copy of the rule.
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
 

@@ -120,6 +120,19 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
+        // round-164 meta-F4: Fill > Series builds one edit per destination cell with no ceiling
+        // of its own (BuildSeriesEdits), so a full-column/whole-sheet selection must be rejected
+        // here -- before FillSeriesPlanner.BuildSeriesEdits ever runs -- rather than relying on its
+        // internal empty-list fallback, which would otherwise close this dialog having silently
+        // done nothing.
+        if (FillSeriesPlanner.IsRangeTooLargeToFill(range))
+        {
+            _messageService.ShowWarning(
+                FillSeriesPlanner.DescribeRangeTooLarge(range).Resolve(UiText.Get, UiText.Format),
+                UiText.Get("FillSeriesStep_Title"));
+            return;
+        }
+
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Fill Series",
                 range,

@@ -142,10 +142,29 @@ public partial class MainWindow
         // active" gate (used the same way before Spell Check runs); reusing it here mirrors Excel,
         // which always finishes an in-progress edit before a ribbon structural command can run, so
         // the edit's value shifts along with everything else instead of being silently resurrected
-        // onto the wrong cell afterwards. A best-effort call: if nothing is pending it is a no-op,
-        // and if a formula-reference point-mode entry is active it intentionally leaves that edit
-        // open (matching the existing skip at MainWindow.Editing.cs's inline-editor LostFocus path).
-        TryCommitPendingSpellCheckEdit();
+        // onto the wrong cell afterwards.
+        //
+        // freex-formula-edit-refs-F1: TryCommitPendingSpellCheckEdit()'s return value used to be
+        // discarded here. It returns false in exactly the two cases where nothing was committed: (1)
+        // a formula-reference point-mode entry is active (leaving that edit deliberately open, same
+        // as the inline-editor LostFocus skip in MainWindow.Editing.cs), or (2) CommitEdit() itself
+        // failed (e.g. a data-validation rejection). Ignoring that meant the structural shift ran
+        // regardless, and its own success path (ApplySuccessfulWorkbookSessionCommand ->
+        // ApplyWorkbookSessionSelectionToRenderer -> SetFormulaBarSelectionText) then overwrote the
+        // still-open Formula Bar text with the post-shift ActiveCell's content while _formulaEditCell
+        // kept pointing at the stale pre-shift address -- silently discarding whatever the user had
+        // typed and, once they finished the edit, committing blank/wrong content to a cell that was
+        // never the one they were editing. Real Excel simply will not run a ribbon structural command
+        // while a cell edit is in progress, so bailing out here (matching the existing "do nothing"
+        // pattern every other early-exit in this method's callers already uses, e.g.
+        // TryShowCellShiftDialog returning false) is the closest in-scope equivalent: the edit is left
+        // completely untouched -- text, point-mode state, and _formulaEditCell all unchanged -- for
+        // the user to finish or cancel themselves.
+        if (!TryCommitPendingSpellCheckEdit())
+        {
+            result = null!;
+            return false;
+        }
 
         SynchronizeWorkbookSessionSelection();
         result = execute();

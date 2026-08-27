@@ -122,20 +122,21 @@ public sealed class AddCommentCommand(
         return true;
     }
 
-    private static Run CloneRunMarks(Run source, string text) => new(text, source.Formatting)
+    // r164 (sweep102 F1): this used to hand-list Run's copyable marks and quietly fell ~20
+    // properties behind (images, charts, equations, footnote/endnote ids, revision marks, ...).
+    // Delegate to the canonical full-fidelity copier (DocumentModelCloner.CloneRun, the same one
+    // CloneRunCore backs) so a property added to Run tomorrow is copied here without anyone having
+    // to remember to touch this file. RevisionClonePolicy.Preserve because this clone snapshots
+    // live paragraph state for undo/redo -- it must be indistinguishable from the original,
+    // tracked-change marks included.
+    private static Run CloneRunMarks(Run source, string text)
     {
-        // r163: a run carries its character-style link like any other property; a copier that
-        // omits it silently unlinks the run the next time anything reformats the paragraph.
-        StyleId = source.StyleId,
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        SubDocument = source.SubDocument,
-        CommentId = source.CommentId,
-        IsCommentReference = source.IsCommentReference,
-        IsPageBreak = source.IsPageBreak,
-        IsColumnBreak = source.IsColumnBreak,
-    };
+        var clone = DocumentModelCloner.CloneRun(source, RevisionClonePolicy.Preserve);
+        clone.Text = text;
+        if (!string.Equals(text, source.Text, StringComparison.Ordinal))
+            clone.Ruby = null;
+        return clone;
+    }
 
     private static Run CloneRunMarks(Run source) => CloneRunMarks(source, source.Text);
 }
@@ -269,20 +270,11 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
             TextDocumentStoryTraversalOptions.IncludeNestedTables
             | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs);
 
-    private static Run CloneRun(Run source) => new(source.Text, source.Formatting)
-    {
-        // r163: a run carries its character-style link like any other property; a copier that
-        // omits it silently unlinks the run the next time anything reformats the paragraph.
-        StyleId = source.StyleId,
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        SubDocument = source.SubDocument,
-        CommentId = source.CommentId,
-        IsCommentReference = source.IsCommentReference,
-        IsPageBreak = source.IsPageBreak,
-        IsColumnBreak = source.IsColumnBreak,
-    };
+    // r164 (sweep102 F2): identical fix to AddCommentCommand.CloneRunMarks above -- delegate to the
+    // canonical full-fidelity copier instead of hand-listing Run's marks, so this can no longer
+    // silently drift behind properties added to Run.
+    private static Run CloneRun(Run source) =>
+        DocumentModelCloner.CloneRun(source, RevisionClonePolicy.Preserve);
 
     public static int ResolveTopLevel(TextDocument doc, int commentId)
     {

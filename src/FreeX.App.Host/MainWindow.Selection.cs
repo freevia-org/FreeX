@@ -496,6 +496,18 @@ public partial class MainWindow
                     return;
                 }
 
+                // A Ctrl+click onto a locked cell on a protected sheet with "Select locked cells"
+                // unchecked must be refused outright, exactly like the identical cell would refuse
+                // a plain click via CanSelectCellForClick below -- Excel never lets a disjoint
+                // selection area land on a locked cell either (freex-protection F2). Still reports
+                // the click as handled (returns) so the drag-capture below doesn't start a drag
+                // for a click that added nothing.
+                if (!CanSelectCellForClick(newAddr))
+                {
+                    e.Handled = true;
+                    return;
+                }
+
                 AddOrMoveAdditionalSelection(newAddr, extendSelection: false);
                 _dragSelectAddsAdditionalRange = true;
                 _dragSelectionTransientOverlaysCleared = false;
@@ -507,8 +519,9 @@ public partial class MainWindow
                 // A plain click onto a locked cell on a protected sheet with "Select locked cells"
                 // unchecked must be refused outright -- Excel neither moves the active cell there
                 // nor opens it for editing (R75-services-protection-security-4-1). Shift-click/F8
-                // extend (TryHandleCellAreaExtendClick above) and Ctrl+click (Add mode) are left
-                // ungated for now.
+                // extend (TryHandleCellAreaExtendClick above) is gated the same way
+                // (R87-commands-protection-lock-5-1); the Ctrl+click branch above now applies the
+                // identical check.
                 if (!CanSelectCellForClick(newAddr))
                 {
                     e.Handled = true;

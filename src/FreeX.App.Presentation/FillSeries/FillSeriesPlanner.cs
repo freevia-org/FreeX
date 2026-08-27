@@ -120,6 +120,34 @@ public static class FillSeriesPlanner
         LocalizedTextDescriptor.Resource("FillSeries_Filled", rangeReference);
 
     /// <summary>
+    /// The largest destination range Fill ▸ Series will materialize edits for in one call. Shared
+    /// with the internal-clipboard paste, external-clipboard paste, Paste Link, and Autofill (fill
+    /// handle) tiling paths via <see cref="PasteCommandFactory.MaxTiledPasteCellCount"/> -- a
+    /// single constant instead of a sixth independent limit that could silently drift from the
+    /// other five. See that constant's doc comment for the OOM/hang this bounds.
+    /// </summary>
+    public static long MaxFillSeriesCellCount => PasteCommandFactory.MaxTiledPasteCellCount;
+
+    /// <summary>
+    /// True when materializing Fill ▸ Series edits for <paramref name="range"/> would exceed the
+    /// shared tiling cap (<see cref="MaxFillSeriesCellCount"/>) -- e.g. a full-column or
+    /// whole-sheet selection. Callers should check this BEFORE invoking <see cref="BuildSeriesEdits"/>
+    /// so they can show the user a clear rejection instead of relying on the empty-list fallback
+    /// <see cref="BuildSeriesEdits"/> itself falls back to for defense in depth.
+    /// </summary>
+    public static bool IsRangeTooLargeToFill(GridRange range) => range.CellCount > MaxFillSeriesCellCount;
+
+    /// <summary>
+    /// Describes the <see cref="IsRangeTooLargeToFill"/> rejection. Not resource-localized,
+    /// matching <see cref="AutofillCommand"/>'s and <see cref="PasteCommandFactory"/>'s own
+    /// plain-English message for the identical too-large-to-tile rejection.
+    /// </summary>
+    public static LocalizedTextDescriptor DescribeRangeTooLarge(GridRange range) =>
+        LocalizedTextDescriptor.Literal(
+            $"Fill range is too large ({range.RowCount:N0} x {range.ColCount:N0} = {range.CellCount:N0} cells; " +
+            $"the limit is {MaxFillSeriesCellCount:N0}). Select a smaller range and fill again.");
+
+    /// <summary>
     /// Parses a step value, accepting the invariant decimal form and the current UI culture (so a typed
     /// <c>1.5</c> or a locale's <c>1,5</c> both work). Rejects non-finite values.
     /// </summary>
@@ -268,6 +296,17 @@ public static class FillSeriesPlanner
     {
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(options);
+
+        // round-164 meta-F4: BuildLinearSeriesEdits/BuildGrowthSeriesEdits/BuildDateSeriesEdits/
+        // BuildAutoFillSeriesEdits below each materialize one edit per destination cell with no
+        // ceiling of their own -- a full-column or whole-sheet selection asks for millions to
+        // billions of entries on the synchronous UI thread. This is the single dispatch point
+        // every one of those four routes through, so the cap lives here rather than duplicated
+        // into each. Callers should also check IsRangeTooLargeToFill up front (see
+        // DescribeRangeTooLarge) so the user gets a clear rejection instead of a silent no-op;
+        // this guard is the defense-in-depth backstop for any caller that does not.
+        if (IsRangeTooLargeToFill(range))
+            return [];
 
         return options.Type switch
         {

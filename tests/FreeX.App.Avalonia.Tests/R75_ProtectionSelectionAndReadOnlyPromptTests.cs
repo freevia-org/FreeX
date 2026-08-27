@@ -143,6 +143,68 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
         }, CancellationToken.None);
     }
 
+    // ── SelectClickedCell (Shift-click / F8 extend) -- freex-protection F1 ────
+
+    [Fact]
+    public async Task SelectClickedCell_ShiftClickOntoLockedCellOnProtectedSheetWithoutSelectLockedCells_DoesNotExtendSelection()
+    {
+        // freex-protection F1: a Shift-click (or F8-extend click) must be refused onto a locked
+        // cell exactly like a plain click is, so the selection can never be pulled onto/through a
+        // locked cell just by holding Shift, matching the WPF host's TryHandleCellAreaExtendClick.
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ProtectionShiftClickFixture");
+            window.Session.SelectSheet(sheet.Id);
+
+            var start = new CellAddress(sheet.Id, 1, 1);
+            var locked = new CellAddress(sheet.Id, 3, 3); // default cell style is Locked = true
+            window.Session.SelectCell(start);
+
+            sheet.IsProtected = true;
+            sheet.ProtectionPermissions.Remove(SheetProtectionPermission.SelectLockedCells);
+
+            window.SelectClickedCell(locked, KeyModifiers.Shift);
+
+            window.Session.SelectedRange.Should().Be(new GridRange(start, start),
+                "a Shift-click extend onto a locked cell must be refused when Select Locked Cells is unchecked, leaving the selection exactly where it was");
+            window.Session.ActiveCell.Should().Be(start);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task SelectClickedCell_ShiftClickOntoLockedCell_SelectLockedCellsPermissionEnabled_ExtendsSelection()
+    {
+        // Sibling/no-regression: checking "Select locked cells" (the default) must keep a
+        // Shift-click extend onto a locked cell working, exactly as the plain-click sibling above.
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ProtShiftClickAllowedFixture");
+            window.Session.SelectSheet(sheet.Id);
+
+            var start = new CellAddress(sheet.Id, 1, 1);
+            var target = new CellAddress(sheet.Id, 3, 3);
+            window.Session.SelectCell(start);
+
+            sheet.IsProtected = true;
+            // Sheet.ProtectionPermissions defaults to [SelectLockedCells, SelectUnlockedCells].
+
+            window.SelectClickedCell(target, KeyModifiers.Shift);
+
+            window.Session.SelectedRange.Should().Be(new GridRange(start, target),
+                "Select Locked Cells being checked must keep a Shift-click extend onto a locked cell working");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     // ── NavigateActiveCell (arrow-key navigation) ─────────────────────────────
 
     [Fact]
@@ -221,6 +283,74 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
 
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 1, 2),
                 "Select Locked Cells being checked must allow navigating straight onto the locked B1 cell");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
+            window.Close();
+            return true;
+        }, CancellationToken.None);
+    }
+
+    // ── NavigateActiveCell (Shift+arrow extend) -- freex-protection F1 ───────
+
+    [Fact]
+    public async Task NavigateActiveCell_ShiftRightArrow_ProtectedSheetWithLockedCellBetween_SkipsExtendPastLockedCell()
+    {
+        // freex-protection F1: Shift+Arrow (and F8-extend keyboard navigation) must skip past a
+        // locked cell exactly like the plain-move sibling above, instead of letting the extending
+        // end of the selection land on it -- matching the WPF host's willExtendSelection gating.
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ProtectionShiftNavSkipFixture");
+            window.Session.SelectSheet(sheet.Id);
+
+            var unlockedStyleId = window.Session.Workbook.RegisterStyle(new CellStyle { Locked = false });
+            // A1 (start) and C1 (expected extend endpoint) unlocked; B1 stays locked (the default
+            // cell style) in between, so extending onto it would be refused.
+            sheet.SetStyleOnly(1, 1, unlockedStyleId);
+            sheet.SetStyleOnly(1, 3, unlockedStyleId);
+            sheet.IsProtected = true;
+            sheet.ProtectionPermissions.Remove(SheetProtectionPermission.SelectLockedCells);
+
+            var start = new CellAddress(sheet.Id, 1, 1);
+            window.Session.SelectCell(start);
+
+            await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.Right, KeyModifiers = KeyModifiers.Shift });
+
+            window.Session.SelectedRange.Should().Be(new GridRange(start, new CellAddress(sheet.Id, 1, 3)),
+                "Shift+Right extend on a protected sheet must skip the locked B1 cell and extend to the next selectable cell C1, not stop on/through B1");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
+            window.Close();
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task NavigateActiveCell_ShiftRightArrow_SelectLockedCellsPermissionEnabled_ExtendsOntoImmediatelyAdjacentLockedCell()
+    {
+        // Sibling/no-regression: with Select Locked Cells checked (the default), Shift+Arrow must
+        // still be able to extend straight onto a locked cell, exactly like the plain-move sibling.
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ProtShiftNavAllowedFixture");
+            window.Session.SelectSheet(sheet.Id);
+
+            var unlockedStyleId = window.Session.Workbook.RegisterStyle(new CellStyle { Locked = false });
+            sheet.SetStyleOnly(1, 1, unlockedStyleId);
+            sheet.IsProtected = true;
+            // Sheet.ProtectionPermissions defaults to [SelectLockedCells, SelectUnlockedCells].
+
+            var start = new CellAddress(sheet.Id, 1, 1);
+            window.Session.SelectCell(start);
+
+            await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.Right, KeyModifiers = KeyModifiers.Shift });
+
+            window.Session.SelectedRange.Should().Be(new GridRange(start, new CellAddress(sheet.Id, 1, 2)),
+                "Select Locked Cells being checked must allow Shift+Right to extend straight onto the locked B1 cell");
 
             window.AllowCloseWithoutDirtyPromptForParityCapture();
 

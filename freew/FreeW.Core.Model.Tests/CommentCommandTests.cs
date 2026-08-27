@@ -190,6 +190,123 @@ public sealed class CommentCommandTests
         doc.Comments[0].Resolved.Should().BeTrue();
     }
 
+    [Fact]
+    public void AddCommentCommand_UndoRestoresRichRunMarks_ElsewhereInParagraph()
+    {
+        // sweep102 F1: AddCommentCommand snapshots every run in the paragraph (not just the one the
+        // comment covers) before inserting the comment, then restores that snapshot verbatim on undo.
+        // A hand-rolled Run copier that only carries a handful of properties silently strips every other
+        // mark -- images, footnote ids, tracked-change revisions -- from runs the user never touched.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        var imageRun = Run.FromImage(new InlineImage([1, 2, 3, 4], 50, 50));
+        var footnoteRun = new Run("ref") { FootnoteId = 5 };
+        var revisionRun = new Run("tracked") { Revision = RevisionKind.Inserted, RevisionAuthor = "Bob" };
+        var plainRun = new Run("comment me");
+        paragraph.Runs.Add(imageRun);
+        paragraph.Runs.Add(footnoteRun);
+        paragraph.Runs.Add(revisionRun);
+        paragraph.Runs.Add(plainRun);
+        doc.Blocks.Add(paragraph);
+        var bus = new DocumentCommandBus(new TestContext(doc));
+
+        // "comment me" starts at offset 10 (after "" + "ref" + "tracked") and runs to offset 20.
+        bus.Execute(new AddCommentCommand(0, 10, 20, 3, new Comment(3, "note", "Ann", "A")));
+        doc.Comments.Should().ContainKey(3);
+
+        bus.Undo().Should().BeTrue();
+
+        doc.Comments.Should().NotContainKey(3);
+        paragraph.Runs.Should().HaveCount(4);
+        paragraph.Runs[0].Image.Should().NotBeNull();
+        paragraph.Runs[0].Image!.Bytes.Should().Equal(1, 2, 3, 4);
+        paragraph.Runs[1].FootnoteId.Should().Be(5);
+        paragraph.Runs[2].Revision.Should().Be(RevisionKind.Inserted);
+        paragraph.Runs[2].RevisionAuthor.Should().Be("Bob");
+        paragraph.Runs[3].Text.Should().Be("comment me");
+    }
+
+    [Fact]
+    public void AddCommentCommand_UndoRestoresPlainRunMarks_AsSiblingCase()
+    {
+        // Adjacent case for F1: the properties the pre-r164 copier already carried (StyleId, hyperlink,
+        // comment marks, page/column breaks) must keep surviving undo exactly as before -- this fix must
+        // not regress the marks that already worked.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("linked")
+        {
+            StyleId = "Emphasis",
+            HyperlinkUrl = "https://example.test",
+            HyperlinkTooltip = "tip"
+        });
+        paragraph.Runs.Add(new Run("comment me"));
+        doc.Blocks.Add(paragraph);
+        var bus = new DocumentCommandBus(new TestContext(doc));
+
+        bus.Execute(new AddCommentCommand(0, 6, 16, 3, new Comment(3, "note", "Ann", "A")));
+        bus.Undo().Should().BeTrue();
+
+        paragraph.Runs[0].StyleId.Should().Be("Emphasis");
+        paragraph.Runs[0].HyperlinkUrl.Should().Be("https://example.test");
+        paragraph.Runs[0].HyperlinkTooltip.Should().Be("tip");
+    }
+
+    [Fact]
+    public void DeleteCommentCommand_UndoRestoresRichRunMarks_ElsewhereInParagraph()
+    {
+        // sweep102 F2: same defect as F1 but in DeleteCommentCommand's own hand-rolled copier.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        var imageRun = Run.FromImage(new InlineImage([9, 8, 7], 30, 30));
+        var commentedRun = new Run("reviewed text") { CommentId = 7 };
+        var footnoteRun = new Run("note") { FootnoteId = 11 };
+        paragraph.Runs.Add(imageRun);
+        paragraph.Runs.Add(commentedRun);
+        paragraph.Runs.Add(Run.CommentReference(7));
+        paragraph.Runs.Add(footnoteRun);
+        doc.Blocks.Add(paragraph);
+        doc.Comments[7] = new Comment(7, "note", "T", "T");
+        var bus = new DocumentCommandBus(new TestContext(doc));
+
+        bus.Execute(new DeleteCommentCommand(7));
+        doc.Comments.Should().NotContainKey(7);
+
+        bus.Undo().Should().BeTrue();
+
+        doc.Comments.Should().ContainKey(7);
+        paragraph.Runs.Should().HaveCount(4);
+        paragraph.Runs[0].Image.Should().NotBeNull();
+        paragraph.Runs[0].Image!.Bytes.Should().Equal(9, 8, 7);
+        paragraph.Runs[1].CommentId.Should().Be(7);
+        paragraph.Runs[2].IsCommentReference.Should().BeTrue();
+        paragraph.Runs[3].FootnoteId.Should().Be(11);
+    }
+
+    [Fact]
+    public void DeleteCommentCommand_UndoRestoresPlainRunMarks_AsSiblingCase()
+    {
+        // Adjacent case for F2: properties the pre-r164 copier already carried must keep surviving undo.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("linked") { StyleId = "Emphasis", HyperlinkUrl = "https://example.test" });
+        paragraph.Runs.Add(new Run("reviewed") { CommentId = 7 });
+        paragraph.Runs.Add(Run.CommentReference(7));
+        doc.Blocks.Add(paragraph);
+        doc.Comments[7] = new Comment(7, "note", "T", "T");
+        var bus = new DocumentCommandBus(new TestContext(doc));
+
+        bus.Execute(new DeleteCommentCommand(7));
+        bus.Undo().Should().BeTrue();
+
+        paragraph.Runs[0].StyleId.Should().Be("Emphasis");
+        paragraph.Runs[0].HyperlinkUrl.Should().Be("https://example.test");
+    }
+
     private static string AnchorText(Paragraph paragraph, int commentId) =>
         string.Concat(paragraph.Runs.Where(run => run.CommentId == commentId && !run.IsCommentReference).Select(run => run.Text));
 }

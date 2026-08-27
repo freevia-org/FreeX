@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 using FreeX.App.Presentation.Import;
@@ -77,6 +78,81 @@ public sealed class ImportDataPlannerTests
         // 0xE9 is 'é' in Windows-1252 but an invalid lone lead byte in UTF-8.
         var bytes = new byte[] { (byte)'c', (byte)'a', (byte)'f', 0xE9 };
         ImportDataPlanner.DecodeBytes(bytes, ImportEncodingKind.Detect).Should().Be("café");
+    }
+
+    /// <summary>
+    /// shared-encoding-detection F2: <see cref="ImportEncodingKind.Detect"/>'s non-UTF-8 fallback must
+    /// resolve the OS's current-culture ANSI code page -- mirroring
+    /// DelimitedTextWorkbookWriter.ResolveAnsiEncoding / DelimitedTextWorkbookReader.DecodeText's R111
+    /// fix -- not a hard-coded Windows-1252. Feeds bytes encoded in Shift-JIS (code page 932, exactly
+    /// what a Japanese Windows install's plain CSV Save-As -- or this app's own writer under ja-JP --
+    /// would produce) while CurrentCulture is ja-JP. Before the fix this always decoded as CP1252,
+    /// mojibake-ing "田中" instead of decoding it correctly.
+    /// </summary>
+    [Fact]
+    public void DecodeBytes_Detect_ResolvesShiftJisFallbackUnderJapaneseCulture_NotHardcoded1252()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ja-JP");
+
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            var shiftJis = Encoding.GetEncoding(932);
+            var bytes = shiftJis.GetBytes("田中");
+
+            ImportDataPlanner.DecodeBytes(bytes, ImportEncodingKind.Detect).Should().Be("田中");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
+    /// <summary>
+    /// No-regression sibling: under an English culture whose ANSI code page genuinely is 1252, the
+    /// detect fallback must still decode Windows-1252 bytes correctly -- the fix resolves 1252 via
+    /// CurrentCulture rather than happening to match by coincidence, so this must keep passing too.
+    /// </summary>
+    [Fact]
+    public void DecodeBytes_Detect_StillDecodesWindows1252FallbackUnderEnglishCulture()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+
+            // 0xE9 is 'é' in Windows-1252 but an invalid lone lead byte in UTF-8.
+            var bytes = new byte[] { (byte)'c', (byte)'a', (byte)'f', 0xE9 };
+            ImportDataPlanner.DecodeBytes(bytes, ImportEncodingKind.Detect).Should().Be("café");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
+    /// <summary>
+    /// No-regression sibling: the *explicit* <see cref="ImportEncodingKind.Windows1252"/> choice (the
+    /// user picking "Windows-1252" from the Get Data encoding combo box, as opposed to "Detect") must
+    /// still force literal Windows-1252 regardless of CurrentCulture -- that is a deliberate, explicit
+    /// user override, not the locale-sniffing "Detect" path this finding is about, so it must not change.
+    /// </summary>
+    [Fact]
+    public void DecodeBytes_ExplicitWindows1252_IgnoresCurrentCulture()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ja-JP");
+
+            var bytes = new byte[] { (byte)'a', 0xE9 };
+            ImportDataPlanner.DecodeBytes(bytes, ImportEncodingKind.Windows1252).Should().Be("aé");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 
     [Fact]
