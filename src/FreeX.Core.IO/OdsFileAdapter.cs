@@ -106,6 +106,13 @@ public sealed partial class OdsFileAdapter : IFileAdapter
         OpenDocumentPackageWriter.WriteMimeType(archive, MimeType);
 
         var contentDoc = WriteContent(workbook);
+
+        // content.xml is the only generated part built from model text (cell values, sheet names,
+        // comments, hyperlinks). ODF is XML 1.0 like OOXML, so the same characters a document can
+        // legitimately hold but the format cannot would abort this save with no file written.
+        // Sanitizing here rather than inside OpenDocumentPackageWriter keeps the ODF packaging
+        // helper free of a dependency on Free.Shared.Opc, which already references it.
+        OoxmlXmlText.SanitizeInPlace(contentDoc);
         OpenDocumentPackageWriter.WriteXmlEntry(archive, "content.xml", contentDoc, XmlEntryOptions);
         OpenDocumentPackageWriter.WriteXmlEntry(archive, "styles.xml", BuildMinimalStyles(), XmlEntryOptions);
         OpenDocumentPackageWriter.WriteXmlEntry(

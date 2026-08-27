@@ -498,18 +498,23 @@ public sealed partial class XlsxFileAdapter
                 {
                     var xlComment = xlSheet.Cell((int)address.Row, (int)address.Col)
                         .CreateComment();
+                    // Note text and author are free-form and go to ClosedXML, which streams the
+                    // comments part itself -- a character XML 1.0 cannot represent in either would
+                    // abort the whole workbook save inside its writer, not just skip this comment,
+                    // so both are sanitized on the way in.
+                    //
                     // GAP 1: preserve the note author stored in CommentAuthors; fall back to
                     // empty string so ClosedXML doesn't silently default to the OS username.
                     if (sheet.CommentAuthors.TryGetValue(address, out var author) &&
                         !string.IsNullOrEmpty(author))
                     {
-                        xlComment.Author = author;
+                        xlComment.Author = OoxmlXmlText.Sanitize(author);
                     }
                     else
                     {
                         xlComment.Author = string.Empty;
                     }
-                    xlComment.AddText(commentText);
+                    xlComment.AddText(OoxmlXmlText.Sanitize(commentText));
                 }
                 catch (Exception ex)
                 {

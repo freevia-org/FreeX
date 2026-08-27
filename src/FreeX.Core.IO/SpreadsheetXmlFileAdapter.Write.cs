@@ -350,7 +350,7 @@ public sealed partial class SpreadsheetXmlFileAdapter
                 break;
             case TextValue textValue:
                 WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "String");
-                writer.WriteString(textValue.Value);
+                writer.WriteString(OoxmlXmlText.Sanitize(textValue.Value));
                 break;
             default:
                 WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "String");
@@ -363,10 +363,14 @@ public sealed partial class SpreadsheetXmlFileAdapter
     private static void WriteSpreadsheetStartElement(XmlWriter writer, string localName) =>
         writer.WriteStartElement("ss", localName, SpreadsheetNs.NamespaceName);
 
+    // This writer streams straight to an XmlWriter rather than building an XDocument, so it has no
+    // package boundary to sanitize at: model text is sanitized where it enters the stream instead.
+    // XmlWriter validates on write, so one C0 control code or lone surrogate anywhere in a cell value,
+    // comment, sheet name or formula would abort the whole save with no file written.
     private static void WriteSpreadsheetTextElement(XmlWriter writer, string localName, string value)
     {
         WriteSpreadsheetStartElement(writer, localName);
-        writer.WriteString(value);
+        writer.WriteString(OoxmlXmlText.Sanitize(value));
         writer.WriteEndElement();
     }
 
@@ -409,7 +413,7 @@ public sealed partial class SpreadsheetXmlFileAdapter
     }
 
     private static void WriteSpreadsheetAttribute(XmlWriter writer, XName name, string value) =>
-        writer.WriteAttributeString("ss", name.LocalName, SpreadsheetNs.NamespaceName, value);
+        writer.WriteAttributeString("ss", name.LocalName, SpreadsheetNs.NamespaceName, OoxmlXmlText.Sanitize(value));
 
     private static void WriteExcelEmptyElement(XmlWriter writer, string localName)
     {
@@ -420,7 +424,7 @@ public sealed partial class SpreadsheetXmlFileAdapter
     private static void WriteExcelTextElement(XmlWriter writer, string localName, string value)
     {
         writer.WriteStartElement("x", localName, ExcelNs.NamespaceName);
-        writer.WriteString(value);
+        writer.WriteString(OoxmlXmlText.Sanitize(value));
         writer.WriteEndElement();
     }
 

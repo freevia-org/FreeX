@@ -27,19 +27,34 @@ public static class OoxmlXmlText
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        // Materialize before mutating: assigning Value while enumerating the same tree is undefined.
-        foreach (var text in document.DescendantNodes().OfType<XText>().ToList())
+        // Assigning Value while enumerating the same tree is undefined, so the nodes to rewrite are
+        // collected first. Only the ones that actually need rewriting are collected: this now runs on
+        // every part write of every save, and a document with nothing to sanitize -- effectively all
+        // of them -- costs one allocation-free traversal instead of a list of every node in the part.
+        List<XText>? pendingText = null;
+        foreach (var text in document.DescendantNodes().OfType<XText>())
         {
-            var sanitized = Sanitize(text.Value);
-            if (!ReferenceEquals(sanitized, text.Value))
-                text.Value = sanitized;
+            if (NeedsSanitizing(text.Value))
+                (pendingText ??= []).Add(text);
         }
 
-        foreach (var attribute in document.Descendants().Attributes().ToList())
+        List<XAttribute>? pendingAttributes = null;
+        foreach (var attribute in document.Descendants().Attributes())
         {
-            var sanitized = Sanitize(attribute.Value);
-            if (!ReferenceEquals(sanitized, attribute.Value))
-                attribute.Value = sanitized;
+            if (NeedsSanitizing(attribute.Value))
+                (pendingAttributes ??= []).Add(attribute);
+        }
+
+        if (pendingText is not null)
+        {
+            foreach (var text in pendingText)
+                text.Value = Sanitize(text.Value);
+        }
+
+        if (pendingAttributes is not null)
+        {
+            foreach (var attribute in pendingAttributes)
+                attribute.Value = Sanitize(attribute.Value);
         }
     }
 

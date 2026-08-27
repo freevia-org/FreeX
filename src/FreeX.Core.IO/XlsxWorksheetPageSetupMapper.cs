@@ -156,12 +156,15 @@ internal static class XlsxWorksheetPageSetupMapper
         WorksheetHeaderFooter value,
         XLHFOccurrence occurrence)
     {
+        // Header/footer text is free-form and reaches ClosedXML unvalidated, so it is sanitized here
+        // rather than at the package boundary: ClosedXML streams the worksheet part itself, and a
+        // character XML 1.0 cannot represent would abort the whole workbook save inside its writer.
         if (!string.IsNullOrEmpty(value.Left))
-            target.Left.AddText(ToHeaderFooterText(value.Left), occurrence);
+            target.Left.AddText(OoxmlXmlText.Sanitize(ToHeaderFooterText(value.Left)), occurrence);
         if (!string.IsNullOrEmpty(value.Center))
-            target.Center.AddText(ToHeaderFooterText(value.Center), occurrence);
+            target.Center.AddText(OoxmlXmlText.Sanitize(ToHeaderFooterText(value.Center)), occurrence);
         if (!string.IsNullOrEmpty(value.Right))
-            target.Right.AddText(ToHeaderFooterText(value.Right), occurrence);
+            target.Right.AddText(OoxmlXmlText.Sanitize(ToHeaderFooterText(value.Right)), occurrence);
     }
 
     private static string ReplaceHeaderFooterTokens(

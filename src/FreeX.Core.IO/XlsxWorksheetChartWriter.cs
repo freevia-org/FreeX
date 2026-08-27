@@ -263,6 +263,12 @@ internal static class XlsxWorksheetChartWriter
                 XlsxChartXmlWriter.ApplyVerbatimTitleHyperlink(chartXml, chartNs, drawingNs, relNs, titleHyperlinkRelId);
             }
 
+            // Unlike the other part writes this one creates its entry directly rather than through
+            // XlsxPackageXmlEditor/OpcXml, so it needs its own pass of the sanitizing those apply --
+            // the chart part is built entirely from free-form model text (title, axis titles, series
+            // names, alt text), any of which can carry a character XML 1.0 cannot represent.
+            OoxmlXmlText.SanitizeInPlace(chartXml);
+
             var chartEntry = archive.CreateEntry(chartPath);
             using (var chartStream = chartEntry.Open())
                 chartXml.Save(chartStream);

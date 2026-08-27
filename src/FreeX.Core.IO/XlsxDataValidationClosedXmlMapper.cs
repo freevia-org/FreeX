@@ -154,10 +154,14 @@ internal static class XlsxDataValidationClosedXmlMapper
                 xlDv.ShowInputMessage = dv.ShowInputMessage;
                 xlDv.ShowErrorMessage = dv.ShowErrorMessage;
 
-                if (!string.IsNullOrEmpty(dv.ErrorTitle)) xlDv.ErrorTitle = dv.ErrorTitle;
-                if (!string.IsNullOrEmpty(dv.ErrorMessage)) xlDv.ErrorMessage = dv.ErrorMessage;
-                if (!string.IsNullOrEmpty(dv.PromptTitle)) xlDv.InputTitle = dv.PromptTitle;
-                if (!string.IsNullOrEmpty(dv.PromptMessage)) xlDv.InputMessage = dv.PromptMessage;
+                // The four message strings are user-typed free text that ClosedXML writes into the
+                // worksheet part as attribute values. A character XML 1.0 cannot represent in any of
+                // them would abort the whole workbook save inside ClosedXML's own writer, well before
+                // the package boundary where the hand-rolled writers get sanitized -- so drop it here.
+                if (!string.IsNullOrEmpty(dv.ErrorTitle)) xlDv.ErrorTitle = OoxmlXmlText.Sanitize(dv.ErrorTitle);
+                if (!string.IsNullOrEmpty(dv.ErrorMessage)) xlDv.ErrorMessage = OoxmlXmlText.Sanitize(dv.ErrorMessage);
+                if (!string.IsNullOrEmpty(dv.PromptTitle)) xlDv.InputTitle = OoxmlXmlText.Sanitize(dv.PromptTitle);
+                if (!string.IsNullOrEmpty(dv.PromptMessage)) xlDv.InputMessage = OoxmlXmlText.Sanitize(dv.PromptMessage);
 
                 // For x14 rules the real formula lives in the worksheet extLst x14 block;
                 // the legacy <dataValidation> intentionally carries an empty formula1 so
