@@ -1,6 +1,6 @@
 param(
     [string]$ProjectRoot = ".",
-    [string]$WorkflowPath = ".github\workflows\tester-release.yml"
+    [string]$WorkflowPath = ".github/workflows/tester-release.yml"
 )
 
 $ErrorActionPreference = "Stop"

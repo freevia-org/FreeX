@@ -18,7 +18,7 @@ public sealed class ColorHexParserSourceTests
             "AvaloniaImageAdjustHelper.Effects.cs"));
         var window = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"));
 
-        project.Should().Contain("Free.Shared.Drawing\\Free.Shared.Drawing.csproj");
+        project.Should().Contain("Free.Shared.Drawing/Free.Shared.Drawing.csproj");
         view.Should().Contain("DrawingMlRgbColor.TryParseHexRgb(hex, out var color)");
         view.Should().Contain("DrawingMlRgbColor.TryParseHexRgb(hex, out var parsed)");
         view.Should().NotContain("NumberStyles.HexNumber");

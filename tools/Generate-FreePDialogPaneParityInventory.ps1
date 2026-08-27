@@ -1,6 +1,6 @@
 param(
-    [string]$JsonPath = "docs\parity\freep-dialog-pane-parity-inventory.json",
-    [string]$MarkdownPath = "docs\parity\freep-dialog-pane-parity-inventory.md",
+    [string]$JsonPath = "docs/parity/freep-dialog-pane-parity-inventory.json",
+    [string]$MarkdownPath = "docs/parity/freep-dialog-pane-parity-inventory.md",
     [switch]$Check
 )
 

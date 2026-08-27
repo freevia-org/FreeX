@@ -200,7 +200,7 @@ public class RibbonAndDocumentTests
     public void Avalonia_shell_uses_the_shared_ribbon_renderer()
     {
         var project = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj"));
-        project.Should().Contain(@"..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj");
+        project.Should().Contain(@"../../shared/Free.Shared.Ribbon.Avalonia/Free.Shared.Ribbon.Avalonia.csproj");
 
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
         mainWindow.Should().Contain("using Free.Shared.Ribbon.Avalonia;");
@@ -216,7 +216,7 @@ public class RibbonAndDocumentTests
     public void Avalonia_shell_routes_file_lifecycle_through_shared_file_command_workflow()
     {
         var project = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj"));
-        project.Should().Contain(@"..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj");
+        project.Should().Contain(@"../../shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj");
 
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
         var sharedShellWorkflow = File.ReadAllText(FindRepoFile(

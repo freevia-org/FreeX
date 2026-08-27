@@ -1,6 +1,6 @@
 param(
-    [string]$EvidenceRoot = "docs\parity\freep-powerpoint-chrome-2026-08-16",
-    [string]$CaptureScriptPath = "tools\Capture-FreePPowerPointChrome.ps1",
+    [string]$EvidenceRoot = "docs/parity/freep-powerpoint-chrome-2026-08-16",
+    [string]$CaptureScriptPath = "tools/Capture-FreePPowerPointChrome.ps1",
     [switch]$Check
 )
 

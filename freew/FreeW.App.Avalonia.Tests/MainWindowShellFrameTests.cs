@@ -177,7 +177,7 @@ public sealed class MainWindowShellFrameTests
     public void MainWindow_sources_reference_the_shared_avalonia_shell_frame()
     {
         var project = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj"));
-        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
+        project.Should().Contain(@"../../shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj");
 
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
         mainWindow.Should().Contain("using Free.Shared.Shell.Avalonia;");

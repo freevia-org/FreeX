@@ -1,7 +1,7 @@
 param(
-    [string]$InventoryPath = "docs\parity\command-inventory.json",
-    [string]$CommandSurfacePath = "docs\parity\command-surface.md",
-    [string]$MenuToolbarPath = "docs\parity\menu-toolbar.md",
+    [string]$InventoryPath = "docs/parity/command-inventory.json",
+    [string]$CommandSurfacePath = "docs/parity/command-surface.md",
+    [string]$MenuToolbarPath = "docs/parity/menu-toolbar.md",
     [switch]$Check
 )
 
@@ -145,7 +145,7 @@ function Set-GeneratedBlock {
     $updatedText = [regex]::Replace($text, $pattern, $replacement)
     if ($CheckOnly) {
         if ($updatedText -cne $text) {
-            throw "Generated block '$Marker' is out of date in $Path. Run tools\Generate-CommandInventoryDocs.ps1 to refresh it."
+            throw "Generated block '$Marker' is out of date in $Path. Run tools/Generate-CommandInventoryDocs.ps1 to refresh it."
         }
 
         return

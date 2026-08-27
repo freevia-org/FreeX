@@ -14,7 +14,7 @@ public sealed class VisualEvidenceHostOwnershipTests
         };
 
         shippingProjects.Should().AllSatisfy(source =>
-            source.Should().NotContain("TestSupport\\VisualEvidence\\FreeP.VisualEvidence.csproj"));
+            source.Should().NotContain("TestSupport/VisualEvidence/FreeP.VisualEvidence.csproj"));
 
         var shippingSources = new[]
         {

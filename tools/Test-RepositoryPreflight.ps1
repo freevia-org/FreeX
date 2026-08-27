@@ -1,18 +1,18 @@
 param(
-    [string]$JsonFilesScriptPath = "tools\Test-JsonFiles.ps1",
-    [string]$XmlFilesScriptPath = "tools\Test-XmlFiles.ps1",
-    [string]$ToolScriptsScriptPath = "tools\Test-ToolScripts.ps1",
-    [string]$GitHubWorkflowsScriptPath = "tools\Test-GitHubWorkflows.ps1",
-    [string]$TestGateContractScriptPath = "tools\Test-TestGateContract.ps1",
-    [string]$DotNetSdkReadinessScriptPath = "tools\Test-DotNetSdkReadiness.ps1",
-    [string]$DotNetProjectReferencesScriptPath = "tools\Test-DotNetProjectReferences.ps1",
-    [string]$SolutionProjectsScriptPath = "tools\Test-SolutionProjects.ps1",
-    [string]$CodeQlSolutionScriptPath = "tools\Test-CodeQlSolution.ps1",
-    [string]$CrossPlatformPortabilityScriptPath = "tools\Test-CrossPlatformPortability.ps1",
-    [string]$MacOsAppReadinessScriptPath = "tools\Test-MacOsAppReadiness.ps1",
-    [string]$GeneratedDocsScriptPath = "tools\Test-GeneratedDocs.ps1",
-    [string]$ConflictMarkersScriptPath = "tools\Test-ConflictMarkers.ps1",
-    [string]$LinuxPackagingScriptsScriptPath = "tools\Test-LinuxPackagingScripts.ps1"
+    [string]$JsonFilesScriptPath = "tools/Test-JsonFiles.ps1",
+    [string]$XmlFilesScriptPath = "tools/Test-XmlFiles.ps1",
+    [string]$ToolScriptsScriptPath = "tools/Test-ToolScripts.ps1",
+    [string]$GitHubWorkflowsScriptPath = "tools/Test-GitHubWorkflows.ps1",
+    [string]$TestGateContractScriptPath = "tools/Test-TestGateContract.ps1",
+    [string]$DotNetSdkReadinessScriptPath = "tools/Test-DotNetSdkReadiness.ps1",
+    [string]$DotNetProjectReferencesScriptPath = "tools/Test-DotNetProjectReferences.ps1",
+    [string]$SolutionProjectsScriptPath = "tools/Test-SolutionProjects.ps1",
+    [string]$CodeQlSolutionScriptPath = "tools/Test-CodeQlSolution.ps1",
+    [string]$CrossPlatformPortabilityScriptPath = "tools/Test-CrossPlatformPortability.ps1",
+    [string]$MacOsAppReadinessScriptPath = "tools/Test-MacOsAppReadiness.ps1",
+    [string]$GeneratedDocsScriptPath = "tools/Test-GeneratedDocs.ps1",
+    [string]$ConflictMarkersScriptPath = "tools/Test-ConflictMarkers.ps1",
+    [string]$LinuxPackagingScriptsScriptPath = "tools/Test-LinuxPackagingScripts.ps1"
 )
 
 $ErrorActionPreference = "Stop"

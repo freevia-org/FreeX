@@ -40,15 +40,15 @@ public sealed class VisualEvidenceOrchestrationSourceTests
         var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
             "tools", "Generate-FreePWholeWindowVisualEvidenceManifest.ps1");
 
-        source.Should().Contain("freep\\TestSupport\\VisualEvidence\\WholeWindowVisualEvidenceHostCoordinator.cs")
-            .And.Contain("freep\\TestSupport\\VisualEvidence.Wpf\\WpfWholeWindowVisualEvidenceCapture.cs")
-            .And.Contain("freep\\TestSupport\\VisualEvidence.Wpf\\WpfWholeWindowVisualEvidenceCoordinator.cs")
-            .And.Contain("freep\\TestSupport\\VisualEvidence.Wpf\\MainWindow.VisualCaptureAdapter.cs")
-            .And.Contain("freep\\TestSupport\\VisualEvidence.Avalonia\\AvaloniaWholeWindowVisualEvidenceCapture.cs")
-            .And.Contain("freep\\TestSupport\\VisualEvidence.Avalonia\\AvaloniaWholeWindowVisualEvidenceCoordinator.cs")
-            .And.Contain("freep\\TestSupport\\VisualEvidence.Avalonia\\MainWindow.VisualCaptureAdapter.cs")
-            .And.NotContain("freep\\FreeP.App.Host\\MainWindow.WholeWindowVisualEvidence.cs")
-            .And.NotContain("freep\\FreeP.App.Avalonia\\MainWindow.WholeWindowVisualEvidence.cs");
+        source.Should().Contain("freep/TestSupport/VisualEvidence/WholeWindowVisualEvidenceHostCoordinator.cs")
+            .And.Contain("freep/TestSupport/VisualEvidence.Wpf/WpfWholeWindowVisualEvidenceCapture.cs")
+            .And.Contain("freep/TestSupport/VisualEvidence.Wpf/WpfWholeWindowVisualEvidenceCoordinator.cs")
+            .And.Contain("freep/TestSupport/VisualEvidence.Wpf/MainWindow.VisualCaptureAdapter.cs")
+            .And.Contain("freep/TestSupport/VisualEvidence.Avalonia/AvaloniaWholeWindowVisualEvidenceCapture.cs")
+            .And.Contain("freep/TestSupport/VisualEvidence.Avalonia/AvaloniaWholeWindowVisualEvidenceCoordinator.cs")
+            .And.Contain("freep/TestSupport/VisualEvidence.Avalonia/MainWindow.VisualCaptureAdapter.cs")
+            .And.NotContain("freep/FreeP.App.Host/MainWindow.WholeWindowVisualEvidence.cs")
+            .And.NotContain("freep/FreeP.App.Avalonia/MainWindow.WholeWindowVisualEvidence.cs");
     }
 
     [Fact]

@@ -58,9 +58,9 @@ public sealed class RendererUtilityOwnershipTests
         };
 
         adapter.Should().Contain("DrawingMlRgbColor.TryParseHexRgb(token, out var parsed)");
-        hostProject.Should().Contain("Free.Shared.Drawing\\Free.Shared.Drawing.csproj");
-        modelProject.Should().Contain("Free.Shared.Drawing\\Free.Shared.Drawing.csproj");
-        toolProject.Should().Contain("Free.Shared.Drawing\\Free.Shared.Drawing.csproj");
+        hostProject.Should().Contain("Free.Shared.Drawing/Free.Shared.Drawing.csproj");
+        modelProject.Should().Contain("Free.Shared.Drawing/Free.Shared.Drawing.csproj");
+        toolProject.Should().Contain("Free.Shared.Drawing/Free.Shared.Drawing.csproj");
         adapter.Split("ColorConverter.ConvertFromString(", StringSplitOptions.None)
             .Length.Should().Be(2);
         targetSources.Should().OnlyContain(source => !source.Contains("ColorConverter.ConvertFromString(", StringComparison.Ordinal));

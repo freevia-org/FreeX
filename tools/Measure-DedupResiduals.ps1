@@ -1,6 +1,6 @@
 param(
-    [string]$JsonPath = "docs\unification\dedup-residual-metrics.json",
-    [string]$MarkdownPath = "docs\unification\dedup-residual-metrics.md",
+    [string]$JsonPath = "docs/unification/dedup-residual-metrics.json",
+    [string]$MarkdownPath = "docs/unification/dedup-residual-metrics.md",
     [string]$RepositoryRoot,
     [string]$UpstreamRevision = "origin/main",
     [string]$AnalysisRevision,

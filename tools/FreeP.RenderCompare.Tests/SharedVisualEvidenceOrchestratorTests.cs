@@ -48,7 +48,7 @@ public sealed class SharedVisualEvidenceOrchestratorTests
         source.Should().Contain("new ToolTemporaryDirectory(\"freex-app-io-bench-\")")
             .And.Contain("temporaryOutput!.GetPath(\"output.xlsx\")")
             .And.NotContain("class TemporaryOutputFile");
-        project.Should().Contain("Free.ToolsShared\\Free.ToolsShared.csproj");
+        project.Should().Contain("Free.ToolsShared/Free.ToolsShared.csproj");
     }
 
     [Fact]

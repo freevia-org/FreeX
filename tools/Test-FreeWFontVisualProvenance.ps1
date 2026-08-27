@@ -1,8 +1,8 @@
 param(
-    [string]$ProvenancePath = "docs\parity\freew-dialog-harness\freew_font_visual_provenance.json",
-    [string]$ComparisonPath = "docs\parity\freew-dialog-harness\freew_dialog_visual_comparison.json",
-    [string]$InventoryPath = "docs\parity\freew-dialog-harness\freew_dialog_evidence_inventory.json",
-    [string]$FreshnessPath = "docs\parity\freew-dialog-harness\freew_dialog_visual_freshness.json",
+    [string]$ProvenancePath = "docs/parity/freew-dialog-harness/freew_font_visual_provenance.json",
+    [string]$ComparisonPath = "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
+    [string]$InventoryPath = "docs/parity/freew-dialog-harness/freew_dialog_evidence_inventory.json",
+    [string]$FreshnessPath = "docs/parity/freew-dialog-harness/freew_dialog_visual_freshness.json",
     [switch]$StrictImprovementContractProbe
 )
 

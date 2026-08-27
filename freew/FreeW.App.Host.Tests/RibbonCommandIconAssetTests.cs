@@ -80,7 +80,7 @@ public sealed class RibbonCommandIconAssetTests
     public void FreeW_hosts_import_one_definitions_owned_asset_composition()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-        const string importPath = @"..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Assets.props";
+        const string importPath = @"../FreeW.Ribbon.Definitions/FreeW.Ribbon.Assets.props";
         foreach (var projectPath in new[]
         {
             Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"),
@@ -104,19 +104,19 @@ public sealed class RibbonCommandIconAssetTests
         var canonicalIcons = assets
             .Descendants("Content")
             .Single(item => (string?)item.Attribute("Include") ==
-                @"$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg");
+                @"$(MSBuildThisFileDirectory)../../src/FreeX.Ribbon.Definitions/Resources/CommandIconsSvg/**/*.svg");
 
         ((string?)canonicalIcons.Attribute("Link")).Should().Be(
-            @"Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
+            @"Resources/CommandIconsSvg/%(RecursiveDir)%(Filename)%(Extension)");
         ((string?)canonicalIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
         ((string?)canonicalIcons.Attribute("CopyToPublishDirectory")).Should().Be("PreserveNewest");
 
         var contentIcons = assets
             .Descendants("Content")
             .Single(item => (string?)item.Attribute("Include") ==
-                @"$(MSBuildThisFileDirectory)Resources\ContentIconsSvg\**\*.svg");
+                @"$(MSBuildThisFileDirectory)Resources/ContentIconsSvg/**/*.svg");
         ((string?)contentIcons.Attribute("Link")).Should().Be(
-            @"Resources\ContentIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
+            @"Resources/ContentIconsSvg/%(RecursiveDir)%(Filename)%(Extension)");
         ((string?)contentIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
         contentIcons.Element("CopyToPublishDirectory")!.Value.Should().Be("PreserveNewest");
         ((string?)contentIcons.Element("CopyToPublishDirectory")!.Attribute("Condition"))
@@ -144,10 +144,10 @@ public sealed class RibbonCommandIconAssetTests
         var localIcons = assets
             .Descendants("Content")
             .Single(item => (string?)item.Attribute("Include") ==
-                @"$(MSBuildThisFileDirectory)Resources\CommandIconsSvg\**\*.svg");
+                @"$(MSBuildThisFileDirectory)Resources/CommandIconsSvg/**/*.svg");
 
         ((string?)localIcons.Attribute("Link")).Should().Be(
-            @"Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
+            @"Resources/CommandIconsSvg/%(RecursiveDir)%(Filename)%(Extension)");
         ((string?)localIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
         ((string?)localIcons.Attribute("CopyToPublishDirectory")).Should().Be("PreserveNewest");
 

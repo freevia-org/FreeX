@@ -1,6 +1,6 @@
 param(
-    [string]$InventoryPath = "docs\parity\freep-command-parity-inventory.json",
-    [string]$MarkdownPath = "docs\parity\freep-command-parity-inventory.md",
+    [string]$InventoryPath = "docs/parity/freep-command-parity-inventory.json",
+    [string]$MarkdownPath = "docs/parity/freep-command-parity-inventory.md",
     [switch]$Check
 )
 
@@ -12,7 +12,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 $resolvedInventoryPath = Resolve-ToolRepoPath -Path $InventoryPath -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
-$definitionsProject = ConvertTo-ToolXmlAttribute (Resolve-ToolRepoPath -Path "freep\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" -RepoRoot $repoRoot)
+$definitionsProject = ConvertTo-ToolXmlAttribute (Resolve-ToolRepoPath -Path "freep/FreeP.Ribbon.Definitions/FreeP.Ribbon.Definitions.csproj" -RepoRoot $repoRoot)
 
 $programSource = @'
 using System.Text;
@@ -2460,7 +2460,7 @@ Invoke-ToolGeneratedProject @{
         param($outputPaths)
         @($outputPaths[0].TempPath, $outputPaths[1].TempPath)
     }
-    Script = "tools\Generate-FreePCommandParityInventory.ps1"
+    Script = "tools/Generate-FreePCommandParityInventory.ps1"
     Failure = "FreeP command parity inventory generator failed."
     Check = $Check
     CheckMessage = "FreeP command parity inventory docs are up to date."

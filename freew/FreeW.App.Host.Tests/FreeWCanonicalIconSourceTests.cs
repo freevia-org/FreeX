@@ -22,26 +22,26 @@ public sealed class FreeWCanonicalIconSourceTests
         brandAssets.Should().Contain("<BrandMacOsIconPath>$(BrandAssetsDirectory)$(BrandMacOsIconFileName)</BrandMacOsIconPath>");
 
         var wpfProject = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"));
-        wpfProject.Should().Contain(@"<Import Project=""..\..\shared\Free.Shared.Shell\BrandAssets.props"" />");
-        wpfProject.Should().Contain(@"<Resource Include=""$(BrandWindowsIconPath)"" Link=""Resources\$(BrandWindowsIconFileName)"" />");
+        wpfProject.Should().Contain(@"<Import Project=""../../shared/Free.Shared.Shell/BrandAssets.props"" />");
+        wpfProject.Should().Contain(@"<Resource Include=""$(BrandWindowsIconPath)"" Link=""Resources/$(BrandWindowsIconFileName)"" />");
         wpfProject.Should().Contain(@"<Content Include=""$(BrandWindowsIconPath)""");
         wpfProject.Should().Contain("<ApplicationIcon>$(BrandWindowsIconPath)</ApplicationIcon>");
-        wpfProject.Should().NotContain(@"shared\Free.Shared.Shell\Resources\FreeW.ico");
+        wpfProject.Should().NotContain(@"shared/Free.Shared.Shell/Resources/FreeW.ico");
         wpfProject.Should().Contain("<ApplicationIcon>");
         var wpfWindow = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "MainWindow.cs"));
         wpfWindow.Should().Contain("IconUri = Program.ActiveTheme.VisualAssets.GetWpfPackUri(\"FreeW.App.Host\")");
 
         var avaloniaProject = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj"));
-        avaloniaProject.Should().Contain(@"<Import Project=""..\..\shared\Free.Shared.Shell\BrandAssets.props"" />");
+        avaloniaProject.Should().Contain(@"<Import Project=""../../shared/Free.Shared.Shell/BrandAssets.props"" />");
         avaloniaProject.Should().Contain(@"<Content Include=""$(BrandWindowsIconPath)""");
-        avaloniaProject.Should().Contain(@"Link=""Resources\$(BrandWindowsIconFileName)""");
+        avaloniaProject.Should().Contain(@"Link=""Resources/$(BrandWindowsIconFileName)""");
         avaloniaProject.Should().Contain(@"<Content Include=""$(BrandScalableIconPath)""");
-        avaloniaProject.Should().Contain(@"Link=""Resources\$(BrandScalableIconFileName)""");
+        avaloniaProject.Should().Contain(@"Link=""Resources/$(BrandScalableIconFileName)""");
         avaloniaProject.Should().Contain(@"<Content Include=""$(BrandMacOsIconPath)""");
         avaloniaProject.Should().Contain(@"Link=""$(BrandMacOsIconFileName)""");
-        avaloniaProject.Should().NotContain(@"shared\Free.Shared.Shell\Resources\FreeW.ico");
-        avaloniaProject.Should().NotContain(@"shared\Free.Shared.Shell\Resources\FreeW.svg");
-        avaloniaProject.Should().NotContain(@"shared\Free.Shared.Shell\Resources\FreeW.icns");
+        avaloniaProject.Should().NotContain(@"shared/Free.Shared.Shell/Resources/FreeW.ico");
+        avaloniaProject.Should().NotContain(@"shared/Free.Shared.Shell/Resources/FreeW.svg");
+        avaloniaProject.Should().NotContain(@"shared/Free.Shared.Shell/Resources/FreeW.icns");
 
         foreach (var script in new[] { "build-appimage.sh", "build-deb.sh", "package-linux-app.sh" })
         {

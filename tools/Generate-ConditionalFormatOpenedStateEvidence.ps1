@@ -1,6 +1,6 @@
 param(
-    [string]$JsonPath = "docs\parity\conditional-format-opened-state-evidence.json",
-    [string]$MarkdownPath = "docs\parity\conditional-format-opened-state-evidence.md",
+    [string]$JsonPath = "docs/parity/conditional-format-opened-state-evidence.json",
+    [string]$MarkdownPath = "docs/parity/conditional-format-opened-state-evidence.md",
     [switch]$Check
 )
 
@@ -381,7 +381,7 @@ function Get-OperatorChecklist {
             -Purpose "Produces the Release WPF and Avalonia executables referenced by the FreeX capture commands."
         New-OperatorChecklistItem `
             -Phase "preflight" `
-            -Command ".\tools\Invoke-ForegroundCapture.ps1 -EnvironmentPreflight" `
+            -Command "./tools/Invoke-ForegroundCapture.ps1 -EnvironmentPreflight" `
             -Purpose "Emits machine-readable readiness diagnostics for Windows foreground focus, Release executables, and Microsoft Excel COM before foreground input."
     )
 
@@ -394,13 +394,13 @@ function Get-OperatorChecklist {
 
     $items += New-OperatorChecklistItem `
         -Phase "refresh" `
-        -Command ".\tools\Generate-ConditionalFormatOpenedStateEvidence.ps1; .\tools\Generate-ConditionalFormatOpenedStateEvidence.ps1 -Check" `
+        -Command "./tools/Generate-ConditionalFormatOpenedStateEvidence.ps1; ./tools/Generate-ConditionalFormatOpenedStateEvidence.ps1 -Check" `
         -Purpose "Refreshes and verifies this report after the real manifests and PNGs are committed under tools/foreground-captures/<scenario>/."
 
     return @($items)
 }
 
-$classification = Read-ToolJson -Path "docs\parity\functional-parity-classification.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+$classification = Read-ToolJson -Path "docs/parity/functional-parity-classification.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
 $runtimeCatalogItems = [int]$classification.summary.'conditional-format-popup-catalog-item'
 $conditionalCommandIds = @($classification.catalogs.conditionalFormatPopupCommandIds | Sort-Object)
 if ($conditionalCommandIds.Count -ne $runtimeCatalogItems) {
@@ -412,28 +412,28 @@ $captureTargets = @(
         -Id "excel.conditional-formatting-gallery.opened" `
         -Subject "excel" `
         -Scenario "excel-conditional-formatting-gallery" `
-        -ManifestPath "tools\foreground-captures\excel-conditional-formatting-gallery\excel-conditional-formatting-gallery_manifest.json" `
+        -ManifestPath "tools/foreground-captures/excel-conditional-formatting-gallery/excel-conditional-formatting-gallery_manifest.json" `
         -ExpectedOpenedState "Excel Home > Conditional Formatting opened popup/gallery" `
-        -RunnerCommand ".\tools\Invoke-ForegroundCapture.ps1 -Scenario excel-conditional-formatting-gallery" `
+        -RunnerCommand "./tools/Invoke-ForegroundCapture.ps1 -Scenario excel-conditional-formatting-gallery" `
         -RequiredEnvironment "Windows desktop session with Microsoft Excel COM registered and foreground focus allowed."
     Get-CaptureTargetStatus `
         -Id "wpf.conditional-formatting-gallery.opened" `
         -Subject "wpf" `
         -Scenario "freex-conditional-formatting-gallery" `
-        -ManifestPath "tools\foreground-captures\freex-conditional-formatting-gallery\freex-conditional-formatting-gallery_manifest.json" `
+        -ManifestPath "tools/foreground-captures/freex-conditional-formatting-gallery/freex-conditional-formatting-gallery_manifest.json" `
         -ExpectedOpenedState "FreeX WPF Home > Conditional Formatting opened popup/gallery" `
-        -RunnerCommand ".\tools\Invoke-ForegroundCapture.ps1 -Scenario freex-conditional-formatting-gallery -FreeXExe <Release FreeX.App.Host.exe>" `
+        -RunnerCommand "./tools/Invoke-ForegroundCapture.ps1 -Scenario freex-conditional-formatting-gallery -FreeXExe <Release FreeX.App.Host.exe>" `
         -RequiredEnvironment "Windows desktop session with built Release WPF host and foreground focus allowed." `
         -ManifestSubject "freex"
     Get-CaptureTargetStatus `
         -Id "avalonia.conditional-formatting-gallery.opened" `
         -Subject "avalonia" `
         -Scenario "avalonia-conditional-formatting-gallery" `
-        -ManifestPath "tools\foreground-captures\avalonia-conditional-formatting-gallery\avalonia-conditional-formatting-gallery_manifest.json" `
+        -ManifestPath "tools/foreground-captures/avalonia-conditional-formatting-gallery/avalonia-conditional-formatting-gallery_manifest.json" `
         -ExpectedOpenedState "FreeX Avalonia Home > Conditional Formatting opened popup/gallery" `
-        -RunnerCommand ".\tools\Invoke-ForegroundCapture.ps1 -Scenario avalonia-conditional-formatting-gallery -AvaloniaExe <Release FreeX.exe>" `
+        -RunnerCommand "./tools/Invoke-ForegroundCapture.ps1 -Scenario avalonia-conditional-formatting-gallery -AvaloniaExe <Release FreeX.exe>" `
         -RequiredEnvironment "Windows desktop session with built Release Avalonia app and foreground focus allowed." `
-        -FallbackEvidencePath "docs\parity\dialog-visual-assets\avalonia-capture\dialog.ConditionalFormatNewRule.png" `
+        -FallbackEvidencePath "docs/parity/dialog-visual-assets/avalonia-capture/dialog.ConditionalFormatNewRule.png" `
         -FallbackEvidenceNote "Existing Avalonia dialog route evidence is retained for dialog parity, but it is not opened popup/gallery evidence."
 )
 
@@ -565,8 +565,8 @@ $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 
 if ($Check) {
-    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Conditional-format opened-state evidence JSON" -GeneratorScriptName "tools\Generate-ConditionalFormatOpenedStateEvidence.ps1" -NormalizeNewlines
-    Test-ToolGeneratedContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Conditional-format opened-state evidence Markdown" -GeneratorScriptName "tools\Generate-ConditionalFormatOpenedStateEvidence.ps1" -NormalizeNewlines
+    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Conditional-format opened-state evidence JSON" -GeneratorScriptName "tools/Generate-ConditionalFormatOpenedStateEvidence.ps1" -NormalizeNewlines
+    Test-ToolGeneratedContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Conditional-format opened-state evidence Markdown" -GeneratorScriptName "tools/Generate-ConditionalFormatOpenedStateEvidence.ps1" -NormalizeNewlines
     Write-Host "Conditional-format opened-state evidence is up to date."
     return
 }

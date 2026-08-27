@@ -1,5 +1,5 @@
 param(
-    [string]$ManifestPath = "docs\parity\freex-avalonia-grid-corpus-2026-08-16\manifest.json"
+    [string]$ManifestPath = "docs/parity/freex-avalonia-grid-corpus-2026-08-16/manifest.json"
 )
 
 $ErrorActionPreference = "Stop"

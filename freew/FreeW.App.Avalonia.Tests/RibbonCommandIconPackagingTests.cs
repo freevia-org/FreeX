@@ -29,7 +29,7 @@ public sealed class RibbonCommandIconPackagingTests
         var assetsImport = project
             .Descendants("Import")
             .Single(item => (string?)item.Attribute("Project") ==
-                @"..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Assets.props");
+                @"../FreeW.Ribbon.Definitions/FreeW.Ribbon.Assets.props");
         var assetsPath = Path.GetFullPath(Path.Combine(
             Path.GetDirectoryName(projectPath)!,
             (string)assetsImport.Attribute("Project")!));
@@ -37,8 +37,8 @@ public sealed class RibbonCommandIconPackagingTests
 
         foreach (var include in new[]
         {
-            @"$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg",
-            @"$(MSBuildThisFileDirectory)Resources\CommandIconsSvg\**\*.svg",
+            @"$(MSBuildThisFileDirectory)../../src/FreeX.Ribbon.Definitions/Resources/CommandIconsSvg/**/*.svg",
+            @"$(MSBuildThisFileDirectory)Resources/CommandIconsSvg/**/*.svg",
         })
         {
             var canonicalIcons = assets
@@ -46,7 +46,7 @@ public sealed class RibbonCommandIconPackagingTests
                 .Single(item => (string?)item.Attribute("Include") == include);
 
             ((string?)canonicalIcons.Attribute("Link")).Should().Be(
-                @"Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
+                @"Resources/CommandIconsSvg/%(RecursiveDir)%(Filename)%(Extension)");
             ((string?)canonicalIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
             ((string?)canonicalIcons.Attribute("CopyToPublishDirectory")).Should().Be("PreserveNewest");
         }

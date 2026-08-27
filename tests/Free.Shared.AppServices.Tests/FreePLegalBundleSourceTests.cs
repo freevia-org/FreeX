@@ -12,7 +12,7 @@ public sealed class FreePLegalBundleSourceTests
             "shared", "Free.Shared.Shell", "FamilyLegalBundle.props");
 
         project.Should().Contain("FamilyLegalBundle.props");
-        project.Should().NotContain("Link=\"Legal\\LICENSE.txt\"");
+        project.Should().NotContain("Link=\"Legal/LICENSE.txt\"");
         bundle.Should().Contain("LICENSE.txt");
         bundle.Should().Contain("legal-notices.md");
         bundle.Should().Contain("privacy.md");

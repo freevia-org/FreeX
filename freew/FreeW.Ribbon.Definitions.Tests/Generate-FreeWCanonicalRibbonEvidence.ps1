@@ -91,7 +91,7 @@ Invoke-ToolGeneratedProject @{
         param($outputPaths)
         @($outputPaths[0].TempPath)
     }
-    Script = "freew\FreeW.Ribbon.Definitions.Tests\Generate-FreeWCanonicalRibbonEvidence.ps1"
+    Script = "freew/FreeW.Ribbon.Definitions.Tests/Generate-FreeWCanonicalRibbonEvidence.ps1"
     Failure = "FreeW canonical ribbon evidence generator failed."
     Check = $Check
     CheckMessage = "FreeW canonical ribbon evidence is up to date."

@@ -223,13 +223,13 @@ if ($Check) {
         -ExpectedContent $jsonText `
         -ActualPath $jsonPath `
         -Label 'FreeW shell visual evidence JSON' `
-        -GeneratorScriptName 'tools\Generate-FreeWShellVisualEvidence.ps1' `
+        -GeneratorScriptName 'tools/Generate-FreeWShellVisualEvidence.ps1' `
         -NormalizeNewlines
     Test-ToolGeneratedContentMatches `
         -ExpectedContent $markdownText `
         -ActualPath $markdownPath `
         -Label 'FreeW shell visual evidence README' `
-        -GeneratorScriptName 'tools\Generate-FreeWShellVisualEvidence.ps1' `
+        -GeneratorScriptName 'tools/Generate-FreeWShellVisualEvidence.ps1' `
         -NormalizeNewlines
     Write-Output "Fresh: $jsonPath"
     Write-Output "Fresh: $markdownPath"

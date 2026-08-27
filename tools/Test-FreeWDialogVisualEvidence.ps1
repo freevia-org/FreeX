@@ -1,8 +1,8 @@
 param(
-    [string]$ComparisonPath = "docs\parity\freew-dialog-harness\freew_dialog_visual_comparison.json",
-    [string]$ReadmePath = "docs\parity\freew-dialog-harness\README.md",
-    [string]$AuditNotePath = "docs\parity\avalonia-parity-wave157-freew-evidence-20260805.md",
-    [string]$DashboardPath = "docs\parity\avalonia-wpf-cross-app-dashboard.json",
+    [string]$ComparisonPath = "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
+    [string]$ReadmePath = "docs/parity/freew-dialog-harness/README.md",
+    [string]$AuditNotePath = "docs/parity/avalonia-parity-wave157-freew-evidence-20260805.md",
+    [string]$DashboardPath = "docs/parity/avalonia-wpf-cross-app-dashboard.json",
     [switch]$Check
 )
 

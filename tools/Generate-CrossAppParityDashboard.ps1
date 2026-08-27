@@ -1,6 +1,6 @@
 param(
-    [string]$JsonPath = "docs\parity\avalonia-wpf-cross-app-dashboard.json",
-    [string]$MarkdownPath = "docs\parity\avalonia-wpf-cross-app-dashboard.md",
+    [string]$JsonPath = "docs/parity/avalonia-wpf-cross-app-dashboard.json",
+    [string]$MarkdownPath = "docs/parity/avalonia-wpf-cross-app-dashboard.md",
     [switch]$Check
 )
 
@@ -200,21 +200,21 @@ $tempJsonPath = Join-Path $tempRoot "avalonia-wpf-cross-app-dashboard.json"
 $tempMarkdownPath = Join-Path $tempRoot "avalonia-wpf-cross-app-dashboard.md"
 
 try {
-    $commandInventory = Read-ToolJson -Path "docs\parity\command-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $functional = Read-ToolJson -Path "docs\parity\functional-parity.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $functionalClassification = Read-ToolJson -Path "docs\parity\functional-parity-classification.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $dialogInventory = Read-ToolJson -Path "docs\parity\dialog-parity-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $dialogVisualEvidence = Read-ToolJson -Path "docs\parity\dialog-visual-evidence-summary.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freeXWpfManifest = Read-ToolJson -Path "docs\parity\dialog-visual-assets\wpf-capture\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freeXAvaloniaManifest = Read-ToolJson -Path "docs\parity\dialog-visual-assets\avalonia-capture\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freeXOfficeBaseline = Read-ToolJson -Path "docs\parity\freex-excel-com-baseline-2026-08-14\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Excel Office baseline manifest is missing"
-    $freeXAvaloniaGridCorpus = Read-ToolJson -Path "docs\parity\freex-avalonia-grid-corpus-2026-08-16\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required FreeX Avalonia grid corpus manifest is missing"
-    $freeXWpfRibbonManifest = Read-ToolJson -Path "tools\screenshots\screenshot_manifest.json" -RepoRoot $repoRoot -MissingMessage "Required FreeX WPF ribbon capture manifest is missing"
-    $freeXAvaloniaRibbonManifest = Read-ToolJson -Path "tools\screenshots_avalonia_ribbon\screenshot_manifest.json" -RepoRoot $repoRoot -MissingMessage "Required FreeX Avalonia ribbon capture manifest is missing"
-    $freeXWave193PhysicalResult = Read-ToolJson -Path "docs\parity\evidence\wave193-freex-autofilter-no-fill-20260823\physical-result.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeX physical result is missing"
-    $freeXWave193Manifest = Read-ToolJson -Path "docs\parity\evidence\wave193-freex-autofilter-no-fill-20260823\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeX evidence manifest is missing"
-    $freeXWave194PhysicalResult = Read-ToolJson -Path "docs\parity\evidence\wave194-freex-autofilter-mixed-type-20260823\physical-result.json" -RepoRoot $repoRoot -MissingMessage "Required Wave194 FreeX physical result is missing"
-    $freeXWave194Manifest = Read-ToolJson -Path "docs\parity\evidence\wave194-freex-autofilter-mixed-type-20260823\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Wave194 FreeX evidence manifest is missing"
+    $commandInventory = Read-ToolJson -Path "docs/parity/command-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $functional = Read-ToolJson -Path "docs/parity/functional-parity.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $functionalClassification = Read-ToolJson -Path "docs/parity/functional-parity-classification.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $dialogInventory = Read-ToolJson -Path "docs/parity/dialog-parity-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $dialogVisualEvidence = Read-ToolJson -Path "docs/parity/dialog-visual-evidence-summary.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freeXWpfManifest = Read-ToolJson -Path "docs/parity/dialog-visual-assets/wpf-capture/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freeXAvaloniaManifest = Read-ToolJson -Path "docs/parity/dialog-visual-assets/avalonia-capture/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freeXOfficeBaseline = Read-ToolJson -Path "docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Excel Office baseline manifest is missing"
+    $freeXAvaloniaGridCorpus = Read-ToolJson -Path "docs/parity/freex-avalonia-grid-corpus-2026-08-16/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required FreeX Avalonia grid corpus manifest is missing"
+    $freeXWpfRibbonManifest = Read-ToolJson -Path "tools/screenshots/screenshot_manifest.json" -RepoRoot $repoRoot -MissingMessage "Required FreeX WPF ribbon capture manifest is missing"
+    $freeXAvaloniaRibbonManifest = Read-ToolJson -Path "tools/screenshots_avalonia_ribbon/screenshot_manifest.json" -RepoRoot $repoRoot -MissingMessage "Required FreeX Avalonia ribbon capture manifest is missing"
+    $freeXWave193PhysicalResult = Read-ToolJson -Path "docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/physical-result.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeX physical result is missing"
+    $freeXWave193Manifest = Read-ToolJson -Path "docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeX evidence manifest is missing"
+    $freeXWave194PhysicalResult = Read-ToolJson -Path "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/physical-result.json" -RepoRoot $repoRoot -MissingMessage "Required Wave194 FreeX physical result is missing"
+    $freeXWave194Manifest = Read-ToolJson -Path "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Wave194 FreeX evidence manifest is missing"
     $wave193PhysicalRun = $freeXWave193Manifest.physicalRun
     $wave193ExpectedArtifactCount = 18
     $wave193PopupOpenChangeThreshold = 300
@@ -243,30 +243,30 @@ try {
         -not [bool]$wave193PhysicalRun.clickAcknowledged) {
         throw "Wave193 FreeX popup transition metrics did not satisfy open/dismiss/restoration thresholds."
     }
-    $freew = Read-ToolJson -Path "docs\parity\freew-command-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freeWRouteInventory = Read-ToolJson -Path "docs\parity\freew-dialog-harness\freew_dialog_route_inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freeWVisualComparison = Read-ToolJson -Path "docs\parity\freew-dialog-harness\freew_dialog_visual_comparison.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freeWFontProvenance = Read-ToolJson -Path "docs\parity\freew-dialog-harness\freew_font_visual_provenance.json" -RepoRoot $repoRoot -MissingMessage "Required FreeW Font provenance is missing"
+    $freew = Read-ToolJson -Path "docs/parity/freew-command-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freeWRouteInventory = Read-ToolJson -Path "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freeWVisualComparison = Read-ToolJson -Path "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freeWFontProvenance = Read-ToolJson -Path "docs/parity/freew-dialog-harness/freew_font_visual_provenance.json" -RepoRoot $repoRoot -MissingMessage "Required FreeW Font provenance is missing"
     if ($null -eq $freeWVisualComparison.scope -or [string]$freeWVisualComparison.scope.kind -ne "canonical-inputs-only") {
         throw "FreeW visual comparison must declare canonical-inputs-only scope before the cross-app dashboard can be generated."
     }
-    $freeWOfficeBaseline = Read-ToolJson -Path "docs\parity\freew-word-baseline-2026-08-16\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Word Office baseline manifest is missing"
-    $freeWShellVisualEvidence = Read-ToolJson -Path "docs\parity\freew-shell-visual-2026-08-16\freew_shell_visual_evidence.json" -RepoRoot $repoRoot -MissingMessage "Required FreeW shell visual evidence is missing"
-    $freep = Read-ToolJson -Path "docs\parity\freep-command-parity-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freePDialogVisualEvidence = Read-ToolJson -Path "docs\parity\freep-dialog-pane-visual-evidence\summary.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freePDialogArtifactManifest = Read-ToolJson -Path "docs\parity\freep-dialog-pane-visual-evidence\artifact-manifest.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freePWholeWindowVisualEvidence = Read-ToolJson -Path "docs\parity\freep-whole-window-visual-evidence\summary.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freePWholeWindowArtifactManifest = Read-ToolJson -Path "docs\parity\freep-whole-window-visual-evidence\artifact-manifest.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freePRenderParity = Read-ToolJson -Path "docs\parity\freep-render-slideshow-media-parity-20260720.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freePNativePickerEvidence = Read-ToolJson -Path "docs\parity\freep-native-picker-human-evidence.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
-    $freePOfficeBaseline = Read-ToolJson -Path "docs\parity\freep-powerpoint-baseline-2026-08-14.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint Office baseline manifest is missing"
-    $freePOfficeRecalibration = Read-ToolJson -Path "docs\parity\freep-powerpoint-recalibration-2026-08-15.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint current-source recalibration is missing"
-    $freePWave193Metrics = Read-ToolJson -Path "docs\parity\evidence\avalonia-parity-wave193-freep-evidence-20260823\metrics.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeP current-source metrics are missing"
-    $freePWave193References = Read-ToolJson -Path "docs\parity\evidence\avalonia-parity-wave193-freep-evidence-20260823\references.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeP Office references are missing"
-    $freePWave193Images = Read-ToolJson -Path "docs\parity\evidence\avalonia-parity-wave193-freep-evidence-20260823\images.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeP retained images are missing"
-    $freePWave194Topology = Read-ToolJson -Path "docs\parity\evidence\freep-wave194-deck17-slide02-topology-20260823\topology.json" -RepoRoot $repoRoot -MissingMessage "Required Wave194 FreeP topology evidence is missing"
-    $freePPowerPointChrome = Read-ToolJson -Path "docs\parity\freep-powerpoint-chrome-2026-08-16\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint chrome capture manifest is missing"
-    $freePResponsiveChrome = Read-ToolJson -Path "docs\parity\freep-responsive-chrome-2026-08-16\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required FreeP responsive chrome capture manifest is missing"
+    $freeWOfficeBaseline = Read-ToolJson -Path "docs/parity/freew-word-baseline-2026-08-16/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Word Office baseline manifest is missing"
+    $freeWShellVisualEvidence = Read-ToolJson -Path "docs/parity/freew-shell-visual-2026-08-16/freew_shell_visual_evidence.json" -RepoRoot $repoRoot -MissingMessage "Required FreeW shell visual evidence is missing"
+    $freep = Read-ToolJson -Path "docs/parity/freep-command-parity-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freePDialogVisualEvidence = Read-ToolJson -Path "docs/parity/freep-dialog-pane-visual-evidence/summary.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freePDialogArtifactManifest = Read-ToolJson -Path "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freePWholeWindowVisualEvidence = Read-ToolJson -Path "docs/parity/freep-whole-window-visual-evidence/summary.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freePWholeWindowArtifactManifest = Read-ToolJson -Path "docs/parity/freep-whole-window-visual-evidence/artifact-manifest.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freePRenderParity = Read-ToolJson -Path "docs/parity/freep-render-slideshow-media-parity-20260720.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freePNativePickerEvidence = Read-ToolJson -Path "docs/parity/freep-native-picker-human-evidence.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freePOfficeBaseline = Read-ToolJson -Path "docs/parity/freep-powerpoint-baseline-2026-08-14.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint Office baseline manifest is missing"
+    $freePOfficeRecalibration = Read-ToolJson -Path "docs/parity/freep-powerpoint-recalibration-2026-08-15.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint current-source recalibration is missing"
+    $freePWave193Metrics = Read-ToolJson -Path "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/metrics.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeP current-source metrics are missing"
+    $freePWave193References = Read-ToolJson -Path "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/references.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeP Office references are missing"
+    $freePWave193Images = Read-ToolJson -Path "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/images.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeP retained images are missing"
+    $freePWave194Topology = Read-ToolJson -Path "docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json" -RepoRoot $repoRoot -MissingMessage "Required Wave194 FreeP topology evidence is missing"
+    $freePPowerPointChrome = Read-ToolJson -Path "docs/parity/freep-powerpoint-chrome-2026-08-16/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint chrome capture manifest is missing"
+    $freePResponsiveChrome = Read-ToolJson -Path "docs/parity/freep-responsive-chrome-2026-08-16/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required FreeP responsive chrome capture manifest is missing"
 
     $commandRows = Get-CommandSurfaceRows $commandInventory.commandSurfaceRows
     $freeXFunctionalMatrix = [ordered]@{
@@ -924,7 +924,7 @@ try {
         reviewRemediation = "FreeX now uses one authoritative mixed-type geometry contract with mutation coverage and reachable-source provenance; FreeP topology schema v3 pins the complete PPTX SHA-256 and describes the remaining residual as unresolved; the color-geometry guard remediation remains retained in the tested source."
         independentReviewStatus = "passed"
         independentReview = "Passed: an independent final cross-app acceptance review of tested source commit ${wave194TestedSourceCommit} completed in an isolated worktree at integration head ${wave194ReviewedIntegrationHead}; no findings. This review preserves the tested-source boundary, counts, timings, and visual claim boundaries."
-        repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1 with isolated SDK C:\Users\quinn\.dotnet-codex-10.0.400 and Git Bash first on PATH exited 0; 294 JSON, 310 XML-backed, 127 PowerShell scripts, 11 GitHub workflows, 12 test gates/48 assigned projects, 13,996 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:01:55.8304515."
+        repositoryPreflight = "Passed at tested source commit ${wave194TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-RepositoryPreflight.ps1 with isolated SDK C:\Users\quinn\.dotnet-codex-10.0.400 and Git Bash first on PATH exited 0; 294 JSON, 310 XML-backed, 127 PowerShell scripts, 11 GitHub workflows, 12 test gates/48 assigned projects, 13,996 conflict-marker files checked, and all generated docs/evidence current; elapsed 00:01:55.8304515."
         fullReleaseBuildMsBuildElapsed = $wave194FullReleaseBuildMsBuildElapsed
         fullReleaseBuildWrapperElapsed = $wave194FullReleaseBuildWrapperElapsed
         fullReleaseBuild = "Passed at tested source commit ${wave194TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release -m:1 passed with 0 warnings and 0 errors; MSBuild-retained Time Elapsed $wave194FullReleaseBuildMsBuildElapsed; wrapper stopwatch $wave194FullReleaseBuildWrapperElapsed."
@@ -1190,8 +1190,8 @@ try {
     Set-Content -LiteralPath $tempMarkdownPath -Value ($md + "`n") -NoNewline -Encoding UTF8
 
     if ($Check) {
-        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempJsonPath -ActualPath $resolvedJsonPath -Label "Cross-app parity dashboard JSON" -GeneratorScriptName "tools\Generate-CrossAppParityDashboard.ps1" -NormalizeNewlines
-        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempMarkdownPath -ActualPath $resolvedMarkdownPath -Label "Cross-app parity dashboard Markdown" -GeneratorScriptName "tools\Generate-CrossAppParityDashboard.ps1" -NormalizeNewlines
+        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempJsonPath -ActualPath $resolvedJsonPath -Label "Cross-app parity dashboard JSON" -GeneratorScriptName "tools/Generate-CrossAppParityDashboard.ps1" -NormalizeNewlines
+        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempMarkdownPath -ActualPath $resolvedMarkdownPath -Label "Cross-app parity dashboard Markdown" -GeneratorScriptName "tools/Generate-CrossAppParityDashboard.ps1" -NormalizeNewlines
     }
     else {
         Copy-Item -LiteralPath $tempJsonPath -Destination $resolvedJsonPath -Force

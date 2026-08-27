@@ -73,8 +73,8 @@ public sealed class SmokeValidationOwnershipTests
         var shippingProject = File.ReadAllText(Path.Combine(shipping, "FreeW.App.Avalonia.csproj"));
         var validationProject = File.ReadAllText(Path.Combine(validation, "FreeW.Validation.Avalonia.csproj"));
         shippingProject.Should().Contain("Condition=\"'$(FreeWValidationHost)' == 'true'\"");
-        shippingProject.Should().Contain("..\\TestSupport\\Validation.Avalonia\\MainWindow.ValidationAccessAdapter.cs");
-        shippingProject.Should().Contain("..\\TestSupport\\Validation.Avalonia\\AvaloniaSpeechEngine.ValidationAccess.cs");
+        shippingProject.Should().Contain("../TestSupport/Validation.Avalonia/MainWindow.ValidationAccessAdapter.cs");
+        shippingProject.Should().Contain("../TestSupport/Validation.Avalonia/AvaloniaSpeechEngine.ValidationAccess.cs");
         shippingProject.Should().Contain("<GlobalPropertiesToRemove>FreeWValidationHost</GlobalPropertiesToRemove>");
         validationProject.Should().Contain("AdditionalProperties=\"FreeWValidationHost=true\"");
         validationProject.Should().Contain("Compile Remove=\"MainWindow.ValidationAccessAdapter.cs\"");

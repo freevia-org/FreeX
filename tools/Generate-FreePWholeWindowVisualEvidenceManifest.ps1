@@ -1,6 +1,6 @@
 param(
-    [string]$EvidenceRoot = "docs\parity\freep-whole-window-visual-evidence",
-    [string]$ManifestPath = "docs\parity\freep-whole-window-visual-evidence\artifact-manifest.json",
+    [string]$EvidenceRoot = "docs/parity/freep-whole-window-visual-evidence",
+    [string]$ManifestPath = "docs/parity/freep-whole-window-visual-evidence/artifact-manifest.json",
     [switch]$Check
 )
 
@@ -143,31 +143,31 @@ $files = Get-VisualEvidenceArtifactInventory `
     -EmptyArtifactMessage "FreeP whole-window evidence contains an empty artifact: {0}"
 
 $inputPaths = @(
-    "freep\TestSupport\VisualEvidence\WholeWindowVisualEvidenceContract.cs",
-    "freep\TestSupport\VisualEvidence\WholeWindowVisualEvidenceHostCoordinator.cs",
-    "freep\TestSupport\VisualEvidence\DialogPaneVisualEvidenceFixture.cs",
-    "freep\FreeP.App.Presentation\FreePShellVisualMetrics.cs",
-    "freep\FreeP.App.Presentation\InCanvasRichTextSelectionVisualContract.cs",
-    "freep\FreeP.App.Presentation\InCanvasRichTextVisualPlanner.cs",
-    "freep\TestSupport\VisualEvidence.Wpf\WpfWholeWindowVisualEvidenceCapture.cs",
-    "freep\TestSupport\VisualEvidence.Wpf\WpfWholeWindowVisualEvidenceCoordinator.cs",
-    "freep\FreeP.App.Host\MainWindow.cs",
-    "freep\TestSupport\VisualEvidence.Wpf\MainWindow.VisualCaptureAdapter.cs",
-    "freep\TestSupport\VisualEvidence.Avalonia\AvaloniaWholeWindowVisualEvidenceCapture.cs",
-    "freep\TestSupport\VisualEvidence.Avalonia\AvaloniaWholeWindowVisualEvidenceCoordinator.cs",
-    "freep\FreeP.App.Avalonia\MainWindow.cs",
-    "freep\TestSupport\VisualEvidence.Avalonia\MainWindow.VisualCaptureAdapter.cs",
-    "freep\FreeP.App.Rendering.Wpf\InCanvasTextEditor.cs",
-    "freep\FreeP.App.Rendering.Wpf\TextBodyFlowDocumentConverter.cs",
-    "freep\FreeP.App.Rendering.Avalonia\AvaloniaInCanvasTextEditor.cs",
-    "freep\FreeP.App.Rendering.Avalonia\AvaloniaRichTextEditor.cs",
-    "freep\FreeP.App.Rendering.Avalonia\AvaloniaRichTextEditingSurface.cs",
-    "shared\Free.Shared.Ribbon\RibbonVisualMetrics.cs",
-    "shared\Free.Shared.Ribbon.Wpf\RibbonTabControlFactory.cs",
-    "shared\Free.Shared.Ribbon.Wpf\RibbonWpfRenderer.cs",
-    "shared\Free.Shared.Ribbon.Avalonia\AvaloniaRibbonRenderer.cs",
-    "tools\FreeP.RenderCompare\WholeWindowVisualEvidence.cs",
-    "tools\FreeP.RenderCompare\ImageDiff.cs"
+    "freep/TestSupport/VisualEvidence/WholeWindowVisualEvidenceContract.cs",
+    "freep/TestSupport/VisualEvidence/WholeWindowVisualEvidenceHostCoordinator.cs",
+    "freep/TestSupport/VisualEvidence/DialogPaneVisualEvidenceFixture.cs",
+    "freep/FreeP.App.Presentation/FreePShellVisualMetrics.cs",
+    "freep/FreeP.App.Presentation/InCanvasRichTextSelectionVisualContract.cs",
+    "freep/FreeP.App.Presentation/InCanvasRichTextVisualPlanner.cs",
+    "freep/TestSupport/VisualEvidence.Wpf/WpfWholeWindowVisualEvidenceCapture.cs",
+    "freep/TestSupport/VisualEvidence.Wpf/WpfWholeWindowVisualEvidenceCoordinator.cs",
+    "freep/FreeP.App.Host/MainWindow.cs",
+    "freep/TestSupport/VisualEvidence.Wpf/MainWindow.VisualCaptureAdapter.cs",
+    "freep/TestSupport/VisualEvidence.Avalonia/AvaloniaWholeWindowVisualEvidenceCapture.cs",
+    "freep/TestSupport/VisualEvidence.Avalonia/AvaloniaWholeWindowVisualEvidenceCoordinator.cs",
+    "freep/FreeP.App.Avalonia/MainWindow.cs",
+    "freep/TestSupport/VisualEvidence.Avalonia/MainWindow.VisualCaptureAdapter.cs",
+    "freep/FreeP.App.Rendering.Wpf/InCanvasTextEditor.cs",
+    "freep/FreeP.App.Rendering.Wpf/TextBodyFlowDocumentConverter.cs",
+    "freep/FreeP.App.Rendering.Avalonia/AvaloniaInCanvasTextEditor.cs",
+    "freep/FreeP.App.Rendering.Avalonia/AvaloniaRichTextEditor.cs",
+    "freep/FreeP.App.Rendering.Avalonia/AvaloniaRichTextEditingSurface.cs",
+    "shared/Free.Shared.Ribbon/RibbonVisualMetrics.cs",
+    "shared/Free.Shared.Ribbon.Wpf/RibbonTabControlFactory.cs",
+    "shared/Free.Shared.Ribbon.Wpf/RibbonWpfRenderer.cs",
+    "shared/Free.Shared.Ribbon.Avalonia/AvaloniaRibbonRenderer.cs",
+    "tools/FreeP.RenderCompare/WholeWindowVisualEvidence.cs",
+    "tools/FreeP.RenderCompare/ImageDiff.cs"
 )
 $inputs = foreach ($relativePath in $inputPaths) {
     $path = Join-Path $repoRoot $relativePath
@@ -205,7 +205,7 @@ if ($artifact.fullPngCount -ne (2 * $expectedScenarioCount) -or
 $json = ($artifact | ConvertTo-Json -Depth 8) + [Environment]::NewLine
 if ($Check) {
     if (-not (Test-Path -LiteralPath $resolvedManifest -PathType Leaf)) {
-        throw "FreeP whole-window visual evidence artifact manifest is missing. Run tools\Generate-FreePWholeWindowVisualEvidenceManifest.ps1 to create it."
+        throw "FreeP whole-window visual evidence artifact manifest is missing. Run tools/Generate-FreePWholeWindowVisualEvidenceManifest.ps1 to create it."
     }
     $actualArtifact = Get-Content -LiteralPath $resolvedManifest -Raw | ConvertFrom-Json
     $scalarNames = @(
@@ -248,7 +248,7 @@ if ($Check) {
         }
     }
     if (-not $matches) {
-        throw "FreeP whole-window visual evidence artifact manifest is out of date. Run tools\Generate-FreePWholeWindowVisualEvidenceManifest.ps1 to refresh it."
+        throw "FreeP whole-window visual evidence artifact manifest is out of date. Run tools/Generate-FreePWholeWindowVisualEvidenceManifest.ps1 to refresh it."
     }
     Write-Host "FreeP whole-window evidence is current: $expectedScenarioCount/$expectedScenarioCount paired, $($artifact.mismatchCount) explicit product mismatches, zero capture limitations."
     exit 0

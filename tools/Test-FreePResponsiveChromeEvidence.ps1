@@ -1,5 +1,5 @@
 param(
-    [string]$EvidenceRoot = "docs\parity\freep-responsive-chrome-2026-08-16"
+    [string]$EvidenceRoot = "docs/parity/freep-responsive-chrome-2026-08-16"
 )
 
 Set-StrictMode -Version Latest

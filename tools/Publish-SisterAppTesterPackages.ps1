@@ -10,7 +10,7 @@
     Linux and macOS use the Avalonia host and self-contained zip packages.
 
 .EXAMPLE
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Publish-SisterAppTesterPackages.ps1 -App FreeW -Version 0.8.149
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Publish-SisterAppTesterPackages.ps1 -App FreeW -Version 0.8.149
 #>
 [CmdletBinding()]
 param(
@@ -65,9 +65,9 @@ $informationalSha = $commitSha.Substring(0, 8)
 $config = switch ($App) {
     "FreeX" {
         @{
-            WpfProject = "src\FreeX.App.Host\FreeX.App.Host.csproj"
-            AvaloniaProject = "src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj"
-            AvaloniaValidationProject = "tools\FreeX.Validation.Avalonia\FreeX.Validation.Avalonia.csproj"
+            WpfProject = "src/FreeX.App.Host/FreeX.App.Host.csproj"
+            AvaloniaProject = "src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj"
+            AvaloniaValidationProject = "tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj"
             WpfHost = "FreeX.App.Host"
             AvaloniaHost = "FreeX"
             AvaloniaValidationHost = "FreeX.Validation.Avalonia"
@@ -75,9 +75,9 @@ $config = switch ($App) {
     }
     "FreeW" {
         @{
-            WpfProject = "freew\FreeW.App.Host\FreeW.App.Host.csproj"
-            AvaloniaProject = "freew\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj"
-            AvaloniaValidationProject = "freew\TestSupport\Validation.Avalonia\FreeW.Validation.Avalonia.csproj"
+            WpfProject = "freew/FreeW.App.Host/FreeW.App.Host.csproj"
+            AvaloniaProject = "freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj"
+            AvaloniaValidationProject = "freew/TestSupport/Validation.Avalonia/FreeW.Validation.Avalonia.csproj"
             WpfHost = "FreeW.App.Host"
             AvaloniaHost = "FreeW"
             AvaloniaValidationHost = "FreeW.Validation.Avalonia"
@@ -85,9 +85,9 @@ $config = switch ($App) {
     }
     "FreeP" {
         @{
-            WpfProject = "freep\FreeP.App.Host\FreeP.App.Host.csproj"
-            AvaloniaProject = "freep\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj"
-            AvaloniaValidationProject = "freep\TestSupport\Validation.Avalonia\FreeP.Validation.Avalonia.csproj"
+            WpfProject = "freep/FreeP.App.Host/FreeP.App.Host.csproj"
+            AvaloniaProject = "freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj"
+            AvaloniaValidationProject = "freep/TestSupport/Validation.Avalonia/FreeP.Validation.Avalonia.csproj"
             WpfHost = "FreeP.App.Host"
             AvaloniaHost = "FreeP"
             AvaloniaValidationHost = "FreeP.Validation.Avalonia"

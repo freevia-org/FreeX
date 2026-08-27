@@ -44,7 +44,7 @@ public sealed class VisualEvidenceProtocolOwnershipTests
         protocol.Should().Contain("public static class VisualEvidenceNormalization");
         protocol.Should().Contain("namespace Free.Shared.AppServices;");
         productProjects.Should().OnlyContain(project =>
-            !project.Contains(@"tools\Free.ToolsShared", StringComparison.OrdinalIgnoreCase));
+            !project.Contains(@"tools/Free.ToolsShared", StringComparison.OrdinalIgnoreCase));
 
         freeP.Should().Contain("VisualEvidenceArgumentParser.ReadFirst(");
         freeP.Should().Contain("VisualEvidencePathPolicy.ResolveContainedPath(");

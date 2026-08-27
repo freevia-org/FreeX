@@ -1,9 +1,9 @@
 param(
-    [string]$MarkdownPath = "docs\parity\dialog-visual-evidence-summary.md",
-    [string]$JsonPath = "docs\parity\dialog-visual-evidence-summary.json",
-    [string]$InventoryPath = "docs\parity\dialog-parity-inventory.json",
-    [string]$WpfManifestPath = "docs\parity\dialog-visual-assets\wpf-capture\manifest.json",
-    [string]$AvaloniaManifestPath = "docs\parity\dialog-visual-assets\avalonia-capture\manifest.json",
+    [string]$MarkdownPath = "docs/parity/dialog-visual-evidence-summary.md",
+    [string]$JsonPath = "docs/parity/dialog-visual-evidence-summary.json",
+    [string]$InventoryPath = "docs/parity/dialog-parity-inventory.json",
+    [string]$WpfManifestPath = "docs/parity/dialog-visual-assets/wpf-capture/manifest.json",
+    [string]$AvaloniaManifestPath = "docs/parity/dialog-visual-assets/avalonia-capture/manifest.json",
     [switch]$Check
 )
 
@@ -1162,8 +1162,8 @@ foreach ($row in $avaloniaOnlyRows) {
 $markdown = $md.ToString()
 
 if ($Check) {
-    Test-ToolGeneratedContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Dialog visual evidence summary Markdown" -GeneratorScriptName "tools\Generate-DialogVisualEvidenceSummary.ps1" -NormalizeNewlines
-    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Dialog visual evidence summary JSON" -GeneratorScriptName "tools\Generate-DialogVisualEvidenceSummary.ps1" -NormalizeNewlines
+    Test-ToolGeneratedContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Dialog visual evidence summary Markdown" -GeneratorScriptName "tools/Generate-DialogVisualEvidenceSummary.ps1" -NormalizeNewlines
+    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Dialog visual evidence summary JSON" -GeneratorScriptName "tools/Generate-DialogVisualEvidenceSummary.ps1" -NormalizeNewlines
 
     Write-Host "Dialog visual evidence summary is up to date."
     return

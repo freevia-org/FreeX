@@ -1,6 +1,6 @@
 param(
-    [string]$JsonPath = "docs\parity\freew-editing-reference-parity-evidence.json",
-    [string]$MarkdownPath = "docs\parity\freew-editing-reference-parity-evidence.md",
+    [string]$JsonPath = "docs/parity/freew-editing-reference-parity-evidence.json",
+    [string]$MarkdownPath = "docs/parity/freew-editing-reference-parity-evidence.md",
     [switch]$Check
 )
 
@@ -23,38 +23,38 @@ function Read-SourceSet {
 }
 
 $wpfSource = Read-SourceSet @(
-    "freew\FreeW.App.Host\MainWindow.cs",
-    "freew\FreeW.App.Host\Ribbon\FreeWRibbonCommands.cs",
-    "freew\FreeW.App.Host\Editing\DocumentView.cs",
-    "freew\FreeW.App.Host\DateTimeDialog.cs",
-    "freew\FreeW.App.Host\FootnoteEndnoteOptionsDialog.cs",
-    "freew\FreeW.App.Host\MultilevelListDialog.cs",
-    "freew\FreeW.App.Host\BookmarkManagerDialog.cs",
-    "freew\FreeW.App.Host\TableOfAuthoritiesDialog.cs",
-    "freew\FreeW.App.Host\ThesaurusPane.cs"
+    "freew/FreeW.App.Host/MainWindow.cs",
+    "freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs",
+    "freew/FreeW.App.Host/Editing/DocumentView.cs",
+    "freew/FreeW.App.Host/DateTimeDialog.cs",
+    "freew/FreeW.App.Host/FootnoteEndnoteOptionsDialog.cs",
+    "freew/FreeW.App.Host/MultilevelListDialog.cs",
+    "freew/FreeW.App.Host/BookmarkManagerDialog.cs",
+    "freew/FreeW.App.Host/TableOfAuthoritiesDialog.cs",
+    "freew/FreeW.App.Host/ThesaurusPane.cs"
 )
 $avaloniaSource = Read-SourceSet @(
-    "freew\FreeW.App.Avalonia\MainWindow.cs",
-    "freew\FreeW.App.Avalonia\Ribbon\FreeWAvaloniaRibbonCommands.cs",
-    "freew\FreeW.App.Avalonia\Editing\DocumentView.cs",
-    "freew\FreeW.App.Avalonia\NotesPane.cs",
-    "freew\FreeW.App.Avalonia\DateTimeDialog.cs",
-    "freew\FreeW.App.Avalonia\FootnoteEndnoteOptionsDialog.cs",
-    "freew\FreeW.App.Avalonia\ImageAndTableConversionDialogs.cs",
-    "freew\FreeW.App.Avalonia\MultilevelListDialog.cs",
-    "freew\FreeW.App.Avalonia\BookmarkManagerDialog.cs",
-    "freew\FreeW.App.Avalonia\TableOfAuthoritiesDialog.cs",
-    "freew\FreeW.App.Avalonia\ThesaurusPane.cs"
+    "freew/FreeW.App.Avalonia/MainWindow.cs",
+    "freew/FreeW.App.Avalonia/Ribbon/FreeWAvaloniaRibbonCommands.cs",
+    "freew/FreeW.App.Avalonia/Editing/DocumentView.cs",
+    "freew/FreeW.App.Avalonia/NotesPane.cs",
+    "freew/FreeW.App.Avalonia/DateTimeDialog.cs",
+    "freew/FreeW.App.Avalonia/FootnoteEndnoteOptionsDialog.cs",
+    "freew/FreeW.App.Avalonia/ImageAndTableConversionDialogs.cs",
+    "freew/FreeW.App.Avalonia/MultilevelListDialog.cs",
+    "freew/FreeW.App.Avalonia/BookmarkManagerDialog.cs",
+    "freew/FreeW.App.Avalonia/TableOfAuthoritiesDialog.cs",
+    "freew/FreeW.App.Avalonia/ThesaurusPane.cs"
 )
 $sharedSource = Read-SourceSet @(
-    "freew\FreeW.App.Presentation\Ribbon\FreeWStatefulToggleCommand.cs",
-    "freew\FreeW.App.Presentation\Ribbon\NoteReferenceRibbonWorkflow.cs",
-    "freew\FreeW.App.Presentation\Ribbon\ThesaurusPaneSession.cs",
-    "freew\FreeW.App.Presentation\Ribbon\ThesaurusPresentationPlanner.cs",
-    "freew\FreeW.App.Presentation\Dialogs\MultilevelListDialogPlanner.cs",
-    "freew\FreeW.App.Presentation\Dialogs\MultilevelListDialogSession.cs",
-    "freew\FreeW.App.Presentation\Editing\DocumentReferenceEditingCoordinator.cs",
-    "freew\FreeW.App.Presentation\Ribbon\TableOfAuthoritiesRegionPlanner.cs"
+    "freew/FreeW.App.Presentation/Ribbon/FreeWStatefulToggleCommand.cs",
+    "freew/FreeW.App.Presentation/Ribbon/NoteReferenceRibbonWorkflow.cs",
+    "freew/FreeW.App.Presentation/Ribbon/ThesaurusPaneSession.cs",
+    "freew/FreeW.App.Presentation/Ribbon/ThesaurusPresentationPlanner.cs",
+    "freew/FreeW.App.Presentation/Dialogs/MultilevelListDialogPlanner.cs",
+    "freew/FreeW.App.Presentation/Dialogs/MultilevelListDialogSession.cs",
+    "freew/FreeW.App.Presentation/Editing/DocumentReferenceEditingCoordinator.cs",
+    "freew/FreeW.App.Presentation/Ribbon/TableOfAuthoritiesRegionPlanner.cs"
 )
 
 function New-Workflow {

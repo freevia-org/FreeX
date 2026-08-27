@@ -520,7 +520,7 @@ public class BackstageViewTests : IDisposable
             "Free.Shared.Shell.Avalonia",
             "AvaloniaBackstagePaneComposer.cs"));
 
-        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
+        project.Should().Contain(@"../../shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj");
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
         source.Should().Contain("new FreeWBackstageSession(");
         source.Should().Contain("BackstageActionBinder.DismissBefore(Dismiss)");

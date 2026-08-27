@@ -1,6 +1,6 @@
 param(
-    [string]$JsonPath = "docs\parity\freew-page-layout-dialog-parity-evidence.json",
-    [string]$MarkdownPath = "docs\parity\freew-page-layout-dialog-parity-evidence.md",
+    [string]$JsonPath = "docs/parity/freew-page-layout-dialog-parity-evidence.json",
+    [string]$MarkdownPath = "docs/parity/freew-page-layout-dialog-parity-evidence.md",
     [switch]$Check
 )
 
@@ -23,27 +23,27 @@ function Read-SourceSet {
 }
 
 $wpfPaths = @(
-    "freew\FreeW.App.Host\Ribbon\FreeWRibbonCommands.cs",
-    "freew\FreeW.App.Host\Editing\DocumentView.cs",
-    "freew\FreeW.App.Host\PageSetupDialog.cs",
-    "freew\FreeW.App.Host\ParagraphBreaksDialog.cs",
-    "freew\FreeW.App.Host\ParagraphIndentDialog.cs",
-    "freew\FreeW.App.Host\ColumnsDialog.cs",
-    "freew\FreeW.App.Host\CustomParagraphSpacingDialog.cs",
-    "freew\FreeW.App.Host\DropCapOptionsDialog.cs",
-    "freew\FreeW.App.Host\HyphenationOptionsDialog.cs",
-    "freew\FreeW.App.Host\ManualHyphenationDialog.cs",
-    "freew\FreeW.App.Host\LineNumberOptionsDialog.cs",
-    "freew\FreeW.Ribbon.Definitions\FreeWRibbon.cs"
+    "freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs",
+    "freew/FreeW.App.Host/Editing/DocumentView.cs",
+    "freew/FreeW.App.Host/PageSetupDialog.cs",
+    "freew/FreeW.App.Host/ParagraphBreaksDialog.cs",
+    "freew/FreeW.App.Host/ParagraphIndentDialog.cs",
+    "freew/FreeW.App.Host/ColumnsDialog.cs",
+    "freew/FreeW.App.Host/CustomParagraphSpacingDialog.cs",
+    "freew/FreeW.App.Host/DropCapOptionsDialog.cs",
+    "freew/FreeW.App.Host/HyphenationOptionsDialog.cs",
+    "freew/FreeW.App.Host/ManualHyphenationDialog.cs",
+    "freew/FreeW.App.Host/LineNumberOptionsDialog.cs",
+    "freew/FreeW.Ribbon.Definitions/FreeWRibbon.cs"
 )
 $avaloniaPaths = @(
-    "freew\FreeW.App.Avalonia\MainWindow.cs",
-    "freew\FreeW.App.Avalonia\Ribbon\FreeWAvaloniaRibbonCommands.cs",
-    "freew\FreeW.App.Avalonia\Editing\DocumentView.cs",
-    "freew\FreeW.App.Avalonia\PageSetupDialog.cs",
-    "freew\FreeW.App.Avalonia\ParagraphDialog.cs",
-    "freew\FreeW.App.Avalonia\PageLayoutDialogs.cs",
-    "freew\FreeW.Ribbon.Definitions\FreeWCanonicalRibbonTabs.cs"
+    "freew/FreeW.App.Avalonia/MainWindow.cs",
+    "freew/FreeW.App.Avalonia/Ribbon/FreeWAvaloniaRibbonCommands.cs",
+    "freew/FreeW.App.Avalonia/Editing/DocumentView.cs",
+    "freew/FreeW.App.Avalonia/PageSetupDialog.cs",
+    "freew/FreeW.App.Avalonia/ParagraphDialog.cs",
+    "freew/FreeW.App.Avalonia/PageLayoutDialogs.cs",
+    "freew/FreeW.Ribbon.Definitions/FreeWCanonicalRibbonTabs.cs"
 )
 $wpfSource = Read-SourceSet $wpfPaths
 $avaloniaSource = Read-SourceSet $avaloniaPaths

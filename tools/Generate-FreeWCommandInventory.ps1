@@ -1,6 +1,6 @@
 param(
-    [string]$JsonPath = "docs\parity\freew-command-inventory.json",
-    [string]$MarkdownPath = "docs\parity\freew-command-inventory.md",
+    [string]$JsonPath = "docs/parity/freew-command-inventory.json",
+    [string]$MarkdownPath = "docs/parity/freew-command-inventory.md",
     [switch]$Check
 )
 
@@ -12,7 +12,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
-$definitionsProject = ConvertTo-ToolXmlAttribute (Resolve-ToolRepoPath -Path "freew\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj" -RepoRoot $repoRoot)
+$definitionsProject = ConvertTo-ToolXmlAttribute (Resolve-ToolRepoPath -Path "freew/FreeW.Ribbon.Definitions/FreeW.Ribbon.Definitions.csproj" -RepoRoot $repoRoot)
 
 $programSource = @'
 using System.Text;
@@ -1885,7 +1885,7 @@ Invoke-ToolGeneratedProject @{
         param($outputPaths)
         @($repoRoot, $outputPaths[0].TempPath, $outputPaths[1].TempPath)
     }
-    Script = "tools\Generate-FreeWCommandInventory.ps1"
+    Script = "tools/Generate-FreeWCommandInventory.ps1"
     Failure = "FreeW command inventory generator failed."
     Check = $Check
     CheckMessage = "FreeW command inventory docs are up to date."

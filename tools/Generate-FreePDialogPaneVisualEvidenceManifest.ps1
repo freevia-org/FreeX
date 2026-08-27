@@ -1,6 +1,6 @@
 param(
-    [string]$EvidenceRoot = "docs\parity\freep-dialog-pane-visual-evidence",
-    [string]$ManifestPath = "docs\parity\freep-dialog-pane-visual-evidence\artifact-manifest.json",
+    [string]$EvidenceRoot = "docs/parity/freep-dialog-pane-visual-evidence",
+    [string]$ManifestPath = "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json",
     [switch]$Check
 )
 
@@ -77,7 +77,7 @@ foreach ($comparison in $summary.comparisons) {
     }
 }
 
-$nativeManifest = Resolve-ToolRepoPath -Path "docs\parity\freep-native-picker-human-evidence.json" -RepoRoot $repoRoot
+$nativeManifest = Resolve-ToolRepoPath -Path "docs/parity/freep-native-picker-human-evidence.json" -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $nativeManifest -PathType Leaf)) {
     throw "FreeP native picker human-evidence manifest is missing: $nativeManifest"
 }
@@ -102,7 +102,7 @@ $json = ($artifact | ConvertTo-Json -Depth 8) + [Environment]::NewLine
 
 if ($Check) {
     if (-not (Test-Path -LiteralPath $resolvedManifest -PathType Leaf)) {
-        throw "FreeP dialog/pane visual evidence artifact manifest is missing. Run tools\Generate-FreePDialogPaneVisualEvidenceManifest.ps1 to create it."
+        throw "FreeP dialog/pane visual evidence artifact manifest is missing. Run tools/Generate-FreePDialogPaneVisualEvidenceManifest.ps1 to create it."
     }
     $actualArtifact = Get-Content -LiteralPath $resolvedManifest -Raw | ConvertFrom-Json
     $scalarNames = @(
@@ -130,7 +130,7 @@ if ($Check) {
         }
     }
     if (-not $matches) {
-        throw "FreeP dialog/pane visual evidence artifact manifest is out of date. Run tools\Generate-FreePDialogPaneVisualEvidenceManifest.ps1 to refresh it."
+        throw "FreeP dialog/pane visual evidence artifact manifest is out of date. Run tools/Generate-FreePDialogPaneVisualEvidenceManifest.ps1 to refresh it."
     }
     Write-Host "FreeP dialog/pane visual evidence artifact is current: $($artifact.passCount) pass, $($artifact.mismatchCount) mismatch, zero capture limitations across $($artifact.pngCount) PNG files."
     exit 0

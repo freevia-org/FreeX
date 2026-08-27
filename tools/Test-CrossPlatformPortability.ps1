@@ -262,6 +262,22 @@ foreach ($relativePath in $portablePowerShellScripts) {
     }
     $ast = $powerShellAsts[$relativePath]
 
+    # PowerShell accepts backslashes as path separators on Windows, which lets repository-relative
+    # literals survive local validation and then become literal filename characters on Unix. Keep
+    # portable scripts on one representation. Test-ToolScripts intentionally contains synthetic
+    # Windows paths to prove the shared helpers normalize foreign input.
+    if ($relativePath -ne 'tools/Test-ToolScripts.ps1') {
+        $repositoryPathStrings = @($ast.FindAll({
+            param($node)
+            ($node -is [System.Management.Automation.Language.StringConstantExpressionAst] -or
+                $node -is [System.Management.Automation.Language.ExpandableStringExpressionAst]) -and
+                [string]$node.Value -match '(?i)(?:^|[\s''"(=:])(?:\.\\)?(?:\.github|tools|eng|src|shared|freew|freep|tests|docs|release)\\'
+        }, $true))
+        foreach ($stringNode in $repositoryPathStrings) {
+            Add-PortabilityError "$relativePath contains a Windows-separated repository path at line $($stringNode.Extent.StartLineNumber); use '/'."
+        }
+    }
+
     $commands = @($ast.FindAll({
         param($node)
         $node -is [System.Management.Automation.Language.CommandAst]
@@ -337,10 +353,35 @@ foreach ($script in $toolScripts) {
 }
 
 $managedSourceFiles = @($trackedPaths | Where-Object { $_ -match '(?i)\.(?:cs|csx|fs|fsx|vb)$' })
+$managedPathFixtureExceptions = @(
+    # These fixtures deliberately feed Windows-separated project files into cross-platform parsers.
+    'tests/FreeX.App.Host.Tests/DotNetProjectReferencesPreflightTests.cs',
+    'tests/FreeX.App.Host.Tests/MacOsAppReadinessPreflightTests.cs',
+    # These source-contract tests target explicitly Windows-only evidence scripts.
+    'freew/FreeW.App.Presentation.Tests/VisualEvidenceRunnerScriptTests.cs',
+    'tests/FreeX.App.Host.Tests/ScreenshotHarnessScriptTests.cs'
+)
 foreach ($relativePath in $managedSourceFiles) {
     $source = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
     if ($source -match '\.Split\s*\(\s*Environment\.NewLine\b') {
         Add-PortabilityError "$relativePath splits text on Environment.NewLine; normalize external/file text with ReplaceLineEndings before splitting so LF checkouts work on Windows."
+    }
+    if ($relativePath -notin $managedPathFixtureExceptions) {
+        $lineNumber = 0
+        foreach ($line in $source -split "`n") {
+            $lineNumber++
+            foreach ($match in [regex]::Matches($line, '(?i)(?:docs|freep|freew|shared|tests|tools)(?:\\\\[A-Za-z0-9_.()$%*? -]+)+')) {
+                $candidate = $match.Value.Replace('\\', '/')
+                $separatorCount = ([regex]::Matches($candidate, '/')).Count
+                if ($separatorCount -ge 2 -or $candidate -match '(?i)\.(?:cs|csproj|fs|fsproj|vb|vbproj|ps1|psm1|psd1|sh|py|js|json|xml|xaml|axaml|svg|png|ico|icns|md|txt|props|targets|slnx)$') {
+                    Add-PortabilityError "$relativePath asserts or embeds a Windows-separated repository path '$candidate' at line $lineNumber; use '/'."
+                }
+            }
+            if ($line -match '[A-Za-z0-9_.$)%*]\\\\[A-Za-z0-9_.$(%*?]' -and
+                $line -match '(?i)\.(?:csproj|props|targets)|MSBuildThisFileDirectory|%\(RecursiveDir\)|(?:Include|Remove|Update|Link|Project)=') {
+                Add-PortabilityError "$relativePath asserts or embeds a Windows-separated MSBuild path at line $lineNumber; use '/'."
+            }
+        }
     }
 }
 
