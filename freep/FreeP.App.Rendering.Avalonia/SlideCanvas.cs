@@ -1713,7 +1713,9 @@ public sealed partial class SlideCanvas : Control
                     importedIncreasingCircleFontScale
                         ?? (fixedSizeAptosBodyHintingMode is not null
                         ? FixedSizeAptosBodyFontScale
-                        : null));
+                        : null),
+                    preserveFixedSizeAptosBodyLeading:
+                        fixedSizeAptosBodyHintingMode is not null);
                 return new TextNativeMeasurement<FormattedText>(
                     formattedText,
                     formattedText.Height,
@@ -2216,7 +2218,8 @@ public sealed partial class SlideCanvas : Control
         double maxWidth,
         bool wrap,
         TextAutoFitKind autoFitKind = TextAutoFitKind.None,
-        double? fontScaleOverride = null)
+        double? fontScaleOverride = null,
+        bool preserveFixedSizeAptosBodyLeading = false)
     {
         var sb = new System.Text.StringBuilder();
         foreach (var run in para.Runs) sb.Append(run.Text);
@@ -2243,9 +2246,11 @@ public sealed partial class SlideCanvas : Control
             brush);
 
         // PowerPoint's default paragraph leading is slightly tighter than Avalonia's automatic line height.
-        ft.LineHeight = ResolvePowerPointLineHeight(
-            firstRun.FontSizePt * (96.0 / 72.0),
-            autoFitKind);
+        ft.LineHeight = preserveFixedSizeAptosBodyLeading
+            ? ResolveFixedSizeAptosBodyLineHeight(firstRun.FontSizePt)
+            : ResolvePowerPointLineHeight(
+                firstRun.FontSizePt * (96.0 / 72.0),
+                autoFitKind);
 
         if (wrap && maxWidth > 0)
             ft.MaxTextWidth = maxWidth;
@@ -2300,6 +2305,14 @@ public sealed partial class SlideCanvas : Control
         fontSizePx * (autoFitKind == TextAutoFitKind.None
             ? PowerPointFixedTextLineSpacingFactor
             : PowerPointDefaultLineSpacingFactor);
+
+    // The Aptos fallback scale is an optical glyph calibration. Office preserves
+    // the authored 18 pt paragraph leading, so applying the scale vertically would
+    // accumulate visible baseline drift across a no-autofit body.
+    internal static double ResolveFixedSizeAptosBodyLineHeight(double fontSizePt) =>
+        ResolvePowerPointLineHeight(
+            fontSizePt * (96.0 / 72.0),
+            TextAutoFitKind.None);
 
     // ── Text-effects geometry helpers (Wave 16A) ──────────────────────────────
 
