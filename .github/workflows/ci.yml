@@ -65,8 +65,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
+          key: nuget-v2-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets') }}
+          restore-keys: nuget-v2-${{ runner.os }}-
       - name: Run repository preflight
         shell: pwsh
         run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1
@@ -93,8 +93,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
+          key: nuget-v2-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets') }}
+          restore-keys: nuget-v2-${{ runner.os }}-
       - name: Run isolated test gate
         shell: pwsh
         run: |

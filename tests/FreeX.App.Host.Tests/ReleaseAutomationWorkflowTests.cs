@@ -308,9 +308,12 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("tools/Invoke-TestGate.ps1");
         workflow.Should().Contain("-Gate release");
         workflow.Should().Contain("name: FreeX full release gate");
-        workflow.Should().Contain("needs: [prepare, release-gate]");
+        workflow.Should().Contain("needs: [prepare, candidate]");
         workflow.Should().Contain("name: Validate complete release inventory");
-        workflow.Should().Contain("needs: [prepare, package, suite-package]");
+        workflow.Should().Contain("needs: [prepare, release-gate, package, suite-package]");
+        workflow.Should().Contain("$releaseGateResult = \"${{ needs.release-gate.result }}\"");
+        workflow.Should().Contain("nuget-v2-${{ runner.os }}");
+        workflow.Should().NotContain("'**/*.csproj'");
         workflow.Should().Contain("name: Verify published release inventory");
         workflow.Should().Contain("Published tag '$Tag' targets");
         workflow.Should().NotContain("function Invoke-Dotnet");

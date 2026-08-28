@@ -158,8 +158,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
+          key: nuget-v2-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets') }}
+          restore-keys: nuget-v2-${{ runner.os }}-
 
       - name: Run isolated release test gate
         shell: pwsh
@@ -199,7 +199,9 @@ jobs:
 
   package:
     name: Package ${{ matrix.app }} ${{ matrix.runtime }}
-    needs: [prepare, release-gate]
+    # Packaging is immutable-candidate work and can overlap release-only tests. Publication still
+    # waits for release-gate, so a failed test can never publish the speculative package artifacts.
+    needs: [prepare, candidate]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -221,8 +223,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
+          key: nuget-v2-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets') }}
+          restore-keys: nuget-v2-${{ runner.os }}-
 
       - name: Cache pinned SBOM tool
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -507,7 +509,7 @@ jobs:
 
   publication-gate:
     name: Validate complete release inventory
-    needs: [prepare, package, suite-package]
+    needs: [prepare, release-gate, package, suite-package]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -518,11 +520,12 @@ jobs:
         shell: pwsh
         run: |
           $prepareResult = "${{ needs.prepare.result }}"
+          $releaseGateResult = "${{ needs.release-gate.result }}"
           $packageResult = "${{ needs.package.result }}"
           $suiteResult = "${{ needs.suite-package.result }}"
           $requiresSuite = "${{ inputs.app }}" -eq "all"
-          if ($prepareResult -ne 'success' -or $packageResult -ne 'success') {
-            throw "Preparation: $prepareResult; app packages: $packageResult."
+          if ($prepareResult -ne 'success' -or $releaseGateResult -ne 'success' -or $packageResult -ne 'success') {
+            throw "Preparation: $prepareResult; release tests: $releaseGateResult; app packages: $packageResult."
           }
           if ($requiresSuite -and $suiteResult -ne 'success') {
             throw "Full-suite packaging must succeed before any release is published; result: $suiteResult."
