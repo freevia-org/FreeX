@@ -98,6 +98,21 @@ public static class RevisionList
     /// </summary>
     public static bool Reject(TextDocument document, RevisionEntry entry) => Resolve(document, entry, accept: false);
 
+    /// <summary>
+    /// The paragraph containing <paramref name="run"/>'s paired move run (see the "A Word move" doc comment
+    /// on <see cref="Resolve"/> below), or null if <paramref name="run"/> doesn't carry a
+    /// <see cref="Run.MoveRevisionId"/> or no other run shares it. <see cref="Accept"/>/<see cref="Reject"/>
+    /// silently resolve this OTHER paragraph too whenever <paramref name="run"/> is half of a tracked move --
+    /// exposed so a caller that snapshots state for undo can find and capture that paragraph as well, not
+    /// just the one <paramref name="entry"/> nominally points at.
+    /// </summary>
+    public static Paragraph? FindMovePairParagraph(TextDocument document, Run run)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(run);
+        return run.MoveRevisionId is { } moveId ? FindMovePair(document, run, moveId)?.Paragraph : null;
+    }
+
     // Resolve one entry's mark only. For an insertion/deletion entry we touch the run's Revision mark; for a
     // formatting entry we touch only its FormatRevision (the two are independent, exactly as TrackChanges
     // treats them). This deliberately does NOT clear the other mark on a doubly-marked run, so accepting an

@@ -198,8 +198,11 @@ public sealed class DocumentEditingSession
         if (clones.Count == 0)
             return -1;
 
-        foreach (var (id, style) in source.Styles)
-            Document.Styles.TryAdd(id, style);
+        // r166: CloneBlocksForInsertion above already transferred exactly the styles the cloned content
+        // references, renaming any whose display Name collides with an existing target style. Copying
+        // every source style again here by id alone undid that: an UNUSED source style whose Name
+        // happens to match a target style under a different id landed as a second entry with the same
+        // Name, which DocxWriter then emits as invalid OOXML. The transfer belongs in one place.
 
         var insertAt = ResolveInsertionIndexAfter(caretBlockIndex);
         RestartUnrelatedNumberListRuns(clones, PrecedingParagraphContinuesNumberList(insertAt - 1));
@@ -222,8 +225,11 @@ public sealed class DocumentEditingSession
         var clones = DocumentMerge.CloneBlocksForInsertion(Document, source).ToList();
         if (clones.Count == 0)
             return false;
-        foreach (var (id, style) in source.Styles)
-            Document.Styles.TryAdd(id, style);
+        // r166: CloneBlocksForInsertion above already transferred exactly the styles the cloned content
+        // references, renaming any whose display Name collides with an existing target style. Copying
+        // every source style again here by id alone undid that: an UNUSED source style whose Name
+        // happens to match a target style under a different id landed as a second entry with the same
+        // Name, which DocxWriter then emits as invalid OOXML. The transfer belongs in one place.
         _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, clones));
         return true;
     }
@@ -260,8 +266,11 @@ public sealed class DocumentEditingSession
         var clones = DocumentMerge.CloneBlocksForInsertion(Document, source).ToList();
         if (clones.Count == 0)
             return false;
-        foreach (var (id, style) in source.Styles)
-            Document.Styles.TryAdd(id, style);
+        // r166: CloneBlocksForInsertion above already transferred exactly the styles the cloned content
+        // references, renaming any whose display Name collides with an existing target style. Copying
+        // every source style again here by id alone undid that: an UNUSED source style whose Name
+        // happens to match a target style under a different id landed as a second entry with the same
+        // Name, which DocxWriter then emits as invalid OOXML. The transfer belongs in one place.
 
         // With Track Changes on, pasted content arrives as this author's insertion, exactly as typing
         // does. A run the SOURCE already marked keeps its own mark: that copied history is the source's

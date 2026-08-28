@@ -26033,8 +26033,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Alt))
             {
+                // R166-shared-keyboard-shortcuts-f1: Ctrl+Alt+F9 is "Calculate Full" (WPF's
+                // KeyboardShortcutMatcher.CommandRules.cs CalculateFull rule -> CalcFullBtn_Click
+                // -> ExecuteCalculationAction(CalculationCommandAction.CalculateFull)), a distinct,
+                // stronger operation than plain F9's dirty-cell-only Calculate Now -- it forces
+                // WorkbookSession.RecalculateWorkbook to re-evaluate every formula cell rather than
+                // only the ones the recalculation engine already knows are dirty. Calling
+                // CalculateNow() here silently downgraded the user's explicit "force a full
+                // rebuild" request to the same recalculation plain F9 already performs.
                 e.Handled = true;
-                CalculateNow();
+                CalculateFull();
                 return;
             }
         }
@@ -26094,7 +26102,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            if (e.Key == Key.F1)
+            // R166-shared-keyboard-shortcuts-f2: Alt+Shift+F1 is the legacy Excel "Insert Worksheet"
+            // alias (WPF's KeyboardShortcutMatcher.CommandRules.cs InsertWorksheet rule, alongside
+            // Shift+F11 -> AddSheetButton_Click). It is not in the shared WorkbookKeyboardShortcutCatalog,
+            // so TryHandleApplicationOrLocalShortcutAsync never resolves it, and it must be caught here
+            // -- BEFORE the unmodified-F1 Help check below -- or it falls through to that unconditional
+            // `e.Key == Key.F1` branch and launches the external help browser instead of adding a sheet.
+            if (e.Key == Key.F1 && e.KeyModifiers == (KeyModifiers.Alt | KeyModifiers.Shift))
+            {
+                e.Handled = true;
+                AddNewSheet();
+                return;
+            }
+
+            if (e.Key == Key.F1 && e.KeyModifiers == KeyModifiers.None)
             {
                 e.Handled = true;
                 await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"));

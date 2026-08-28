@@ -1057,6 +1057,66 @@ public class DocumentMergeTests
         target.Styles.Should().ContainKey("LinkedChar_FreeW1");
     }
 
+    [Fact]
+    public void Merge_ReusesTargetStyle_WhenSourceStyleIdCollidesWithMatchingName()
+    {
+        // Both documents seed the same built-in id (e.g. Heading1) with the same display name, as any
+        // two ordinary FreeW documents do via BuiltInStyles. Pasting content styled with it must NOT
+        // produce a second DocumentStyle entry sharing that Name -- styles.xml would then carry two
+        // <w:style> elements with the same <w:name>, which real Word treats as invalid.
+        var source = new TextDocument();
+        source.Styles["Heading1"] = new DocumentStyle
+        {
+            Id = "Heading1", Name = "Heading 1", Run = new RunFormatting { Bold = true, ColorHex = "#0066AA" }
+        };
+        source.Blocks.Add(new Paragraph("Source heading") { StyleId = "Heading1" });
+
+        var target = new TextDocument();
+        target.Styles["Heading1"] = new DocumentStyle
+        {
+            Id = "Heading1", Name = "Heading 1", Run = new RunFormatting { Bold = true, ColorHex = "#AA0000" }
+        };
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        // The pasted paragraph resolves to the target's own Heading1, not a synthesized shadow style.
+        inserted.Single().Should().BeOfType<Paragraph>().Which.StyleId.Should().Be("Heading1");
+        target.Styles.Should().NotContainKey("Heading1_FreeW1");
+        target.Styles.Values.Select(style => style.Name)
+            .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .Should().OnlyContain(group => group.Count() == 1, "no two styles may share a display name");
+        // The target's pre-existing definition wins (matches Word's own same-name paste behaviour),
+        // it is not silently overwritten by the source's formatting.
+        target.Styles["Heading1"].Run.ColorHex.Should().Be("#AA0000");
+    }
+
+    [Fact]
+    public void Merge_RenamesCollidingStyle_WhenDisplayNamesDiffer()
+    {
+        // Sibling/no-regression case: when the colliding id's target and source styles have DIFFERENT
+        // display names, the existing shadow-id rename behaviour must be unchanged -- both styles are
+        // genuinely distinct and neither should be discarded or merged into the other.
+        var source = new TextDocument();
+        source.Styles["Heading1"] = new DocumentStyle
+        {
+            Id = "Heading1", Name = "Source Heading", Run = new RunFormatting { ColorHex = "#0066AA" }
+        };
+        source.Blocks.Add(new Paragraph("Source heading") { StyleId = "Heading1" });
+
+        var target = new TextDocument();
+        target.Styles["Heading1"] = new DocumentStyle
+        {
+            Id = "Heading1", Name = "Target Heading", Run = new RunFormatting { ColorHex = "#AA0000" }
+        };
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        inserted.Single().Should().BeOfType<Paragraph>().Which.StyleId.Should().Be("Heading1_FreeW1");
+        target.Styles["Heading1_FreeW1"].Name.Should().Be("Source Heading");
+        target.Styles["Heading1_FreeW1"].Run.ColorHex.Should().Be("#0066AA");
+        target.Styles["Heading1"].Run.ColorHex.Should().Be("#AA0000");
+    }
+
     private static XElement Numbering(XNamespace wordprocessing, int abstractId, int numberId, string label) =>
         new(wordprocessing + "numbering",
             new XAttribute(XNamespace.Xmlns + "w", wordprocessing.NamespaceName),

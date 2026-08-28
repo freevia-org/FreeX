@@ -190,7 +190,9 @@ public sealed class AnimationPresetRoundTripTests
         var cTn = slideXml.Descendants(p + "cTn")
             .Single(element => element.Attribute("presetID")?.Value is not null
                 && element.Attribute("nodeType")?.Value == "withEffect");
-        cTn.Attribute("repeatCount")!.Value.Should().Be("3");
+        // ST_TLTimeNodeRepeatCount is a percentage scaled by 1000 (100000 == one pass),
+        // so a model RepeatCount of 3 is authored as "300000", not the literal "3".
+        cTn.Attribute("repeatCount")!.Value.Should().Be("300000");
         cTn.Attribute("autoRev")!.Value.Should().Be("1");
         cTn.Attribute("accel")!.Value.Should().Be("25000");
         cTn.Attribute("decel")!.Value.Should().Be("35000");

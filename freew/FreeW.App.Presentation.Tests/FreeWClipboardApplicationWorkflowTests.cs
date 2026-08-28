@@ -590,6 +590,67 @@ public sealed class FreeWClipboardApplicationWorkflowTests
             "a bookmark that ends before the selection begins was never copied, so it must not appear in the paste");
     }
 
+    /// <summary>
+    /// r166. The r165 guard located a bookmark's other half inside the SAME paragraph, and treated a
+    /// missing partner as "the span continues past this paragraph, so it overlaps". A bookmark that
+    /// spans a paragraph break records its Start only in the first paragraph and its End only in the
+    /// last -- so the partner is always absent, the guard always said yes, and the phantom it was
+    /// written to prevent came straight back for exactly the bookmarks most likely to exist.
+    /// A half-pair is an open-ended span: a Start covers what follows it, an End what precedes it.
+    /// </summary>
+    [Fact]
+    public void BuildSelectionNativeDocument_DoesNotInventACrossParagraphBookmarkTheSelectionPrecedes()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var first = new Paragraph();
+        first.Runs.Add(new Run("Intro"));
+        first.Runs.Add(new Run(" tail"));
+        // The bookmark opens at the very END of this paragraph and closes in a later one, so only the
+        // Start lives here -- the shape the model documents for a cross-paragraph bookmark.
+        first.BookmarkBoundaries.Add(new BookmarkBoundary("pair-x", BookmarkBoundaryKind.Start, 2, "MyBookmark"));
+        document.Blocks.Add(first);
+
+        var last = new Paragraph();
+        last.Runs.Add(new Run("End here"));
+        last.BookmarkBoundaries.Add(new BookmarkBoundary("pair-x", BookmarkBoundaryKind.End, 1));
+        document.Blocks.Add(last);
+
+        // Copy only "Intro" -- entirely before the bookmark opens.
+        var native = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(
+            document,
+            [new DocumentFormattingTextRange(first, 0, 5)])!;
+
+        native.Paragraphs.Single().BookmarkBoundaries.Should().BeEmpty(
+            "the bookmark opens after this selection ends, so none of the copied text was inside it");
+    }
+
+    /// <summary>
+    /// Sibling to the case above: text taken from AFTER a cross-paragraph bookmark opens really is
+    /// inside it, so the Start must still travel. Without this, dropping half-pairs outright would
+    /// trade one silent bookmark loss for another.
+    /// </summary>
+    [Fact]
+    public void BuildSelectionNativeDocument_KeepsACrossParagraphBookmarkTheSelectionIsInside()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var first = new Paragraph();
+        first.Runs.Add(new Run("Intro"));
+        first.Runs.Add(new Run(" tail"));
+        first.BookmarkBoundaries.Add(new BookmarkBoundary("pair-x", BookmarkBoundaryKind.Start, 1, "MyBookmark"));
+        document.Blocks.Add(first);
+
+        var native = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(
+            document,
+            [new DocumentFormattingTextRange(first, 5, 10)])!;
+
+        native.Paragraphs.Single().BookmarkBoundaries.Should().ContainSingle()
+            .Which.Name.Should().Be("MyBookmark");
+    }
+
     private static IReadOnlyList<DocumentFormattingTextRange> AllRanges(TextDocument document) =>
         document.Paragraphs
             .Select(paragraph => new DocumentFormattingTextRange(paragraph, 0, paragraph.PlainText.Length))

@@ -28,6 +28,20 @@ namespace FreeW.App.Presentation.Tests.Editing;
 /// case: the scoped snapshot bypasses CaptureTable/CaptureParagraphContainer entirely for single-entry
 /// commands, so this proves round-tripping still works when the target paragraph lives inside a table
 /// cell, not just as a top-level body paragraph.
+///
+/// freew-track-changes-merge F1 (round 166): a Word move (cut in one paragraph, paste into another under
+/// Track Changes) is a linked pair of runs sharing Run.MoveRevisionId in two DIFFERENT Paragraph instances
+/// (see RevisionList.Resolve's "A Word move" doc comment and RevisionList.FindMovePairParagraph).
+/// RevisionList.Accept/Reject always resolves both halves together, but the single-entry TargetParagraph
+/// hook above used to snapshot only the ONE paragraph the clicked-on entry pointed at, so undoing a single
+/// Accept/Reject of a move left the OTHER paragraph's half unrestored -- the moved text came back
+/// duplicated (still pending in the source paragraph, already resolved as plain text in the destination) or
+/// lost, depending on direction.
+/// <see cref="ResolveOneRevisionCommand_OnAMoveSpanningTwoParagraphs_UndoRestoresBothHalves"/> proves the
+/// fix: it snapshots BOTH paragraphs (count 2) and Revert puts both back exactly as they were.
+/// <see cref="ResolveOneRevisionCommand_OnANonMoveRevision_StillSnapshotsOnlyOneParagraph"/> is the sibling
+/// no-regression: an ordinary (non-move) revision must still snapshot only its own paragraph, not grow to
+/// two just because the new hook now looks for a pair.
 /// </summary>
 public sealed class RevisionCommandsScopedSnapshotTests
 {
@@ -118,6 +132,81 @@ public sealed class RevisionCommandsScopedSnapshotTests
         cellParagraph.Runs.Select(run => run.Text).Should().Equal("cell text", "deleted");
         cellParagraph.Runs[1].Revision.Should().Be(RevisionKind.Deleted);
         table.Rows.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void ResolveOneRevisionCommand_OnAMoveSpanningTwoParagraphs_UndoRestoresBothHalves()
+    {
+        var document = new TextDocument();
+
+        var source = new Paragraph();
+        source.Runs.Clear();
+        source.Runs.Add(new Run("Alpha "));
+        source.Runs.Add(new Run("MOVED-TEXT") { Revision = RevisionKind.Deleted, MoveRevisionId = 7 });
+        source.Runs.Add(new Run(" Beta"));
+        document.Blocks.Add(source);
+
+        var destination = new Paragraph();
+        destination.Runs.Clear();
+        destination.Runs.Add(new Run("Gamma "));
+        destination.Runs.Add(new Run("MOVED-TEXT") { Revision = RevisionKind.Inserted, MoveRevisionId = 7 });
+        destination.Runs.Add(new Run(" Delta"));
+        document.Blocks.Add(destination);
+
+        var entries = RevisionList.Enumerate(document);
+        entries.Should().HaveCount(2);
+        entries[0].Paragraph.Should().Be(source);
+        entries[0].Kind.Should().Be(RevisionEntryKind.Deletion);
+
+        // The Reviewing Pane's Accept click on just the deletion half -- NOT Accept All.
+        var target = new RevisionTargetDecision(0, 0, entries[0]);
+        var command = CreateCommand("ResolveOneRevisionCommand", target, RevisionResolutionAction.Accept);
+
+        command.Apply(new Context(document));
+
+        GetParagraphSnapshotCount(command).Should().Be(2,
+            "a single Accept/Reject on one half of a move must also snapshot the OTHER paragraph holding " +
+            "the paired run, since RevisionList.Accept/Reject resolves both halves together");
+
+        source.Runs.Select(r => r.Text).Should().Equal("Alpha ", " Beta");
+        destination.Runs.Should().Contain(r => r.Text == "MOVED-TEXT" && r.Revision == RevisionKind.None);
+
+        command.Revert(new Context(document));
+
+        source.Runs.Select(r => r.Text).Should().Equal("Alpha ", "MOVED-TEXT", " Beta");
+        source.Runs[1].Revision.Should().Be(RevisionKind.Deleted);
+        source.Runs[1].MoveRevisionId.Should().Be(7);
+
+        destination.Runs.Select(r => r.Text).Should().Equal("Gamma ", "MOVED-TEXT", " Delta");
+        destination.Runs[1].Revision.Should().Be(RevisionKind.Inserted);
+        destination.Runs[1].MoveRevisionId.Should().Be(7);
+    }
+
+    [Fact]
+    public void ResolveOneRevisionCommand_OnANonMoveRevision_StillSnapshotsOnlyOneParagraph()
+    {
+        var document = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Clear();
+        paragraph.Runs.Add(new Run("kept "));
+        paragraph.Runs.Add(new Run("inserted") { Revision = RevisionKind.Inserted });
+        document.Blocks.Add(paragraph);
+        document.Blocks.Add(new Paragraph("unrelated paragraph"));
+
+        var entries = RevisionList.Enumerate(document);
+        entries.Should().ContainSingle();
+        var target = new RevisionTargetDecision(0, 0, entries[0]);
+
+        var command = CreateCommand("ResolveOneRevisionCommand", target, RevisionResolutionAction.Accept);
+        command.Apply(new Context(document));
+
+        GetParagraphSnapshotCount(command).Should().Be(1,
+            "an ordinary (non-move) revision has no paired run in another paragraph, so it must not grow " +
+            "the snapshot beyond its own paragraph");
+
+        command.Revert(new Context(document));
+        paragraph.Runs.Select(r => r.Text).Should().Equal("kept ", "inserted");
+        paragraph.Runs[1].Revision.Should().Be(RevisionKind.Inserted);
     }
 
     // ResolveOneRevisionCommand/AcceptAllRevisionsCommand are internal to FreeW.App.Presentation, and this
