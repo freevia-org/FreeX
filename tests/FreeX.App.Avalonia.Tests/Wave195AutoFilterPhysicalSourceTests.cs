@@ -1,6 +1,7 @@
 using System.Threading;
 using Avalonia.Headless;
 using FluentAssertions;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -37,9 +38,16 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
         probe.Should().Contain("click_autofilter_control 190 220");
         probe.Should().Contain("click_autofilter_control 151 168");
         probe.Should().Contain("click_autofilter_control \"$((column_offset * cell_width + 292))\" \"$ok_y\"");
+        probe.Should().Contain("local column_offset=\"$1\"\n        click_autofilter_control \"$((column_offset * cell_width + 151))\" 117");
         probe.Should().Contain("choose_value 0 1 405");
         probe.Should().Contain("choose_value 1 0 391");
         probe.Should().Contain("change_value 1 0 1");
+        probe.Should().Contain("clipboard_sentinel_value=\"__FREEX_CLIPBOARD_SENTINEL_${BASHPID}_${RANDOM}_${RANDOM}__\"");
+        probe.Should().Contain("wait_for_non_sentinel_clipboard");
+        probe.Should().Contain("reload-witness-before=$reload_witness_before");
+        probe.Should().Contain("reload-witness-discarded=$reload_witness_discarded");
+        probe.Should().Contain("restore_calibrated_window_geometry || return 1");
+        probe.Should().Contain("$reload_witness_passed");
         probe.Should().Contain("fill:#FFC000");
         probe.Should().Contain("cleared-package=$cleared_package");
         multiFixture.Should().Contain("<autoFilter ref=`\"A1:C7`\"");
@@ -93,6 +101,51 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
             window.RunAutoFilterForTest(range, 1, []);
             sheet.FilterHiddenRows.Should().BeEmpty();
             sheet.AutoFilter!.FilterColumns.Should().BeEmpty();
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+            window.Close();
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task ProductionDropdownPlanner_RoutesBColumnChecklistAndResult() =>
+        Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("Wave195 Planner Route");
+            window.Session.SelectSheet(sheet.Id);
+            PopulateRows(sheet);
+            var range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 7, 3));
+            sheet.AutoFilter = new WorksheetAutoFilterModel("A1:C7", null);
+
+            window.RunAutoFilterForTest(range, 0, ["North"]);
+            window.RunAutoFilterForTest(range, 1, ["Hardware"]);
+
+            AutoFilterDropdownMenuPlanner.TryPlan(
+                    range,
+                    new CellAddress(sheet.Id, 1, 2),
+                    out var plan)
+                .Should().BeTrue();
+            plan.FilterColumnOffset.Should().Be(1);
+            var menuPlan = AutoFilterDropdownMenuPlanner.CreateMenuPlan(
+                window.Session.Workbook,
+                sheet,
+                plan,
+                InvariantAutoFilterMenuTextProvider.Instance,
+                InvariantAutoFilterMenuTextProvider.BlankDisplayText);
+            var menu = AutoFilterMenuPlanner.Build(menuPlan);
+
+            menu.Header.Should().Be("Category");
+            menu.Items
+                .Where(item => item.Kind == AutoFilterMenuItemKind.ChecklistItem)
+                .Select(item => (item.Label, item.IsChecked))
+                .Should().Equal(("Hardware", true), ("Software", false));
+            var result = AutoFilterMenuPlanner.BuildResult(
+                AutoFilterMenuPlanner.CreateDialogItems(menu),
+                searchText: "",
+                criteriaText: "");
+            result.SelectedValues.Should().Equal("Hardware");
+
             window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);

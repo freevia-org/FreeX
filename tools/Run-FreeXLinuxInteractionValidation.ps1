@@ -952,6 +952,12 @@ function Assert-AutoFilterMultiColumnPostcondition {
         "cleared-package=ref=A1:C7|columns=",
         "dialog-open=true",
         "dialog-closed=true",
+        "reload-witness-before=__FREEX_RELOAD_WITNESS__",
+        "reload-witness-before-read=true",
+        "reload-witness-discarded=true",
+        "reload-witness-after=East",
+        "reload-witness-after-read=true",
+        "reload-witness-passed=true",
         "reopened-visible=North,North,South,South,East,East,"
     )
     $missing = @($expected | Where-Object { $_ -notin $lines })
@@ -983,6 +989,12 @@ function Assert-AutoFilterColorChangeClearPostcondition {
         "cleared-package=ref=A1:B5|columns=",
         "dialog-open=true",
         "dialog-closed=true",
+        "reload-witness-before=__FREEX_RELOAD_WITNESS__",
+        "reload-witness-before-read=true",
+        "reload-witness-discarded=true",
+        "reload-witness-after=East",
+        "reload-witness-after-read=true",
+        "reload-witness-passed=true",
         "reopened-visible=North,South,East,West,"
     )
     $missing = @($expected | Where-Object { $_ -notin $lines })

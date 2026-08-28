@@ -12,6 +12,7 @@ mousemove_timeout_seconds="${FREEX_X11_MOUSEMOVE_TIMEOUT_SECONDS:-5}"
 mousemove_timeout_count=0
 clipboard_timeout_seconds="${FREEX_X11_CLIPBOARD_TIMEOUT_SECONDS:-5}"
 clipboard_sentinel_pid=""
+clipboard_sentinel_value=""
 image_tool_timeout_seconds="${FREEX_X11_IMAGE_TOOL_TIMEOUT_SECONDS:-5}"
 selection_color="${FREEX_X11_SELECTION_COLOR:-#217346}"
 document_path="${FREEX_X11_DOCUMENT_PATH:-/documents/linux-interactive-demo.csv}"
@@ -408,18 +409,52 @@ write_artifact() {
 }
 
 set_clipboard_sentinel() {
-    # The application becomes the real clipboard owner after each physical Copy.
-    # Do not install a persistent xclip owner before that event: xclip waits for
-    # selection requests and can block command substitutions indefinitely.
-    return 0
+    local current=""
+    stop_clipboard_sentinel
+    clipboard_sentinel_value="__FREEX_CLIPBOARD_SENTINEL_${BASHPID}_${RANDOM}_${RANDOM}__"
+    printf '%s' "$clipboard_sentinel_value" | xclip -selection clipboard -in >/dev/null 2>&1 &
+    clipboard_sentinel_pid=$!
+    for _ in $(seq 1 20); do
+        current="$(clipboard_text || true)"
+        if [[ "$current" == "$clipboard_sentinel_value" ]]; then
+            return 0
+        fi
+        sleep 0.05
+    done
+    stop_clipboard_sentinel
+    clipboard_sentinel_value=""
+    return 1
+}
+
+wait_for_non_sentinel_clipboard() {
+    local sentinel="$clipboard_sentinel_value" value=""
+    [[ -n "$sentinel" ]] || return 1
+    for _ in $(seq 1 20); do
+        value="$(clipboard_text || true)"
+        if [[ "$value" != "$sentinel" ]]; then
+            printf '%s' "$value"
+            return 0
+        fi
+        sleep 0.12
+    done
+    return 1
 }
 
 copy_cell_display() {
     local column_offset="$1" row_offset="$2" address="$3"
-    set_clipboard_sentinel
-    select_cell "$column_offset" "$row_offset" "$address" || return 1
+    local value=""
+    set_clipboard_sentinel || return 1
+    if ! select_cell "$column_offset" "$row_offset" "$address"; then
+        stop_clipboard_sentinel
+        return 1
+    fi
     send_key ctrl+c
-    clipboard_text
+    if ! value="$(wait_for_non_sentinel_clipboard)"; then
+        stop_clipboard_sentinel
+        return 1
+    fi
+    stop_clipboard_sentinel
+    printf '%s' "$value"
 }
 
 copy_cell_formula() {
@@ -440,12 +475,20 @@ select_cell_by_keyboard() {
 
 copy_cell_formula_by_keyboard() {
     local column_offset="$1" row_offset="$2" value=""
-    set_clipboard_sentinel
-    select_cell_by_keyboard "$column_offset" "$row_offset"
+    set_clipboard_sentinel || return 1
+    if ! select_cell_by_keyboard "$column_offset" "$row_offset"; then
+        stop_clipboard_sentinel
+        return 1
+    fi
     send_key F2
     send_key ctrl+a
     send_key ctrl+c
-    value="$(clipboard_text)"
+    if ! value="$(wait_for_non_sentinel_clipboard)"; then
+        stop_clipboard_sentinel
+        send_key Escape
+        return 1
+    fi
+    stop_clipboard_sentinel
     send_key Escape
     printf '%s' "$value"
 }
@@ -6369,12 +6412,15 @@ PY
 
 probe_autofilter_multi_column_persistence_physical() {
     local prefix="autofilter-multi-column" result_id="autofilter-multi-column-criteria-change-clear-physical"
-    local artifacts="${prefix}-before.png;${prefix}-region-menu-open.png;${prefix}-region-applied.png;${prefix}-both-menu-open.png;${prefix}-both-applied.png;${prefix}-category-change-menu-open.png;${prefix}-category-changed.png;${prefix}-region-clear-menu-open.png;${prefix}-region-cleared.png;${prefix}-all-clear-menu-open.png;${prefix}-all-cleared.png;${prefix}-reopened.png;${prefix}-postcondition.txt;${prefix}-popup-gate.txt;${prefix}-reopen-diagnostics.txt"
+    local artifacts="${prefix}-before.png;${prefix}-region-menu-open.png;${prefix}-region-applied.png;${prefix}-both-menu-open.png;${prefix}-both-applied.png;${prefix}-category-change-menu-open.png;${prefix}-category-changed.png;${prefix}-region-clear-menu-open.png;${prefix}-region-cleared.png;${prefix}-all-clear-menu-open.png;${prefix}-all-cleared.png;${prefix}-reload-witness-unsaved.png;${prefix}-reload-discard-prompt.png;${prefix}-reopened.png;${prefix}-postcondition.txt;${prefix}-popup-gate.txt;${prefix}-reopen-diagnostics.txt"
     local menu_open=false region_menu_open=false both_menu_open=false category_change_menu_open=false
     local region_clear_menu_open=false all_clear_menu_open=false
     local dialog_open=false dialog_closed=false
     local region_visible="" both_visible="" category_changed_visible="" region_cleared_visible="" all_cleared_visible="" reopened_visible=""
     local region_package="" both_package="" changed_package="" region_cleared_package="" cleared_package=""
+    local reload_witness_value="__FREEX_RELOAD_WITNESS__" reload_witness_expected_after="East" reload_witness_before="" reload_witness_after=""
+    local reload_witness_before_read=false reload_witness_after_read=false
+    local reload_witness_discarded=false reload_witness_passed=false
 
     if [[ "${document_path,,}" != *.xlsx ]]; then
         write_artifact "${prefix}-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path"
@@ -6449,11 +6495,12 @@ PY
     }
 
     clear_column_filter() {
-        click_autofilter_control 151 117
+        local column_offset="$1"
+        click_autofilter_control "$((column_offset * cell_width + 151))" 117
     }
 
     reopen_multi_document() {
-        local main_pid active_id active_title active_pid visible_dialog_id shortcut
+        local main_pid active_id active_title active_pid visible_dialog_id shortcut active_geometry active_width active_height
         local diagnostics_path="$output/${prefix}-reopen-diagnostics.txt"
         : > "$diagnostics_path"
         select_cell 0 0 A1 || true
@@ -6469,6 +6516,24 @@ PY
                 printf 'shortcut=%s|active-id=%s|active-title=%s|active-pid=%s\n' \
                     "$shortcut" "$active_id" "$active_title" "$active_pid" >> "$diagnostics_path"
                 if [[ "$active_id" != "$window_id" && "$active_title" == "Open Workbook" && "$active_pid" == "$main_pid" ]]; then
+                    active_geometry="$(xdotool getwindowgeometry --shell "$active_id" 2>/dev/null || true)"
+                    active_width="$(printf '%s\n' "$active_geometry" | awk -F= '/^WIDTH=/{print $2}')"
+                    active_height="$(printf '%s\n' "$active_geometry" | awk -F= '/^HEIGHT=/{print $2}')"
+                    if [[ "$active_width" =~ ^[0-9]+$ && "$active_height" =~ ^[0-9]+$ ]] &&
+                       (( active_width <= 600 && active_height <= 260 )); then
+                        xdotool windowactivate --sync "$active_id" 2>/dev/null || return 1
+                        capture "${prefix}-reload-discard-prompt.png"
+                        xdotool key --clearmodifiers --delay "$input_delay_ms" Tab
+                        xdotool key --clearmodifiers --delay "$input_delay_ms" Return
+                        for _ in $(seq 1 20); do
+                            if ! xdotool getwindowname "$active_id" >/dev/null 2>&1; then
+                                reload_witness_discarded=true
+                                break
+                            fi
+                            sleep 0.15
+                        done
+                        continue
+                    fi
                     dialog_open=true
                     break 2
                 fi
@@ -6492,6 +6557,7 @@ PY
         sleep "$dialog_settle_seconds"
         focus_app
         wait_for_document_idle || true
+        restore_calibrated_window_geometry || return 1
     }
 
     capture "${prefix}-before.png"
@@ -6565,27 +6631,41 @@ PY
     fi
 
     if [[ "$cleared_package" == "ref=A1:C7|columns=" ]]; then
+        if set_cell_text_without_save 0 6 A7 "$reload_witness_value"; then
+            if reload_witness_before="$(copy_cell_display 0 6 A7-reload-witness-before)"; then
+                reload_witness_before_read=true
+                capture "${prefix}-reload-witness-unsaved.png"
+            fi
+        fi
         reopen_multi_document || true
         if $dialog_closed; then
             capture "${prefix}-reopened.png"
             reopened_visible="$(read_all_region_values)"
+            if reload_witness_after="$(copy_cell_display 0 6 A7-reload-witness-after)"; then
+                reload_witness_after_read=true
+            fi
+        fi
+        if [[ "$reload_witness_before" == "$reload_witness_value" && "$reload_witness_before_read" == true &&
+              "$reload_witness_discarded" == true && "$reload_witness_after_read" == true &&
+              "$reload_witness_after" == "$reload_witness_expected_after" ]]; then
+            reload_witness_passed=true
         fi
     fi
 
     write_artifact "${prefix}-popup-gate.txt" \
         "schema-version=1\nregion-menu-open=$region_menu_open\nboth-menu-open=$both_menu_open\ncategory-change-menu-open=$category_change_menu_open\nregion-clear-menu-open=$region_clear_menu_open\nall-clear-menu-open=$all_clear_menu_open\ngate=$([[ $region_menu_open == true && $both_menu_open == true && $category_change_menu_open == true && $region_clear_menu_open == true && $all_clear_menu_open == true ]] && echo true || echo false)\n"
     write_artifact "${prefix}-postcondition.txt" \
-        "document-path=$document_path\nmenu-open=$menu_open\nregion-visible=$region_visible\nboth-visible=$both_visible\ncategory-changed-visible=$category_changed_visible\nregion-cleared-visible=$region_cleared_visible\nall-cleared-visible=$all_cleared_visible\nregion-package=$region_package\nboth-package=$both_package\nchanged-package=$changed_package\nregion-cleared-package=$region_cleared_package\ncleared-package=$cleared_package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-visible=$reopened_visible"
+        "document-path=$document_path\nmenu-open=$menu_open\nregion-visible=$region_visible\nboth-visible=$both_visible\ncategory-changed-visible=$category_changed_visible\nregion-cleared-visible=$region_cleared_visible\nall-cleared-visible=$all_cleared_visible\nregion-package=$region_package\nboth-package=$both_package\nchanged-package=$changed_package\nregion-cleared-package=$region_cleared_package\ncleared-package=$cleared_package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreload-witness-before=$reload_witness_before\nreload-witness-before-read=$reload_witness_before_read\nreload-witness-discarded=$reload_witness_discarded\nreload-witness-after=$reload_witness_after\nreload-witness-after-read=$reload_witness_after_read\nreload-witness-passed=$reload_witness_passed\nreopened-visible=$reopened_visible"
 
     if $menu_open && $region_menu_open && $both_menu_open && $category_change_menu_open && $region_clear_menu_open && $all_clear_menu_open &&
        [[ "$region_visible" == "North,North," && "$both_visible" == "North," && "$category_changed_visible" == "North," &&
           "$region_cleared_visible" == "North,South,East," && "$all_cleared_visible" == "North,North,South,South,East,East," &&
           "$region_package" == "ref=A1:C7|columns=0:North;" && "$both_package" == "ref=A1:C7|columns=0:North;1:Hardware;" &&
           "$changed_package" == "ref=A1:C7|columns=0:North;1:Software;" && "$region_cleared_package" == "ref=A1:C7|columns=1:Software;" &&
-          "$cleared_package" == "ref=A1:C7|columns=" && $dialog_open && $dialog_closed &&
+          "$cleared_package" == "ref=A1:C7|columns=" && $dialog_open && $dialog_closed && $reload_witness_passed &&
           "$reopened_visible" == "North,North,South,South,East,East," ]]; then
         record "$result_id" "passed" \
-            "${prefix}-region-applied.png;${prefix}-both-applied.png;${prefix}-category-changed.png;${prefix}-region-cleared.png;${prefix}-all-cleared.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt" \
+            "${prefix}-region-applied.png;${prefix}-both-applied.png;${prefix}-category-changed.png;${prefix}-region-cleared.png;${prefix}-all-cleared.png;${prefix}-reload-witness-unsaved.png;${prefix}-reload-discard-prompt.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt" \
             "Physical production X11 filtering applied criteria on two columns, changed one column while retaining the other, cleared one column without losing the sibling criterion, then cleared the remaining criterion and reopened the saved workbook." "$artifacts"
     else
         record "$result_id" "failed" "$artifacts" \
@@ -6595,10 +6675,13 @@ PY
 
 probe_autofilter_color_change_clear_persistence_physical() {
     local prefix="autofilter-color-change-clear" result_id="autofilter-color-criteria-change-clear-physical"
-    local artifacts="${prefix}-before.png;${prefix}-green-menu-open.png;${prefix}-green-applied.png;${prefix}-yellow-menu-open.png;${prefix}-yellow-applied.png;${prefix}-clear-menu-open.png;${prefix}-cleared.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt;${prefix}-reopen-diagnostics.txt"
+    local artifacts="${prefix}-before.png;${prefix}-green-menu-open.png;${prefix}-green-applied.png;${prefix}-yellow-menu-open.png;${prefix}-yellow-applied.png;${prefix}-clear-menu-open.png;${prefix}-cleared.png;${prefix}-reload-witness-unsaved.png;${prefix}-reload-discard-prompt.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt;${prefix}-reopen-diagnostics.txt"
     local green_menu_open=false yellow_menu_open=false clear_menu_open=false dialog_open=false dialog_closed=false
     local green_criteria="" yellow_criteria="" green_visible="" yellow_visible="" cleared_visible="" reopened_visible=""
     local green_package="" yellow_package="" cleared_package="" green_gate=false yellow_gate=false
+    local reload_witness_value="__FREEX_RELOAD_WITNESS__" reload_witness_expected_after="East" reload_witness_before="" reload_witness_after=""
+    local reload_witness_before_read=false reload_witness_after_read=false
+    local reload_witness_discarded=false reload_witness_passed=false
 
     if [[ "${document_path,,}" != *.xlsx ]]; then
         write_artifact "${prefix}-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path"
@@ -6659,7 +6742,7 @@ PY
     }
 
     reopen_color_change_document() {
-        local main_pid active_id active_title active_pid visible_dialog_id shortcut
+        local main_pid active_id active_title active_pid visible_dialog_id shortcut active_geometry active_width active_height
         local diagnostics_path="$output/${prefix}-reopen-diagnostics.txt"
         : > "$diagnostics_path"
         select_cell 0 0 A1 || true
@@ -6675,6 +6758,24 @@ PY
                 printf 'shortcut=%s|active-id=%s|active-title=%s|active-pid=%s\n' \
                     "$shortcut" "$active_id" "$active_title" "$active_pid" >> "$diagnostics_path"
                 if [[ "$active_id" != "$window_id" && "$active_title" == "Open Workbook" && "$active_pid" == "$main_pid" ]]; then
+                    active_geometry="$(xdotool getwindowgeometry --shell "$active_id" 2>/dev/null || true)"
+                    active_width="$(printf '%s\n' "$active_geometry" | awk -F= '/^WIDTH=/{print $2}')"
+                    active_height="$(printf '%s\n' "$active_geometry" | awk -F= '/^HEIGHT=/{print $2}')"
+                    if [[ "$active_width" =~ ^[0-9]+$ && "$active_height" =~ ^[0-9]+$ ]] &&
+                       (( active_width <= 600 && active_height <= 260 )); then
+                        xdotool windowactivate --sync "$active_id" 2>/dev/null || return 1
+                        capture "${prefix}-reload-discard-prompt.png"
+                        xdotool key --clearmodifiers --delay "$input_delay_ms" Tab
+                        xdotool key --clearmodifiers --delay "$input_delay_ms" Return
+                        for _ in $(seq 1 20); do
+                            if ! xdotool getwindowname "$active_id" >/dev/null 2>&1; then
+                                reload_witness_discarded=true
+                                break
+                            fi
+                            sleep 0.15
+                        done
+                        continue
+                    fi
                     dialog_open=true
                     break 2
                 fi
@@ -6698,6 +6799,7 @@ PY
         sleep "$dialog_settle_seconds"
         focus_app
         wait_for_document_idle || true
+        restore_calibrated_window_geometry || return 1
     }
 
     capture "${prefix}-before.png"
@@ -6747,26 +6849,40 @@ PY
         save_color_change_document && cleared_package="$(package_color_change_signature || true)"
     fi
     if [[ "$cleared_package" == "ref=A1:B5|columns=" ]]; then
+        if set_cell_text_without_save 0 3 A4 "$reload_witness_value"; then
+            if reload_witness_before="$(copy_cell_display 0 3 A4-reload-witness-before)"; then
+                reload_witness_before_read=true
+                capture "${prefix}-reload-witness-unsaved.png"
+            fi
+        fi
         reopen_color_change_document || true
         if $dialog_closed; then
             capture "${prefix}-reopened.png"
             reopened_visible="$(read_all_color_values)"
+            if reload_witness_after="$(copy_cell_display 0 3 A4-reload-witness-after)"; then
+                reload_witness_after_read=true
+            fi
+        fi
+        if [[ "$reload_witness_before" == "$reload_witness_value" && "$reload_witness_before_read" == true &&
+              "$reload_witness_discarded" == true && "$reload_witness_after_read" == true &&
+              "$reload_witness_after" == "$reload_witness_expected_after" ]]; then
+            reload_witness_passed=true
         fi
     fi
 
     write_artifact "${prefix}-popup-gate.txt" \
         "schema-version=1\ngreen-menu-open=$green_menu_open\ngreen-swatch-gate=$green_gate\nyellow-menu-open=$yellow_menu_open\nyellow-swatch-gate=$yellow_gate\nclear-menu-open=$clear_menu_open\nchange-clear-gate=$([[ $green_gate == true && $yellow_gate == true && $clear_menu_open == true ]] && echo true || echo false)\n"
     write_artifact "${prefix}-postcondition.txt" \
-        "document-path=$document_path\ngreen-menu-open=$green_menu_open\ngreen-criteria=$green_criteria\ngreen-visible=$green_visible\nyellow-menu-open=$yellow_menu_open\nyellow-criteria=$yellow_criteria\nyellow-visible=$yellow_visible\nclear-menu-open=$clear_menu_open\ncleared-visible=$cleared_visible\ngreen-package=$green_package\nyellow-package=$yellow_package\ncleared-package=$cleared_package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-visible=$reopened_visible"
+        "document-path=$document_path\ngreen-menu-open=$green_menu_open\ngreen-criteria=$green_criteria\ngreen-visible=$green_visible\nyellow-menu-open=$yellow_menu_open\nyellow-criteria=$yellow_criteria\nyellow-visible=$yellow_visible\nclear-menu-open=$clear_menu_open\ncleared-visible=$cleared_visible\ngreen-package=$green_package\nyellow-package=$yellow_package\ncleared-package=$cleared_package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreload-witness-before=$reload_witness_before\nreload-witness-before-read=$reload_witness_before_read\nreload-witness-discarded=$reload_witness_discarded\nreload-witness-after=$reload_witness_after\nreload-witness-after-read=$reload_witness_after_read\nreload-witness-passed=$reload_witness_passed\nreopened-visible=$reopened_visible"
 
     if $green_menu_open && $green_gate && $yellow_menu_open && $yellow_gate && $clear_menu_open &&
        [[ "$green_criteria" == "fill:#00B050" && "$green_visible" == "North,East," && "$yellow_criteria" == "fill:#FFC000" &&
           "$yellow_visible" == "South,West," && "$cleared_visible" == "North,South,East,West," &&
           "$green_package" == "ref=A1:B5|colId=0|cellColor=1|fill=FF00B050" && "$yellow_package" == "ref=A1:B5|colId=0|cellColor=1|fill=FFFFC000" &&
-          "$cleared_package" == "ref=A1:B5|columns=" && $dialog_open && $dialog_closed &&
+          "$cleared_package" == "ref=A1:B5|columns=" && $dialog_open && $dialog_closed && $reload_witness_passed &&
           "$reopened_visible" == "North,South,East,West," ]]; then
         record "$result_id" "passed" \
-            "${prefix}-green-menu-open.png;${prefix}-green-applied.png;${prefix}-yellow-menu-open.png;${prefix}-yellow-applied.png;${prefix}-clear-menu-open.png;${prefix}-cleared.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt" \
+            "${prefix}-green-menu-open.png;${prefix}-green-applied.png;${prefix}-yellow-menu-open.png;${prefix}-yellow-applied.png;${prefix}-clear-menu-open.png;${prefix}-cleared.png;${prefix}-reload-witness-unsaved.png;${prefix}-reload-discard-prompt.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt" \
             "Physical production X11 color filtering applied a rendered green criterion, changed it to yellow, cleared the criterion, saved each state, and reopened the cleared workbook." "$artifacts"
     else
         record "$result_id" "failed" "$artifacts" \
