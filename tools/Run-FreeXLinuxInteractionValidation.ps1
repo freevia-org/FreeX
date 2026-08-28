@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "autofilter-text-criteria-persistence", "autofilter-numeric-criteria-persistence", "autofilter-date-criteria-persistence", "autofilter-color-persistence", "autofilter-font-color-persistence", "autofilter-no-fill-persistence", "autofilter-mixed-type-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
+    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "autofilter-text-criteria-persistence", "autofilter-numeric-criteria-persistence", "autofilter-date-criteria-persistence", "autofilter-color-persistence", "autofilter-font-color-persistence", "autofilter-no-fill-persistence", "autofilter-mixed-type-persistence", "autofilter-multi-column-persistence", "autofilter-color-change-clear-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -64,6 +64,8 @@ $autoFilterColorFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDock
 $autoFilterFontColorFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave192AutoFilterFontColorFixture.ps1"
 $autoFilterNoFillFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave193AutoFilterNoFillFixture.ps1"
 $autoFilterMixedTypeFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave194AutoFilterMixedTypeFixture.ps1"
+$autoFilterMultiColumnFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave195AutoFilterMultiColumnFixture.ps1"
+$autoFilterColorChangeClearFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave195AutoFilterColorChangeFixture.ps1"
 $native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
 $gridAutofitSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-grid-autofit-validation.schema.json"
 $nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
@@ -927,6 +929,68 @@ function Assert-AutoFilterMixedTypePostcondition {
     }
 }
 
+function Assert-AutoFilterMultiColumnPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    $path = Join-Path $EvidenceDirectory "autofilter-multi-column-postcondition.txt"
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Multi-column AutoFilter probe did not emit its postcondition: $path"
+    }
+
+    $lines = @(Get-Content -LiteralPath $path)
+    $expected = @(
+        "menu-open=true",
+        "region-visible=North,North,",
+        "both-visible=North,",
+        "category-changed-visible=North,",
+        "region-cleared-visible=South,East,",
+        "all-cleared-visible=North,North,South,South,East,East,",
+        "region-package=ref=A1:C7|columns=0:North;",
+        "both-package=ref=A1:C7|columns=0:North;1:Hardware;",
+        "changed-package=ref=A1:C7|columns=0:North;1:Software;",
+        "region-cleared-package=ref=A1:C7|columns=1:Software;",
+        "cleared-package=ref=A1:C7|columns=",
+        "dialog-open=true",
+        "dialog-closed=true",
+        "reopened-visible=North,North,South,South,East,East,"
+    )
+    $missing = @($expected | Where-Object { $_ -notin $lines })
+    if ($missing.Count -ne 0) {
+        throw "Multi-column AutoFilter postcondition failed: $($missing -join '; ')."
+    }
+}
+
+function Assert-AutoFilterColorChangeClearPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    $path = Join-Path $EvidenceDirectory "autofilter-color-change-clear-postcondition.txt"
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Color change/clear AutoFilter probe did not emit its postcondition: $path"
+    }
+
+    $lines = @(Get-Content -LiteralPath $path)
+    $expected = @(
+        "green-menu-open=true",
+        "green-criteria=fill:#00B050",
+        "green-visible=North,East,",
+        "yellow-menu-open=true",
+        "yellow-criteria=fill:#FFC000",
+        "yellow-visible=South,West,",
+        "clear-menu-open=true",
+        "cleared-visible=North,South,East,West,",
+        "green-package=ref=A1:B5|colId=0|cellColor=1|fill=FF00B050",
+        "yellow-package=ref=A1:B5|colId=0|cellColor=1|fill=FFFFC000",
+        "cleared-package=ref=A1:B5|columns=",
+        "dialog-open=true",
+        "dialog-closed=true",
+        "reopened-visible=North,South,East,West,"
+    )
+    $missing = @($expected | Where-Object { $_ -notin $lines })
+    if ($missing.Count -ne 0) {
+        throw "Color change/clear AutoFilter postcondition failed: $($missing -join '; ')."
+    }
+}
+
 function Start-ValidationSession {
     param(
         [string[]]$AppArgument = @(),
@@ -1590,6 +1654,26 @@ try {
             throw "autofilter-mixed-type-persistence requires an existing .xlsx PhysicalDocumentPath."
         }
     }
+    if ($PhysicalProbeSelector -eq "autofilter-multi-column-persistence") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = Join-Path $reportDirectory "fixtures/freex-wave195-autofilter-multi-column.xlsx"
+            & $autoFilterMultiColumnFixtureGenerator -OutputPath $PhysicalDocumentPath
+        }
+        if (-not (Test-Path -LiteralPath $PhysicalDocumentPath -PathType Leaf) -or
+            [IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "autofilter-multi-column-persistence requires an existing .xlsx PhysicalDocumentPath."
+        }
+    }
+    if ($PhysicalProbeSelector -eq "autofilter-color-change-clear-persistence") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = Join-Path $reportDirectory "fixtures/freex-wave195-autofilter-color-change.xlsx"
+            & $autoFilterColorChangeClearFixtureGenerator -OutputPath $PhysicalDocumentPath
+        }
+        if (-not (Test-Path -LiteralPath $PhysicalDocumentPath -PathType Leaf) -or
+            [IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "autofilter-color-change-clear-persistence requires an existing .xlsx PhysicalDocumentPath."
+        }
+    }
     if ($PhysicalProbeSelector -in @("pivot-field-list", "pivot-table-details-double-click")) {
         if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
             $PhysicalDocumentPath = $pivotDetailsFixturePath
@@ -1717,6 +1801,10 @@ try {
         @("autofilter-color-no-fill-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "autofilter-mixed-type-persistence") {
         @("autofilter-mixed-type-value-save-reopen-physical")
+    } elseif ($PhysicalProbeSelector -eq "autofilter-multi-column-persistence") {
+        @("autofilter-multi-column-criteria-change-clear-physical")
+    } elseif ($PhysicalProbeSelector -eq "autofilter-color-change-clear-persistence") {
+        @("autofilter-color-criteria-change-clear-physical")
     } elseif ($PhysicalProbeSelector -eq "backstage-print") {
         @(
             "backstage-print-ctrl-shift-f12-cancel"
@@ -1872,6 +1960,10 @@ try {
         @("autofilter-color-no-fill-save-reopen-physical")
     } elseif ($PhysicalProbeSelector -eq "autofilter-mixed-type-persistence") {
         @("autofilter-mixed-type-value-save-reopen-physical")
+    } elseif ($PhysicalProbeSelector -eq "autofilter-multi-column-persistence") {
+        @("autofilter-multi-column-criteria-change-clear-physical")
+    } elseif ($PhysicalProbeSelector -eq "autofilter-color-change-clear-persistence") {
+        @("autofilter-color-criteria-change-clear-physical")
     } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
         @(
             "formula-bar-point-mode-3d-sheet-range-grip"
@@ -2029,6 +2121,12 @@ try {
     }
     if ($PhysicalProbeSelector -eq "autofilter-mixed-type-persistence") {
         Assert-AutoFilterMixedTypePostcondition -EvidenceDirectory $x11EvidenceDirectory
+    }
+    if ($PhysicalProbeSelector -eq "autofilter-multi-column-persistence") {
+        Assert-AutoFilterMultiColumnPostcondition -EvidenceDirectory $x11EvidenceDirectory
+    }
+    if ($PhysicalProbeSelector -eq "autofilter-color-change-clear-persistence") {
+        Assert-AutoFilterColorChangeClearPostcondition -EvidenceDirectory $x11EvidenceDirectory
     }
     if ($PhysicalProbeSelector -eq "grid-autofit") {
         Assert-GridAutofitPostcondition -EvidenceDirectory $x11EvidenceDirectory

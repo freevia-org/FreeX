@@ -6367,6 +6367,407 @@ PY
     fi
 }
 
+probe_autofilter_multi_column_persistence_physical() {
+    local prefix="autofilter-multi-column" result_id="autofilter-multi-column-criteria-change-clear-physical"
+    local artifacts="${prefix}-before.png;${prefix}-region-menu-open.png;${prefix}-region-applied.png;${prefix}-both-menu-open.png;${prefix}-both-applied.png;${prefix}-category-change-menu-open.png;${prefix}-category-changed.png;${prefix}-region-clear-menu-open.png;${prefix}-region-cleared.png;${prefix}-all-clear-menu-open.png;${prefix}-all-cleared.png;${prefix}-reopened.png;${prefix}-postcondition.txt;${prefix}-popup-gate.txt;${prefix}-reopen-diagnostics.txt"
+    local menu_open=false region_menu_open=false both_menu_open=false category_change_menu_open=false
+    local region_clear_menu_open=false all_clear_menu_open=false
+    local dialog_open=false dialog_closed=false
+    local region_visible="" both_visible="" category_changed_visible="" region_cleared_visible="" all_cleared_visible="" reopened_visible=""
+    local region_package="" both_package="" changed_package="" region_cleared_package="" cleared_package=""
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "${prefix}-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path"
+        record "$result_id" "failed" "${prefix}-postcondition.txt" "The physical multi-column AutoFilter lane requires an XLSX document path." "$artifacts"
+        return
+    fi
+
+    read_region_values() {
+        local first second
+        first="$(copy_cell_display 0 1 multi-region-first || true)"
+        second="$(copy_cell_display 0 2 multi-region-second || true)"
+        printf '%s,%s,' "$first" "$second"
+    }
+
+    read_first_region_value() {
+        printf '%s,' "$(copy_cell_display 0 1 multi-region-single || true)"
+    }
+
+    read_all_region_values() {
+        local value address output_values="" first=true
+        for address in A2 A3 A4 A5 A6 A7; do
+            value="$(copy_cell_formula_by_address "$address" || true)"
+            if $first; then first=false; else output_values+=","; fi
+            output_values+="$value"
+        done
+        printf '%s,' "$output_values"
+    }
+
+    package_value_signature() {
+        python3 - "$document_path" <<'PY'
+import sys, zipfile, xml.etree.ElementTree as ET
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+with zipfile.ZipFile(sys.argv[1]) as package:
+    root = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+auto_filter = root.find(main + "autoFilter")
+columns = []
+if auto_filter is not None:
+    for column in auto_filter.findall(main + "filterColumn"):
+        values = column.find(main + "filters")
+        if values is not None:
+            items = [item.attrib.get("val", "") for item in values.findall(main + "filter")]
+            if items:
+                columns.append(f"{column.attrib.get('colId','')}:{','.join(items)};")
+print(f"ref={auto_filter.attrib.get('ref','') if auto_filter is not None else ''}|columns={''.join(columns)}")
+PY
+    }
+
+    save_multi_document() {
+        select_cell 0 0 A1 || return 1
+        send_key ctrl+s
+        if wait_for_document_clean; then return 0; fi
+        send_key shift+F12
+        wait_for_document_clean
+    }
+
+    clear_value_checklist() {
+        local column_offset="$1"
+        click_autofilter_control "$((column_offset * cell_width + 75))" 319
+        click_autofilter_control "$((column_offset * cell_width + 75))" 319
+    }
+
+    choose_value() {
+        local column_offset="$1" item_index="$2"
+        clear_value_checklist "$column_offset"
+        click_autofilter_control "$((column_offset * cell_width + 75))" "$((346 + item_index * 16))"
+        click_autofilter_control "$((column_offset * cell_width + 292))" 391
+    }
+
+    reopen_multi_document() {
+        local main_pid active_id active_title active_pid visible_dialog_id shortcut
+        local diagnostics_path="$output/${prefix}-reopen-diagnostics.txt"
+        : > "$diagnostics_path"
+        select_cell 0 0 A1 || true
+        focus_app
+        main_pid="$(xdotool getwindowpid "$window_id" 2>/dev/null || true)"
+        [[ -n "$main_pid" ]] || return 1
+        for shortcut in ctrl+F12 ctrl+o ctrl+F12; do
+            send_key "$shortcut"
+            for _ in $(seq 1 12); do
+                active_id="$(xdotool getactivewindow 2>/dev/null || true)"
+                active_title="$(xdotool getwindowname "$active_id" 2>/dev/null || true)"
+                active_pid="$(xdotool getwindowpid "$active_id" 2>/dev/null || true)"
+                printf 'shortcut=%s|active-id=%s|active-title=%s|active-pid=%s\n' \
+                    "$shortcut" "$active_id" "$active_title" "$active_pid" >> "$diagnostics_path"
+                if [[ "$active_id" != "$window_id" && "$active_title" == "Open Workbook" && "$active_pid" == "$main_pid" ]]; then
+                    dialog_open=true
+                    break 2
+                fi
+                sleep 0.2
+            done
+        done
+        if ! $dialog_open; then return 1; fi
+        xdotool windowactivate --sync "$active_id" 2>/dev/null || return 1
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+        xdotool key --clearmodifiers Return
+        sleep "$settle_seconds"
+        xdotool key --clearmodifiers Return
+        for _ in $(seq 1 20); do
+            visible_dialog_id="$(xdotool search --onlyvisible --name '^Open Workbook$' 2>/dev/null | awk -v target="$active_id" '$1 == target { print $1; exit }')"
+            if [[ "$visible_dialog_id" != "$active_id" ]]; then dialog_closed=true; break; fi
+            sleep 0.25
+        done
+        $dialog_closed || return 1
+        wait_for_expected_document || return 1
+        sleep "$dialog_settle_seconds"
+        focus_app
+        wait_for_document_idle || true
+    }
+
+    capture "${prefix}-before.png"
+    select_cell 0 0 A1
+    open_autofilter_menu 0
+    capture "${prefix}-region-menu-open.png"
+    if screen_changed "$output/${prefix}-before.png" "$output/${prefix}-region-menu-open.png" 500; then
+        menu_open=true; region_menu_open=true
+        choose_value 0 1
+        region_visible="$(read_region_values)"
+        capture "${prefix}-region-applied.png"
+    fi
+    if $region_menu_open && [[ "$region_visible" == "North,North," ]]; then
+        save_multi_document && region_package="$(package_value_signature || true)"
+    fi
+
+    if [[ "$region_package" == "ref=A1:C7|columns=0:North;" ]]; then
+        select_cell 1 0 B1; open_autofilter_menu 1
+        capture "${prefix}-both-menu-open.png"
+        if screen_changed "$output/${prefix}-region-applied.png" "$output/${prefix}-both-menu-open.png" 500; then
+            both_menu_open=true
+            choose_value 1 0
+            both_visible="$(read_first_region_value)"
+            capture "${prefix}-both-applied.png"
+        fi
+    fi
+    if $both_menu_open && [[ "$both_visible" == "North," ]]; then
+        save_multi_document && both_package="$(package_value_signature || true)"
+    fi
+
+    if [[ "$both_package" == "ref=A1:C7|columns=0:North;1:Hardware;" ]]; then
+        select_cell 1 0 B1; open_autofilter_menu 1
+        capture "${prefix}-category-change-menu-open.png"
+        if screen_changed "$output/${prefix}-both-applied.png" "$output/${prefix}-category-change-menu-open.png" 500; then
+            category_change_menu_open=true
+            choose_value 1 1
+            category_changed_visible="$(read_first_region_value)"
+            capture "${prefix}-category-changed.png"
+        fi
+    fi
+    if $category_change_menu_open && [[ "$category_changed_visible" == "North," ]]; then
+        save_multi_document && changed_package="$(package_value_signature || true)"
+    fi
+
+    if [[ "$changed_package" == "ref=A1:C7|columns=0:North;1:Software;" ]]; then
+        select_cell 0 0 A1; open_autofilter_menu 0
+        capture "${prefix}-region-clear-menu-open.png"
+        if screen_changed "$output/${prefix}-category-changed.png" "$output/${prefix}-region-clear-menu-open.png" 500; then
+            region_clear_menu_open=true
+            clear_column_filter 0
+            region_cleared_visible="$(read_region_values)"
+            capture "${prefix}-region-cleared.png"
+        fi
+    fi
+    if $region_clear_menu_open && [[ "$region_cleared_visible" == "South,East," ]]; then
+        save_multi_document && region_cleared_package="$(package_value_signature || true)"
+    fi
+
+    if [[ "$region_cleared_package" == "ref=A1:C7|columns=1:Software;" ]]; then
+        select_cell 1 0 B1; open_autofilter_menu 1
+        capture "${prefix}-all-clear-menu-open.png"
+        if screen_changed "$output/${prefix}-region-cleared.png" "$output/${prefix}-all-clear-menu-open.png" 500; then
+            all_clear_menu_open=true
+            clear_column_filter 1
+            all_cleared_visible="$(read_all_region_values)"
+            capture "${prefix}-all-cleared.png"
+        fi
+    fi
+    if $all_clear_menu_open && [[ "$all_cleared_visible" == "North,North,South,South,East,East," ]]; then
+        save_multi_document && cleared_package="$(package_value_signature || true)"
+    fi
+
+    if [[ "$cleared_package" == "ref=A1:C7|columns=" ]]; then
+        reopen_multi_document || true
+        if $dialog_closed; then
+            capture "${prefix}-reopened.png"
+            reopened_visible="$(read_all_region_values)"
+        fi
+    fi
+
+    write_artifact "${prefix}-popup-gate.txt" \
+        "schema-version=1\nregion-menu-open=$region_menu_open\nboth-menu-open=$both_menu_open\ncategory-change-menu-open=$category_change_menu_open\nregion-clear-menu-open=$region_clear_menu_open\nall-clear-menu-open=$all_clear_menu_open\ngate=$([[ $region_menu_open == true && $both_menu_open == true && $category_change_menu_open == true && $region_clear_menu_open == true && $all_clear_menu_open == true ]] && echo true || echo false)\n"
+    write_artifact "${prefix}-postcondition.txt" \
+        "document-path=$document_path\nmenu-open=$menu_open\nregion-visible=$region_visible\nboth-visible=$both_visible\ncategory-changed-visible=$category_changed_visible\nregion-cleared-visible=$region_cleared_visible\nall-cleared-visible=$all_cleared_visible\nregion-package=$region_package\nboth-package=$both_package\nchanged-package=$changed_package\nregion-cleared-package=$region_cleared_package\ncleared-package=$cleared_package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-visible=$reopened_visible"
+
+    if $menu_open && $region_menu_open && $both_menu_open && $category_change_menu_open && $region_clear_menu_open && $all_clear_menu_open &&
+       [[ "$region_visible" == "North,North," && "$both_visible" == "North," && "$category_changed_visible" == "North," &&
+          "$region_cleared_visible" == "South,East," && "$all_cleared_visible" == "North,North,South,South,East,East," &&
+          "$region_package" == "ref=A1:C7|columns=0:North;" && "$both_package" == "ref=A1:C7|columns=0:North;1:Hardware;" &&
+          "$changed_package" == "ref=A1:C7|columns=0:North;1:Software;" && "$region_cleared_package" == "ref=A1:C7|columns=1:Software;" &&
+          "$cleared_package" == "ref=A1:C7|columns=" && $dialog_open && $dialog_closed &&
+          "$reopened_visible" == "North,North,South,South,East,East," ]]; then
+        record "$result_id" "passed" \
+            "${prefix}-region-applied.png;${prefix}-both-applied.png;${prefix}-category-changed.png;${prefix}-region-cleared.png;${prefix}-all-cleared.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt" \
+            "Physical production X11 filtering applied criteria on two columns, changed one column while retaining the other, cleared one column without losing the sibling criterion, then cleared the remaining criterion and reopened the saved workbook." "$artifacts"
+    else
+        record "$result_id" "failed" "$artifacts" \
+            "The physical multi-column AutoFilter lane did not prove AND filtering, criterion change, per-column clear, final clear, package state, and production reopen." "$artifacts"
+    fi
+}
+
+probe_autofilter_color_change_clear_persistence_physical() {
+    local prefix="autofilter-color-change-clear" result_id="autofilter-color-criteria-change-clear-physical"
+    local artifacts="${prefix}-before.png;${prefix}-green-menu-open.png;${prefix}-green-applied.png;${prefix}-yellow-menu-open.png;${prefix}-yellow-applied.png;${prefix}-clear-menu-open.png;${prefix}-cleared.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt;${prefix}-reopen-diagnostics.txt"
+    local green_menu_open=false yellow_menu_open=false clear_menu_open=false dialog_open=false dialog_closed=false
+    local green_criteria="" yellow_criteria="" green_visible="" yellow_visible="" cleared_visible="" reopened_visible=""
+    local green_package="" yellow_package="" cleared_package="" green_gate=false yellow_gate=false
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "${prefix}-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path"
+        record "$result_id" "failed" "${prefix}-postcondition.txt" "The physical color change/clear AutoFilter lane requires an XLSX document path." "$artifacts"
+        return
+    fi
+
+    read_color_values() {
+        local first second
+        first="$(copy_cell_display 0 1 color-change-first || true)"
+        second="$(copy_cell_display 0 2 color-change-second || true)"
+        printf '%s,%s,' "$first" "$second"
+    }
+
+    read_all_color_values() {
+        local value address output_values="" first=true
+        for address in A2 A3 A4 A5; do
+            value="$(copy_cell_formula_by_address "$address" || true)"
+            if $first; then first=false; else output_values+=","; fi
+            output_values+="$value"
+        done
+        printf '%s,' "$output_values"
+    }
+
+    package_color_change_signature() {
+        python3 - "$document_path" <<'PY'
+import sys, zipfile, xml.etree.ElementTree as ET
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+with zipfile.ZipFile(sys.argv[1]) as package:
+    sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+    styles = ET.fromstring(package.read("xl/styles.xml"))
+auto_filter = sheet.find(main + "autoFilter")
+column = auto_filter.find(main + "filterColumn") if auto_filter is not None else None
+color = column.find(main + "colorFilter") if column is not None else None
+if color is None:
+    print(f"ref={auto_filter.attrib.get('ref','') if auto_filter is not None else ''}|columns=")
+    raise SystemExit(0)
+dxfs = styles.find(main + "dxfs")
+dxf = list(dxfs.findall(main + "dxf"))[int(color.attrib["dxfId"])]
+fill = dxf.find(main + "fill/" + main + "patternFill/" + main + "fgColor")
+rgb = fill.attrib.get("rgb", "") if fill is not None else ""
+print(f"ref={auto_filter.attrib.get('ref','')}|colId={column.attrib.get('colId','')}|cellColor={color.attrib.get('cellColor','')}|fill={rgb}")
+PY
+    }
+
+    save_color_change_document() {
+        select_cell 0 0 A1 || return 1
+        send_key ctrl+s
+        if wait_for_document_clean; then return 0; fi
+        send_key shift+F12
+        wait_for_document_clean
+    }
+
+    sample_color_swatch() {
+        local before="$1" opened="$2" sample_x_offset="$3" expected="$4"
+        local before_pixel pixel
+        before_pixel="$(convert "$before" -format "%[hex:p{$((a1_x + sample_x_offset)),$((a1_y + 216))}]" info: 2>/dev/null || true)"
+        pixel="$(convert "$opened" -format "%[hex:p{$((a1_x + sample_x_offset)),$((a1_y + 216))}]" info: 2>/dev/null || true)"
+        before_pixel="${before_pixel^^}"; pixel="${pixel^^}"
+        [[ "$pixel" == "$expected" && "$before_pixel" != "$expected" ]]
+    }
+
+    reopen_color_change_document() {
+        local main_pid active_id active_title active_pid visible_dialog_id shortcut
+        local diagnostics_path="$output/${prefix}-reopen-diagnostics.txt"
+        : > "$diagnostics_path"
+        select_cell 0 0 A1 || true
+        focus_app
+        main_pid="$(xdotool getwindowpid "$window_id" 2>/dev/null || true)"
+        [[ -n "$main_pid" ]] || return 1
+        for shortcut in ctrl+F12 ctrl+o ctrl+F12; do
+            send_key "$shortcut"
+            for _ in $(seq 1 12); do
+                active_id="$(xdotool getactivewindow 2>/dev/null || true)"
+                active_title="$(xdotool getwindowname "$active_id" 2>/dev/null || true)"
+                active_pid="$(xdotool getwindowpid "$active_id" 2>/dev/null || true)"
+                printf 'shortcut=%s|active-id=%s|active-title=%s|active-pid=%s\n' \
+                    "$shortcut" "$active_id" "$active_title" "$active_pid" >> "$diagnostics_path"
+                if [[ "$active_id" != "$window_id" && "$active_title" == "Open Workbook" && "$active_pid" == "$main_pid" ]]; then
+                    dialog_open=true
+                    break 2
+                fi
+                sleep 0.2
+            done
+        done
+        if ! $dialog_open; then return 1; fi
+        xdotool windowactivate --sync "$active_id" 2>/dev/null || return 1
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+        xdotool key --clearmodifiers Return
+        sleep "$settle_seconds"
+        xdotool key --clearmodifiers Return
+        for _ in $(seq 1 20); do
+            visible_dialog_id="$(xdotool search --onlyvisible --name '^Open Workbook$' 2>/dev/null | awk -v target="$active_id" '$1 == target { print $1; exit }')"
+            if [[ "$visible_dialog_id" != "$active_id" ]]; then dialog_closed=true; break; fi
+            sleep 0.25
+        done
+        $dialog_closed || return 1
+        wait_for_expected_document || return 1
+        sleep "$dialog_settle_seconds"
+        focus_app
+        wait_for_document_idle || true
+    }
+
+    capture "${prefix}-before.png"
+    select_cell 0 0 A1; open_autofilter_menu 0
+    capture "${prefix}-green-menu-open.png"
+    if screen_changed "$output/${prefix}-before.png" "$output/${prefix}-green-menu-open.png" 500; then
+        green_menu_open=true
+        if sample_color_swatch "$output/${prefix}-before.png" "$output/${prefix}-green-menu-open.png" 84 00B050; then
+            green_gate=true; green_criteria="fill:#00B050"
+            click_autofilter_control 110 220
+            green_visible="$(read_color_values)"
+            capture "${prefix}-green-applied.png"
+        fi
+    fi
+    if $green_menu_open && $green_gate && [[ "$green_visible" == "North,East," ]]; then
+        save_color_change_document && green_package="$(package_color_change_signature || true)"
+    fi
+
+    if [[ "$green_package" == "ref=A1:B5|colId=0|cellColor=1|fill=FF00B050" ]]; then
+        select_cell 0 0 A1; open_autofilter_menu 0
+        capture "${prefix}-yellow-menu-open.png"
+        if screen_changed "$output/${prefix}-green-applied.png" "$output/${prefix}-yellow-menu-open.png" 500; then
+            yellow_menu_open=true
+            if sample_color_swatch "$output/${prefix}-green-applied.png" "$output/${prefix}-yellow-menu-open.png" 164 FFC000; then
+                yellow_gate=true; yellow_criteria="fill:#FFC000"
+                click_autofilter_control 190 220
+                yellow_visible="$(read_color_values)"
+                capture "${prefix}-yellow-applied.png"
+            fi
+        fi
+    fi
+    if $yellow_menu_open && $yellow_gate && [[ "$yellow_visible" == "South,West," ]]; then
+        save_color_change_document && yellow_package="$(package_color_change_signature || true)"
+    fi
+
+    if [[ "$yellow_package" == "ref=A1:B5|colId=0|cellColor=1|fill=FFFFC000" ]]; then
+        select_cell 0 0 A1; open_autofilter_menu 0
+        capture "${prefix}-clear-menu-open.png"
+        if screen_changed "$output/${prefix}-yellow-applied.png" "$output/${prefix}-clear-menu-open.png" 500; then
+            clear_menu_open=true
+            click_autofilter_control 151 121
+            cleared_visible="$(read_all_color_values)"
+            capture "${prefix}-cleared.png"
+        fi
+    fi
+    if $clear_menu_open && [[ "$cleared_visible" == "North,South,East,West," ]]; then
+        save_color_change_document && cleared_package="$(package_color_change_signature || true)"
+    fi
+    if [[ "$cleared_package" == "ref=A1:B5|columns=" ]]; then
+        reopen_color_change_document || true
+        if $dialog_closed; then
+            capture "${prefix}-reopened.png"
+            reopened_visible="$(read_all_color_values)"
+        fi
+    fi
+
+    write_artifact "${prefix}-popup-gate.txt" \
+        "schema-version=1\ngreen-menu-open=$green_menu_open\ngreen-swatch-gate=$green_gate\nyellow-menu-open=$yellow_menu_open\nyellow-swatch-gate=$yellow_gate\nclear-menu-open=$clear_menu_open\nchange-clear-gate=$([[ $green_gate == true && $yellow_gate == true && $clear_menu_open == true ]] && echo true || echo false)\n"
+    write_artifact "${prefix}-postcondition.txt" \
+        "document-path=$document_path\ngreen-menu-open=$green_menu_open\ngreen-criteria=$green_criteria\ngreen-visible=$green_visible\nyellow-menu-open=$yellow_menu_open\nyellow-criteria=$yellow_criteria\nyellow-visible=$yellow_visible\nclear-menu-open=$clear_menu_open\ncleared-visible=$cleared_visible\ngreen-package=$green_package\nyellow-package=$yellow_package\ncleared-package=$cleared_package\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-visible=$reopened_visible"
+
+    if $green_menu_open && $green_gate && $yellow_menu_open && $yellow_gate && $clear_menu_open &&
+       [[ "$green_criteria" == "fill:#00B050" && "$green_visible" == "North,East," && "$yellow_criteria" == "fill:#FFC000" &&
+          "$yellow_visible" == "South,West," && "$cleared_visible" == "North,South,East,West," &&
+          "$green_package" == "ref=A1:B5|colId=0|cellColor=1|fill=FF00B050" && "$yellow_package" == "ref=A1:B5|colId=0|cellColor=1|fill=FFFFC000" &&
+          "$cleared_package" == "ref=A1:B5|columns=" && $dialog_open && $dialog_closed &&
+          "$reopened_visible" == "North,South,East,West," ]]; then
+        record "$result_id" "passed" \
+            "${prefix}-green-menu-open.png;${prefix}-green-applied.png;${prefix}-yellow-menu-open.png;${prefix}-yellow-applied.png;${prefix}-clear-menu-open.png;${prefix}-cleared.png;${prefix}-reopened.png;${prefix}-popup-gate.txt;${prefix}-postcondition.txt" \
+            "Physical production X11 color filtering applied a rendered green criterion, changed it to yellow, cleared the criterion, saved each state, and reopened the cleared workbook." "$artifacts"
+    else
+        record "$result_id" "failed" "$artifacts" \
+            "The physical color AutoFilter lane did not prove rendered color selection, criterion change, clear behavior, package transitions, and production reopen." "$artifacts"
+    fi
+}
+
 probe_autofilter_mixed_type_persistence_physical() {
     local prefix="autofilter-mixed-type"
     local result_id="autofilter-mixed-type-value-save-reopen-physical"
@@ -6712,6 +7113,32 @@ if [[ "$probe_selector" == "autofilter-mixed-type-persistence" ]]; then
     probe_autofilter_mixed_type_persistence_physical
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the mixed-type AutoFilter persistence probe."
+    fi
+    write_manifest
+    probe_failed=false
+    for result in "${results[@]}"; do
+        [[ "$result" == *'\"status\":\"failed\"'* ]] && probe_failed=true
+    done
+    if $probe_failed; then exit 3; fi
+    exit 0
+fi
+if [[ "$probe_selector" == "autofilter-multi-column-persistence" ]]; then
+    probe_autofilter_multi_column_persistence_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the multi-column AutoFilter probe."
+    fi
+    write_manifest
+    probe_failed=false
+    for result in "${results[@]}"; do
+        [[ "$result" == *'\"status\":\"failed\"'* ]] && probe_failed=true
+    done
+    if $probe_failed; then exit 3; fi
+    exit 0
+fi
+if [[ "$probe_selector" == "autofilter-color-change-clear-persistence" ]]; then
+    probe_autofilter_color_change_clear_persistence_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the color change/clear AutoFilter probe."
     fi
     write_manifest
     probe_failed=false
