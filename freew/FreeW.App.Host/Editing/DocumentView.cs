@@ -759,6 +759,14 @@ public sealed partial class DocumentView : RichTextBox
             e.Handled = true;
             return;
         }
+        if (CanUseNativeUntrackedTextInput())
+        {
+            // RichTextBox can edit ordinary text in place. Rebuilding the entire FlowDocument for each
+            // character makes large documents unusable; model-first editing remains necessary for tracked
+            // changes and protected/content-control scenarios below.
+            base.OnPreviewTextInput(e);
+            return;
+        }
         if (!string.IsNullOrEmpty(e.Text)
             && TryApplyBodyTextInput(e.Text))
         {
@@ -795,6 +803,12 @@ public sealed partial class DocumentView : RichTextBox
 
         base.OnPreviewTextInput(e);
     }
+
+    private bool CanUseNativeUntrackedTextInput() =>
+        !TrackChangesEnabled
+        && !IsReadOnly
+        && Selection.IsEmpty
+        && !IsCaretOnLockedContentControl();
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
