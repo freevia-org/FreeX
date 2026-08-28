@@ -69,7 +69,9 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
                 ApplyTextRenderingPolicy(textBox, presentation.TextRenderingPolicy);
             }
             AvaloniaCompactDialogChrome.ApplyLegalNoticesDefaultButtonChrome(_closeButton);
-            Dispatcher.UIThread.Post(ApplyWpfAuthoritySelectedPaneTrailingEdge, DispatcherPriority.Render);
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(
+                ApplyWpfAuthoritySelectedPaneTrailingEdge,
+                global::Avalonia.Threading.DispatcherPriority.Render);
             FocusInitialKeyboardTarget();
         };
     }
