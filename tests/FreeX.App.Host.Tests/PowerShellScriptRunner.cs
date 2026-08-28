@@ -58,8 +58,32 @@ internal static class PowerShellScriptRunner
 
 internal static class TestProcessRunner
 {
-    public static PowerShellResult Run(string fileName, string arguments, string workingDirectory)
+    /// <summary>
+    /// How long a tool script may run before the test gives up on it.
+    /// </summary>
+    /// <remarks>
+    /// r164 remediation, tests tier: this waited on the child with no bound at all, so a script that
+    /// blocks -- on an unexpected prompt, a lock held by a parallel session, a hung child of its own
+    /// -- blocked the test, its suite, and the whole gate behind it. Measured: a script sleeping 30s
+    /// still had the runner blocked at the 10s mark with no timeout in sight. That is the mechanism
+    /// behind a full DefaultTests run stalling indefinitely with the test host alive but idle.
+    ///
+    /// Five minutes is far beyond the slowest script here (they run in seconds; the entire
+    /// 5,300-test host suite takes ~16 minutes), so this cannot turn a slow machine into a failure --
+    /// it only converts an unbounded stall into a legible one, the same way
+    /// LinuxInteractionRunnerSessionBindingTests already bounds its own probe.
+    /// </remarks>
+    public static readonly TimeSpan ScriptTimeout = TimeSpan.FromMinutes(5);
+
+    public static PowerShellResult Run(
+        string fileName,
+        string arguments,
+        string workingDirectory,
+        TimeSpan? timeout = null)
     {
+        // Injectable so the timeout-and-kill path itself is covered by a test with a short bound.
+        // An untested timeout path is the one that turns out to be broken the day it first fires.
+        var effectiveTimeout = timeout ?? ScriptTimeout;
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
@@ -75,11 +99,46 @@ internal static class TestProcessRunner
         process.Start().Should().BeTrue();
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
+
+        if (!process.WaitForExit((int)effectiveTimeout.TotalMilliseconds))
+        {
+            // Kill the whole tree: the script itself may be waiting on a child of its own, and
+            // leaving either behind would keep the next run's working directory locked.
+            try
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit((int)TimeSpan.FromSeconds(30).TotalMilliseconds);
+            }
+            catch (InvalidOperationException)
+            {
+                // Raced with the process exiting on its own; nothing left to kill.
+            }
+
+            throw new TimeoutException(
+                $"'{fileName} {arguments}' did not exit within {effectiveTimeout.TotalSeconds:N0}s and was killed. " +
+                $"Partial output: {Truncate(SafeResult(outputTask))} Partial error: {Truncate(SafeResult(errorTask))}");
+        }
+
         Task.WaitAll(outputTask, errorTask);
 
         return new PowerShellResult(process.ExitCode, outputTask.Result, errorTask.Result);
     }
+
+    /// <summary>Whatever the reader captured before the kill, without waiting on it further.</summary>
+    private static string SafeResult(Task<string> readerTask)
+    {
+        try
+        {
+            return readerTask.Wait(TimeSpan.FromSeconds(5)) ? readerTask.Result : "(unavailable)";
+        }
+        catch (Exception)
+        {
+            return "(unavailable)";
+        }
+    }
+
+    private static string Truncate(string value) =>
+        value.Length <= 2000 ? value : value[..2000] + "... (truncated)";
 }
 
 internal sealed record PowerShellResult(int ExitCode, string Output, string Error)
