@@ -452,11 +452,21 @@ public static class ShapeGeometryBuilder
         const double AngleUnitsPerDegree = 60000.0;
         var startDegrees = GetAdjustment(adjustments, "adj1", 0) / AngleUnitsPerDegree;
         var endDegrees = GetAdjustment(adjustments, "adj2", 180 * AngleUnitsPerDegree) / AngleUnitsPerDegree;
-        var sweepDegrees = endDegrees - startDegrees;
-        while (sweepDegrees < 0)
+
+        // r164 remediation, unbounded declared quantity: the guide values come straight from the file
+        // (`<a:gd name="adj1" fmla="val ..."/>`), parsed as a plain double with no range check, and
+        // this used to normalize the sweep by repeated +=/-= 360. Past ~1e19 a double is too coarse to
+        // change by 360 at all -- `x - 360 == x` -- so a shape carrying `val 1e308` spun forever on
+        // the render thread rather than merely slowly (measured: never returned). Modular arithmetic
+        // normalizes in one step at any magnitude, and a non-finite guide (which would otherwise poison
+        // every coordinate below with NaN) falls into the full-circle case the degenerate-sweep check
+        // just below already handles.
+        if (!double.IsFinite(startDegrees) || !double.IsFinite(endDegrees))
+            return Ellipse(rect);
+
+        var sweepDegrees = (endDegrees - startDegrees) % 360;
+        if (sweepDegrees < 0)
             sweepDegrees += 360;
-        while (sweepDegrees > 360)
-            sweepDegrees -= 360;
 
         // Equal start/end guides are PowerPoint's full-circle case. An ArcTo with
         // identical endpoints would be treated as an empty arc by both host APIs.

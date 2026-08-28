@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
+using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
@@ -220,6 +221,8 @@ public sealed partial class MainWindow : Window
     private DocumentView? _splitEditor;
     private DocumentView? _lastEditedDocumentEditor;
     private bool _synchronizingSplitEditors;
+    private readonly DispatcherTimer _editorChromeRefreshTimer;
+    private DocumentView? _pendingEditorChromeRefresh;
 
     // PagedEdit: editable paginated surface. When active the workspace child is swapped
     // from the live workspaceGrid to a PaginatedEditorPanel. Exiting commits all page boxes back to
@@ -387,6 +390,11 @@ public sealed partial class MainWindow : Window
         var editor = new DocumentView(_platformClipboard) { Margin = new Thickness(40, 24, 40, 24) };
         _editor = editor;
         _lastFocusedDocumentEditor = editor;
+        _editorChromeRefreshTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(150)
+        };
+        _editorChromeRefreshTimer.Tick += OnEditorChromeRefreshTimerTick;
         AddHandler(
             Keyboard.GotKeyboardFocusEvent,
             new KeyboardFocusChangedEventHandler(OnWindowGotKeyboardFocus),
@@ -505,7 +513,7 @@ public sealed partial class MainWindow : Window
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
         // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
         // Also re-evaluate which contextual "Tools" tabs apply to the new selection.
-        editor.SelectionChanged += (_, _) => { _lastFocusedDocumentEditor = editor; UpdateCounts(editor); RefreshContextualTabs(); };
+        editor.SelectionChanged += (_, _) => OnDocumentEditorSelectionChanged(editor);
         _autosave = new AutosaveCoordinator(editor, _file, recoverInNewWindow: OpenNewWindowWithRecoveredSnapshot);
         Loaded += (_, _) =>
         {
@@ -529,6 +537,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
             DisposeReadAloud();
+            _editorChromeRefreshTimer.Stop();
             _autosave.Stop();
         };
 
@@ -1144,8 +1153,8 @@ public sealed partial class MainWindow : Window
 
     // Recompute the live status-bar counts. When there is a non-empty selection, show that selection's
     // word + character totals (via the pure WordCount helpers over Selection.Text); otherwise fall back
-    // to the whole-document word/character/paragraph counts. Cheap enough to run on every edit
-    // (TextChanged), on selection change, and on document load.
+    // to the whole-document word/character/paragraph counts. Rich-text serialization runs after
+    // typing settles, as well as on selection change and document load.
     private void UpdateCounts(DocumentView? source = null)
     {
         var editor = source ?? ResolveActiveDocumentEditor();
@@ -3064,7 +3073,7 @@ public sealed partial class MainWindow : Window
         splitEditor.ZoomLevel = _editor.ZoomLevel;
         splitEditor.ApplyViewDepthLayout(_viewSession.CurrentDepth.Layout);
         splitEditor.TextChanged += (_, _) => OnDocumentEditorChanged(splitEditor);
-        splitEditor.SelectionChanged += (_, _) => { _lastFocusedDocumentEditor = splitEditor; UpdateCounts(splitEditor); RefreshContextualTabs(); };
+        splitEditor.SelectionChanged += (_, _) => OnDocumentEditorSelectionChanged(splitEditor);
         Grid.SetRow(splitEditor, 2);
         splitGrid.Children.Add(splitEditor);
 
@@ -3758,10 +3767,33 @@ public sealed partial class MainWindow : Window
         _lastEditedDocumentEditor = source;
 
         _file.MarkDirty();
+        ScheduleEditorChromeRefresh(source);
+    }
+
+    private void OnDocumentEditorSelectionChanged(DocumentView source)
+    {
+        _lastFocusedDocumentEditor = source;
+        RefreshContextualTabs();
+        ScheduleEditorChromeRefresh(source);
+    }
+
+    // Page/section status commits the live FlowDocument back to the portable model. Deferring it until
+    // typing pauses keeps that document-wide work out of WPF's per-keystroke input path.
+    private void ScheduleEditorChromeRefresh(DocumentView source)
+    {
+        _pendingEditorChromeRefresh = source;
+        _editorChromeRefreshTimer.Stop();
+        _editorChromeRefreshTimer.Start();
+    }
+
+    private void OnEditorChromeRefreshTimerTick(object? sender, EventArgs e)
+    {
+        _editorChromeRefreshTimer.Stop();
+        var source = _pendingEditorChromeRefresh ?? _editor;
+        _pendingEditorChromeRefresh = null;
         UpdateCounts(source);
         RefreshOutline();
         RefreshSelectionPane();
-        RefreshContextualTabs();
         RefreshReviewPane();
         RefreshNotesPane();
         _balloonOverlay?.Rebuild();

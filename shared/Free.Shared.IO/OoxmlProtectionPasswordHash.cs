@@ -6,6 +6,26 @@ namespace Free.Shared.IO;
 
 public static class OoxmlProtectionPasswordHash
 {
+    /// <summary>
+    /// Ceiling on the iteration count this helper will honour. Office writes 100,000 (Word and Excel
+    /// both, since 2013) and FreeW's own writer uses 50,000, so this is 100x anything a real document
+    /// carries; it costs ~2.6s of SHA-1 at the top end, against 44ms for Office's default.
+    /// </summary>
+    /// <remarks>
+    /// r164 remediation, unbounded declared quantity: the spin count is a COUNT the document declares
+    /// -- xlsx <c>sheetProtection/@spinCount</c>, docx <c>w:documentProtection/@w:cryptSpinCount</c> --
+    /// and it reached this loop with only "not negative" checked. A file declaring 2,000,000,000 made
+    /// a single password check run two billion hash rounds: it had not returned after 20s when
+    /// measured, and extrapolates to hours. That is the classic iteration-count DoS, and it fires on
+    /// the ordinary "unprotect this sheet" path, so it is bounded here -- the one place every app's
+    /// verify and derive funnel through -- rather than in each reader.
+    ///
+    /// Beyond the ceiling the derivation is REFUSED rather than truncated: truncating would silently
+    /// compute a hash that can never match, reporting a correct password as wrong with no way to tell
+    /// why.
+    /// </remarks>
+    public const int MaximumSpinCount = 10_000_000;
+
     public static byte[] Derive(
         string algorithmName,
         string password,
@@ -14,6 +34,11 @@ public static class OoxmlProtectionPasswordHash
     {
         ArgumentNullException.ThrowIfNull(password);
         ArgumentOutOfRangeException.ThrowIfNegative(spinCount);
+        if (spinCount > MaximumSpinCount)
+        {
+            throw new NotSupportedException(
+                $"OOXML password spin count {spinCount:N0} exceeds the supported maximum of {MaximumSpinCount:N0}.");
+        }
 
         if (!TryDerive(algorithmName, password, salt, spinCount, out var digest))
             throw new ArgumentException($"Unsupported OOXML password hash algorithm '{algorithmName}'.", nameof(algorithmName));
@@ -30,7 +55,10 @@ public static class OoxmlProtectionPasswordHash
     {
         ArgumentNullException.ThrowIfNull(password);
         digest = [];
-        if (spinCount < 0 || !TryResolveAlgorithm(algorithmName, out var algorithm))
+        // An out-of-range spin count is treated exactly like an unsupported algorithm: the caller
+        // cannot verify this document's password, and says so, instead of grinding through a
+        // document-declared number of hash rounds (see MaximumSpinCount).
+        if (spinCount < 0 || spinCount > MaximumSpinCount || !TryResolveAlgorithm(algorithmName, out var algorithm))
             return false;
 
         var passwordBytes = Encoding.Unicode.GetBytes(password);
