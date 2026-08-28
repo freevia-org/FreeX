@@ -67,7 +67,9 @@ internal sealed partial class BackstageView : UserControl
             });
     }
 
-    public void Show() => _backstage.Show();
+    // Match FreeX's Backstage selection policy: File opens the task-oriented Home surface, while
+    // document properties stay available as the explicit Info rail destination.
+    public void Show() => _backstage.Show("Home");
 
     public void Hide() => _backstage.Hide();
 

@@ -26,7 +26,7 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("SisterBackstageHostController");
         source.Should().Contain("new SisterBackstageHostSpec(");
         source.Should().Contain("Chrome = BackstageRibbonChrome.Create()");
-        source.Should().Contain("public void Show() => _backstage.Show();");
+        source.Should().Contain("public void Show() => _backstage.Show(\"Home\");");
         source.Should().Contain("public void Hide() => _backstage.Hide();");
         if (appFolder == "freew")
         {
