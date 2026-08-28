@@ -436,9 +436,10 @@ public partial class GridView
             text.TextAlignment = wrapTextAlignment;
         }
 
+        var layoutTextWidth = ResolveCellTextLayoutWidth(text.Width, wrapMaxTextWidth, wrapText);
         var textLayout = CalculateCellTextRenderLayout(
             rect,
-            text.Width,
+            layoutTextWidth,
             text.Height,
             ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue),
             style?.VerticalAlignment,
@@ -951,9 +952,10 @@ public partial class GridView
                 text.TextAlignment = wrapTextAlignment;
             }
 
+            var layoutTextWidth = ResolveCellTextLayoutWidth(text.Width, wrapMaxTextWidth, wrapText);
             var textLayout = CalculateCellTextRenderLayout(
                 rect,
-                text.Width,
+                layoutTextWidth,
                 text.Height,
                 ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue),
                 style?.VerticalAlignment,
@@ -1482,6 +1484,9 @@ public partial class GridView
             CellHAlign.General => isEffectivelyRightToLeft ? TextAlignment.Right : TextAlignment.Left,
             _ => TextAlignment.Left
         };
+
+    internal static double ResolveCellTextLayoutWidth(double formattedTextWidth, double wrapMaxTextWidth, bool wrapText) =>
+        wrapText ? wrapMaxTextWidth : formattedTextWidth;
 
     internal static CellTextRenderLayout CalculateCellTextRenderLayout(
         Rect rect,
