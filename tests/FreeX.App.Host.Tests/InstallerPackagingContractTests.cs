@@ -92,7 +92,7 @@ public sealed class InstallerPackagingContractTests
         portable.GetProperty("size").GetInt64().Should().Be(3);
     }
 
-    [Fact]
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void ReleaseSbom_RemovesItsPayloadStagingDirectoryAfterGeneration()
     {
         using var temp = new TestTemporaryDirectory();

@@ -111,7 +111,27 @@ internal static class Wave192GitProvenanceAssertions
         using var output = new MemoryStream();
         process.StandardOutput.BaseStream.CopyTo(output);
         var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
+
+        // r164 remediation, tests tier: this waited on git with no bound. git blocks on a held
+        // index.lock -- which this repository hits routinely, since parallel sessions share the main
+        // checkout -- and an unbounded wait there stalls the whole gate behind this assertion rather
+        // than failing it. Two minutes is far beyond any provenance query here.
+        if (!process.WaitForExit((int)TimeSpan.FromMinutes(2).TotalMilliseconds))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit((int)TimeSpan.FromSeconds(30).TotalMilliseconds);
+            }
+            catch (InvalidOperationException)
+            {
+                // Raced with git exiting on its own.
+            }
+
+            throw new TimeoutException(
+                $"git {string.Join(' ', arguments)} did not exit within 2 minutes and was killed (stderr: {error}).");
+        }
+
         return new GitResult(process.ExitCode, output.ToArray(), error);
     }
 
