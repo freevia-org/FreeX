@@ -1498,34 +1498,31 @@ public sealed class WorkbookSession : IDisposable
                 "Quick Analysis sparklines require a supported multi-column selection.");
         }
 
-        var appliedCount = 0;
-        foreach (var command in commands)
+        // R165-services-quickanalysis-sparklines-undo-1: run every per-row AddSparklineCommand as
+        // one CompositeWorkbookCommand through a single ExecuteReviewCommand call, matching the
+        // sibling ExecuteQuickAnalysisTotal above (which groups its per-row edits into one
+        // EditCellsCommand). Executing the commands one at a time here previously pushed one
+        // undo entry PER SPARKLINE, so Ctrl+Z after inserting sparklines for a multi-row
+        // selection only removed the last row's sparkline instead of undoing the whole Quick
+        // Analysis operation.
+        var result = ExecuteReviewCommand(new CompositeWorkbookCommand(title, commands));
+        if (!result.Success || result.IsNoOp)
         {
-            var result = ExecuteReviewCommand(command);
-            if (!result.Success)
-            {
-                return new QuickAnalysisWorkbookOperationResult(
-                    result,
-                    QuickAnalysisWorkbookOperationFailure.CommandFailed,
-                    appliedCount,
-                    range,
-                    SelectedCell: null,
-                    title);
-            }
-
-            if (!result.IsNoOp)
-                appliedCount++;
+            return new QuickAnalysisWorkbookOperationResult(
+                result,
+                result.Success
+                    ? QuickAnalysisWorkbookOperationFailure.None
+                    : QuickAnalysisWorkbookOperationFailure.CommandFailed,
+                AppliedItemCount: 0,
+                range,
+                SelectedCell: null,
+                title);
         }
 
         return new QuickAnalysisWorkbookOperationResult(
-            new WorkbookCellEditResult(
-                Success: true,
-                ErrorMessage: null,
-                AffectedCells: [],
-                RecalcReport: null,
-                IsNoOp: appliedCount == 0),
+            result,
             QuickAnalysisWorkbookOperationFailure.None,
-            appliedCount,
+            commands.Count,
             range,
             SelectedCell: null,
             title);

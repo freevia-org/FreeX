@@ -2845,10 +2845,23 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
         foreach (var shape in slide.Shapes.ToList())
         {
             var target = FindMatchingPlaceholder(layout, shape.Placeholder);
-            if (target is null || !HasGeometry(target))
+            if (target is null)
                 continue;
 
-            var state = new PlaceholderGeometryState(shape, target);
+            // A new layout's matching placeholder can legitimately omit its own xfrm (ECMA-376
+            // 19.3.1.53: absent xfrm means "inherit from master"). Leaving the existing shape
+            // untouched in that case would let it keep the PREVIOUS layout's explicit, non-zero
+            // geometry forever -- PlaceholderResolver.ResolveAnchor never falls through to
+            // layout/master inheritance once a shape has its own non-zero extent, so the stale
+            // position/size becomes permanent and gets baked into the saved file. Resolve the
+            // same layout-then-master chain the newly-added-placeholder path below already uses
+            // (ApplyInheritedMasterGeometry) into a transient shape so the existing placeholder
+            // adopts the new layout's real geometry instead.
+            var effectiveTarget = HasGeometry(target)
+                ? target
+                : ResolveInheritedMasterGeometry(target, layout, p);
+
+            var state = new PlaceholderGeometryState(shape, effectiveTarget);
             _updatedPlaceholders.Add(state);
             state.ApplyTargetGeometry(slide);
         }
@@ -3008,6 +3021,25 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
         placeholder.FlipH = masterPlaceholder.FlipH;
         placeholder.FlipV = masterPlaceholder.FlipV;
         placeholder.HasExplicitZeroExtentTransform = masterPlaceholder.HasExplicitZeroExtentTransform;
+    }
+
+    /// <summary>
+    /// Resolves a layout placeholder that carries no xfrm of its own (per ECMA-376 19.3.1.53,
+    /// this legitimately means "inherit from master") into a transient <see cref="SlideShape"/>
+    /// holding the concrete master geometry, for use as an already-present shape's new target
+    /// geometry when switching layouts. Never mutates <paramref name="target"/> itself -- that
+    /// object is the layout's own placeholder shape, shared by every slide assigned to this
+    /// layout, so writing resolved coordinates into it would corrupt the layout for everyone
+    /// else. When the master has no matching geometry either, returns a geometry-less shape
+    /// (0,0,0,0), mirroring the newly-added-placeholder path: PlaceholderResolver.ResolveAnchor
+    /// falls through to layout/master inheritance at render/hit-test time for a zero-extent
+    /// shape, so leaving it at (0,0,0,0) here is safe.
+    /// </summary>
+    private static SlideShape ResolveInheritedMasterGeometry(SlideShape target, SlideLayout layout, Presentation p)
+    {
+        var resolved = new SlideShape { Placeholder = target.Placeholder };
+        ApplyInheritedMasterGeometry(resolved, layout, p);
+        return resolved;
     }
 
     private static uint NextShapeId(Slide slide)

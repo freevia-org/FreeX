@@ -57,6 +57,38 @@ public sealed class WorkbookSessionQuickAnalysisOwnershipTests
     }
 
     [Fact]
+    public void ExecuteQuickAnalysisSparklines_GroupsAllInsertsIntoOneUndoEntry()
+    {
+        using var session = new WorkbookSessionFactory().CreateNew(240, 320);
+        var sheet = session.ActiveSheet;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Q1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Q2"));
+        var range = Range(sheet.Id, 1, 1, 5, 2);
+        for (uint row = 2; row <= 5; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 10));
+        }
+        session.SelectRange(range);
+
+        var result = session.ExecuteQuickAnalysisSparklines(Operation(session, "sparkline.line"));
+
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        result.AppliedItemCount.Should().Be(4);
+        sheet.Sparklines.Should().HaveCount(4);
+
+        // The whole Quick Analysis operation must land as a single undo entry, not one per
+        // inserted sparkline -- R165-services-quickanalysis-sparklines-undo-1.
+        session.CanUndo.Should().BeTrue();
+        session.GetUndoHistory(10).Should().ContainSingle()
+            .Which.Label.Should().Be("Quick Analysis Sparklines");
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        sheet.Sparklines.Should().BeEmpty();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void SelectFormulaPointModeSourceRange_OwnsSheetAndRangeTransition()
     {
         using var session = new WorkbookSessionFactory().CreateNew(240, 320);

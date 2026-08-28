@@ -8,6 +8,7 @@ using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Services;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
@@ -568,21 +569,24 @@ public sealed partial class MainWindow
                 return;
             }
 
-            var created = 0;
-            foreach (var command in definedNames.BuildCreateCommands(planned))
+            // Built as one CompositeWorkbookCommand (rather than executed as N separate
+            // DefineNamedRangeCommand calls) so this dialog action pushes a single undo entry,
+            // matching the WPF host's CreateNamedRangesFromSelectionCommand and real Excel:
+            // Ctrl+Z after "Create from Selection" must remove every name it just created in one
+            // step, not walk back one name at a time.
+            var commands = definedNames.BuildCreateCommands(planned);
+            var command = commands.Count == 1
+                ? (IWorkbookCommand)commands[0]
+                : new CompositeWorkbookCommand("Create Names from Selection", commands);
+            var result = _session.ExecuteReviewCommand(command);
+            if (!result.Success)
             {
-                var result = _session.ExecuteReviewCommand(command);
-                if (!result.Success)
-                {
-                    warningText.Text = result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotCreateNames");
-                    warningText.IsVisible = true;
-                    return;
-                }
-
-                created++;
+                warningText.Text = result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotCreateNames");
+                warningText.IsVisible = true;
+                return;
             }
 
-            RefreshShell(UiText.Format("InsertLoc_CreatedNamesFromSelection", created));
+            RefreshShell(UiText.Format("InsertLoc_CreatedNamesFromSelection", commands.Count));
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();
