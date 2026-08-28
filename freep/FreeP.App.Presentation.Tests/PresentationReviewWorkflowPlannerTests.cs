@@ -4084,8 +4084,19 @@ public sealed class PresentationReviewWorkflowPlannerTests
         listRows.Select(row => row.Text).Should().Equal(",", ";", ":");
         listRows.Select(row => row.SuggestedReplacement).Should().Equal(", ", "; ", ": ");
 
+        // r164 audit, tests tier: this loop ends only when the product stops reporting the issue, so a
+        // correction that applies without actually removing it would spin here forever -- a test that
+        // can hang the gate rather than fail it. The guard cannot fire for a working product (three
+        // issues, one removed per pass) and turns that regression into a readable failure instead.
+        var correctionPasses = 0;
         while (true)
         {
+            correctionPasses++;
+            correctionPasses.Should().BeLessThanOrEqualTo(
+                16,
+                "each pass must remove one of the punctuation issues; if it stops making progress this " +
+                "loop would never end");
+
             var refreshedExecution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
             var issueIndex = Array.FindIndex(
                 refreshedExecution.Issues.ToArray(),
