@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
@@ -161,6 +162,27 @@ public sealed class BackstageCloseFocusRestoreTests
 
             GetBackstageFrame(GetBackstage(window)).CurrentPaneLabel.Should().Be("Home",
                 "File should open the task-focused Home surface; document properties are available through Info");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void OpenRailEntry_DismissesTheOverlayAndLaunchesTheNativePickerWorkflow()
+    {
+        var window = NewOffscreenWindow();
+        try
+        {
+            window.Show();
+
+            InvokePrivate(window, "ShowBackstage");
+
+            GetBackstageFrame(GetBackstage(window)).Entries
+                .Single(entry => entry.Label == "Open")
+                .Kind.Should().Be(SisterBackstageEntryKind.Command,
+                    "FreeW follows FreeX by making File > Open immediately invoke the document picker");
         }
         finally
         {
