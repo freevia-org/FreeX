@@ -58,8 +58,10 @@ public sealed class Wave196RibbonFormattingPhysicalSourceTests
         wpfShortcuts.Should().Contain("WorkbookKeyboardShortcutCatalog.Rules");
         wpfShortcuts.Should().Contain("WorkbookShortcutRoute.SaveWorkbook => KeyboardCommandShortcut.SaveWorkbook");
         shortcutCatalog.Should().Contain("new(WorkbookShortcutRoute.SaveWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Shift))");
-        avaloniaShortcuts.Should().Contain("key == Key.F24 && physicalKey != PhysicalKey.F12");
-        avaloniaShortcuts.Should().Contain("modifiers | KeyModifiers.Shift");
+        avaloniaShortcuts.Should().Contain("key == Key.F24");
+        avaloniaShortcuts.Should().Contain("physicalKey == PhysicalKey.None");
+        avaloniaShortcuts.Should().Contain("modifiers.HasFlag(KeyModifiers.Shift)");
+        avaloniaShortcuts.Should().Contain("physical F24 is a genuine F24 key");
         definition.Should().Contain(".IconToggle(\"Bold\", \"Bold\", Ico.Bold, \"1\")");
     }
 }

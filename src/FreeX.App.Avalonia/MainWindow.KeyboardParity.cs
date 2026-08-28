@@ -345,11 +345,15 @@ public sealed partial class MainWindow
             return new EffectiveWorkbookShortcut(Key.F12, modifiers);
 
         // On Linux/X11, Shift+F12 can arrive as its shifted logical keysym F24 while Avalonia
-        // leaves PhysicalKey unset or reports the shifted F24 identity. Unless the backend gives
-        // us an explicit physical F12 whose modifier state is authoritative, the shifted keysym is
-        // the only surviving proof of Shift, so reconstruct the canonical shared-catalog chord.
-        if (key == Key.F24 && physicalKey != PhysicalKey.F12)
-            return new EffectiveWorkbookShortcut(Key.F12, modifiers | KeyModifiers.Shift);
+        // leaves PhysicalKey unset. Only use that compatibility alias when Shift is present and
+        // no physical key contradicts it; an explicit physical F24 is a genuine F24 key and must
+        // never be allowed to invoke the workbook's Shift+F12 Save route.
+        if (key == Key.F24 &&
+            physicalKey == PhysicalKey.None &&
+            modifiers.HasFlag(KeyModifiers.Shift))
+        {
+            return new EffectiveWorkbookShortcut(Key.F12, modifiers);
+        }
 
         return new EffectiveWorkbookShortcut(key, modifiers);
     }

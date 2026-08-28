@@ -20,11 +20,9 @@ public sealed class AvaloniaSaveShortcutSettlementTests
     [Theory]
     [InlineData(Key.S, KeyModifiers.Control, PhysicalKey.None)]
     [InlineData(Key.F12, KeyModifiers.Shift, PhysicalKey.F12)]
+    [InlineData(Key.F12, KeyModifiers.Shift, PhysicalKey.None)]
     [InlineData(Key.F24, KeyModifiers.Shift, PhysicalKey.F12)]
     [InlineData(Key.F24, KeyModifiers.Shift, PhysicalKey.None)]
-    [InlineData(Key.F24, KeyModifiers.None, PhysicalKey.None)]
-    [InlineData(Key.F24, KeyModifiers.Shift, PhysicalKey.F24)]
-    [InlineData(Key.F24, KeyModifiers.None, PhysicalKey.F24)]
     public async Task SaveShortcut_AwaitsSaveAsThenReusesSettledPath(
         Key key,
         KeyModifiers modifiers,
@@ -84,6 +82,7 @@ public sealed class AvaloniaSaveShortcutSettlementTests
     [Theory]
     [InlineData(Key.S, KeyModifiers.Control, PhysicalKey.None)]
     [InlineData(Key.F12, KeyModifiers.Shift, PhysicalKey.F12)]
+    [InlineData(Key.F12, KeyModifiers.Shift, PhysicalKey.None)]
     [InlineData(Key.F24, KeyModifiers.Shift, PhysicalKey.F12)]
     [InlineData(Key.F12, KeyModifiers.None, PhysicalKey.F12)]
     [InlineData(Key.F24, KeyModifiers.None, PhysicalKey.F12)]
@@ -130,8 +129,13 @@ public sealed class AvaloniaSaveShortcutSettlementTests
         }, CancellationToken.None);
     }
 
-    [Fact]
-    public async Task PlainF12_AlwaysRoutesThroughSaveAsAndSettlesTheSelectedPath()
+    [Theory]
+    [InlineData(Key.F12, PhysicalKey.F12)]
+    [InlineData(Key.F12, PhysicalKey.None)]
+    [InlineData(Key.F24, PhysicalKey.F12)]
+    public async Task PlainF12_AlwaysRoutesThroughSaveAsAndSettlesTheSelectedPath(
+        Key key,
+        PhysicalKey physicalKey)
     {
         await Session.Dispatch(async () =>
         {
@@ -163,7 +167,7 @@ public sealed class AvaloniaSaveShortcutSettlementTests
                         window.CreateTransientWorkbookSaveAsSelection(saveAsPath));
                 };
 
-                await PressHandled(window, Key.F24, KeyModifiers.None, PhysicalKey.F12);
+                await PressHandled(window, key, KeyModifiers.None, physicalKey);
 
                 pickerCalls.Should().Be(1);
                 window.Session.IsDirty.Should().BeFalse();
@@ -183,6 +187,57 @@ public sealed class AvaloniaSaveShortcutSettlementTests
                 window.Close();
                 File.Delete(firstPath);
                 File.Delete(saveAsPath);
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(Key.F24, KeyModifiers.None, PhysicalKey.None)]
+    [InlineData(Key.F24, KeyModifiers.None, PhysicalKey.F24)]
+    [InlineData(Key.F24, KeyModifiers.Shift, PhysicalKey.F24)]
+    public async Task GenuineF24_DoesNotInvokeSaveOrSaveAs(
+        Key key,
+        KeyModifiers modifiers,
+        PhysicalKey physicalKey)
+    {
+        await Session.Dispatch(async () =>
+        {
+            var currentPath = Path.Combine(
+                Path.GetTempPath(),
+                $"freex-f24-current-{Guid.NewGuid():N}.fxl");
+            var window = new MainWindow([]);
+            var pickerCalls = 0;
+            try
+            {
+                window.Session.MarkSaved(currentPath);
+                Edit(window, window.Session.ActiveCell, "genuine-f24");
+                window.WorkbookSaveAsPickerOverrideForTest = _ =>
+                {
+                    pickerCalls++;
+                    throw new InvalidOperationException("Genuine F24 must not open Save As.");
+                };
+
+                var args = new KeyEventArgs
+                {
+                    Key = key,
+                    KeyModifiers = modifiers,
+                    PhysicalKey = physicalKey,
+                };
+                await window.RaiseKeyDownForTest(args);
+
+                args.Handled.Should().BeFalse("a genuine F24 is not a workbook shortcut");
+                pickerCalls.Should().Be(0);
+                window.Session.IsDirty.Should().BeTrue();
+                Path.GetFullPath(window.Session.CurrentFilePath!).Should().Be(Path.GetFullPath(currentPath));
+            }
+            finally
+            {
+                window.WorkbookSaveAsPickerOverrideForTest = null;
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+                File.Delete(currentPath);
             }
 
             return true;
