@@ -29,8 +29,41 @@ using FreeW.App.Host;
 
 string outDir = args.Length > 0 ? args[0] : Directory.GetCurrentDirectory();
 string tabArg = args.Length > 1 ? args[1] : "0";
-double w = args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 1500;
-double h = args.Length > 3 ? double.Parse(args[3], CultureInfo.InvariantCulture) : 300;
+// r164 audit: same as FreeP.RibbonShot's identical argument block. WPF's RenderTargetBitmap does
+// reject an absurd canvas quickly on its own (measured on the FreeP twin: "1e9 1e9" fails in 2s with
+// no hang and no runaway allocation), so this is not the unbounded-quantity hazard the audit hunts --
+// but a mistyped dimension reported "The image data generated an overflow during processing" and a
+// non-numeric one threw a raw FormatException out of Main. Say what is wrong with the argument.
+if (!TryReadDimension(args, 2, 1500, out var w) ||
+    !TryReadDimension(args, 3, 300, out var h))
+{
+    return 2;
+}
+
+static bool TryReadDimension(string[] arguments, int index, double fallback, out double value)
+{
+    value = fallback;
+    if (arguments.Length <= index)
+        return true;
+
+    // 16384 is generous: the widest evidence capture this tool is asked for is a 4K-wide window.
+    const double MaximumDimension = 16384;
+    if (!double.TryParse(arguments[index], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ||
+        double.IsNaN(parsed))
+    {
+        Console.Error.WriteLine($"[RibbonShot] '{arguments[index]}' is not a number (usage: FreeW.RibbonShot <outDir> [tab] [width] [height]).");
+        return false;
+    }
+
+    if (parsed < 1 || parsed > MaximumDimension)
+    {
+        Console.Error.WriteLine($"[RibbonShot] dimension {parsed} is outside the supported range 1..{MaximumDimension}.");
+        return false;
+    }
+
+    value = parsed;
+    return true;
+}
 
 int rc = 0;
 var t = new Thread(() => rc = Run(outDir, tabArg, w, h));
