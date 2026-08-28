@@ -29,9 +29,7 @@ public sealed class CrossAppParityDashboardTests
         var acceptanceRefresh = PowerShellScriptRunner.RunToolScript(
             "Generate-CrossAppParityDashboard.ps1",
             repoRoot,
-            "-AcceptanceRefresh",
-            "-AcceptanceRefreshTestedSourceCommit",
-            "HEAD");
+            "-AcceptanceRefresh -AcceptanceRefreshTestedSourceCommit HEAD");
         acceptanceRefresh.ExitCode.Should().Be(0, acceptanceRefresh.CombinedOutput);
         acceptanceRefresh.CombinedOutput.Should().Contain(
             "Acceptance refresh real-repository boundary passed");
