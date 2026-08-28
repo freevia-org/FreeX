@@ -47,6 +47,22 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public void ShapeEditorWidth_SnapsRenderedRightEdgeToWpfRaster()
+    {
+        const double left = 382.6666666666667;
+        const double width = 250.6666666666667;
+        var alignedWidth = AvaloniaInCanvasTextEditor.AlignShapeEditorWidthToWpfRaster(
+            left,
+            width,
+            renderScaling: 1.5);
+        var renderedLeft = left + AvaloniaInCanvasTextEditor.WpfRasterAlignmentOffsetX;
+
+        Math.Floor(renderedLeft).Should().Be(382);
+        alignedWidth.Should().Be(250);
+        Math.Ceiling(renderedLeft + alignedWidth).Should().Be(633);
+    }
+
+    [Fact]
     public async Task Input_uses_the_portable_rich_text_semantic_identity()
     {
         await Session.Dispatch(() =>
