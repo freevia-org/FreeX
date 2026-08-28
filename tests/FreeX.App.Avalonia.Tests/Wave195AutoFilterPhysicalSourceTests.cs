@@ -44,6 +44,9 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
         probe.Should().Contain("change_value 1 0 1");
         probe.Should().Contain("clipboard_sentinel_value=\"__FREEX_CLIPBOARD_SENTINEL_${BASHPID}_${RANDOM}_${RANDOM}__\"");
         probe.Should().Contain("wait_for_non_sentinel_clipboard");
+        probe.Should().Contain("value=\"$(wait_for_non_sentinel_clipboard)\"; then\n        stop_clipboard_sentinel\n        return 1\n    fi\n    stop_clipboard_sentinel\n    printf '%s' \"$value\"");
+        probe.Should().Contain("clipboard=\"$(wait_for_non_sentinel_clipboard || true)\"\n        stop_clipboard_sentinel");
+        probe.Should().Contain("inline_drag_editor_text=\"$(wait_for_non_sentinel_clipboard || true)\"\n    stop_clipboard_sentinel");
         probe.Should().Contain("reload-witness-before=$reload_witness_before");
         probe.Should().Contain("reload-witness-discarded=$reload_witness_discarded");
         probe.Should().Contain("restore_calibrated_window_geometry || return 1");

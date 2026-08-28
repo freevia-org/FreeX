@@ -658,11 +658,17 @@ copy_cell_formula_allow_empty() {
 read_active_formula_bar() {
     # A point-mode header/corner click leaves the formula editor active. Copy the
     # editor text before committing so the semantic assertion is independent of pixels.
-    set_clipboard_sentinel
+    local value=""
+    set_clipboard_sentinel || return 1
     send_key ctrl+End
     send_key ctrl+a
     send_key ctrl+c
-    clipboard_text
+    if ! value="$(wait_for_non_sentinel_clipboard)"; then
+        stop_clipboard_sentinel
+        return 1
+    fi
+    stop_clipboard_sentinel
+    printf '%s' "$value"
 }
 
 probe_formula_bar_point_mode_whole_range() {
@@ -5414,7 +5420,8 @@ probe_worksheet_context_copy() {
         send_key shift+F10
         capture "worksheet-context-copy-open.png"
         send_active_key Home Down Return
-        clipboard="$(wait_for_clipboard "$value" || true)"
+        clipboard="$(wait_for_non_sentinel_clipboard || true)"
+        stop_clipboard_sentinel
         capture "worksheet-context-copy-after.png"
         write_artifact "worksheet-context-copy-postcondition.txt" "expected=$value\nclipboard=$clipboard\ncell=G11"
         if [[ "$clipboard" == "$value" ]]; then
@@ -5475,7 +5482,8 @@ probe_clipboard_roundtrips() {
         select_cell 6 15 G16
         capture "clipboard-copy-paste-before.png"
         send_key ctrl+c
-        clipboard="$(wait_for_clipboard "$copy_value" || true)"
+        clipboard="$(wait_for_non_sentinel_clipboard || true)"
+        stop_clipboard_sentinel
         select_cell 7 15 H16
         send_key ctrl+v
         capture "clipboard-copy-paste-after.png"
@@ -5504,7 +5512,8 @@ probe_clipboard_roundtrips() {
         select_cell 6 16 G17
         capture "clipboard-cut-paste-before.png"
         send_key ctrl+x
-        clipboard="$(wait_for_clipboard "$cut_value" || true)"
+        clipboard="$(wait_for_non_sentinel_clipboard || true)"
+        stop_clipboard_sentinel
         select_cell 7 16 H17
         send_key ctrl+v
         capture "clipboard-cut-paste-after.png"
@@ -7450,7 +7459,8 @@ if select_cell 6 11 G12; then
     set_clipboard_sentinel
     send_key ctrl+a
     send_key ctrl+c
-    inline_drag_editor_text="$(clipboard_text)"
+    inline_drag_editor_text="$(wait_for_non_sentinel_clipboard || true)"
+    stop_clipboard_sentinel
     send_key Return
     inline_drag_formula="$(copy_cell_formula 6 11 G12 || printf 'selection-failed')"
     select_cell 0 0 A1 || true
