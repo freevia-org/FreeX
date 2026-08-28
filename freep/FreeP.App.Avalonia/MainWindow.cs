@@ -3547,7 +3547,11 @@ public sealed partial class MainWindow : Window,
 
     private Control? _backstageRestoreFocus;
 
-    private void ShowBackstage() => ShowBackstage("Info");
+    private void ShowBackstage()
+    {
+        _backstageRestoreFocus = FocusManager?.GetFocusedElement() as Control ?? _slideCanvas;
+        _backstage.Show();
+    }
 
     private void ShowBackstage(string paneLabel)
     {
