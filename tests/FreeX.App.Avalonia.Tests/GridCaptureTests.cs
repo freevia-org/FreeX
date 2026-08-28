@@ -381,6 +381,9 @@ public sealed class GridCaptureTests
     [Fact]
     public async Task CaptureGridRange_WritesPngAndJsonLog_ForNewWorkbook()
     {
+        // This raster assertion is routed by the project filters to CaptureTests.Batch6, whose
+        // headless app uses Skia. The main test assembly uses Avalonia's lightweight no-raster
+        // backend and therefore cannot authoritatively prove PNG pixels on Linux or macOS.
         // Arrange: write a minimal new workbook to a temp xlsx file, then capture A1:B5 from it.
         using (var workbookDirectory = new TestTemporaryDirectory("freex-grid-capture-src-"))
         using (var outputDirectory = new TestTemporaryDirectory("freex-grid-capture-out-"))

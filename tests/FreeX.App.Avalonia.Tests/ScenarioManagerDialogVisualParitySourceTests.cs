@@ -107,6 +107,7 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
         var expectedMethods = captureSources
             .SelectMany(file => FindCaptureMethodNames(file.Source))
             .ToHashSet(StringComparer.Ordinal);
+        expectedMethods.Add("CaptureGridRange_WritesPngAndJsonLog_ForNewWorkbook");
         var captureProjectDirectory = Path.GetDirectoryName(RepoFile(
             "tests", "FreeX.App.Avalonia.CaptureTests", "CaptureTests.Shared.props"))!;
         var captureFilterBatches = Directory.GetFiles(
@@ -125,6 +126,37 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
             "FullyQualifiedName!~",
             '&');
         mainFilter.Should().BeEquivalentTo(expectedMethods);
+    }
+
+    [Fact]
+    public void GridCaptureRasterSmoke_RunsOnlyInTheSkiaEvidenceLane()
+    {
+        const string method = "CaptureGridRange_WritesPngAndJsonLog_ForNewWorkbook";
+        var sharedProjectSource = File.ReadAllText(RepoFile(
+            "tests", "FreeX.App.Avalonia.CaptureTests", "CaptureTests.Shared.props"));
+        sharedProjectSource.Should().Contain("GridCaptureTests.cs");
+
+        var mainFilter = ReadFilterTerms(RepoFile(
+            "tests", "FreeX.App.Avalonia.Tests", "FreeX.App.Avalonia.Tests.csproj"),
+            "FullyQualifiedName!~",
+            '&');
+        mainFilter.Should().Contain(method,
+            "the lightweight headless backend intentionally provides no raster framebuffer");
+
+        var captureProjectDirectory = Path.GetDirectoryName(RepoFile(
+            "tests", "FreeX.App.Avalonia.CaptureTests", "CaptureTests.Shared.props"))!;
+        var routedProjects = Directory.GetFiles(
+                captureProjectDirectory,
+                "FreeX.App.Avalonia.CaptureTests*.csproj")
+            .Where(file => ReadFilterTerms(file, "FullyQualifiedName~", '|').Contains(method, StringComparer.Ordinal))
+            .ToArray();
+        routedProjects.Should().ContainSingle()
+            .Which.Should().EndWith("FreeX.App.Avalonia.CaptureTests.Batch6.csproj");
+
+        var skiaHost = File.ReadAllText(RepoFile(
+            "tests", "FreeX.App.Avalonia.CaptureTests", "Batch6HeadlessTestApp.cs"));
+        skiaHost.Should().Contain(".UseSkia()")
+            .And.Contain("UseHeadlessDrawing = false");
     }
 
     /// <summary>
