@@ -4,6 +4,7 @@ using FluentAssertions;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using System.Text.RegularExpressions;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -26,6 +27,9 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
             "tools", "LinuxInteractiveDocker", "New-FreeXWave195AutoFilterColorChangeFixture.ps1");
         var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
             "src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs");
+        var colorChangeProbe = SelectProbeFunction(
+            probe,
+            "probe_autofilter_color_change_clear_persistence_physical");
 
         runner.Should().Contain("autofilter-multi-column-persistence");
         runner.Should().Contain("autofilter-color-change-clear-persistence");
@@ -51,8 +55,14 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
         probe.Should().Contain("reload-witness-discarded=$reload_witness_discarded");
         probe.Should().Contain("restore_calibrated_window_geometry || return 1");
         probe.Should().Contain("$reload_witness_passed");
-        probe.Should().Contain("fill:#FFC000");
-        probe.Should().Contain("cleared-package=$cleared_package");
+        colorChangeProbe.Should().Contain("green_gate=true; green_criteria=\"fill:#00B050\"");
+        colorChangeProbe.Should().Contain("yellow_gate=true; yellow_criteria=\"fill:#FFC000\"");
+        colorChangeProbe.Should().Contain("\"$green_package\" == \"ref=A1:B5|colId=0|cellColor=1|fill=FF00B050\"");
+        colorChangeProbe.Should().Contain("\"$yellow_package\" == \"ref=A1:B5|colId=0|cellColor=1|fill=FFFFC000\"");
+        colorChangeProbe.Should().Contain("\"$cleared_package\" == \"ref=A1:B5|columns=\"");
+        colorChangeProbe.Should().Contain("\"$green_criteria\" == \"fill:#00B050\"");
+        colorChangeProbe.Should().Contain("\"$yellow_criteria\" == \"fill:#FFC000\"");
+        colorChangeProbe.Should().Contain("cleared-package=$cleared_package");
         multiFixture.Should().Contain("<autoFilter ref=`\"A1:C7`\"");
         multiFixture.Should().Contain("North");
         multiFixture.Should().Contain("Hardware");
@@ -212,5 +222,20 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
             sheet.SetCell(new CellAddress(sheet.Id, addressRow, 1), new TextValue(rows[row]));
             sheet.SetCell(new CellAddress(sheet.Id, addressRow, 2), new TextValue("Value"));
         }
+    }
+
+    private static string SelectProbeFunction(string source, string functionName)
+    {
+        var marker = $"{functionName}() {{";
+        var start = source.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0)
+            throw new InvalidDataException($"The probe must define {functionName}.");
+
+        var searchStart = start + marker.Length;
+        var nextFunction = Regex.Match(
+            source[searchStart..],
+            @"\r?\nprobe_[A-Za-z0-9_]+\(\) \{",
+            RegexOptions.Multiline);
+        return source[start..(nextFunction.Success ? searchStart + nextFunction.Index : source.Length)];
     }
 }

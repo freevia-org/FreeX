@@ -2,6 +2,7 @@ using FluentAssertions;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -16,28 +17,32 @@ public sealed class Wave191AutoFilterColorPhysicalSourceTests
             "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh");
         var fixture = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
             "tools", "LinuxInteractiveDocker", "New-FreeXWave191AutoFilterColorFixture.ps1");
+        var persistenceProbe = SelectProbeFunction(probe, "probe_autofilter_color_persistence_physical");
 
         WaveAutoFilterColorGeometryAssertions.AssertBoundGeometry(probe);
         runner.Should().Contain("autofilter-color-persistence");
         runner.Should().Contain("autofilter-color-fill-save-reopen-physical");
+        runner.Should().Contain("probe_autofilter_color_persistence_physical fill");
         runner.Should().Contain("New-FreeXWave191AutoFilterColorFixture.ps1");
         runner.Should().Contain("Assert-AutoFilterColorPostcondition");
         runner.Should().Contain("before-rgb=#FFFFFF");
         runner.Should().Contain("sample-rgb=#00B050");
-        probe.Should().Contain("probe_autofilter_color_persistence_physical");
-        probe.Should().Contain("verify_rendered_fill_swatch");
-        probe.Should().Contain("%[hex:p{${sample_x},${sample_y}}]");
-        probe.Should().Contain("autofilter-color-swatch-gate.txt");
-        probe.Should().Contain("criteria=\"$(verify_rendered_fill_swatch");
-        probe.Should().Contain("local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27");
-        probe.Should().Contain("swatch-gate=$swatch_gate");
-        probe.Should().NotContain("criteria=\"fill:#00B050\"");
-        probe.Should().Contain("fill:#00B050");
-        probe.Should().Contain("North,East,");
-        probe.Should().Contain("ref=A1:B5|colId=0|cellColor=1");
-        probe.Should().Contain("FF00B050");
-        probe.Should().Contain("copy_cell_formula_by_address A4");
-        probe.Should().Contain("status\":\"failed\"");
+        persistenceProbe.Should().Contain("verify_rendered_fill_swatch");
+        persistenceProbe.Should().Contain("%[hex:p{${sample_x},${sample_y}}]");
+        persistenceProbe.Should().Contain("autofilter-color-swatch-gate.txt");
+        persistenceProbe.Should().Contain("criteria=\"$(verify_rendered_fill_swatch");
+        persistenceProbe.Should().Contain("expected_criteria=\"${mode}:#00B050\"");
+        persistenceProbe.Should().Contain("\"$criteria\" == \"$expected_criteria\"");
+        persistenceProbe.Should().Contain("local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27");
+        persistenceProbe.Should().Contain("swatch-gate=$swatch_gate");
+        persistenceProbe.Should().NotContain("criteria=\"fill:#00B050\"");
+        persistenceProbe.Should().Contain("expected_package_mode=\"1\"");
+        persistenceProbe.Should().Contain("expected_package_color=\"fill=FF00B050\"");
+        persistenceProbe.Should().Contain("North,East,");
+        persistenceProbe.Should().Contain("ref=A1:B5|colId=0|cellColor=${expected_package_mode}");
+        persistenceProbe.Should().Contain("\"$package\" == *\"|${expected_package_color}\"*");
+        persistenceProbe.Should().Contain("copy_cell_formula_by_address A4");
+        persistenceProbe.Should().Contain("status\":\"failed\"");
         fixture.Should().Contain("00B050");
         fixture.Should().Contain("FFC000");
         fixture.Should().Contain("<autoFilter ref=`\"A1:B5`\"");
@@ -126,5 +131,20 @@ public sealed class Wave191AutoFilterColorPhysicalSourceTests
             _ => throw new InvalidDataException($"Unknown Wave191 hash mode '{hashMode}'."),
         };
         return Convert.ToHexString(SHA256.HashData(hashBytes)).ToLowerInvariant();
+    }
+
+    private static string SelectProbeFunction(string source, string functionName)
+    {
+        var marker = $"{functionName}() {{";
+        var start = source.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0)
+            throw new InvalidDataException($"The probe must define {functionName}.");
+
+        var searchStart = start + marker.Length;
+        var nextFunction = Regex.Match(
+            source[searchStart..],
+            @"\r?\nprobe_[A-Za-z0-9_]+\(\) \{",
+            RegexOptions.Multiline);
+        return source[start..(nextFunction.Success ? searchStart + nextFunction.Index : source.Length)];
     }
 }
