@@ -2,10 +2,11 @@
   <Import Project="CaptureTests.Shared.props" />
   <PropertyGroup>
     <AssemblyName>FreeX.App.Avalonia.CaptureTests.Batch6</AssemblyName>
-    <!-- Goal Seek's wrapped status text can loop in Avalonia's lightweight headless formatter.
-         Keep its evidence isolated and render it through Skia, as the desktop app does. -->
+    <!-- Pixel evidence requires the production Skia renderer. Avalonia's lightweight headless
+         drawing backend intentionally does not provide a raster framebuffer and can emit an empty
+         RenderTargetBitmap on Unix. Keep these tests isolated and render them as the desktop app does. -->
     <DefineConstants>$(DefineConstants);AVALONIA_CAPTURE_PER_TEST</DefineConstants>
-    <VSTestTestCaseFilter>FullyQualifiedName~TargetedGoalSeekStatusCapture_WritesNonBlank380x190Png</VSTestTestCaseFilter>
+    <VSTestTestCaseFilter>FullyQualifiedName~TargetedGoalSeekStatusCapture_WritesNonBlank380x190Png|FullyQualifiedName~CaptureGridRange_WritesPngAndJsonLog_ForNewWorkbook</VSTestTestCaseFilter>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Batch6HeadlessTestApp.cs" />

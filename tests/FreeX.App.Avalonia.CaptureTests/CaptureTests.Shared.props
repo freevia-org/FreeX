@@ -32,6 +32,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)../FreeX.App.Avalonia.Tests/DialogInteractionValidationTests.cs" Link="DialogInteractionValidationTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../FreeX.App.Avalonia.Tests/DialogTabCycleResidualTests.cs" Link="DialogTabCycleResidualTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../FreeX.App.Avalonia.Tests/HighlightCellsRuleDialogLifecycleRegressionTests.cs" Link="HighlightCellsRuleDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../FreeX.App.Avalonia.Tests/GridCaptureTests.cs" Link="GridCaptureTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../FreeX.App.Avalonia.Tests/ManageConditionalFormatsDialogLifecycleRegressionTests.cs" Link="ManageConditionalFormatsDialogLifecycleRegressionTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../FreeX.App.Avalonia.Tests/MissingParityDialogsTests.cs" Link="MissingParityDialogsTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../FreeX.App.Avalonia.Tests/OwnedDialogLifecycleRegressionTests.cs" Link="OwnedDialogLifecycleRegressionTests.cs" />
