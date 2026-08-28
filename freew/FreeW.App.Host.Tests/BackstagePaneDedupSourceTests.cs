@@ -54,7 +54,8 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("_session.BuildSharePane(");
             source.Should().Contain("_session.BuildExportPane(");
             source.Should().Contain("BackstageExportPaneSurfaceText.FromDescriptor(");
-            source.Should().Contain("BuildOpenPane = BuildOpenPane");
+            source.Should().NotContain("BuildOpenPane = BuildOpenPane");
+            source.Should().Contain("_backstage.HideThen(_callbacks.Browse)");
             source.Should().Contain("BuildOpenSurface(");
             source.Should().Contain("surface.Search.AutomationName");
             source.Should().Contain("surface.Tabs.DocumentsTabLabel");
