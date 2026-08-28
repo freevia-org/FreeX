@@ -17,6 +17,9 @@ public sealed partial class MainWindow
         return _backstage.CurrentPaneContent is not null;
     }
 
+    internal bool InvokeBackstageEntryForTests(string label) =>
+        _backstage.TryActivateEntryForTests(label);
+
     internal UIElement? CurrentBackstagePaneContentForTests => _backstage.CurrentPaneContent;
 
     internal bool ApplyBackstagePrintCustomRangeForTests(string rangeText) =>

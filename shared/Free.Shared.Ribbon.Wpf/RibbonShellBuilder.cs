@@ -16,6 +16,8 @@ public sealed record RibbonShellBuildSpec(
 {
     public IReadOnlyList<ResourceDictionary> ResourceDictionaries { get; init; } = Array.Empty<ResourceDictionary>();
 
+    public RibbonWpfRendererOptions RendererOptions { get; init; } = RibbonWpfRendererOptions.FreeFamilyHost;
+
     public Action<RibbonTab, FrameworkElement>? CustomizeTabContent { get; init; }
 
     public bool EnableContextualTabs { get; init; }
@@ -42,6 +44,16 @@ public static class RibbonShellBuilder
         ArgumentNullException.ThrowIfNull(spec.ShowBackstage);
 
         var tabs = RibbonTabControlFactory.Create();
+        // Every sister-app ribbon is rendered with the shared FreeX-derived control vocabulary.  Hosts may
+        // append dictionaries below to override individual resources, but they must never have to opt in to
+        // the baseline styles: omitting them leaves WPF's stock raised gray buttons in place and makes menus
+        // and split controls look unrelated to the rest of the Office-style shell.
+        tabs.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri(
+                "/Free.Shared.Ribbon.Wpf;component/SharedRibbonControlResources.xaml",
+                UriKind.Relative)
+        });
         foreach (var dictionary in spec.ResourceDictionaries)
             tabs.Resources.MergedDictionaries.Add(dictionary);
 
@@ -59,7 +71,12 @@ public static class RibbonShellBuilder
 
         foreach (var tab in spec.Definition.Tabs)
         {
-            var content = RibbonWpfRenderer.BuildTabContent(tab, tabs, spec.Registry, spec.StateStore);
+            var content = RibbonWpfRenderer.BuildTabContent(
+                tab,
+                tabs,
+                spec.Registry,
+                spec.StateStore,
+                spec.RendererOptions);
             spec.CustomizeTabContent?.Invoke(tab, content);
 
             var item = new TabItem { Header = tab.Header, Content = content };

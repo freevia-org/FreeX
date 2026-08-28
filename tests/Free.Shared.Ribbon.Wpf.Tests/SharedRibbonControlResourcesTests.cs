@@ -6,6 +6,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Markup;
 using System.Xml.Linq;
+using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 using Rectangle = System.Windows.Shapes.Rectangle;
 
@@ -70,6 +71,57 @@ public sealed class SharedRibbonControlResourcesTests
         {
             sharedSource.Should().Contain(key);
         }
+    }
+
+    [Fact]
+    [Trait("Category", "RibbonUiLane")]
+    public void Ribbon_shell_always_loads_the_shared_styles_and_FreeX_geometry()
+    {
+        RunOnSta(() =>
+        {
+            var definition = new RibbonDefinition([
+                new RibbonTab(
+                    "home",
+                    "Home",
+                    KeyTip: null,
+                    Context: null,
+                    Groups:
+                    [
+                        new RibbonGroup(
+                            "clipboard",
+                            "Clipboard",
+                            KeyTip: null,
+                            Priority: 0,
+                            Controls:
+                            [
+                                new RibbonButton("paste", "Paste")
+                                {
+                                    PreferredLayout = RibbonCommandLayoutKind.Large,
+                                },
+                            ],
+                            RibbonGroupSizing.Default),
+                    ]),
+            ]);
+
+            var result = RibbonShellBuilder.Build(new RibbonShellBuildSpec(
+                definition,
+                new RibbonCommandRegistry(),
+                new RibbonStateStore(),
+                "File",
+                System.Windows.Media.Color.FromRgb(0x0F, 0x6D, 0x8C),
+                System.Windows.Media.Color.FromRgb(0x0B, 0x55, 0x6E),
+                static () => { }));
+
+            result.Tabs.Resources.MergedDictionaries
+                .Select(dictionary => dictionary.Source?.OriginalString)
+                .Should().Contain(SharedResourceUri);
+            result.Tabs.TryFindResource("RibbonBtn").Should().BeOfType<Style>();
+
+            var home = result.Tabs.Items.OfType<TabItem>().Single(tab => Equals(tab.Header, "Home"));
+            var large = FindLogicalChild<Button>((DependencyObject)home.Content)!;
+            large.Style.Should().BeSameAs(result.Tabs.TryFindResource("RibbonLargeButton"));
+            large.Width.Should().Be(58d, "sister apps use the compact FreeX hero-button geometry");
+        });
     }
 
     [Fact]
@@ -253,6 +305,20 @@ public sealed class SharedRibbonControlResourcesTests
             .Where(source => source is not null)
             .Cast<string>()
             .ToArray();
+
+    private static T? FindLogicalChild<T>(DependencyObject root) where T : DependencyObject
+    {
+        if (root is T match)
+            return match;
+
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (FindLogicalChild<T>(child) is { } descendant)
+                return descendant;
+        }
+
+        return null;
+    }
 
     private static string FindRepositoryRoot() =>
         TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");

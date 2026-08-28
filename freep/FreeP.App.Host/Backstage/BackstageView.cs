@@ -90,12 +90,31 @@ internal sealed partial class BackstageView : UserControl
             BuildNewPane,
             BuildOptionsPane)
         {
+            Close = _endpoints.Close is { } close ? backstage.FrameCommand(close) : null,
+            BuildHomePane = BuildHomePane,
+            UseNewPane = true,
             Print = backstage.FrameCommand(() => _printSession.Refresh()),
             BuildOpenPane = BuildOpenPane,
             BuildPrintPane = BuildPrintPane,
             BuildExportPane = BuildExportPane,
             BuildAccountPane = BuildAccountPane,
+            HideRecentPane = true,
         };
+    }
+
+    private UIElement BuildHomePane()
+    {
+        // Reuse the same live New and Recent projections as their dedicated panes. Keeping Home as a
+        // composition avoids a second set of file callbacks and gives FreeP the FreeX/FreeW first-open
+        // experience while the New and Open rail entries remain directly reachable.
+        var panel = new StackPanel
+        {
+            MaxWidth = 760,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        panel.Children.Add(BuildNewPane());
+        panel.Children.Add(BuildRecentPane());
+        return Kit.Scroll(panel);
     }
 
     private UIElement BuildOpenPane()
