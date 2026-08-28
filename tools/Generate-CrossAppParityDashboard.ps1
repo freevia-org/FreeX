@@ -562,7 +562,7 @@ try {
             -DialogRoutes $freeXDialogRoutes `
             -DialogVisualEvidence $freeXDialogVisualEvidence
     }
-    $freeX.nextSlice = "$($freeX.nextSlice) Production Linux evidence now covers Name Box (1/1 visual, 8/8 interaction), AutoFilter apply/change/clear recalculation (1/1), sort/save/reopen persistence (1/1), text-criteria save/reopen persistence (2/2), numeric Greater Than/Equals persistence (2/2), date criteria (2/2), fill-color save/reopen (1/1), font-color save/reopen (1/1), No Fill save/reopen persistence ($($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillPassed)/$($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillTotal)), and mixed-type value persistence ($($freeX.renderedEvidence.physicalEvidence.wave194.physicalPassed)/$($freeX.renderedEvidence.physicalEvidence.wave194.physicalTotal)). Wave194 retains $(@($freeXWave194Manifest.files).Count)/20 artifacts and one authoritative geometry contract. Extend physical verification to multi-column and color criteria change/clear workflows."
+    $freeX.nextSlice = "$($freeX.nextSlice) Production Linux evidence now covers Name Box (1/1 visual, 8/8 interaction), AutoFilter apply/change/clear recalculation (1/1), sort/save/reopen persistence (1/1), text-criteria save/reopen persistence (2/2), numeric Greater Than/Equals persistence (2/2), date criteria (2/2), fill-color save/reopen (1/1), font-color save/reopen (1/1), No Fill save/reopen persistence ($($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillPassed)/$($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillTotal)), and mixed-type value persistence ($($freeX.renderedEvidence.physicalEvidence.wave194.physicalPassed)/$($freeX.renderedEvidence.physicalEvidence.wave194.physicalTotal)). Wave194 retains $(@($freeXWave194Manifest.files).Count)/20 artifacts and one authoritative geometry contract. Wave195 adds $wave195SessionCount/$wave195SessionCount passing production Linux sessions for multi-column and color criteria change/clear persistence, with $wave195ReloadWitnessCount/$wave195SessionCount reload witnesses; continue with broader physical coverage beyond these completed workflows."
 
     $freeWComparisonRows = @($freeWVisualComparison.rows)
     $freeWPairedComparisonRows = @($freeWComparisonRows | Where-Object { $_.captureStatus -eq "captured/captured" })
@@ -772,6 +772,7 @@ try {
     $freePPairedPassCount = [int]$freePDialogVisualEvidence.passCount + [int]$freePWholeWindowVisualEvidence.passCount
     $freePPairedMismatchCount = [int]$freePDialogVisualEvidence.mismatchCount + [int]$freePWholeWindowVisualEvidence.mismatchCount
     $freePPairedLimitationCount = [int]$freePDialogVisualEvidence.limitationCount + [int]$freePWholeWindowVisualEvidence.limitationCount
+    $freePPairedScenarioCount = [int]$freePDialogArtifactCoverage.pairedCaptureCount + [int]$freePWholeWindowArtifactCoverage.pairedCaptureCount
     $freePRenderedEvidence = [ordered]@{
         sourceFiles = @(
             "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
@@ -835,7 +836,7 @@ try {
             fileCount = $freePDialogArtifactCoverage.fileCount + $freePWholeWindowArtifactCoverage.fileCount
         }
         pairedEvidence = [ordered]@{
-            pairedScenarioCount = $freePDialogArtifactCoverage.pairedCaptureCount + $freePWholeWindowArtifactCoverage.pairedCaptureCount
+            pairedScenarioCount = $freePPairedScenarioCount
             passCount = $freePPairedPassCount
             mismatchCount = $freePPairedMismatchCount
             limitationCount = $freePPairedLimitationCount
@@ -904,9 +905,9 @@ try {
             wholeWindowScenarioCount = [int]$freePWholeWindowVisualEvidence.scenarioCount
             wholeWindowPassCount = [int]$freePWholeWindowVisualEvidence.passCount
             wholeWindowMismatchCount = [int]$freePWholeWindowVisualEvidence.mismatchCount
-            combinedRenderedEvidenceCount = 64
-            combinedRenderedEvidencePassCount = 64
-            combinedRenderedEvidenceMismatchCount = 0
+            combinedRenderedEvidenceCount = $freePPairedScenarioCount
+            combinedRenderedEvidencePassCount = $freePPairedPassCount
+            combinedRenderedEvidenceMismatchCount = $freePPairedMismatchCount
             richTextSelection = [ordered]@{
                 changedPixelRatioBefore = 0.2185757
                 changedPixelRatioAfter = 0.1809518682

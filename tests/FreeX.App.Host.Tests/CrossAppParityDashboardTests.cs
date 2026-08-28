@@ -120,6 +120,13 @@ public sealed class CrossAppParityDashboardTests
         freePWave195.GetProperty("wholeWindowScenarioCount").GetInt32().Should().Be(36);
         freePWave195.GetProperty("wholeWindowPassCount").GetInt32().Should().Be(36);
         freePWave195.GetProperty("wholeWindowMismatchCount").GetInt32().Should().Be(0);
+        var freePPairedEvidence = freeP.GetProperty("renderedEvidence").GetProperty("pairedEvidence");
+        freePWave195.GetProperty("combinedRenderedEvidenceCount").GetInt32().Should().Be(
+            freePPairedEvidence.GetProperty("pairedScenarioCount").GetInt32());
+        freePWave195.GetProperty("combinedRenderedEvidencePassCount").GetInt32().Should().Be(
+            freePPairedEvidence.GetProperty("passCount").GetInt32());
+        freePWave195.GetProperty("combinedRenderedEvidenceMismatchCount").GetInt32().Should().Be(
+            freePPairedEvidence.GetProperty("mismatchCount").GetInt32());
         freePWave195.GetProperty("combinedRenderedEvidenceCount").GetInt32().Should().Be(64);
         freePWave195.GetProperty("combinedRenderedEvidencePassCount").GetInt32().Should().Be(64);
         freePWave195.GetProperty("combinedRenderedEvidenceMismatchCount").GetInt32().Should().Be(0);
