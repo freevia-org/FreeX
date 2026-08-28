@@ -6383,24 +6383,21 @@ probe_autofilter_multi_column_persistence_physical() {
     fi
 
     read_region_values() {
-        local first second
-        first="$(copy_cell_display 0 1 multi-region-first || true)"
-        second="$(copy_cell_display 0 2 multi-region-second || true)"
-        printf '%s,%s,' "$first" "$second"
-    }
-
-    read_first_region_value() {
-        printf '%s,' "$(copy_cell_display 0 1 multi-region-single || true)"
-    }
-
-    read_all_region_values() {
-        local value address output_values="" first=true
-        for address in A2 A3 A4 A5 A6 A7; do
-            value="$(copy_cell_formula_by_address "$address" || true)"
+        local count="${1:-2}" row value output_values="" first=true
+        for row in $(seq 1 "$count"); do
+            value="$(copy_cell_display 0 "$row" "multi-region-visible-$row" || true)"
             if $first; then first=false; else output_values+=","; fi
             output_values+="$value"
         done
         printf '%s,' "$output_values"
+    }
+
+    read_first_region_value() {
+        read_region_values 1
+    }
+
+    read_all_region_values() {
+        read_region_values 6
     }
 
     package_value_signature() {
@@ -6437,10 +6434,22 @@ PY
     }
 
     choose_value() {
-        local column_offset="$1" item_index="$2"
-        clear_value_checklist "$column_offset"
+        local column_offset="$1" item_index="$2" ok_y="$3"
+        click_autofilter_control "$((column_offset * cell_width + 75))" 319
+        click_autofilter_control "$((column_offset * cell_width + 75))" 319
         click_autofilter_control "$((column_offset * cell_width + 75))" "$((346 + item_index * 16))"
+        click_autofilter_control "$((column_offset * cell_width + 292))" "$ok_y"
+    }
+
+    change_value() {
+        local column_offset="$1" old_item_index="$2" new_item_index="$3"
+        click_autofilter_control "$((column_offset * cell_width + 75))" "$((346 + old_item_index * 16))"
+        click_autofilter_control "$((column_offset * cell_width + 75))" "$((346 + new_item_index * 16))"
         click_autofilter_control "$((column_offset * cell_width + 292))" 391
+    }
+
+    clear_column_filter() {
+        click_autofilter_control 151 117
     }
 
     reopen_multi_document() {
@@ -6491,7 +6500,7 @@ PY
     capture "${prefix}-region-menu-open.png"
     if screen_changed "$output/${prefix}-before.png" "$output/${prefix}-region-menu-open.png" 500; then
         menu_open=true; region_menu_open=true
-        choose_value 0 1
+        choose_value 0 1 405
         region_visible="$(read_region_values)"
         capture "${prefix}-region-applied.png"
     fi
@@ -6504,7 +6513,7 @@ PY
         capture "${prefix}-both-menu-open.png"
         if screen_changed "$output/${prefix}-region-applied.png" "$output/${prefix}-both-menu-open.png" 500; then
             both_menu_open=true
-            choose_value 1 0
+            choose_value 1 0 391
             both_visible="$(read_first_region_value)"
             capture "${prefix}-both-applied.png"
         fi
@@ -6518,7 +6527,7 @@ PY
         capture "${prefix}-category-change-menu-open.png"
         if screen_changed "$output/${prefix}-both-applied.png" "$output/${prefix}-category-change-menu-open.png" 500; then
             category_change_menu_open=true
-            choose_value 1 1
+            change_value 1 0 1
             category_changed_visible="$(read_first_region_value)"
             capture "${prefix}-category-changed.png"
         fi
@@ -6533,11 +6542,11 @@ PY
         if screen_changed "$output/${prefix}-category-changed.png" "$output/${prefix}-region-clear-menu-open.png" 500; then
             region_clear_menu_open=true
             clear_column_filter 0
-            region_cleared_visible="$(read_region_values)"
+            region_cleared_visible="$(read_region_values 3)"
             capture "${prefix}-region-cleared.png"
         fi
     fi
-    if $region_clear_menu_open && [[ "$region_cleared_visible" == "South,East," ]]; then
+    if $region_clear_menu_open && [[ "$region_cleared_visible" == "North,South,East," ]]; then
         save_multi_document && region_cleared_package="$(package_value_signature || true)"
     fi
 
@@ -6570,7 +6579,7 @@ PY
 
     if $menu_open && $region_menu_open && $both_menu_open && $category_change_menu_open && $region_clear_menu_open && $all_clear_menu_open &&
        [[ "$region_visible" == "North,North," && "$both_visible" == "North," && "$category_changed_visible" == "North," &&
-          "$region_cleared_visible" == "South,East," && "$all_cleared_visible" == "North,North,South,South,East,East," &&
+          "$region_cleared_visible" == "North,South,East," && "$all_cleared_visible" == "North,North,South,South,East,East," &&
           "$region_package" == "ref=A1:C7|columns=0:North;" && "$both_package" == "ref=A1:C7|columns=0:North;1:Hardware;" &&
           "$changed_package" == "ref=A1:C7|columns=0:North;1:Software;" && "$region_cleared_package" == "ref=A1:C7|columns=1:Software;" &&
           "$cleared_package" == "ref=A1:C7|columns=" && $dialog_open && $dialog_closed &&
@@ -6598,20 +6607,17 @@ probe_autofilter_color_change_clear_persistence_physical() {
     fi
 
     read_color_values() {
-        local first second
-        first="$(copy_cell_display 0 1 color-change-first || true)"
-        second="$(copy_cell_display 0 2 color-change-second || true)"
-        printf '%s,%s,' "$first" "$second"
-    }
-
-    read_all_color_values() {
-        local value address output_values="" first=true
-        for address in A2 A3 A4 A5; do
-            value="$(copy_cell_formula_by_address "$address" || true)"
+        local count="${1:-2}" row value output_values="" first=true
+        for row in $(seq 1 "$count"); do
+            value="$(copy_cell_display 0 "$row" "color-visible-$row" || true)"
             if $first; then first=false; else output_values+=","; fi
             output_values+="$value"
         done
         printf '%s,' "$output_values"
+    }
+
+    read_all_color_values() {
+        read_color_values 4
     }
 
     package_color_change_signature() {
@@ -6732,7 +6738,7 @@ PY
         capture "${prefix}-clear-menu-open.png"
         if screen_changed "$output/${prefix}-yellow-applied.png" "$output/${prefix}-clear-menu-open.png" 500; then
             clear_menu_open=true
-            click_autofilter_control 151 121
+            click_autofilter_control 151 168
             cleared_visible="$(read_all_color_values)"
             capture "${prefix}-cleared.png"
         fi

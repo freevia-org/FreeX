@@ -943,7 +943,7 @@ function Assert-AutoFilterMultiColumnPostcondition {
         "region-visible=North,North,",
         "both-visible=North,",
         "category-changed-visible=North,",
-        "region-cleared-visible=South,East,",
+        "region-cleared-visible=North,South,East,",
         "all-cleared-visible=North,North,South,South,East,East,",
         "region-package=ref=A1:C7|columns=0:North;",
         "both-package=ref=A1:C7|columns=0:North;1:Hardware;",
