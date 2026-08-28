@@ -68,6 +68,9 @@ $wave194FullReleaseBuildWrapperElapsed = "00:09:49.4386774"
 $wave194DefaultLaneWrapperElapsed = "00:16:54.2974514"
 $wave194DefaultLaneTrxTimestampSpan = "14:03:31.8502271 to 14:20:25.1692656 (+03:00)"
 $wave194DefaultLaneTrxDuration = "00:16:53.3190385"
+$wave195TestedSourceCommit = "feff4d47c02d57112c6cb191bcc85e1d60ea4e06"
+$wave195AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
+$wave195FullReleaseBuildElapsed = "00:05:22.96"
 $wave195ProgressNotePath = "docs/parity/avalonia-parity-wave195-cross-app-integration-20260828.md"
 
 function Get-JsonPropertyValue {
@@ -1094,16 +1097,22 @@ try {
         workerVerification = "Current focused evidence is recorded for FreeW and FreeP above; FreeX physical and generated metrics remain retained below. Functional/source evidence and visual comparison evidence are intentionally separate."
     }
     $wave195IntegrationGateEvidence = [ordered]@{
-        status = "pending"
-        pendingIntegrationGates = @(
-            "repository-preflight",
-            "full-release-build"
-        )
+        status = "accepted-local-gates"
+        testedSourceCommit = $wave195TestedSourceCommit
+        acceptanceRefreshNote = $wave195AcceptanceRefreshNote
+        pendingIntegrationGates = @()
         sliceAccounting = "Wave 195 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 585 app slices (195 per app)."
         currentEvidence = "Wave195 evidence is recorded from committed app-specific artifacts and remains separate from the parent-run integration gates."
         localGatePolicy = "Per AGENTS.md, repository preflight and the full Release build are the local branch gates. The manifest-driven integration suite and UI/render/release-only gates are delegated to GitHub after main is pushed."
         delegatedGitHubGates = @("manifest-driven-integration-suite", "ui-render-release-workflow")
-        gateBoundary = "Wave195 is pending and not accepted until the parent supplies final exact-head acceptance facts for the local and delegated gates; no timings or passing results are inferred here."
+        delegatedGitHubGateStatus = "not-run-locally"
+        gateBoundary = "Wave195 local acceptance records only the supplied exact-head repository preflight and full Release build. Delegated GitHub gates are not claimed as locally run and remain for GitHub after main is pushed."
+        repositoryPreflight = "Passed at tested source commit ${wave195TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0; all repository preflight checks passed."
+        fullReleaseBuild = "Passed at tested source commit ${wave195TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release passed with 0 warnings and 0 errors; elapsed $wave195FullReleaseBuildElapsed."
+        fullReleaseBuildElapsed = $wave195FullReleaseBuildElapsed
+        focusedTests = "Passed at tested source commit ${wave195TestedSourceCommit}: FreeX Wave195 physical 2/2 workflows with 75 artifacts, 58 PNGs, and 2 reload witnesses; FreeW canonical 291 rows with 80 pass, 141 genuine visual mismatches, and 70 Avalonia extensions; FreeP whole-window 36/36 and combined 64/64 with zero local-threshold mismatch."
+        independentReviewStatus = "passed"
+        independentReview = "Passed: the exact tested/reviewed source commit ${wave195TestedSourceCommit} is the acceptance evidence boundary; no delegated GitHub gate is represented as locally run."
         historicalWave194Acceptance = $wave194IntegrationGateEvidence
     }
 
@@ -1111,8 +1120,8 @@ try {
         schema = "freex.parity.cross-app-dashboard.v3"
         wave = 195
         cumulativeAppSlices = 585
-        cumulativeAppSlicesStatus = "pending-integration-gates"
-        integrationGateStatus = "pending"
+        cumulativeAppSlicesStatus = "accepted-local-gates"
+        integrationGateStatus = "accepted-local-gates"
         pendingIntegrationGates = $wave195IntegrationGateEvidence.pendingIntegrationGates
         integrationGateEvidence = $wave195IntegrationGateEvidence
         scopeBoundary = "Wave195 is three app slices, cumulative 585 (195 per app). Functional/source parity evidence is represented by generated command/profile routing, focused evidence, route coverage, and artifact coverage. Visual parity remains a separate claim: FreeW retains 141 genuine visual mismatches and 70 Avalonia extensions; FreeP retains an unresolved native Office deck17 slide02 residual; FreeX Wave195 is bounded physical Linux/X11 evidence for two named workflows. These metrics do not prove complete visual parity, workflow completeness, or pixel-level equivalence, and the overall 100% parity goal remains incomplete."
@@ -1221,7 +1230,7 @@ try {
         "",
         "> Generated counts prove command/profile routing, route and artifact coverage, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates, physical/no-COM limitations, and authoritative Microsoft Office baseline availability remain explicitly separate from coverage metrics.",
         "",
-        "> Wave195 records three app slices and cumulative **$($dashboard.cumulativeAppSlices)** app slices (195 per app). Current Wave195 integration gates are **pending** and this dashboard does not invent timings or passing results. Wave194 remains historical acceptance context: its supplied Release, default-lane, and repository gates passed against tested source commit ``$($wave194History.testedSourceCommit)``; independent review passed with no findings at integration head ``$wave194ReviewedIntegrationHead``.",
+        "> Wave195 records three app slices and cumulative **$($dashboard.cumulativeAppSlices)** app slices (195 per app). Wave195 local integration gates are **accepted** against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``. Delegated GitHub gates are explicitly not claimed as locally run. Wave194 remains historical acceptance context: its supplied Release, default-lane, and repository gates passed against tested source commit ``$($wave194History.testedSourceCommit)``; independent review passed with no findings at integration head ``$wave194ReviewedIntegrationHead``.",
         "",
         "## Summary",
         "",
@@ -1249,12 +1258,17 @@ try {
         "",
         "## Integration Gates",
         "",
-        "Wave195 current status is **pending/not accepted**. It records three app slices and cumulative 585 app slices (195 per app). Per AGENTS.md, repository preflight and the full Release build are the local branch gates; the manifest-driven integration suite and UI/render/release-only gates are delegated to GitHub. No current Wave195 timing or pass is claimed. $($dashboard.integrationGateEvidence.gateBoundary)",
+        "Wave195 local integration gates are **accepted**. It records three app slices and cumulative 585 app slices (195 per app). Per AGENTS.md, repository preflight and the full Release build are the local branch gates; the manifest-driven integration suite and UI/render/release-only gates are delegated to GitHub and are not claimed as locally run. $($dashboard.integrationGateEvidence.gateBoundary)",
         "",
         "- Historical Wave194 acceptance: $($wave194History.acceptanceRefreshNote) $($wave194History.fullReleaseBuild) $($wave194History.defaultNonUiTestLane)",
         "- Wave195 evidence: $($dashboard.integrationGateEvidence.currentEvidence)",
         "- Slice accounting: $($dashboard.integrationGateEvidence.sliceAccounting)",
-        "- Pending gates: $($dashboard.integrationGateEvidence.pendingIntegrationGates -join ', ')",
+        "- Pending local gates: $(if (@($dashboard.integrationGateEvidence.pendingIntegrationGates).Count -eq 0) { 'none; repository preflight and full Release build passed' } else { $dashboard.integrationGateEvidence.pendingIntegrationGates -join ', ' })",
+        "- Delegated GitHub gates: $($dashboard.integrationGateEvidence.delegatedGitHubGates -join ', ') ($($dashboard.integrationGateEvidence.delegatedGitHubGateStatus))",
+        "- Tested/reviewed source commit: ``$($dashboard.integrationGateEvidence.testedSourceCommit)``",
+        "- Repository preflight: $($dashboard.integrationGateEvidence.repositoryPreflight)",
+        "- Full Release build: $($dashboard.integrationGateEvidence.fullReleaseBuild)",
+        "- Focused/evidence facts: $($dashboard.integrationGateEvidence.focusedTests)",
         "- Historical Wave194 reintegration: $($wave194History.reintegration)",
         "- Historical Wave194 focused tests: $($wave194History.focusedTests)",
         "",
