@@ -27,6 +27,9 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
             "tools", "LinuxInteractiveDocker", "New-FreeXWave195AutoFilterColorChangeFixture.ps1");
         var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
             "src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs");
+        var colorChangeDispatch = SelectProbeDispatch(
+            probe,
+            "autofilter-color-change-clear-persistence");
         var colorChangeProbe = SelectProbeFunction(
             probe,
             "probe_autofilter_color_change_clear_persistence_physical");
@@ -36,7 +39,8 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
         runner.Should().Contain("Assert-AutoFilterMultiColumnPostcondition");
         runner.Should().Contain("Assert-AutoFilterColorChangeClearPostcondition");
         probe.Should().Contain("probe_autofilter_multi_column_persistence_physical");
-        probe.Should().Contain("probe_autofilter_color_change_clear_persistence_physical");
+        colorChangeDispatch.Should().Contain("probe_autofilter_color_change_clear_persistence_physical");
+        colorChangeDispatch.Should().NotContain("probe_autofilter_color_persistence_physical fill");
         probe.Should().Contain("columns=0:North;1:Hardware;");
         probe.Should().Contain("columns=1:Software;");
         probe.Should().Contain("click_autofilter_control 190 220");
@@ -237,5 +241,20 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
             @"\r?\nprobe_[A-Za-z0-9_]+\(\) \{",
             RegexOptions.Multiline);
         return source[start..(nextFunction.Success ? searchStart + nextFunction.Index : source.Length)];
+    }
+
+    private static string SelectProbeDispatch(string source, string selector)
+    {
+        var marker = $"if [[ \"$probe_selector\" == \"{selector}\" ]]; then";
+        var start = source.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0)
+            throw new InvalidDataException($"The probe must dispatch {selector}.");
+
+        var searchStart = start + marker.Length;
+        var nextDispatch = source.IndexOf(
+            "\nif [[ \"$probe_selector\" == \"",
+            searchStart,
+            StringComparison.Ordinal);
+        return source[start..(nextDispatch >= 0 ? nextDispatch : source.Length)];
     }
 }

@@ -17,12 +17,15 @@ public sealed class Wave191AutoFilterColorPhysicalSourceTests
             "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh");
         var fixture = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
             "tools", "LinuxInteractiveDocker", "New-FreeXWave191AutoFilterColorFixture.ps1");
+        var persistenceDispatch = SelectProbeDispatch(probe, "autofilter-color-persistence");
         var persistenceProbe = SelectProbeFunction(probe, "probe_autofilter_color_persistence_physical");
 
         WaveAutoFilterColorGeometryAssertions.AssertBoundGeometry(probe);
         runner.Should().Contain("autofilter-color-persistence");
         runner.Should().Contain("autofilter-color-fill-save-reopen-physical");
-        runner.Should().Contain("probe_autofilter_color_persistence_physical fill");
+        persistenceDispatch.Should().Contain("probe_autofilter_color_persistence_physical fill");
+        persistenceDispatch.Should().NotContain("probe_autofilter_color_change_clear_persistence_physical");
+        persistenceDispatch.Should().Contain("status\":\"failed\"");
         runner.Should().Contain("New-FreeXWave191AutoFilterColorFixture.ps1");
         runner.Should().Contain("Assert-AutoFilterColorPostcondition");
         runner.Should().Contain("before-rgb=#FFFFFF");
@@ -42,7 +45,6 @@ public sealed class Wave191AutoFilterColorPhysicalSourceTests
         persistenceProbe.Should().Contain("ref=A1:B5|colId=0|cellColor=${expected_package_mode}");
         persistenceProbe.Should().Contain("\"$package\" == *\"|${expected_package_color}\"*");
         persistenceProbe.Should().Contain("copy_cell_formula_by_address A4");
-        persistenceProbe.Should().Contain("status\":\"failed\"");
         fixture.Should().Contain("00B050");
         fixture.Should().Contain("FFC000");
         fixture.Should().Contain("<autoFilter ref=`\"A1:B5`\"");
@@ -146,5 +148,20 @@ public sealed class Wave191AutoFilterColorPhysicalSourceTests
             @"\r?\nprobe_[A-Za-z0-9_]+\(\) \{",
             RegexOptions.Multiline);
         return source[start..(nextFunction.Success ? searchStart + nextFunction.Index : source.Length)];
+    }
+
+    private static string SelectProbeDispatch(string source, string selector)
+    {
+        var marker = $"if [[ \"$probe_selector\" == \"{selector}\" ]]; then";
+        var start = source.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0)
+            throw new InvalidDataException($"The probe must dispatch {selector}.");
+
+        var searchStart = start + marker.Length;
+        var nextDispatch = source.IndexOf(
+            "\nif [[ \"$probe_selector\" == \"",
+            searchStart,
+            StringComparison.Ordinal);
+        return source[start..(nextDispatch >= 0 ? nextDispatch : source.Length)];
     }
 }
