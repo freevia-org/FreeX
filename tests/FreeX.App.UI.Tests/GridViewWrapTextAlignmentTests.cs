@@ -75,4 +75,41 @@ public sealed class GridViewWrapTextAlignmentTests
         GridView.ResolveWrapTextAlignment(hAlign, isNumeric: false, isEffectivelyRightToLeft: false)
             .Should().Be(TextAlignment.Center);
     }
+
+    [Theory]
+    [InlineData(120)]
+    [InlineData(220)]
+    public void RightAlignedWrappedText_UsesParagraphBoxWidthSoWiderCellsStayInside(double cellWidth)
+    {
+        var rect = new Rect(10, 0, cellWidth, 20);
+        var wrapMaxTextWidth = Math.Max(1, rect.Width - 4);
+        var layoutWidth = GridView.ResolveCellTextLayoutWidth(
+            formattedTextWidth: 62,
+            wrapMaxTextWidth,
+            wrapText: true);
+
+        var layout = GridView.CalculateCellTextRenderLayout(
+            rect,
+            layoutWidth,
+            textHeight: 12,
+            CellHAlign.Right,
+            vAlign: null,
+            isNumeric: true,
+            indentPx: 0,
+            textRotation: 0);
+
+        layout.TextPoint.X.Should().Be(rect.Left + 2);
+        layout.Bounds.Right.Should().BeLessThanOrEqualTo(rect.Right - 2);
+    }
+
+    [Fact]
+    public void ResolveCellTextLayoutWidth_UnwrappedTextKeepsMeasuredGlyphWidth()
+    {
+        GridView.ResolveCellTextLayoutWidth(
+                formattedTextWidth: 62,
+                wrapMaxTextWidth: 196,
+                wrapText: false)
+            .Should()
+            .Be(62);
+    }
 }
