@@ -628,16 +628,16 @@ public sealed partial class MainWindow : Window
         workspaceGrid.Children.Add(_vRuler);
         ApplyRulerVisibility();
 
-        // Phase 1: floating-image overlay canvas. Host the editor and a transparent sibling Canvas in
-        // the same Grid cell (row 1, col 1) so the canvas sits on top of the editor at the same size
-        // and position. The canvas is transparent and IsHitTestVisible=true only on its image children.
+        // Phase 1: floating-image overlay canvas. Host the editor and a sibling Canvas in the same Grid
+        // cell (row 1, col 1) so it sits above the editor at the same size and position. Keep the canvas
+        // background null: a Transparent background makes the entire overlay consume mouse input and
+        // prevents users from placing the caret or selecting text in the editor underneath.
         // This is the MINIMAL layout change: we wrap both into a single Grid that lives in the cell,
         // leaving the surrounding workspaceGrid / workspace Border structure completely untouched.
         var editorOverlayHost = new Grid();
         var floatingCanvas = new Canvas
         {
-            IsHitTestVisible = true,
-            Background = System.Windows.Media.Brushes.Transparent
+            IsHitTestVisible = true
         };
         editorOverlayHost.Children.Add(editor);
         editorOverlayHost.Children.Add(floatingCanvas);
