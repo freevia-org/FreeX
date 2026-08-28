@@ -2194,6 +2194,94 @@ public sealed class SmartArtEditingPlannerTests
             .Should().Contain(["CEO", "Assistant", "Director"]);
     }
 
+    [Fact]
+    public void RewriteDataPart_TextPaneEditWithControlCharacter_SavesDeckWithCharacterDropped()
+    {
+        // C1: mirrors PptxIllegalXmlCharacterExportTests, but for the SmartArt diagram data part
+        // rather than shape text. The real text-pane gesture is Apply(ChangeText) followed by
+        // RewriteDataPart (see EditingSession.cs and PresentationSmartArtTextPaneSession.cs) --
+        // both together are what a pasted control character reaches in production.
+        const string VerticalTab = "";
+        var data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build"));
+
+        var edit = SmartArtEditingPlanner.Apply(
+            data,
+            SmartArtNodeEditIntent.ChangeText("n2", "before" + VerticalTab + "after"));
+        edit.Applied.Should().BeTrue(edit.Message);
+
+        var smartArt = new SmartArtShape { Data = data };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+        smartArt.DiagramRelIds["dm"] = "rIdDm1";
+
+        var rewriteAction = () => SmartArtEditingPlanner.RewriteDataPart(smartArt);
+        rewriteAction.Should().NotThrow();
+        var rewriteResult = SmartArtEditingPlanner.RewriteDataPart(smartArt);
+        rewriteResult.Applied.Should().BeTrue(rewriteResult.Message);
+
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var dataPartXml = Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/data1.xml"].Bytes);
+        var document = XDocument.Parse(dataPartXml);
+        document.Descendants(dgm + "t").Descendants(a + "t").Select(t => t.Value)
+            .Should().Contain("beforeafter");
+        dataPartXml.Should().NotContain(VerticalTab);
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 5,
+            Kind = SlideShapeKind.SmartArt,
+            SmartArt = smartArt,
+            ExtentCxEmu = 7_315_200,
+            ExtentCyEmu = 3_657_600,
+        });
+
+        using var stream = new MemoryStream();
+        var write = () => PptxPackageWriter.Write(presentation, stream);
+        write.Should().NotThrow();
+
+        stream.Position = 0;
+        var reloaded = PptxPackageReader.Read(stream);
+        reloaded.Slides[0].Shapes.Should().Contain(shape => shape.Kind == SlideShapeKind.SmartArt);
+    }
+
+    [Fact]
+    public void RewriteDataPart_OrdinaryTextIncludingEmoji_IsUnchanged()
+    {
+        // Sibling of the control-character test above: the sanitizer must not touch valid text
+        // (including a surrogate-pair emoji) that happens to share the same write path.
+        var data = MakeFlatData(SmartArtFamily.List, ("n1", "Plan"), ("n2", "Build"));
+
+        var edit = SmartArtEditingPlanner.Apply(
+            data,
+            SmartArtNodeEditIntent.ChangeText("n2", "hello \U0001F600 world"));
+        edit.Applied.Should().BeTrue(edit.Message);
+
+        var smartArt = new SmartArtShape { Data = data };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var document = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/data1.xml"].Bytes));
+        document.Descendants(dgm + "t").Descendants(a + "t").Select(t => t.Value)
+            .Should().Contain("hello \U0001F600 world");
+    }
+
     private static PresentationTheme DefaultTheme() =>
         Presentation.CreateEmpty().Theme!;
 

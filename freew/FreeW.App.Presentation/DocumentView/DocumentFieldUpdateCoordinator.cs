@@ -85,6 +85,11 @@ public static class DocumentFieldUpdateCoordinator
                 }
                 else if (run.FieldKind != RunFieldKind.None)
                 {
+                    // A locked simple field (Ctrl+F11) must not recompute on F9, mirroring the
+                    // ComplexField.IsLocked gate just above.
+                    if (run.FieldLocked)
+                        continue;
+
                     resolved = ComplexFieldDisplayPlanner.ResolveLiveValue(
                         run.FieldKind,
                         run.Text,

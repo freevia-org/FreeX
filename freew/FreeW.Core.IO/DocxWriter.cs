@@ -2576,25 +2576,17 @@ public static class DocxWriter
                 copy.Runs.Add(run);
                 continue;
             }
-            copy.Runs.Add(new Run(run.Text, run.Formatting with { Bold = true })
-            {
-                Image = run.Image,
-                Equation = run.Equation,
-                Chart = run.Chart,
-                HyperlinkUrl = run.HyperlinkUrl,
-                HyperlinkAnchor = run.HyperlinkAnchor,
-                HyperlinkTooltip = run.HyperlinkTooltip,
-                SubDocument = run.SubDocument,
-                FieldKind = run.FieldKind,
-                FootnoteId = run.FootnoteId,
-                EndnoteId = run.EndnoteId,
-                CommentId = run.CommentId,
-                IsCommentReference = run.IsCommentReference,
-                Revision = run.Revision,
-                RevisionAuthor = run.RevisionAuthor,
-                RevisionDateXml = run.RevisionDateXml,
-                Control = run.Control
-            });
+            // r165: this used to hand-list the properties to carry across, and dropped fourteen of
+            // them -- StyleId, MoveRevisionId, Ruby, TableFormula, Citation, CrossReference,
+            // ComplexField, the break flags, FormatRevision, NestedRevision, Shape, WordArt and
+            // DrawingGroup -- so writing a header row silently stripped them from the saved file.
+            // It is the ninth run copier this program has found with that shape, and the count only
+            // ever grew because each one was repaired by adding the single property that had been
+            // noticed. Delegating to the canonical clone means a property added to Run tomorrow
+            // arrives here for free; only the bold override is this method's own business.
+            var bolded = RevisionEditPlanner.CloneRunWithText(run, run.Text);
+            bolded.Formatting = run.Formatting with { Bold = true };
+            copy.Runs.Add(bolded);
         }
         return copy;
     }
@@ -4079,10 +4071,15 @@ public static class DocxWriter
         // A document field emits a self-contained w:fldSimple wrapping a run; the wrapped run's w:t
         // carries the last-known/cached value as fallback text for field-unaware consumers. The
         // w:instr keyword identifies the field kind (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES).
+        // A Ctrl+F11-locked field also carries w:fldLock, mirroring BuildGenericSimpleField below.
         if (FieldInstruction(run.FieldKind) is { } instruction)
-            return new XElement(W + "fldSimple",
-                new XAttribute(W + "instr", instruction),
-                BuildTextRun(run, drawings, hyperlinks, preservedNumbering, restartOverrides));
+        {
+            var fieldElement = new XElement(W + "fldSimple", new XAttribute(W + "instr", instruction));
+            if (run.FieldLocked)
+                fieldElement.Add(new XAttribute(W + "fldLock", "1"));
+            fieldElement.Add(BuildTextRun(run, drawings, hyperlinks, preservedNumbering, restartOverrides));
+            return fieldElement;
+        }
 
         // A footnote reference is a superscript run carrying a w:footnoteReference (no literal text).
         // Carry the run's real formatting (forcing vertAlign=superscript) so a bold/coloured/sized

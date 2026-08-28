@@ -1214,6 +1214,13 @@ public sealed partial class MainWindow
             current = saveResult.Options;
             _avaloniaQuickAccessOptions = current;
             RebuildAvaloniaQuickAccessToolbar();
+
+            // Same shared-AppOptions defect as the QAT context menu's
+            // ApplyAvaloniaQuickAccessCustomization (MainWindow.CatalogContextMenus.cs): the Options
+            // dialog's Quick Access Toolbar page edits the same process-wide
+            // FreeXOptionsRuntimeSession every sibling window shares, so committing it here must
+            // rebuild every OTHER open window's QAT chrome too, not just this window's.
+            WindowRegistry.NotifyQuickAccessToolbarChanged(this);
             if (!ApplyFormulaErrorCheckingOptions())
                 return false;
 

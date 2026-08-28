@@ -1090,6 +1090,14 @@ public partial class MainWindow
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
             ApplyOptionsCalculationSubmission(dlg.CalculationSubmission);
             RebuildQuickAccessToolbar();
+
+            // Same shared-AppOptions defect the QAT context menu's
+            // ApplyQuickAccessToolbarCustomization already broadcasts for
+            // (MainWindow.QuickAccessToolbar.cs): the Options dialog's Quick Access Toolbar page
+            // edits the same process-wide AppOptions instance every sibling MainWindow shares, so
+            // committing it here must rebuild every OTHER open window's QAT chrome too, not just
+            // this window's.
+            _windowRegistry?.BroadcastQuickAccessToolbarChanged(this);
             ApplyOptionsWorksheetViewSettings();
             ApplyOptionsToView();
             UpdateViewport();

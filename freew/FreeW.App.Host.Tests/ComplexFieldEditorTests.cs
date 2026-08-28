@@ -298,6 +298,69 @@ public sealed class ComplexFieldEditorTests
         fields[1].ComplexField!.IsLocked.Should().BeFalse();
     }
 
+    /// <summary>
+    /// C3 remediation: FreeW models DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES a second way, as
+    /// <see cref="RunFieldKind"/> simple fields -- the form the mainstream ribbon routes actually produce
+    /// (Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt; Date, Quick Parts &gt;
+    /// Document Property &gt; Author). <see cref="Run.AuthorField"/> mirrors exactly what those routes
+    /// build (see e.g. HeaderFooterDialogPlanner's <c>Run.PageNumberField()</c> calls). Ctrl+F11 on such a
+    /// field used to be a silent no-op (<see cref="DocumentView.SetFieldLockAtCaret"/> returned immediately
+    /// unless the run's Tag was a ComplexFieldMarker), so F9 kept recomputing it from live state even after
+    /// the user locked it.
+    /// </summary>
+    [StaFact]
+    public void SetFieldLockAtCaret_SimpleAuthorField_PreventsRecomputeOnUpdateFields()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Author = "Ada Lovelace";
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("By "), Run.AuthorField("Ada Lovelace") } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var renderedField = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "Ada Lovelace");
+        view.CaretPosition = renderedField.ContentStart.GetPositionAtOffset(2)
+            ?? renderedField.ContentStart;
+
+        view.SetFieldLockAtCaret(true);
+
+        var lockedRun = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.Author);
+        lockedRun.FieldLocked.Should().BeTrue();
+        lockedRun.Text.Should().Be("Ada Lovelace");
+
+        // Change the underlying source a live AUTHOR field would otherwise recompute from, then F9.
+        view.Model.Properties.Author = "Grace Hopper";
+        view.UpdateFields();
+
+        var updatedRun = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.Author);
+        updatedRun.Text.Should().Be("Ada Lovelace");
+        updatedRun.FieldLocked.Should().BeTrue();
+    }
+
+    /// <summary>Sibling no-regression check: an unlocked simple field must still update normally on F9.</summary>
+    [StaFact]
+    public void UpdateFields_SimpleAuthorField_RecomputesWhenNotLocked()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Author = "Ada Lovelace";
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("By "), Run.AuthorField("Ada Lovelace") } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.Model.Properties.Author = "Grace Hopper";
+        view.UpdateFields();
+
+        var updatedRun = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.Author);
+        updatedRun.Text.Should().Be("Grace Hopper");
+        updatedRun.FieldLocked.Should().BeFalse();
+    }
+
     [StaFact]
     public void SelectedFieldCommands_ToggleLockAndUnlinkOnlyIntersectingFields()
     {

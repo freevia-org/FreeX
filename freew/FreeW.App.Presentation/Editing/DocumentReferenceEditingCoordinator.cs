@@ -1205,6 +1205,13 @@ public sealed class DocumentReferenceEditingCoordinator
                 }
                 else if (run.FieldKind != RunFieldKind.None)
                 {
+                    // A locked simple field (Ctrl+F11) must not recompute on F9, mirroring the
+                    // complexField.IsLocked gate above -- this is the production F9 path DocumentView.
+                    // UpdateFields() drives (via ReferenceEdits.UpdateFields), so without this a locked
+                    // DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES field silently recomputed anyway.
+                    if (run.FieldLocked)
+                        continue;
+
                     resolved = ResolveLiveFieldResult(
                         fieldDocument,
                         run.FieldKind,

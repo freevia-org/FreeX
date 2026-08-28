@@ -32,6 +32,23 @@ public sealed partial class MainWindow
         RebuildAvaloniaQuickAccessToolbar();
     }
 
+    /// <summary>
+    /// Test-only entry into the real production QAT context-menu customization handler
+    /// (<c>ApplyAvaloniaQuickAccessCustomization</c>), the same code path
+    /// <c>AttachAvaloniaQuickAccessCustomization</c> wires every QAT button's "Add"/"Remove"
+    /// context-menu item to. Exercises the identical shared-AppOptions mutation + broadcast
+    /// production code, not a re-implementation.
+    /// </summary>
+    internal void ApplyAvaloniaQuickAccessCustomizationForTest(
+        string commandId,
+        QuickAccessToolbarCustomizationAction action) =>
+        ApplyAvaloniaQuickAccessCustomization(new QuickAccessToolbarMenuCommand(
+            ResourceKey: "",
+            Action: action == QuickAccessToolbarCustomizationAction.Remove
+                ? QuickAccessToolbarMenuAction.Remove
+                : QuickAccessToolbarMenuAction.Add,
+            CommandId: commandId));
+
     internal string? AvaloniaQuickAccessKeyTipForTest(string commandId) =>
         _avaloniaQuickAccessKeyTipButtons
             .FirstOrDefault(entry => string.Equals(entry.Value.Tag as string, commandId, StringComparison.OrdinalIgnoreCase))

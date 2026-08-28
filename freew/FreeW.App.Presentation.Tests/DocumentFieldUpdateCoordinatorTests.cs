@@ -45,6 +45,14 @@ public sealed class DocumentFieldUpdateCoordinatorTests
         {
             ComplexField = new ComplexField(" FILENAME ").WithLock(true)
         });
+        // A locked RunFieldKind run (the simple-field form Insert > Header & Footer > Page Number /
+        // Quick Parts > Document Property produce, distinct from the ComplexField form above) must be
+        // honored too -- this is the second field model this test's name promises to cover.
+        body.Runs.Add(new Run("old author (locked simple)")
+        {
+            FieldKind = RunFieldKind.Author,
+            FieldLocked = true
+        });
         document.Header = new HeaderFooter();
         document.Header.Paragraphs.Add(new Paragraph
         {
@@ -65,6 +73,7 @@ public sealed class DocumentFieldUpdateCoordinatorTests
         body.Runs[0].Text.Should().Be("current.docx");
         body.Runs[1].Text.Should().Be("Grace");
         body.Runs[2].Text.Should().Be("locked");
+        body.Runs[3].Text.Should().Be("old author (locked simple)");
         document.Header.Paragraphs[0].Runs[0].Text.Should().Be("current.docx");
     }
 

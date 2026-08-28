@@ -923,6 +923,10 @@ public sealed class DocumentReferenceEditingCoordinatorTests
                 " STYLEREF 1 ",
                 SimpleField: new SimpleFieldMetadata(IsLocked: true, IsDirty: true))
         };
+        // C3 remediation: a locked RunFieldKind run -- the simple-field form the ribbon's Insert >
+        // Header & Footer > Page Number / Quick Parts > Document Property routes actually produce,
+        // distinct from the ComplexField form lockedStyleReference above -- must be honored the same way.
+        var lockedAuthor = new Run("Locked author") { FieldKind = RunFieldKind.Author, FieldLocked = true };
         var document = new TextDocument();
         document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
         document.Page.PageNumberStartAt = 4;
@@ -945,7 +949,8 @@ public sealed class DocumentReferenceEditingCoordinatorTests
                 pageReference,
                 importedPageReference,
                 styleReference,
-                lockedStyleReference
+                lockedStyleReference,
+                lockedAuthor
             }
         });
         var session = new DocumentEditingSession();
@@ -976,6 +981,8 @@ public sealed class DocumentReferenceEditingCoordinatorTests
         lockedStyleReference.Text.Should().Be("Locked heading");
         lockedStyleReference.ComplexField!.SimpleField.Should()
             .Be(new SimpleFieldMetadata(IsLocked: true, IsDirty: true));
+        lockedAuthor.Text.Should().Be("Locked author");
+        lockedAuthor.FieldLocked.Should().BeTrue();
     }
 
     [Fact]

@@ -283,6 +283,7 @@ public static class DocumentModelCloner
         HyperlinkTooltip = source.HyperlinkTooltip,
         SubDocument = source.SubDocument,
         FieldKind = source.FieldKind,
+        FieldLocked = source.FieldLocked,
         TableFormula = source.TableFormula,
         FootnoteId = source.FootnoteId,
         EndnoteId = source.EndnoteId,
