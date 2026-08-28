@@ -13,8 +13,42 @@ using FreeP.App.Host;
 // Usage: FreeP.RibbonShot <output.png> [tab header] [width] [height]
 var outputPath = args.Length > 0 ? args[0] : Path.Combine(Directory.GetCurrentDirectory(), "freep-ribbon.png");
 var tabHeader = args.Length > 1 ? args[1] : "Home";
-var width = args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 1280;
-var height = args.Length > 3 ? double.Parse(args[3], CultureInfo.InvariantCulture) : 720;
+// r164 audit: the capture surface is sized straight from these arguments. WPF's own
+// RenderTargetBitmap does reject an absurd canvas quickly (measured: "1e9 1e9" and "100000 100000"
+// both fail in 2-3s, no hang and no runaway allocation), so this is not the unbounded-quantity
+// hazard the audit was hunting -- but a mistyped dimension reported "The image data generated an
+// overflow during processing", and a non-numeric one threw a raw FormatException stack trace out of
+// Main. Say what is wrong with the argument instead.
+if (!TryReadDimension(args, 2, 1280, out var width) ||
+    !TryReadDimension(args, 3, 720, out var height))
+{
+    return 2;
+}
+
+static bool TryReadDimension(string[] arguments, int index, double fallback, out double value)
+{
+    value = fallback;
+    if (arguments.Length <= index)
+        return true;
+
+    // 16384 is generous: the largest evidence capture this tool is asked for is a 4K-wide window.
+    const double MaximumDimension = 16384;
+    if (!double.TryParse(arguments[index], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ||
+        double.IsNaN(parsed))
+    {
+        Console.Error.WriteLine($"FAIL: '{arguments[index]}' is not a number (usage: FreeP.RibbonShot <output.png> [tab] [width] [height]).");
+        return false;
+    }
+
+    if (parsed < 1 || parsed > MaximumDimension)
+    {
+        Console.Error.WriteLine($"FAIL: dimension {parsed} is outside the supported range 1..{MaximumDimension}.");
+        return false;
+    }
+
+    value = parsed;
+    return true;
+}
 
 var exitCode = 0;
 var thread = new Thread(() => exitCode = Capture(outputPath, tabHeader, width, height));

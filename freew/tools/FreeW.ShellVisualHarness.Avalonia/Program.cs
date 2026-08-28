@@ -28,6 +28,12 @@ var widths = Optional(args, "--widths")?.Split(',', StringSplitOptions.RemoveEmp
 var height = int.TryParse(Optional(args, "--height"), out var requestedHeight) ? requestedHeight : 900;
 if (widths.Any(width => width < 720) || height < 480)
     throw new ArgumentOutOfRangeException("The FreeW desktop shell cannot be captured below its supported minimum size.");
+// r164 audit: this had a floor but no ceiling, and every capture surface below is sized from these
+// numbers. 16384 is generous -- the widest capture this harness is asked for is 1500 -- and it keeps
+// a mistyped --widths from asking the headless compositor for an absurd frame.
+const int MaximumCaptureDimension = 16384;
+if (widths.Any(width => width > MaximumCaptureDimension) || height > MaximumCaptureDimension)
+    throw new ArgumentOutOfRangeException($"The FreeW desktop shell cannot be captured above {MaximumCaptureDimension} px.");
 
 Directory.CreateDirectory(output);
 var captures = new List<ShellCapture>();
