@@ -19,11 +19,19 @@ pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeW -Platfor
 pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeP -Platform macos
 ```
 
-Every app has a native commit lane on all platforms. The canonical `CI` workflow runs automatically
+Every app has a native commit lane on all platforms. Tests with observable filesystem, runtime,
+globalization, process, or OS behavior stay in `*-portable` gates on Windows, Linux, and macOS.
+Pure calculation/model/localization/definition suites with no platform behavior run once in the
+Linux `*-neutral` gates rather than repeating identical assertions on three operating systems.
+The canonical `CI` workflow runs automatically
 for `main` pushes, remains manually dispatchable, and cancels superseded runs for the same ref.
 Branches are integrated after repository preflight and a successful Release build; this repository
-does not use pull-request workflows. The three repository preflights and all integration entries run in
-parallel. Only gates marked `requiresFullHistory` receive a full checkout.
+does not use pull-request workflows. Hosted CI runs repository-static validation once, while small
+platform-behavior preflights exercise process, shell, path, macOS-readiness, and Linux-packaging
+behavior on Windows, Linux, and macOS. This avoids rebuilding generated-document validators and
+rescanning every tracked path three times. All integration entries run in parallel, and only gates
+marked `requiresFullHistory` receive a full checkout. The local command defaults to `-Mode All` and
+therefore remains the complete preflight.
 
 ## Release Gate
 
@@ -57,6 +65,13 @@ CI selects one manifest entry with `-GateId` on each hosted runner. The establis
 gate` required-check name is retained for branch-protection compatibility, but its aggregate now
 covers the generated matrix for all three apps plus all Windows, Linux, and macOS preflights.
 `App Tester Release` does not repeat those tests: it requires successful `ci.yml` and
-`codeql.yml` runs for its immutable `GITHUB_SHA`, runs the release-only matrix, and only then starts
-native packaging and installation tests. App publication waits for every selected package and the
+`codeql.yml` runs for its immutable `GITHUB_SHA`, runs the release-only matrix, and starts immutable
+native packaging and installation work in parallel. App publication still waits for the complete
+release-only test gate, every selected package, and the
 all-app workflow also waits for every suite package before creating or updating any release.
+
+NuGet caches are keyed from the SDK, central package versions, and repository-wide build props and
+targets. Individual project files are intentionally excluded from the key: adding or moving a project
+does not change restored package content, while central dependency changes still invalidate the cache.
+CodeQL uses no-build C# extraction over shipped production sources and excludes tests, build output,
+and repository tooling because those are already compiled and exercised by CI/preflight gates.

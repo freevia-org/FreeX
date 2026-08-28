@@ -78,4 +78,41 @@ public sealed class TestGateMatrixTests
             gate.GetProperty("gate").GetString() == "release" &&
             gate.GetProperty("projects").GetArrayLength() == 1);
     }
+
+    [Fact]
+    public void Manifest_RunsPlatformNeutralSuitesOnceAndKeepsPortableSuitesCrossPlatform()
+    {
+        using var manifest = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("eng", "test-gates.json"));
+        var gates = manifest.RootElement.GetProperty("gates").EnumerateArray().ToArray();
+
+        var neutral = gates.Where(gate =>
+            gate.GetProperty("id").GetString()!.EndsWith("-neutral", StringComparison.Ordinal)).ToArray();
+        neutral.Should().HaveCount(3);
+        neutral.Should().OnlyContain(gate =>
+            gate.GetProperty("gate").GetString() == "commit" &&
+            gate.GetProperty("platforms").GetArrayLength() == 1 &&
+            gate.GetProperty("platforms").EnumerateArray().Single().GetString() == "linux");
+
+        var portable = gates.Where(gate =>
+            gate.GetProperty("id").GetString()!.EndsWith("-portable", StringComparison.Ordinal)).ToArray();
+        portable.Should().HaveCount(3);
+        portable.Should().OnlyContain(gate =>
+            gate.GetProperty("platforms").EnumerateArray().Select(value => value.GetString())
+                .SequenceEqual(new[] { "windows", "linux", "macos" }));
+    }
+
+    [Fact]
+    public void CodeQl_UsesProductionOnlyNoBuildScope()
+    {
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "codeql.yml");
+        var config = WorkspaceFileLocator.ReadAllText(".github", "codeql", "codeql-config.yml");
+
+        workflow.Should().Contain("build-mode: none");
+        workflow.Should().Contain("config-file: ./.github/codeql/codeql-config.yml");
+        config.Should().Contain("paths-ignore:");
+        config.Should().Contain("- tests/**");
+        config.Should().Contain("- freew/**/*Tests/**");
+        config.Should().Contain("- freep/**/*Tests/**");
+        config.Should().Contain("- tools/**");
+    }
 }

@@ -37,8 +37,32 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File tools/Get-TestGateMatrix.ps1 -Gate commit -GitHubOutputPath $env:GITHUB_OUTPUT
 
-  preflight:
-    name: Repository preflight (${{ matrix.platform }})
+  preflight-static:
+    name: Repository preflight (static)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.400
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-v2-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets') }}
+          restore-keys: nuget-v2-${{ runner.os }}-
+      - name: Run repository-static preflight
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1 -Mode Static
+
+  preflight-platform:
+    name: Repository preflight (${{ matrix.platform }} behavior)
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -65,11 +89,11 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
-      - name: Run repository preflight
+          key: nuget-v2-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets') }}
+          restore-keys: nuget-v2-${{ runner.os }}-
+      - name: Run platform behavior preflight
         shell: pwsh
-        run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1
+        run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1 -Mode Platform
 
   tests:
     name: ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.gateId }}
@@ -93,8 +117,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
+          key: nuget-v2-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets') }}
+          restore-keys: nuget-v2-${{ runner.os }}-
       - name: Run isolated test gate
         shell: pwsh
         run: |
@@ -117,7 +141,7 @@ jobs:
   quality-gate:
     # Keep the established required-check name so branch protection does not need migration.
     name: FreeX commit gate
-    needs: [prepare, preflight, tests]
+    needs: [prepare, preflight-static, preflight-platform, tests]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -126,8 +150,9 @@ jobs:
         shell: pwsh
         run: |
           $prepareResult = "${{ needs.prepare.result }}"
-          $preflightResult = "${{ needs.preflight.result }}"
+          $staticPreflightResult = "${{ needs.preflight-static.result }}"
+          $platformPreflightResult = "${{ needs.preflight-platform.result }}"
           $testResult = "${{ needs.tests.result }}"
-          if ($prepareResult -ne 'success' -or $preflightResult -ne 'success' -or $testResult -ne 'success') {
-            throw "Matrix result: $prepareResult; preflight result: $preflightResult; test result: $testResult."
+          if ($prepareResult -ne 'success' -or $staticPreflightResult -ne 'success' -or $platformPreflightResult -ne 'success' -or $testResult -ne 'success') {
+            throw "Matrix result: $prepareResult; static preflight: $staticPreflightResult; platform preflight: $platformPreflightResult; test result: $testResult."
           }

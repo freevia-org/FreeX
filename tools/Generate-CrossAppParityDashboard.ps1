@@ -1107,7 +1107,7 @@ try {
         delegatedGitHubGates = @("manifest-driven-integration-suite", "ui-render-release-workflow")
         delegatedGitHubGateStatus = "not-run-locally"
         gateBoundary = "Wave195 local acceptance records only the supplied exact-head repository preflight and full Release build. Delegated GitHub gates are not claimed as locally run and remain for GitHub after main is pushed."
-        repositoryPreflight = "Passed at tested source commit ${wave195TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1 exited 0; all repository preflight checks passed."
+        repositoryPreflight = "Passed at tested source commit ${wave195TestedSourceCommit}: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-RepositoryPreflight.ps1 exited 0; all repository preflight checks passed."
         fullReleaseBuild = "Passed at tested source commit ${wave195TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release passed with 0 warnings and 0 errors; elapsed $wave195FullReleaseBuildElapsed."
         fullReleaseBuildElapsed = $wave195FullReleaseBuildElapsed
         focusedTests = "Passed at tested source commit ${wave195TestedSourceCommit}: FreeX Wave195 physical 2/2 workflows with 75 artifacts, 58 PNGs, and 2 reload witnesses; FreeW canonical 291 rows with 80 pass, 141 genuine visual mismatches, and 70 Avalonia extensions; FreeP whole-window 36/36 and combined 64/64 with zero local-threshold mismatch."

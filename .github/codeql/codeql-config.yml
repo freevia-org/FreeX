@@ -1,0 +1,13 @@
+name: Free Suite production C# scope
+
+# CI and the release gate already compile and execute test/tooling code. CodeQL's no-build C#
+# extractor otherwise spends most of its time indexing the very large test corpus even though the
+# security boundary is the shipped FreeX, FreeW, FreeP, and shared production code.
+paths-ignore:
+  - tests/**
+  - freew/**/*Tests/**
+  - freep/**/*Tests/**
+  - tools/**
+  - artifacts/**
+  - '**/bin/**'
+  - '**/obj/**'
