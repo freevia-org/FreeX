@@ -49,6 +49,12 @@ public static class PngCodec
 {
     private static readonly byte[] Signature = { 137, 80, 78, 71, 13, 10, 26, 10 };
 
+    /// <summary>
+    /// Largest canvas this decoder will accept, in pixels. A 4K screenshot is ~8.3M pixels, so this
+    /// is ~32x the biggest capture the parity harness produces.
+    /// </summary>
+    private const long MaxPixelCount = 268_435_456;
+
     public static PixelImage Decode(byte[] data)
     {
         if (data.Length < 8)
@@ -98,6 +104,17 @@ public static class PngCodec
 
         if (width == 0 || height == 0)
             throw new FormatException("PNG missing IHDR / zero dimensions");
+        // r164 remediation, unbounded declared quantity: width and height come straight from IHDR and
+        // every buffer below multiplies them, so a tiny file declaring 40000 x 60000 overflowed int
+        // and surfaced as a bare OverflowException from `new byte[negative]` -- an opaque failure in
+        // the middle of a capture comparison rather than "this PNG is malformed". Same guard the
+        // shared PDF writer applies to its own IHDR read, and the same shape DialogPngAnalyzer's
+        // CheckedDimension already enforces in this tools tree.
+        if ((long)width * height > MaxPixelCount)
+        {
+            throw new FormatException(
+                $"PNG declares {width}x{height} pixels, beyond the {MaxPixelCount:N0}-pixel limit this comparison decoder supports.");
+        }
         if (bitDepth != 8)
             throw new NotSupportedException($"Unsupported PNG bit depth {bitDepth} (only 8 supported)");
         if (interlace != 0)
@@ -123,9 +140,27 @@ public static class PngCodec
 
     private static byte[] Inflate(Stream zlib, int expected)
     {
+        // r164 remediation, unbounded declared quantity: the inflated size was bounded by nothing in
+        // the file -- a PNG declaring a 1x1 canvas whose IDAT expands to 256 MB inflated all of it
+        // (measured: 1,025 MB allocated). `expected` is exactly how many bytes the declared geometry
+        // can hold, so anything past it is data no pixel will ever read; stop there and say so.
         using var outStream = new MemoryStream(Math.Max(expected, 1024));
         using (var z = new ZLibStream(zlib, CompressionMode.Decompress, leaveOpen: true))
-            z.CopyTo(outStream);
+        {
+            var buffer = new byte[81920];
+            int read;
+            while ((read = z.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                if (outStream.Length + read > expected)
+                {
+                    throw new FormatException(
+                        $"PNG IDAT inflates past the {expected:N0} bytes its declared dimensions can hold.");
+                }
+
+                outStream.Write(buffer, 0, read);
+            }
+        }
+
         return outStream.ToArray();
     }
 
