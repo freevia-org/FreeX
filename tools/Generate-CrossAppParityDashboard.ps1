@@ -54,6 +54,7 @@ $wave194FullReleaseBuildWrapperElapsed = "00:09:49.4386774"
 $wave194DefaultLaneWrapperElapsed = "00:16:54.2974514"
 $wave194DefaultLaneTrxTimestampSpan = "14:03:31.8502271 to 14:20:25.1692656 (+03:00)"
 $wave194DefaultLaneTrxDuration = "00:16:53.3190385"
+$wave195ProgressNotePath = "docs/parity/avalonia-parity-wave195-cross-app-integration-20260828.md"
 
 function Get-JsonPropertyValue {
     param(
@@ -215,6 +216,7 @@ try {
     $freeXWave193Manifest = Read-ToolJson -Path "docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Wave193 FreeX evidence manifest is missing"
     $freeXWave194PhysicalResult = Read-ToolJson -Path "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/physical-result.json" -RepoRoot $repoRoot -MissingMessage "Required Wave194 FreeX physical result is missing"
     $freeXWave194Manifest = Read-ToolJson -Path "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Wave194 FreeX evidence manifest is missing"
+    $freeXWave195Manifest = Read-ToolJson -Path "docs/parity/evidence/wave195-freex-autofilter-criteria-workflows-20260828/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Wave195 FreeX physical evidence manifest is missing"
     $wave193PhysicalRun = $freeXWave193Manifest.physicalRun
     $wave193ExpectedArtifactCount = 18
     $wave193PopupOpenChangeThreshold = 300
@@ -242,6 +244,18 @@ try {
         [int]$wave193PhysicalRun.popupRestoredChangedPixels -gt $wave193PopupRestoredChangeMaximum -or
         -not [bool]$wave193PhysicalRun.clickAcknowledged) {
         throw "Wave193 FreeX popup transition metrics did not satisfy open/dismiss/restoration thresholds."
+    }
+    if ([int]$freeXWave195Manifest.wave -ne 195 -or
+        [string]$freeXWave195Manifest.status -ne "passed" -or
+        [string]$freeXWave195Manifest.validationMode -ne "physical-only") {
+        throw "Wave195 FreeX evidence manifest must be a passed physical-only Wave195 result."
+    }
+    $wave195SessionCount = @($freeXWave195Manifest.sessions).Count
+    $wave195ReloadWitnessCount = @($freeXWave195Manifest.sessions | Where-Object { $_.reloadWitnessPassed }).Count
+    $wave195ArtifactCount = @($freeXWave195Manifest.files).Count
+    $wave195ScreenshotCount = @($freeXWave195Manifest.files | Where-Object { [string]$_.path -like "*.png" }).Count
+    if ($wave195SessionCount -ne 2 -or $wave195ReloadWitnessCount -ne 2 -or $wave195ArtifactCount -ne 75 -or $wave195ScreenshotCount -ne 58) {
+        throw "Wave195 FreeX evidence must contain two passing sessions, 75 artifacts, 58 screenshots, and two reload witnesses."
     }
     $freew = Read-ToolJson -Path "docs/parity/freew-command-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
     $freeWRouteInventory = Read-ToolJson -Path "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
@@ -358,7 +372,9 @@ try {
             "docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/manifest.json",
             "docs/parity/avalonia-parity-wave194-freex-autofilter-mixed-type-20260823.md",
             "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/physical-result.json",
-            "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/manifest.json"
+            "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/manifest.json",
+            "docs/parity/evidence/wave195-freex-autofilter-criteria-workflows-20260828/manifest.json",
+            $wave195ProgressNotePath
         )
         routeCoverage = [ordered]@{
             inventoryRouteCount = $freeXDialogRoutes.totalRoutes
@@ -483,6 +499,20 @@ try {
                 evidenceUnchangedAfterGeometryRemediation = $true
                 claimBoundary = "Bounded physical Linux/X11 evidence for one mixed-type AutoFilter workflow; it does not establish complete AutoFilter or Excel visual parity."
             }
+            wave195 = [ordered]@{
+                status = [string]$freeXWave195Manifest.status
+                validationMode = [string]$freeXWave195Manifest.validationMode
+                evidencePath = "docs/parity/evidence/wave195-freex-autofilter-criteria-workflows-20260828/manifest.json"
+                physicalPassed = $wave195SessionCount
+                physicalTotal = $wave195SessionCount
+                sessionCount = $wave195SessionCount
+                evidenceArtifactCount = $wave195ArtifactCount
+                screenshotCount = $wave195ScreenshotCount
+                reloadWitnessPassed = $wave195ReloadWitnessCount
+                reloadWitnessTotal = $wave195SessionCount
+                productionDockerX11Sessions = "Both named production Docker/X11 sessions pass: multi-column criteria change/clear and color criteria change/clear persistence."
+                claimBoundary = [string]$freeXWave195Manifest.claimBoundary
+            }
             limitations = @(
                 "The 2026-08-16 interactive run captured 36 foreground ribbon states for each of Excel, WPF, and Avalonia, including Draw at all four widths, plus six guarded Excel popup/dialog surfaces. The 27 fixed-viewport triage rows average 13.937% RGB delta for WPF and 15.639% for Avalonia versus Excel; nine maximized rows are coverage-only, not an acceptance threshold.",
                 "The ribbon harness creates a blank workbook before tab discovery so the enabled Draw tab is materialized; the current manifest records no unavailable-tab skips.",
@@ -498,6 +528,7 @@ try {
                 "Wave193 focused source/evidence coverage is 3/3 Avalonia guards and 8/8 Core.IO guards; the package tests retain SourcePatch semantics when a criterion-only change produces no row-visibility delta.",
                 "Wave194 adds one physical mixed-type AutoFilter workflow at $($freeXWave194PhysicalResult.summary.passed)/$($freeXWave194PhysicalResult.summary.total): Select All is cleared, numeric 42 is selected, SUBTOTAL changes 5 -> 2, visible/readback is $($freeXWave194Manifest.physicalRun.visible), semantic labels are $($freeXWave194Manifest.physicalRun.semantic), and save/reopen preserves the exact package contract. Focused Wave194 source/evidence coverage is 9/9 Avalonia guards, 1/1 Presentation, and 8/8 Core.IO (Wave194 plus five foreground-capture guards).",
                 "Wave194 retains $(@($freeXWave194Manifest.files).Count)/20 evidence artifacts, $(@($freeXWave194Manifest.provenanceFiles).Count)/10 reachable provenance files, and $(@($freeXWave194Manifest.validationFiles).Count)/2 current validation files. Geometry is $($freeXWave194Manifest.physicalRun.targetBounds) with click $($freeXWave194Manifest.physicalRun.targetClick), consumed through one authoritative contract; physical evidence bytes are unchanged by the geometry remediation.",
+                "Wave195 adds two passing production Docker/X11 sessions for multi-column and color criteria change/clear persistence. The committed manifest contains $wave195ArtifactCount artifacts including $wave195ScreenshotCount screenshots, and both sessions have reload witnesses. This is bounded physical FreeX Avalonia Linux evidence for the named fixtures and retained sessions, not exhaustive parity or WPF evidence.",
                 "The current-source range corpus retains 35 Avalonia grid captures: eight charts, seven cell styles, and 20 native PivotTable surfaces. These are renderer coverage evidence, not raw-pixel Office acceptance rows.",
                 [string]$freeXOfficeBaseline.limitation
             )
@@ -560,7 +591,8 @@ try {
             "docs/parity/avalonia-parity-wave191-freew-font-template-20260823.md",
             "docs/parity/avalonia-parity-wave192-freew-font-checkbox-20260823.md",
             "docs/parity/avalonia-parity-wave193-freew-font-checkbox-glyph-20260823.md",
-            "docs/parity/avalonia-parity-wave194-freew-font-action-border-20260824.md"
+            "docs/parity/avalonia-parity-wave194-freew-font-action-border-20260824.md",
+            $wave195ProgressNotePath
         )
         canonicalComparison = [ordered]@{
             kind = [string]$freeWVisualComparison.scope.kind
@@ -602,6 +634,20 @@ try {
             classificationTotals = $freeWClassificationTotals
             correction = "Avalonia Font action-button border changed from #707070 to #C8C8C8 to match WPF; no other rows changed."
             claimBoundary = "Canonical FreeW Font-dialog WPF/Avalonia evidence only; remaining text/control raster differences do not establish Word visual parity."
+        }
+        wave195 = [ordered]@{
+            catalogRowCount = 291
+            passCount = 80
+            genuineVisualMismatchCount = 141
+            avaloniaExtensionCount = 70
+            legalNoticesStateCount = 6
+            legalNoticesBaselineChangedPixels = 324936
+            legalNoticesChangedPixels = 324253
+            legalNoticesAggregateDelta = -683
+            nonLegalRowsStructurallyUnchanged = 285
+            correction = "Fresh current-source Legal Notices evidence is refreshed for six states; aggregate changed pixels fall from 324936 to 324253, a delta of -683, while 285 non-Legal rows remain structurally unchanged."
+            classificationBoundary = "The canonical catalog remains 291 rows: 80 pass, 141 genuine visual mismatches, and 70 Avalonia extensions."
+            claimBoundary = "Canonical FreeW WPF/Avalonia evidence only; the Legal Notices improvement does not establish Word visual parity."
         }
         routeCoverage = [ordered]@{
             inventoryScenarioCount = @($freeWRouteInventory.scenarios).Count
@@ -691,7 +737,7 @@ try {
             classifiedRows = $true
         }
         renderedEvidence = $freeWRenderedEvidence
-        nextSlice = "A committed current-source Word PNG baseline bundle is available for $($freeWOfficeBaseline.comparison.comparableRows) comparable rows, but $($freeWOfficeBaseline.comparison.failedRows) comparisons remain outside tolerance. The current Font evidence contains $($freeWFontProvenance.wave194Result.aggregateChangedPixels) aggregate changed pixels with relative improvement $(Format-CanonicalPercentage $freeWFontProvenance.wave194Result.relativeImprovement) and matching WPF painted bounds; $($freeWFontProvenance.wave194Result.nonFontRowsCompared) non-Font rows remain unchanged. Continue with the remaining native checkbox/glyph raster tail, tab-template edges, Legal Notices glyph/template tail, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
+        nextSlice = "Wave195 keeps the canonical FreeW catalog at 291 rows: 80 pass, 141 genuine visual mismatches, and 70 Avalonia extensions. The six-state Legal Notices aggregate improves from 324936 to 324253 changed pixels (delta -683), with 285 non-Legal rows structurally unchanged. Continue with the remaining native checkbox/glyph raster tail, tab-template edges, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
     }
 
     $freePExternalPowerPointResidual = Get-ResidualById -Residuals $freePRenderParity.Residuals -Id "external-powerpoint-baseline"
@@ -757,7 +803,8 @@ try {
             "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/references.json",
             "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/images.json",
             "docs/parity/freep-wave194-deck17-slide02-topology-20260823.md",
-            "docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json"
+            "docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json",
+            $wave195ProgressNotePath
         )
         routeCoverage = [ordered]@{
             laneEntries = @(
@@ -853,6 +900,25 @@ try {
             residualClaim = "The topology evidence rules out the investigated structural, autofit, and theme-inheritance hypotheses; the remaining render residual is unresolved and is not attributed to host fonts or raster behavior."
             claimBoundary = "Pinned Office topology and retained comparison metrics only; no PowerPoint visual-parity claim is made."
         }
+        wave195 = [ordered]@{
+            wholeWindowScenarioCount = [int]$freePWholeWindowVisualEvidence.scenarioCount
+            wholeWindowPassCount = [int]$freePWholeWindowVisualEvidence.passCount
+            wholeWindowMismatchCount = [int]$freePWholeWindowVisualEvidence.mismatchCount
+            combinedRenderedEvidenceCount = 64
+            combinedRenderedEvidencePassCount = 64
+            combinedRenderedEvidenceMismatchCount = 0
+            richTextSelection = [ordered]@{
+                changedPixelRatioBefore = 0.2185757
+                changedPixelRatioAfter = 0.1809518682
+                meanChannelDelta = 9.7919313736
+                perceptualHashDistance = 11
+                cropWidth = 251
+                cropHeight = 74
+                cropDimensions = "251x74"
+            }
+            correction = "Wave195 refreshes the whole-window catalog to 36 pass and 0 mismatch and the combined rendered evidence to 64/64 pass and 0 mismatch. Rich-text selection evidence uses exact 251x74 crops and improves the changed-pixel ratio from 0.2185757 to 0.1809518682."
+            claimBoundary = "Local WPF/Avalonia rendered evidence only; the native Office deck17 slide02 residual remains unresolved and no PowerPoint visual-parity claim is made."
+        }
         physicalEvidence = [ordered]@{
             status = "available-app-and-native-office-chrome"
             captureMode = "visible app-owned render targets with scenario-isolated processes plus guarded native PowerPoint ribbon capture"
@@ -893,7 +959,7 @@ try {
         claimBoundary = "Route/scenario coverage, committed PNG manifests, and local WPF/Avalonia comparison results only; no PowerPoint visual-parity claim is made."
     }
 
-    $freePNextSlice = "The tracked PowerPoint corpus has $($freePOfficeBaseline.artifactCount) COM-exported reference slides across $($freePOfficeBaseline.comparison.referenceReadyDecks) ready decks, with $($freePOfficeBaseline.comparison.missingReferenceDecks) deck missing references. Wave194 makes no runtime rendering change: topology evidence pins the complete deck17 slide02 source at $($freePWave194Topology.sourceCorpus.sha256), records $($freePWave194Topology.model.title.effectiveFontFamily) and $($freePWave194Topology.model.body.effectiveFontFamily) theme-resolved fonts, and leaves the residual unresolved. Continue renderer-level evidence against the existing corpus rather than introducing fixture-specific correction."
+    $freePNextSlice = "Wave195 refreshes the local whole-window catalog to 36 pass and 0 mismatch, and the combined rendered evidence to 64/64 pass and 0 mismatch. Rich-text selection is measured on exact 251x74 crops with changed-pixel ratio 0.1809518682, mean channel delta 9.7919313736, and pHash 11. The native Office deck17 slide02 residual remains unresolved; continue renderer-level evidence against the existing corpus rather than introducing fixture-specific correction."
 
     $freeP = [ordered]@{
         app = "FreeP"
@@ -937,16 +1003,29 @@ try {
         sourceTestRemediation = "The current source is accepted only with the focused and full-lane evidence recorded above; generated inventory and visual manifests remain the authority for coverage and comparison counts."
         workerVerification = "Current focused evidence is recorded for FreeW and FreeP above; FreeX physical and generated metrics remain retained below. Functional/source evidence and visual comparison evidence are intentionally separate."
     }
+    $wave195IntegrationGateEvidence = [ordered]@{
+        status = "pending"
+        pendingIntegrationGates = @(
+            "repository-preflight",
+            "full-release-build",
+            "default-non-ui-test-lane",
+            "integration-review"
+        )
+        sliceAccounting = "Wave 195 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 585 app slices (195 per app)."
+        currentEvidence = "Wave195 evidence is recorded from committed app-specific artifacts and remains separate from the parent-run integration gates."
+        gateBoundary = "Wave195 is pending and not accepted until the parent runs and records the integration gates; no timings or passing results are inferred here."
+        historicalWave194Acceptance = $wave194IntegrationGateEvidence
+    }
 
     $dashboard = [ordered]@{
         schema = "freex.parity.cross-app-dashboard.v3"
-        wave = 194
-        cumulativeAppSlices = 582
-        cumulativeAppSlicesStatus = "accepted-final-integration-gates"
-        integrationGateStatus = "accepted"
-        pendingIntegrationGates = @()
-        integrationGateEvidence = $wave194IntegrationGateEvidence
-        scopeBoundary = "Functional/source parity evidence is represented by generated command/profile routing, focused test gates, route coverage, and artifact coverage. Visual parity remains a separate claim: current generated FreeW evidence has $($freeW.renderedEvidence.artifactCoverage.evidenceRowCount) dialog rows with $($freeW.renderedEvidence.pairedEvidence.passCount) pass, $($freeW.renderedEvidence.pairedEvidence.mismatchCount) genuine visual mismatches, and $($freeW.renderedEvidence.pairedEvidence.avaloniaOnlyScenarioCount) Avalonia extensions; FreeX retains Excel triage deltas; FreeP has paired app-owned evidence but its Office reference lane is not a raw Office-to-host equivalence result. These metrics do not prove complete visual parity, workflow completeness, or pixel-level equivalence."
+        wave = 195
+        cumulativeAppSlices = 585
+        cumulativeAppSlicesStatus = "pending-integration-gates"
+        integrationGateStatus = "pending"
+        pendingIntegrationGates = $wave195IntegrationGateEvidence.pendingIntegrationGates
+        integrationGateEvidence = $wave195IntegrationGateEvidence
+        scopeBoundary = "Wave195 is three app slices, cumulative 585 (195 per app). Functional/source parity evidence is represented by generated command/profile routing, focused evidence, route coverage, and artifact coverage. Visual parity remains a separate claim: FreeW retains 141 genuine visual mismatches and 70 Avalonia extensions; FreeP retains an unresolved native Office deck17 slide02 residual; FreeX Wave195 is bounded physical Linux/X11 evidence for two named workflows. These metrics do not prove complete visual parity, workflow completeness, or pixel-level equivalence, and the overall 100% parity goal remains incomplete."
         sources = @(
             "docs/parity/command-inventory.json",
             "docs/parity/functional-parity.json",
@@ -979,7 +1058,8 @@ try {
                     "docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/manifest.json",
                     "docs/parity/avalonia-parity-wave194-freex-autofilter-mixed-type-20260823.md",
                     "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/physical-result.json",
-                    "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/manifest.json",
+            "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/manifest.json",
+            "docs/parity/evidence/wave195-freex-autofilter-criteria-workflows-20260828/manifest.json",
             "docs/parity/freew-command-inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
@@ -1028,7 +1108,8 @@ try {
             "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/references.json",
             "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/images.json",
             "docs/parity/freep-wave194-deck17-slide02-topology-20260823.md",
-            "docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json"
+            "docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json",
+            $wave195ProgressNotePath
         )
         apps = @($freeX, $freeW, $freeP)
     }
@@ -1041,6 +1122,7 @@ try {
             "| $(ConvertTo-ToolMarkdownCell $candidate.id) | $($candidate.triageScore) | $($candidate.logicalDimensionMatch) | $(ConvertTo-ToolMarkdownCell $(if ([string]::IsNullOrWhiteSpace([string]$candidate.dimensionMismatchBucket)) { "none" } else { $candidate.dimensionMismatchBucket })) | $(ConvertTo-ToolMarkdownCell $candidate.reviewStatus) |"
         }
     )
+    $wave194History = $dashboard.integrationGateEvidence.historicalWave194Acceptance
 
     $md = @(
         "# Avalonia/WPF Cross-App Parity Dashboard",
@@ -1049,15 +1131,15 @@ try {
         "",
         "> Generated counts prove command/profile routing, route and artifact coverage, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates, physical/no-COM limitations, and authoritative Microsoft Office baseline availability remain explicitly separate from coverage metrics.",
         "",
-        "> Wave194 records an accepted cumulative **$($dashboard.cumulativeAppSlices)** app slices. The supplied Release, default-lane, and repository integration gates passed against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``; independent review passed with no findings at integration head ``$wave194ReviewedIntegrationHead``. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
+        "> Wave195 records three app slices and cumulative **$($dashboard.cumulativeAppSlices)** app slices (195 per app). Current Wave195 integration gates are **pending** and this dashboard does not invent timings or passing results. Wave194 remains historical acceptance context: its supplied Release, default-lane, and repository gates passed against tested source commit ``$($wave194History.testedSourceCommit)``; independent review passed with no findings at integration head ``$wave194ReviewedIntegrationHead``.",
         "",
         "## Summary",
         "",
         "| App | Primary evidence | Current generated state | Next slice |",
         "|---|---|---|---|",
         "| FreeX | Functional matrix, classifier, dialog inventory, dialog visual evidence, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) command inventory parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.functionalMatrix.pseudoCommandGalleryItems) catalog-backed pseudo-gallery rows ($($freeX.functionalMatrix.conditionalFormatPopupGalleryRows) conditional-format, $($freeX.functionalMatrix.fontBorderPopupGalleryRows) font/border, $($freeX.functionalMatrix.accountingSymbolPopupGalleryRows) accounting-symbol); $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia; $($freeX.dialogVisualEvidence.pairedCapturedSurfaceIds) paired screenshot surface ids, $($freeX.dialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only ids, $($freeX.dialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair) WPF-only ids; $($freeX.dialogVisualEvidence.pairedDimensionMismatches) scale-aware dimension mismatches; $($freeX.dialogVisualEvidence.visualReviewCandidateCount) unresolved high-delta visual review candidates at triage score >= $($freeX.dialogVisualEvidence.visualReviewTriageThreshold) (highest $($freeX.dialogVisualEvidence.highestTriageScore)); $($freeX.dialogVisualEvidence.pairedRawPixelDimensionMismatches) raw PNG pixel dimension mismatches, of which $($freeX.dialogVisualEvidence.pairedCaptureScaleNormalizedDimensionMatches) normalize by capture DPI. These are coverage/triage metrics, not a visual-parity claim. | $($freeX.nextSlice) |",
-        "| FreeW | Generated command inventory plus dialog rendered evidence | $($freeW.commandInventory.totalCommands) commands; $($freeW.commandInventory.bothProfiles) shared-profile; $($freeW.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeW.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeW.commandInventory.profileShapeOnly) profile-shape-only; $($freeW.commandInventory.commandIdAliases) command-id aliases; $($freeW.commandInventory.platformOnly) platform-only; $($freeW.commandInventory.deferred) deferred; $($freeW.renderedEvidence.artifactCoverage.evidenceRowCount) rendered comparison rows; Wave194 Font aggregate $($freeW.renderedEvidence.wave194.aggregateChangedPixels) changed pixels (-$([math]::Abs($freeW.renderedEvidence.wave194.aggregateDelta)), $(Format-CanonicalPercentage $freeW.renderedEvidence.wave194.relativeImprovement)) | $($freeW.nextSlice) |",
-        "| FreeP | Generated command inventory plus dialog/whole-window rendered evidence | $($freeP.commandInventory.totalCommands) commands; $($freeP.commandInventory.bothProfiles) shared-profile; $($freeP.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeP.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeP.commandInventory.platformOnly) platform-only; $($freeP.commandInventory.workflowEvidenceRows) workflow evidence rows; $($freeP.renderedEvidence.pairedEvidence.pairedScenarioCount) paired rendered scenarios; Wave194 topology evidence pins deck17 slide02 and leaves its residual unresolved | $($freeP.nextSlice) |",
+        "| FreeW | Generated command inventory plus dialog rendered evidence | $($freeW.commandInventory.totalCommands) commands; $($freeW.commandInventory.bothProfiles) shared-profile; $($freeW.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeW.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeW.commandInventory.profileShapeOnly) profile-shape-only; $($freeW.commandInventory.commandIdAliases) command-id aliases; $($freeW.commandInventory.platformOnly) platform-only; $($freeW.commandInventory.deferred) deferred; $($freeW.renderedEvidence.artifactCoverage.evidenceRowCount) rendered comparison rows; Wave195 Legal Notices aggregate $($freeW.renderedEvidence.wave195.legalNoticesChangedPixels) changed pixels (delta $($freeW.renderedEvidence.wave195.legalNoticesAggregateDelta)); $($freeW.renderedEvidence.wave195.genuineVisualMismatchCount) genuine visual mismatches and $($freeW.renderedEvidence.wave195.avaloniaExtensionCount) Avalonia extensions | $($freeW.nextSlice) |",
+        "| FreeP | Generated command inventory plus dialog/whole-window rendered evidence | $($freeP.commandInventory.totalCommands) commands; $($freeP.commandInventory.bothProfiles) shared-profile; $($freeP.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeP.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeP.commandInventory.platformOnly) platform-only; $($freeP.commandInventory.workflowEvidenceRows) workflow evidence rows; $($freeP.renderedEvidence.wave195.combinedRenderedEvidencePassCount)/$($freeP.renderedEvidence.wave195.combinedRenderedEvidenceCount) combined rendered evidence pass; whole-window $($freeP.renderedEvidence.wave195.wholeWindowPassCount)/$($freeP.renderedEvidence.wave195.wholeWindowScenarioCount) pass | $($freeP.nextSlice) |",
         "",
         "## Rendered Evidence Summary",
         "",
@@ -1067,6 +1149,7 @@ try {
         "",
         "FreeX Wave193 No Fill transition evidence: **$($freeX.renderedEvidence.physicalEvidence.wave193PopupTransitions.summary)**. Retained evidence includes **$($freeX.renderedEvidence.physicalEvidence.wave193EvidenceArtifactCount)/$($freeX.renderedEvidence.physicalEvidence.wave193EvidenceArtifactExpectedCount) artifacts** and **$($freeX.renderedEvidence.physicalEvidence.wave193EvidenceProvenanceFileCount)/9 provenance files**.",
         "FreeX Wave194 mixed-type evidence: **$($freeX.renderedEvidence.physicalEvidence.wave194.physicalPassed)/$($freeX.renderedEvidence.physicalEvidence.wave194.physicalTotal)** physical workflow, **$($freeX.renderedEvidence.physicalEvidence.wave194.focusedAvaloniaGuardPassed)/$($freeX.renderedEvidence.physicalEvidence.wave194.focusedAvaloniaGuardTotal)** Avalonia guards, **$($freeX.renderedEvidence.physicalEvidence.wave194.focusedPresentationPassed)/$($freeX.renderedEvidence.physicalEvidence.wave194.focusedPresentationTotal)** Presentation, and **$($freeX.renderedEvidence.physicalEvidence.wave194.focusedCoreIoPassed)/$($freeX.renderedEvidence.physicalEvidence.wave194.focusedCoreIoTotal)** Core.IO (Wave194 plus five foreground-capture guards); geometry $($freeX.renderedEvidence.physicalEvidence.wave194.geometry.bounds), click $($freeX.renderedEvidence.physicalEvidence.wave194.geometry.click), package readback remains exact.",
+        "FreeX Wave195 physical evidence: **$($freeX.renderedEvidence.physicalEvidence.wave195.physicalPassed)/$($freeX.renderedEvidence.physicalEvidence.wave195.physicalTotal)** production Docker/X11 sessions pass, with **$($freeX.renderedEvidence.physicalEvidence.wave195.evidenceArtifactCount)** manifest-listed artifacts, **$($freeX.renderedEvidence.physicalEvidence.wave195.screenshotCount)** screenshots, and **$($freeX.renderedEvidence.physicalEvidence.wave195.reloadWitnessPassed)/$($freeX.renderedEvidence.physicalEvidence.wave195.reloadWitnessTotal)** reload witnesses. This is bounded evidence for the named workflows and retained sessions, not exhaustive parity or WPF evidence.",
         "",
         "| App | Route coverage | Artifact coverage | Paired WPF/Avalonia evidence | Physical/no-COM limitation | Authoritative Microsoft Office baseline |",
         "|---|---|---|---|---|---|",
@@ -1076,24 +1159,14 @@ try {
         "",
         "## Integration Gates",
         "",
-        "Wave194's cumulative 582 app-slice count is **accepted**. The supplied Release, default-lane, and repository integration gates passed against tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``; independent review passed with no findings at integration head ``$wave194ReviewedIntegrationHead``. $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
+        "Wave195 current status is **pending/not accepted**. It records three app slices and cumulative 585 app slices (195 per app). Parent-run repository preflight, Release build, default non-UI lane, and integration review are still pending; no current Wave195 timing or pass is claimed. $($dashboard.integrationGateEvidence.gateBoundary)",
         "",
-        "- Initial independent review: $($dashboard.integrationGateEvidence.initialIndependentReview)",
+        "- Historical Wave194 acceptance: $($wave194History.acceptanceRefreshNote) $($wave194History.fullReleaseBuild) $($wave194History.defaultNonUiTestLane)",
+        "- Wave195 evidence: $($dashboard.integrationGateEvidence.currentEvidence)",
         "- Slice accounting: $($dashboard.integrationGateEvidence.sliceAccounting)",
-        "- Elapsed-time provenance: Release build MSBuild-retained ``Time Elapsed $($dashboard.integrationGateEvidence.fullReleaseBuildMsBuildElapsed)`` versus wrapper stopwatch ``$($dashboard.integrationGateEvidence.fullReleaseBuildWrapperElapsed)``; default lane wrapper stopwatch ``$($dashboard.integrationGateEvidence.defaultNonUiTestLaneWrapperElapsed)`` versus independently parsed 31-TRX timestamp span ``$($dashboard.integrationGateEvidence.defaultNonUiTestLaneTrxTimestampSpan)`` with duration ``$($dashboard.integrationGateEvidence.defaultNonUiTestLaneTrxDuration)``.",
-        "- Reintegration: $($dashboard.integrationGateEvidence.reintegration)",
-        "- Focused tests: $($dashboard.integrationGateEvidence.focusedTests)",
-        "- Initial reintegration preflight: $($dashboard.integrationGateEvidence.initialReintegrationPreflight)",
-        "- Review remediation: $($dashboard.integrationGateEvidence.reviewRemediation)",
-        "- Independent review: $($dashboard.integrationGateEvidence.independentReview)",
-        "- Repository preflight: $($dashboard.integrationGateEvidence.repositoryPreflight)",
-        "- Tested source commit: ``$($dashboard.integrationGateEvidence.testedSourceCommit)``",
-        "- Acceptance refresh: $($dashboard.integrationGateEvidence.acceptanceRefreshNote)",
-        "- Full Release build: $($dashboard.integrationGateEvidence.fullReleaseBuild)",
-        "- Final default non-UI test lane: $($dashboard.integrationGateEvidence.defaultNonUiTestLane)",
-        "- Initial default-lane result: $($dashboard.integrationGateEvidence.initialDefaultLane)",
-        "- Remediation: $($dashboard.integrationGateEvidence.sourceTestRemediation)",
-        "- Worker verification: $($dashboard.integrationGateEvidence.workerVerification)",
+        "- Pending gates: $($dashboard.integrationGateEvidence.pendingIntegrationGates -join ', ')",
+        "- Historical Wave194 reintegration: $($wave194History.reintegration)",
+        "- Historical Wave194 focused tests: $($wave194History.focusedTests)",
         "",
         "## FreeX Visual Review Queue",
         "",
@@ -1136,7 +1209,8 @@ try {
         '- `docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/manifest.json`',
         '- `docs/parity/avalonia-parity-wave194-freex-autofilter-mixed-type-20260823.md`',
         '- `docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/physical-result.json`',
-        '- `docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/manifest.json`',
+            '- `docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/manifest.json`',
+            '- `docs/parity/evidence/wave195-freex-autofilter-criteria-workflows-20260828/manifest.json`',
         '- `docs/parity/freew-command-inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json`',
@@ -1185,7 +1259,8 @@ try {
         '- `docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/references.json`',
         '- `docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/images.json`',
         '- `docs/parity/freep-wave194-deck17-slide02-topology-20260823.md`',
-        '- `docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json`'
+            '- `docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json`',
+            '- `docs/parity/avalonia-parity-wave195-cross-app-integration-20260828.md`'
     ) -join "`n"
     Set-Content -LiteralPath $tempMarkdownPath -Value ($md + "`n") -NoNewline -Encoding UTF8
 
