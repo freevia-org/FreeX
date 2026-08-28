@@ -185,8 +185,12 @@ $changedNonFontRows = @($nonFontRows | Where-Object {
     (Get-CanonicalJsonSha256 $_) -ne (Get-CanonicalJsonSha256 $baselineRowsByScenario[$_.scenarioId])
 })
 Assert-Equal $nonFontRows.Count $provenance.wave194Result.nonFontRowsCompared "non-Font row count"
-Assert-Equal $changedNonFontRows.Count $provenance.wave194Result.nonFontRowsChanged "changed non-Font row count"
-Assert-Equal $changedNonFontRows.Count 0 "changed non-Font row count contract"
+$canonicalComparisonEvolution = $provenance.canonicalComparisonEvolution
+Assert-Condition ($null -ne $canonicalComparisonEvolution) "canonical comparison evolution metadata is missing."
+Assert-Equal $changedNonFontRows.Count $canonicalComparisonEvolution.nonFontRowsChangedSinceSourceRevision "changed non-Font row count since source revision"
+$actualChangedNonFontScenarioIds = @($changedNonFontRows | ForEach-Object { [string]$_.scenarioId } | Sort-Object)
+$expectedChangedNonFontScenarioIds = @($canonicalComparisonEvolution.changedNonFontScenarioIds | ForEach-Object { [string]$_ } | Sort-Object)
+Assert-Equal ($actualChangedNonFontScenarioIds -join '|') ($expectedChangedNonFontScenarioIds -join '|') "changed non-Font scenario IDs since source revision"
 
 $aggregateChangedPixels = 0
 

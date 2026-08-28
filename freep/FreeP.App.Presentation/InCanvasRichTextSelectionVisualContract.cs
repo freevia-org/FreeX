@@ -19,6 +19,11 @@ public static class InCanvasRichTextSelectionVisualContract
     public const byte ForegroundBlue = 0xFF;
     public const byte ForegroundAlpha = 0xFF;
 
+    public const byte EditorBorderRed = 0x21;
+    public const byte EditorBorderGreen = 0x96;
+    public const byte EditorBorderBlue = 0xF3;
+    public const double EditorBorderThicknessDip = 1.5;
+
     // WPF composites the nominal selection brushes through SelectionOpacity.
     // Avalonia paints these shared 96-DPI realized colors directly because its
     // custom rich-text surface does not have an equivalent native selection layer.

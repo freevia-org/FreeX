@@ -50,4 +50,40 @@ public sealed class DialogTabChromeParityTests
             }
         }, CancellationToken.None);
     }
+
+    [Fact]
+    public async Task Shared_legal_notices_applies_the_WPF_selected_pane_trailing_edge_contract()
+    {
+        await Session.Dispatch(() =>
+        {
+            var presentation = new LegalNoticesDialogPresentation(
+                "Legal Notices",
+                [new LegalNoticeDocument("Legal Notices", "test.txt", "legal text")],
+                "Summary",
+                "Close",
+                "Help",
+                "Summary",
+                "Sections",
+                "Choose a section",
+                "Read-only text");
+            var dialog = new AvaloniaLegalNoticesDialog(presentation);
+            try
+            {
+                dialog.Show();
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var selectedPane = dialog.GetVisualDescendants()
+                    .OfType<ContentPresenter>()
+                    .Single(presenter => presenter.Name == "PART_SelectedContentHost");
+
+                selectedPane.Margin.Should().Be(new Thickness(0, -5, 1, 0));
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
 }

@@ -159,6 +159,16 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
         Children.Add(_richTextView);
         Children.Add(InputBox);
+        Children.Add(new Border
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(
+                InCanvasRichTextSelectionVisualContract.EditorBorderRed,
+                InCanvasRichTextSelectionVisualContract.EditorBorderGreen,
+                InCanvasRichTextSelectionVisualContract.EditorBorderBlue)),
+            BorderThickness = new Thickness(
+                InCanvasRichTextSelectionVisualContract.EditorBorderThicknessDip),
+            IsHitTestVisible = false,
+        });
 
         InputBox.TextChanged += OnInputTextChanged;
         InputBox.PropertyChanged += (_, args) =>
