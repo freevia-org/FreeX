@@ -1,5 +1,7 @@
 using System.IO;
+using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -24,6 +26,16 @@ public sealed class CrossAppParityDashboardTests
         hostGuard.CombinedOutput.Should().Contain("generator -Check passed under pwsh");
         hostGuard.CombinedOutput.Should().Contain("generator -Check passed under powershell.exe");
 
+        var acceptanceRefresh = PowerShellScriptRunner.RunToolScript(
+            "Generate-CrossAppParityDashboard.ps1",
+            repoRoot,
+            "-AcceptanceRefresh",
+            "-AcceptanceRefreshTestedSourceCommit",
+            "HEAD");
+        acceptanceRefresh.ExitCode.Should().Be(0, acceptanceRefresh.CombinedOutput);
+        acceptanceRefresh.CombinedOutput.Should().Contain(
+            "Acceptance refresh real-repository boundary passed");
+
         using var json = JsonDocument.Parse(
             File.ReadAllText(Path.Combine(repoRoot, "docs", "parity", "avalonia-wpf-cross-app-dashboard.json")));
         var root = json.RootElement;
@@ -33,14 +45,17 @@ public sealed class CrossAppParityDashboardTests
         root.GetProperty("cumulativeAppSlices").GetInt32().Should().Be(585);
         root.GetProperty("cumulativeAppSlicesStatus").GetString().Should().Be("pending-integration-gates");
         root.GetProperty("integrationGateStatus").GetString().Should().Be("pending");
-        root.GetProperty("pendingIntegrationGates").GetArrayLength().Should().Be(4);
+        root.GetProperty("pendingIntegrationGates").GetArrayLength().Should().Be(2);
 
         var integrationEvidence = root.GetProperty("integrationGateEvidence");
         integrationEvidence.GetProperty("status").GetString().Should().Be("pending");
         integrationEvidence.GetProperty("sliceAccounting").GetString().Should().Be(
             "Wave 195 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 585 app slices (195 per app).");
         integrationEvidence.GetProperty("gateBoundary").GetString().Should().Contain("pending and not accepted");
-        integrationEvidence.GetProperty("gateBoundary").GetString().Should().Contain("no timings or passing results");
+        integrationEvidence.GetProperty("gateBoundary").GetString().Should().Contain("final exact-head acceptance facts");
+        integrationEvidence.GetProperty("localGatePolicy").GetString().Should().Contain("repository preflight and the full Release build");
+        integrationEvidence.GetProperty("localGatePolicy").GetString().Should().Contain("delegated to GitHub");
+        integrationEvidence.GetProperty("delegatedGitHubGates").GetArrayLength().Should().Be(2);
 
         var historicalWave194 = integrationEvidence.GetProperty("historicalWave194Acceptance");
         historicalWave194.GetProperty("testedSourceCommit").GetString().Should().Be("f7cbd8cbe3f1ac5fbaf14da1c2cacc1a3fb7bf3f");
@@ -103,10 +118,54 @@ public sealed class CrossAppParityDashboardTests
         freeWWave195.GetProperty("passCount").GetInt32().Should().Be(80);
         freeWWave195.GetProperty("genuineVisualMismatchCount").GetInt32().Should().Be(141);
         freeWWave195.GetProperty("avaloniaExtensionCount").GetInt32().Should().Be(70);
-        freeWWave195.GetProperty("legalNoticesBaselineChangedPixels").GetInt32().Should().Be(324936);
-        freeWWave195.GetProperty("legalNoticesChangedPixels").GetInt32().Should().Be(324253);
-        freeWWave195.GetProperty("legalNoticesAggregateDelta").GetInt32().Should().Be(-683);
-        freeWWave195.GetProperty("nonLegalRowsStructurallyUnchanged").GetInt32().Should().Be(285);
+
+        using var freeWComparison = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(repoRoot, "docs", "parity", "freew-dialog-harness", "freew_dialog_visual_comparison.json")));
+        var comparisonRows = freeWComparison.RootElement.GetProperty("rows").EnumerateArray().ToArray();
+        var legalRows = comparisonRows
+            .Where(row => row.GetProperty("scenarioId").GetString()!.StartsWith("legal-notices.", StringComparison.Ordinal))
+            .ToArray();
+        var note = File.ReadAllText(Path.Combine(repoRoot, "freew", "docs", "parity", "avalonia-parity-wave195-freew-legal-notices-20260828.md"));
+        var baselinePattern = new Regex(
+            "^\\|\\s*`(?<id>[^`]+)`\\s*\\|\\s*(?<before>[\\d,]+)\\s*/[^|]+\\|\\s*(?<after>[\\d,]+)\\s*/[^|]+\\|\\s*(?<delta>[+-]?[\\d,]+)\\s*\\|\\s*$",
+            RegexOptions.Multiline);
+        var baselineById = baselinePattern.Matches(note)
+            .ToDictionary(
+                match => match.Groups["id"].Value,
+                match => (
+                    Before: int.Parse(match.Groups["before"].Value.Replace(",", "", StringComparison.Ordinal)),
+                    After: int.Parse(match.Groups["after"].Value.Replace(",", "", StringComparison.Ordinal)),
+                    Delta: int.Parse(match.Groups["delta"].Value.Replace(",", "", StringComparison.Ordinal))));
+        comparisonRows.Length.Should().Be(freeWWave195.GetProperty("catalogRowCount").GetInt32());
+        comparisonRows.Count(row => row.GetProperty("classification").GetString() == "pass")
+            .Should().Be(freeWWave195.GetProperty("passCount").GetInt32());
+        comparisonRows.Count(row => row.GetProperty("classification").GetString() == "genuine-visual-mismatch")
+            .Should().Be(freeWWave195.GetProperty("genuineVisualMismatchCount").GetInt32());
+        comparisonRows.Count(row => row.GetProperty("classification").GetString() == "avalonia-extension")
+            .Should().Be(freeWWave195.GetProperty("avaloniaExtensionCount").GetInt32());
+        legalRows.Length.Should().Be(baselineById.Count);
+        foreach (var row in legalRows)
+        {
+            var scenarioId = row.GetProperty("scenarioId").GetString()!;
+            var currentChangedPixels = row.GetProperty("metrics").GetProperty("changedPixels").GetInt32();
+            currentChangedPixels.Should().Be(baselineById[scenarioId].After);
+            (currentChangedPixels - baselineById[scenarioId].Before)
+                .Should().Be(baselineById[scenarioId].Delta);
+        }
+        var expectedBaselineChangedPixels = legalRows.Sum(row => baselineById[row.GetProperty("scenarioId").GetString()!].Before);
+        var expectedChangedPixels = legalRows.Sum(row => row.GetProperty("metrics").GetProperty("changedPixels").GetInt32());
+        var expectedAggregateDelta = legalRows.Sum(row => row.GetProperty("metrics").GetProperty("changedPixels").GetInt32()
+            - baselineById[row.GetProperty("scenarioId").GetString()!].Before);
+        expectedBaselineChangedPixels.Should().Be(freeWWave195.GetProperty("legalNoticesBaselineChangedPixels").GetInt32());
+        expectedChangedPixels.Should().Be(freeWWave195.GetProperty("legalNoticesChangedPixels").GetInt32());
+        expectedAggregateDelta.Should().Be(freeWWave195.GetProperty("legalNoticesAggregateDelta").GetInt32());
+        baselineById.Values.Sum(value => value.Delta)
+            .Should().Be(freeWWave195.GetProperty("legalNoticesAggregateDelta").GetInt32());
+        legalRows.Sum(row => row.GetProperty("metrics").GetProperty("changedPixels").GetInt32()
+            - baselineById[row.GetProperty("scenarioId").GetString()!].Before)
+            .Should().Be(expectedAggregateDelta);
+        (comparisonRows.Length - legalRows.Length)
+            .Should().Be(freeWWave195.GetProperty("nonLegalRowsStructurallyUnchanged").GetInt32());
 
         var freeP = root.GetProperty("apps")[2];
         freeP.GetProperty("commandInventory").GetProperty("totalCommands").GetInt32().Should().Be(719);
@@ -141,7 +200,7 @@ public sealed class CrossAppParityDashboardTests
         markdown.Should().Contain("These are coverage/triage metrics, not a visual-parity claim.");
         markdown.Should().Contain("Wave195 current status is **pending/not accepted**");
         markdown.Should().Contain("cumulative 585 app slices (195 per app)");
-        markdown.Should().Contain("324936 to 324253");
+        markdown.Should().Contain($"{expectedBaselineChangedPixels} to {expectedChangedPixels}");
         markdown.Should().Contain("0.1809518682");
         markdown.Should().Contain("## FreeX Visual Review Queue");
         markdown.Should().Contain("equal dimensions or paired ids do not establish visual parity.");

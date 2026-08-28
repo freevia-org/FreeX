@@ -1,7 +1,10 @@
 param(
     [string]$JsonPath = "docs/parity/avalonia-wpf-cross-app-dashboard.json",
     [string]$MarkdownPath = "docs/parity/avalonia-wpf-cross-app-dashboard.md",
-    [switch]$Check
+    [switch]$Check,
+    [switch]$AcceptanceRefresh,
+    [string]$AcceptanceRefreshTestedSourceCommit,
+    [string]$AcceptanceRefreshHeadRef = "HEAD"
 )
 
 Set-StrictMode -Version Latest
@@ -26,6 +29,17 @@ if ($PSVersionTable.PSEdition -eq "Desktop" -and $currentCanonicalHostMarker -ne
     }
     if ($PSBoundParameters.ContainsKey("Check")) {
         $forwardedArguments += "-Check:$([bool]$PSBoundParameters["Check"])"
+    }
+    if ($PSBoundParameters.ContainsKey("AcceptanceRefresh")) {
+        $forwardedArguments += "-AcceptanceRefresh:$([bool]$PSBoundParameters["AcceptanceRefresh"])"
+    }
+    if ($PSBoundParameters.ContainsKey("AcceptanceRefreshTestedSourceCommit")) {
+        $forwardedArguments += "-AcceptanceRefreshTestedSourceCommit"
+        $forwardedArguments += [string]$PSBoundParameters["AcceptanceRefreshTestedSourceCommit"]
+    }
+    if ($PSBoundParameters.ContainsKey("AcceptanceRefreshHeadRef")) {
+        $forwardedArguments += "-AcceptanceRefreshHeadRef"
+        $forwardedArguments += [string]$PSBoundParameters["AcceptanceRefreshHeadRef"]
     }
 
     $previousCanonicalHostMarker = $currentCanonicalHostMarker
@@ -138,6 +152,79 @@ function Get-ManifestFileCount {
     )
 
     return @($Manifest.files | Where-Object { [string]$_.path -like $Pattern }).Count
+}
+
+function Get-FreeWWave195Metrics {
+    param(
+        [Parameter(Mandatory = $true)]$ComparisonRows,
+        [Parameter(Mandatory = $true)][string]$EvidenceNote
+    )
+
+    $legalRows = @($ComparisonRows | Where-Object { [string]$_.scenarioId -like "legal-notices.*" })
+    if ($legalRows.Count -eq 0) {
+        throw "FreeW Wave195 canonical comparison contains no Legal Notices rows."
+    }
+
+    $rowPattern = '(?m)^\|\s*`(?<scenarioId>[^`]+)`\s*\|\s*(?<before>[\d,]+)\s*/[^|]+\|\s*(?<after>[\d,]+)\s*/[^|]+\|\s*(?<delta>[+-]?[\d,]+)\s*\|\s*$'
+    $baselineRows = @{}
+    foreach ($match in [regex]::Matches($EvidenceNote, $rowPattern)) {
+        $scenarioId = [string]$match.Groups["scenarioId"].Value
+        $baselineRows[$scenarioId] = [ordered]@{
+            before = [int]($match.Groups["before"].Value -replace ',', '')
+            after = [int]($match.Groups["after"].Value -replace ',', '')
+            delta = [int]($match.Groups["delta"].Value -replace ',', '')
+        }
+    }
+
+    if ($baselineRows.Count -ne $legalRows.Count) {
+        throw "FreeW Wave195 Legal Notices baseline row count ($($baselineRows.Count)) does not match the canonical comparison row count ($($legalRows.Count))."
+    }
+
+    $baselineChangedPixels = 0
+    $changedPixels = 0
+    $aggregateDelta = 0
+    foreach ($row in $legalRows) {
+        $scenarioId = [string]$row.scenarioId
+        if (-not $baselineRows.ContainsKey($scenarioId)) {
+            throw "FreeW Wave195 Legal Notices baseline is missing canonical row '$scenarioId'."
+        }
+
+        $baseline = $baselineRows[$scenarioId]
+        $currentChangedPixels = [int]$row.metrics.changedPixels
+        if ($currentChangedPixels -ne $baseline.after) {
+            throw "FreeW Wave195 Legal Notices current metric for '$scenarioId' ($currentChangedPixels) disagrees with the canonical evidence note ($($baseline.after))."
+        }
+        $derivedDelta = $currentChangedPixels - [int]$baseline.before
+        if ($derivedDelta -ne [int]$baseline.delta) {
+            throw "FreeW Wave195 Legal Notices delta for '$scenarioId' ($derivedDelta) disagrees with the canonical evidence note ($($baseline.delta))."
+        }
+
+        $baselineChangedPixels += [int]$baseline.before
+        $changedPixels += $currentChangedPixels
+        $aggregateDelta += $derivedDelta
+    }
+
+    $nonLegalRows = @($ComparisonRows | Where-Object { [string]$_.scenarioId -notlike "legal-notices.*" })
+    $unchangedMatch = [regex]::Match($EvidenceNote, '(?m)^All\s+(?<count>[\d,]+)\s+non-`legal-notices\.\*` rows were structurally unchanged\.')
+    if (-not $unchangedMatch.Success) {
+        throw "FreeW Wave195 evidence note is missing the canonical non-Legal row stability statement."
+    }
+    $documentedNonLegalRows = [int]($unchangedMatch.Groups["count"].Value -replace ',', '')
+    if ($documentedNonLegalRows -ne $nonLegalRows.Count) {
+        throw "FreeW Wave195 non-Legal row count ($($nonLegalRows.Count)) disagrees with the canonical evidence note ($documentedNonLegalRows)."
+    }
+
+    return [ordered]@{
+        catalogRowCount = $ComparisonRows.Count
+        passCount = @($ComparisonRows | Where-Object { $_.classification -eq "pass" }).Count
+        genuineVisualMismatchCount = @($ComparisonRows | Where-Object { $_.classification -eq "genuine-visual-mismatch" }).Count
+        avaloniaExtensionCount = @($ComparisonRows | Where-Object { $_.classification -eq "avalonia-extension" }).Count
+        legalNoticesStateCount = $legalRows.Count
+        legalNoticesBaselineChangedPixels = $baselineChangedPixels
+        legalNoticesChangedPixels = $changedPixels
+        legalNoticesAggregateDelta = $aggregateDelta
+        nonLegalRowsStructurallyUnchanged = $nonLegalRows.Count
+    }
 }
 
 function Get-ResidualById {
@@ -260,6 +347,7 @@ try {
     $freew = Read-ToolJson -Path "docs/parity/freew-command-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
     $freeWRouteInventory = Read-ToolJson -Path "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
     $freeWVisualComparison = Read-ToolJson -Path "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freeWWave195EvidenceNote = Get-Content -LiteralPath (Join-Path $repoRoot "freew/docs/parity/avalonia-parity-wave195-freew-legal-notices-20260828.md") -Raw
     $freeWFontProvenance = Read-ToolJson -Path "docs/parity/freew-dialog-harness/freew_font_visual_provenance.json" -RepoRoot $repoRoot -MissingMessage "Required FreeW Font provenance is missing"
     if ($null -eq $freeWVisualComparison.scope -or [string]$freeWVisualComparison.scope.kind -ne "canonical-inputs-only") {
         throw "FreeW visual comparison must declare canonical-inputs-only scope before the cross-app dashboard can be generated."
@@ -568,6 +656,7 @@ try {
     $freeWPairedComparisonRows = @($freeWComparisonRows | Where-Object { $_.captureStatus -eq "captured/captured" })
     $freeWAvaloniaExtensionRows = @($freeWComparisonRows | Where-Object { $_.classification -eq "avalonia-extension" })
     $freeWStateNotApplicableRows = @($freeWComparisonRows | Where-Object { $_.classification -eq "state-not-applicable" })
+    $freeWWave195Metrics = Get-FreeWWave195Metrics -ComparisonRows $freeWComparisonRows -EvidenceNote $freeWWave195EvidenceNote
     $freeWPassCount = @($freeWPairedComparisonRows | Where-Object { $_.classification -eq "pass" }).Count
     $freeWVisualMismatchCount = @($freeWPairedComparisonRows | Where-Object { $_.classification -eq "genuine-visual-mismatch" }).Count
     $freeWClassificationTotals = "$freeWVisualMismatchCount mismatch / $freeWPassCount pass / $($freeWAvaloniaExtensionRows.Count) extension"
@@ -636,17 +725,17 @@ try {
             claimBoundary = "Canonical FreeW Font-dialog WPF/Avalonia evidence only; remaining text/control raster differences do not establish Word visual parity."
         }
         wave195 = [ordered]@{
-            catalogRowCount = 291
-            passCount = 80
-            genuineVisualMismatchCount = 141
-            avaloniaExtensionCount = 70
-            legalNoticesStateCount = 6
-            legalNoticesBaselineChangedPixels = 324936
-            legalNoticesChangedPixels = 324253
-            legalNoticesAggregateDelta = -683
-            nonLegalRowsStructurallyUnchanged = 285
-            correction = "Fresh current-source Legal Notices evidence is refreshed for six states; aggregate changed pixels fall from 324936 to 324253, a delta of -683, while 285 non-Legal rows remain structurally unchanged."
-            classificationBoundary = "The canonical catalog remains 291 rows: 80 pass, 141 genuine visual mismatches, and 70 Avalonia extensions."
+            catalogRowCount = $freeWWave195Metrics.catalogRowCount
+            passCount = $freeWWave195Metrics.passCount
+            genuineVisualMismatchCount = $freeWWave195Metrics.genuineVisualMismatchCount
+            avaloniaExtensionCount = $freeWWave195Metrics.avaloniaExtensionCount
+            legalNoticesStateCount = $freeWWave195Metrics.legalNoticesStateCount
+            legalNoticesBaselineChangedPixels = $freeWWave195Metrics.legalNoticesBaselineChangedPixels
+            legalNoticesChangedPixels = $freeWWave195Metrics.legalNoticesChangedPixels
+            legalNoticesAggregateDelta = $freeWWave195Metrics.legalNoticesAggregateDelta
+            nonLegalRowsStructurallyUnchanged = $freeWWave195Metrics.nonLegalRowsStructurallyUnchanged
+            correction = "Fresh current-source Legal Notices evidence is refreshed for $($freeWWave195Metrics.legalNoticesStateCount) states; aggregate changed pixels fall from $($freeWWave195Metrics.legalNoticesBaselineChangedPixels) to $($freeWWave195Metrics.legalNoticesChangedPixels), a delta of $($freeWWave195Metrics.legalNoticesAggregateDelta), while $($freeWWave195Metrics.nonLegalRowsStructurallyUnchanged) non-Legal rows remain structurally unchanged."
+            classificationBoundary = "The canonical catalog remains $($freeWWave195Metrics.catalogRowCount) rows: $($freeWWave195Metrics.passCount) pass, $($freeWWave195Metrics.genuineVisualMismatchCount) genuine visual mismatches, and $($freeWWave195Metrics.avaloniaExtensionCount) Avalonia extensions."
             claimBoundary = "Canonical FreeW WPF/Avalonia evidence only; the Legal Notices improvement does not establish Word visual parity."
         }
         routeCoverage = [ordered]@{
@@ -737,7 +826,7 @@ try {
             classifiedRows = $true
         }
         renderedEvidence = $freeWRenderedEvidence
-        nextSlice = "Wave195 keeps the canonical FreeW catalog at 291 rows: 80 pass, 141 genuine visual mismatches, and 70 Avalonia extensions. The six-state Legal Notices aggregate improves from 324936 to 324253 changed pixels (delta -683), with 285 non-Legal rows structurally unchanged. Continue with the remaining native checkbox/glyph raster tail, tab-template edges, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
+        nextSlice = "Wave195 keeps the canonical FreeW catalog at $($freeWWave195Metrics.catalogRowCount) rows: $($freeWWave195Metrics.passCount) pass, $($freeWWave195Metrics.genuineVisualMismatchCount) genuine visual mismatches, and $($freeWWave195Metrics.avaloniaExtensionCount) Avalonia extensions. The $($freeWWave195Metrics.legalNoticesStateCount)-state Legal Notices aggregate improves from $($freeWWave195Metrics.legalNoticesBaselineChangedPixels) to $($freeWWave195Metrics.legalNoticesChangedPixels) changed pixels (delta $($freeWWave195Metrics.legalNoticesAggregateDelta)), with $($freeWWave195Metrics.nonLegalRowsStructurallyUnchanged) non-Legal rows structurally unchanged. Continue with the remaining native checkbox/glyph raster tail, tab-template edges, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
     }
 
     $freePExternalPowerPointResidual = Get-ResidualById -Residuals $freePRenderParity.Residuals -Id "external-powerpoint-baseline"
@@ -1008,13 +1097,13 @@ try {
         status = "pending"
         pendingIntegrationGates = @(
             "repository-preflight",
-            "full-release-build",
-            "default-non-ui-test-lane",
-            "integration-review"
+            "full-release-build"
         )
         sliceAccounting = "Wave 195 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 585 app slices (195 per app)."
         currentEvidence = "Wave195 evidence is recorded from committed app-specific artifacts and remains separate from the parent-run integration gates."
-        gateBoundary = "Wave195 is pending and not accepted until the parent runs and records the integration gates; no timings or passing results are inferred here."
+        localGatePolicy = "Per AGENTS.md, repository preflight and the full Release build are the local branch gates. The manifest-driven integration suite and UI/render/release-only gates are delegated to GitHub after main is pushed."
+        delegatedGitHubGates = @("manifest-driven-integration-suite", "ui-render-release-workflow")
+        gateBoundary = "Wave195 is pending and not accepted until the parent supplies final exact-head acceptance facts for the local and delegated gates; no timings or passing results are inferred here."
         historicalWave194Acceptance = $wave194IntegrationGateEvidence
     }
 
@@ -1160,7 +1249,7 @@ try {
         "",
         "## Integration Gates",
         "",
-        "Wave195 current status is **pending/not accepted**. It records three app slices and cumulative 585 app slices (195 per app). Parent-run repository preflight, Release build, default non-UI lane, and integration review are still pending; no current Wave195 timing or pass is claimed. $($dashboard.integrationGateEvidence.gateBoundary)",
+        "Wave195 current status is **pending/not accepted**. It records three app slices and cumulative 585 app slices (195 per app). Per AGENTS.md, repository preflight and the full Release build are the local branch gates; the manifest-driven integration suite and UI/render/release-only gates are delegated to GitHub. No current Wave195 timing or pass is claimed. $($dashboard.integrationGateEvidence.gateBoundary)",
         "",
         "- Historical Wave194 acceptance: $($wave194History.acceptanceRefreshNote) $($wave194History.fullReleaseBuild) $($wave194History.defaultNonUiTestLane)",
         "- Wave195 evidence: $($dashboard.integrationGateEvidence.currentEvidence)",
@@ -1273,6 +1362,25 @@ try {
         Copy-Item -LiteralPath $tempJsonPath -Destination $resolvedJsonPath -Force
         Copy-Item -LiteralPath $tempMarkdownPath -Destination $resolvedMarkdownPath -Force
         Write-Host "Wrote $JsonPath and $MarkdownPath."
+    }
+
+    if ($AcceptanceRefresh) {
+        if ([string]::IsNullOrWhiteSpace($AcceptanceRefreshTestedSourceCommit)) {
+            throw "-AcceptanceRefresh requires -AcceptanceRefreshTestedSourceCommit; the parent must supply the exact tested source head."
+        }
+
+        $boundaryScriptPath = Join-Path $PSScriptRoot "Test-CrossAppParityDashboard.ps1"
+        $boundaryHost = (Get-Command pwsh -ErrorAction Stop).Source
+        $boundaryOutput = @(& $boundaryHost -NoProfile -ExecutionPolicy Bypass -File $boundaryScriptPath `
+            -AcceptanceRefresh `
+            -TestedSourceCommit $AcceptanceRefreshTestedSourceCommit `
+            -HeadRef $AcceptanceRefreshHeadRef 2>&1)
+        $boundaryExitCode = $LASTEXITCODE
+        if ($boundaryExitCode -ne 0) {
+            throw "Cross-app dashboard acceptance refresh boundary failed: $($boundaryOutput -join "`n")"
+        }
+
+        $boundaryOutput | ForEach-Object { Write-Host $_ }
     }
 }
 finally {

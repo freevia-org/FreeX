@@ -1,6 +1,9 @@
 param(
     [string]$DashboardPath = "docs/parity/avalonia-wpf-cross-app-dashboard.json",
-    [switch]$BoundarySelfTest
+    [switch]$BoundarySelfTest,
+    [switch]$AcceptanceRefresh,
+    [string]$TestedSourceCommit,
+    [string]$HeadRef = "HEAD"
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,7 +15,6 @@ $acceptanceRefreshTestedSourceCommit = "f7cbd8cbe3f1ac5fbaf14da1c2cacc1a3fb7bf3f
 $acceptanceRefreshReviewedIntegrationHead = "2ee42a45efd651ad9ad1c015403d788570ae02d9"
 $acceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 $acceptanceRefreshAllowedPaths = @(
-    "docs/parity/avalonia-parity-wave195-cross-app-integration-20260828.md",
     "docs/parity/avalonia-wpf-cross-app-dashboard.json",
     "docs/parity/avalonia-wpf-cross-app-dashboard.md",
     "tests/FreeX.App.Host.Tests/CrossAppParityDashboardTests.cs",
@@ -50,17 +52,43 @@ function Test-AcceptanceRefreshGitBoundary {
 
     $changedPathOutput = @(& git -C $RepositoryRoot diff --name-only --no-renames $TestedSourceCommit $HeadRef 2>&1)
     if ($LASTEXITCODE -ne 0) {
-        throw "Acceptance boundary could not obtain changed paths for '$TestedSourceCommit..$HeadRef': $($changedPathOutput -join ' ')"
+        throw "Acceptance boundary could not obtain committed changed paths for '$TestedSourceCommit..$HeadRef': $($changedPathOutput -join ' ')"
+    }
+
+    # Refreshes are often generated before their documentation commit exists.
+    # Include all working-tree forms so an uncommitted out-of-scope edit cannot
+    # bypass the same allowlist enforced for committed refresh history.
+    $workingTreePathOutput = @(
+        @(& git -C $RepositoryRoot diff --name-only --no-renames 2>$null)
+        @(& git -C $RepositoryRoot diff --cached --name-only --no-renames 2>$null)
+        @(& git -C $RepositoryRoot ls-files --others --exclude-standard 2>$null)
+    )
+    if ($LASTEXITCODE -ne 0) {
+        throw "Acceptance boundary could not obtain working-tree changed paths: $($workingTreePathOutput -join ' ')"
     }
 
     $normalizedAllowedPaths = @($AllowedPaths | ForEach-Object { Normalize-GitPath $_ } | Sort-Object -Unique)
-    $changedPaths = @($changedPathOutput | ForEach-Object { Normalize-GitPath $_ } | Where-Object { $_ })
+    $changedPaths = @($changedPathOutput + $workingTreePathOutput | ForEach-Object { Normalize-GitPath $_ } | Where-Object { $_ } | Sort-Object -Unique)
     $unexpectedPaths = @($changedPaths | Where-Object { $normalizedAllowedPaths -notcontains $_ } | Sort-Object -Unique)
     if ($unexpectedPaths.Count -gt 0) {
         throw "Acceptance boundary changed paths outside the exact allowlist: $($unexpectedPaths -join ', '). Allowed paths: $($normalizedAllowedPaths -join ', ')."
     }
 
     return $changedPaths
+}
+
+function Invoke-RealAcceptanceRefreshBoundary {
+    if ([string]::IsNullOrWhiteSpace($TestedSourceCommit)) {
+        throw "-AcceptanceRefresh requires -TestedSourceCommit; the parent must supply the exact tested source head."
+    }
+
+    $changedPaths = @(Test-AcceptanceRefreshGitBoundary `
+        -RepositoryRoot $repoRoot `
+        -TestedSourceCommit $TestedSourceCommit `
+        -AllowedPaths $acceptanceRefreshAllowedPaths `
+        -HeadRef $HeadRef)
+
+    Write-Host "Acceptance refresh real-repository boundary passed: tested source '$TestedSourceCommit', head '$HeadRef', $($changedPaths.Count) changed paths within the exact allowlist."
 }
 
 function Invoke-AcceptanceBoundaryGit {
@@ -102,6 +130,10 @@ function Invoke-AcceptanceBoundaryMutationSelfTest {
         $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("commit", "-q", "-m", "acceptance refresh")
 
         $null = Test-AcceptanceRefreshGitBoundary -RepositoryRoot $fixturePath -TestedSourceCommit $testedCommit -AllowedPaths $acceptanceRefreshAllowedPaths
+
+        Set-Content -LiteralPath (Join-Path $fixturePath $acceptanceRefreshAllowedPaths[0]) -Value "working-tree acceptance" -NoNewline
+        $null = Test-AcceptanceRefreshGitBoundary -RepositoryRoot $fixturePath -TestedSourceCommit $testedCommit -AllowedPaths $acceptanceRefreshAllowedPaths
+        Remove-Item -LiteralPath (Join-Path $fixturePath $acceptanceRefreshAllowedPaths[0]) -Force
 
         Set-Content -LiteralPath (Join-Path $fixturePath "unexpected.txt") -Value "unexpected" -NoNewline
         $null = Invoke-AcceptanceBoundaryGit -RepositoryRoot $fixturePath -Arguments @("add", "unexpected.txt")
@@ -213,6 +245,11 @@ if ($BoundarySelfTest) {
     return
 }
 
+if ($AcceptanceRefresh) {
+    Invoke-RealAcceptanceRefreshBoundary
+    return
+}
+
 Test-CrossAppDashboardGeneratorHosts
 
 $resolvedDashboardPath = Resolve-ToolRepoPath -Path $DashboardPath -RepoRoot $repoRoot
@@ -223,10 +260,12 @@ Assert-DashboardCondition ($dashboard.wave -eq 195) "Cross-app dashboard must de
 Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 585) "Wave195 cumulative app-slice count must be 585."
 Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "pending-integration-gates") "Wave195 app-slice count must remain pending until integration gates run."
 Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "pending") "Wave195 integration gates must remain pending."
-Assert-DashboardCondition (@($dashboard.pendingIntegrationGates).Count -eq 4) "Wave195 must retain all four pending integration gates."
+Assert-DashboardCondition (@($dashboard.pendingIntegrationGates).Count -eq 2) "Wave195 must retain the two local branch gates."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.status -eq "pending") "Wave195 integration evidence must be pending."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sliceAccounting -eq "Wave 195 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 585 app slices (195 per app).") "Wave195 slice accounting must be exact."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.gateBoundary -match "pending and not accepted.*no timings or passing results") "Wave195 gate boundary must not invent acceptance results."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.gateBoundary -match "pending and not accepted.*final exact-head acceptance facts") "Wave195 gate boundary must not invent acceptance results."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.localGatePolicy -match "repository preflight and the full Release build.*delegated to GitHub") "Wave195 gate policy must match AGENTS.md."
+Assert-DashboardCondition (@($dashboard.integrationGateEvidence.delegatedGitHubGates).Count -eq 2) "Wave195 delegated GitHub gates must remain explicit."
 $historicalWave194 = $dashboard.integrationGateEvidence.historicalWave194Acceptance
 Assert-DashboardCondition ($null -ne $historicalWave194) "Wave194 acceptance history must remain available."
 Assert-DashboardCondition ([string]$historicalWave194.testedSourceCommit -eq $acceptanceRefreshTestedSourceCommit) "Wave194 historical evidence must name tested source commit $acceptanceRefreshTestedSourceCommit."
@@ -408,9 +447,12 @@ Assert-DashboardCondition ($freeW.renderedEvidence.wave194.aggregateDelta -eq -5
 Assert-DashboardCondition ($freeW.renderedEvidence.wave194.changedPixelsByState.initial -eq 10599 -and $freeW.renderedEvidence.wave194.changedPixelsByState.populated -eq 10756 -and $freeW.renderedEvidence.wave194.changedPixelsByState.validationError -eq 10957) "FreeW Wave194 state changed-pixel counts must remain exact."
 Assert-DashboardCondition ($freeW.renderedEvidence.wave194.nonFontRowsCompared -eq 288 -and $freeW.renderedEvidence.wave194.nonFontRowsChanged -eq 0 -and [string]$freeW.renderedEvidence.wave194.paintedBounds -eq "421 x 321") "FreeW Wave194 non-Font stability and bounds must remain exact."
 Assert-DashboardCondition ([string]$freeW.renderedEvidence.wave194.correction -match "#C8C8C8") "FreeW Wave194 correction must record the WPF-style action border."
-Assert-DashboardCondition ($freeW.renderedEvidence.wave195.catalogRowCount -eq 291 -and $freeW.renderedEvidence.wave195.passCount -eq 80 -and $freeW.renderedEvidence.wave195.genuineVisualMismatchCount -eq 141 -and $freeW.renderedEvidence.wave195.avaloniaExtensionCount -eq 70) "FreeW Wave195 catalog counts must remain 291/80/141/70."
-Assert-DashboardCondition ($freeW.renderedEvidence.wave195.legalNoticesBaselineChangedPixels -eq 324936 -and $freeW.renderedEvidence.wave195.legalNoticesChangedPixels -eq 324253 -and $freeW.renderedEvidence.wave195.legalNoticesAggregateDelta -eq -683) "FreeW Wave195 Legal Notices pixel delta must remain exact."
-Assert-DashboardCondition ($freeW.renderedEvidence.wave195.nonLegalRowsStructurallyUnchanged -eq 285) "FreeW Wave195 must retain 285 unchanged non-Legal rows."
+$freeWWave195 = $freeW.renderedEvidence.wave195
+Assert-DashboardCondition ($freeWWave195.catalogRowCount -eq $freeWArtifacts.evidenceRowCount) "FreeW Wave195 catalog count must equal the canonical evidence row count."
+Assert-DashboardCondition (($freeWWave195.passCount + $freeWWave195.genuineVisualMismatchCount + $freeWWave195.avaloniaExtensionCount) -eq $freeWWave195.catalogRowCount) "FreeW Wave195 classifications must partition the canonical catalog."
+Assert-DashboardCondition ($freeWWave195.legalNoticesStateCount -gt 0) "FreeW Wave195 must retain canonical Legal Notices states."
+Assert-DashboardCondition ($freeWWave195.legalNoticesChangedPixels - $freeWWave195.legalNoticesBaselineChangedPixels -eq $freeWWave195.legalNoticesAggregateDelta) "FreeW Wave195 Legal Notices delta must be derived from before/after metrics."
+Assert-DashboardCondition ($freeWWave195.nonLegalRowsStructurallyUnchanged + $freeWWave195.legalNoticesStateCount -eq $freeWWave195.catalogRowCount) "FreeW Wave195 row counts must partition Legal Notices and non-Legal rows."
 Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.status -eq "no-runtime-change-retained") "FreeP Wave193 must retain the no-runtime-change result."
 Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.retainedRowCount -eq 53) "FreeP Wave193 retained row count must remain 53."
 Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.retainedOfficeReferenceCount -eq 53) "FreeP Wave193 retained Office reference count must remain 53."
