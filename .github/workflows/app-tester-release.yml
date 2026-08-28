@@ -493,6 +493,8 @@ jobs:
           name: tester-FreeSuite-${{ inputs.release_version }}-${{ matrix.runtime }}
           path: |
             artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}-*
+            artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json
+            artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json.sha256
             artifacts/suite/FreeX-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
             artifacts/suite/FreeW-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
             artifacts/suite/FreeP-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
