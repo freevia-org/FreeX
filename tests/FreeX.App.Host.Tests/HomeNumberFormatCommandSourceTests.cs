@@ -1,4 +1,6 @@
 using FluentAssertions;
+using FreeX.Core.Formula;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
@@ -68,6 +70,16 @@ public sealed class HomeNumberFormatCommandSourceTests
         HomeNumberFormatDropdownPlanner.ResolveAccountingNumberFormatCode("CHF")
             .Should()
             .Be(FormatCellsNumberFormatPlanner.BuildAccountingFormatFor(2, "CHF"));
+    }
+
+    [Fact]
+    public void AccountingSymbolDropdown_EuroFormatRendersWithoutEscapedFillSpace()
+    {
+        var format = HomeNumberFormatDropdownPlanner.ResolveAccountingNumberFormatCode("\u20AC");
+
+        NumberFormatter.Format(new NumberValue(82809), format)
+            .Should()
+            .Be("\u20AC 82,809.00");
     }
 
     [Fact]
