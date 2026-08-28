@@ -38,6 +38,15 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public void EditorBorder_UsesSharedWpfChromeGeometry()
+    {
+        InCanvasRichTextSelectionVisualContract.EditorBorderThicknessDip.Should().Be(1.5);
+        InCanvasRichTextSelectionVisualContract.EditorBorderRed.Should().Be(0x21);
+        InCanvasRichTextSelectionVisualContract.EditorBorderGreen.Should().Be(0x96);
+        InCanvasRichTextSelectionVisualContract.EditorBorderBlue.Should().Be(0xF3);
+    }
+
+    [Fact]
     public async Task Input_uses_the_portable_rich_text_semantic_identity()
     {
         await Session.Dispatch(() =>
