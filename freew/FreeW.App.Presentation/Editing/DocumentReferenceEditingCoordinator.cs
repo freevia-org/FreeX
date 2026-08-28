@@ -133,6 +133,20 @@ public sealed class DocumentReferenceEditingCoordinator
         return run;
     }
 
+    /// <summary>
+    /// Alt+F9: toggles field-code display for every <see cref="ComplexField"/> in the document (Word's
+    /// document-wide surface, matching the per-selection <see cref="ToggleComplexFieldCodes"/>). This
+    /// deliberately excludes <see cref="RunFieldKind"/> simple fields (PAGE/DATE/TIME/AUTHOR/FILENAME/
+    /// NUMPAGES/document-property fields from Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt;
+    /// Quick Parts &gt; Date, etc.) -- unlike <see cref="Run.FieldLocked"/>, which mirrors
+    /// <see cref="ComplexField.IsLocked"/> as a plain boolean with no display consequence, a "code" view
+    /// for a <see cref="RunFieldKind"/> run has nowhere to live: the run carries no wrapper object and no
+    /// ShowCode-equivalent flag, and no renderer in either shell knows how to paint one as
+    /// <c>{ PAGE }</c>-style text -- <see cref="DocumentFieldDisplayPlanner.Resolve"/> only ever resolves
+    /// the live *result*. So there is no field-code state to toggle for these runs; the filter below is a
+    /// deliberate scope boundary, not an oversight, and the caret-scoped Shift+F9 (both shells'
+    /// ToggleFieldCodeAtCaret) draws the same line for the same reason.
+    /// </summary>
     public DocumentFieldCodeToggleResult ToggleFieldCodes()
     {
         var fields = DocumentFieldStories.Enumerate(_session.Document)

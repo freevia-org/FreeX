@@ -755,6 +755,34 @@ public sealed class DocumentReferenceEditingCoordinatorTests
             .Should().OnlyContain(run => !run.ComplexField!.ShowCode);
     }
 
+    /// <summary>
+    /// Sibling of <see cref="FieldCodeToggleUsesOnePortableDocumentWideMajorityDecision"/>: a document
+    /// mixing a <see cref="ComplexField"/> run with a <see cref="RunFieldKind"/> simple field (the form
+    /// Insert &gt; Header &amp; Footer &gt; Page Number produces). The simple field has no
+    /// ShowCode-equivalent state to toggle, so the document-wide Alt+F9 must count and flip only the
+    /// complex field and must leave the simple field's kind, cached text, and lock completely alone --
+    /// not silently "half-apply" to it. This is a deliberate scope boundary, not the blind spot the
+    /// caret-scoped Ctrl+F11/Ctrl+Shift+F9 commands had before their own RunFieldKind fallback was added.
+    /// </summary>
+    [Fact]
+    public void FieldCodeToggleLeavesSimpleRunFieldKindFieldsCompletelyUntouched()
+    {
+        var complex = Run.ComplexFieldRun(" PAGE ", "1");
+        var simplePageNumber = new Run("3") { FieldKind = RunFieldKind.PageNumber, FieldLocked = false };
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph { Runs = { complex, simplePageNumber } });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var result = session.References.ToggleFieldCodes();
+
+        result.Should().Be(new DocumentFieldCodeToggleResult(true, true, 1));
+        complex.ComplexField!.ShowCode.Should().BeTrue();
+        simplePageNumber.FieldKind.Should().Be(RunFieldKind.PageNumber);
+        simplePageNumber.Text.Should().Be("3");
+        simplePageNumber.FieldLocked.Should().BeFalse();
+    }
+
     [Fact]
     public void SelectedComplexFieldTransitionsAreCoordinatorOwned()
     {
@@ -2171,6 +2199,20 @@ public sealed class DocumentReferenceEditingCoordinatorTests
 
 public sealed class DocumentPortableEditingOwnershipTests
 {
+    /// <summary>
+    /// Source-contract guard for the C3 remediation decision: <see cref="DocumentReferenceEditingCoordinator.ToggleFieldCodes"/>
+    /// excluding <see cref="RunFieldKind"/> runs must stay an explained, deliberate scope boundary -- not
+    /// a filter that quietly reverts to looking like an unexplained oversight the next time someone edits
+    /// nearby.
+    /// </summary>
+    [Fact]
+    public void ToggleFieldCodesDocumentsWhyItExcludesSimpleFields()
+    {
+        var source = ReadSource("freew", "FreeW.App.Presentation", "Editing", "DocumentReferenceEditingCoordinator.cs");
+
+        source.Should().Contain("no field-code state to toggle for these runs");
+    }
+
     [Fact]
     public void RenderersDelegateMigratedTableParagraphAndReferenceCommands()
     {

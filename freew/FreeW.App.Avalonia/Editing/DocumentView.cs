@@ -23363,7 +23363,18 @@ public sealed partial class DocumentView : Control
 
     /// <summary>
     /// Shift+F9: toggles field-code display for selected complex fields, or only the field containing the
-    /// active body or table-cell caret when the selection does not intersect a field.
+    /// active body or table-cell caret when the selection does not intersect a field. Deliberately does
+    /// nothing when the caret is instead on a simple <see cref="RunFieldKind"/> field (Insert &gt; Header
+    /// &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt; Date, Quick Parts &gt; Document
+    /// Property &gt; Author, etc.) -- unlike <see cref="SetFieldLockAtCaret"/> and
+    /// <see cref="UnlinkFieldAtCaret"/>, which both fall back to a simple-field form of their edit
+    /// (<see cref="SetSimpleFieldLockAtCaret"/> mutates <see cref="Run.FieldLocked"/> directly;
+    /// <see cref="UnlinkFieldAtCaret"/>'s fallback bakes <see cref="Run.Text"/>), there is no simple-field
+    /// analogue here to fall back to: a <see cref="RunFieldKind"/> run carries no wrapper object and no
+    /// ShowCode-equivalent flag to hold a code/result display mode, so there is nothing for Shift+F9 to
+    /// toggle. This mirrors <see cref="DocumentReferenceEditingCoordinator.ToggleFieldCodes"/> (Alt+F9),
+    /// which excludes these same runs from the document-wide toggle for the identical reason, and the WPF
+    /// host's <c>ToggleFieldCodeAtCaret</c>, which draws the same line the same way.
     /// </summary>
     public void ToggleFieldCodeAtCaret()
     {

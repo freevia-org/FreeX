@@ -13208,6 +13208,19 @@ public sealed partial class DocumentView : RichTextBox
     /// Shift+F9: toggles field-code display for selected complex fields, or only the field containing the
     /// caret when the selection does not intersect a field.
     /// </summary>
+    /// <remarks>
+    /// Deliberately has <em>no</em> <see cref="FieldMarker"/> fallback, unlike its siblings
+    /// <see cref="UnlinkFieldAtCaret"/> and <see cref="SetFieldLockAtCaret"/>. Those two apply to a simple
+    /// <see cref="RunFieldKind"/> field by mutating state that already exists on the model (<see cref="ModelRun.Text"/>
+    /// / <see cref="ModelRun.FieldLocked"/>). "Show field code" has no such target: <see cref="ComplexField.ShowCode"/>
+    /// has no counterpart on <see cref="ModelRun"/>, and <see cref="BuildFieldRun"/> resolves a simple field's display
+    /// purely from <see cref="RunFieldKind"/>/<see cref="ModelRun.FieldLocked"/> on every render, so any transient
+    /// "showing the code" state stashed elsewhere would vanish on the very next <see cref="Render"/> anyway. Toggling
+    /// field-code display for a simple field is therefore not expressible without adding a persisted model property
+    /// (mirroring how <see cref="ModelRun.FieldLocked"/> was added for the lock), which is out of scope here. Shift+F9
+    /// on a simple field stays a genuine no-op — recorded, not left to look like an unexamined copy of the
+    /// Unlink/Lock gap (see <c>ToggleFieldCodeAtCaret_SimpleAuthorField_RemainsANoOp</c>).
+    /// </remarks>
     public void ToggleFieldCodeAtCaret()
     {
         var fields = SelectedComplexFields();
@@ -13372,7 +13385,15 @@ public sealed partial class DocumentView : RichTextBox
 
     /// <summary>
     /// Ctrl+Shift+F9: replaces selected complex fields with their displayed results, or only the field
-    /// containing the caret when the selection does not intersect a field.
+    /// containing the caret when the selection does not intersect a field. Falls back to
+    /// <see cref="UnlinkSimpleFieldAtCaret"/> when the caret is on a <see cref="RunFieldKind"/> field
+    /// instead (the form Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt;
+    /// Date, and Quick Parts &gt; Document Property &gt; Author all produce) -- mirroring the
+    /// <see cref="SetFieldLockAtCaret"/> fallback to <see cref="SetSimpleFieldLockAtCaret"/>. Without this
+    /// fallback (the Avalonia host's identical gap was closed at round 166), Ctrl+Shift+F9 was a silent
+    /// no-op on every RunFieldKind field in this shell: <c>ComplexFieldRunAtPointer</c> only ever matches
+    /// a <see cref="ComplexFieldMarker"/> tag, and a simple field is tagged with the distinct
+    /// <see cref="FieldMarker"/> record, so the match could never succeed.
     /// </summary>
     public void UnlinkFieldAtCaret()
     {
@@ -13383,7 +13404,10 @@ public sealed partial class DocumentView : RichTextBox
                 ?? ComplexFieldRunAtPointer(Selection.Start)
                 ?? ComplexFieldRunAtPointer(Selection.End);
             if (fieldRun?.Tag is not ComplexFieldMarker marker)
+            {
+                UnlinkSimpleFieldAtCaret();
                 return;
+            }
             markers = [marker];
         }
 
@@ -13393,6 +13417,30 @@ public sealed partial class DocumentView : RichTextBox
         CommitToModel();
         if (ReferenceEdits.UnlinkComplexFields(targets).Applied)
             Render();
+    }
+
+    /// <summary>
+    /// Ctrl+Shift+F9 for a simple <see cref="RunFieldKind"/> field (DATE/TIME/PAGE/AUTHOR/FILENAME/
+    /// NUMPAGES/... inserted via Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick
+    /// Parts &gt; Date, or Quick Parts &gt; Document Property &gt; Author/Title/etc.). Unlike
+    /// <see cref="ComplexField"/>, a simple field carries no model object identity that survives a
+    /// render/commit round trip, so the unlink is applied the same way <see cref="SetSimpleFieldLockAtCaret"/>
+    /// applies a lock: by rewriting the caret's <see cref="FieldMarker"/> tag to <see cref="RunFieldKind.None"/>
+    /// before <see cref="CommitToModel"/> writes it onto the fresh model run. The WPF run's current text
+    /// (already the resolved display value <see cref="BuildFieldRun"/> renders, or the locked cache) becomes
+    /// the baked-in static text, matching Avalonia's <c>UnlinkSimpleFieldAtCaret</c>.
+    /// </summary>
+    private void UnlinkSimpleFieldAtCaret()
+    {
+        var fieldRun = FieldRunAtPointer(CaretPosition)
+            ?? FieldRunAtPointer(Selection.Start)
+            ?? FieldRunAtPointer(Selection.End);
+        if (fieldRun?.Tag is not FieldMarker marker)
+            return;
+
+        fieldRun.Tag = marker with { Kind = RunFieldKind.None, Locked = false };
+        CommitToModel();
+        Render();
     }
 
     private ModelRun? FindComplexFieldRun(ComplexField field) =>

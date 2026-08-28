@@ -257,6 +257,99 @@ public sealed class ComplexFieldEditorTests
         runs[3].ComplexField!.Instruction.Should().Be(" SECOND ");
     }
 
+    /// <summary>
+    /// C1 remediation: <see cref="DocumentView.UnlinkFieldAtCaret"/> had the identical <see cref="RunFieldKind"/>
+    /// blind spot <see cref="DocumentView.SetFieldLockAtCaret"/> was fixed for at round 165 (see
+    /// <see cref="SetFieldLockAtCaret_SimpleAuthorField_PreventsRecomputeOnUpdateFields"/> above) --
+    /// <c>ComplexFieldRunAtPointer</c> only ever matches a <c>ComplexFieldMarker</c> tag, so Ctrl+Shift+F9 was a
+    /// silent no-op on every RunFieldKind field (Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt;
+    /// Quick Parts &gt; Date, Quick Parts &gt; Document Property &gt; Author) in this shell. Round 166 fixed the
+    /// Avalonia sibling (<c>R166_UnlinkFieldSiblingTests</c>); this is the WPF fix.
+    /// </summary>
+    [StaFact]
+    public void UnlinkFieldAtCaret_SimpleAuthorField_ConvertsToStaticText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Author = "Ada Lovelace";
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("By "), Run.AuthorField("Ada Lovelace") } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var renderedField = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "Ada Lovelace");
+        view.CaretPosition = renderedField.ContentStart.GetPositionAtOffset(2)
+            ?? renderedField.ContentStart;
+
+        view.UnlinkFieldAtCaret();
+
+        var runs = view.Model.Blocks.OfType<Paragraph>().Single().Runs;
+        var unlinkedRun = runs.Single(r => r.Text == "Ada Lovelace");
+        unlinkedRun.FieldKind.Should().Be(
+            RunFieldKind.None,
+            "Ctrl+Shift+F9 must convert the field run into plain static text, the same way it already does " +
+            "for a ComplexField");
+        unlinkedRun.FieldLocked.Should().BeFalse();
+    }
+
+    /// <summary>Sibling no-regression: a caret sitting on ordinary text (no field of either kind under it)
+    /// keeps the original silent no-op -- there is nothing to unlink.</summary>
+    [StaFact]
+    public void UnlinkFieldAtCaret_OnPlainTextCaret_RemainsANoOp()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Just plain text"));
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var renderedText = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "Just plain text");
+        view.CaretPosition = renderedText.ContentStart.GetPositionAtOffset(4)
+            ?? renderedText.ContentStart;
+
+        view.UnlinkFieldAtCaret();
+
+        var run = view.Model.Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.Text.Should().Be("Just plain text");
+        run.FieldKind.Should().Be(RunFieldKind.None);
+    }
+
+    /// <summary>
+    /// C1 remediation: <see cref="DocumentView.ToggleFieldCodeAtCaret"/> ("Shift+F9") was recorded at round 166
+    /// as "broken the same way in both shells" as Unlink/Lock. On inspection it is not fixable the same way: a
+    /// <see cref="RunFieldKind"/> run has no <c>ShowCode</c>-equivalent state to flip (see the method's own
+    /// remarks), so Shift+F9 on a simple field must remain a genuine no-op rather than gaining a fallback that
+    /// cannot actually persist across the next render. This pins that as the deliberate, correct behaviour so a
+    /// future round does not "fix" it by faking a toggle that cannot survive a render.
+    /// </summary>
+    [StaFact]
+    public void ToggleFieldCodeAtCaret_SimpleAuthorField_RemainsANoOp()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Author = "Ada Lovelace";
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("By "), Run.AuthorField("Ada Lovelace") } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var renderedField = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "Ada Lovelace");
+        view.CaretPosition = renderedField.ContentStart.GetPositionAtOffset(2)
+            ?? renderedField.ContentStart;
+
+        view.ToggleFieldCodeAtCaret();
+
+        var run = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.Author);
+        run.Text.Should().Be("Ada Lovelace");
+        run.FieldKind.Should().Be(RunFieldKind.Author);
+        run.FieldLocked.Should().BeFalse();
+    }
+
     [StaFact]
     public void SetFieldLockAtCaret_ChangesOnlyCurrentField_AndPreservesDirtyState()
     {

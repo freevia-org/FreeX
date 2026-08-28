@@ -259,8 +259,13 @@ public static class DocumentFieldUpdateCoordinator
     }
 
     /// <summary>
-    /// Toggles all document-story fields to a single code-visibility state. Codes are shown unless a
-    /// strict majority is already showing them, matching Word's document-wide Alt+F9 behavior.
+    /// Toggles every document-story <see cref="ComplexField"/> to a single code-visibility state. Codes
+    /// are shown unless a strict majority is already showing them, matching Word's document-wide Alt+F9
+    /// behavior. Like <see cref="DocumentReferenceEditingCoordinator.ToggleFieldCodes"/> (the production
+    /// entry point both shells actually call for this command -- this coordinator has no production
+    /// caller), this deliberately excludes <see cref="RunFieldKind"/> simple fields: they have no
+    /// ShowCode-equivalent storage and no renderer paints a code form for them, so there is no
+    /// field-code state here to toggle.
     /// </summary>
     public static int ToggleAllCodes(TextDocument document)
     {

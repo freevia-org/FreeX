@@ -519,6 +519,27 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
 {
     private const double UnalignedMargin = 0.3 * 96.0;
 
+    /// <summary>
+    /// R167-presentation-headerfooter-band-bound-1: the largest fraction of the page a single
+    /// header OR footer band may claim once <c>sizeToContent</c> lets it grow past its base line
+    /// height to fit a picture. Round 166 fixed a header/footer picture's own DIP-unit conversion
+    /// (a picture is no longer stored at 1-4x its physical size), but that narrows the range of
+    /// inputs that reach this code -- it does not bound them: even a correctly-converted, genuinely
+    /// large photo (the auditor's own probe used a 72 DPI image, whose DIP-converted size is LARGER
+    /// than its raw pixel count) still flowed straight into <see cref="ResolveLineHeight"/> with no
+    /// upper limit, so the band could balloon to many times the page itself. There is no Excel
+    /// precedent to match here -- real Excel does not grow the header/footer margin to fit an
+    /// inserted picture at all (an oversized picture there simply overlaps the sheet body); this
+    /// app's <c>SizeHeaderFooterBandsToContent</c> WPF-native behavior is a deliberate departure
+    /// (see the existing 48px-band test for a 96x48 default picture, comfortably exceeding the
+    /// 28.8px default header margin -- so the bound below must stay well above a "page margin"-sized
+    /// cap or it would break that already-intentional growth). A quarter of the page leaves the
+    /// other three quarters for the printed body even in the worst case of both header and footer
+    /// maxing out simultaneously, while comfortably fitting every legitimate case (multi-line text,
+    /// or a picture sized through the app's own Format Picture / header-footer picture dialogs).
+    /// </summary>
+    private const double MaxBandHeightFraction = 0.25;
+
     public static WorksheetPrintHeaderFooterBandGeometry BuildBand(
         WorksheetHeaderFooter value,
         WorksheetHeaderFooterPictureSet pictures,
@@ -535,13 +556,15 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
         double baseLineHeight,
         bool sizeToContent)
     {
-        var lineHeight = ResolveLineHeight(
-            value,
-            pictures,
-            draftQuality,
-            fontScale,
-            baseLineHeight,
-            sizeToContent);
+        var lineHeight = Math.Min(
+            ResolveLineHeight(
+                value,
+                pictures,
+                draftQuality,
+                fontScale,
+                baseLineHeight,
+                sizeToContent),
+            Math.Max(1, pageHeight * MaxBandHeightFraction));
         var y = isFooter
             ? Math.Max(
                 Math.Max(4, pageHeight - bandMargin - lineHeight),
@@ -605,13 +628,30 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
         return height;
     }
 
+    /// <summary>
+    /// R167-presentation-headerfooter-band-bound-1: fits the picture inside the section by shrinking
+    /// it, never by squashing it. The prior implementation clamped width and height with two
+    /// independent <c>Math.Min</c> calls, each against its own axis of <paramref name="section"/> --
+    /// so a picture that overflowed one axis far more than the other (e.g. a wide, short picture
+    /// dropped into a narrow, tall section) came out at the wrong aspect ratio instead of merely
+    /// smaller. Reuses <see cref="PageGeometryRules.ResolveUniformScale"/>, the same "take whichever
+    /// axis needs the bigger shrink and apply it to both" rule this app already applies to page-level
+    /// fit-to-N-pages scaling (R101/R20/R100), so a picture that needs to shrink is scaled uniformly
+    /// and a picture that already fits both axes is left at its original size unchanged (scale 1.0),
+    /// exactly matching prior behavior for that common case.
+    /// </summary>
     public static LayoutRect ResolvePictureBounds(
         WorksheetHeaderFooterPicture picture,
         LayoutRect section,
         PageTextAlignment alignment)
     {
-        var width = Math.Min(Math.Max(1, picture.Width), section.Width);
-        var height = Math.Min(Math.Max(1, picture.Height), section.Height);
+        var pictureWidth = Math.Max(1, picture.Width);
+        var pictureHeight = Math.Max(1, picture.Height);
+        var widthScale = Math.Min(1, section.Width / pictureWidth);
+        var heightScale = Math.Min(1, section.Height / pictureHeight);
+        var scale = PageGeometryRules.ResolveUniformScale(widthScale, heightScale);
+        var width = pictureWidth * scale;
+        var height = pictureHeight * scale;
         var left = alignment switch
         {
             PageTextAlignment.Center => section.Left + (section.Width - width) / 2,
