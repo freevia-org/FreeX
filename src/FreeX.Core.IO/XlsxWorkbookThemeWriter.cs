@@ -12,9 +12,19 @@ internal static class XlsxWorkbookThemeWriter
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         const string themePath = "xl/theme/theme1.xml";
         archive.GetEntry(themePath)?.Delete();
+
+        // Like XlsxWorksheetChartWriter, this creates its entry directly rather than through
+        // XlsxPackageXmlEditor/OpcXml, so it needs its own pass of the sanitizing those apply. The
+        // theme part is built from model text -- the theme name (which reaches the a:theme/@name,
+        // a:clrScheme/@name and a:fontScheme/@name attributes) and the major/minor font names -- and
+        // WorkbookTheme.WithName takes arbitrary text, so a control code or lone surrogate that
+        // arrived with a .fxl import would otherwise abort the ENTIRE workbook save here.
+        var themeXml = ToThemeXml(theme);
+        XmlTextSanitizer.SanitizeInPlace(themeXml);
+
         var themeEntry = archive.CreateEntry(themePath);
         using var stream = themeEntry.Open();
-        ToThemeXml(theme).Save(stream);
+        themeXml.Save(stream);
     }
 
     private static XDocument ToThemeXml(WorkbookTheme theme)
