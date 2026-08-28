@@ -16,6 +16,8 @@ public sealed class InstallerPackagingContractTests
         workflow.Should().Contain("tools/packaging/New-AppInstallers.ps1");
         workflow.Should().Contain("tools/New-ReleaseArtifactManifest.ps1");
         workflow.Should().Contain("tools/New-ReleaseSbom.ps1");
+        workflow.Should().Contain("artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json");
+        workflow.Should().Contain("artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json.sha256");
         workflow.Should().Contain("tools/Test-ReleaseInstallation.ps1");
         workflow.Should().Contain("Microsoft.Sbom.DotNetTool --version 4.1.5");
         workflow.Should().Contain("tools/Test-ReleasePackageContents.ps1");
