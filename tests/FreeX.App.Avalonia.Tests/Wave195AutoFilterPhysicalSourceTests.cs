@@ -1,10 +1,13 @@
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using Avalonia.Headless;
 using FluentAssertions;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-using System.Text.RegularExpressions;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -15,67 +18,95 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     [Fact]
-    public void PhysicalSelectors_PinProductionX11ScenariosAndPackageTransitions()
+    public void Manifest_Lists75ExistingHashMatchingArtifacts_AndReferencedCommitsAreAncestors()
     {
-        var runner = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
-            "tools", "Run-FreeXLinuxInteractionValidation.ps1");
-        var probe = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
-            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh");
-        var multiFixture = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
-            "tools", "LinuxInteractiveDocker", "New-FreeXWave195AutoFilterMultiColumnFixture.ps1");
-        var colorFixture = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
-            "tools", "LinuxInteractiveDocker", "New-FreeXWave195AutoFilterColorChangeFixture.ps1");
-        var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
-            "src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs");
-        var colorChangeDispatch = SelectProbeDispatch(
-            probe,
-            "autofilter-color-change-clear-persistence");
-        var colorChangeProbe = SelectProbeFunction(
-            probe,
-            "probe_autofilter_color_change_clear_persistence_physical");
+        using var manifest = ReadManifest();
+        var root = manifest.RootElement;
+        var evidenceRoot = EvidenceRoot;
 
-        runner.Should().Contain("autofilter-multi-column-persistence");
-        runner.Should().Contain("autofilter-color-change-clear-persistence");
-        runner.Should().Contain("Assert-AutoFilterMultiColumnPostcondition");
-        runner.Should().Contain("Assert-AutoFilterColorChangeClearPostcondition");
-        probe.Should().Contain("probe_autofilter_multi_column_persistence_physical");
-        colorChangeDispatch.Should().Contain("probe_autofilter_color_change_clear_persistence_physical");
-        colorChangeDispatch.Should().NotContain("probe_autofilter_color_persistence_physical fill");
-        probe.Should().Contain("columns=0:North;1:Hardware;");
-        probe.Should().Contain("columns=1:Software;");
-        probe.Should().Contain("click_autofilter_control 190 220");
-        probe.Should().Contain("click_autofilter_control 151 168");
-        probe.Should().Contain("click_autofilter_control \"$((column_offset * cell_width + 292))\" \"$ok_y\"");
-        probe.Should().Contain("local column_offset=\"$1\"\n        click_autofilter_control \"$((column_offset * cell_width + 151))\" 117");
-        probe.Should().Contain("choose_value 0 1 405");
-        probe.Should().Contain("choose_value 1 0 391");
-        probe.Should().Contain("change_value 1 0 1");
-        probe.Should().Contain("clipboard_sentinel_value=\"__FREEX_CLIPBOARD_SENTINEL_${BASHPID}_${RANDOM}_${RANDOM}__\"");
-        probe.Should().Contain("wait_for_non_sentinel_clipboard");
-        probe.Should().Contain("value=\"$(wait_for_non_sentinel_clipboard)\"; then\n        stop_clipboard_sentinel\n        return 1\n    fi\n    stop_clipboard_sentinel\n    printf '%s' \"$value\"");
-        probe.Should().Contain("clipboard=\"$(wait_for_non_sentinel_clipboard || true)\"\n        stop_clipboard_sentinel");
-        probe.Should().Contain("inline_drag_editor_text=\"$(wait_for_non_sentinel_clipboard || true)\"\n    stop_clipboard_sentinel");
-        probe.Should().Contain("reload-witness-before=$reload_witness_before");
-        probe.Should().Contain("reload-witness-discarded=$reload_witness_discarded");
-        probe.Should().Contain("restore_calibrated_window_geometry || return 1");
-        probe.Should().Contain("$reload_witness_passed");
-        colorChangeProbe.Should().Contain("green_gate=true; green_criteria=\"fill:#00B050\"");
-        colorChangeProbe.Should().Contain("yellow_gate=true; yellow_criteria=\"fill:#FFC000\"");
-        colorChangeProbe.Should().Contain("\"$green_package\" == \"ref=A1:B5|colId=0|cellColor=1|fill=FF00B050\"");
-        colorChangeProbe.Should().Contain("\"$yellow_package\" == \"ref=A1:B5|colId=0|cellColor=1|fill=FFFFC000\"");
-        colorChangeProbe.Should().Contain("\"$cleared_package\" == \"ref=A1:B5|columns=\"");
-        colorChangeProbe.Should().Contain("\"$green_criteria\" == \"fill:#00B050\"");
-        colorChangeProbe.Should().Contain("\"$yellow_criteria\" == \"fill:#FFC000\"");
-        colorChangeProbe.Should().Contain("cleared-package=$cleared_package");
-        multiFixture.Should().Contain("<autoFilter ref=`\"A1:C7`\"");
-        multiFixture.Should().Contain("North");
-        multiFixture.Should().Contain("Hardware");
-        colorFixture.Should().Contain("FF00B050");
-        colorFixture.Should().Contain("FFFFC000");
-        colorFixture.Should().Contain("<autoFilter ref=`\"A1:B5`\"");
-        source.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
-        source.Should().Contain("AutoFilterMenuPlanner.BuildResult");
-        source.Should().Contain("RecalculateAfterAutoFilterMutation");
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(2);
+        root.GetProperty("wave").GetInt32().Should().Be(195);
+        root.GetProperty("status").GetString().Should().Be("passed");
+        root.GetProperty("app").GetString().Should().Be("FreeX");
+        root.GetProperty("platform").GetString().Should().Be("linux");
+        root.GetProperty("shell").GetString().Should().Be("avalonia");
+        root.GetProperty("validationMode").GetString().Should().Be("physical-only");
+        root.GetProperty("claimBoundary").GetString().Should().Contain("not exhaustive");
+
+        var files = root.GetProperty("files").EnumerateArray().ToArray();
+        files.Should().HaveCount(75);
+        var relativePaths = files.Select(file => file.GetProperty("path").GetString()!).ToArray();
+        relativePaths.Should().OnlyHaveUniqueItems();
+        relativePaths.Count(path => path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)).Should().Be(58);
+
+        foreach (var file in files)
+        {
+            var relativePath = file.GetProperty("path").GetString()!;
+            var fullPath = ResolveEvidencePath(evidenceRoot, relativePath);
+            File.Exists(fullPath).Should().BeTrue($"the manifest artifact '{relativePath}' must exist");
+
+            var hashMode = file.GetProperty("hashMode").GetString();
+            hashMode.Should().BeOneOf("raw", "canonical-lf");
+            var actualHash = ComputeSha256(fullPath, hashMode == "canonical-lf");
+            actualHash.Should().Be(
+                file.GetProperty("sha256").GetString()!.ToLowerInvariant(),
+                $"the manifest hash for '{relativePath}' must match its committed bytes");
+        }
+
+        var head = RunGit(evidenceRoot, "rev-parse", "HEAD").StandardOutput.Trim();
+        head.Should().MatchRegex("^[0-9a-f]{40}$");
+
+        var commits = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddCommit(root, commits, "appPayloadSourceCommit");
+        AddCommit(root, commits, "captureHarnessEquivalentCommit");
+        AddCommit(root, commits, "postCaptureCleanupCommit");
+        AddCommit(root, commits, "packagingBaseCommit");
+        AddCommit(root, commits, "originMainAtPackaging");
+        foreach (var session in root.GetProperty("sessions").EnumerateArray())
+        {
+            AddCommit(session, commits, "appPayloadSourceCommit");
+            AddCommit(session, commits, "captureHarnessEquivalentCommit");
+            foreach (var file in session.GetProperty("captureHarnessEquivalentFiles").EnumerateArray())
+                commits.Add(file.GetProperty("commit").GetString()!);
+        }
+
+        commits.Should().HaveCount(5);
+        foreach (var commit in commits)
+        {
+            RunGit(evidenceRoot, "cat-file", "-e", $"{commit}^{{commit}}").ExitCode.Should().Be(0,
+                $"referenced commit {commit} must exist");
+            RunGit(evidenceRoot, "merge-base", "--is-ancestor", commit, head).ExitCode.Should().Be(0,
+                $"referenced commit {commit} must be an ancestor of the checked-out HEAD");
+        }
+    }
+
+    [Fact]
+    public void Sessions_ContainPassedSelectorsAndMeaningfulPostconditions()
+    {
+        using var manifest = ReadManifest();
+        var root = manifest.RootElement;
+        var evidenceRoot = EvidenceRoot;
+        var sessions = root.GetProperty("sessions").EnumerateArray().ToArray();
+        sessions.Should().HaveCount(2);
+
+        foreach (var session in sessions)
+        {
+            var name = session.GetProperty("name").GetString()!;
+            SessionContracts.Should().ContainKey(name);
+            var contract = SessionContracts[name];
+            var selector = session.GetProperty("selector").GetString()!;
+            selector.Should().Be(contract.Selector);
+            session.GetProperty("resultId").GetString().Should().Be(contract.ResultId);
+            session.GetProperty("reloadWitnessPassed").GetBoolean().Should().BeTrue();
+            session.GetProperty("payloadFileCount").GetInt32().Should().Be(778);
+            session.GetProperty("payloadFingerprint").GetString().Should().MatchRegex("^[0-9a-f]{64}$");
+            session.GetProperty("appImageId").GetString().Should().MatchRegex("^sha256:[0-9a-f]{64}$");
+
+            AssertSelectorDispatch(selector, contract, RepositoryRoot);
+            AssertInteractionReport(session, contract, evidenceRoot);
+            AssertX11Report(session, contract, evidenceRoot);
+            AssertPostcondition(session, contract, evidenceRoot);
+        }
     }
 
     [Fact]
@@ -228,33 +259,254 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
         }
     }
 
-    private static string SelectProbeFunction(string source, string functionName)
-    {
-        var marker = $"{functionName}() {{";
-        var start = source.IndexOf(marker, StringComparison.Ordinal);
-        if (start < 0)
-            throw new InvalidDataException($"The probe must define {functionName}.");
+    private static readonly IReadOnlyDictionary<string, SessionContract> SessionContracts =
+        new Dictionary<string, SessionContract>(StringComparer.Ordinal)
+        {
+            ["multi-column"] = new(
+                "autofilter-multi-column-persistence",
+                "autofilter-multi-column-criteria-change-clear-physical",
+                "multi-column/x11-validation/autofilter-multi-column-postcondition.txt",
+                [
+                    "autofilter-multi-column-region-applied.png",
+                    "autofilter-multi-column-both-applied.png",
+                    "autofilter-multi-column-category-changed.png",
+                    "autofilter-multi-column-region-cleared.png",
+                    "autofilter-multi-column-all-cleared.png",
+                    "autofilter-multi-column-reload-witness-unsaved.png",
+                    "autofilter-multi-column-reload-discard-prompt.png",
+                    "autofilter-multi-column-reopened.png",
+                    "autofilter-multi-column-popup-gate.txt",
+                    "autofilter-multi-column-postcondition.txt"
+                ],
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["menu-open"] = "true",
+                    ["region-visible"] = "North,North,",
+                    ["both-visible"] = "North,",
+                    ["category-changed-visible"] = "North,",
+                    ["region-cleared-visible"] = "North,South,East,",
+                    ["all-cleared-visible"] = "North,North,South,South,East,East,",
+                    ["region-package"] = "ref=A1:C7|columns=0:North;",
+                    ["both-package"] = "ref=A1:C7|columns=0:North;1:Hardware;",
+                    ["changed-package"] = "ref=A1:C7|columns=0:North;1:Software;",
+                    ["region-cleared-package"] = "ref=A1:C7|columns=1:Software;",
+                    ["cleared-package"] = "ref=A1:C7|columns=",
+                    ["dialog-open"] = "true",
+                    ["dialog-closed"] = "true",
+                    ["reload-witness-before"] = "__FREEX_RELOAD_WITNESS__",
+                    ["reload-witness-before-read"] = "true",
+                    ["reload-witness-discarded"] = "true",
+                    ["reload-witness-after"] = "East",
+                    ["reload-witness-after-read"] = "true",
+                    ["reload-witness-passed"] = "true",
+                    ["reopened-visible"] = "North,North,South,South,East,East,"
+                }),
+            ["color-change-clear"] = new(
+                "autofilter-color-change-clear-persistence",
+                "autofilter-color-criteria-change-clear-physical",
+                "color-change-clear/x11-validation/autofilter-color-change-clear-postcondition.txt",
+                [
+                    "autofilter-color-change-clear-green-menu-open.png",
+                    "autofilter-color-change-clear-green-applied.png",
+                    "autofilter-color-change-clear-yellow-menu-open.png",
+                    "autofilter-color-change-clear-yellow-applied.png",
+                    "autofilter-color-change-clear-clear-menu-open.png",
+                    "autofilter-color-change-clear-cleared.png",
+                    "autofilter-color-change-clear-reload-witness-unsaved.png",
+                    "autofilter-color-change-clear-reload-discard-prompt.png",
+                    "autofilter-color-change-clear-reopened.png",
+                    "autofilter-color-change-clear-popup-gate.txt",
+                    "autofilter-color-change-clear-postcondition.txt"
+                ],
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["green-menu-open"] = "true",
+                    ["green-criteria"] = "fill:#00B050",
+                    ["green-visible"] = "North,East,",
+                    ["yellow-menu-open"] = "true",
+                    ["yellow-criteria"] = "fill:#FFC000",
+                    ["yellow-visible"] = "South,West,",
+                    ["clear-menu-open"] = "true",
+                    ["cleared-visible"] = "North,South,East,West,",
+                    ["green-package"] = "ref=A1:B5|colId=0|cellColor=1|fill=FF00B050",
+                    ["yellow-package"] = "ref=A1:B5|colId=0|cellColor=1|fill=FFFFC000",
+                    ["cleared-package"] = "ref=A1:B5|columns=",
+                    ["dialog-open"] = "true",
+                    ["dialog-closed"] = "true",
+                    ["reload-witness-before"] = "__FREEX_RELOAD_WITNESS__",
+                    ["reload-witness-before-read"] = "true",
+                    ["reload-witness-discarded"] = "true",
+                    ["reload-witness-after"] = "East",
+                    ["reload-witness-after-read"] = "true",
+                    ["reload-witness-passed"] = "true",
+                    ["reopened-visible"] = "North,South,East,West,"
+                })
+        };
 
-        var searchStart = start + marker.Length;
-        var nextFunction = Regex.Match(
-            source[searchStart..],
-            @"\r?\nprobe_[A-Za-z0-9_]+\(\) \{",
-            RegexOptions.Multiline);
-        return source[start..(nextFunction.Success ? searchStart + nextFunction.Index : source.Length)];
+    private static JsonDocument ReadManifest() =>
+        JsonDocument.Parse(File.ReadAllText(
+            TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+                "docs", "parity", "evidence", "wave195-freex-autofilter-criteria-workflows-20260828", "manifest.json")));
+
+    private static string EvidenceRoot =>
+        Path.GetDirectoryName(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+            "docs", "parity", "evidence", "wave195-freex-autofilter-criteria-workflows-20260828", "manifest.json"))!;
+
+    private static string RepositoryRoot =>
+        Path.GetDirectoryName(TestWorkspaceFileLocator.FindFromWorkspaceRoot("FreeX.slnx"))!;
+
+    private static void AddCommit(JsonElement element, ISet<string> commits, string propertyName)
+    {
+        var commit = element.GetProperty(propertyName).GetString();
+        commit.Should().NotBeNullOrWhiteSpace();
+        commits.Add(commit!);
     }
 
-    private static string SelectProbeDispatch(string source, string selector)
+    private static string ResolveEvidencePath(string evidenceRoot, string relativePath)
     {
-        var marker = $"if [[ \"$probe_selector\" == \"{selector}\" ]]; then";
-        var start = source.IndexOf(marker, StringComparison.Ordinal);
-        if (start < 0)
-            throw new InvalidDataException($"The probe must dispatch {selector}.");
-
-        var searchStart = start + marker.Length;
-        var nextDispatch = source.IndexOf(
-            "\nif [[ \"$probe_selector\" == \"",
-            searchStart,
-            StringComparison.Ordinal);
-        return source[start..(nextDispatch >= 0 ? nextDispatch : source.Length)];
+        Path.IsPathRooted(relativePath).Should().BeFalse($"manifest path '{relativePath}' must be relative");
+        var root = Path.GetFullPath(evidenceRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var fullPath = Path.GetFullPath(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+            .Should().BeTrue($"manifest path '{relativePath}' must stay under the evidence directory");
+        return fullPath;
     }
+
+    private static string ComputeSha256(string path, bool canonicalizeLineEndings)
+    {
+        var bytes = File.ReadAllBytes(path);
+        if (canonicalizeLineEndings)
+        {
+            var text = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+                .GetString(bytes)
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n');
+            bytes = Encoding.UTF8.GetBytes(text);
+        }
+
+        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
+    private static void AssertSelectorDispatch(string selector, SessionContract contract, string repositoryRoot)
+    {
+        var runner = File.ReadAllText(Path.Combine(repositoryRoot, "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var probe = File.ReadAllText(Path.Combine(repositoryRoot, "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+        var functionName = $"probe_{selector.Replace('-', '_')}_physical";
+
+        runner.Should().Contain($"$PhysicalProbeSelector -eq \"{selector}\"");
+        runner.Should().Contain($"@(\"{contract.ResultId}\")");
+        probe.Should().Contain($"if [[ \"$probe_selector\" == \"{selector}\" ]]; then");
+        probe.Should().Contain($"{functionName}() {{");
+        probe.Should().Contain(functionName, $"the {selector} dispatch must invoke its physical function");
+    }
+
+    private static void AssertInteractionReport(JsonElement session, SessionContract contract, string evidenceRoot)
+    {
+        var sessionRoot = ResolveEvidencePath(evidenceRoot, session.GetProperty("name").GetString()!);
+        var reportPath = Path.Combine(sessionRoot, "run-report", "interaction-validation.json");
+        File.Exists(reportPath).Should().BeTrue();
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(2);
+        root.GetProperty("app").GetString().Should().Be("FreeX");
+        root.GetProperty("platform").GetString().Should().Be("linux");
+        root.GetProperty("shell").GetString().Should().Be("avalonia");
+        root.GetProperty("validationMode").GetString().Should().Be("physical-only");
+        root.GetProperty("coverage").GetProperty("exhaustive").GetBoolean().Should().BeFalse();
+        root.GetProperty("coverage").GetProperty("scope").GetString().Should().Contain("bounded");
+
+        var results = root.GetProperty("results").EnumerateArray().ToArray();
+        results.Should().ContainSingle();
+        var result = results.Single();
+        result.GetProperty("id").GetString().Should().Be(contract.ResultId);
+        result.GetProperty("category").GetString().Should().Be("x11-input");
+        result.GetProperty("status").GetString().Should().Be("passed");
+        result.GetProperty("evidenceLevel").GetString().Should().Be("physical-x11-input");
+
+        var evidence = result.GetProperty("evidence").GetString()!;
+        foreach (var evidenceFile in contract.RequiredEvidence)
+            evidence.Should().Contain(evidenceFile);
+        result.GetProperty("artifacts").EnumerateArray().Select(item => item.GetString()!).Should()
+            .Contain(Path.GetFileName(contract.Postcondition));
+        root.GetProperty("summary").GetProperty("passed").GetInt32().Should().Be(1);
+        root.GetProperty("summary").GetProperty("total").GetInt32().Should().Be(1);
+    }
+
+    private static void AssertX11Report(JsonElement session, SessionContract contract, string evidenceRoot)
+    {
+        var sessionRoot = ResolveEvidencePath(evidenceRoot, session.GetProperty("name").GetString()!);
+        var reportPath = Path.Combine(sessionRoot, "x11-validation", "x11-input-results.json");
+        File.Exists(reportPath).Should().BeTrue();
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        root.GetProperty("schemaVersion").GetInt32().Should().Be(2);
+        root.GetProperty("platform").GetString().Should().Be("linux");
+        root.GetProperty("shell").GetString().Should().Be("avalonia");
+        root.GetProperty("calibration").GetProperty("status").GetString().Should().Be("passed");
+        root.GetProperty("calibration").GetProperty("selectionColor").GetString().Should().Be("#217346");
+        root.GetProperty("summary").GetProperty("passed").GetInt32().Should().Be(1);
+        root.GetProperty("summary").GetProperty("failed").GetInt32().Should().Be(0);
+        root.GetProperty("summary").GetProperty("total").GetInt32().Should().Be(1);
+
+        var results = root.GetProperty("results").EnumerateArray().ToArray();
+        results.Should().ContainSingle();
+        var result = results.Single();
+        result.GetProperty("id").GetString().Should().Be(contract.ResultId);
+        result.GetProperty("status").GetString().Should().Be("passed");
+        result.GetProperty("evidenceLevel").GetString().Should().Be("physical-x11-input");
+    }
+
+    private static void AssertPostcondition(JsonElement session, SessionContract contract, string evidenceRoot)
+    {
+        var postcondition = session.GetProperty("postcondition").GetString()!;
+        postcondition.Should().Be(contract.Postcondition);
+        var path = ResolveEvidencePath(evidenceRoot, postcondition);
+        File.Exists(path).Should().BeTrue();
+
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var line in File.ReadAllLines(path))
+        {
+            var separator = line.IndexOf('=');
+            separator.Should().BeGreaterThan(0, $"postcondition line '{line}' must be a key/value pair");
+            values.Add(line[..separator], line[(separator + 1)..]);
+        }
+
+        values.Should().HaveCountGreaterThan(contract.Postconditions.Count - 1);
+        foreach (var expected in contract.Postconditions)
+        {
+            values.Should().ContainKey(expected.Key);
+            values[expected.Key].Should().Be(expected.Value, $"postcondition '{expected.Key}' must preserve the workflow result");
+        }
+    }
+
+    private static GitResult RunGit(string repositoryRoot, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = repositoryRoot,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start git.");
+
+        var standardOutput = process.StandardOutput.ReadToEnd();
+        var standardError = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return new GitResult(process.ExitCode, standardOutput, standardError);
+    }
+
+    private sealed record SessionContract(
+        string Selector,
+        string ResultId,
+        string Postcondition,
+        string[] RequiredEvidence,
+        IReadOnlyDictionary<string, string> Postconditions);
+
+    private sealed record GitResult(int ExitCode, string StandardOutput, string StandardError);
 }
