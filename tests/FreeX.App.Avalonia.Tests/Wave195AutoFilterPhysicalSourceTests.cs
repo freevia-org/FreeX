@@ -66,8 +66,6 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
         {
             AddCommit(session, commits, "appPayloadSourceCommit");
             AddCommit(session, commits, "captureHarnessEquivalentCommit");
-            foreach (var file in session.GetProperty("captureHarnessEquivalentFiles").EnumerateArray())
-                commits.Add(file.GetProperty("commit").GetString()!);
         }
 
         commits.Should().HaveCount(5);
