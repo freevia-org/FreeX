@@ -41,13 +41,14 @@ public sealed class FreeWSampleDocumentFactoryTests
     }
 
     [Fact]
-    public void HostsKeepOnlyProfileSelectionAndDoNotBuildSampleModels()
+    public void HostsKeepStartupDocumentConstructionCentralized()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var wpf = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "MainWindow.cs"));
         var avalonia = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "SampleDocument.cs"));
 
-        wpf.Should().Contain(
+        wpf.Should().Contain("editor.LoadModel(TextDocument.CreateEmpty())");
+        wpf.Should().NotContain(
             "FreeWSampleDocumentFactory.Create(FreeWSampleDocumentProfile.ClassicEditor)");
         wpf.Should().NotContain("private static TextDocument CreateSampleDocument(");
         avalonia.Should().Contain(
