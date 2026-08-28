@@ -17,6 +17,9 @@ param(
 
     [switch]$NoRestore,
 
+    [ValidateRange(0, 3)]
+    [int]$RetryFailedProjectCount = 0,
+
     [string]$ResultsDirectory = "artifacts/test-gates"
 )
 
@@ -85,19 +88,37 @@ foreach ($testGate in $gates) {
             throw "Gate '$($testGate.id)' references missing test project '$projectPath'."
         }
 
-        $arguments = @("test", $projectFullPath, "--configuration", $Configuration)
-        if ($NoBuild) { $arguments += "--no-build" }
-        if ($NoRestore) { $arguments += "--no-restore" }
-        if (-not [string]::IsNullOrWhiteSpace($ResultsDirectory)) {
-            $outputDirectory = Join-Path $ResultsDirectory $testGate.id
-            $fileName = [System.IO.Path]::GetFileNameWithoutExtension($projectPath) + ".trx"
-            $arguments += @("--results-directory", $outputDirectory, "--logger", "trx;LogFileName=$fileName")
-        }
+        $attempt = 0
+        do {
+            $arguments = @("test", $projectFullPath, "--configuration", $Configuration)
+            if ($NoBuild) { $arguments += "--no-build" }
+            if ($NoRestore) { $arguments += "--no-restore" }
+            if (-not [string]::IsNullOrWhiteSpace($ResultsDirectory)) {
+                $outputDirectory = Join-Path $ResultsDirectory $testGate.id
+                $baseName = [System.IO.Path]::GetFileNameWithoutExtension($projectPath)
+                $attemptSuffix = if ($attempt -eq 0) { "" } else { ".retry$attempt" }
+                $arguments += @(
+                    "--results-directory", $outputDirectory,
+                    "--logger", "trx;LogFileName=$baseName$attemptSuffix.trx"
+                )
+            }
 
-        Write-Host "dotnet $($arguments -join ' ')"
-        & dotnet @arguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "Gate '$($testGate.id)' failed for '$projectPath' with exit code $LASTEXITCODE."
-        }
+            Write-Host "dotnet $($arguments -join ' ')"
+            & dotnet @arguments
+            $testExitCode = $LASTEXITCODE
+            if ($testExitCode -eq 0) {
+                if ($attempt -gt 0) {
+                    Write-Warning "Gate '$($testGate.id)' project '$projectPath' passed on retry $attempt; the initial TRX is retained."
+                }
+                break
+            }
+
+            if ($attempt -ge $RetryFailedProjectCount) {
+                throw "Gate '$($testGate.id)' failed for '$projectPath' after $($attempt + 1) attempt(s) with exit code $testExitCode."
+            }
+
+            $attempt++
+            Write-Warning "Gate '$($testGate.id)' project '$projectPath' failed with exit code $testExitCode; retrying only this project ($attempt/$RetryFailedProjectCount)."
+        } while ($true)
     }
 }

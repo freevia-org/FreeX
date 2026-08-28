@@ -7,67 +7,58 @@ namespace FreeX.App.Host.Tests;
 public sealed class GitHubWorkflowPreflightTests
 {
     [Fact]
-    public void CiWorkflow_RunsPreflightBuildAndTestsWithReadOnlyPermissions()
+    public void CiWorkflow_AutomaticallyRunsTheManifestDefinedSuiteAcrossAllPlatforms()
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "ci.yml");
 
         workflow.Should().Contain("workflow_dispatch:");
-        workflow.Should().NotContain("push:");
-        workflow.Should().NotContain("pull_request:");
+        workflow.Should().Contain("push:");
+        workflow.Should().Contain("pull_request:");
         workflow.Should().NotContain("schedule:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");
         workflow.Should().NotContain("pull_request_target");
-        workflow.Should().Contain("runs-on: windows-latest");
-        workflow.Should().Contain("timeout-minutes: 120");
+        workflow.Should().Contain("runs-on: ${{ matrix.runner }}");
+        workflow.Should().Contain("timeout-minutes: 90");
         workflow.Should().Contain("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
         workflow.Should().Contain("persist-credentials: false");
-        (workflow.Split("fetch-depth: 0", StringSplitOptions.None).Length - 1).Should().Be(3);
-        (workflow.Split("fetch-depth: 1", StringSplitOptions.None).Length - 1).Should().Be(1);
+        workflow.Should().Contain("fetch-depth: ${{ matrix.fetchDepth }}");
         workflow.Should().Contain("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68");
         workflow.Should().Contain("dotnet-version: 10.0.400");
         workflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("concurrency:");
-        workflow.Should().Contain("group: ci-${{ github.ref }}");
+        workflow.Should().Contain("group: ci-${{ github.event.pull_request.number || github.ref }}");
         workflow.Should().Contain("cancel-in-progress: true");
         workflow.Should().Contain("name: FreeX commit gate");
-        workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release");
-        workflow.Should().Contain("-Gate commit -App FreeX -Platform windows");
-        workflow.Should().Contain("-GateId \"${{ matrix.gate }}\"");
-        workflow.Should().Contain("name: Windows test shard (${{ matrix.gate }})");
-        workflow.Should().Contain("needs: [freex-build, freex-tests]");
+        workflow.Should().Contain("tools/Get-TestGateMatrix.ps1 -Gate all");
+        workflow.Should().Contain("fromJSON(needs.prepare.outputs.matrix)");
+        workflow.Should().Contain("-Gate \"${{ matrix.gate }}\"");
+        workflow.Should().Contain("-App \"${{ matrix.app }}\"");
+        workflow.Should().Contain("-Platform \"${{ matrix.platform }}\"");
+        workflow.Should().Contain("-GateId \"${{ matrix.gateId }}\"");
         workflow.Should().Contain("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9");
-        workflow.Should().Contain("name: Linux portable lane");
-        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux");
-        workflow.Should().NotContain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform linux -NoBuild");
-        workflow.Should().Contain("name: macOS portable lane");
-        workflow.Should().Contain("dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release");
-        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform macos");
-        workflow.Should().NotContain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform macos -NoBuild");
+        workflow.Should().Contain("platform: linux");
+        workflow.Should().Contain("platform: macos");
         workflow.Should().NotContain("dotnet test FreeX.DefaultTests.slnx");
         workflow.Should().NotContain("dotnet test FreeX.UiTests.slnx");
-        workflow.Should().Contain("--disable-build-servers");
-        workflow.Should().Contain("-p:UseSharedCompilation=false");
-        workflow.Should().Contain("-p:NodeReuse=false");
-        workflow.Should().Contain("/nr:false");
-        workflow.Should().Contain("-m:1");
-        workflow.Should().Contain("Parallel build failed; retrying once");
-        workflow.Should().NotContain("dotnet test FreeX.slnx --configuration Release --no-build");
+        workflow.Should().NotContain("dotnet build FreeX.slnx");
     }
 
     [Fact]
-    public void CodeQlWorkflow_AnalyzesProductionSuiteAndCancelsSupersededRuns()
+    public void CodeQlWorkflow_UsesGitHubsNoBuildCSharpAnalysisAndCancelsSupersededRuns()
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "codeql.yml");
         var solution = WorkspaceFileLocator.ReadAllText("FreeSuite.CodeQL.slnx");
 
-        workflow.Should().Contain("group: codeql-${{ github.ref }}");
+        workflow.Should().Contain("push:");
+        workflow.Should().Contain("pull_request:");
+        workflow.Should().Contain("schedule:");
+        workflow.Should().Contain("group: codeql-${{ github.event.pull_request.number || github.ref }}");
         workflow.Should().Contain("cancel-in-progress: true");
-        workflow.Should().Contain("dotnet build FreeSuite.CodeQL.slnx --configuration Release");
-        workflow.Should().Contain("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9");
-        workflow.Should().Contain("Parallel CodeQL build failed; retrying once");
-        workflow.Should().NotContain("dotnet build FreeX.slnx");
+        workflow.Should().Contain("build-mode: none");
+        workflow.Should().NotContain("dotnet build");
+        workflow.Should().NotContain("actions/cache");
         solution.Should().Contain("freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj");
         solution.Should().Contain("freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj");
         solution.Should().NotContain(".Tests.csproj");
@@ -188,11 +179,11 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void GitHubWorkflowPreflight_RequiresManualDispatchOnly()
+    public void GitHubWorkflowPreflight_ReservesAutomaticTriggersForCanonicalQualityWorkflows()
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-GitHubWorkflows.ps1");
 
-        script.Should().Contain("workflow must use workflow_dispatch only; automatic triggers are disabled.");
+        script.Should().Contain("automatic triggers are reserved for CI and CodeQL");
     }
 
     [Fact]
@@ -224,7 +215,7 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("workflow must use workflow_dispatch only; automatic triggers are disabled.");
+        result.NormalizedCombinedOutput.Should().Contain("non-canonical workflow must use workflow_dispatch only; automatic triggers are reserved for CI and CodeQL.");
         result.CombinedOutput.Should().Contain("automatic.yml");
     }
 

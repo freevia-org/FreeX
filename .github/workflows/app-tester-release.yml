@@ -38,6 +38,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: app-tester-release-${{ inputs.app }}-${{ inputs.release_version }}
@@ -53,8 +54,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      preflight_matrix: ${{ steps.select.outputs.preflight_matrix }}
-      verify_matrix: ${{ steps.select.outputs.verify_matrix }}
       package_matrix: ${{ steps.select.outputs.package_matrix }}
       publish_matrix: ${{ steps.select.outputs.publish_matrix }}
     steps:
@@ -86,41 +85,19 @@ jobs:
           $selectedLanes = @($lanes | Where-Object { $_.app -in $apps -and $_.platform -in $platforms })
           if ($selectedLanes.Count -eq 0) { throw "No release lanes were selected." }
 
-          $verifyLanes = @(
-            $selectedLanes |
-              Group-Object { "$($_.app):$($_.platform)" } |
-              ForEach-Object {
-                $lane = $_.Group[0]
-                @{ app = $lane.app; platform = $lane.platform; runner = $lane.runner }
-              }
-          )
-          $preflightLanes = @(
-            foreach ($selectedPlatform in $platforms) {
-              $runner = switch ($selectedPlatform) {
-                "windows" { "windows-latest" }
-                "linux" { "ubuntu-latest" }
-                "macos" { "macos-15" }
-              }
-              @{ platform = $selectedPlatform; runner = $runner }
-            }
-          )
-          $preflightMatrix = @{ include = $preflightLanes } | ConvertTo-Json -Compress
-          $verifyMatrix = @{ include = $verifyLanes } | ConvertTo-Json -Compress
           $packageMatrix = @{ include = $selectedLanes } | ConvertTo-Json -Compress
           $publishMatrix = @{ app = $apps } | ConvertTo-Json -Compress
-          "preflight_matrix=$preflightMatrix" >> $env:GITHUB_OUTPUT
-          "verify_matrix=$verifyMatrix" >> $env:GITHUB_OUTPUT
           "package_matrix=$packageMatrix" >> $env:GITHUB_OUTPUT
           "publish_matrix=$publishMatrix" >> $env:GITHUB_OUTPUT
 
-  preflight:
-    name: Preflight ${{ matrix.platform }}
+  candidate:
+    name: Verify immutable release candidate
     needs: prepare
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.prepare.outputs.preflight_matrix) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -149,70 +126,19 @@ jobs:
             }
           }
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: 10.0.400
-
-      - name: Cache NuGet packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
-
-      - name: Repository preflight
+      - name: Require successful exact-SHA CI and CodeQL attestations
         shell: pwsh
-        run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1
-
-  verify:
-    name: Verify ${{ matrix.app }} ${{ matrix.platform }}
-    needs: [prepare, preflight]
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 240
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.prepare.outputs.verify_matrix) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: 10.0.400
-
-      - name: Cache NuGet packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
-
-      - name: Run release test gate
-        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          pwsh -NoProfile -File tools/Invoke-TestGate.ps1 `
-            -Gate release `
-            -App "${{ matrix.app }}" `
-            -Platform "${{ matrix.platform }}" `
-            -ResultsDirectory TestResults
-          if ($LASTEXITCODE -ne 0) { throw "Release gate failed with exit code $LASTEXITCODE." }
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: tester-${{ matrix.app }}-${{ github.run_id }}-${{ github.run_attempt }}-test-results
-          path: "**/TestResults/*.trx"
-          if-no-files-found: warn
+          pwsh -NoProfile -File tools/Test-GitHubReleaseCandidate.ps1 `
+            -Repository $env:GITHUB_REPOSITORY `
+            -CommitSha $env:GITHUB_SHA `
+            -RequiredWorkflows ci.yml,codeql.yml
 
   package:
     name: Package ${{ matrix.app }} ${{ matrix.runtime }}
-    needs: [prepare, verify]
+    needs: [prepare, candidate]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     strategy:
