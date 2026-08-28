@@ -4213,7 +4213,10 @@ public sealed partial class MainWindow : Window,
         GetPrintPlan: _fileSession.BuildPrintBackstagePlan,
         Print: request => FilePrint(request),
         ExportVideo: () => _ = _fileSession.ExportVideoAsync(),
-        CanExportVideo: () => _fileSession.CanExportVideo);
+        CanExportVideo: () => _fileSession.CanExportVideo)
+    {
+        Close = Close,
+    };
 
     private bool FileNew() => RunFileCommand(_fileSession.NewAsync());
     private bool FileOpen() => RunFileCommand(_fileSession.OpenAsync());
@@ -4266,7 +4269,7 @@ public sealed partial class MainWindow : Window,
         }
     }
 
-    private void ShowBackstage() => ShowBackstage("Info");
+    private void ShowBackstage() => _backstage.Show();
 
     private void ShowBackstage(string paneLabel) => _backstage.Show(paneLabel);
 

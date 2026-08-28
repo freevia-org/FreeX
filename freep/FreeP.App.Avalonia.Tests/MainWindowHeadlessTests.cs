@@ -603,25 +603,20 @@ public sealed class MainWindowHeadlessTests : IDisposable
         if (!ran) return;
         entries.Select(entry => entry.Kind == SisterBackstageEntryKind.Divider ? "|" : entry.Label)
             .Should().Equal(
-                "Info", "New", "Open", "|", "Save", "Save As", "Print", "Export",
-                "Recent", "New from template", "Account", "Options", "Close");
-        entries.Should().HaveCount(13);
-        // R139: "Open" became a Pane entry instead of a direct Command entry, so Pane gains one and
-        // Command loses one. The pane hosts both a "Browse" row (preserving what the old Command
-        // did — see PresentationBackstagePanePlannerTests.
-        // BuildOpenPane_ExposesBrowseSoTheOpenEntryStillOpensFiles) and the manual
-        // "Recover Unsaved Presentations" command.
+                "Home", "New", "Open", "Info", "|", "Save", "Save As", "Print", "Export",
+                "Close", "Account", "Options");
+        entries.Should().HaveCount(12);
         entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Pane).Should().Be(8);
-        entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Command).Should().Be(4);
+        entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Command).Should().Be(3);
         entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Divider).Should().Be(1);
         entries.Where(entry => entry.DockBottom).Select(entry => entry.Label)
-            .Should().Equal("Account", "Options", "Close");
+            .Should().Equal("Account", "Options");
     }
 
     [Fact]
-    public async Task Backstage_opens_info_refreshes_print_and_closes_by_escape_or_command()
+    public async Task Backstage_opens_home_refreshes_print_and_closes_by_escape_or_command()
     {
-        var openedInfo = false;
+        var openedHome = false;
         var openedPrint = false;
         var printPlanBuilt = false;
         var escaped = false;
@@ -631,7 +626,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         {
             var window = new MainWindow(Array.Empty<string>());
             window.ShowBackstageForTests();
-            openedInfo = window.IsBackstageOpen && window.CurrentBackstagePaneLabel == "Info";
+            openedHome = window.IsBackstageOpen && window.CurrentBackstagePaneLabel == "Home";
 
             openedPrint = window.ActivateBackstageEntryForTests("Print") &&
                 window.IsBackstageOpen &&
@@ -645,7 +640,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         });
 
         if (!ran) return;
-        openedInfo.Should().BeTrue();
+        openedHome.Should().BeTrue();
         openedPrint.Should().BeTrue();
         printPlanBuilt.Should().BeTrue("Print must use the live shared print workflow");
         escaped.Should().BeTrue();
@@ -666,7 +661,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
 
             ribbon.SelectedIndex = 0;
 
-            opened = window.IsBackstageOpen && window.CurrentBackstagePaneLabel == "Info";
+            opened = window.IsBackstageOpen && window.CurrentBackstagePaneLabel == "Home";
             restoredIndex = ribbon.SelectedIndex;
             restoredIndex.Should().Be(contentIndex);
         });
