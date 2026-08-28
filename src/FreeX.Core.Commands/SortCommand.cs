@@ -1726,9 +1726,6 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
 
         foreach (var rule in sheet.ConditionalFormats.OrderBy(r => r.Priority))
         {
-            if (rule.RuleType != CfRuleType.IconSet)
-                continue;
-
             var applies = false;
             foreach (var range in rule.AllRanges)
             {
@@ -1740,6 +1737,22 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             }
             if (!applies)
                 continue;
+
+            if (rule.RuleType != CfRuleType.IconSet)
+            {
+                // R166-sort-icon-stopiftrue: a higher-priority non-icon rule that matches this
+                // cell with StopIfTrue set suppresses every lower-priority rule in the real
+                // renderer (ViewportConditionalFormatEvaluator.IsSuppressedByHigherPriorityStopIfTrue),
+                // so a lower-priority icon-set rule's icon is never actually painted for this
+                // cell — it displays with no icon. Mirror that suppression here for the "simple"
+                // rule shapes this evaluator already knows how to judge (CellValue, text-match,
+                // Blanks/Errors) via TryEvaluateSimpleConditionalFormatRule; aggregate/formula
+                // rule types are left unresolved, the same narrowed scope documented on this
+                // method and on GetEffectiveColor above.
+                if (rule.StopIfTrue && TryEvaluateSimpleConditionalFormatRule(rule, value, out var suppresses) && suppresses)
+                    return null;
+                continue;
+            }
 
             if (!TryResolveIconSetBucket(sheet, rule, cellNumber, out var bucket, out var iconCount))
             {

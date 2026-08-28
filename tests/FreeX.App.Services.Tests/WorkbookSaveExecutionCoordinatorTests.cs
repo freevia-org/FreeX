@@ -188,6 +188,55 @@ public sealed class WorkbookSaveExecutionCoordinatorTests
         failure.Exception.Should().BeOfType<IOException>().Which.Message.Should().Be("disk full");
     }
 
+    [Fact]
+    public async Task ExecuteAsync_CancellationRequestedAfterSaveCommits_StillReportsSucceeded()
+    {
+        // Regression for R166 shared-status-progress F1: request.SaveAsync (WorkbookSaveService.SaveAsync)
+        // has already durably flushed content and performed the atomic rename before it returns. A cancel
+        // observed only *after* that successful return must not turn an already-committed save into a
+        // reported Canceled outcome -- that would leave the on-disk file holding the new content while the
+        // host skips ApplyCompletion/recent-file registration and tells the user the save was canceled.
+        var workbook = CreateWorkbook();
+        using var cancellation = new CancellationTokenSource();
+        var start = ReadyExecution(workbook, () => 0);
+
+        var result = await start.ExecuteAsync(new WorkbookSaveExecutionRequest(
+            cancellation.Token,
+            ProjectViewStateForSave: () => { },
+            SaveAsync: _ =>
+            {
+                // Simulates the Cancel button being clicked in the narrow window between the
+                // underlying save's atomic commit and the coordinator's post-save continuation.
+                cancellation.Cancel();
+                return Task.FromResult<IReadOnlyList<string>>([]);
+            }));
+
+        result.Outcome.Should().Be(WorkbookSaveExecutionOutcome.Succeeded);
+        result.CompletionPlan.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CancellationObservedBySaveBeforeCommit_StillReportsCanceled()
+    {
+        // Sibling/no-regression case: when the cancellation is observed *by the save itself* (i.e. it
+        // never reaches a durable commit and instead throws OperationCanceledException out of SaveAsync),
+        // the coordinator must still report Canceled. This is unaffected by removing the post-save check.
+        var workbook = CreateWorkbook();
+        using var cancellation = new CancellationTokenSource();
+        var start = ReadyExecution(workbook, () => 0);
+
+        var result = await start.ExecuteAsync(new WorkbookSaveExecutionRequest(
+            cancellation.Token,
+            ProjectViewStateForSave: () => { },
+            SaveAsync: _ =>
+            {
+                cancellation.Cancel();
+                throw new OperationCanceledException(cancellation.Token);
+            }));
+
+        result.Outcome.Should().Be(WorkbookSaveExecutionOutcome.Canceled);
+    }
+
     private static WorkbookSaveExecution ReadyExecution(
         Workbook workbook,
         Func<int> getGeneration,

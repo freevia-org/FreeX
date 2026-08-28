@@ -147,8 +147,14 @@ public sealed class WorkbookSaveExecution
                 _workbookAtStart,
                 request.CancellationToken,
                 _expectedLastWriteTimeUtc)).ConfigureAwait(true);
-            request.CancellationToken.ThrowIfCancellationRequested();
 
+            // No cancellation check here: request.SaveAsync (WorkbookSaveService.SaveAsync) has already
+            // durably flushed the new content and performed the atomic rename onto the real target path
+            // by the time it returns successfully. The save is fully committed at that point -- there is
+            // no partially-applied state to abort into. A ThrowIfCancellationRequested() here would report
+            // WorkbookSaveExecutionOutcome.Canceled to the caller (which skips ApplyCompletion and recent-file
+            // registration, leaving the dirty flag set) even though the file on disk already holds the new
+            // content, misleading the user into re-saving or discarding a save that already succeeded.
             var completionPlan = SaveCompletionPlanner.Plan(
                 _generationAtStart,
                 _getDirtyGeneration(),

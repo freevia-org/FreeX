@@ -1638,16 +1638,25 @@ public static class PresentationPdfExporter
 
     private static void AppendShapeText(List<PdfDrawOp> ops, ShapeBox box, TextBody? textBody, string content, bool hasText)
     {
-        var lines = BuildShapeTextLines(textBody, content, hasText);
+        var lines = BuildShapeTextLines(textBody, content, hasText, box.Width, box.Height);
         if (lines.Count == 0)
             return;
 
+        // freep-text-autofit F1: this text layer is an invisible overlay used only for PDF
+        // search/copy/screen-reader access (see PresentationRasterPdfExporter's R132 comment) --
+        // it is never seen, so a line landing below the shape's box is harmless. Previously this
+        // loop `return`ed as soon as a line crossed the box's bottom edge, which silently deleted
+        // every remaining paragraph from the accessible/searchable layer whenever the box was too
+        // small at authored size -- exactly the case a:normAutofit (shrink-to-fit) and a:spAutoFit
+        // (grow-shape-to-fit) exist to handle on screen, but whose live shrink/grow math
+        // (TextLayoutPlanner/ShapeAutoFitRenderPlanner) lives in FreeP.App.Presentation and is not
+        // reachable from Core.IO. Emitting every line unconditionally -- rather than trying to
+        // reproduce that layout -- guarantees no authored text ever silently vanishes from the
+        // exported PDF's text layer, which is the actual defect: position accuracy for the
+        // (invisible) overflow lines is a lesser concern than dropping content outright.
         var y = box.Y + box.Height - ShapeTextInsetPt - lines[0].FontSizePt;
         foreach (var line in lines)
         {
-            if (y < box.Y + ShapeTextInsetPt)
-                return;
-
             ops.Add(new PdfText(
                 box.X + ShapeTextInsetPt,
                 y,
@@ -1670,18 +1679,43 @@ public static class PresentationPdfExporter
     /// what was authored, silently truncating text that needed more/smaller lines than that budget
     /// allowed and rendering PowerPoint-mismatched sizes for everything else).
     /// </summary>
-    private static List<ShapeTextLine> BuildShapeTextLines(TextBody? textBody, string content, bool hasText)
+    /// <param name="boxWidthPt">The shape's current box width in points, used only as an
+    /// EMU-converted input to <see cref="PptxPackageWriter.RecomputeNormalAutoFitScale"/>'s
+    /// line-wrap estimate for <c>a:normAutofit</c> shapes.</param>
+    /// <param name="boxHeightPt">The shape's current box height in points, same use as
+    /// <paramref name="boxWidthPt"/>.</param>
+    private static List<ShapeTextLine> BuildShapeTextLines(
+        TextBody? textBody, string content, bool hasText, double boxWidthPt, double boxHeightPt)
     {
         if (!hasText || textBody is null || textBody.Paragraphs.Count == 0)
             return Lines(content).Select(line => new ShapeTextLine(line, BodySize, BodyLeadingPt)).ToList();
 
         var normAutofit = textBody.AutoFitKind == TextAutoFitKind.Normal;
-        var fontScale = normAutofit && textBody.FontScalePPT is { } scalePpt && scalePpt > 0
-            ? scalePpt / 100000.0
-            : 1.0;
-        var leadingScale = normAutofit && textBody.LnSpcReductionPPT is { } reductionPpt && reductionPpt > 0
-            ? Math.Max(0.0, 1.0 - reductionPpt / 100000.0)
-            : 1.0;
+
+        // freep-text-autofit F1: a cached TextBody.FontScalePPT reflects the box/text state at
+        // import time (or whenever it was last cached) and is null for a shape authored fresh in
+        // FreeP -- re-using it verbatim (the old behavior) either trusted a stale scale or, when
+        // absent, rendered every paragraph at full authored size. The live renderer
+        // (TextLayoutPlanner.PlanNormalAutoFitOverflow, FreeP.App.Presentation) recomputes an
+        // authoritative scale using real host glyph metrics on every paint, but that layer is not
+        // reachable from Core.IO. PptxPackageWriter.RecomputeNormalAutoFitScale already solves this
+        // exact problem for the .pptx writer with a text-metrics-free estimate built from data
+        // Core.IO owns (run font sizes vs. the shape's current box) -- reuse it here instead of
+        // re-deriving the same estimate, so the exported text layer's font size tracks the CURRENT
+        // box even when no cached scale exists or the cached one has gone stale.
+        var fontScale = 1.0;
+        var leadingScale = 1.0;
+        if (normAutofit)
+        {
+            var (fontScalePpt, lnSpcReductionPpt) = PptxPackageWriter.RecomputeNormalAutoFitScale(
+                textBody,
+                DrawingMlCoordinateUnits.PointsToEmu(boxWidthPt),
+                DrawingMlCoordinateUnits.PointsToEmu(boxHeightPt));
+            if (fontScalePpt is { } scalePpt && scalePpt > 0)
+                fontScale = scalePpt / 100000.0;
+            if (lnSpcReductionPpt is { } reductionPpt && reductionPpt > 0)
+                leadingScale = Math.Max(0.0, 1.0 - reductionPpt / 100000.0);
+        }
 
         var result = new List<ShapeTextLine>();
         foreach (var paragraph in textBody.Paragraphs)

@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using System.Threading;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -168,7 +169,9 @@ public sealed class RecalcEngine
         bool resolveSpillDependents,
         SheetId? restrictWritesToSheet = null,
         bool skipDataTableBodyCells = false,
-        bool includeVolatileCells = true)
+        bool includeVolatileCells = true,
+        CancellationToken cancellationToken = default,
+        IProgress<RecalcProgress>? progress = null)
     {
         // See the includeVolatileCells parameter doc above. Every reference to the workbook's
         // registered volatile-cell set within this pass goes through this local instead of the
@@ -392,8 +395,31 @@ public sealed class RecalcEngine
             _activeIterativeCyclicCells.RemoveWhere(addr => !stillCyclic.Contains(addr));
         }
 
+        // R166-shared-status-progress-F2: RecalculateAllFormulas (Ctrl+Alt+F9/F9) and
+        // RecalculateSheetFormulas (Shift+F9) pass a real cancellationToken/progress through to
+        // this loop -- the single per-cell evaluation pass that dominates the cost of a large,
+        // formula-heavy "Calculate Now" gesture. Every other caller of this private overload
+        // (the ordinary edit-triggered public Recalculate wrapper, ResolveSpillTargetDependentsFixpoint's
+        // spill-target follow-up pass, and the #SPILL! anchor retry pass) omits both parameters, so
+        // they default to CancellationToken.None (ThrowIfCancellationRequested is then a no-op) and
+        // a null progress (Report is never called) -- this leaves every other recalculation gesture's
+        // behavior byte-for-byte unchanged.
+        var progressTotalCells = (directFormulaRoots ?? evaluationPlan.OrderedCells).Count;
+        var progressCompletedCells = 0;
+        progress?.Report(new RecalcProgress(progressCompletedCells, progressTotalCells));
+
         foreach (var addr in directFormulaRoots ?? evaluationPlan.OrderedCells)
         {
+            // See the R166-shared-status-progress-F2 comment above the loop: honor cancellation and
+            // surface progress once per cell so a large synchronous recalc (F9/Ctrl+Alt+F9/Shift+F9)
+            // can be interrupted and shown a percentage instead of freezing the UI thread with no
+            // feedback and no way out. Checked/reported at the top of every iteration rather than
+            // batched, since ThrowIfCancellationRequested/Report are both cheap no-ops when the
+            // caller passed neither (the overwhelming majority of calls into this method).
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(new RecalcProgress(progressCompletedCells, progressTotalCells));
+            progressCompletedCells++;
+
             // Shift+F9 "Calculate Sheet" (RecalculateSheetFormulas) restricts writes to the target
             // sheet: the dependency traversal above still crosses sheet boundaries to keep the
             // topological order correct, but a cross-sheet dependent must not be mutated here.
@@ -688,6 +714,8 @@ public sealed class RecalcEngine
             if (_anchorArraySpillDependents.Count > 0)
                 RefreshAnchorArraySpillDependents(workbook, addr);
         }
+
+        progress?.Report(new RecalcProgress(progressCompletedCells, progressTotalCells));
 
         var report = new RecalcReport(
             BuildRecalculatedCells(recalculatedCount, singleRecalculated, recalculated),
@@ -2050,15 +2078,35 @@ public sealed class RecalcEngine
         }
     }
 
-    /// <summary>Rebuild dependencies and evaluate every formula cell in the workbook.</summary>
-    public RecalcReport RecalculateAllFormulas(Workbook workbook)
+    /// <summary>
+    /// Rebuild dependencies and evaluate every formula cell in the workbook.
+    /// </summary>
+    /// <param name="cancellationToken">
+    /// R166-shared-status-progress-F2: honored inside the per-cell evaluation loop (the dominant
+    /// cost for a large, formula-heavy workbook) so a caller can interrupt a long-running "Calculate
+    /// Now" (Ctrl+Alt+F9) pass instead of blocking with no way out. Throws
+    /// <see cref="OperationCanceledException"/> when canceled mid-pass; cells already evaluated by
+    /// then keep their fresh values, cells not yet reached keep their prior (stale) ones -- the same
+    /// "some of it happened" contract a canceled Excel calculation leaves behind. Defaults to
+    /// <see cref="CancellationToken.None"/>, which makes every existing caller's behavior unchanged.
+    /// </param>
+    /// <param name="progress">
+    /// R166-shared-status-progress-F2: optional per-cell progress callback (completed/total formula
+    /// cells) so a caller can drive a status-bar percentage the same way Open/Save/Print/Export
+    /// already do via WorkbookProgressStageRunner. Defaults to null, which reports nothing.
+    /// </param>
+    public RecalcReport RecalculateAllFormulas(Workbook workbook, CancellationToken cancellationToken = default, IProgress<RecalcProgress>? progress = null)
     {
         RebuildFormulaDependencies(workbook);
+        cancellationToken.ThrowIfCancellationRequested();
         var formulaCells = CollectFormulaCells(workbook);
 
         // Recalculate runs the spill-target dependent follow-up pass itself (see the
-        // spillTargetsMayHaveChanged path), so no separate second pass is needed here.
-        var report = Recalculate(workbook, formulaCells);
+        // spillTargetsMayHaveChanged path), so no separate second pass is needed here. Call the
+        // private overload directly (rather than the public 4-arg Recalculate wrapper) so
+        // cancellationToken/progress reach the per-cell loop; resolveSpillDependents: true and the
+        // other defaults below match exactly what the public wrapper would have passed.
+        var report = Recalculate(workbook, formulaCells, resolveSpillDependents: true, cancellationToken: cancellationToken, progress: progress);
 
         NotifyAllSheetsRecalculated(workbook);
 
@@ -2309,10 +2357,23 @@ public sealed class RecalcEngine
             Notify(report.Errors[i].Cell.Sheet);
     }
 
-    /// <summary>Rebuild dependencies and evaluate formula cells on a single worksheet.</summary>
-    public RecalcReport RecalculateSheetFormulas(Workbook workbook, SheetId sheetId)
+    /// <summary>
+    /// Rebuild dependencies and evaluate formula cells on a single worksheet.
+    /// </summary>
+    /// <param name="cancellationToken">
+    /// See <see cref="RecalculateAllFormulas"/>'s matching parameter doc (R166-shared-status-progress-F2)
+    /// -- honored inside the per-cell evaluation loop so a caller can interrupt a long-running Shift+F9
+    /// "Calculate Sheet" pass. Defaults to <see cref="CancellationToken.None"/>, so every existing
+    /// caller's behavior is unchanged.
+    /// </param>
+    /// <param name="progress">
+    /// See <see cref="RecalculateAllFormulas"/>'s matching parameter doc. Defaults to null, which
+    /// reports nothing.
+    /// </param>
+    public RecalcReport RecalculateSheetFormulas(Workbook workbook, SheetId sheetId, CancellationToken cancellationToken = default, IProgress<RecalcProgress>? progress = null)
     {
         RebuildFormulaDependencies(workbook);
+        cancellationToken.ThrowIfCancellationRequested();
         var sheet = workbook.GetSheet(sheetId);
         if (sheet is null)
             return new RecalcReport([], [], []);
@@ -2350,7 +2411,7 @@ public sealed class RecalcEngine
             // re-evaluates every formula cell in the workbook regardless of this pass). See the
             // matching restriction checks throughout Recalculate/AddCyclicCell/RunIterativeCalc/
             // ResolveSpillTargetDependentsFixpoint.
-            var report = Recalculate(workbook, formulaCells, resolveSpillDependents: true, restrictWritesToSheet: sheetId);
+            var report = Recalculate(workbook, formulaCells, resolveSpillDependents: true, restrictWritesToSheet: sheetId, cancellationToken: cancellationToken, progress: progress);
 
             // Shift+F9 "Calculate Sheet" is a genuine "Calculate Now"-shaped gesture for sheetId --
             // see NotifyAllSheetsRecalculated's doc comment for why a real recalc pass must
@@ -3186,3 +3247,16 @@ public sealed record RecalcReport(
     IReadOnlyList<CellAddress> RecalculatedCells,
     IReadOnlyList<(CellAddress Cell, string Error)> Errors,
     IReadOnlyList<CellAddress> CyclicCells);
+
+/// <summary>
+/// Progress of a <see cref="RecalcEngine.RecalculateAllFormulas"/> or
+/// <see cref="RecalcEngine.RecalculateSheetFormulas"/> pass (R166-shared-status-progress-F2), reported
+/// once before the per-cell evaluation loop starts (<c>CompletedFormulaCells</c> 0), once per cell
+/// evaluated, and once more after the loop finishes (<c>CompletedFormulaCells == TotalFormulaCells</c>).
+/// <see cref="TotalFormulaCells"/> is the number of formula cells this particular pass is evaluating
+/// (every formula cell in the workbook for RecalculateAllFormulas, or just the target sheet's for
+/// RecalculateSheetFormulas) -- it does not include the follow-up spill-target-dependent fixpoint
+/// pass, so a workbook with dynamic-array spills can see the final report land short of a literal
+/// 100% despite the recalculation having genuinely finished.
+/// </summary>
+public readonly record struct RecalcProgress(int CompletedFormulaCells, int TotalFormulaCells);

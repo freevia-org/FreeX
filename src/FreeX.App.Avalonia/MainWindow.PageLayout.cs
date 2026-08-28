@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 
 using FreeX.App.Presentation.PageLayout;
@@ -1845,7 +1846,8 @@ public sealed partial class MainWindow
             }
 
             var contentType = InsertPictureCommandFactory.ContentTypeForPath(file.Name) ?? "image/png";
-            var picture = new WorksheetHeaderFooterPicture(readResult.Bytes, contentType, file.Name, 160, 80);
+            var (pictureWidth, pictureHeight) = DecodeHeaderFooterPictureSize(readResult.Bytes);
+            var picture = new WorksheetHeaderFooterPicture(readResult.Bytes, contentType, file.Name, pictureWidth, pictureHeight);
             if (!HeaderFooterEditorPlanner.ContainsPictureToken(editor.Text))
             {
                 var value = HeaderFooterEditorPlanner.InsertToken(editor.Text, caret, HeaderFooterEditorPlanner.PictureToken);
@@ -1972,5 +1974,50 @@ public sealed partial class MainWindow
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    private const double HeaderFooterPictureDefaultWidth = 160;
+    private const double HeaderFooterPictureDefaultHeight = 80;
+
+    /// <summary>
+    /// Decodes a header/footer picture's native size via Avalonia's <see cref="Bitmap"/> decoder and
+    /// converts pixels to this app's 96-DPI device-independent unit convention using the same
+    /// <see cref="PictureDecodePixelsToDip"/> helper (defined in MainWindow.InsertObjects.cs) that the
+    /// ordinary Insert &gt; Picture path's <c>DecodePictureSize</c> already uses -- so an image inserted
+    /// through either the header/footer "Picture" button or the ordinary Insert &gt; Picture command lands
+    /// at the same physical size instead of every header/footer picture being force-fit into a fixed box
+    /// and having its aspect ratio distorted. Falls back to the historical 160x80 default only when the
+    /// bytes cannot be decoded as an image at all, matching how <c>DecodePictureSize</c> degrades on failure.
+    /// </summary>
+    private static (double Width, double Height) DecodeHeaderFooterPictureSize(byte[] imageBytes)
+    {
+        try
+        {
+            using var stream = new MemoryStream(imageBytes);
+            using var bitmap = new Bitmap(stream);
+            return ResolveHeaderFooterPictureSize(bitmap.PixelSize.Width, bitmap.PixelSize.Height, bitmap.Dpi.X, bitmap.Dpi.Y);
+        }
+        catch (Exception)
+        {
+            // Corrupt, truncated, or unsupported bytes: fall through to the historical default box size
+            // below, same as the ordinary Insert > Picture path's DecodePictureSize degrades on failure.
+            return (HeaderFooterPictureDefaultWidth, HeaderFooterPictureDefaultHeight);
+        }
+    }
+
+    /// <summary>
+    /// Converts decoded pixel dimensions to DIP units via <see cref="PictureDecodePixelsToDip"/> and falls
+    /// back to the historical 160x80 default when either dimension decodes as non-positive (extracted from
+    /// <see cref="DecodeHeaderFooterPictureSize"/> so the fallback threshold is directly testable without
+    /// needing a real -- or headless-stubbed -- <see cref="Bitmap"/> decode).
+    /// </summary>
+    private static (double Width, double Height) ResolveHeaderFooterPictureSize(
+        int pixelWidth, int pixelHeight, double dpiX, double dpiY)
+    {
+        var width = PictureDecodePixelsToDip(pixelWidth, dpiX);
+        var height = PictureDecodePixelsToDip(pixelHeight, dpiY);
+        return width > 0 && height > 0
+            ? (width, height)
+            : (HeaderFooterPictureDefaultWidth, HeaderFooterPictureDefaultHeight);
     }
 }
