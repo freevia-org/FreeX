@@ -62,6 +62,19 @@ public sealed class Wave195AutoFilterPhysicalSourceTests
         AddCommit(root, commits, "postCaptureCleanupCommit");
         AddCommit(root, commits, "packagingBaseCommit");
         AddCommit(root, commits, "originMainAtPackaging");
+        foreach (var file in root.GetProperty("captureHarnessEquivalentFiles").EnumerateArray())
+        {
+            var path = file.GetProperty("path").GetString()!;
+            var commit = file.GetProperty("commit").GetString()!;
+            var expectedBlob = file.GetProperty("gitBlob").GetString()!;
+            commits.Add(commit);
+
+            var blob = RunGit(evidenceRoot, "rev-parse", $"{commit}:{path}");
+            blob.ExitCode.Should().Be(0,
+                $"the declared harness path '{path}' must exist at commit {commit}: {blob.StandardError}");
+            blob.StandardOutput.Trim().Should().Be(expectedBlob,
+                $"the declared Git blob for harness path '{path}' must match commit {commit}");
+        }
         foreach (var session in root.GetProperty("sessions").EnumerateArray())
         {
             AddCommit(session, commits, "appPayloadSourceCommit");
