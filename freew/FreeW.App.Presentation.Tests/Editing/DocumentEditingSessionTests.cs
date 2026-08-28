@@ -4,6 +4,51 @@ namespace FreeW.App.Presentation.Tests.Editing;
 
 public sealed class DocumentEditingSessionTests
 {
+    /// <summary>
+    /// r166 remediation. DocumentMerge.CloneBlocksForInsertion transfers exactly the styles the cloned
+    /// content references, renaming any whose display Name collides with a target style under a
+    /// different id -- because two styles sharing a Name is invalid OOXML and DocxWriter emits it
+    /// anyway. All three insert-a-document paths then copied EVERY source style again, by id alone,
+    /// which put the collision straight back for any source style the content does not reference.
+    /// A second implementation of "import a document's styles" is what made this possible.
+    /// </summary>
+    [Theory]
+    [InlineData("after")]
+    [InlineData("replace")]
+    [InlineData("caret")]
+    public void InsertingADocument_DoesNotImportAnUnusedStyleThatCollidesByName(string path)
+    {
+        var session = new DocumentEditingSession();
+        // ReplaceEmptyParagraphWithDocument only acts on an EMPTY paragraph and returns false
+        // otherwise -- with body text here that arm asserted nothing at all and passed for the wrong
+        // reason, which the fail-before check caught.
+        var target = DocumentWith(path == "replace" ? "" : "body");
+        target.Styles["TargetId"] = new DocumentStyle { Id = "TargetId", Name = "Shared Name" };
+        session.LoadDocument(target);
+
+        var source = DocumentWith("inserted");
+        // Not referenced by any inserted paragraph, and named the same as the target's own style.
+        source.Styles["SourceId"] = new DocumentStyle { Id = "SourceId", Name = "Shared Name" };
+
+        switch (path)
+        {
+            case "after":
+                session.InsertDocumentAfter(0, source);
+                break;
+            case "replace":
+                session.ReplaceEmptyParagraphWithDocument(0, source)
+                    .Should().BeTrue("the arm must actually run for this case to assert anything");
+                break;
+            default:
+                session.TryInsertDocumentAtBodyCaret(new DocumentTextPosition(0, 0), source, out _);
+                break;
+        }
+
+        session.Document.Styles.Values
+            .Count(style => string.Equals(style.Name, "Shared Name", StringComparison.OrdinalIgnoreCase))
+            .Should().Be(1, "two styles sharing a display name is invalid OOXML and breaks the save");
+    }
+
     [Fact]
     public void LoadDocument_ReplacesTheAuthoritativeDocumentAndResetsHistory()
     {

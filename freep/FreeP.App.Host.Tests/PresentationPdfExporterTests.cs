@@ -1115,6 +1115,96 @@ public class PresentationPdfExporterTests
         }
     }
 
+    // freep-text-autofit F1: reproduces the finding's Case 1 probe -- a normAutofit shape with 20
+    // paragraphs of 10pt text and NO cached FontScalePPT (the common case for a shape authored
+    // fresh in FreeP, or once the box/text has changed since any cached scale was last computed),
+    // whose box (200pt tall) is too small to hold 20 lines at the full authored 10pt size but
+    // plenty tall enough once shrunk the way the live on-screen renderer would. Before the fix,
+    // AppendShapeText laid out every paragraph at the unshrunk 10pt size and then silently
+    // `return`ed (dropping every remaining paragraph) as soon as it ran out of the stale box --
+    // this asserts every paragraph survives into the exported PDF's accessible/searchable text
+    // layer, which is the actual defect (position/size fidelity for the invisible layer is
+    // secondary to not deleting content outright).
+    [Fact]
+    public void BuildDocument_NormAutofitOverflowWithNoCachedScale_KeepsAllParagraphs()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(4 * 72), // 4in wide
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(200),    // too small for 20 lines at 10pt
+            TextBody = new TextBody { AutoFitKind = TextAutoFitKind.Normal },
+        };
+        for (var i = 1; i <= 20; i++)
+        {
+            var para = new Paragraph();
+            para.Runs.Add(new Run { Text = $"Line {i:D2} of 20", FontSizePt = 10 });
+            shape.TextBody.Paragraphs.Add(para);
+        }
+
+        var slide = new Slide();
+        slide.Shapes.Add(shape);
+        deck.Slides.Add(slide);
+
+        var textOps = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops.OfType<PdfText>().ToList();
+
+        for (var i = 1; i <= 20; i++)
+        {
+            var expected = $"Line {i:D2} of 20";
+            textOps.Should().Contain(t => t.Text == expected,
+                $"'{expected}' must not be silently dropped from the exported PDF's text layer");
+        }
+    }
+
+    // freep-text-autofit F1: reproduces the finding's Case 2 probe -- an a:spAutoFit (grow-shape-
+    // to-fit) shape whose stored ExtentCyEmu is stale/small (100pt) because Core.IO has no way to
+    // see the runtime-grown bounds ShapeAutoFitRenderPlanner computes on screen (that layer lives in
+    // FreeP.App.Presentation, unreachable from Core.IO). Before the fix, AppendShapeText silently
+    // dropped every paragraph once it ran off the bottom of that stale 100pt box. This is a
+    // no-regression sibling of the Normal-autofit case above: AutoFitKind.Shape never goes through
+    // the fontScale/RecomputeNormalAutoFitScale path (text stays at its authored 12pt, unshrunk --
+    // matching what a real grown shape would show), but must still keep every paragraph.
+    [Fact]
+    public void BuildDocument_ShapeAutofitStaleSmallBox_KeepsAllParagraphsAtAuthoredSize()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(4 * 72), // 4in wide
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(100),    // stale/small grow-to-fit box
+            TextBody = new TextBody { AutoFitKind = TextAutoFitKind.Shape },
+        };
+        for (var i = 1; i <= 20; i++)
+        {
+            var para = new Paragraph();
+            para.Runs.Add(new Run { Text = $"Grow line {i:D2} of 20", FontSizePt = 12 });
+            shape.TextBody.Paragraphs.Add(para);
+        }
+
+        var slide = new Slide();
+        slide.Shapes.Add(shape);
+        deck.Slides.Add(slide);
+
+        var textOps = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops.OfType<PdfText>().ToList();
+
+        for (var i = 1; i <= 20; i++)
+        {
+            var expected = $"Grow line {i:D2} of 20";
+            textOps.Should().Contain(t => t.Text == expected && t.FontSize == 12,
+                $"'{expected}' must not be silently dropped, and AutoFitKind.Shape must not be scaled by the Normal-autofit path");
+        }
+    }
+
     // Sibling/no-regression: a shape with no explicit run font size and no autofit (the common
     // case exercised by every other test in this file, via the SlideShape.Text setter) must keep
     // rendering at the original fixed BodySize/BodyLeadingPt (18pt / 26pt leading) so plain shape

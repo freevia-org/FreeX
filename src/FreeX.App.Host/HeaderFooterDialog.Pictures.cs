@@ -2,7 +2,6 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media.Imaging;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Model;
@@ -204,9 +203,13 @@ public partial class HeaderFooterDialog
 
     private static (double Width, double Height) GetImageSize(byte[] bytes)
     {
-        using var stream = new MemoryStream(bytes);
-        var frame = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnLoad);
-        return (frame.PixelWidth, frame.PixelHeight);
+        // Convert native pixel dimensions to the app's device-independent 1/96-inch unit
+        // convention (matching the ordinary Insert>Picture path's ImageDimensionDecoder), rather
+        // than storing raw pixel counts as if they were already DIP units. Storing raw pixels
+        // verbatim treated e.g. a 4032x3024px photo as 4032x3024 DIP units (42in x 31.5in),
+        // ballooning the header/footer band far beyond the page in WorksheetPrintPageContentPlanner.
+        var decoded = ImageDimensionDecoder.Decode(bytes);
+        return (decoded.Width, decoded.Height);
     }
 
     private void ShowPictureOpenFailure(string detail)

@@ -23731,19 +23731,50 @@ public sealed partial class DocumentView : Control
     /// <summary>
     /// Ctrl+Shift+F9: replaces selected complex fields with their cached result text, or only the field
     /// containing the active body or table-cell caret when the selection does not intersect a field.
+    /// Falls back to <see cref="UnlinkSimpleFieldAtCaret"/> when the caret is on a
+    /// <see cref="RunFieldKind"/> field instead (the form Insert &gt; Header &amp; Footer &gt; Page
+    /// Number, Insert &gt; Quick Parts &gt; Date, and Quick Parts &gt; Document Property &gt; Author all
+    /// produce) -- mirroring the <see cref="SetFieldLockAtCaret"/> fallback to
+    /// <see cref="SetSimpleFieldLockAtCaret"/>. Without this fallback, Ctrl+Shift+F9 was a silent no-op on
+    /// every RunFieldKind field in this shell.
     /// </summary>
     public void UnlinkFieldAtCaret()
     {
         var fields = SelectedOrCurrentComplexFields();
-        if (fields.Count == 0)
+        if (fields.Count > 0)
+        {
+            var result = ReferenceEdits.UnlinkComplexFields(
+                fields
+                    .Select(run => new DocumentComplexFieldTarget(run.ComplexField!))
+                    .ToArray());
+            if (!result.Applied)
+                return;
+            InvalidateLayoutAndVisual();
+            Focus();
+            return;
+        }
+
+        UnlinkSimpleFieldAtCaret();
+    }
+
+    /// <summary>
+    /// Ctrl+Shift+F9 for a simple <see cref="RunFieldKind"/> field (DATE/TIME/PAGE/AUTHOR/FILENAME/
+    /// NUMPAGES/... inserted via Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick
+    /// Parts &gt; Date, or Quick Parts &gt; Document Property &gt; Author/Title/etc.). Bakes the field's
+    /// resolved display value into <see cref="Run.Text"/> and clears <see cref="Run.FieldKind"/> (and the
+    /// now-meaningless <see cref="Run.FieldLocked"/>), converting it to plain static text the same way
+    /// <see cref="DocumentReferenceEditingCoordinator.UnlinkComplexFields"/> detaches
+    /// <see cref="Run.ComplexField"/> for the complex-field form.
+    /// </summary>
+    private void UnlinkSimpleFieldAtCaret()
+    {
+        var fieldRun = SimpleFieldRunAtCaret();
+        if (fieldRun is null)
             return;
 
-        var result = ReferenceEdits.UnlinkComplexFields(
-            fields
-                .Select(run => new DocumentComplexFieldTarget(run.ComplexField!))
-                .ToArray());
-        if (!result.Applied)
-            return;
+        fieldRun.Text = ResolveSimpleField(fieldRun);
+        fieldRun.FieldKind = RunFieldKind.None;
+        fieldRun.FieldLocked = false;
         InvalidateLayoutAndVisual();
         Focus();
     }

@@ -1168,13 +1168,32 @@ public static class ShapeGeometryAdjustmentPlanner
         return degrees < 0 ? degrees + 360 : degrees;
     }
 
+    /// <summary>
+    /// The representation of <paramref name="angle"/> that sits within half a turn of
+    /// <paramref name="reference"/>.
+    /// </summary>
+    /// <remarks>
+    /// r164 remediation, unbounded declared quantity: <paramref name="reference"/> is an arc's
+    /// <c>StAng + SwAng</c>, read from custom geometry in the file as a plain double with no range
+    /// check. This used to walk there 360 degrees at a time, which is not merely slow for a large
+    /// value -- past roughly 1e19 a double cannot change by 360 at all, so the loop never ends.
+    /// Measured: dragging an arc's end-angle handle on a shape whose SwAng is 1e18 or 1e308 never
+    /// returned, on the UI thread, while an ordinary 90-degree arc completes instantly. Reducing the
+    /// difference modulo a full turn gives the same answer for every ordinary angle in one step.
+    /// Same fix, same reason, as Free.Shared.Drawing's chord sweep.
+    /// </remarks>
     private static double NearestEquivalentAngle(double angle, double reference)
     {
-        while (angle - reference > 180)
-            angle -= 360;
-        while (angle - reference < -180)
-            angle += 360;
-        return angle;
+        if (!double.IsFinite(angle) || !double.IsFinite(reference))
+            return angle;
+
+        var delta = (angle - reference) % 360;
+        if (delta > 180)
+            delta -= 360;
+        else if (delta <= -180)
+            delta += 360;
+
+        return reference + delta;
     }
 
     private static bool TryGetSegmentPoint(

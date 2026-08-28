@@ -3210,7 +3210,7 @@ public static class PptxPackageWriter
         if (animation.RepeatIndefinitely)
             attributes.Add(new XAttribute("repeatCount", "indefinite"));
         else if (animation.RepeatCount is > 1)
-            attributes.Add(new XAttribute("repeatCount", animation.RepeatCount.Value));
+            attributes.Add(new XAttribute("repeatCount", animation.RepeatCount.Value * 100000));
 
         if (animation.AutoReverse)
             attributes.Add(new XAttribute("autoRev", "1"));
@@ -3222,7 +3222,9 @@ public static class PptxPackageWriter
         => animation.RepeatIndefinitely
             ? new XAttribute("repeatCount", "indefinite")
             : animation.RepeatCount is > 1
-                ? new XAttribute("repeatCount", animation.RepeatCount.Value)
+                // ST_TLTimeNodeRepeatCount is a percentage scaled by 1000 (100000 == one
+                // pass), matching the accel/decel scaling on the same p:cTn element.
+                ? new XAttribute("repeatCount", animation.RepeatCount.Value * 100000)
                 : null;
 
     private static XAttribute? AutoReverseAttribute(ShapeAnimation animation)

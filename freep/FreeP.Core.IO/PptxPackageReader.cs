@@ -7439,10 +7439,14 @@ public static class PptxPackageReader
         if (string.Equals(value, "indefinite", StringComparison.OrdinalIgnoreCase))
             return (null, true);
 
-        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
-            && count > 1
-            ? (count, false)
-            : (null, false);
+        // ST_TLTimeNodeRepeatCount is a percentage scaled by 1000: 100000 == 100% == one
+        // pass, so a genuine 3x repeat is authored as repeatCount="300000". This mirrors
+        // the accel/decel scaling on the same p:cTn element (see ReadTimingPercentage).
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var scaled))
+            return (null, false);
+
+        var count = (int)Math.Round(scaled / 100000.0, MidpointRounding.AwayFromZero);
+        return count > 1 ? (count, false) : (null, false);
     }
 
     private static bool ReadBoolean(string? value) =>
