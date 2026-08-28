@@ -393,19 +393,43 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         paragraph.Runs.Add(Run.CommentReference(id));
     }
 
+    /// <summary>
+    /// Ceiling on the columns a single table may declare through
+    /// <c>table:number-columns-repeated</c>. Word tops out at 63 columns and LibreOffice Writer at 64,
+    /// so this is roughly 16x the widest table either application can produce, while still bounding
+    /// what a hostile or corrupt repeat count can allocate.
+    /// </summary>
+    private const int MaximumTableColumns = 1024;
+
     private Table ReadTable(XElement table, ReadContext ctx)
     {
         var result = new Table();
 
         // Expand table:table-column/@table:number-columns-repeated into per-column widths where available.
+        //
+        // The repeat is a COUNT declared by the file, not a measure of anything the file contains, so a
+        // ~600-byte document can ask for two billion columns. Expanding it verbatim allocated 32.7 GB
+        // and froze the open for 13 s on the reference machine (measured; an OOM on a smaller one) --
+        // and the zip-bomb guard in Load cannot catch it, because the package really is tiny. Cap the
+        // expansion: a width beyond the last column any row actually reaches describes a column that
+        // does not exist, so it cannot change layout.
+        var declaredColumnWidths = new List<double>();
         foreach (var col in table.Elements(TableNs + "table-column"))
         {
             var repeat = (int?)col.Attribute(TableNs + "number-columns-repeated") ?? 1;
             var colStyle = ctx.Styles.ColumnWidthPt((string?)col.Attribute(TableNs + "style-name"));
-            for (var i = 0; i < repeat; i++)
-                if (colStyle is { } w)
-                    result.ColumnWidthsPt.Add(w);
+            if (colStyle is not { } width)
+                continue;
+
+            var expandable = Math.Min(repeat, MaximumTableColumns - declaredColumnWidths.Count);
+            for (var i = 0; i < expandable; i++)
+                declaredColumnWidths.Add(width);
+
+            if (declaredColumnWidths.Count >= MaximumTableColumns)
+                break;
         }
+
+        result.ColumnWidthsPt.AddRange(declaredColumnWidths);
 
         // Vertical merges (table:number-rows-spanned on the top cell) leave a table:covered-table-cell
         // placeholder in each row below, one per grid column the merge occupies. Track them keyed by the

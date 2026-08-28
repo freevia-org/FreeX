@@ -1734,6 +1734,13 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
 
     private static string ToChicago(int value)
     {
+        // A Chicago numeral repeats its symbol once per full cycle, so its length grows linearly with
+        // the value -- note 2,000,000,000 is a 500,000,000-character string. ToRoman above already
+        // clamps at 3999 for the same reason; match it here (see NoteNumberFormatter for the measured
+        // numbers).
+        if (value > 3999)
+            return value.ToString(CultureInfo.InvariantCulture);
+
         string[] symbols = ["*", "\u2020", "\u2021", "\u00A7"];
         var symbol = symbols[(value - 1) % symbols.Length];
         var repeat = (value - 1) / symbols.Length + 1;

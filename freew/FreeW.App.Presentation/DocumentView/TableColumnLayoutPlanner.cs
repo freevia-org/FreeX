@@ -13,6 +13,12 @@ public static class TableColumnLayoutPlanner
     public const double DefaultMinimumUndeclaredWidthDip = 40;
     public const double DefaultContentAllowanceDip = 14;
 
+    /// <summary>
+    /// Ceiling on the columns one table is laid out across. Word tops out at 63; this is ~65x that,
+    /// so it cannot affect a real document, and it bounds what a malformed grid can allocate.
+    /// </summary>
+    public const int MaximumLaidOutColumns = 4096;
+
     public static double ResolveTableWidthDip(Table table, double? measuredWidthDip = null)
     {
         ArgumentNullException.ThrowIfNull(table);
@@ -32,7 +38,13 @@ public static class TableColumnLayoutPlanner
         double minimumUndeclaredWidthDip = DefaultMinimumUndeclaredWidthDip)
     {
         ArgumentNullException.ThrowIfNull(table);
-        var count = Math.Max(0, columnCount);
+        // r164 remediation, unbounded declared quantity: this allocates one double per column, so a
+        // column count derived from a hostile span or a malformed grid used to allocate gigabytes
+        // (measured: 15.3 GB, still running after 15s, from a single cell declaring colspan=2e9).
+        // TableGridProjection.NormalizeSpan now bounds each individual span; this bounds their SUM,
+        // which is what actually sizes the array. A document whose real grid is this wide cannot be
+        // laid out on a page anyway -- Word stops at 63 columns.
+        var count = Math.Clamp(columnCount, 0, MaximumLaidOutColumns);
         if (count == 0)
             return [];
 
