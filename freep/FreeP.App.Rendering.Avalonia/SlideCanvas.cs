@@ -1698,6 +1698,8 @@ public sealed partial class SlideCanvas : Control
             useImportedIncreasingCircleAptosCalibration
                 ? ImportedIncreasingCircleAptosFontScale
                 : null;
+        TextHintingMode? fixedSizeAptosBodyHintingMode =
+            ResolveFixedSizeAptosBodyTextHintingMode(text);
         var plan = TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>(
             text,
             bounds,
@@ -1709,7 +1711,7 @@ public sealed partial class SlideCanvas : Control
                     request.Text.Wrap,
                     request.Text.AutoFitKind,
                     importedIncreasingCircleFontScale
-                        ?? (UsesFixedSizeAptosBodyFallback(request.Text)
+                        ?? (fixedSizeAptosBodyHintingMode is not null
                         ? FixedSizeAptosBodyFontScale
                         : null));
                 return new TextNativeMeasurement<FormattedText>(
@@ -1721,7 +1723,7 @@ public sealed partial class SlideCanvas : Control
             dc,
             plan,
             bounds,
-            applyFixedSizeAptosBodyFallback: UsesFixedSizeAptosBodyFallback(text),
+            fixedSizeAptosBodyHintingMode,
             originOffsetY: ResolveImportedIncreasingCircleAptosOriginOffsetY(
                 useImportedIncreasingCircleTextRaster,
                 text,
@@ -1837,15 +1839,15 @@ public sealed partial class SlideCanvas : Control
         DrawingContext dc,
         TextMeasuredBlockLayoutPlan<FormattedText> plan,
         LayoutRect bounds,
-        bool applyFixedSizeAptosBodyFallback = false,
+        TextHintingMode? fixedSizeAptosBodyHintingMode = null,
         double originOffsetY = 0.0)
     {
         var renderText = plan.RenderText;
-        using IDisposable? textOptionsScope = applyFixedSizeAptosBodyFallback
+        using IDisposable? textOptionsScope = fixedSizeAptosBodyHintingMode is { } hintingMode
             ? dc.PushTextOptions(new TextOptions
             {
                 TextRenderingMode = TextRenderingMode.Antialias,
-                TextHintingMode = TextHintingMode.None,
+                TextHintingMode = hintingMode,
                 BaselinePixelAlignment = BaselinePixelAlignment.Unaligned
             })
             : null;
@@ -1882,9 +1884,9 @@ public sealed partial class SlideCanvas : Control
                 }));
     }
 
-    // Fixed-size Aptos bodies use Arial on this host. Wave185 keeps their measured
-    // fallback calibration and grayscale raster policy together while leaving
-    // mixed-font and bullet paths on Avalonia's defaults.
+    // Fixed-size Aptos bodies use Arial on this host. The measured fallback keeps
+    // its optical size and grayscale raster policy together while leaving mixed-font
+    // and bullet paths on Avalonia's defaults.
     internal static bool UsesFixedSizeAptosBodyFallback(ResolvedTextLayout text) =>
         text.AutoFitKind == TextAutoFitKind.None
         && text.ColumnCount == 1
@@ -1895,6 +1897,12 @@ public sealed partial class SlideCanvas : Control
             && paragraph.Runs.All(run =>
                 string.Equals(run.FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
                 && Math.Abs(run.FontSizePt - PowerPointAptosBodyCalibrationFontSizePt) < 0.01));
+
+    internal static TextHintingMode? ResolveFixedSizeAptosBodyTextHintingMode(
+        ResolvedTextLayout text) =>
+        UsesFixedSizeAptosBodyFallback(text)
+            ? TextHintingMode.Light
+            : null;
 
     /// <summary>
     /// Wave 19A: draws a bullet glyph or number string at the given position.

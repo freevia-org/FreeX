@@ -2,15 +2,18 @@ using FreeP.App.Rendering.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 using Free.Shared.Drawing;
+using Avalonia.Media;
 
 namespace FreeP.App.Rendering.Avalonia.Tests;
 
 public sealed class SlideCanvasAptosRasterPolicyTests
 {
     [Fact]
-    public void FixedSizeAptosBodyFallback_UsesWave185HostCalibration()
+    public void FixedSizeAptosBodyFallback_UsesMeasuredHostCalibration()
     {
         SlideCanvas.FixedSizeAptosBodyFontScale.Should().Be(0.930);
+        SlideCanvas.ResolveFixedSizeAptosBodyTextHintingMode(CreateLayout(8))
+            .Should().Be(TextHintingMode.Light);
     }
 
     [Fact]
@@ -135,6 +138,21 @@ public sealed class SlideCanvasAptosRasterPolicyTests
         SlideCanvas.UsesFixedSizeAptosBodyFallback(
             CreateLayout(8, fontSizePt: 18.01)).Should().BeFalse();
         SlideCanvas.UsesFixedSizeAptosBodyFallback(CreateLayout(0)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void FixedSizeAptosBodyHinting_DoesNotLeakToOtherTextRoutes()
+    {
+        SlideCanvas.ResolveFixedSizeAptosBodyTextHintingMode(
+            CreateLayout(8, TextAutoFitKind.Normal)).Should().BeNull();
+        SlideCanvas.ResolveFixedSizeAptosBodyTextHintingMode(
+            CreateLayout(8, bulletKind: BulletKind.Char)).Should().BeNull();
+        SlideCanvas.ResolveFixedSizeAptosBodyTextHintingMode(
+            CreateLayout(8, fontFamily: "Calibri")).Should().BeNull();
+        SlideCanvas.ResolveFixedSizeAptosBodyTextHintingMode(
+            CreateLayout(8, fontSizePt: 24.0)).Should().BeNull();
+        SlideCanvas.ResolveFixedSizeAptosBodyTextHintingMode(
+            CreateLayout(8, columnCount: 2)).Should().BeNull();
     }
 
     private static ResolvedTextLayout CreateLayout(
