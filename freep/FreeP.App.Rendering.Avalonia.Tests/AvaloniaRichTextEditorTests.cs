@@ -47,19 +47,43 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
-    public void ShapeEditorWidth_SnapsRenderedRightEdgeToWpfRaster()
+    public void ShapeEditorWidth_PreservesWave195WidthAtOneX()
     {
         const double left = 382.6666666666667;
         const double width = 250.6666666666667;
         var alignedWidth = AvaloniaInCanvasTextEditor.AlignShapeEditorWidthToWpfRaster(
             left,
             width,
-            renderScaling: 1.5);
+            renderScaling: 1);
         var renderedLeft = left + AvaloniaInCanvasTextEditor.WpfRasterAlignmentOffsetX;
 
         Math.Floor(renderedLeft).Should().Be(382);
         alignedWidth.Should().Be(250);
         Math.Ceiling(renderedLeft + alignedWidth).Should().Be(633);
+    }
+
+    [Theory]
+    [InlineData(1.25)]
+    [InlineData(1.5)]
+    [InlineData(2.0)]
+    public void ShapeEditorWidth_SnapsScaledRightEdgeToWpfRaster(double renderScaling)
+    {
+        const double left = 382.6666666666667;
+        const double width = 250.6666666666667;
+        var renderedLeft = left + AvaloniaInCanvasTextEditor.WpfRasterAlignmentOffsetX;
+        var expectedRightPixels = Math.Round(
+            (renderedLeft + width) * renderScaling,
+            MidpointRounding.AwayFromZero);
+
+        var alignedWidth = AvaloniaInCanvasTextEditor.AlignShapeEditorWidthToWpfRaster(
+            left,
+            width,
+            renderScaling);
+        var actualRightPixels = (renderedLeft + alignedWidth) * renderScaling;
+
+        actualRightPixels.Should().BeApproximately(expectedRightPixels, 1e-10);
+        (actualRightPixels - Math.Truncate(actualRightPixels))
+            .Should().BeApproximately(0, 1e-10);
     }
 
     [Fact]
