@@ -2,19 +2,27 @@
   "schemaVersion": 1,
   "gates": [
     {
-      "id": "freex-core",
+      "id": "freex-core-portable",
       "app": "FreeX",
       "gate": "commit",
       "platforms": ["windows", "linux", "macos"],
       "projects": [
         "tests/Free.Shared.AppServices.Tests/Free.Shared.AppServices.Tests.csproj",
-        "tests/Free.Shared.Pdf.Tests/Free.Shared.Pdf.Tests.csproj",
-        "tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj",
-        "tests/Free.Shared.Theme.Tests/Free.Shared.Theme.Tests.csproj",
-        "tests/FreeX.Core.Calc.Tests/FreeX.Core.Calc.Tests.csproj",
         "tests/FreeX.Core.Formula.Tests/FreeX.Core.Formula.Tests.csproj",
         "tests/FreeX.Core.IO.Tests/FreeX.Core.IO.Tests.csproj",
         "tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj"
+      ]
+    },
+    {
+      "id": "freex-core-neutral",
+      "app": "FreeX",
+      "gate": "commit",
+      "platforms": ["linux"],
+      "projects": [
+        "tests/Free.Shared.Pdf.Tests/Free.Shared.Pdf.Tests.csproj",
+        "tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj",
+        "tests/Free.Shared.Theme.Tests/Free.Shared.Theme.Tests.csproj",
+        "tests/FreeX.Core.Calc.Tests/FreeX.Core.Calc.Tests.csproj"
       ]
     },
     {
@@ -117,14 +125,22 @@
       ]
     },
     {
-      "id": "freew-core",
+      "id": "freew-core-portable",
       "app": "FreeW",
       "gate": "commit",
       "platforms": ["windows", "linux", "macos"],
       "projects": [
-        "freew/FreeW.Core.Model.Tests/FreeW.Core.Model.Tests.csproj",
         "freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj",
-        "freew/FreeW.App.Presentation.Tests/FreeW.App.Presentation.Tests.csproj",
+        "freew/FreeW.App.Presentation.Tests/FreeW.App.Presentation.Tests.csproj"
+      ]
+    },
+    {
+      "id": "freew-core-neutral",
+      "app": "FreeW",
+      "gate": "commit",
+      "platforms": ["linux"],
+      "projects": [
+        "freew/FreeW.Core.Model.Tests/FreeW.Core.Model.Tests.csproj",
         "freew/FreeW.App.Localization.Tests/FreeW.App.Localization.Tests.csproj",
         "freew/FreeW.Ribbon.Definitions.Tests/FreeW.Ribbon.Definitions.Tests.csproj"
       ]
@@ -144,14 +160,22 @@
       ]
     },
     {
-      "id": "freep-core",
+      "id": "freep-core-portable",
       "app": "FreeP",
       "gate": "commit",
       "platforms": ["windows", "linux", "macos"],
       "projects": [
-        "freep/FreeP.App.Localization.Tests/FreeP.App.Localization.Tests.csproj",
         "freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj",
-        "freep/FreeP.App.Recording.Tests/FreeP.App.Recording.Tests.csproj",
+        "freep/FreeP.App.Recording.Tests/FreeP.App.Recording.Tests.csproj"
+      ]
+    },
+    {
+      "id": "freep-core-neutral",
+      "app": "FreeP",
+      "gate": "commit",
+      "platforms": ["linux"],
+      "projects": [
+        "freep/FreeP.App.Localization.Tests/FreeP.App.Localization.Tests.csproj",
         "freep/FreeP.Ribbon.Definitions.Tests/FreeP.Ribbon.Definitions.Tests.csproj"
       ]
     },

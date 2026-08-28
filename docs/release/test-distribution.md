@@ -113,7 +113,9 @@ The canonical `App Tester Release` workflow pins the `main` SHA selected at disp
 to `main` do not invalidate that immutable candidate. It accepts only an exact-SHA successful CI and
 CodeQL pair, then runs the release-only WPF/UI-host and render-evidence gates. The exact-SHA integration
 attestation plus those release-only gates form the complete release test suite without repeating
-already-covered integration projects. Packaging starts only after that aggregate release gate passes.
+already-covered integration projects. Immutable packaging runs alongside the release-only tests to
+remove an unnecessary critical-path wait; the publication gate still requires both the complete test
+gate and every selected app/suite package before it can create any tag or release.
 Native package jobs retain their content, smoke, manifest, SBOM, checksum, installation, transition,
 and uninstall checks; publication waits for every selected app package and, for an all-app release,
 every suite package. A final hosted verification checks tag SHAs, prerelease state, required assets,

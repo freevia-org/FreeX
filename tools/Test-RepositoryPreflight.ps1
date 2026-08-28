@@ -1,4 +1,7 @@
 param(
+    [ValidateSet("All", "Static", "Platform")]
+    [string]$Mode = "All",
+
     [string]$JsonFilesScriptPath = "tools/Test-JsonFiles.ps1",
     [string]$XmlFilesScriptPath = "tools/Test-XmlFiles.ps1",
     [string]$ToolScriptsScriptPath = "tools/Test-ToolScripts.ps1",
@@ -37,37 +40,42 @@ function Invoke-RepositoryPreflight {
     & $resolvedScriptPath @Parameters
 }
 
-Invoke-RepositoryPreflight -ScriptPath $JsonFilesScriptPath -Label "JSON files"
-Invoke-RepositoryPreflight -ScriptPath $XmlFilesScriptPath -Label "XML files"
-Invoke-RepositoryPreflight -ScriptPath $ToolScriptsScriptPath -Label "PowerShell tools"
-Invoke-RepositoryPreflight -ScriptPath $GitHubWorkflowsScriptPath -Label "GitHub workflows"
-Invoke-RepositoryPreflight -ScriptPath $TestGateContractScriptPath -Label "test-gate contract"
-Invoke-RepositoryPreflight -ScriptPath $DotNetSdkReadinessScriptPath -Label ".NET SDK readiness"
-Invoke-RepositoryPreflight -ScriptPath $DotNetProjectReferencesScriptPath -Label ".NET project references"
-Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "solution projects"
-Invoke-RepositoryPreflight -ScriptPath $CodeQlSolutionScriptPath -Label "CodeQL production solution"
-Invoke-RepositoryPreflight -ScriptPath $CrossPlatformPortabilityScriptPath -Label "cross-platform portability"
-Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "default test solution projects" -Parameters @{
-    SolutionPath = "FreeX.DefaultTests.slnx"
-    ProjectPathPrefixes = @("tests/")
-    ExcludedProjectPathPrefixes = @(
-        "tests/FreeX.App.Host.Tests/",
-        "tests/FreeX.App.UI.Tests/",
-        "tests/Free.Shared.Shell.Avalonia.Tests/",
-        "tests/Free.Shared.Ribbon.Wpf.Tests/"
-    )
+if ($Mode -in @("All", "Static")) {
+    Invoke-RepositoryPreflight -ScriptPath $JsonFilesScriptPath -Label "JSON files"
+    Invoke-RepositoryPreflight -ScriptPath $XmlFilesScriptPath -Label "XML files"
+    Invoke-RepositoryPreflight -ScriptPath $GitHubWorkflowsScriptPath -Label "GitHub workflows"
+    Invoke-RepositoryPreflight -ScriptPath $TestGateContractScriptPath -Label "test-gate contract"
+    Invoke-RepositoryPreflight -ScriptPath $DotNetSdkReadinessScriptPath -Label ".NET SDK readiness"
+    Invoke-RepositoryPreflight -ScriptPath $DotNetProjectReferencesScriptPath -Label ".NET project references"
+    Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "solution projects"
+    Invoke-RepositoryPreflight -ScriptPath $CodeQlSolutionScriptPath -Label "CodeQL production solution"
+    Invoke-RepositoryPreflight -ScriptPath $CrossPlatformPortabilityScriptPath -Label "cross-platform portability"
+    Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "default test solution projects" -Parameters @{
+        SolutionPath = "FreeX.DefaultTests.slnx"
+        ProjectPathPrefixes = @("tests/")
+        ExcludedProjectPathPrefixes = @(
+            "tests/FreeX.App.Host.Tests/",
+            "tests/FreeX.App.UI.Tests/",
+            "tests/Free.Shared.Shell.Avalonia.Tests/",
+            "tests/Free.Shared.Ribbon.Wpf.Tests/"
+        )
+    }
+    Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "FreeW solution projects" -Parameters @{
+        SolutionPath = "FreeW.slnx"
+        ProjectPathPrefixes = @("freew/", "tools/FreeW.")
+    }
+    Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "FreeP solution projects" -Parameters @{
+        SolutionPath = "FreeP.slnx"
+        ProjectPathPrefixes = @("freep/")
+    }
+    Invoke-RepositoryPreflight -ScriptPath $GeneratedDocsScriptPath -Label "generated docs"
+    Invoke-RepositoryPreflight -ScriptPath $ConflictMarkersScriptPath -Label "Git conflict markers"
 }
-Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "FreeW solution projects" -Parameters @{
-    SolutionPath = "FreeW.slnx"
-    ProjectPathPrefixes = @("freew/", "tools/FreeW.")
-}
-Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "FreeP solution projects" -Parameters @{
-    SolutionPath = "FreeP.slnx"
-    ProjectPathPrefixes = @("freep/")
-}
-Invoke-RepositoryPreflight -ScriptPath $MacOsAppReadinessScriptPath -Label "macOS app readiness"
-Invoke-RepositoryPreflight -ScriptPath $LinuxPackagingScriptsScriptPath -Label "Linux packaging scripts"
-Invoke-RepositoryPreflight -ScriptPath $GeneratedDocsScriptPath -Label "generated docs"
-Invoke-RepositoryPreflight -ScriptPath $ConflictMarkersScriptPath -Label "Git conflict markers"
 
-Write-Host "Repository preflight checks passed."
+if ($Mode -in @("All", "Platform")) {
+    Invoke-RepositoryPreflight -ScriptPath $ToolScriptsScriptPath -Label "PowerShell tools"
+    Invoke-RepositoryPreflight -ScriptPath $MacOsAppReadinessScriptPath -Label "macOS app readiness"
+    Invoke-RepositoryPreflight -ScriptPath $LinuxPackagingScriptsScriptPath -Label "Linux packaging scripts"
+}
+
+Write-Host "Repository preflight checks passed. Mode: $Mode."
