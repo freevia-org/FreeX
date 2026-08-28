@@ -149,6 +149,36 @@ public sealed class GridViewTextDecorationTests
     }
 
     [Fact]
+    public void CalculateCellTextRenderLayout_CompactRowsKeepBottomTextAtOrBelowMiddleText()
+    {
+        var compactRow = new Rect(0, 0, 100, 20);
+        const double textHeight = 16;
+
+        var middle = GridView.CalculateCellTextRenderLayout(
+            compactRow,
+            textWidth: 30,
+            textHeight: textHeight,
+            FreeX.Core.Model.HorizontalAlignment.Left,
+            FreeX.Core.Model.VerticalAlignment.Center,
+            isNumeric: false,
+            indentPx: 0,
+            textRotation: 0);
+        var bottom = GridView.CalculateCellTextRenderLayout(
+            compactRow,
+            textWidth: 30,
+            textHeight: textHeight,
+            FreeX.Core.Model.HorizontalAlignment.Left,
+            FreeX.Core.Model.VerticalAlignment.Bottom,
+            isNumeric: false,
+            indentPx: 0,
+            textRotation: 0);
+
+        bottom.TextPoint.Y.Should().BeGreaterThanOrEqualTo(
+            middle.TextPoint.Y,
+            "Bottom alignment must not render higher than Middle alignment in a compact row");
+    }
+
+    [Fact]
     public void CanOverflowCellText_PreservesNormalTextOverflowButExcludesShrinkToFitAndRotation()
     {
         GridView.CanOverflowCellText(

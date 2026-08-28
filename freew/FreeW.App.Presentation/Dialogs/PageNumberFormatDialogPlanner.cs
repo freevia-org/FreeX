@@ -629,6 +629,13 @@ public static class PageNumberFormatDialogPlanner
 
     private static string ToRoman(int value)
     {
+        // A roman numeral emits one "M" per thousand once it runs out of larger symbols, so its length
+        // grows linearly with the value: the dialog's own "Start at" field accepts any int, and
+        // 2,000,000,000 renders a 2,000,000-character numeral for every page number. 3999 is the
+        // classic roman limit and the threshold the suite's other copies of this helper already use.
+        if (value > 3999)
+            return value.ToString(CultureInfo.InvariantCulture);
+
         (int Value, string Token)[] symbols =
         [
             (1000, "M"),

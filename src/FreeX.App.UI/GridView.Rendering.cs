@@ -1507,19 +1507,24 @@ public partial class GridView
         var wpfLayout = ToWpfLayout(layout);
 
         // FormattedText includes roughly two DIPs of bottom leading that Excel's grid does not
-        // reserve when it bottom-aligns an unrotated cell. Without compensating for that leading,
-        // every ordinary Office cell sits visibly low in WPF (most obvious in Aptos Narrow's
-        // compact default row). Keep the portable layout math unchanged and correct only the WPF
-        // drawing origin, where the FormattedText metric is introduced.
+        // reserve when it bottom-aligns an unrotated cell. Keep the portable layout math unchanged
+        // and correct only the WPF drawing origin, where the FormattedText metric is introduced.
+        // In a compact row, however, applying the full correction can pull Bottom above Center.
+        // Cap it to the available lower-half slack so the three vertical alignments retain their
+        // expected Top <= Center <= Bottom ordering.
         if (textRotation == 0 &&
             (vAlign ?? CellVAlign.Bottom) == CellVAlign.Bottom)
         {
-            const double ExcelBottomAlignedWpfLeadingCorrection = 2.0;
+            const double MaxExcelBottomAlignedWpfLeadingCorrection = 2.0;
+            var verticalSlack = Math.Max(0, rect.Height - textHeight);
+            var leadingCorrection = Math.Min(
+                MaxExcelBottomAlignedWpfLeadingCorrection,
+                Math.Max(0, verticalSlack / 2 - 1));
             return new CellTextRenderLayout(
-                new Point(wpfLayout.TextPoint.X, wpfLayout.TextPoint.Y - ExcelBottomAlignedWpfLeadingCorrection),
+                new Point(wpfLayout.TextPoint.X, wpfLayout.TextPoint.Y - leadingCorrection),
                 new Rect(
                     wpfLayout.Bounds.Left,
-                    wpfLayout.Bounds.Top - ExcelBottomAlignedWpfLeadingCorrection,
+                    wpfLayout.Bounds.Top - leadingCorrection,
                     wpfLayout.Bounds.Width,
                     wpfLayout.Bounds.Height),
                 wpfLayout.TransformAngle);

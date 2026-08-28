@@ -15,7 +15,22 @@ public readonly record struct TableGridCellProjection(
 /// <summary>Canonical logical-grid projection for model tables, including malformed span normalization.</summary>
 public static class TableGridProjection
 {
-    public static int NormalizeSpan(int span) => Math.Max(1, span);
+    /// <summary>
+    /// Ceiling on a single cell's horizontal span. Word tops out at 63 table columns and LibreOffice
+    /// Writer at 64, so this is roughly 16x the widest table either can produce.
+    /// </summary>
+    /// <remarks>
+    /// r164 remediation, unbounded declared quantity: a span is a COUNT the file declares, not a
+    /// measure of anything it contains. Both readers accept any value above 1 -- DocxReader from
+    /// <c>w:gridSpan</c>, HtmlFileAdapter from <c>colspan</c> -- so a single cell could declare a
+    /// two-billion-column grid. <see cref="TableWidth"/> then reported 2,000,000,000 and the layout
+    /// pass allocated a <c>double[]</c> for every column: measured at 15.3 GB and still running after
+    /// 15s. Normalizing here bounds every consumer at once, which is what this canonical projection
+    /// exists for; the cell keeps its original GridSpan, so a round-trip still writes back what it read.
+    /// </remarks>
+    public const int MaximumGridSpan = 1024;
+
+    public static int NormalizeSpan(int span) => Math.Clamp(span, 1, MaximumGridSpan);
 
     public static IReadOnlyList<TableGridCellProjection> ProjectRow(TableRow row)
     {

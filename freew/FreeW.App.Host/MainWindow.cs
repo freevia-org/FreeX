@@ -22,7 +22,6 @@ using FreeW.App.Presentation;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
-using FreeW.App.Presentation.Documents;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Panes;
@@ -395,7 +394,9 @@ public sealed partial class MainWindow : Window
         // Push the persisted AutoCorrect / AutoFormat-As-You-Type settings so the editor's as-you-type
         // rules honour the user's toggles from the first keystroke (re-applied when Options is saved).
         ApplyEditorTypingOptions(_optionsRuntime.EditorTypingOptions);
-        editor.LoadModel(FreeWSampleDocumentFactory.Create(FreeWSampleDocumentProfile.ClassicEditor));
+        // A normal first launch starts with the same empty document as File > New.
+        // Showcase documents remain available only to explicit demo and visual-harness paths.
+        editor.LoadModel(TextDocument.CreateEmpty());
         _navigationPaneSession = new NavigationPaneSession(
             CurrentPaneDocument,
             new NavigationPaneMutationActions(
