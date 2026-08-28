@@ -386,8 +386,10 @@ public static partial class NumberFormatter
 
             if (!inQuote && TryReadAccountingFillSymbol(format, i, out var symbol, out var fillIndex))
             {
-                sb.Append(symbol);
+                sb.Append('"');
+                sb.Append(symbol.Replace("\"", "\"\"", StringComparison.Ordinal));
                 sb.Append(' ');
+                sb.Append('"');
                 i = fillIndex + 1;
                 continue;
             }
