@@ -274,7 +274,7 @@ foreach ($runtime in $Runtimes) {
     if ($smokeRan) {
         Write-Host "Packaged smoke passed for $App $runtime."
     } else {
-        Write-Host "$App $runtime has no packaged smoke entry point; the release gate uses its compiled test suite."
+        Write-Host "$App $runtime has no packaged smoke entry point; exact-SHA CI provides its compiled test coverage."
     }
 
     if ($isWindowsSingleFile) {

@@ -35,7 +35,7 @@ For all three applications together, use the matching artifact on the `free-suit
 
 ## Dispatching A Lane
 
-Use the `App Tester Release` workflow (`.github/workflows/app-tester-release.yml`) for normal tester publication. It runs the selected app's release test gate, packages the requested platform lane on its native GitHub runner, and creates or updates the matching app/version release.
+Use the `App Tester Release` workflow (`.github/workflows/app-tester-release.yml`) for normal tester publication. It first verifies that the immutable dispatch SHA already has successful canonical CI and CodeQL runs. It then packages the requested platform lane on its native GitHub runner, executes package-content and install/transition/uninstall checks, and creates or updates the matching app/version release. Source tests and repository preflight are not repeated during publication.
 
 | Requested work | Dispatch inputs |
 | --- | --- |
@@ -49,6 +49,10 @@ For example, a complete `0.8.151` tester package run is:
 ```powershell
 gh workflow run app-tester-release.yml --ref <branch> -f app=all -f platform=all -f release_version=0.8.151 -f prerelease=true
 ```
+
+Run the workflow from the exact commit that passed CI and CodeQL. A later `main` commit does not
+invalidate an already-dispatched immutable candidate; publish the verified SHA or deliberately test
+a newer SHA. This prevents unrelated merges from restarting hours of completed validation.
 
 The workflow uses `tools/Publish-SisterAppTesterPackages.ps1` as the package contract. It accepts `-Runtimes` for local, independent package verification and now supports FreeX, FreeW, and FreeP:
 

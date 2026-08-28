@@ -286,7 +286,7 @@ public sealed class ReleaseAutomationWorkflowTests
             workflow.Should().Contain(lane);
         }
 
-        workflow.Should().Contain("needs: [prepare, verify]");
+        workflow.Should().Contain("needs: [prepare, candidate]");
         workflow.Should().Contain("fromJSON(needs.prepare.outputs.package_matrix)");
         workflow.Should().Contain("$isFullReleaseBranch = $env:GITHUB_REF -like \"refs/heads/codex/full-release-*\"");
         workflow.Should().Contain("git fetch origin main:refs/remotes/origin/main --no-tags");
@@ -298,19 +298,18 @@ public sealed class ReleaseAutomationWorkflowTests
                 RegexOptions.CultureInvariant)
             .Should().BeTrue("moving origin/main must only gate explicit full-release branches, not an immutable main dispatch");
         Regex.Matches(workflow, "git fetch origin main:refs/remotes/origin/main --no-tags").Count.Should().Be(1);
-        workflow.Should().Contain("$verifyLanes");
-        workflow.Should().Contain("$preflightLanes");
-        workflow.Should().Contain("needs: [prepare, preflight]");
-        Regex.Matches(workflow, "pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1").Count.Should().Be(1);
+        workflow.Should().Contain("name: Verify immutable release candidate");
+        workflow.Should().Contain("actions: read");
+        workflow.Should().Contain("tools/Test-GitHubReleaseCandidate.ps1");
+        workflow.Should().Contain("-RequiredWorkflows ci.yml,codeql.yml");
+        workflow.Should().NotContain("preflight_matrix");
+        workflow.Should().NotContain("verify_matrix");
+        workflow.Should().NotContain("name: Preflight ${{ matrix.platform }}");
+        workflow.Should().NotContain("name: Verify ${{ matrix.app }} ${{ matrix.platform }}");
+        workflow.Should().NotContain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9");
-        workflow.Should().Contain("Group-Object { \"$($_.app):$($_.platform)\" }");
-        workflow.Should().Contain("name: Verify ${{ matrix.app }} ${{ matrix.platform }}");
         workflow.Should().Contain("runs-on: ${{ matrix.runner }}");
-        workflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
-        workflow.Should().Contain("tools/Invoke-TestGate.ps1");
-        workflow.Should().Contain("-Gate release");
-        workflow.Should().Contain("-App \"${{ matrix.app }}\"");
-        workflow.Should().Contain("-Platform \"${{ matrix.platform }}\"");
+        workflow.Should().NotContain("tools/Invoke-TestGate.ps1");
         workflow.Should().NotContain("function Invoke-Dotnet");
         workflow.Should().NotContain("dotnet test FreeP.slnx");
         workflow.Should().Contain("-Runtimes \"${{ matrix.runtime }}\"");
@@ -343,7 +342,7 @@ public sealed class ReleaseAutomationWorkflowTests
         publisher.Should().Contain("$smokeArguments = @(\"--packaging-smoke\")");
         publisher.Should().Contain("freep_packaging_smoke=passed");
         publisher.Should().Contain("Packaged smoke passed for $App $runtime.");
-        publisher.Should().Contain("has no packaged smoke entry point; the release gate uses its compiled test suite.");
+        publisher.Should().Contain("has no packaged smoke entry point; exact-SHA CI provides its compiled test coverage.");
         publisher.Should().Contain("Single-file Windows publish produced runtime sidecars");
         publisher.Should().Contain("$packageName = \"$App-v$Version-$runtime$packageExtension\"");
     }

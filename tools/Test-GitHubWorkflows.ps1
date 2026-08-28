@@ -297,8 +297,24 @@ foreach ($workflow in $workflows) {
     $triggerNames = @($inlineTriggerNames + $blockTriggerNames)
     $hasWorkflowDispatch = $triggerNames -contains "workflow_dispatch"
     $nonManualTriggerNames = @($triggerNames | Where-Object { $_ -ne "workflow_dispatch" })
-    if (-not $hasWorkflowDispatch -or $nonManualTriggerNames.Count -gt 0) {
-        $errors.Add("$($workflow.Name): workflow must use workflow_dispatch only; automatic triggers are disabled.")
+    $automaticQualityWorkflows = @("ci.yml", "codeql.yml")
+    if ($automaticQualityWorkflows -contains $workflow.Name) {
+        foreach ($requiredTrigger in @("workflow_dispatch", "push", "pull_request")) {
+            if ($triggerNames -notcontains $requiredTrigger) {
+                $errors.Add("$($workflow.Name): canonical quality workflow must declare '$requiredTrigger'.")
+            }
+        }
+        $allowedAutomaticTriggers = @("push", "pull_request")
+        if ($workflow.Name -eq "codeql.yml") {
+            $allowedAutomaticTriggers += "schedule"
+        }
+        $unexpectedTriggers = @($nonManualTriggerNames | Where-Object { $allowedAutomaticTriggers -notcontains $_ })
+        if ($unexpectedTriggers.Count -gt 0) {
+            $errors.Add("$($workflow.Name): canonical quality workflow has unsupported triggers: $($unexpectedTriggers -join ', ').")
+        }
+    }
+    elseif (-not $hasWorkflowDispatch -or $nonManualTriggerNames.Count -gt 0) {
+        $errors.Add("$($workflow.Name): non-canonical workflow must use workflow_dispatch only; automatic triggers are reserved for CI and CodeQL.")
     }
 
     foreach ($match in [regex]::Matches($content, "(?ms)^\s*runs-on\s*:\s*(?<runner>[^\r\n]*(?:\r?\n\s+-\s+[^\r\n]+)*)")) {

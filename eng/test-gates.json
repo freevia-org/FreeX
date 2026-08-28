@@ -34,6 +34,7 @@
       "id": "freex-avalonia",
       "app": "FreeX",
       "gate": "commit",
+      "requiresFullHistory": true,
       "platforms": ["windows", "linux", "macos"],
       "projects": [
         "tests/Free.Shared.Shell.Avalonia.Tests/Free.Shared.Shell.Avalonia.Tests.csproj",
