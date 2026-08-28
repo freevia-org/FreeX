@@ -14,12 +14,14 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $acceptanceRefreshTestedSourceCommit = "f7cbd8cbe3f1ac5fbaf14da1c2cacc1a3fb7bf3f"
 $acceptanceRefreshReviewedIntegrationHead = "2ee42a45efd651ad9ad1c015403d788570ae02d9"
 $acceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
+$acceptanceRefreshWave196TestedSourceCommit = "100f4aea399e3bc9d194c15cf962ded7d0cf3772"
 $acceptanceRefreshAllowedPaths = @(
+    "tools/Generate-CrossAppParityDashboard.ps1",
+    "tools/Test-CrossAppParityDashboard.ps1",
+    "tests/FreeX.App.Host.Tests/CrossAppParityDashboardTests.cs",
     "docs/parity/avalonia-wpf-cross-app-dashboard.json",
     "docs/parity/avalonia-wpf-cross-app-dashboard.md",
-    "tests/FreeX.App.Host.Tests/CrossAppParityDashboardTests.cs",
-    "tools/Generate-CrossAppParityDashboard.ps1",
-    "tools/Test-CrossAppParityDashboard.ps1"
+    "docs/parity/avalonia-parity-wave196-cross-app-integration-20260829.md"
 )
 
 function Normalize-GitPath {
@@ -80,6 +82,9 @@ function Test-AcceptanceRefreshGitBoundary {
 function Invoke-RealAcceptanceRefreshBoundary {
     if ([string]::IsNullOrWhiteSpace($TestedSourceCommit)) {
         throw "-AcceptanceRefresh requires -TestedSourceCommit; the parent must supply the exact tested source head."
+    }
+    if ($TestedSourceCommit -ne $acceptanceRefreshWave196TestedSourceCommit) {
+        throw "-AcceptanceRefresh requires the exact Wave196 tested source commit '$acceptanceRefreshWave196TestedSourceCommit'; received '$TestedSourceCommit'."
     }
 
     $changedPaths = @(Test-AcceptanceRefreshGitBoundary `
@@ -258,18 +263,23 @@ $dashboard = Read-ToolJson -Path $DashboardPath -RepoRoot $repoRoot -MissingMess
 Assert-DashboardCondition ($dashboard.schema -eq "freex.parity.cross-app-dashboard.v3") "Cross-app dashboard schema must be v3."
 Assert-DashboardCondition ($dashboard.wave -eq 196) "Cross-app dashboard must describe Wave196."
 Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 588) "Wave196 cumulative app-slice count must be 588."
-Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "pending-local-gates") "Wave196 app-slice count must record pending local gates."
-Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "pending-local-gates") "Wave196 integration status must record pending local gates."
-Assert-DashboardCondition (@($dashboard.pendingIntegrationGates) -contains "repository-preflight") "Wave196 must retain the pending repository preflight gate."
-Assert-DashboardCondition (@($dashboard.pendingIntegrationGates) -contains "full-release-build") "Wave196 must retain the pending Release-build gate."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.status -eq "pending-local-gates") "Wave196 integration evidence must record pending local gates."
-Assert-DashboardCondition ($null -eq $dashboard.integrationGateEvidence.PSObject.Properties["testedSourceCommit"]) "Wave196 must not invent an acceptance source SHA."
+Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "accepted-local-gates") "Wave196 app-slice count must record accepted local gates."
+Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "accepted-local-gates") "Wave196 integration status must record accepted local gates."
+Assert-DashboardCondition (@($dashboard.pendingIntegrationGates).Count -eq 0) "Wave196 must have zero pending local gates."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.status -eq "accepted-local-gates") "Wave196 integration evidence must record accepted local gates."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.acceptanceStatus -eq "accepted-local-gates") "Wave196 acceptance status must record accepted local gates."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.testedSourceCommit -eq "100f4aea399e3bc9d194c15cf962ded7d0cf3772") "Wave196 must record the exact tested source SHA."
+Assert-DashboardCondition (@($dashboard.integrationGateEvidence.pendingIntegrationGates).Count -eq 0) "Wave196 integration evidence must have zero pending local gates."
+Assert-DashboardCondition (@($dashboard.integrationGateEvidence.acceptedLocalGates) -contains "repository-preflight") "Wave196 must record accepted repository preflight."
+Assert-DashboardCondition (@($dashboard.integrationGateEvidence.acceptedLocalGates) -contains "full-release-build") "Wave196 must record accepted Release build."
+Assert-DashboardCondition (@($dashboard.integrationGateEvidence.acceptanceRefreshAllowedPaths).Count -eq 6) "Wave196 acceptance refresh must allow exactly six paths."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sliceAccounting -eq "Wave 196 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 588 app slices (196 per app).") "Wave196 slice accounting must be exact."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.gateBoundary -match "pending.*no acceptance SHA") "Wave196 gate boundary must remain pending and unaccepted."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.gateBoundary -match "100f4aea399e3bc9d194c15cf962ded7d0cf3772.*six allowlisted") "Wave196 gate boundary must retain the exact tested-source and six-path boundary."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.gateBoundary -match "full Avalonia/WPF parity is not claimed") "Wave196 gate boundary must retain the no-full-parity claim."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.localGatePolicy -match "repository preflight and the full Release build.*delegated to GitHub") "Wave196 gate policy must match AGENTS.md."
 Assert-DashboardCondition (@($dashboard.integrationGateEvidence.delegatedGitHubGates).Count -eq 2) "Wave196 delegated GitHub gates must remain explicit."
 Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.delegatedGitHubGateStatus -eq "not-run-locally") "Wave196 must not claim delegated GitHub gates ran locally."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.focusedTests -match "FreeX.*22/22.*FreeW.*consecutive.*FreeP") "Wave196 focused/evidence facts must remain recorded."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.focusedTests -match "FreeX.*22/22.*FreeW.*2/2.*FreeP.*10/10.*resolved model 1/1") "Wave196 focused/evidence facts must remain recorded."
 $historicalWave195 = $dashboard.integrationGateEvidence.historicalWave195Acceptance
 Assert-DashboardCondition ($null -ne $historicalWave195) "Wave195 acceptance history must remain available."
 Assert-DashboardCondition ([string]$historicalWave195.status -eq "accepted-local-gates") "Wave195 historical status must remain accepted."

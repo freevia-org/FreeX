@@ -40,16 +40,22 @@ public sealed class CrossAppParityDashboardTests
         root.GetProperty("scopeBoundary").GetString().Should().Contain("do not prove complete visual parity");
         root.GetProperty("wave").GetInt32().Should().Be(196);
         root.GetProperty("cumulativeAppSlices").GetInt32().Should().Be(588);
-        root.GetProperty("cumulativeAppSlicesStatus").GetString().Should().Be("pending-local-gates");
-        root.GetProperty("integrationGateStatus").GetString().Should().Be("pending-local-gates");
-        root.GetProperty("pendingIntegrationGates").GetArrayLength().Should().Be(2);
+        root.GetProperty("cumulativeAppSlicesStatus").GetString().Should().Be("accepted-local-gates");
+        root.GetProperty("integrationGateStatus").GetString().Should().Be("accepted-local-gates");
+        root.GetProperty("pendingIntegrationGates").GetArrayLength().Should().Be(0);
 
         var integrationEvidence = root.GetProperty("integrationGateEvidence");
-        integrationEvidence.GetProperty("status").GetString().Should().Be("pending-local-gates");
-        integrationEvidence.TryGetProperty("testedSourceCommit", out _).Should().BeFalse();
+        integrationEvidence.GetProperty("status").GetString().Should().Be("accepted-local-gates");
+        integrationEvidence.GetProperty("acceptanceStatus").GetString().Should().Be("accepted-local-gates");
+        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("100f4aea399e3bc9d194c15cf962ded7d0cf3772");
+        integrationEvidence.GetProperty("pendingIntegrationGates").GetArrayLength().Should().Be(0);
+        integrationEvidence.GetProperty("acceptedLocalGates").GetArrayLength().Should().Be(2);
+        integrationEvidence.GetProperty("acceptanceRefreshAllowedPaths").GetArrayLength().Should().Be(6);
         integrationEvidence.GetProperty("sliceAccounting").GetString().Should().Be(
             "Wave 196 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 588 app slices (196 per app).");
-        integrationEvidence.GetProperty("gateBoundary").GetString().Should().Contain("no acceptance SHA");
+        integrationEvidence.GetProperty("gateBoundary").GetString().Should().Contain("100f4aea399e3bc9d194c15cf962ded7d0cf3772");
+        integrationEvidence.GetProperty("gateBoundary").GetString().Should().Contain("six allowlisted acceptance/report paths");
+        integrationEvidence.GetProperty("gateBoundary").GetString().Should().Contain("full Avalonia/WPF parity is not claimed");
         integrationEvidence.GetProperty("delegatedGitHubGateStatus").GetString().Should().Be("not-run-locally");
         integrationEvidence.GetProperty("localGatePolicy").GetString().Should().Contain("repository preflight and the full Release build");
         integrationEvidence.GetProperty("localGatePolicy").GetString().Should().Contain("delegated to GitHub");
@@ -225,7 +231,9 @@ public sealed class CrossAppParityDashboardTests
 
         var markdown = File.ReadAllText(Path.Combine(repoRoot, "docs", "parity", "avalonia-wpf-cross-app-dashboard.md"));
         markdown.Should().Contain("These are coverage/triage metrics, not a visual-parity claim.");
-        markdown.Should().Contain("Wave196 local integration gates are **pending**");
+        markdown.Should().Contain("Wave196 local integration gates are **accepted**");
+        markdown.Should().Contain("100f4aea399e3bc9d194c15cf962ded7d0cf3772");
+        markdown.Should().Contain("Pending local gates: none");
         markdown.Should().Contain("cumulative 588 app slices (196 per app)");
         markdown.Should().Contain("Wave195 remains historical acceptance context");
         markdown.Should().Contain("22/22 focused source tests");
