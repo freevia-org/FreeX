@@ -26,8 +26,12 @@ Linux `*-neutral` gates rather than repeating identical assertions on three oper
 The canonical `CI` workflow runs automatically
 for `main` pushes, remains manually dispatchable, and cancels superseded runs for the same ref.
 Branches are integrated after repository preflight and a successful Release build; this repository
-does not use pull-request workflows. The three repository preflights and all integration entries run in
-parallel. Only gates marked `requiresFullHistory` receive a full checkout.
+does not use pull-request workflows. Hosted CI runs repository-static validation once, while small
+platform-behavior preflights exercise process, shell, path, macOS-readiness, and Linux-packaging
+behavior on Windows, Linux, and macOS. This avoids rebuilding generated-document validators and
+rescanning every tracked path three times. All integration entries run in parallel, and only gates
+marked `requiresFullHistory` receive a full checkout. The local command defaults to `-Mode All` and
+therefore remains the complete preflight.
 
 ## Release Gate
 

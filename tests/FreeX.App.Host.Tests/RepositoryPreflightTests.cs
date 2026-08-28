@@ -25,6 +25,9 @@ public sealed class RepositoryPreflightTests
         script.Should().Contain("Test-LinuxPackagingScripts.ps1");
         script.Should().Contain("Test-GeneratedDocs.ps1");
         script.Should().Contain("Test-ConflictMarkers.ps1");
+        script.Should().Contain("[ValidateSet(\"All\", \"Static\", \"Platform\")]");
+        script.Should().Contain("$Mode -in @(\"All\", \"Static\")");
+        script.Should().Contain("$Mode -in @(\"All\", \"Platform\")");
         script.Should().Contain("Repository preflight checks passed.");
     }
 
