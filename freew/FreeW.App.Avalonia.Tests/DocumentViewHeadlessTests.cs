@@ -907,6 +907,69 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task ConsecutiveTrailingInlineFlowBreaks_PlaceCaretAtTheFinalPostBreakBoundary()
+    {
+        var pageCount = -1;
+        var pageCaretPage = -1;
+        var pageCaretTop = 0d;
+        var columnPageCount = -1;
+        var columnCaretPage = -1;
+        var columnCaretTop = 0d;
+        var columnCaretLeft = 0d;
+        var columnFirstGlyphLeft = 0d;
+        var ran = await OnUiThread(() =>
+        {
+            var pageDoc = TextDocument.CreateEmpty();
+            pageDoc.Blocks.Clear();
+            pageDoc.Blocks.Add(new Paragraph
+            {
+                Runs = { new Run("Before"), Run.PageBreak(), Run.PageBreak() }
+            });
+            var pageView = new DocumentView();
+            pageView.LoadDocument(pageDoc);
+            pageView.Measure(new Size(800, 5000));
+            pageCount = pageView.PageCount;
+            pageView.MoveCaretToBlockForTest(0, "Before".Length);
+            pageCaretPage = pageView.CaretPageIndex;
+            pageCaretTop = pageView.CaretTop;
+
+            var columnDoc = TextDocument.CreateEmpty();
+            columnDoc.Blocks.Clear();
+            columnDoc.Page.ColumnCount = 3;
+            columnDoc.Page.ColumnSpacingPt = 36;
+            columnDoc.Blocks.Add(new Paragraph
+            {
+                Runs = { new Run("Before"), Run.ColumnBreak(), Run.ColumnBreak() }
+            });
+            var columnView = new DocumentView();
+            columnView.LoadDocument(columnDoc);
+            columnView.Measure(new Size(800, 5000));
+            columnPageCount = columnView.PageCount;
+            columnFirstGlyphLeft = columnView.GetPlacedForBlock(0).First().X;
+            columnView.MoveCaretToBlockForTest(0, "Before".Length);
+            columnCaretPage = columnView.CaretPageIndex;
+            columnCaretTop = columnView.CaretTop;
+            columnCaretLeft = columnView.CaretLeft;
+        });
+
+        if (!ran)
+            return;
+
+        pageCount.Should().Be(3);
+        pageCaretPage.Should().Be(2,
+            "consecutive trailing page breaks resolve to the final post-break page");
+        pageCaretTop.Should().BeGreaterThan(0,
+            "the final post-break page has a real caret slot");
+        columnPageCount.Should().Be(1);
+        columnCaretPage.Should().Be(0,
+            "consecutive trailing column breaks remain on the same physical page");
+        columnCaretTop.Should().BeGreaterThan(0,
+            "the final post-break column has a real caret slot");
+        columnCaretLeft.Should().BeGreaterThan(columnFirstGlyphLeft + 100,
+            "the caret rectangle resolves to the final post-break column");
+    }
+
+    [Fact]
     public async Task InlineFlowBreaks_InListItem_UseSharedPrecedenceAndSourceOffsets()
     {
         var pageCount = 0;

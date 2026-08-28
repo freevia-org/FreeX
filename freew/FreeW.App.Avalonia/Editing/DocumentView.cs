@@ -826,9 +826,12 @@ public sealed partial class DocumentView : Control
         {
             if (_laidOutWidth < 0)
                 Relayout(FallbackWidth);
-            // Find the placed char at the caret and derive its page from its page-space Y.
-            foreach (var pc in _placed)
+            // Source offsets are shared by zero-width inline breaks and the text immediately after them.
+            // Resolve the final matching placement so consecutive breaks use their final post-break
+            // boundary instead of the first sentinel emitted at that offset.
+            for (var i = _placed.Count - 1; i >= 0; i--)
             {
+                var pc = _placed[i];
                 if (pc.Block == _caret.Block && pc.Offset == _caret.Offset)
                     return RenderedPageIndexForPoint(pc.X, pc.Y);
             }
@@ -16507,9 +16510,11 @@ public sealed partial class DocumentView : Control
             return false;
         }
 
-        // Body paragraph: search by block + glyph offset (original logic).
-        foreach (var pc in _placed)
+        // Body paragraph: source offsets are shared by zero-width inline breaks and the text
+        // immediately after them, so use the final matching placement in layout order.
+        for (var i = _placed.Count - 1; i >= 0; i--)
         {
+            var pc = _placed[i];
             if (pc.Block == _caret.Block && pc.Offset == _caret.Offset)
             {
                 rect = new Rect(pc.X, pc.Y, 1.5, pc.LineHeight);
