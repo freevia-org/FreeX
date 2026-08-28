@@ -373,38 +373,15 @@ public static class ContentControlInteractionPlanner
             ? control with { WordMetadata = metadata with { ShowingPlaceholder = false } }
             : control;
 
-    private static Run CloneWith(Run source, string text, ContentControl control) => new(text, source.Formatting)
+    // r165 (C2): delegate to the canonical text-changing run copier (RevisionEditPlanner.CloneRunWithText,
+    // the same one the paragraph-rebuild edit paths use) instead of hand-listing Run's properties here --
+    // a hand list keeps missing whatever was added to Run since the last audit (r163 found StyleId dropped,
+    // r165 found MoveRevisionId/Ruby/SubDocument dropped). Only Control is overridden after cloning, since
+    // this call's whole point is to swap in the toggled/picked/typed control state.
+    private static Run CloneWith(Run source, string text, ContentControl control)
     {
-        Image = source.Image,
-        Equation = source.Equation,
-        Shape = source.Shape,
-        WordArt = source.WordArt,
-        Chart = source.Chart,
-        EmbeddedObject = source.EmbeddedObject,
-        SmartArt = source.SmartArt,
-        PreservedDrawing = source.PreservedDrawing,
-        DrawingGroup = source.DrawingGroup,
-        // r163: a run carries its character-style link like any other property; a copier that
-        // omits it silently unlinks the run the next time anything reformats the paragraph.
-        StyleId = source.StyleId,
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        FieldKind = source.FieldKind,
-        TableFormula = source.TableFormula,
-        Citation = source.Citation,
-        CrossReference = source.CrossReference,
-        ComplexField = source.ComplexField,
-        FootnoteId = source.FootnoteId,
-        EndnoteId = source.EndnoteId,
-        CommentId = source.CommentId,
-        IsCommentReference = source.IsCommentReference,
-        IsPageBreak = source.IsPageBreak,
-        IsColumnBreak = source.IsColumnBreak,
-        Revision = source.Revision,
-        Control = ClearShowingPlaceholder(control),
-        RevisionAuthor = source.RevisionAuthor,
-        RevisionDateXml = source.RevisionDateXml,
-        FormatRevision = source.FormatRevision
-    };
+        var clone = RevisionEditPlanner.CloneRunWithText(source, text);
+        clone.Control = ClearShowingPlaceholder(control);
+        return clone;
+    }
 }

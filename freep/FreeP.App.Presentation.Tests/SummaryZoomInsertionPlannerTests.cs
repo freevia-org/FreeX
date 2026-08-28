@@ -43,6 +43,51 @@ public sealed class SummaryZoomInsertionPlannerTests
     }
 
     [Fact]
+    public void Insert_summary_zoom_with_control_character_in_section_name_succeeds()
+    {
+        // Round 165 meta finding F2: a control character embedded inside a word (no adjacent
+        // whitespace) survives SlideSectionPlanner.NormalizeSectionName's whitespace-only collapsing
+        // and lands in section.Name unchanged. BuildRawXml used to serialize that name straight into
+        // an XAttribute and call XElement.ToString(), which validates on write and throws -- so the
+        // real Insert Summary Zoom gesture (EditingSession.InsertSummaryZoom) failed outright before
+        // AddShape ever ran. This drives the actual gesture and asserts it now succeeds.
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Slide 1" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Slide 2" });
+        AddSection(presentation, "{SECTION-ONE}", "Sec" + (char)0x01 + "tion", "slide-1");
+        AddSection(presentation, "{SECTION-TWO}", "Two", "slide-2");
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        var shape = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}" });
+
+        presentation.Slides[0].Shapes.Should().Contain(shape);
+        var root = XElement.Parse(shape.PreservedObject!.RawXml);
+        var titles = root.Descendants().Where(element => element.Name.LocalName == "summaryZmObj")
+            .Select(element => element.Attribute("title")!.Value)
+            .ToArray();
+        titles.Should().Contain("Section");
+        titles.Should().NotContain(name => name.Contains((char)0x01));
+    }
+
+    [Fact]
+    public void Insert_summary_zoom_with_ordinary_section_name_preserves_it_exactly()
+    {
+        // Sibling no-regression case: an ordinary section name (no illegal characters) must survive
+        // the sanitizer unchanged -- the fix must not alter well-formed titles.
+        var presentation = BuildPresentation();
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        var shape = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}" });
+
+        var root = XElement.Parse(shape.PreservedObject!.RawXml);
+        var titles = root.Descendants().Where(element => element.Name.LocalName == "summaryZmObj")
+            .Select(element => element.Attribute("title")!.Value)
+            .ToArray();
+        titles.Should().Contain("One");
+        titles.Should().Contain("Two");
+    }
+
+    [Fact]
     public void Summary_zoom_requires_two_valid_sections_and_undoes()
     {
         var presentation = BuildPresentation();
@@ -303,6 +348,30 @@ public sealed class SummaryZoomInsertionPlannerTests
         AddSection(presentation, "{SECTION-THREE}", "Three", "slide-3");
         AddSection(presentation, "{SECTION-EMPTY}", "Empty");
         return presentation;
+    }
+
+    [Fact]
+    public void Retargeting_a_summary_zoom_with_a_control_character_in_a_section_name_succeeds()
+    {
+        // r165 remediation. The insertion planner was fixed for this, but Edit Summary Zoom Targets
+        // goes through a SECOND, hand-written serializer (SummaryZoomTargetPlanner.SetTileAttributes)
+        // that the insertion fix did not reach -- so the same section name that could no longer break
+        // Insert still broke retargeting. Same defect, same file family, different command.
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Slide 1" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Slide 2" });
+        AddSection(presentation, "{SECTION-ONE}", "Sec" + (char)0x01 + "tion", "slide-1");
+        AddSection(presentation, "{SECTION-TWO}", "Two", "slide-2");
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}" });
+
+        var act = () => session.SetSummaryZoomTargets(shape.Id, new[] { "{SECTION-TWO}", "{SECTION-ONE}" });
+
+        act.Should().NotThrow();
+        var root = XElement.Parse(shape.PreservedObject!.RawXml);
+        root.Descendants().Where(element => element.Name.LocalName == "summaryZmObj")
+            .Select(element => element.Attribute("title")!.Value)
+            .Should().NotContain(name => name.Contains((char)0x01));
     }
 
     private static void AddSection(

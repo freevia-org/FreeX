@@ -3020,7 +3020,11 @@ public static class DocxReader
             // PAGE keeps its historic "1" fallback when no cached value was written; the rest are happy
             // with whatever cached text the field carried (possibly empty).
             var fallback = kind == RunFieldKind.PageNumber && text.Length == 0 ? "1" : text;
-            paragraph.Runs.Add(new Run(fallback, formatting) { FieldKind = kind });
+            paragraph.Runs.Add(new Run(fallback, formatting)
+            {
+                FieldKind = kind,
+                FieldLocked = ReadOnOffValue(fldSimple.Attribute(W + "fldLock")?.Value)
+            });
         }
         else
         {

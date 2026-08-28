@@ -485,6 +485,18 @@ public static class FindReplaceDialogPlanner
             }
         }
 
+        // document.Blocks is only the body story. Every section's Header/Footer (and, on a
+        // different-odd-even or different-first-page layout, its EvenHeader/EvenFooter/
+        // FirstHeader/FirstFooter) is a separate paragraph store that a plain block walk never
+        // sees -- without this, a term that appears only in a header/footer is invisible to
+        // CountMatches/DocumentContains even though the user can plainly see it on every page.
+        // TextDocumentStoryTraversal.HeadersFooters already flattens a header/footer's optional
+        // side-by-side layout Table into the same Paragraphs list (see HeaderFooter.Table), so no
+        // separate table walk is needed here the way there is for the body.
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
+                     document, TextDocumentStorySubset.HeadersFooters))
+            count += FindAll(paragraph.PlainText, term, effective).Count;
+
         return count;
     }
 

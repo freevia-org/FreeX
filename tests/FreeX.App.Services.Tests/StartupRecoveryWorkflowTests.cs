@@ -96,20 +96,56 @@ public sealed class StartupRecoveryWorkflowTests
             {
                 events.Add($"restore:{target}:{CandidateId(candidate)}");
                 return CandidateId(candidate) == "bad"
-                    ? Task.FromException(new InvalidDataException("bad snapshot"))
-                    : Task.CompletedTask;
+                    ? Task.FromException<bool>(new InvalidDataException("bad snapshot"))
+                    : Task.FromResult(true);
             }
         };
 
         var accepted = await StartupRecoveryWorkflow.RunAsync(candidates, host);
 
         accepted.Should().BeTrue();
+        // The "bad" candidate's restore threw, so it must NOT be retired (deleted): its snapshot is
+        // the only surviving copy of the crash-time edits, and the caller never confirmed the load
+        // actually happened (R165-shared-autosave-recovery-F1). Recovery still moves on to offer the
+        // next candidate rather than getting stuck.
+        events.Should().NotContain("delete:bad");
         events.Should().ContainInOrder(
             "restore:primary:bad",
-            "delete:bad",
             "create:additional-1",
             "restore:additional-1:good",
             "delete:good");
+    }
+
+    /// <summary>
+    /// R165-shared-autosave-recovery-F1: a restore that returns <c>false</c> (the host reporting a
+    /// load failure WITHOUT throwing -- e.g. the WPF host's <c>OpenRecoverySnapshotAsync</c>, which
+    /// never throws on a failed open) must be treated exactly like a thrown restore: the candidate
+    /// survives, undeleted, so the next launch can offer it again instead of the user's unsaved work
+    /// being silently destroyed the moment recovery merely LOOKS like it ran.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_DoesNotDeleteCandidate_WhenRestoreReportsFailureWithoutThrowing()
+    {
+        var candidates = new[] { CreateCandidate("failed-load", "FailedLoad") };
+        var events = new List<string>();
+        var host = CreateHost(events, _ => true, operation => operation());
+        host = host with
+        {
+            RestoreAsync = (target, candidate, _) =>
+            {
+                events.Add($"restore:{target}:{CandidateId(candidate)}");
+                // Mirrors a real failed-but-non-throwing open: nothing about the target was touched,
+                // and the caller correctly reports failure instead of pretending it succeeded.
+                return Task.FromResult(false);
+            }
+        };
+
+        var accepted = await StartupRecoveryWorkflow.RunAsync(candidates, host);
+
+        accepted.Should().BeTrue("the user still accepted the offer even though the load itself failed");
+        events.Should().Contain("restore:primary:failed-load");
+        events.Should().NotContain("delete:failed-load",
+            "a failed load must not destroy the only surviving copy of the crash-time edits");
     }
 
     [Fact]
@@ -203,7 +239,7 @@ public sealed class StartupRecoveryWorkflowTests
             RestoreAsync: (target, candidate, _) =>
             {
                 events.Add($"restore:{target}:{CandidateId(candidate)}");
-                return Task.CompletedTask;
+                return Task.FromResult(true);
             },
             ExecuteRestoreAsync: async (operation, _) =>
             {

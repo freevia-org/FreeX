@@ -324,6 +324,67 @@ public sealed class ContentControlInteractionPlannerTests
             "unrelated Word metadata fields must survive untouched");
     }
 
+    /// <summary>
+    /// C2: a run inside a Word tracked-change MOVE (w:moveFrom/w:moveTo, modelled as two runs sharing
+    /// <see cref="Run.MoveRevisionId"/>) that also happens to sit in a content control loses its move mark
+    /// the instant the user flips the checkbox, picks a drop-down item, or picks a date -- these are LIVE
+    /// UI interactions with no undo path back (unlike an undo-tracked edit), so a dropped mark here is
+    /// unrecoverable. Exercised through three different live interactions, not just one, since each is a
+    /// distinct call site into the shared copier.
+    /// </summary>
+    [Fact]
+    public void LiveControlInteractions_PreserveAMoveRevisionMark()
+    {
+        var checkbox = Run.CheckBoxControl(@checked: false);
+        checkbox.MoveRevisionId = 42;
+        var afterToggle = ContentControlInteractionPlanner.ToggleCheckBox(checkbox);
+        afterToggle!.MoveRevisionId.Should().Be(42,
+            "toggling a checkbox is a live, non-undo-tracked action -- a move mark it drops is gone for good");
+
+        var items = new[] { new ContentControlListItem("Red", "R"), new ContentControlListItem("Green", "G") };
+        var dropDown = Run.DropDownListControl(items);
+        dropDown.MoveRevisionId = 7;
+        var afterPick = ContentControlInteractionPlanner.SelectItem(dropDown, 1);
+        afterPick!.MoveRevisionId.Should().Be(7,
+            "picking a drop-down item is a live, non-undo-tracked action");
+
+        var datePicker = Run.DatePickerControl("old", dateFormat: "yyyy-MM-dd");
+        datePicker.MoveRevisionId = 9;
+        var afterDate = ContentControlInteractionPlanner.SelectRelativeDate(
+            datePicker, choiceIndex: 0, today: new DateTime(2026, 7, 4), culture: CultureInfo.InvariantCulture);
+        afterDate!.MoveRevisionId.Should().Be(9,
+            "picking a relative date is a live, non-undo-tracked action");
+    }
+
+    /// <summary>
+    /// C2 sibling: <see cref="Run.SubDocument"/> (w:subDoc) and a Ruby annotation whose base text is left
+    /// unchanged by the edit must also survive CloneWith -- the same structural gap as MoveRevisionId, just
+    /// without a live-interaction consequence as sharp. Also guards the correct converse: when the edit
+    /// genuinely changes the text, a stale Ruby base must NOT survive (it would no longer match the run's
+    /// new text), matching the canonical clone's own text-changed-clears-Ruby rule.
+    /// </summary>
+    [Fact]
+    public void CloneWith_PreservesSubDocumentAndTextUnchangedRuby_ButClearsRubyWhenTextChanges()
+    {
+        var subDoc = new SubDocumentReference("linked.docx");
+        var withSubDocument = Run.CheckBoxControl(@checked: false);
+        withSubDocument.SubDocument = subDoc;
+        var afterToggle = ContentControlInteractionPlanner.ToggleCheckBox(withSubDocument);
+        afterToggle!.SubDocument.Should().Be(subDoc);
+
+        var ruby = new RubyAnnotation();
+        ruby.BaseFragments.Add(new RubyTextFragment("Bob", RunFormatting.Default));
+        var rubyRun = Run.PlainTextControl("placeholder");
+        rubyRun.Ruby = ruby;
+        var afterSameText = ContentControlInteractionPlanner.WithText(rubyRun, "Bob");
+        afterSameText!.Ruby.Should().NotBeNull("the text did not actually change, so the ruby guide still applies");
+        afterSameText.Ruby!.BaseText.Should().Be("Bob");
+
+        var afterChangedText = ContentControlInteractionPlanner.WithText(rubyRun, "Robert");
+        afterChangedText!.Ruby.Should().BeNull(
+            "the run's text no longer matches the ruby's base text, so a stale guide must not survive");
+    }
+
     [Theory]
     [InlineData(ContentControlKind.PlainText, true)]
     [InlineData(ContentControlKind.RichText, true)]

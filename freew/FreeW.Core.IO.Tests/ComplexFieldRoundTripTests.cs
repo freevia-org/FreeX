@@ -453,6 +453,49 @@ public class ComplexFieldRoundTripTests
         reopened[1].Control!.Tag.Should().Be("SimpleFieldControl");
     }
 
+    /// <summary>
+    /// A w:fldSimple whose w:instr is one of the six standard keywords FreeW models as
+    /// <see cref="RunFieldKind"/> (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES) takes AddSimpleField's
+    /// FieldKindFor branch rather than the generic <see cref="ComplexField"/> branch. That branch used to
+    /// never read w:fldLock, so a Word-authored locked AUTHOR/DATE/... field silently opened unlocked.
+    /// Covers both directions: the locked AUTHOR field must open (and re-save) locked, and the
+    /// neighbouring unlocked PAGE field must open (and re-save) unlocked, matching Word's default.
+    /// </summary>
+    [Fact]
+    public void SimpleKeywordField_PreservesFldLockAcrossReaderAndWriter()
+    {
+        var loaded = ReadAuthoredDocument(
+            new XElement(W + "p",
+                new XElement(W + "fldSimple",
+                    new XAttribute(W + "instr", " AUTHOR "),
+                    new XAttribute(W + "fldLock", "1"),
+                    TextRun(W, "Ada Lovelace")),
+                new XElement(W + "fldSimple",
+                    new XAttribute(W + "instr", " PAGE "),
+                    TextRun(W, "1"))));
+
+        var runs = loaded.Blocks.OfType<Paragraph>().Single().Runs;
+        runs.Should().HaveCount(2);
+        runs[0].FieldKind.Should().Be(RunFieldKind.Author);
+        runs[0].FieldLocked.Should().BeTrue();
+        runs[0].Text.Should().Be("Ada Lovelace");
+        runs[1].FieldKind.Should().Be(RunFieldKind.PageNumber);
+        runs[1].FieldLocked.Should().BeFalse();
+
+        var savedFields = DocumentXml(loaded).Descendants(W + "fldSimple").ToList();
+        savedFields.Should().HaveCount(2);
+        savedFields[0].Attribute(W + "instr")!.Value.Should().Be(" AUTHOR ");
+        savedFields[0].Attribute(W + "fldLock")!.Value.Should().Be("1");
+        savedFields[1].Attribute(W + "instr")!.Value.Should().Be(" PAGE ");
+        savedFields[1].Attribute(W + "fldLock").Should().BeNull();
+
+        var reopened = RoundTrip(loaded).Blocks.OfType<Paragraph>().Single().Runs;
+        reopened[0].FieldKind.Should().Be(RunFieldKind.Author);
+        reopened[0].FieldLocked.Should().BeTrue();
+        reopened[1].FieldKind.Should().Be(RunFieldKind.PageNumber);
+        reopened[1].FieldLocked.Should().BeFalse();
+    }
+
     [Fact]
     public void ComplexField_PreservesOuterBeginLockAndDirtyAcrossReaderPaths()
     {

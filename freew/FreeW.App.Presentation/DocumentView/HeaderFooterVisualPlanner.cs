@@ -179,38 +179,57 @@ public static class HeaderFooterVisualPlanner
         if (run.FieldKind == RunFieldKind.None && run.ComplexField is null)
             return null;
 
-        var liveKind = run.FieldKind != RunFieldKind.None
-            ? run.FieldKind
-            : ComplexFieldDisplayPlanner.ResolveLiveKind(run.ComplexField!.Keyword);
-        var resolved = liveKind is RunFieldKind.Date or RunFieldKind.Time
-            && context.EvaluatedAt is null
-                ? run.Text
-                : DocumentFieldDisplayPlanner.Resolve(
-                    liveKind,
-                    run.Text,
-                    context.Document,
-                    new DocumentFieldDisplayContext(
-                        context.EvaluatedAt ?? DateTime.MinValue,
-                        context.FileName,
-                        context.PageNumberText,
-                        Math.Max(1, context.PageCount)));
+        var field = run.ComplexField;
 
-        if (run.ComplexField is not { } field)
+        // A locked field (Ctrl+F11) must not recompute on render, matching the WPF host's identical
+        // guards in BuildFieldRun (DocumentView.cs ~12773) and ResolveComplexFieldText (~12933).
+        // Without this, a locked DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES field in a header/footer keeps
+        // recomputing to the live value on every re-render instead of staying frozen at its locked value.
+        var locked = field?.IsLocked ?? run.FieldLocked;
+
+        string resolved;
+        if (locked)
+        {
+            resolved = run.Text;
+        }
+        else
+        {
+            var liveKind = run.FieldKind != RunFieldKind.None
+                ? run.FieldKind
+                : ComplexFieldDisplayPlanner.ResolveLiveKind(field!.Keyword);
+            resolved = liveKind is RunFieldKind.Date or RunFieldKind.Time
+                && context.EvaluatedAt is null
+                    ? run.Text
+                    : DocumentFieldDisplayPlanner.Resolve(
+                        liveKind,
+                        run.Text,
+                        context.Document,
+                        new DocumentFieldDisplayContext(
+                            context.EvaluatedAt ?? DateTime.MinValue,
+                            context.FileName,
+                            context.PageNumberText,
+                            Math.Max(1, context.PageCount)));
+        }
+
+        if (field is null)
             return resolved;
 
-        resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
-            field,
-            resolved,
-            context.SectionOrdinal,
-            context.SectionPageCount);
-        if (context.EvaluatedAt is { } evaluatedAt)
+        if (!locked)
         {
-            resolved = ComplexFieldDisplayPlanner.ApplyTemporalPicture(
+            resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
                 field,
-                evaluatedAt,
-                run.Formatting.LanguageTag,
-                context.Culture ?? CultureInfo.CurrentCulture,
-                resolved);
+                resolved,
+                context.SectionOrdinal,
+                context.SectionPageCount);
+            if (context.EvaluatedAt is { } evaluatedAt)
+            {
+                resolved = ComplexFieldDisplayPlanner.ApplyTemporalPicture(
+                    field,
+                    evaluatedAt,
+                    run.Formatting.LanguageTag,
+                    context.Culture ?? CultureInfo.CurrentCulture,
+                    resolved);
+            }
         }
 
         return ComplexFieldDisplayPlanner.Build(field, resolved, context.Document).Text;
