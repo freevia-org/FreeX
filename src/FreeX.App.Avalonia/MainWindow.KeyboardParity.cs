@@ -142,9 +142,10 @@ public sealed partial class MainWindow
         // WPF keeps plain F12 as a local Save As command, separate from the shared Shift+F12
         // Save route. X11 may report Shift+F12 as the logical F24 key, so use the physical-key
         // normalization here as well as in the shared route dispatcher.
+        var effectiveShortcut = GetEffectiveWorkbookShortcut(args);
         if (!IsTextEditingEventSource(args) &&
-            GetEffectiveWorkbookShortcutKey(args) == Key.F12 &&
-            args.KeyModifiers == KeyModifiers.None)
+            effectiveShortcut.Key == Key.F12 &&
+            effectiveShortcut.Modifiers == KeyModifiers.None)
         {
             args.Handled = true;
             await SaveWorkbookAsAsync();
@@ -327,11 +328,31 @@ public sealed partial class MainWindow
         return true;
     }
 
-    private static Key GetEffectiveWorkbookShortcutKey(KeyEventArgs args) =>
-        NormalizeWorkbookShortcutKey(args.Key, args.PhysicalKey);
+    private readonly record struct EffectiveWorkbookShortcut(Key Key, KeyModifiers Modifiers);
+
+    private static EffectiveWorkbookShortcut GetEffectiveWorkbookShortcut(KeyEventArgs args) =>
+        NormalizeWorkbookShortcut(args.Key, args.PhysicalKey, args.KeyModifiers);
 
     private static Key NormalizeWorkbookShortcutKey(Key key, PhysicalKey physicalKey) =>
-        physicalKey == PhysicalKey.F12 ? Key.F12 : key;
+        NormalizeWorkbookShortcut(key, physicalKey, KeyModifiers.None).Key;
+
+    private static EffectiveWorkbookShortcut NormalizeWorkbookShortcut(
+        Key key,
+        PhysicalKey physicalKey,
+        KeyModifiers modifiers)
+    {
+        if (physicalKey == PhysicalKey.F12)
+            return new EffectiveWorkbookShortcut(Key.F12, modifiers);
+
+        // On Linux/X11, Shift+F12 can arrive as its shifted logical keysym F24 while Avalonia
+        // leaves PhysicalKey unset or reports the shifted F24 identity. Unless the backend gives
+        // us an explicit physical F12 whose modifier state is authoritative, the shifted keysym is
+        // the only surviving proof of Shift, so reconstruct the canonical shared-catalog chord.
+        if (key == Key.F24 && physicalKey != PhysicalKey.F12)
+            return new EffectiveWorkbookShortcut(Key.F12, modifiers | KeyModifiers.Shift);
+
+        return new EffectiveWorkbookShortcut(key, modifiers);
+    }
 
     private bool TryHandleFocusedEditorShortcut(KeyEventArgs args)
     {

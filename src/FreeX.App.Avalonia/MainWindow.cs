@@ -26255,14 +26255,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task<bool> TryHandleWorkbookShortcutRouteAsync(KeyEventArgs e)
     {
-        var effectiveKey = GetEffectiveWorkbookShortcutKey(e);
-        if (effectiveKey != e.Key)
+        var effectiveShortcut = GetEffectiveWorkbookShortcut(e);
+        if (effectiveShortcut.Key != e.Key || effectiveShortcut.Modifiers != e.KeyModifiers)
         {
             var normalizedArgs = new KeyEventArgs
             {
-                Key = effectiveKey,
+                Key = effectiveShortcut.Key,
                 PhysicalKey = e.PhysicalKey,
-                KeyModifiers = e.KeyModifiers,
+                KeyModifiers = effectiveShortcut.Modifiers,
             };
             var handled = await TryHandleWorkbookShortcutRouteAsync(normalizedArgs);
             e.Handled = normalizedArgs.Handled;

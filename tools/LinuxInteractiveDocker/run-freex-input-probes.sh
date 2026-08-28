@@ -207,6 +207,19 @@ send_key() {
     sleep "$settle_seconds"
 }
 
+send_shifted_function_key() {
+    local function_key="$1"
+    focus_app
+    xdotool keydown --clearmodifiers --window "$window_id" Shift_L
+    sleep 0.12
+    if ! xdotool key --delay "$input_delay_ms" --window "$window_id" "$function_key"; then
+        xdotool keyup --window "$window_id" Shift_L 2>/dev/null || true
+        return 1
+    fi
+    xdotool keyup --window "$window_id" Shift_L
+    sleep "$settle_seconds"
+}
+
 send_flyout_key() {
     # Keep the popup's focus owner. Calling send_key here would reactivate the
     # workbook top-level window and can dismiss an Avalonia MenuFlyout before
@@ -5716,7 +5729,9 @@ probe_ribbon_home_bold_keytip() {
     keytip_key h
     keytip_key 1
     capture "ribbon-home-bold-keytip-after.png"
-    send_key shift+F12
+    # Hold Shift explicitly so this drives the intended physical chord independently of xdotool's
+    # compact shifted-keysym parsing. Avalonia normalizes X11's resulting F24 alias to Shift+F12.
+    send_shifted_function_key F12
     wait_for_document_clean && save_clean=true
 
     package_signature="$(python3 - "$document_path" <<'PY'

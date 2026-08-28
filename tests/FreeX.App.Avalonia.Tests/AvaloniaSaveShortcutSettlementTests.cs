@@ -21,6 +21,10 @@ public sealed class AvaloniaSaveShortcutSettlementTests
     [InlineData(Key.S, KeyModifiers.Control, PhysicalKey.None)]
     [InlineData(Key.F12, KeyModifiers.Shift, PhysicalKey.F12)]
     [InlineData(Key.F24, KeyModifiers.Shift, PhysicalKey.F12)]
+    [InlineData(Key.F24, KeyModifiers.Shift, PhysicalKey.None)]
+    [InlineData(Key.F24, KeyModifiers.None, PhysicalKey.None)]
+    [InlineData(Key.F24, KeyModifiers.Shift, PhysicalKey.F24)]
+    [InlineData(Key.F24, KeyModifiers.None, PhysicalKey.F24)]
     public async Task SaveShortcut_AwaitsSaveAsThenReusesSettledPath(
         Key key,
         KeyModifiers modifiers,
