@@ -21,6 +21,23 @@ public sealed class LegalNoticesDialogVisualParityTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
     [Fact]
+    public void Legal_notices_wrapper_keeps_visual_ownership_in_the_shared_renderer()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "LegalNoticesDialog.cs"));
+
+        source.Should().Contain("FreeWLegalNoticesPresentation.Create")
+            .And.NotContain("using Avalonia")
+            .And.NotContain("GetVisualDescendants")
+            .And.NotContain("Dispatcher")
+            .And.NotContain("ContentPresenter");
+    }
+
+    [Fact]
     public async Task Legal_notices_uses_route_local_grayscale_document_text_policy()
     {
         await Session.Dispatch(() =>

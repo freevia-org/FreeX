@@ -69,6 +69,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
                 ApplyTextRenderingPolicy(textBox, presentation.TextRenderingPolicy);
             }
             AvaloniaCompactDialogChrome.ApplyLegalNoticesDefaultButtonChrome(_closeButton);
+            Dispatcher.UIThread.Post(ApplyWpfAuthoritySelectedPaneTrailingEdge, DispatcherPriority.Render);
             FocusInitialKeyboardTarget();
         };
     }
@@ -381,6 +382,22 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             }
         };
         textBox.LayoutUpdated += onLayoutUpdated;
+    }
+
+    private void ApplyWpfAuthoritySelectedPaneTrailingEdge()
+    {
+        _tabControl.ApplyTemplate();
+        var selectedPane = _tabControl.GetVisualDescendants()
+            .OfType<ContentPresenter>()
+            .SingleOrDefault(presenter => presenter.Name == "PART_SelectedContentHost");
+        if (selectedPane is null || selectedPane.Margin.Right >= 1)
+            return;
+
+        selectedPane.Margin = new Thickness(
+            selectedPane.Margin.Left,
+            selectedPane.Margin.Top,
+            1,
+            selectedPane.Margin.Bottom);
     }
 
     private void FocusInitialKeyboardTarget()
