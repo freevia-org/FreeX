@@ -189,6 +189,35 @@ public sealed class XlsxIllegalXmlCharacterSaveTests
         reloaded.PageFooter.Left.Should().Be("Foot");
     }
 
+    // -- The theme part: written straight to its own zip entry, bypassing OpcXml like the chart part --
+
+    /// <summary>
+    /// The theme name reaches three attributes of the theme part (a:theme/@name and the generated
+    /// a:clrScheme/@name and a:fontScheme/@name), and <c>WorkbookTheme.WithName</c> takes arbitrary
+    /// text -- a .fxl import carries it as JSON, which can legally hold C0 control codes and lone surrogates.
+    /// <c>XlsxWorkbookThemeWriter</c> creates its package entry directly, so it misses OpcXml's
+    /// sanitize and one such character aborted the ENTIRE workbook save.
+    /// </summary>
+    [Fact]
+    public void SaveAs_WithControlCharacterInThemeName_SucceedsAndReloads()
+    {
+        var workbook = NewWorkbook(out _);
+        workbook.Theme = workbook.Theme.WithName("Corporate" + Control + " Blue");
+
+        var reloaded = SaveAndReload(workbook);
+
+        reloaded.Theme.Name.Should().Be("Corporate Blue");
+    }
+
+    [Fact]
+    public void SaveAs_WithLoneSurrogateInThemeFontName_SucceedsAndReloads()
+    {
+        var workbook = NewWorkbook(out _);
+        workbook.Theme = workbook.Theme.WithFonts("Calibri" + LoneHighSurrogate, "Calibri");
+
+        SaveAndReload(workbook).Should().NotBeNull();
+    }
+
     // -- The other spreadsheet formats that hand-roll their own XML --
 
     [Fact]

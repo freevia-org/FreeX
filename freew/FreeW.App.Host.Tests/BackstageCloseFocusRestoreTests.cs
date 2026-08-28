@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Options;
@@ -37,6 +39,15 @@ public sealed class BackstageCloseFocusRestoreTests
             "_backstage",
             BindingFlags.Instance | BindingFlags.NonPublic);
         return (BackstageView)field!.GetValue(window)!;
+    }
+
+    private static BackstageFrame GetBackstageFrame(BackstageView backstage)
+    {
+        var controllerField = typeof(BackstageView).GetField(
+            "_backstage",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        var controller = (SisterBackstageHostController)controllerField!.GetValue(backstage)!;
+        return controller.Frame;
     }
 
     private static void InvokePrivate(MainWindow window, string methodName)
@@ -132,6 +143,46 @@ public sealed class BackstageCloseFocusRestoreTests
             backstage.Hide();
             layer.Visibility.Should().Be(Visibility.Visible,
                 "the adorner layer must still be restored to visible once the Backstage closes");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void OpeningBackstage_LandsOnHomeInsteadOfDocumentProperties()
+    {
+        var window = NewOffscreenWindow();
+        try
+        {
+            window.Show();
+
+            InvokePrivate(window, "ShowBackstage");
+
+            GetBackstageFrame(GetBackstage(window)).CurrentPaneLabel.Should().Be("Home",
+                "File should open the task-focused Home surface; document properties are available through Info");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void OpenRailEntry_DismissesTheOverlayAndLaunchesTheNativePickerWorkflow()
+    {
+        var window = NewOffscreenWindow();
+        try
+        {
+            window.Show();
+
+            InvokePrivate(window, "ShowBackstage");
+
+            GetBackstageFrame(GetBackstage(window)).Entries
+                .Single(entry => entry.Label == "Open")
+                .Kind.Should().Be(SisterBackstageEntryKind.Command,
+                    "FreeW follows FreeX by making File > Open immediately invoke the document picker");
         }
         finally
         {

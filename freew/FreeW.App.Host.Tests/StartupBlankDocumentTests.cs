@@ -20,6 +20,9 @@ public sealed class StartupBlankDocumentTests
             editor.Model.PlainText.Should().BeEmpty();
             editor.Model.Blocks.OfType<Paragraph>().Should().ContainSingle()
                 .Which.PlainText.Should().BeEmpty();
+            editor.FloatingObjectsCanvas.Should().NotBeNull();
+            editor.FloatingObjectsCanvas!.Background.Should().BeNull(
+                "the empty floating-object overlay must not intercept clicks intended for the document editor");
         }
         finally
         {
