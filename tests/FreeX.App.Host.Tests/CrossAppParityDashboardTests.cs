@@ -12,6 +12,13 @@ public sealed class CrossAppParityDashboardTests
     public void CrossAppParityDashboard_DistinguishesCoverageFromVisualReview()
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var generatorSource = File.ReadAllText(
+            Path.Combine(repoRoot, "tools", "Generate-CrossAppParityDashboard.ps1"));
+        generatorSource.Should().NotContain(
+            "tools\\\\Test-RepositoryPreflight.ps1",
+            "portable PowerShell scripts must use repository paths with forward slashes");
+        generatorSource.Should().Contain("tools/Test-RepositoryPreflight.ps1");
+
         var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
             "Generate-CrossAppParityDashboard.ps1",
             repoRoot,
