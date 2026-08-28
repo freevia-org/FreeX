@@ -49,7 +49,7 @@ public sealed class BackstageViewShell
 
     public BackstageFrame Frame { get; }
 
-    public void Show(string paneLabelOrAutomationId = "Info")
+    public void Show(string? paneLabelOrAutomationId = null)
     {
         _host.Visibility = Visibility.Visible;
         Frame.Show(paneLabelOrAutomationId);
