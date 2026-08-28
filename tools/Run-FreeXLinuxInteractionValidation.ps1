@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "inline-edit", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "autofilter-text-criteria-persistence", "autofilter-numeric-criteria-persistence", "autofilter-date-criteria-persistence", "autofilter-color-persistence", "autofilter-font-color-persistence", "autofilter-no-fill-persistence", "autofilter-mixed-type-persistence", "autofilter-multi-column-persistence", "autofilter-color-change-clear-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
+    [ValidateSet("all", "inline-edit", "ribbon-formatting", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "autofilter-sort-persistence", "autofilter-text-criteria-persistence", "autofilter-numeric-criteria-persistence", "autofilter-date-criteria-persistence", "autofilter-color-persistence", "autofilter-font-color-persistence", "autofilter-no-fill-persistence", "autofilter-mixed-type-persistence", "autofilter-multi-column-persistence", "autofilter-color-change-clear-persistence", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -66,6 +66,7 @@ $autoFilterNoFillFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDoc
 $autoFilterMixedTypeFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave194AutoFilterMixedTypeFixture.ps1"
 $autoFilterMultiColumnFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave195AutoFilterMultiColumnFixture.ps1"
 $autoFilterColorChangeClearFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave195AutoFilterColorChangeFixture.ps1"
+$ribbonFormattingFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave196RibbonFormattingFixture.ps1"
 $native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
 $gridAutofitSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-grid-autofit-validation.schema.json"
 $nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
@@ -1572,6 +1573,16 @@ try {
             throw "grid-autofit requires an existing .xlsx PhysicalDocumentPath."
         }
     }
+    if ($PhysicalProbeSelector -eq "ribbon-formatting") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = Join-Path $reportDirectory "fixtures/freex-wave196-ribbon-formatting.xlsx"
+            & $ribbonFormattingFixtureGenerator -OutputPath $PhysicalDocumentPath
+        }
+        if (-not (Test-Path -LiteralPath $PhysicalDocumentPath -PathType Leaf) -or
+            [IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "ribbon-formatting requires an existing .xlsx PhysicalDocumentPath."
+        }
+    }
     if ($PhysicalProbeSelector -eq "outline-nested-save-reopen" -and
         ([IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx")) {
         throw "outline-nested-save-reopen requires an .xlsx PhysicalDocumentPath."
@@ -1773,6 +1784,8 @@ try {
 
     $requiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "inline-edit") {
         @("inline-edit-f2-enter-commit")
+    } elseif ($PhysicalProbeSelector -eq "ribbon-formatting") {
+        @("ribbon-home-bold-keytip-physical")
     } elseif ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
         @("name-box-dropdown-parity-native-crop")
     } elseif ($PhysicalProbeSelector -eq "name-box-dropdown") {
@@ -1928,6 +1941,8 @@ try {
     })
     $artifactRequiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "inline-edit") {
         @("inline-edit-f2-enter-commit")
+    } elseif ($PhysicalProbeSelector -eq "ribbon-formatting") {
+        @("ribbon-home-bold-keytip-physical")
     } elseif ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
         @("name-box-dropdown-parity-native-crop")
     } elseif ($PhysicalProbeSelector -eq "backstage-print") {

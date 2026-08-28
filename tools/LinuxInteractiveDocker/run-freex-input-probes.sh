@@ -5694,6 +5694,74 @@ probe_cancelable_window() {
     fi
 }
 
+probe_ribbon_home_bold_keytip() {
+    local artifacts="ribbon-home-bold-keytip-before.png;ribbon-home-bold-keytip-keytips.png;ribbon-home-bold-keytip-after.png;ribbon-home-bold-keytip-postcondition.txt"
+    local package_signature="" style_id="" font_id="" bold="false" save_clean=false
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "ribbon-home-bold-keytip-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path"
+        record "ribbon-home-bold-keytip-physical" "failed" "ribbon-home-bold-keytip-postcondition.txt" "The Home ribbon Bold probe requires an XLSX fixture so the persisted font record can be checked." "$artifacts"
+        return
+    fi
+
+    if ! select_cell 0 0 A1; then
+        write_artifact "ribbon-home-bold-keytip-postcondition.txt" "selected=false\ncell=A1"
+        record "ribbon-home-bold-keytip-physical" "failed" "ribbon-home-bold-keytip-postcondition.txt" "Could not select the deterministic A1 target before entering Home key-tip mode." "$artifacts"
+        return
+    fi
+
+    capture "ribbon-home-bold-keytip-before.png"
+    enter_keytip_mode
+    capture "ribbon-home-bold-keytip-keytips.png"
+    keytip_key h
+    keytip_key 1
+    capture "ribbon-home-bold-keytip-after.png"
+    send_key shift+F12
+    wait_for_document_clean && save_clean=true
+
+    package_signature="$(python3 - "$document_path" <<'PY'
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+path = sys.argv[1]
+ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+with zipfile.ZipFile(path) as package:
+    sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+    styles = ET.fromstring(package.read("xl/styles.xml"))
+    cell = next((node for node in sheet.findall(".//m:c", ns) if node.attrib.get("r") == "A1"), None)
+    style_id = int(cell.attrib.get("s", "0")) if cell is not None else 0
+    xfs = styles.find("m:cellXfs", ns)
+    fonts = styles.find("m:fonts", ns)
+    font_id = 0
+    if xfs is not None and style_id < len(xfs):
+        font_id = int(xfs[style_id].attrib.get("fontId", "0"))
+    bold = False
+    if fonts is not None and font_id < len(fonts):
+        bold = fonts[font_id].find("m:b", ns) is not None
+    print(f"style-id={style_id}|font-id={font_id}|bold={'true' if bold else 'false'}")
+PY
+)"
+    style_id="${package_signature#style-id=}"
+    style_id="${style_id%%|*}"
+    font_id="${package_signature#*font-id=}"
+    font_id="${font_id%%|*}"
+    bold="${package_signature##*bold=}"
+    write_artifact "ribbon-home-bold-keytip-postcondition.txt" \
+        "selector=ribbon-formatting\ndocument-path=$document_path\ncell=A1\nkeytip-sequence=Alt,H,1\nsave-clean=$save_clean\npackage-signature=$package_signature"
+
+    if $save_clean && [[ "$bold" == "true" ]]; then
+        record "ribbon-home-bold-keytip-physical" "passed" \
+            "ribbon-home-bold-keytip-before.png; ribbon-home-bold-keytip-keytips.png; ribbon-home-bold-keytip-after.png; cell=A1; style-id=$style_id; font-id=$font_id; bold=true" \
+            "The production Home ribbon key-tip sequence Alt,H,1 toggled Bold on A1 and the saved XLSX contains a bold font record for the target cell." "$artifacts"
+    else
+        record "ribbon-home-bold-keytip-physical" "failed" \
+            "ribbon-home-bold-keytip-before.png; ribbon-home-bold-keytip-keytips.png; ribbon-home-bold-keytip-after.png; cell=A1; style-id=$style_id; font-id=$font_id; bold=$bold" \
+            "The production Home ribbon key-tip sequence did not produce a clean save with a bold font record for A1." "$artifacts"
+    fi
+    dismiss_overlays
+}
+
 probe_backstage_print_shortcut() {
     local id="backstage-print-ctrl-shift-f12-cancel"
     local before_count="" open_count="" cancel_count=""
@@ -5753,6 +5821,20 @@ fi
 
 if [[ "$probe_selector" == "backstage-print" ]]; then
     probe_backstage_print_shortcut
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "ribbon-formatting" ]]; then
+    # Focused Wave196 lane: drive a real Home ribbon key-tip command and inspect the persisted XLSX style.
+    probe_ribbon_home_bold_keytip
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" \
+            "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused ribbon-formatting probe."
+    fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
         exit 1
