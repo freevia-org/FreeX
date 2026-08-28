@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -1139,7 +1140,10 @@ public sealed class SlideShowWindowHeadlessTests
         var showVisibleAfterOwnerClose = true;
         var ran = await OnUiThread(() =>
         {
-            var owner = new MainWindow(Array.Empty<string>());
+            var owner = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                suppressStartupRecoveryOffer: true);
             owner.Editor.SelectSlide(0);
             owner.Show();
             owner.StartSlideShow(fromStart: true);
@@ -1150,11 +1154,20 @@ public sealed class SlideShowWindowHeadlessTests
             var slideShow = owner.OwnedWindows.OfType<SlideShowWindow>().Single();
             showVisibleAfterLaunch = slideShow.IsVisible;
 
-            // The first Close() always cancels and resumes asynchronously (the shared close coordinator
-            // confirms first), so the close has to be pumped before the owned window's fate can be read.
+            // The first Close() always cancels and resumes asynchronously after the shared close
+            // coordinator confirms the file/autosave gate. Pump until the observable lifecycle state
+            // changes, yielding real time for thread-pool/file work between UI drains. A fixed count of
+            // immediate RunJobs calls races that work; awaiting Closed inside the headless dispatcher
+            // deadlocks because the callback itself owns the UI dispatch until it returns.
             owner.Close();
-            for (var pump = 0; pump < 8 && owner.IsVisible; pump++)
+            var closeDeadline = Stopwatch.StartNew();
+            while (owner.IsVisible && closeDeadline.Elapsed < TimeSpan.FromSeconds(10))
+            {
                 Dispatcher.UIThread.RunJobs();
+                Thread.Sleep(10);
+            }
+
+            owner.IsVisible.Should().BeFalse("the clean editor close must complete within the lifecycle timeout");
 
             showVisibleAfterOwnerClose = slideShow.IsVisible;
         });
