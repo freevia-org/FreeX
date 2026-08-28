@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -162,6 +163,7 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        AttachPageBreakLinePointerHandlers();
         ClearSelectedDrawingObject();
         var plan = PageLayoutStatusPlanner.PlanPageBreakPreviewToggle(_session.ViewMode);
         var result = _session.SetWorksheetViewMode(plan.TargetViewMode);
@@ -177,6 +179,281 @@ public sealed partial class MainWindow
         }
 
         RefreshShell(status);
+    }
+
+    // -------------------------------------------------------------------------------------------------------
+    // Page Break Preview: dragging a manual break line to move or remove it (parity with the WPF shell's
+    // GridView.Input.cs / GridView.HitTesting.cs HitTestPageBreakLine + CalculatePageBreakLineDragTarget,
+    // wired through MainWindow.Host's OnPageBreakLineMoved -> PlanMovePageBreak). Mirrors the Tunnel-routed
+    // capture pattern MainWindow.SplitPanePointer.cs uses for split-pane dividers: handlers are attached once
+    // on _sheetGridHost so they see the pointer before the underlying cell-selection handlers do, and only
+    // act while Page Break Preview is the active view mode.
+    // -------------------------------------------------------------------------------------------------------
+
+    /// <summary>Pixel tolerance for grabbing a manual page-break line, matching the WPF shell's
+    /// <c>PageBreakLineHitZone</c>.</summary>
+    private const double PageBreakLinePointerHitZone = 4;
+
+    private bool _pageBreakLinePointerHandlersAttached;
+    private PageBreakAxis? _pageBreakLineDragAxis;
+    private uint _pageBreakLineDragIndex;
+    private IPointer? _pageBreakLineDragPointer;
+
+    private readonly record struct PageBreakLinePointerLayout(
+        ViewportModel DisplayViewport,
+        double RowHeaderWidth,
+        double ColumnHeaderHeight,
+        double Width,
+        double Height);
+
+    private void AttachPageBreakLinePointerHandlers()
+    {
+        if (_pageBreakLinePointerHandlersAttached)
+            return;
+
+        _pageBreakLinePointerHandlersAttached = true;
+        _sheetGridHost.AddHandler(
+            InputElement.PointerPressedEvent,
+            PageBreakLinePointerPressed,
+            RoutingStrategies.Tunnel);
+        _sheetGridHost.AddHandler(
+            InputElement.PointerMovedEvent,
+            PageBreakLinePointerMoved,
+            RoutingStrategies.Tunnel);
+        _sheetGridHost.AddHandler(
+            InputElement.PointerReleasedEvent,
+            PageBreakLinePointerReleased,
+            RoutingStrategies.Tunnel);
+        _sheetGridHost.PointerCaptureLost += PageBreakLinePointerCaptureLost;
+    }
+
+    private void PageBreakLinePointerPressed(object? sender, PointerPressedEventArgs args)
+    {
+        if (!args.GetCurrentPoint(_sheetGridHost).Properties.IsLeftButtonPressed ||
+            !TryGetPageBreakLinePointerLayout(out var layout))
+        {
+            return;
+        }
+
+        var sheet = _session.ActiveSheet;
+        var position = args.GetPosition(_sheetGridHost);
+        if (HitTestPageBreakLinePointer(
+                layout.DisplayViewport,
+                sheet.RowPageBreaks,
+                sheet.ColumnPageBreaks,
+                position,
+                layout.RowHeaderWidth,
+                layout.ColumnHeaderHeight,
+                layout.Width,
+                layout.Height) is not { } hit)
+        {
+            return;
+        }
+
+        _pageBreakLineDragAxis = hit.Axis;
+        _pageBreakLineDragIndex = hit.Index;
+        _pageBreakLineDragPointer = args.Pointer;
+        args.Pointer.Capture(_sheetGridHost);
+        _sheetGridHost.Cursor = PageBreakLineDragCursor(hit.Axis);
+        args.Handled = true;
+    }
+
+    private void PageBreakLinePointerMoved(object? sender, PointerEventArgs args)
+    {
+        if (_pageBreakLineDragAxis is not { } axis)
+            return;
+
+        _sheetGridHost.Cursor = PageBreakLineDragCursor(axis);
+        args.Handled = true;
+    }
+
+    private void PageBreakLinePointerReleased(object? sender, PointerReleasedEventArgs args)
+    {
+        if (_pageBreakLineDragAxis is not { } axis)
+            return;
+
+        var originalIndex = _pageBreakLineDragIndex;
+        if (TryGetPageBreakLinePointerLayout(out var layout))
+        {
+            var position = args.GetPosition(_sheetGridHost);
+            var newIndex = CalculatePageBreakLineDragTarget(
+                layout.DisplayViewport,
+                axis,
+                position,
+                layout.RowHeaderWidth,
+                layout.ColumnHeaderHeight,
+                layout.Width,
+                layout.Height);
+            if (newIndex != originalIndex)
+            {
+                var sheet = _session.ActiveSheet;
+                ExecutePageLayoutCommandWithShellRefresh(
+                    CreatePageLayoutCommandSession().PlanMovePageBreak(
+                        axis,
+                        originalIndex,
+                        newIndex,
+                        sheet.RowPageBreaks,
+                        sheet.ColumnPageBreaks));
+            }
+        }
+
+        ClearPageBreakLinePointerCapture();
+        args.Handled = true;
+    }
+
+    private void PageBreakLinePointerCaptureLost(object? sender, PointerCaptureLostEventArgs args) =>
+        ClearPageBreakLinePointerCapture();
+
+    private void ClearPageBreakLinePointerCapture()
+    {
+        _pageBreakLineDragAxis = null;
+        _pageBreakLineDragIndex = 0;
+        _pageBreakLineDragPointer = null;
+        _sheetGridHost.Cursor = Cursor.Default;
+    }
+
+    private static Cursor PageBreakLineDragCursor(PageBreakAxis axis) =>
+        axis == PageBreakAxis.Row
+            ? new Cursor(StandardCursorType.SizeNorthSouth)
+            : new Cursor(StandardCursorType.SizeWestEast);
+
+    /// <summary>
+    /// Resolves the display-space viewport + header offsets a page-break-line pointer gesture should hit
+    /// test against, matching what <see cref="BuildPageBreakPreviewOverlay"/> renders (same zoom + minimum
+    /// row/column size projection). Returns false outside Page Break Preview or when the grid has no
+    /// measured extent yet.
+    /// </summary>
+    private bool TryGetPageBreakLinePointerLayout(out PageBreakLinePointerLayout layout)
+    {
+        if (_session.ViewMode != WorksheetViewMode.PageBreakPreview)
+        {
+            layout = default;
+            return false;
+        }
+
+        var viewport = _session.Viewport;
+        var zoomFactor = GetActiveZoomFactor();
+        var showHeadings = _session.IsShowingHeadings;
+        var rowHeaderWidth = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
+        var columnHeaderHeight = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
+        var width = CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor);
+        var height = CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor);
+        if (width <= 0 || height <= 0)
+        {
+            layout = default;
+            return false;
+        }
+
+        var displayViewport = PageBreakPreviewInstructionBuilder.ProjectToDisplaySpace(
+            viewport,
+            zoomFactor,
+            MinimumDisplayedColumnWidth,
+            MinimumDisplayedRowHeight);
+        layout = new PageBreakLinePointerLayout(displayViewport, rowHeaderWidth, columnHeaderHeight, width, height);
+        return true;
+    }
+
+    /// <summary>
+    /// Hit-tests a manual (row or column) page-break line in Page Break Preview, mirroring the WPF shell's
+    /// <c>GridView.HitTesting.cs HitTestPageBreakLine</c>: returns the axis and row/column index of the
+    /// nearest manual break line within <see cref="PageBreakLinePointerHitZone"/> pixels of
+    /// <paramref name="pos"/>, or null when the pointer is outside the grid/print area or not close enough
+    /// to a line.
+    /// </summary>
+    internal static (PageBreakAxis Axis, uint Index)? HitTestPageBreakLinePointer(
+        ViewportModel displayViewport,
+        IReadOnlyCollection<uint>? rowPageBreaks,
+        IReadOnlyCollection<uint>? columnPageBreaks,
+        Point pos,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double width,
+        double height)
+    {
+        if (pos.X < rowHeaderWidth || pos.Y < columnHeaderHeight || pos.X > width || pos.Y > height)
+            return null;
+
+        if (rowPageBreaks is { Count: > 0 })
+        {
+            var rowBreakLookup = rowPageBreaks as IReadOnlySet<uint> ?? new HashSet<uint>(rowPageBreaks);
+            foreach (var metric in displayViewport.RowMetrics)
+            {
+                if (!rowBreakLookup.Contains(metric.Row))
+                    continue;
+
+                var y = metric.TopOffset + columnHeaderHeight;
+                if (Math.Abs(pos.Y - y) <= PageBreakLinePointerHitZone)
+                    return (PageBreakAxis.Row, metric.Row);
+            }
+        }
+
+        if (columnPageBreaks is { Count: > 0 })
+        {
+            var columnBreakLookup = columnPageBreaks as IReadOnlySet<uint> ?? new HashSet<uint>(columnPageBreaks);
+            foreach (var metric in displayViewport.ColMetrics)
+            {
+                if (!columnBreakLookup.Contains(metric.Col))
+                    continue;
+
+                var x = metric.LeftOffset + rowHeaderWidth;
+                if (Math.Abs(pos.X - x) <= PageBreakLinePointerHitZone)
+                    return (PageBreakAxis.Column, metric.Col);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Given a page-break line drag on <paramref name="axis"/>, computes where dropping the pointer at
+    /// <paramref name="pos"/> should place the break: the row/column of the nearest gridline under the
+    /// pointer, or null when the pointer is outside the grid/print area (matching
+    /// <see cref="HitTestPageBreakLinePointer"/>'s bounds check) -- Excel removes a page break dragged off
+    /// the print area the same way. Mirrors the WPF shell's
+    /// <c>GridView.HitTesting.cs CalculatePageBreakLineDragTarget</c>.
+    /// </summary>
+    internal static uint? CalculatePageBreakLineDragTarget(
+        ViewportModel displayViewport,
+        PageBreakAxis axis,
+        Point pos,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double width,
+        double height)
+    {
+        if (pos.X < rowHeaderWidth || pos.Y < columnHeaderHeight || pos.X > width || pos.Y > height)
+            return null;
+
+        if (axis == PageBreakAxis.Row)
+        {
+            uint? closestRow = null;
+            var closestDistance = double.MaxValue;
+            foreach (var metric in displayViewport.RowMetrics)
+            {
+                var y = metric.TopOffset + columnHeaderHeight;
+                var distance = Math.Abs(pos.Y - y);
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestRow = metric.Row;
+                }
+            }
+            return closestRow;
+        }
+
+        uint? closestCol = null;
+        var closestColDistance = double.MaxValue;
+        foreach (var metric in displayViewport.ColMetrics)
+        {
+            var x = metric.LeftOffset + rowHeaderWidth;
+            var distance = Math.Abs(pos.X - x);
+            if (distance < closestColDistance)
+            {
+                closestColDistance = distance;
+                closestCol = metric.Col;
+            }
+        }
+        return closestCol;
     }
 
     private Canvas? BuildPageBreakPreviewOverlay(ViewportModel viewport, bool showHeadings, double zoomFactor)

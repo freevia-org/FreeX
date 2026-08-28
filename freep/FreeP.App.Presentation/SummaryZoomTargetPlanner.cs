@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -125,8 +126,15 @@ public static class SummaryZoomTargetPlanner
     private static void SetTileAttributes(XElement tile, SummaryZoomTarget target)
     {
         tile.SetAttributeValue("sectionId", target.SectionId);
-        tile.SetAttributeValue("title", target.Title);
-        tile.SetAttributeValue("descr", target.Description);
+
+        // r165: Title comes from a section name, which the user edits freely and which
+        // NormalizeSectionName only collapses whitespace in -- so a control character inside a word
+        // reaches here intact and makes the serialization below throw, killing Edit Summary Zoom
+        // Targets outright. The insertion planner beside this one was fixed for the same reason; this
+        // is its second, hand-written implementation of the same operation, which a grep for the
+        // insertion path's shape did not reach.
+        tile.SetAttributeValue("title", XmlTextSanitizer.Sanitize(target.Title));
+        tile.SetAttributeValue("descr", XmlTextSanitizer.Sanitize(target.Description));
         tile.SetAttributeValue("offsetFactorX", target.OffsetFactorX);
         tile.SetAttributeValue("offsetFactorY", target.OffsetFactorY);
         tile.SetAttributeValue("scaleFactorX", target.ScaleFactorX);

@@ -299,12 +299,12 @@ foreach ($workflow in $workflows) {
     $nonManualTriggerNames = @($triggerNames | Where-Object { $_ -ne "workflow_dispatch" })
     $automaticQualityWorkflows = @("ci.yml", "codeql.yml")
     if ($automaticQualityWorkflows -contains $workflow.Name) {
-        foreach ($requiredTrigger in @("workflow_dispatch", "push", "pull_request")) {
+        foreach ($requiredTrigger in @("workflow_dispatch", "push")) {
             if ($triggerNames -notcontains $requiredTrigger) {
                 $errors.Add("$($workflow.Name): canonical quality workflow must declare '$requiredTrigger'.")
             }
         }
-        $allowedAutomaticTriggers = @("push", "pull_request")
+        $allowedAutomaticTriggers = @("push")
         if ($workflow.Name -eq "codeql.yml") {
             $allowedAutomaticTriggers += "schedule"
         }

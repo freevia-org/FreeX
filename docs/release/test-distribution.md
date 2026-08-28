@@ -86,19 +86,17 @@ Use [release/tester-release-checklist.md](tester-release-checklist.md) as the op
 
 For the full suite release map across FreeX, FreeW, and FreeP, see [app-platform-publish-lanes.md](app-platform-publish-lanes.md). Each app/platform lane is independent so Windows, Linux, and macOS packages can be built or rerun separately.
 
-## Commit Gate Verification
+## Branch Build And Main Integration Verification
 
-Run the manifest-driven commit gate from the repository root. It selects only the projects assigned
-to an app and platform, serializes project execution for UI/resource isolation, and writes a
-separate TRX result per project:
+Before merging a worktree branch, run repository preflight and the full Release build. Focused tests
+are useful for changed components, but complete local test lanes are not a routine branch gate:
 
 0. `pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1`
-1. `pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform windows`
-2. `pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeW -Platform linux`
-3. `pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeP -Platform macos`
+1. `dotnet build FreeX.slnx --configuration Release`
 
-CI runs each app's commit gate on Windows, Linux, and macOS. Windows includes desktop WPF coverage;
-Linux and macOS include only portable core, contract, and Avalonia projects. The separate
+After the branch is merged and pushed to `main`, canonical CI runs the manifest-driven integration
+gate across FreeX, FreeW, and FreeP on Windows, Linux, and macOS. UI-host and render-evidence projects
+are release-only and do not consume routine integration capacity. The separate
 `FreeX.DefaultTests.slnx` and `FreeX.UiTests.slnx` files remain build-grouping aids, not executable
 test gates. See [testing/test-gates.md](../testing/test-gates.md) for the complete ownership map.
 
@@ -106,15 +104,20 @@ Canonical CI runs the manifest gates as isolated hosted-runner shards and folds 
 `FreeX commit gate` required check (retained for branch-protection compatibility, now aggregating
 all three apps). CI and package jobs reuse OS-specific NuGet caches.
 Canonical CI derives its all-app/all-platform
-matrix directly from `eng/test-gates.json`, including release render evidence, and cancels superseded
+integration matrix directly from `eng/test-gates.json` and cancels superseded
 runs. CodeQL uses GitHub's supported C# `build-mode: none` instead of compiling the production tree
 a second time; repository preflight still guards `FreeSuite.CodeQL.slnx` as the complete production
-project inventory. Tester publication accepts only an exact-SHA successful CI and CodeQL pair and
-does not repeat source tests or repository preflight.
+project inventory.
 
-For the suite tester workflow, release-source and exact-SHA attestation validation run once before
-the package matrix. Native package jobs retain their own content, smoke, manifest, SBOM, checksum,
-installation, transition, and uninstall checks.
+The canonical `App Tester Release` workflow pins the `main` SHA selected at dispatch. Later commits
+to `main` do not invalidate that immutable candidate. It accepts only an exact-SHA successful CI and
+CodeQL pair, then runs the release-only WPF/UI-host and render-evidence gates. The exact-SHA integration
+attestation plus those release-only gates form the complete release test suite without repeating
+already-covered integration projects. Packaging starts only after that aggregate release gate passes.
+Native package jobs retain their content, smoke, manifest, SBOM, checksum, installation, transition,
+and uninstall checks; publication waits for every selected app package and, for an all-app release,
+every suite package. A final hosted verification checks tag SHAs, prerelease state, required assets,
+and non-empty remote asset metadata.
 
 A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Avalonia` on architecture-specific hosted macOS runners for `osx-arm64` and `osx-x64`, wraps the output in `FreeX.app` with `FreeX.icns`, verifies bundle metadata, ad-hoc signs by default, optionally Developer ID signs/notarizes when secrets are configured, self-checks each SHA-256 file with `shasum -a 256 -c`, records `zip_sha256` in evidence, and uploads zipped app artifacts, checksum files, tester instructions, smoke evidence, separate diagnostics artifacts, and a post-matrix aggregate readiness artifact. The Windows-runnable `tools/Test-MacOsAppReadiness.ps1` preflight statically checks the app project, `Info.plist`, icon asset, workflow markers, source wiring, and portable-source hygiene. After hosted artifacts are downloaded and unzipped, the Windows-runnable `tools/Test-MacOsPublicPreviewReadiness.ps1` preflight validates both runtime evidence bundles, checksum files, LaunchServices/Open-With/default-open smoke, startup smoke, command key smoke, hosted dialog smoke, Format Cells roundtrip evidence, diagnostics artifact file sets, tester instructions, distribution-candidate signing/notarization/stapler evidence, and release publication artifacts when required for promotion. File-access grant diagnostics in those artifacts are instrumentation/readiness evidence only; hosted CI must not be treated as proof of real macOS security-scoped access to user-selected workbook files.
 

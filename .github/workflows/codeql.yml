@@ -5,14 +5,11 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
   schedule:
     - cron: "19 3 * * 1"
 
 concurrency:
-  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  group: codeql-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:

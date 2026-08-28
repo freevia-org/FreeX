@@ -973,38 +973,59 @@ public sealed partial class DocumentView : Control
         _caret = restrictToSelection ? priorSelection!.Value.Start : new DocPosition(FirstEditableBlock(), 0);
         _selectionAnchor = _caret;
         var count = 0;
-        while (count < 10000)
+        // Word (and the WPF shell's FindReplaceDialog.ReplaceAll, which wraps its own loop in
+        // BeginUndoGroup/CommitUndoGroup("Replace All")) undoes a whole Replace All as one Ctrl+Z. Each
+        // ReplaceSelectionWith call below eventually reaches DocumentCommandBus.Execute, which pushes a
+        // standalone undo-stack entry per call whenever no group is open -- so without this outer group,
+        // an N-match Replace All became N separate undo entries here. ownsUndoGroup guards against the
+        // (currently unreached, but the rest of this file always guards it this way) case of being called
+        // while an outer caller already has a group open.
+        var ownsUndoGroup = !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        try
         {
-            var searchFrom = _caret;
-            var found = options is { } opts ? FindNext(query, opts) : FindNext(query);
-            if (!found || HasWrappedAround(searchFrom))
-                break;
+            while (count < 10000)
+            {
+                var searchFrom = _caret;
+                var found = options is { } opts ? FindNext(query, opts) : FindNext(query);
+                if (!found || HasWrappedAround(searchFrom))
+                    break;
 
-            var matchStart = _selectionAnchor!.Value;
-            if (restrictToSelection && Compare(matchStart, limit) >= 0)
-                break;
+                var matchStart = _selectionAnchor!.Value;
+                if (restrictToSelection && Compare(matchStart, limit) >= 0)
+                    break;
 
-            // The match's block never changes under ReplaceSelectionWith (it only rewrites text within a
-            // single paragraph), so a replacement before the selection's end offset, in that same block,
-            // shifts the end offset by however much the paragraph's character count actually changed --
-            // measured from the live model rather than assumed from replacement.Length - match.Length, so
-            // this stays correct even under Track Changes (where a "replace" leaves the struck-through
-            // original text in place and only inserts the replacement, a different length delta than a
-            // literal swap). Otherwise the selection boundary would drift out of sync with the edited text
-            // as later matches are located and replaced.
-            var lengthBefore = restrictToSelection && limit.Block == matchStart.Block
-                && _doc.Blocks[matchStart.Block] is Paragraph beforeParagraph
-                ? beforeParagraph.PlainText.Length
-                : (int?)null;
+                // The match's block never changes under ReplaceSelectionWith (it only rewrites text within a
+                // single paragraph), so a replacement before the selection's end offset, in that same block,
+                // shifts the end offset by however much the paragraph's character count actually changed --
+                // measured from the live model rather than assumed from replacement.Length - match.Length, so
+                // this stays correct even under Track Changes (where a "replace" leaves the struck-through
+                // original text in place and only inserts the replacement, a different length delta than a
+                // literal swap). Otherwise the selection boundary would drift out of sync with the edited text
+                // as later matches are located and replaced.
+                var lengthBefore = restrictToSelection && limit.Block == matchStart.Block
+                    && _doc.Blocks[matchStart.Block] is Paragraph beforeParagraph
+                    ? beforeParagraph.PlainText.Length
+                    : (int?)null;
 
-            var originalMatchText = SelectedText;
-            ReplaceSelectionWith(replacement);
-            SkipTrackedLeftoverMatch(originalMatchText);
+                var originalMatchText = SelectedText;
+                ReplaceSelectionWith(replacement);
+                SkipTrackedLeftoverMatch(originalMatchText);
 
-            if (lengthBefore is { } before && _doc.Blocks[matchStart.Block] is Paragraph afterParagraph)
-                limit = limit with { Offset = limit.Offset + (afterParagraph.PlainText.Length - before) };
+                if (lengthBefore is { } before && _doc.Blocks[matchStart.Block] is Paragraph afterParagraph)
+                    limit = limit with { Offset = limit.Offset + (afterParagraph.PlainText.Length - before) };
 
-            count++;
+                count++;
+            }
+        }
+        finally
+        {
+            // CommitUndoGroup no-ops (pushes nothing) when nothing was collected, e.g. a zero-match
+            // Replace All -- safe to call unconditionally, including when the loop above threw, so the
+            // bus is never left with a permanently-open group that would swallow every later edit.
+            if (ownsUndoGroup)
+                _bus.CommitUndoGroup("Replace All");
         }
 
         InvalidateVisual();
@@ -10840,9 +10861,15 @@ public sealed partial class DocumentView : Control
             }
 
             var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run, paragraph));
-            var text = run.ComplexField is null
-                ? run.Text
-                : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text;
+            // A table cell paints through this wrap-measurement path, not DisplayCells -- so a simple
+            // RunFieldKind field (DATE/PAGE/AUTHOR/...) inside a cell needs the same live-vs-locked
+            // resolution DisplayCells applies for the body, or it stays frozen at its cached text there
+            // too. See ResolveSimpleField / DisplayCells for the identical body-level fix.
+            var text = run.ComplexField is not null
+                ? BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text
+                : run.FieldKind != RunFieldKind.None
+                    ? ResolveSimpleField(run)
+                    : run.Text;
             for (var textIndex = 0; textIndex < text.Length; textIndex++)
             {
                 var ch = text[textIndex];
@@ -23329,21 +23356,146 @@ public sealed partial class DocumentView : Control
 
     /// <summary>
     /// Ctrl+F11 / Ctrl+Shift+F11: locks or unlocks recalculation for selected complex fields, or only the
-    /// field containing the active body or table-cell caret.
+    /// field containing the active body or table-cell caret. Falls back to
+    /// <see cref="SetSimpleFieldLockAtCaret"/> when the caret is on a <see cref="RunFieldKind"/> field
+    /// instead (the form Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt;
+    /// Date, and Quick Parts &gt; Document Property &gt; Author all produce) -- mirroring the WPF host's
+    /// <c>SetFieldLockAtCaret</c>, which falls back to its own <c>SetSimpleFieldLockAtCaret</c> the same
+    /// way. Without this fallback, Ctrl+F11 was a silent no-op on every RunFieldKind field in this shell.
     /// </summary>
     public void SetFieldLockAtCaret(bool isLocked)
     {
         var fields = SelectedOrCurrentComplexFields();
-        if (fields.Count == 0)
+        if (fields.Count > 0)
+        {
+            var result = ReferenceEdits.SetComplexFieldsLocked(
+                fields.Select(run => run.ComplexField!).ToArray(),
+                isLocked);
+            if (!result.Applied)
+                return;
+            InvalidateLayoutAndVisual();
+            Focus();
+            return;
+        }
+
+        SetSimpleFieldLockAtCaret(isLocked);
+    }
+
+    /// <summary>
+    /// Ctrl+F11 / Ctrl+Shift+F11 for a simple <see cref="RunFieldKind"/> field (DATE/TIME/PAGE/AUTHOR/
+    /// FILENAME/NUMPAGES/... inserted via Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt;
+    /// Quick Parts &gt; Date, or Quick Parts &gt; Document Property &gt; Author/Title/etc.). Unlike
+    /// <see cref="ComplexField"/>, a simple field carries no wrapper object of its own to hold the lock,
+    /// so it lives directly on <see cref="Run.FieldLocked"/> and is mutated in place here -- the same way
+    /// <see cref="DocumentReferenceEditingCoordinator.SetComplexFieldsLocked"/> mutates
+    /// <see cref="Run.ComplexField"/> in place for the complex-field form.
+    /// </summary>
+    private void SetSimpleFieldLockAtCaret(bool isLocked)
+    {
+        var fieldRun = SimpleFieldRunAtCaret();
+        if (fieldRun is null)
             return;
 
-        var result = ReferenceEdits.SetComplexFieldsLocked(
-            fields.Select(run => run.ComplexField!).ToArray(),
-            isLocked);
-        if (!result.Applied)
-            return;
+        fieldRun.FieldLocked = isLocked;
         InvalidateLayoutAndVisual();
         Focus();
+    }
+
+    /// <summary>
+    /// The <see cref="RunFieldKind"/> run at the active shape, header/footer, table-cell, or body caret --
+    /// the simple-field analogue of <see cref="ComplexFieldRunAtCaret"/>, used by
+    /// <see cref="SetSimpleFieldLockAtCaret"/>.
+    /// </summary>
+    private Run? SimpleFieldRunAtCaret()
+    {
+        if (_shapeCaret is { } shapeCaret
+            && TryGetShapeTextTarget(
+                shapeCaret.BlockIndex,
+                shapeCaret.RunIndex,
+                _activeShapeTextChildPath,
+                out _,
+                out var shape)
+            && shapeCaret.TextParagraphIndex >= 0
+            && shapeCaret.TextParagraphIndex < shape.TextParagraphs.Count)
+        {
+            var paragraph = shape.TextParagraphs[shapeCaret.TextParagraphIndex];
+            if (shapeCaret.TextRunIndex >= 0 && shapeCaret.TextRunIndex < paragraph.Runs.Count)
+            {
+                var run = paragraph.Runs[shapeCaret.TextRunIndex];
+                return run.FieldKind != RunFieldKind.None ? run : null;
+            }
+        }
+
+        if (_hfCaret is { } headerFooterCaret)
+        {
+            var paragraph = GetHfParagraph(headerFooterCaret.Target);
+            return paragraph is null
+                ? null
+                : SimpleFieldRunAtModelOffset(paragraph, headerFooterCaret.Offset);
+        }
+
+        if (_cellCaret is { } cellCaret)
+        {
+            var paragraph = GetCellParagraph(
+                cellCaret.TableBlock,
+                cellCaret.Row,
+                cellCaret.Col,
+                cellCaret.ParaIdx);
+            return paragraph is null
+                ? null
+                : SimpleFieldRunAtDisplayOffset(cellCaret.TableBlock, paragraph, cellCaret.Offset);
+        }
+
+        return CurrentParagraph() is { } bodyParagraph
+            ? SimpleFieldRunAtDisplayOffset(_caret.Block, bodyParagraph, _caret.Offset)
+            : null;
+    }
+
+    private static Run? SimpleFieldRunAtModelOffset(Paragraph paragraph, int offset)
+    {
+        var modelOffset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            var modelLength = run.Text.Length;
+            if (run.FieldKind != RunFieldKind.None
+                && offset >= modelOffset
+                && offset <= modelOffset + modelLength)
+                return run;
+
+            modelOffset += modelLength;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The display offset variant <see cref="SimpleFieldRunAtCaret"/> needs for body/table-cell carets:
+    /// those carets sit in RENDERED offset space (see <see cref="ComplexFieldRunAtDisplayOffset"/>'s
+    /// identical reasoning), and a simple field's resolved display text can differ in length from its
+    /// cached <see cref="Run.Text"/> once it is live-resolved (see <c>DisplayCells</c>).
+    /// </summary>
+    private Run? SimpleFieldRunAtDisplayOffset(int blockIndex, Paragraph paragraph, int offset)
+    {
+        var displayOffset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            if (IsFloatingDrawingRun(run))
+                continue;
+
+            var displayLength = run.ComplexField is not null
+                ? BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text.Length
+                : run.FieldKind != RunFieldKind.None
+                    ? ResolveSimpleField(run).Length
+                    : run.Text.Length;
+            if (run.FieldKind != RunFieldKind.None
+                && offset >= displayOffset
+                && offset <= displayOffset + displayLength)
+                return run;
+
+            displayOffset += displayLength;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -23791,6 +23943,17 @@ public sealed partial class DocumentView : Control
 
     private string ResolvePageNumberFieldText() =>
         DocumentFieldDisplayPlanner.ResolveFirstPageNumberText(_doc);
+
+    /// <summary>
+    /// Resolves a body/table-cell <see cref="RunFieldKind"/> run's display text for <c>DisplayCells</c>:
+    /// its cached text, unchanged, when locked (<see cref="Run.FieldLocked"/> -- Ctrl+F11), otherwise the
+    /// live current value (matching WPF's BuildFieldRun and this file's own
+    /// <see cref="BuildBodyComplexFieldDisplayPlan"/> for the ComplexField form).
+    /// </summary>
+    private string ResolveSimpleField(Run run) =>
+        run.FieldLocked
+            ? run.Text
+            : ResolveLiveField(run.FieldKind, run.Text, ResolvePageNumberFieldText(), pageCount: 1);
 
     /// <summary>
     /// AV-INSERT2: Insert an inline equation at the caret (Word's Insert &gt; Equation). The equation is
@@ -25892,6 +26055,17 @@ public sealed partial class DocumentView : Control
                 if (displayPlan.IsFieldCode)
                     displayFormatting = displayFormatting with { ColorHex = ComplexFieldDisplayPlanner.FieldCodeColorHex };
             }
+            else if (run.FieldKind != RunFieldKind.None)
+            {
+                // A simple DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES/... field (Insert > Header & Footer >
+                // Page Number, Insert > Quick Parts > Date, Quick Parts > Document Property). Unlike
+                // run.ComplexField, this has no wrapper object -- the lock lives on run.FieldLocked, and
+                // ResolveSimpleField honors it exactly like BuildBodyComplexFieldDisplayPlan honors
+                // ComplexField.IsLocked above. Matches WPF's BuildFieldRun ("run.FieldLocked ? run.Text :
+                // ResolveFieldText(...)"): without this branch the field never re-resolved at all here,
+                // staying frozen at its cached insertion-time/imported text even when unlocked.
+                displayText = ResolveSimpleField(run);
+            }
             else if (run.FootnoteId is { } footnoteId)
             {
                 // The body reference mark must show the note's computed display sequence, not the raw
@@ -25933,6 +26107,15 @@ public sealed partial class DocumentView : Control
     private ComplexFieldDisplayPlan BuildBodyComplexFieldDisplayPlan(int blockIndex, Run run)
     {
         var complexField = run.ComplexField!;
+        // A locked field (Ctrl+F11) must not recompute on render, matching the WPF host's
+        // ResolveComplexFieldText guard ("if (field.IsLocked) return run.Text;", freew/FreeW.App.Host/
+        // Editing/DocumentView.cs). Without this, a locked DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES field
+        // kept recalculating from live state on every render even after being locked -- the on-screen
+        // value, the PDF export, and (via CommitToModel-equivalent paths) the saved cached text all
+        // disagreed with what the identical, identically-locked document shows on the WPF shell.
+        if (complexField.IsLocked)
+            return ComplexFieldDisplayPlanner.Build(complexField, run.Text, _doc);
+
         var resolved = ComplexFieldEngine.CanRecompute(complexField)
             ? run.Text
             : ResolveComplexField(run, run.Text);

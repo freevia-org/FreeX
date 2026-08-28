@@ -295,6 +295,7 @@ public static class RevisionEditPlanner
         HyperlinkTooltip = source.HyperlinkTooltip,
         SubDocument = source.SubDocument,
         FieldKind = source.FieldKind,
+        FieldLocked = source.FieldLocked,
         TableFormula = source.TableFormula,
         Citation = source.Citation,
         CrossReference = source.CrossReference,

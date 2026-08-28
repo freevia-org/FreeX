@@ -9094,14 +9094,19 @@ public sealed partial class DocumentView : RichTextBox
             case WpfRun { Tag: FieldMarker fieldMarker } fieldRun:
                 // A document field round-trips its kind; the run's visible text is the last-resolved
                 // value, which we keep as the cached fallback (matching Word's cached-field behaviour).
-                // If the run somehow lost its text, fall back to the marker's stored cached value.
-                var cachedText = fieldRun.Text.Length > 0 ? fieldRun.Text : fieldMarker.Cached;
+                // If the run somehow lost its text, fall back to the marker's stored cached value. A
+                // locked field (Ctrl+F11) must never have a recomputed/displayed value committed back --
+                // it keeps the marker's cached value, mirroring the ComplexFieldMarker case below.
+                var cachedText = fieldMarker.Locked
+                    ? fieldMarker.Cached
+                    : (fieldRun.Text.Length > 0 ? fieldRun.Text : fieldMarker.Cached);
                 modelParagraph.Runs.Add(new ModelRun(cachedText, ReadRunFormatting(fieldRun))
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
                     HyperlinkTooltip = hyperlinkTooltip,
-                    FieldKind = fieldMarker.Kind
+                    FieldKind = fieldMarker.Kind,
+                    FieldLocked = fieldMarker.Locked
                 });
                 break;
             case WpfRun { Tag: ComplexFieldMarker complexMarker } complexFieldRun:
@@ -12761,13 +12766,19 @@ public sealed partial class DocumentView : RichTextBox
         var fieldFileName = evaluationDocument is not null
             ? evaluationFileName
             : _renderFieldEvaluationFileName ?? _renderFileName;
-        var display = ResolveFieldText(run.FieldKind, run.Text, fieldDocument, fieldFileName);
+        // A locked field (Ctrl+F11) must not recompute on render, matching ResolveComplexFieldText's
+        // identical guard for the ComplexField form. Without this, a locked DATE/TIME/PAGE/AUTHOR/
+        // FILENAME/NUMPAGES field kept recalculating from live state on every render even after being
+        // locked, and the recomputed value then got written back into the model by CommitToModel.
+        var display = run.FieldLocked
+            ? run.Text
+            : ResolveFieldText(run.FieldKind, run.Text, fieldDocument, fieldFileName);
         var fmt = run.Formatting ?? document.DefaultRun;
         var wpf = new WpfRun(display)
         {
             FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
-            Tag = new FieldMarker(run.FieldKind, run.Text)
+            Tag = new FieldMarker(run.FieldKind, run.Text, run.FieldLocked)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
             wpf.FontFamily = new FontFamily(family);
@@ -12805,8 +12816,12 @@ public sealed partial class DocumentView : RichTextBox
     /// Carried on a field WPF run's Tag so CommitToModel can round-trip the field kind and its cached
     /// (last-computed) text. The WPF run's visible text is the resolved value; the cached text is what
     /// the model keeps so a re-resolve next render is possible and field-unaware consumers still render.
+    /// <see cref="Locked"/> mirrors <see cref="ComplexFieldMarker"/>'s reliance on <c>ComplexField.IsLocked</c>:
+    /// a <see cref="RunFieldKind"/> field has no wrapper object to carry the flag by reference across a
+    /// render/commit round trip, so the marker snapshots it here and <see cref="SetFieldLockAtCaret"/>
+    /// mutates it directly (see <c>SetSimpleFieldLockAtCaret</c>).
     /// </summary>
-    private sealed record FieldMarker(RunFieldKind Kind, string Cached);
+    private sealed record FieldMarker(RunFieldKind Kind, string Cached, bool Locked = false);
 
     /// <summary>
     /// Carried on a table-formula WPF run's Tag so <see cref="CommitToModel"/> can round-trip the formula
@@ -13213,7 +13228,10 @@ public sealed partial class DocumentView : RichTextBox
 
     /// <summary>
     /// Ctrl+F11 / Ctrl+Shift+F11: locks or unlocks recalculation for selected complex fields, or only the
-    /// field containing the caret, while preserving cached results and field storage form.
+    /// field containing the caret, while preserving cached results and field storage form. Falls back to
+    /// <see cref="SetSimpleFieldLockAtCaret"/> when the caret is in a <see cref="RunFieldKind"/> field
+    /// instead (the form Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt;
+    /// Date, and Quick Parts &gt; Document Property &gt; Author all produce).
     /// </summary>
     public void SetFieldLockAtCaret(bool isLocked)
     {
@@ -13224,13 +13242,58 @@ public sealed partial class DocumentView : RichTextBox
                 ?? ComplexFieldRunAtPointer(Selection.Start)
                 ?? ComplexFieldRunAtPointer(Selection.End);
             if (fieldRun?.Tag is not ComplexFieldMarker marker)
+            {
+                SetSimpleFieldLockAtCaret(isLocked);
                 return;
+            }
             fields = [marker.Field];
         }
 
         CommitToModel();
         if (ReferenceEdits.SetComplexFieldsLocked(fields, isLocked).Applied)
             Render();
+    }
+
+    /// <summary>
+    /// Ctrl+F11 / Ctrl+Shift+F11 for a simple <see cref="RunFieldKind"/> field (DATE/TIME/PAGE/AUTHOR/
+    /// FILENAME/NUMPAGES/... inserted via Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt;
+    /// Quick Parts &gt; Date, or Quick Parts &gt; Document Property &gt; Author/Title/etc.). Unlike
+    /// <see cref="ComplexField"/>, a simple field carries no model object identity that survives a
+    /// render/commit round trip, so the lock is applied by mutating the caret's <see cref="FieldMarker"/>
+    /// tag directly; <see cref="ReadInline"/>'s <c>FieldMarker</c> case then writes it onto the fresh
+    /// model run <see cref="CommitToModel"/> creates.
+    /// </summary>
+    private void SetSimpleFieldLockAtCaret(bool isLocked)
+    {
+        var fieldRun = FieldRunAtPointer(CaretPosition)
+            ?? FieldRunAtPointer(Selection.Start)
+            ?? FieldRunAtPointer(Selection.End);
+        if (fieldRun?.Tag is not FieldMarker marker)
+            return;
+
+        fieldRun.Tag = marker with { Locked = isLocked };
+        CommitToModel();
+        Render();
+    }
+
+    private static WpfRun? FieldRunAtPointer(TextPointer? pointer)
+    {
+        if (pointer is null)
+            return null;
+
+        for (TextElement? element = pointer.Parent as TextElement;
+             element is not null;
+             element = element.Parent as TextElement)
+        {
+            if (element is WpfRun { Tag: FieldMarker } run)
+                return run;
+        }
+
+        return pointer.GetAdjacentElement(LogicalDirection.Forward) is WpfRun { Tag: FieldMarker } forward
+            ? forward
+            : pointer.GetAdjacentElement(LogicalDirection.Backward) is WpfRun { Tag: FieldMarker } backward
+                ? backward
+                : null;
     }
 
     /// <summary>

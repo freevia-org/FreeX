@@ -51,15 +51,31 @@ public sealed class TestGateMatrixTests
     }
 
     [Fact]
-    public void CanonicalCi_RetriesOnlyTheFailedProjectOnceAndRetainsAttemptEvidence()
+    public void CanonicalCi_FailsVisibleProjectsAndCapturesBoundedHangDiagnostics()
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "ci.yml");
         var runner = WorkspaceFileLocator.ReadAllText("tools", "Invoke-TestGate.ps1");
 
-        workflow.Should().Contain("-RetryFailedProjectCount 1");
+        workflow.Should().NotContain("-RetryFailedProjectCount");
+        workflow.Should().Contain("-HangTimeout 15m");
+        workflow.Should().Contain("\"**/TestResults/**\"");
         runner.Should().Contain("[int]$RetryFailedProjectCount = 0");
-        runner.Should().Contain("$attemptSuffix = if ($attempt -eq 0)");
-        runner.Should().Contain("the initial TRX is retained");
-        runner.Should().Contain("retrying only this project");
+        runner.Should().Contain("[string]$HangTimeout = \"15m\"");
+        runner.Should().Contain("\"--blame-hang-timeout\", $HangTimeout");
+    }
+
+    [Fact]
+    public void Manifest_ReservesUiHostsForReleaseAndShardsEveryWpfBatch()
+    {
+        using var manifest = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("eng", "test-gates.json"));
+        var gates = manifest.RootElement.GetProperty("gates").EnumerateArray().ToArray();
+
+        gates.Single(gate => gate.GetProperty("id").GetString() == "freex-wpf-shell")
+            .GetProperty("gate").GetString().Should().Be("release");
+        var batches = gates.Where(gate => gate.GetProperty("id").GetString()!.StartsWith("freex-wpf-host-batch", StringComparison.Ordinal)).ToArray();
+        batches.Should().HaveCount(7);
+        batches.Should().OnlyContain(gate =>
+            gate.GetProperty("gate").GetString() == "release" &&
+            gate.GetProperty("projects").GetArrayLength() == 1);
     }
 }
