@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
@@ -146,6 +147,32 @@ public sealed class LegalNoticesDialogVisualParityTests
             close.IsDefault.Should().BeTrue();
             close.IsCancel.Should().BeTrue();
             dialog.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Legal_notices_matches_WPF_selected_pane_trailing_edge()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new LegalNoticesDialog([("Legal Notices", "legal text")]);
+            try
+            {
+                dialog.Show();
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var selectedPane = dialog.GetVisualDescendants()
+                    .OfType<ContentPresenter>()
+                    .Single(presenter => presenter.Name == "PART_SelectedContentHost");
+
+                selectedPane.Margin.Should().Be(new Thickness(0, -5, 1, 0));
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+            }
         }, CancellationToken.None);
     }
 
