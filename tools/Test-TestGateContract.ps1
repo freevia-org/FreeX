@@ -122,7 +122,7 @@ function Assert-WorkflowContains {
     }
 }
 
-Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected 'tools/Get-TestGateMatrix.ps1 -Gate all'
+Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected 'tools/Get-TestGateMatrix.ps1 -Gate commit'
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected 'fromJSON(needs.prepare.outputs.matrix)'
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-Gate "${{ matrix.gate }}"'
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-App "${{ matrix.app }}"'
@@ -133,6 +133,10 @@ Assert-WorkflowContains -Path ".github/workflows/freep-ci.yml" -Expected '-Gate 
 Assert-WorkflowContains -Path ".github/workflows/tester-release.yml" -Expected '-Gate release -App FreeX -Platform windows'
 Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expected 'tools/Test-GitHubReleaseCandidate.ps1'
 Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expected '-RequiredWorkflows ci.yml,codeql.yml'
+Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expected 'tools/Get-TestGateMatrix.ps1 -Gate release'
+Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expected 'fromJSON(needs.prepare.outputs.release_matrix)'
+Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expected 'name: FreeX full release gate'
+Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expected 'name: Validate complete release inventory'
 
 $gateDocumentation = Get-Content -LiteralPath (Join-Path $repoRoot "docs/testing/test-gates.md") -Raw
 foreach ($requiredHeading in @("Commit gate", "Release gate", "all platforms", "Invoke-TestGate.ps1")) {

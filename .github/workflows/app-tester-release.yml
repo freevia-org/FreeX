@@ -41,7 +41,9 @@ permissions:
   actions: read
 
 concurrency:
-  group: app-tester-release-${{ inputs.app }}-${{ inputs.release_version }}
+  # A version owns one immutable set of app and suite tags. Serialize every
+  # app/platform selection for that version so partial dispatches cannot race.
+  group: app-tester-release-${{ inputs.release_version }}
   cancel-in-progress: false
 
 env:
@@ -56,7 +58,13 @@ jobs:
     outputs:
       package_matrix: ${{ steps.select.outputs.package_matrix }}
       publish_matrix: ${{ steps.select.outputs.publish_matrix }}
+      release_matrix: ${{ steps.release_tests.outputs.matrix }}
     steps:
+      - name: Checkout release contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
       - name: Select requested app and platform lanes
         id: select
         shell: pwsh
@@ -90,6 +98,11 @@ jobs:
           "package_matrix=$packageMatrix" >> $env:GITHUB_OUTPUT
           "publish_matrix=$publishMatrix" >> $env:GITHUB_OUTPUT
 
+      - name: Select full release-only test matrix
+        id: release_tests
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/Get-TestGateMatrix.ps1 -Gate release -GitHubOutputPath $env:GITHUB_OUTPUT
+
   candidate:
     name: Verify immutable release candidate
     needs: prepare
@@ -108,23 +121,10 @@ jobs:
       - name: Validate latest release source
         shell: pwsh
         run: |
-          $isMainRelease = $env:GITHUB_REF -eq "refs/heads/main"
-          $isFullReleaseBranch = $env:GITHUB_REF -like "refs/heads/codex/full-release-*"
-          if (-not ($isMainRelease -or $isFullReleaseBranch)) {
-            throw "Full app releases must run from refs/heads/main or a codex/full-release-* branch."
+          if ($env:GITHUB_REF -ne "refs/heads/main") {
+            throw "Full app releases must be dispatched from refs/heads/main."
           }
-
-          if ($isFullReleaseBranch) {
-            git fetch origin main:refs/remotes/origin/main --no-tags
-            if ($LASTEXITCODE -ne 0) {
-              throw "Could not fetch origin/main while validating the full release source."
-            }
-
-            git merge-base --is-ancestor origin/main HEAD
-            if ($LASTEXITCODE -ne 0) {
-              throw "Full release branches must contain the current origin/main commit."
-            }
-          }
+          Write-Host "Pinned immutable release candidate $env:GITHUB_SHA. Later main commits do not invalidate this run."
 
       - name: Require successful exact-SHA CI and CodeQL attestations
         shell: pwsh
@@ -136,11 +136,72 @@ jobs:
             -CommitSha $env:GITHUB_SHA `
             -RequiredWorkflows ci.yml,codeql.yml
 
-  package:
-    name: Package ${{ matrix.app }} ${{ matrix.runtime }}
+  release-tests:
+    name: Release test ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.gateId }}
     needs: [prepare, candidate]
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.release_matrix) }}
+    steps:
+      - name: Checkout immutable candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: ${{ matrix.fetchDepth }}
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.400
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Run isolated release test gate
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File tools/Invoke-TestGate.ps1 `
+            -Gate release `
+            -App "${{ matrix.app }}" `
+            -Platform "${{ matrix.platform }}" `
+            -GateId "${{ matrix.gateId }}" `
+            -HangTimeout 15m `
+            -ResultsDirectory TestResults
+      - name: Upload release test diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-tests-${{ matrix.platform }}-${{ matrix.gateId }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: "**/TestResults/**"
+          if-no-files-found: warn
+          retention-days: 14
+
+  release-gate:
+    name: FreeX full release gate
+    needs: [prepare, candidate, release-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aggregate immutable-candidate coverage
+        shell: pwsh
+        run: |
+          $prepareResult = "${{ needs.prepare.result }}"
+          $candidateResult = "${{ needs.candidate.result }}"
+          $releaseTestResult = "${{ needs.release-tests.result }}"
+          if ($prepareResult -ne 'success' -or $candidateResult -ne 'success' -or $releaseTestResult -ne 'success') {
+            throw "Preparation: $prepareResult; exact-SHA integration attestations: $candidateResult; release-only tests: $releaseTestResult."
+          }
+
+  package:
+    name: Package ${{ matrix.app }} ${{ matrix.runtime }}
+    needs: [prepare, release-gate]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.package_matrix) }}
@@ -162,6 +223,12 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
+
+      - name: Cache pinned SBOM tool
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: artifacts/sbom-tool
+          key: sbom-tool-${{ runner.os }}-${{ runner.arch }}-4.1.5
 
       - name: Locate Inno Setup
         if: matrix.platform == 'windows'
@@ -229,9 +296,11 @@ jobs:
           } else {
             @("$prefix.zip", "$prefix-apps.zip")
           }
-          dotnet tool install --tool-path artifacts/sbom-tool Microsoft.Sbom.DotNetTool --version 4.1.5
-          if ($LASTEXITCODE -ne 0) { throw "Could not install Microsoft.Sbom.DotNetTool 4.1.5." }
           $sbomTool = if ($IsWindows) { "artifacts/sbom-tool/sbom-tool.exe" } else { "artifacts/sbom-tool/sbom-tool" }
+          if (-not (Test-Path -LiteralPath $sbomTool -PathType Leaf)) {
+            dotnet tool install --tool-path artifacts/sbom-tool Microsoft.Sbom.DotNetTool --version 4.1.5
+            if ($LASTEXITCODE -ne 0) { throw "Could not install Microsoft.Sbom.DotNetTool 4.1.5." }
+          }
           tools/New-ReleaseSbom.ps1 `
             -Name $app `
             -Version $version `
@@ -316,6 +385,13 @@ jobs:
         with:
           dotnet-version: 10.0.400
 
+      - name: Cache pinned SBOM tool
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: artifacts/sbom-tool
+          key: sbom-tool-${{ runner.os }}-${{ runner.arch }}-4.1.5
+
       - name: Validate downloaded app packages
         if: inputs.platform == 'all' || inputs.platform == matrix.platform
         shell: pwsh
@@ -378,9 +454,11 @@ jobs:
           $payloadName = if ($runtime -like "win-*") { "$prefix-setup.exe" } elseif ($runtime -like "linux-*") { "$prefix-installer.zip" } else { "$prefix-apps.zip" }
           Get-ChildItem -LiteralPath downloaded-artifacts -Recurse -File -Filter "*-v$version-$runtime-manifest.json" |
             Copy-Item -Destination artifacts/suite
-          dotnet tool install --tool-path artifacts/sbom-tool Microsoft.Sbom.DotNetTool --version 4.1.5
-          if ($LASTEXITCODE -ne 0) { throw "Could not install Microsoft.Sbom.DotNetTool 4.1.5." }
           $sbomTool = if ($IsWindows) { "artifacts/sbom-tool/sbom-tool.exe" } else { "artifacts/sbom-tool/sbom-tool" }
+          if (-not (Test-Path -LiteralPath $sbomTool -PathType Leaf)) {
+            dotnet tool install --tool-path artifacts/sbom-tool Microsoft.Sbom.DotNetTool --version 4.1.5
+            if ($LASTEXITCODE -ne 0) { throw "Could not install Microsoft.Sbom.DotNetTool 4.1.5." }
+          }
           tools/New-ReleaseSbom.ps1 `
             -Name FreeSuite `
             -Version $version `
@@ -427,9 +505,59 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  publication-gate:
+    name: Validate complete release inventory
+    needs: [prepare, package, suite-package]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Require every selected package before publication
+        shell: pwsh
+        run: |
+          $prepareResult = "${{ needs.prepare.result }}"
+          $packageResult = "${{ needs.package.result }}"
+          $suiteResult = "${{ needs.suite-package.result }}"
+          $requiresSuite = "${{ inputs.app }}" -eq "all"
+          if ($prepareResult -ne 'success' -or $packageResult -ne 'success') {
+            throw "Preparation: $prepareResult; app packages: $packageResult."
+          }
+          if ($requiresSuite -and $suiteResult -ne 'success') {
+            throw "Full-suite packaging must succeed before any release is published; result: $suiteResult."
+          }
+          if (-not $requiresSuite -and $suiteResult -notin @('skipped', 'success')) {
+            throw "Unexpected suite packaging result for an app-only release: $suiteResult."
+          }
+
+      - name: Checkout immutable tag context
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reject every conflicting release tag before the first publication
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.release_version }}".Trim()
+          $apps = if ("${{ inputs.app }}" -eq "all") { @("FreeX", "FreeW", "FreeP") } else { @("${{ inputs.app }}") }
+          $tags = @($apps | ForEach-Object { "$($_.ToLowerInvariant())-v$version" })
+          if ("${{ inputs.app }}" -eq "all") { $tags += "free-suite-v$version" }
+          foreach ($tag in $tags) {
+            $remoteRefs = @(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}")
+            if ($LASTEXITCODE -ne 0) { throw "Could not resolve remote tag '$tag'." }
+            if ($remoteRefs.Count -eq 0) { continue }
+            $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
+            $tagSha = (($peeled + $remoteRefs)[0] -split "`t")[0]
+            if ($tagSha -cne $env:GITHUB_SHA) {
+              throw "Tag '$tag' is immutable at $tagSha; refusing publication from $env:GITHUB_SHA."
+            }
+          }
+
   publish:
     name: Publish ${{ matrix.app }} release
-    needs: [prepare, package]
+    needs: [prepare, publication-gate]
     runs-on: ubuntu-latest
     environment: public-preview
     timeout-minutes: 20
@@ -552,7 +680,7 @@ jobs:
 
   publish-suite:
     name: Publish Free Suite release
-    needs: suite-package
+    needs: [suite-package, publication-gate]
     if: inputs.app == 'all'
     runs-on: ubuntu-latest
     environment: public-preview
@@ -630,4 +758,77 @@ jobs:
             $releaseArgs = @()
             if ("${{ inputs.prerelease }}" -eq "true") { $releaseArgs += "--prerelease" }
             $notes | gh release create $tag @assets --target $env:GITHUB_SHA --title $title --notes-file - @releaseArgs
+          }
+
+  verify-publication:
+    name: Verify published release inventory
+    needs: [publish, publish-suite]
+    if: ${{ always() && needs.publish.result == 'success' && (inputs.app != 'all' || needs.publish-suite.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout tag verification context
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify tags, prerelease state, and complete remote assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ inputs.release_version }}".Trim()
+          $expectedPrerelease = "${{ inputs.prerelease }}" -eq "true"
+          $apps = if ("${{ inputs.app }}" -eq "all") { @("FreeX", "FreeW", "FreeP") } else { @("${{ inputs.app }}") }
+          $runtimes = switch ("${{ inputs.platform }}") {
+            "windows" { @("win-x64") }
+            "linux" { @("linux-x64", "linux-arm64") }
+            "macos" { @("osx-x64", "osx-arm64") }
+            default { @("win-x64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64") }
+          }
+
+          function Assert-Release([string]$Tag, [string[]]$RequiredAssets) {
+            $remoteRefs = @(git ls-remote origin "refs/tags/$Tag" "refs/tags/$Tag^{}")
+            if ($LASTEXITCODE -ne 0 -or $remoteRefs.Count -eq 0) { throw "Published tag '$Tag' could not be resolved." }
+            $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
+            $tagSha = (($peeled + $remoteRefs)[0] -split "`t")[0]
+            if ($tagSha -cne $env:GITHUB_SHA) { throw "Published tag '$Tag' targets $tagSha instead of $env:GITHUB_SHA." }
+
+            $release = gh release view $Tag --json isPrerelease,assets,url | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw "Could not inspect published release '$Tag'." }
+            if ([bool]$release.isPrerelease -ne $expectedPrerelease) {
+              throw "Release '$Tag' prerelease state is '$($release.isPrerelease)'; expected '$expectedPrerelease'."
+            }
+            $assetNames = @($release.assets | ForEach-Object { [string]$_.name })
+            $emptyAssets = @($release.assets | Where-Object { [long]$_.size -le 0 } | ForEach-Object { [string]$_.name })
+            if ($emptyAssets.Count -gt 0) { throw "Release '$Tag' contains empty assets: $($emptyAssets -join ', ')." }
+            $missing = @($RequiredAssets | Where-Object { $_ -notin $assetNames })
+            if ($missing.Count -gt 0) { throw "Release '$Tag' is missing assets: $($missing -join ', ')." }
+            Write-Host "Verified $Tag at $($release.url) with $($assetNames.Count) non-empty assets."
+          }
+
+          foreach ($app in $apps) {
+            $required = @("$app-v$version-release-manifest.json")
+            foreach ($runtime in $runtimes) {
+              $prefix = "$app-v$version-$runtime"
+              $payloads = if ($runtime -like "win-*") { @("$prefix.exe", "$prefix-setup.exe") } elseif ($runtime -like "linux-*") { @("$prefix.zip", "$prefix-installer.zip") } else { @("$prefix.zip", "$prefix-apps.zip") }
+              $required += $payloads
+              $required += @($payloads | ForEach-Object { "$_.sha256" })
+              $required += @("$prefix-manifest.json", "$prefix.spdx.json", "$prefix.spdx.json.sha256")
+            }
+            Assert-Release -Tag "$($app.ToLowerInvariant())-v$version" -RequiredAssets $required
+          }
+
+          if ("${{ inputs.app }}" -eq "all") {
+            $required = @("FreeSuite-v$version-release-manifest.json")
+            foreach ($runtime in $runtimes) {
+              $prefix = "FreeSuite-v$version-$runtime"
+              $payload = if ($runtime -like "win-*") { "$prefix-setup.exe" } elseif ($runtime -like "linux-*") { "$prefix-installer.zip" } else { "$prefix-apps.zip" }
+              $required += @($payload, "$payload.sha256", "$prefix-manifest.json", "$prefix.spdx.json", "$prefix.spdx.json.sha256")
+              $required += @("FreeX-v$version-$runtime-manifest.json", "FreeW-v$version-$runtime-manifest.json", "FreeP-v$version-$runtime-manifest.json")
+            }
+            Assert-Release -Tag "free-suite-v$version" -RequiredAssets $required
           }

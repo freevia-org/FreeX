@@ -288,16 +288,10 @@ public sealed class ReleaseAutomationWorkflowTests
 
         workflow.Should().Contain("needs: [prepare, candidate]");
         workflow.Should().Contain("fromJSON(needs.prepare.outputs.package_matrix)");
-        workflow.Should().Contain("$isFullReleaseBranch = $env:GITHUB_REF -like \"refs/heads/codex/full-release-*\"");
-        workflow.Should().Contain("git fetch origin main:refs/remotes/origin/main --no-tags");
-        workflow.Should().Contain("git merge-base --is-ancestor origin/main HEAD");
-        workflow.Should().Contain("Full release branches must contain the current origin/main commit.");
-        Regex.IsMatch(
-                workflow,
-                @"if \(\$isFullReleaseBranch\) \{\s+git fetch origin main:refs/remotes/origin/main --no-tags",
-                RegexOptions.CultureInvariant)
-            .Should().BeTrue("moving origin/main must only gate explicit full-release branches, not an immutable main dispatch");
-        Regex.Matches(workflow, "git fetch origin main:refs/remotes/origin/main --no-tags").Count.Should().Be(1);
+        workflow.Should().Contain("group: app-tester-release-${{ inputs.release_version }}");
+        workflow.Should().Contain("Full app releases must be dispatched from refs/heads/main.");
+        workflow.Should().Contain("Later main commits do not invalidate this run.");
+        workflow.Should().NotContain("codex/full-release-");
         workflow.Should().Contain("name: Verify immutable release candidate");
         workflow.Should().Contain("actions: read");
         workflow.Should().Contain("tools/Test-GitHubReleaseCandidate.ps1");
@@ -309,7 +303,16 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().NotContain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9");
         workflow.Should().Contain("runs-on: ${{ matrix.runner }}");
-        workflow.Should().NotContain("tools/Invoke-TestGate.ps1");
+        workflow.Should().Contain("tools/Get-TestGateMatrix.ps1 -Gate release");
+        workflow.Should().Contain("fromJSON(needs.prepare.outputs.release_matrix)");
+        workflow.Should().Contain("tools/Invoke-TestGate.ps1");
+        workflow.Should().Contain("-Gate release");
+        workflow.Should().Contain("name: FreeX full release gate");
+        workflow.Should().Contain("needs: [prepare, release-gate]");
+        workflow.Should().Contain("name: Validate complete release inventory");
+        workflow.Should().Contain("needs: [prepare, package, suite-package]");
+        workflow.Should().Contain("name: Verify published release inventory");
+        workflow.Should().Contain("Published tag '$Tag' targets");
         workflow.Should().NotContain("function Invoke-Dotnet");
         workflow.Should().NotContain("dotnet test FreeP.slnx");
         workflow.Should().Contain("-Runtimes \"${{ matrix.runtime }}\"");

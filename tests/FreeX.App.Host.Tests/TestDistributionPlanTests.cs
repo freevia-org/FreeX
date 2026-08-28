@@ -53,14 +53,12 @@ public sealed class TestDistributionPlanTests
     {
         var source = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
 
-        source.Should().Contain("## Commit Gate Verification");
+        source.Should().Contain("## Branch Build And Main Integration Verification");
         source.Should().Contain("tools/Test-RepositoryPreflight.ps1");
-        source.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeX -Platform windows");
-        source.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeW -Platform linux");
-        source.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeP -Platform macos");
-        source.Should().Contain("manifest-driven commit gate");
-        source.Should().Contain("separate TRX result per project");
-        source.Should().Contain("commit versus release gate contract");
+        source.Should().Contain("dotnet build FreeX.slnx --configuration Release");
+        source.Should().Contain("manifest-driven integration");
+        source.Should().Contain("immutable candidate");
+        source.Should().Contain("without repeating");
         source.Should().Contain("## Conservative Rerun Fallback");
         source.Should().Contain("--disable-build-servers");
         source.Should().Contain("-p:UseSharedCompilation=false");

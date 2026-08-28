@@ -13,14 +13,14 @@ public sealed class GitHubWorkflowPreflightTests
 
         workflow.Should().Contain("workflow_dispatch:");
         workflow.Should().Contain("push:");
-        workflow.Should().Contain("pull_request:");
+        workflow.Should().NotContain("pull_request:");
         workflow.Should().NotContain("schedule:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");
         workflow.Should().NotContain("pull_request_target");
         workflow.Should().Contain("runs-on: ${{ matrix.runner }}");
-        workflow.Should().Contain("timeout-minutes: 90");
+        workflow.Should().Contain("timeout-minutes: 45");
         workflow.Should().Contain("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
         workflow.Should().Contain("persist-credentials: false");
         workflow.Should().Contain("fetch-depth: ${{ matrix.fetchDepth }}");
@@ -28,15 +28,17 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("dotnet-version: 10.0.400");
         workflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("concurrency:");
-        workflow.Should().Contain("group: ci-${{ github.event.pull_request.number || github.ref }}");
+        workflow.Should().Contain("group: ci-${{ github.ref }}");
         workflow.Should().Contain("cancel-in-progress: true");
         workflow.Should().Contain("name: FreeX commit gate");
-        workflow.Should().Contain("tools/Get-TestGateMatrix.ps1 -Gate all");
+        workflow.Should().Contain("tools/Get-TestGateMatrix.ps1 -Gate commit");
         workflow.Should().Contain("fromJSON(needs.prepare.outputs.matrix)");
         workflow.Should().Contain("-Gate \"${{ matrix.gate }}\"");
         workflow.Should().Contain("-App \"${{ matrix.app }}\"");
         workflow.Should().Contain("-Platform \"${{ matrix.platform }}\"");
         workflow.Should().Contain("-GateId \"${{ matrix.gateId }}\"");
+        workflow.Should().Contain("-HangTimeout 15m");
+        workflow.Should().NotContain("-RetryFailedProjectCount");
         workflow.Should().Contain("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9");
         workflow.Should().Contain("platform: linux");
         workflow.Should().Contain("platform: macos");
@@ -52,9 +54,9 @@ public sealed class GitHubWorkflowPreflightTests
         var solution = WorkspaceFileLocator.ReadAllText("FreeSuite.CodeQL.slnx");
 
         workflow.Should().Contain("push:");
-        workflow.Should().Contain("pull_request:");
+        workflow.Should().NotContain("pull_request:");
         workflow.Should().Contain("schedule:");
-        workflow.Should().Contain("group: codeql-${{ github.event.pull_request.number || github.ref }}");
+        workflow.Should().Contain("group: codeql-${{ github.ref }}");
         workflow.Should().Contain("cancel-in-progress: true");
         workflow.Should().Contain("build-mode: none");
         workflow.Should().NotContain("dotnet build");

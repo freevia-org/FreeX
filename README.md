@@ -59,15 +59,14 @@ dotnet --version
 
 GitHub workflows install the same SDK explicitly, so the runner image's preinstalled SDKs are not part of the build contract.
 
-Run the default agent verification path for routine repo changes. It uses normal .NET restore/build caching and parallelism, builds the full solution, then tests only the non-UI lane:
+Run the default branch verification path for routine repository changes. It uses normal .NET restore/build caching and parallelism and builds the full solution; focused tests are optional when useful for the changed component. After integration, a push to `main` runs the hosted integration matrix:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1
 dotnet build FreeX.slnx --configuration Release
-dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx"
 ```
 
-Run the UI lane separately only when touching WPF app/host behavior, UI tests, UI documentation/inventory, or when preparing a tester-release/public-preview candidate:
+Do not run the complete UI lane locally as routine verification. The canonical tester-release workflow runs the UI/render/release-only matrix for the immutable release SHA. Run a focused UI test locally only when diagnosing a specific UI failure, or run the complete lane when the user explicitly asks:
 
 ```powershell
 dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"
