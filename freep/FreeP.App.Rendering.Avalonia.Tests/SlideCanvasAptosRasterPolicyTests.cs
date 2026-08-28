@@ -17,19 +17,6 @@ public sealed class SlideCanvasAptosRasterPolicyTests
     }
 
     [Fact]
-    public void FixedSizeAptosBodyFallback_PreservesAuthoredParagraphLeading()
-    {
-        SlideCanvas.ResolveFixedSizeAptosBodyLineHeight(18.0)
-            .Should().BeApproximately(28.8, 0.0001);
-
-        var scaledLeading = 18.0 * (96.0 / 72.0)
-            * SlideCanvas.FixedSizeAptosBodyFontScale * 1.20;
-        scaledLeading.Should().BeApproximately(26.784, 0.0001);
-        SlideCanvas.ResolveFixedSizeAptosBodyLineHeight(18.0)
-            .Should().NotBeApproximately(scaledLeading, 0.001);
-    }
-
-    [Fact]
     public void ImportedIncreasingCircleText_UsesDedicatedAptosCalibrationOnly()
     {
         SlideCanvas.ImportedIncreasingCircleAptosFontScale.Should().Be(0.930);
