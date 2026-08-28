@@ -399,6 +399,77 @@ public sealed class FreeWClipboardApplicationWorkflowTests
         FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges: []).Should().BeNull();
     }
 
+    /// <summary>
+    /// freew-bookmarks-hyperlinks F1: a whole-paragraph bookmark (the shape Insert &gt; Bookmark actually
+    /// produces -- a name in <see cref="Paragraph.BookmarkNames"/> with no run-anchored boundary, see
+    /// <see cref="BookmarkCommands.SetParagraphBookmarkNameCommand"/>) used to vanish from
+    /// <see cref="FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument"/>'s output because the
+    /// sliced <see cref="Paragraph"/> it built never copied <see cref="Paragraph.BookmarkNames"/> at all.
+    /// A hyperlink pasted alongside it (an ordinary run mark, already preserved by
+    /// <see cref="RevisionEditPlanner.CloneRunWithText"/>) would then resolve to nothing.
+    /// </summary>
+    [Fact]
+    public void BuildSelectionNativeDocument_PreservesTheWholeParagraphBookmarkAndTheHyperlinkThatTargetsIt()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var target = new Paragraph();
+        target.Runs.Add(new Run("Target paragraph"));
+        target.BookmarkNames.Add("MyBookmark");
+        document.Blocks.Add(target);
+
+        var linker = new Paragraph();
+        linker.Runs.Add(new Run("See here") { HyperlinkAnchor = "MyBookmark" });
+        document.Blocks.Add(linker);
+
+        var native = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(
+            document,
+            AllRanges(document))!;
+
+        native.Paragraphs.ElementAt(0).BookmarkNames.Should().Contain(
+            "MyBookmark", "the bookmark travels with a full copy of the paragraph that carries it");
+        native.Paragraphs.ElementAt(1).Runs.Single().HyperlinkAnchor.Should().Be(
+            "MyBookmark", "the hyperlink anchor was already preserved -- it must still resolve to a name that also survived");
+    }
+
+    /// <summary>
+    /// freew-bookmarks-hyperlinks F1 (regression): a copy that only spans PART of a paragraph must remap a
+    /// run-anchored <see cref="BookmarkBoundary"/> (the shape <c>InsertCrossReferenceCommand</c>'s
+    /// auto-bookmark and an imported Word bookmark use) into the new, shorter run list -- not copy its
+    /// <see cref="BookmarkBoundary.RunIndex"/> verbatim, which would point at the wrong run (or past the end
+    /// of the slice) once leading runs outside the selection are dropped.
+    /// </summary>
+    [Fact]
+    public void BuildSelectionNativeDocument_RemapsABookmarkBoundaryThatWrapsOnlyPartOfAPartialSelection()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("AAA")); // offsets 0-3, excluded from the selection below
+        paragraph.Runs.Add(new Run("BBB")); // offsets 3-6, the bookmarked run
+        paragraph.Runs.Add(new Run("CCC")); // offsets 6-9
+        paragraph.BookmarkNames.Add("_Ref1");
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary("auto:_Ref1", BookmarkBoundaryKind.Start, 1, "_Ref1"));
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary("auto:_Ref1", BookmarkBoundaryKind.End, 2, "_Ref1"));
+        document.Blocks.Add(paragraph);
+
+        // Select "BBBCCC" -- offsets [3,9) -- dropping the leading "AAA" run entirely, so the sliced
+        // paragraph has 2 runs (not 3) and the boundary's original RunIndex values (1 and 2) no longer
+        // name the right positions.
+        var native = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(
+            document,
+            [new DocumentFormattingTextRange(paragraph, 3, 9)])!;
+
+        var sliced = native.Paragraphs.Single();
+        sliced.PlainText.Should().Be("BBBCCC");
+        sliced.BookmarkBoundaries.Should().HaveCount(2);
+        var start = sliced.BookmarkBoundaries.Single(b => b.Kind == BookmarkBoundaryKind.Start);
+        var end = sliced.BookmarkBoundaries.Single(b => b.Kind == BookmarkBoundaryKind.End);
+        start.RunIndex.Should().Be(0, "the bookmarked run is now the first run of the slice");
+        end.RunIndex.Should().Be(1, "the bookmark closes before the second (and last) run of the slice");
+    }
+
 
     /// <summary>
     /// clip-RTF: the shell without a native editor (Avalonia) wrote only HTML, so a copy into an
@@ -489,6 +560,35 @@ public sealed class FreeWClipboardApplicationWorkflowTests
 
     private static readonly byte[] OnePixelPngBytes = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
+    /// <summary>
+    /// r165 remediation. Carrying bookmark boundaries into a partial copy clamped EVERY boundary into
+    /// the selected range, so a bookmark the user did not select was manufactured into the pasted text
+    /// as a zero-width pair at offset 0. That is the mirror image of the bug the carrying fixes, and it
+    /// was newly possible: before that change Copy/Cut never touched boundaries at all.
+    /// </summary>
+    [Fact]
+    public void BuildSelectionNativeDocument_DoesNotInventABookmarkTheSelectionExcludes()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("AAA"));
+        paragraph.Runs.Add(new Run("BBB"));
+        paragraph.Runs.Add(new Run("CCC"));
+        // The bookmark spans only the first run; the selection below starts after it ends.
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary("pair-1", BookmarkBoundaryKind.Start, 0, "_Ref1"));
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary("pair-1", BookmarkBoundaryKind.End, 1));
+        document.Blocks.Add(paragraph);
+
+        var native = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(
+            document,
+            [new DocumentFormattingTextRange(paragraph, 6, 9)])!;
+
+        native.Paragraphs.Single().BookmarkBoundaries.Should().BeEmpty(
+            "a bookmark that ends before the selection begins was never copied, so it must not appear in the paste");
+    }
 
     private static IReadOnlyList<DocumentFormattingTextRange> AllRanges(TextDocument document) =>
         document.Paragraphs

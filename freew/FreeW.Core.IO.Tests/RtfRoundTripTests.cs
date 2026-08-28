@@ -562,4 +562,99 @@ public class RtfRoundTripTests
         run.Formatting.AllCaps.Should().BeFalse("plain run must have AllCaps=false");
         run.Formatting.Rtl.Should().BeFalse("plain run must have Rtl=false");
     }
+
+    // sweep103 F2 — RtfWriter must thread MultiLevelList.LevelTexts (captured from a foreign DOCX/ODT via
+    // DocxReader, see MultiLevelListLvlTextTests) through the exported \leveltext for the multilevel
+    // \list entry, instead of always emitting the fixed "%1." / "%2." placeholder pattern. RtfReader
+    // never parses \leveltext content back for any list kind (confirmed: no "leveltext" match in
+    // RtfReader.cs other than a doc comment), so this can only be verified against the raw RTF bytes the
+    // writer produces -- there is no reader-side round trip to compare against for this field.
+    [Fact]
+    public void Write_MultiLevelList_UsesCapturedLevelTextsPerLevel()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Article")
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 0 }
+        });
+        document.Blocks.Add(new Paragraph("Section")
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 1 }
+        });
+        document.Blocks.Add(new Paragraph("Sub-section")
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 2 }
+        });
+
+        // Level 0 and 1 carry a captured foreign pattern (e.g. Word's "Article 1)" / "Section 1.1)"
+        // outline gallery style); level 2 is left uncaptured and must keep the default dotted fallback.
+        document.MultiLevelList.SetLevelText(0, "Article %1)");
+        document.MultiLevelList.SetLevelText(1, "Section %1.%2)");
+
+        var rtf = Encoding.ASCII.GetString(Save(document));
+
+        var levelTexts = ExtractMultiLevelLevelTexts(rtf);
+        levelTexts.Should().HaveCount(9, "the multilevel \\list entry always defines all 9 levels");
+        levelTexts[0].Should().Be("Article %1)", "level 0's captured lvlText must be emitted verbatim");
+        levelTexts[1].Should().Be("Section %1.%2)", "level 1's captured lvlText must be emitted verbatim");
+        levelTexts[2].Should().Be("%3.",
+            "level 2 has no captured pattern, so it must keep the pre-existing default placeholder");
+    }
+
+    // Sibling/no-regression: a document whose MultiLevelList carries no captured LevelTexts at all (every
+    // level null -- FreeW's own "Define new Multilevel list" styles, which only ever set NumberFormats)
+    // must still emit the original fixed "%1.", "%2.", ... placeholder pattern at every level, unchanged.
+    [Fact]
+    public void Write_MultiLevelList_WithNoCapturedLevelTexts_KeepsDefaultDottedPattern()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Top")
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 0 }
+        });
+        document.Blocks.Add(new Paragraph("Nested")
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 1 }
+        });
+
+        var rtf = Encoding.ASCII.GetString(Save(document));
+
+        var levelTexts = ExtractMultiLevelLevelTexts(rtf);
+        levelTexts.Should().HaveCount(9);
+        for (var level = 0; level < 9; level++)
+            levelTexts[level].Should().Be($"%{level + 1}.", $"level {level} has no captured pattern");
+    }
+
+    /// <summary>
+    /// Extracts the 9 <c>\leveltext</c> bodies from the fixed-id (<see cref="RtfWriter.ListIdMultiLevel"/>)
+    /// <c>\list</c> entry, in level order, from raw RTF produced by <see cref="RtfWriter"/>.
+    /// </summary>
+    private static List<string> ExtractMultiLevelLevelTexts(string rtf)
+    {
+        var marker = $@"\listid{RtfWriter.ListIdMultiLevel}";
+        var listStart = rtf.IndexOf(marker, StringComparison.Ordinal);
+        listStart.Should().BeGreaterThanOrEqualTo(0, "the multilevel list entry must be present");
+
+        // The next \listid marks the following distinct \list entry (or none, if this was the last).
+        var nextListId = rtf.IndexOf(@"\listid", listStart + marker.Length, StringComparison.Ordinal);
+        var listBlock = nextListId >= 0
+            ? rtf[listStart..nextListId]
+            : rtf[listStart..rtf.IndexOf(@"{\listoverridetable", listStart, StringComparison.Ordinal)];
+
+        var texts = new List<string>();
+        var index = 0;
+        while (true)
+        {
+            var start = listBlock.IndexOf(@"{\leveltext ", index, StringComparison.Ordinal);
+            if (start < 0)
+                break;
+            start += @"{\leveltext ".Length;
+            var end = listBlock.IndexOf(";}", start, StringComparison.Ordinal);
+            texts.Add(listBlock[start..end]);
+            index = end + 2;
+        }
+        return texts;
+    }
 }

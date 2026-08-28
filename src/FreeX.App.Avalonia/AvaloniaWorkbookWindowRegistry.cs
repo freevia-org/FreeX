@@ -106,6 +106,29 @@ internal sealed class AvaloniaWorkbookWindowRegistry
             static window => window.RefreshWindowVisibilityCommandStates());
     }
 
+    /// <summary>
+    /// Broadcasts a Quick Access Toolbar customization (command set or below-ribbon placement) to
+    /// every OTHER registered window in the process, regardless of document. The QAT customization
+    /// lives in the single process-wide <c>FreeXOptionsRuntimeSession.LiveOptions</c> instance every
+    /// window shares -- <see cref="MainWindow"/>'s View &gt; New Window handler passes the SAME
+    /// <c>_optionsRuntimeSession</c> into every sibling window it creates -- so a change applied via
+    /// one window's QAT context menu or its Options dialog must be reflected live in every sibling
+    /// window's toolbar chrome too, instead of only the next time each sibling happens to rebuild its
+    /// own QAT for an unrelated reason. Mirrors the WPF host's
+    /// <c>WorkbookWindowRegistry.BroadcastQuickAccessToolbarChanged</c> (same shared-options
+    /// defect, same fix shape), adapted to this registry's existing pattern of notifying the
+    /// concrete <see cref="MainWindow"/> type directly rather than through an <c>IWorkbookWindow</c>
+    /// seam.
+    /// </summary>
+    internal void NotifyQuickAccessToolbarChanged(MainWindow origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        _core.Notify(
+            origin,
+            WorkbookWindowNotificationAudience.AllExceptOrigin,
+            static window => window.ApplyQuickAccessToolbarChanged());
+    }
+
     internal MainWindow? NextWindowTarget(MainWindow currentWindow, bool forward)
     {
         ArgumentNullException.ThrowIfNull(currentWindow);

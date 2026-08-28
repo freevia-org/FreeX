@@ -286,7 +286,26 @@ public sealed partial class MainWindow
                 action.Value).ToList());
         _avaloniaQuickAccessOptions = saveResult.Options;
         RebuildAvaloniaQuickAccessToolbar();
+
+        // The Quick Access Toolbar is an Excel-instance-wide preference, not scoped to this
+        // window's own document (it lives in the single process-wide FreeXOptionsRuntimeSession
+        // shared by every sibling MainWindow -- see NewWindow in MainWindow.WindowManagement.cs) --
+        // every other open window (any document) must reflect the change immediately too, exactly
+        // like the WPF host's ApplyQuickAccessToolbarCustomization broadcast
+        // (MainWindow.QuickAccessToolbar.cs).
+        WindowRegistry.NotifyQuickAccessToolbarChanged(this);
     }
+
+    /// <summary>
+    /// AvaloniaWorkbookWindowRegistry.NotifyQuickAccessToolbarChanged: rebuilds this window's Quick
+    /// Access Toolbar after ANOTHER window in the process customized the shared
+    /// FreeXOptionsRuntimeSession.LiveOptions QuickAccessToolbarCommands / QuickAccessToolbarBelowRibbon
+    /// (via that window's own QAT context menu, or its Options dialog). _avaloniaQuickAccessOptions
+    /// already aliases that same shared LiveOptions instance (see PopulateQuickAccessToolbar), so this
+    /// only needs to rebuild the chrome from its current values -- no re-fetch required. Mirrors the
+    /// WPF host's MainWindow.QuickAccessToolbar.cs ApplyQuickAccessToolbarChanged.
+    /// </summary>
+    internal void ApplyQuickAccessToolbarChanged() => RebuildAvaloniaQuickAccessToolbar();
 
     private QuickAccessToolbarHistoryMenuState CreateAvaloniaQuickAccessHistoryState(string commandId)
     {

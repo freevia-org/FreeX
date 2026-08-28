@@ -3,6 +3,7 @@ using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
+using Free.Shared.IO;
 using Free.Shared.Opc;
 using FreeP.Core.Model;
 
@@ -2566,6 +2567,19 @@ public static class SmartArtEditingPlanner
 
     private static byte[] SerializeXml(XDocument document)
     {
+        // Every SmartArt part this planner produces (data, drawing cache, part rels) reaches the
+        // .pptx package as pre-serialized bytes: PptxPackageWriter's raw diagram-part write loop
+        // (around PptxPackageWriter.cs:6217) copies part.Bytes straight into the zip entry, bypassing
+        // WriteEntry's own XmlTextSanitizer.SanitizeInPlace call. That would leave SmartArt text
+        // pane edits unsanitized -- except document.Save(writer) below performs XML character
+        // validation itself, so an illegal character (a pasted control character or lone surrogate)
+        // would already have thrown ArgumentException right here, before there is any part.Bytes for
+        // PptxPackageWriter to write. The sanitize call therefore has to sit at this boundary, where
+        // the XDocument becomes bytes, not downstream where the bytes enter the package -- every call
+        // site in this class funnels through here, so a future SmartArt authoring path added to this
+        // class cannot bypass it.
+        XmlTextSanitizer.SanitizeInPlace(document);
+
         using var stream = new MemoryStream();
         using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 1024, leaveOpen: true))
             document.Save(writer);

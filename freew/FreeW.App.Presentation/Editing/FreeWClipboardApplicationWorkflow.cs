@@ -396,7 +396,38 @@ public static class FreeWClipboardApplicationWorkflow
             }
 
             if (sliced.Runs.Count > 0)
+            {
+                // Bookmarks travel with the slice the same way DocumentModelCloner.CloneParagraphTextRange
+                // carries them for every other partial-paragraph clone path: whole-paragraph bookmark names
+                // (Paragraph.BookmarkNames) copy unconditionally -- they don't depend on run position -- and
+                // run-anchored boundaries (Paragraph.BookmarkBoundaries, used by imported Word bookmarks and
+                // by InsertCrossReferenceCommand's auto-bookmarks) get their RunIndex remapped into the
+                // sliced run list, clamped to the selected range the same way that sibling clone does.
+                // Without this, a copy/cut of a bookmarked paragraph silently drops the bookmark, leaving any
+                // hyperlink or cross-reference field copied alongside it pointing at nothing once pasted.
+                sliced.BookmarkNames.AddRange(paragraph.BookmarkNames);
+                foreach (var boundary in paragraph.BookmarkBoundaries)
+                {
+                    // r165 remediation: clamping EVERY boundary into the selected range manufactured a
+                    // bookmark the user never selected. A paragraph reading "see [bookmarked phrase] and
+                    // this caveat", copied from "and this caveat" alone, produced a zero-width boundary
+                    // pair clamped to offset 0 -- so the pasted text carried an invisible bookmark that
+                    // was nowhere near it. That is the mirror image of the bug this block fixes, and it
+                    // did not exist before, because Copy/Cut never touched boundaries at all.
+                    //
+                    // A pair that lies wholly outside the selection is dropped. A pair only partly
+                    // covered still clamps, which is what carries a half-selected bookmark and is
+                    // asserted by the partial-overlap case below.
+                    if (!BookmarkPairIntersects(paragraph, boundary, start, end))
+                        continue;
+
+                    var sourceOffset = ParagraphRunOffset(paragraph, boundary.RunIndex);
+                    var slicedOffset = Math.Clamp(sourceOffset - start, 0, end - start);
+                    sliced.BookmarkBoundaries.Add(boundary with { RunIndex = SlicedRunIndexAtOffset(sliced, slicedOffset) });
+                }
+
                 document.Blocks.Add(sliced);
+            }
         }
 
         if (!wroteAnyRun)
@@ -408,6 +439,71 @@ public static class FreeWClipboardApplicationWorkflow
         document.Theme = source.Theme;
         CopyReferencedNotesAndComments(source, document);
         return document;
+    }
+
+    /// <summary>
+    /// The plain-text offset immediately before <paramref name="runIndex"/> in <paramref name="paragraph"/>
+    /// -- the same position <see cref="BookmarkBoundary.RunIndex"/> names, but expressed as an offset so it
+    /// can be carried through a text-range slice (see <see cref="BuildSelectionNativeDocument"/>) the way
+    /// <c>BookmarkBoundaryMapper.Capture</c> does for the paragraph-internal clone paths in FreeW.Core.Model.
+    /// </summary>
+    /// <summary>
+    /// True when the bookmark <paramref name="boundary"/> belongs to a span that actually overlaps the
+    /// selected character range [<paramref name="start"/>, <paramref name="end"/>).
+    /// <para>
+    /// Both halves of a pair are located by PairKey, because a boundary on its own says nothing about
+    /// the span's extent: a Start at offset 0 with its End at offset 3 does not reach a selection that
+    /// begins at 6. A boundary whose partner is in another paragraph counts as overlapping, since the
+    /// span continues past this paragraph in that direction.
+    /// </para>
+    /// </summary>
+    private static bool BookmarkPairIntersects(Paragraph paragraph, BookmarkBoundary boundary, int start, int end)
+    {
+        var partner = paragraph.BookmarkBoundaries
+            .FirstOrDefault(other => other.PairKey == boundary.PairKey && !ReferenceEquals(other, boundary));
+        if (partner is null)
+            return true;
+
+        var own = ParagraphRunOffset(paragraph, boundary.RunIndex);
+        var other = ParagraphRunOffset(paragraph, partner.RunIndex);
+        var spanStart = Math.Min(own, other);
+        var spanEnd = Math.Max(own, other);
+
+        // A zero-width bookmark (start and end at the same offset) still counts when it sits inside the
+        // selection; a non-empty span needs real overlap.
+        return spanStart == spanEnd
+            ? spanStart >= start && spanStart <= end
+            : spanStart < end && spanEnd > start;
+    }
+
+    private static int ParagraphRunOffset(Paragraph paragraph, int runIndex)
+    {
+        var clampedIndex = Math.Clamp(runIndex, 0, paragraph.Runs.Count);
+        var offset = 0;
+        for (var i = 0; i < clampedIndex; i++)
+            offset += paragraph.Runs[i].Text.Length;
+        return offset;
+    }
+
+    /// <summary>
+    /// The run index in <paramref name="paragraph"/> whose text starts at <paramref name="offset"/>. Every
+    /// offset <see cref="BuildSelectionNativeDocument"/> passes here lands exactly on a run boundary of the
+    /// slice it just built (it is either the clamped start/end of the selection, both of which are slice
+    /// boundaries by construction, or an in-range source boundary, which the slicing loop above preserves
+    /// as a run boundary because it never splits a run mid-selection) -- so this never needs to split a run
+    /// the way <c>BookmarkBoundaryMapper.EnsureRunBoundary</c> does for its more general callers.
+    /// </summary>
+    private static int SlicedRunIndexAtOffset(Paragraph paragraph, int offset)
+    {
+        var position = 0;
+        for (var i = 0; i < paragraph.Runs.Count; i++)
+        {
+            if (position == offset)
+                return i;
+            position += paragraph.Runs[i].Text.Length;
+        }
+
+        return paragraph.Runs.Count;
     }
 
     /// <summary>

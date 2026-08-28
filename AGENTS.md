@@ -39,13 +39,12 @@
 
 ## Verification
 
-- Before claiming a branch is ready, run the relevant build and tests from that branch's worktree.
-- The default agent verification path favors the normal .NET restore/build cache, build servers, shared compilation, and parallelism. It is repository preflight, full-solution build, and the non-UI test lane only:
+- Before integrating a branch, run repository preflight and the full Release build from that branch's worktree. Run focused tests when they are useful for the changed component, but do not make a complete local test lane a routine branch gate. GitHub runs the manifest-driven integration suite after `main` is pushed, and the canonical release workflow completes the UI/render/release-only gates for the same immutable SHA before packaging.
+- The default local branch verification path favors the normal .NET restore/build cache, build servers, shared compilation, and parallelism. It is repository preflight and full-solution build:
   - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1`
   - `dotnet build FreeX.slnx --configuration Release`
-  - `dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx"`
 - Do not run `dotnet test FreeX.slnx` or `dotnet test FreeX.UiTests.slnx` as routine/default verification.
-- Run the UI lane (`dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"`) only when the user explicitly requests UI tests, the task touches WPF app/host behavior or UI test infrastructure, or the branch is preparing a tester-release/public-preview candidate.
+- Run the UI lane (`dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"`) locally only when the user explicitly requests it or there is a specific UI failure that cannot be diagnosed through focused tests. Tester-release candidates run the complete UI/release lane on GitHub; do not duplicate it locally without a concrete reason.
 - For ribbon rendering/adaptive-layout/resize work, the focused ribbon lane is `dotnet test FreeX.RibbonTests.slnx --configuration Release --filter Category=RibbonUiLane` (see `docs/ribbon-ui-test-lane.md`).
 - If a build fails because another process locks output files, identify and clear the stale process before rerunning.
 - If a build or test command still fails because of stale build-server or shared-compiler state after clearing locks, rerun that command once with `--disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1` before treating it as a product failure.

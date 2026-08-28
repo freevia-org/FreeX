@@ -57,7 +57,7 @@ public static class RtfWriter
         WriteFontTable(sb, fonts);
         WriteColorTable(sb, colors);
         if (listTable.HasBullet || listTable.HasNumber || listTable.HasMultiLevel)
-            WriteListTable(sb, listTable);
+            WriteListTable(sb, listTable, document.MultiLevelList);
 
         // \uc1: every \uN Unicode escape is followed by exactly one ASCII fallback byte.
         sb.Append(@"\uc1");
@@ -165,7 +165,7 @@ public static class RtfWriter
     /// with 9 levels. Each list gets a matching <c>\listoverride</c> so paragraphs can reference it via
     /// <c>\ls{id}</c>.
     /// </summary>
-    private static void WriteListTable(StringBuilder sb, ListMarkerTable listTable)
+    private static void WriteListTable(StringBuilder sb, ListMarkerTable listTable, MultiLevelListFormat multiLevelList)
     {
         sb.Append(@"{\listtable");
 
@@ -176,7 +176,12 @@ public static class RtfWriter
         foreach (var (id, format) in listTable.NumberEntries())
             WriteListEntry(sb, id, numFmt: MapListNumberFormatToRtfLevelNfc(format), levelText: "%1.");
         if (listTable.HasMultiLevel)
-            WriteListEntry(sb, ListIdMultiLevel, numFmt: 0, levelText: null); // multi: per-level text
+            // Per-level text: use the document's own captured lvlText pattern (round-tripped from a
+            // foreign DOCX/ODT via TextDocument.MultiLevelList.LevelTexts -- see DocxReader) when the
+            // level has one, falling back to the fixed "%{level+1}." dotted-outline placeholder for a
+            // level that never had a pattern captured (FreeW's own "Define new Multilevel list" styles).
+            WriteListEntry(sb, ListIdMultiLevel, numFmt: 0, levelText: null,
+                levelTextForLevel: level => MultiLevelLevelText(multiLevelList, level));
 
         sb.Append('}');
 
@@ -224,7 +229,26 @@ public static class RtfWriter
         return text.ToString();
     }
 
-    private static void WriteListEntry(StringBuilder sb, int listId, int numFmt, string? levelText)
+    /// <summary>
+    /// The <c>\leveltext</c> body for one level of the MultiLevel list: <see
+    /// cref="MultiLevelListFormat.GetLevelText"/>'s captured DOCX-style <c>%1</c>..<c>%9</c> pattern
+    /// (round-tripped from a foreign document by <see cref="DocxReader"/>), escaped the same way run text
+    /// is so any literal characters in the pattern survive. Falls back to FreeW's own fixed dotted-outline
+    /// placeholder only when the level has no captured pattern at all -- the same "nothing to represent"
+    /// case <see cref="BulletLevelText"/> falls back for.
+    /// </summary>
+    private static string MultiLevelLevelText(MultiLevelListFormat multiLevelList, int level)
+    {
+        var pattern = multiLevelList.GetLevelText(level);
+        if (string.IsNullOrEmpty(pattern))
+            return $"%{level + 1}.";
+        var text = new StringBuilder();
+        AppendEscaped(text, pattern);
+        return text.ToString();
+    }
+
+    private static void WriteListEntry(
+        StringBuilder sb, int listId, int numFmt, string? levelText, Func<int, string>? levelTextForLevel = null)
     {
         // \listid must be non-zero and unique per document. We use the fixed IDs 1/2/3.
         // \listhybrid tells Word to use per-level formatting rather than "legacy" mode.
@@ -243,8 +267,9 @@ public static class RtfWriter
             sb.Append(@"\li").Append(leftTwips.ToString(CultureInfo.InvariantCulture));
             sb.Append(@"\fi-360");
 
-            // Level text: for multilevel use "%{level+1}." so readers can render "1.1." etc.
-            var text = levelText ?? $"%{level + 1}.";
+            // Level text: for multilevel this is per-level (levelTextForLevel), falling back to
+            // "%{level+1}." so readers can render "1.1." etc. when the level has no captured pattern.
+            var text = levelTextForLevel?.Invoke(level) ?? levelText ?? $"%{level + 1}.";
             sb.Append(@"{\leveltext ").Append(text).Append(";}");
             sb.Append(@"{\levelnumbers;}");
             sb.Append('}');

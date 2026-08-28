@@ -566,4 +566,56 @@ public sealed class FindReplaceDialogPlannerTests
         FindReplaceDialogPlanner.CountMatches(BuildTwoParagraphDocument(), "the", new FindReplaceSearchOptions())
             .Should().Be(2);
     }
+
+    // ---- shared-find-replace F2 / freew-find-replace-skips-headers-footers -------------------------
+    // document.Blocks is only the body story: TextDocument.Header/Footer/EvenHeader/EvenFooter/
+    // FirstHeader/FirstFooter are a completely separate per-section HeaderFooter store that a plain
+    // document.Blocks walk never visits. CountMatches/DocumentContains now also walk
+    // TextDocumentStoryTraversal's HeadersFooters subset (the same helper spell-check, word count, and
+    // document compare already use) so a term that lives only in a header/footer is no longer invisible
+    // to them. See freew/FreeW.App.Presentation/Dialogs/FindReplaceDialogPlanner.cs.
+
+    [Fact]
+    public void CountMatches_IncludesHeaderAndFooterOccurrencesAlongsideTheBody()
+    {
+        var doc = BuildSampleDoc("MAGICWORD in the body");
+        doc.Header = new HeaderFooter("MAGICWORD in the header");
+        doc.Footer = new HeaderFooter("MAGICWORD in the footer");
+
+        FindReplaceDialogPlanner.CountMatches(doc, "MAGICWORD", new FindReplaceSearchOptions())
+            .Should().Be(3);
+    }
+
+    [Fact]
+    public void DocumentContains_TrueForATermThatOnlyOccursInTheHeader()
+    {
+        var doc = BuildSampleDoc("nothing relevant here");
+        doc.Header = new HeaderFooter("MAGICWORD");
+        var request = new FindReplaceSearchRequest("MAGICWORD", new FindReplaceSearchOptions());
+
+        FindReplaceDialogPlanner.DocumentContains(doc, request).Should().BeTrue();
+    }
+
+    [Fact]
+    public void DocumentContains_TrueForATermThatOnlyOccursInTheFooter()
+    {
+        var doc = BuildSampleDoc("nothing relevant here");
+        doc.Footer = new HeaderFooter("MAGICWORD");
+        var request = new FindReplaceSearchRequest("MAGICWORD", new FindReplaceSearchOptions());
+
+        FindReplaceDialogPlanner.DocumentContains(doc, request).Should().BeTrue();
+    }
+
+    [Fact]
+    public void CountMatches_StillCountsOnlyTheBodyWhenDocumentHasNoHeaderOrFooter()
+    {
+        // Sibling/non-regression coverage: adding header/footer support must not disturb ordinary
+        // body-paragraph and table counting for documents that have no header/footer at all.
+        FindReplaceDialogPlanner.CountMatches(BuildTwoParagraphDocument(), "the", new FindReplaceSearchOptions())
+            .Should().Be(2);
+
+        var tableDoc = BuildDocumentWithTable("intro", "Budget2026 total", "outro");
+        FindReplaceDialogPlanner.CountMatches(tableDoc, "Budget2026", new FindReplaceSearchOptions())
+            .Should().Be(1);
+    }
 }

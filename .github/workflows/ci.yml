@@ -5,12 +5,9 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -38,7 +35,7 @@ jobs:
       - name: Build test matrix from the repository contract
         id: matrix
         shell: pwsh
-        run: pwsh -NoProfile -File tools/Get-TestGateMatrix.ps1 -Gate all -GitHubOutputPath $env:GITHUB_OUTPUT
+        run: pwsh -NoProfile -File tools/Get-TestGateMatrix.ps1 -Gate commit -GitHubOutputPath $env:GITHUB_OUTPUT
 
   preflight:
     name: Repository preflight (${{ matrix.platform }})
@@ -78,7 +75,7 @@ jobs:
     name: ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.gateId }}
     needs: prepare
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
@@ -106,14 +103,14 @@ jobs:
             -App "${{ matrix.app }}" `
             -Platform "${{ matrix.platform }}" `
             -GateId "${{ matrix.gateId }}" `
-            -RetryFailedProjectCount 1 `
+            -HangTimeout 15m `
             -ResultsDirectory TestResults
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ci-${{ matrix.platform }}-${{ matrix.gateId }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: "**/TestResults/*.trx"
+          path: "**/TestResults/**"
           if-no-files-found: warn
           retention-days: 7
 

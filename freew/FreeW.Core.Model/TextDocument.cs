@@ -878,6 +878,15 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public RunFieldKind FieldKind { get; set; } = RunFieldKind.None;
 
     /// <summary>
+    /// Whether Word prevents this <see cref="RunFieldKind"/> field from being recalculated (Ctrl+F11 /
+    /// Ctrl+Shift+F11 — Word's <c>w:fldLock</c>). Mirrors <see cref="ComplexField.IsLocked"/> for the
+    /// simple-field form: <see cref="RunFieldKind"/> has no wrapper object of its own to carry the flag,
+    /// so it lives directly on the run, meaningful only while <see cref="FieldKind"/> is not
+    /// <see cref="RunFieldKind.None"/>. Ignored (and always false) for an ordinary text run.
+    /// </summary>
+    public bool FieldLocked { get; set; }
+
+    /// <summary>
     /// When non-null, this run is a table-cell formula field (Word's Table &gt; Data &gt; Formula) — e.g.
     /// <c>=SUM(ABOVE)</c> with an optional number format. It serialises as a <c>w:fldSimple</c> whose
     /// <c>w:instr</c> is <c> =SUM(ABOVE) \# "#,##0.00" </c> wrapping a cached result run; the run's

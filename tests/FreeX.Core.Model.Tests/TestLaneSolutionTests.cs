@@ -145,20 +145,21 @@ public sealed class TestLaneSolutionTests
     }
 
     [Fact]
-    public void DefaultAgentVerification_DocumentsNonUiTestLane()
+    public void DefaultAgentVerification_DocumentsBuildThenHostedTestPolicy()
     {
         var agents = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("AGENTS.md");
         var readme = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("README.md");
         var plan = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("docs", "release/test-distribution.md");
 
-        agents.Should().Contain("default agent verification path");
-        agents.Should().Contain("dotnet test FreeX.DefaultTests.slnx");
+        agents.Should().Contain("default local branch verification path");
+        agents.Should().Contain("dotnet build FreeX.slnx --configuration Release");
+        agents.Should().NotContain("- `dotnet test FreeX.DefaultTests.slnx");
         agents.Should().Contain("Do not run `dotnet test FreeX.slnx` or `dotnet test FreeX.UiTests.slnx` as routine/default verification.");
-        readme.Should().Contain("tests only the non-UI lane");
-        readme.Should().Contain("dotnet test FreeX.DefaultTests.slnx");
-        readme.Should().Contain("Run the UI lane separately only");
-        plan.Should().Contain("Commit Gate Verification");
-        plan.Should().Contain("manifest-driven commit gate");
+        readme.Should().Contain("push to `main` runs the hosted integration matrix");
+        readme.Should().NotContain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build");
+        readme.Should().Contain("Do not run the complete UI lane locally as routine verification");
+        plan.Should().Contain("Branch Build And Main Integration Verification");
+        plan.Should().Contain("manifest-driven integration");
         plan.Should().Contain("manifest-defined FreeX release gate");
     }
 

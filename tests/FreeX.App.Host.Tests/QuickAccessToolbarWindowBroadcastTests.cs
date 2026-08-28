@@ -1,4 +1,7 @@
+using System.Reflection;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Threading;
 using FluentAssertions;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -138,4 +141,103 @@ public sealed class QuickAccessToolbarWindowBroadcastTests
                 PumpDispatcher();
             }
         });
+
+    /// <summary>
+    /// C4 (round 165 remediation): the still-open half of this same defect the round 164 fixer
+    /// disclosed but did not close -- MainWindow.Backstage.cs's ShowOptionsDialog commits the
+    /// Options dialog's Quick Access Toolbar page (same shared AppOptions instance,
+    /// QuickAccessBelowRibbonCheckBox / the QAT add/remove/move controls) and rebuilt only ITS OWN
+    /// window's QAT chrome (RebuildQuickAccessToolbar()) with no broadcast, unlike the QAT context
+    /// menu's ApplyQuickAccessToolbarCustomization above.
+    /// </summary>
+    [Fact]
+    public void ShowOptionsDialog_OkCommit_BroadcastsToOtherRegisteredWindows() =>
+        StaTestRunner.Run(() =>
+        {
+            var registry = new WorkbookWindowRegistry();
+            var window = CreateWindow(registry, CreateInMemoryOptionsSession());
+            var sibling = new TestWorkbookWindow();
+            try
+            {
+                window.Show();
+                window.Activate();
+                PumpDispatcher(); // MainWindow_Loaded -> RegisterWithWindowRegistry() registers `window`.
+
+                registry.Register(sibling);
+
+                InvokeShowOptionsDialogAndClickOk(window);
+
+                sibling.QuickAccessToolbarChangedAppliedCount.Should().Be(1,
+                    "the Options dialog's Quick Access Toolbar page edits the exact same " +
+                    "process-wide AppOptions instance as the QAT context menu, so committing it " +
+                    "with OK must broadcast to every other open window exactly like " +
+                    "ApplyQuickAccessToolbarCustomization already does, instead of leaving sibling " +
+                    "windows' QAT chrome stale");
+            }
+            finally
+            {
+                MainWindowTestCleanup.CloseWithoutSavePrompt(window);
+                PumpDispatcher();
+            }
+        });
+
+    /// <summary>
+    /// Adjacent case: the ordinary single-window session (no WorkbookWindowRegistry at all) must be
+    /// unaffected by the new broadcast -- the null-conditional
+    /// `_windowRegistry?.BroadcastQuickAccessToolbarChanged(this)` is a no-op, and the dialog's own
+    /// commit (the pre-existing, already-correct behavior) must still succeed without throwing.
+    /// </summary>
+    [Fact]
+    public void ShowOptionsDialog_NoRegistry_StillCommitsWithoutError() =>
+        StaTestRunner.Run(() =>
+        {
+            var window = CreateWindow(registry: null, CreateInMemoryOptionsSession());
+            try
+            {
+                window.Show();
+                window.Activate();
+                PumpDispatcher();
+
+                InvokeShowOptionsDialogAndClickOk(window);
+            }
+            finally
+            {
+                MainWindowTestCleanup.CloseWithoutSavePrompt(window);
+                PumpDispatcher();
+            }
+        });
+
+    /// <summary>
+    /// Drives the real "File &gt; Options" entry point end to end: invokes SsOptionsBtn_Click
+    /// (MainWindow.Backstage.cs), which synchronously opens the genuinely modal OptionsDialog via
+    /// ShowDialog(). While that call blocks and pumps the dispatcher, a queued callback locates the
+    /// dialog through the owner window's OwnedWindows (no test-only seam) and raises its own OkBtn's
+    /// Click event -- the same control the user's mouse click drives -- so the broadcast wiring
+    /// under test is whatever MainWindow.Backstage.cs actually calls, not a callback the test
+    /// supplies itself.
+    /// </summary>
+    private static void InvokeShowOptionsDialogAndClickOk(MainWindow window)
+    {
+        var ssOptionsBtnClick = typeof(MainWindow).GetMethod(
+                "SsOptionsBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(nameof(MainWindow), "SsOptionsBtn_Click");
+
+        window.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            var dialog = window.OwnedWindows
+                .OfType<Window>()
+                .FirstOrDefault(w => w.GetType().Name == "OptionsDialog");
+            if (dialog is null)
+                return;
+
+            var okBtnField = dialog.GetType().GetField(
+                    "OkBtn", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+                ?? throw new MissingMemberException("OptionsDialog", "OkBtn");
+            var okBtn = (Button)okBtnField.GetValue(dialog)!;
+            okBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, okBtn));
+        }), DispatcherPriority.ApplicationIdle);
+
+        ssOptionsBtnClick.Invoke(window, [window, new RoutedEventArgs()]);
+        PumpDispatcher();
+    }
 }

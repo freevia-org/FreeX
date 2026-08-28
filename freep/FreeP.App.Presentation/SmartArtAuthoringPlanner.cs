@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -1262,6 +1263,16 @@ public static class SmartArtAuthoringPlanner
 
     private static byte[] Serialize(XDocument document)
     {
+        // Same chokepoint as SmartArtEditingPlanner.SerializeXml: this is a second, hand-written
+        // implementation of "SmartArt part XDocument -> bytes" (layout/style parts today), and the
+        // parts it produces reach the .pptx through PptxPackageWriter's raw diagram-part write loop,
+        // which copies bytes straight into the zip entry without going through WriteEntry's own
+        // XmlTextSanitizer.SanitizeInPlace call. Sanitizing here -- before the XmlWriter below would
+        // otherwise throw on an illegal character and before any authoring path in this class could
+        // add user-authored node text without noticing -- keeps this helper safe by construction the
+        // same way SerializeXml is.
+        XmlTextSanitizer.SanitizeInPlace(document);
+
         using var stream = new MemoryStream();
         using (var writer = System.Xml.XmlWriter.Create(stream, new System.Xml.XmlWriterSettings
         {

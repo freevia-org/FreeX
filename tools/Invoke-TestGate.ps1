@@ -20,6 +20,9 @@ param(
     [ValidateRange(0, 3)]
     [int]$RetryFailedProjectCount = 0,
 
+    [ValidatePattern("^\d+[smh]$")]
+    [string]$HangTimeout = "15m",
+
     [string]$ResultsDirectory = "artifacts/test-gates"
 )
 
@@ -93,6 +96,9 @@ foreach ($testGate in $gates) {
             $arguments = @("test", $projectFullPath, "--configuration", $Configuration)
             if ($NoBuild) { $arguments += "--no-build" }
             if ($NoRestore) { $arguments += "--no-restore" }
+            if (-not [string]::IsNullOrWhiteSpace($HangTimeout)) {
+                $arguments += @("--blame-hang-timeout", $HangTimeout)
+            }
             if (-not [string]::IsNullOrWhiteSpace($ResultsDirectory)) {
                 $outputDirectory = Join-Path $ResultsDirectory $testGate.id
                 $baseName = [System.IO.Path]::GetFileNameWithoutExtension($projectPath)

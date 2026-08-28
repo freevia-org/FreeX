@@ -541,7 +541,10 @@ internal static partial class RowColumnShiftHelpers
             }
     }
 
-    private static void RemapChartSeriesFormattingForColumnInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
+    // chart-binding F1 follow-up: widened from private to internal so InsertDeleteCellsCommand's
+    // band-scoped Insert/Delete Cells path can drive this same remap under its own band-containment
+    // check (see InsertCellsCommand.ShiftChartSeriesFormattingInBandRight) -- logic unchanged.
+    internal static void RemapChartSeriesFormattingForColumnInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
     {
         if (chart.DataRange.Start.Sheet != sheetId) return;
         if (chart.SeriesColumnMappings.Count > 0) return; // authoritative mapping already keeps SeriesIndex column-independent
@@ -637,7 +640,8 @@ internal static partial class RowColumnShiftHelpers
             }
     }
 
-    private static void RemapChartSeriesFormattingForColumnDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
+    // chart-binding F1 follow-up: widened from private to internal (see the Insert counterpart above).
+    internal static void RemapChartSeriesFormattingForColumnDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
     {
         if (chart.DataRange.Start.Sheet != sheetId) return;
         if (chart.SeriesColumnMappings.Count > 0) return;
@@ -786,7 +790,8 @@ internal static partial class RowColumnShiftHelpers
             }
     }
 
-    private static void RemapChartSeriesFormattingForRowInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
+    // chart-binding F1 follow-up: widened from private to internal (see RemapChartSeriesFormattingForColumnInsert above).
+    internal static void RemapChartSeriesFormattingForRowInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
     {
         if (chart.DataRange.Start.Sheet != sheetId) return;
         if (!chart.SeriesInRows) return; // rows are only the series axis for a Switch-Row/Column chart
@@ -891,7 +896,8 @@ internal static partial class RowColumnShiftHelpers
             }
     }
 
-    private static void RemapChartSeriesFormattingForRowDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
+    // chart-binding F1 follow-up: widened from private to internal (see RemapChartSeriesFormattingForColumnInsert above).
+    internal static void RemapChartSeriesFormattingForRowDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
     {
         if (chart.DataRange.Start.Sheet != sheetId) return;
         if (!chart.SeriesInRows) return;
@@ -1044,7 +1050,8 @@ internal static partial class RowColumnShiftHelpers
     /// computation but off the row axis and gated on FirstRowIsHeader (the flag that gates the
     /// category-header ROW in the un-transposed, default orientation -- see ChartRenderer.cs:116).
     /// </summary>
-    private static void RemapChartPointFormattingForRowInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
+    // chart-binding F1 follow-up: widened from private to internal (see RemapChartSeriesFormattingForColumnInsert above).
+    internal static void RemapChartPointFormattingForRowInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
     {
         if (chart.DataRange.Start.Sheet != sheetId) return;
         if (chart.SeriesInRows) return; // rows are the point axis only for the default orientation
@@ -1062,7 +1069,8 @@ internal static partial class RowColumnShiftHelpers
     }
 
     /// <summary>Row delete counterpart of <see cref="RemapChartPointFormattingForRowInsert"/>.</summary>
-    private static void RemapChartPointFormattingForRowDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
+    // chart-binding F1 follow-up: widened from private to internal (see RemapChartSeriesFormattingForColumnInsert above).
+    internal static void RemapChartPointFormattingForRowDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
     {
         if (chart.DataRange.Start.Sheet != sheetId) return;
         if (chart.SeriesInRows) return;
@@ -1093,7 +1101,8 @@ internal static partial class RowColumnShiftHelpers
     /// FirstColIsCategories gating the first ROW for that function's series axis). Mirrors
     /// <see cref="RemapChartPointFormattingForRowInsert"/> off the orthogonal axis.
     /// </summary>
-    private static void RemapChartPointFormattingForColumnInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
+    // chart-binding F1 follow-up: widened from private to internal (see RemapChartSeriesFormattingForColumnInsert above).
+    internal static void RemapChartPointFormattingForColumnInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
     {
         if (chart.DataRange.Start.Sheet != sheetId) return;
         if (!chart.SeriesInRows) return; // columns are the point axis only for a Switch-Row/Column chart
@@ -1111,7 +1120,8 @@ internal static partial class RowColumnShiftHelpers
     }
 
     /// <summary>Column delete counterpart of <see cref="RemapChartPointFormattingForColumnInsert"/>.</summary>
-    private static void RemapChartPointFormattingForColumnDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
+    // chart-binding F1 follow-up: widened from private to internal (see RemapChartSeriesFormattingForColumnInsert above).
+    internal static void RemapChartPointFormattingForColumnDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
     {
         if (chart.DataRange.Start.Sheet != sheetId) return;
         if (!chart.SeriesInRows) return;
