@@ -64,10 +64,14 @@ internal sealed partial class BackstageView : UserControl
             BuildNewPane,
             BuildOptionsPane)
         {
+            Close = endpoints.Close,
+            BuildHomePane = BuildHomePane,
+            UseNewPane = true,
             BuildOpenPane = BuildOpenPane,
             BuildPrintPane = BuildPrintPane,
             BuildExportPane = BuildExportPane,
             BuildAccountPane = BuildAccountPane,
+            HideRecentPane = true,
         });
 
         _frame = new AvaloniaBackstageFrame(
@@ -91,7 +95,10 @@ internal sealed partial class BackstageView : UserControl
     internal IReadOnlyList<SisterBackstageEntryPlan<Control>> Entries => _frame.Entries;
 
     public void Show()
-        => Show("Info");
+    {
+        IsVisible = true;
+        _frame.Show();
+    }
 
     public void Show(string paneLabel)
     {
@@ -225,6 +232,18 @@ internal sealed partial class BackstageView : UserControl
         return Panes.BuildRecentPane(PanePlans.BuildRecentPane(
             _endpoints.GetRecentEntries(),
             _dismissBeforeDispatch.Bind(_endpoints.OpenPath)));
+    }
+
+    private Control BuildHomePane()
+    {
+        var panel = new StackPanel
+        {
+            MaxWidth = 760,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        panel.Children.Add(BuildNewPane());
+        panel.Children.Add(BuildRecentPane());
+        return new ScrollViewer { Content = panel };
     }
 
     private Control BuildNewPane()

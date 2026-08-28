@@ -3540,11 +3540,18 @@ public sealed partial class MainWindow : Window,
         GetPrintPlan: RefreshPrintBackstagePlan,
         Print: request => _backstagePrintOperation = ExecutePrintWorkflowAsync(request),
         ExportVideo: () => _ = FileExportVideoAsync(),
-        CanExportVideo: () => _fileSession.CanExportVideo);
+        CanExportVideo: () => _fileSession.CanExportVideo)
+    {
+        Close = Close,
+    };
 
     private Control? _backstageRestoreFocus;
 
-    private void ShowBackstage() => ShowBackstage("Info");
+    private void ShowBackstage()
+    {
+        _backstageRestoreFocus = FocusManager?.GetFocusedElement() as Control ?? _slideCanvas;
+        _backstage.Show();
+    }
 
     private void ShowBackstage(string paneLabel)
     {

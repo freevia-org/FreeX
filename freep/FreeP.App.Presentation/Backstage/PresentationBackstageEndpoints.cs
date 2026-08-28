@@ -27,4 +27,8 @@ public sealed record PresentationBackstageEndpoints(
     Func<PresentationPrintRequest?, PresentationPrintBackstagePlan> GetPrintPlan,
     Action<PresentationPrintRequest> Print,
     Action ExportVideo,
-    Func<bool> CanExportVideo);
+    Func<bool> CanExportVideo)
+{
+    /// <summary>Closes the current presentation window through the host's normal dirty-document gate.</summary>
+    public Action? Close { get; init; }
+}

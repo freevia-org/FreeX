@@ -28,6 +28,12 @@ public sealed record RibbonWpfRendererOptions(
 {
     public static RibbonWpfRendererOptions Default { get; } = new();
 
+    // FreeP and FreeW use the same compact icon and hero-button geometry as FreeX while retaining the
+    // shared renderer's built-in dropdown behavior. FreeX itself enables external dropdown zones because
+    // its legacy host still owns those hit targets.
+    public static RibbonWpfRendererOptions FreeFamilyHost { get; } =
+        new(UseExternalDropdownZones: false, MediumIconSize: 20, SmallIconSize: 20, LargeButtonWidth: 58);
+
     public static RibbonWpfRendererOptions FreeXHost { get; } =
         new(UseExternalDropdownZones: true, MediumIconSize: 20, SmallIconSize: 20, LargeButtonWidth: 58);
 }

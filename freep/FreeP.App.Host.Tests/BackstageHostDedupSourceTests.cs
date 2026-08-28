@@ -21,12 +21,57 @@ public sealed class BackstageHostDedupSourceTests
                 AutomationProperties.GetAutomationId(frame) ==
                 PresentationSemanticIdentityCatalog.BackstageOverlayAutomationId);
 
-        window.ActivateBackstageEntryForTests("New from template").Should().BeTrue();
+        window.ActivateBackstageEntryForTests("New").Should().BeTrue();
         LogicalDescendants(window.CurrentBackstagePaneContentForTests!)
             .OfType<FrameworkElement>()
             .Should().ContainSingle(element =>
                 AutomationProperties.GetAutomationId(element) ==
                 PresentationSemanticIdentityCatalog.BackstageNewBlankPresentationAutomationId);
+    }
+
+    [Fact]
+    public void FreeP_backstage_is_home_first_and_wires_real_close_endpoints_in_both_hosts()
+    {
+        var wpf = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Host", "Backstage", "BackstageView.cs");
+        var avalonia = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Avalonia", "Backstage", "BackstageView.cs");
+        var wpfWindow = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Host", "MainWindow.cs");
+        var avaloniaWindow = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Avalonia", "MainWindow.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("BuildHomePane = BuildHomePane");
+            source.Should().Contain("UseNewPane = true");
+            source.Should().Contain("HideRecentPane = true");
+            source.Should().Contain("Close =");
+        }
+
+        wpfWindow.Should().Contain("Close = Close");
+        avaloniaWindow.Should().Contain("Close = Close");
+    }
+
+    [StaFact]
+    public void Wpf_backstage_close_entry_closes_the_window()
+    {
+        var window = new MainWindow(new FreePOptions());
+        try
+        {
+            window.Show();
+            window.ShowBackstageForTests();
+            window.UpdateLayout();
+
+            window.InvokeBackstageEntryForTests("Close").Should().BeTrue();
+
+            window.IsVisible.Should().BeFalse();
+        }
+        finally
+        {
+            if (window.IsVisible)
+                window.Close();
+        }
     }
 
     [Fact]

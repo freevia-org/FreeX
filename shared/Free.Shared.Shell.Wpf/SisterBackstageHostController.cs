@@ -36,7 +36,10 @@ public sealed class SisterBackstageHostController
 
     public BackstageFrame Frame => Shell.Frame;
 
-    public void Show(string paneLabelOrAutomationId = "Info") => Shell.Show(paneLabelOrAutomationId);
+    // A null target lets BackstageFrame select its first pane. This keeps the default aligned with FreeX
+    // and with each host's declared navigation order (for example FreeW/FreeP Home) instead of silently
+    // jumping past that first pane to a hard-coded English "Info" label.
+    public void Show(string? paneLabelOrAutomationId = null) => Shell.Show(paneLabelOrAutomationId);
 
     public void Hide() => Shell.Hide();
 
