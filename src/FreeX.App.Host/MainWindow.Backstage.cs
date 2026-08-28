@@ -602,13 +602,28 @@ public partial class MainWindow
 
     /// <summary>
     /// Opens a recovery snapshot into this window without recording the snapshot path in recent
-    /// files. Called from App.xaml.cs during startup recovery; the snapshot path is a temporary
-    /// .fxl file that must never appear in the MRU list.
+    /// files. Called from App.xaml.cs's <c>RestoreRecoveryCandidateAsync</c> during startup
+    /// recovery; the snapshot path is a temporary .fxl file that must never appear in the MRU list.
+    /// Returns <c>true</c> only when the load actually completed -- never throws. The caller
+    /// (App.xaml.cs) must not repoint <c>CurrentFilePath</c> at the original file, mark the window
+    /// dirty, or let <c>StartupRecoveryWorkflow</c> delete the snapshot when this returns
+    /// <c>false</c>: a failed load leaves this window's pre-existing session untouched, so the
+    /// snapshot remains the only copy of the crash-time edits (R165-shared-autosave-recovery-F1).
     /// </summary>
-    internal Task OpenRecoverySnapshotAsync(string snapshotPath) =>
-        OpenFileAsync(snapshotPath, suppressRecentFiles: true);
+    internal async Task<bool> OpenRecoverySnapshotAsync(string snapshotPath)
+    {
+        var succeeded = false;
+        await OpenFileAsync(snapshotPath, suppressRecentFiles: true, reportOutcome: value => succeeded = value);
+        return succeeded;
+    }
 
-    private async Task OpenFileAsync(string path, bool suppressRecentFiles = false)
+    // reportOutcome is invoked with true ONLY on the confirmed-success exit path below; every other
+    // exit (target-resolve failure, reentrancy guard, dirty-gate decline, cancel, workflow failure,
+    // or an exception caught below) leaves it uninvoked, so callers that seed their capture variable
+    // to false (see OpenRecoverySnapshotAsync above) get an accurate signal without this ordinary
+    // Task-returning method's signature or any of its other call sites (File > Open, MRU, drag-drop,
+    // startup file args) having to change.
+    private async Task OpenFileAsync(string path, bool suppressRecentFiles = false, Action<bool>? reportOutcome = null)
     {
         if (!_fileWorkflow.TryResolveOpenTarget(path, out var target, out var openTargetMessage))
         {
@@ -678,6 +693,7 @@ public partial class MainWindow
                 return;
             }
 
+            reportOutcome?.Invoke(true);
             return;
 
             Task ApplyOpenedWorkbookAsync(

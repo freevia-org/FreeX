@@ -48,4 +48,61 @@ public sealed class HeaderFooterSemanticResolutionTests
                 new HeaderFooterFieldResolutionContext(document, "1", 1, 1, 1))
             .Should().BeNull();
     }
+
+    // Regression for freew-avalonia-fields F1: a locked header/footer field (Ctrl+F11) must stay frozen
+    // at its cached text instead of recomputing to the live value on every re-render. Covers both lock
+    // forms -- the simple RunFieldKind.FieldLocked flag and the ComplexField.IsLocked wrapper -- matching
+    // the WPF host's BuildFieldRun/ResolveComplexFieldText guards (DocumentView.cs ~12773 and ~12933).
+    [Fact]
+    public void ResolveFieldTextFreezesLockedSimpleAndComplexFieldsAtCachedText()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Properties.Author = "Ada";
+        var context = new HeaderFooterFieldResolutionContext(
+            document,
+            PageNumberText: "iv",
+            PageCount: 12,
+            SectionOrdinal: 4,
+            SectionPageCount: 7,
+            EvaluatedAt: new DateTime(2026, 8, 28, 9, 0, 0));
+
+        var lockedSimple = new Run("cached author")
+        {
+            FieldKind = RunFieldKind.Author,
+            FieldLocked = true
+        };
+        HeaderFooterVisualPlanner.ResolveFieldText(lockedSimple, context)
+            .Should().Be("cached author", "a locked RunFieldKind field must not recompute from live document state");
+
+        var lockedComplex = new Run("cached section")
+        {
+            ComplexField = new ComplexField(" SECTION \\* ROMAN ").WithLock(true)
+        };
+        HeaderFooterVisualPlanner.ResolveFieldText(lockedComplex, context)
+            .Should().Be("cached section", "a locked ComplexField must not recompute (SECTION/temporal-picture) from live state");
+    }
+
+    // Sibling no-regression: unlocked fields of both forms must still resolve live, matching the
+    // existing coverage in ResolveLineTextOwnsSimpleComplexAndPlainRunProjection.
+    [Fact]
+    public void ResolveFieldTextStillResolvesUnlockedSimpleAndComplexFieldsLive()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Properties.Author = "Ada";
+        var context = new HeaderFooterFieldResolutionContext(
+            document,
+            PageNumberText: "iv",
+            PageCount: 12,
+            SectionOrdinal: 4,
+            SectionPageCount: 7);
+
+        var unlockedSimple = new Run("cached author") { FieldKind = RunFieldKind.Author };
+        HeaderFooterVisualPlanner.ResolveFieldText(unlockedSimple, context).Should().Be("Ada");
+
+        var unlockedComplex = new Run("cached section")
+        {
+            ComplexField = new ComplexField(" SECTION \\* ROMAN ")
+        };
+        HeaderFooterVisualPlanner.ResolveFieldText(unlockedComplex, context).Should().Be("IV");
+    }
 }

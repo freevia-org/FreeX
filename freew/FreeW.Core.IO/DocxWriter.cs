@@ -326,6 +326,7 @@ public static class DocxWriter
                 includeFreeWNumbering,
                 preservedNumbering,
                 document.MultiLevelList.NumberFormats,
+                document.MultiLevelList.LevelTexts,
                 restartOverrides,
                 chapterPageNumberingLevels.Count > 0));
         // One part per (section × header/footer × type) slot with content. Each part XML carries its inline
@@ -8846,15 +8847,19 @@ public static class DocxWriter
     /// </summary>
     /// <remarks>
     /// The bullet and decimal definitions reuse one fixed lvlText across every level. The multilevel
-    /// definition instead gives each level its own lvlText that accumulates the ancestor counters —
-    /// level 0 = <c>%1.</c>, level 1 = <c>%1.%2.</c>, level 2 = <c>%1.%2.%3.</c>, … — so Word renders
-    /// the familiar outline form (1, 1.1, 1.1.1). Every multilevel level is w:numFmt="decimal" and the
-    /// indent grows one step (18pt) per level.
+    /// definition gives each level its own lvlText: a level captured from a foreign document (a non-null
+    /// entry in <paramref name="multiLevelLevelTexts"/>, e.g. <c>%1)</c> or <c>%1.%2)</c>) is re-emitted
+    /// verbatim so the document's own outline separator/prefix/suffix survives the round trip; a level with
+    /// no captured pattern (every level of a FreeW-authored "Define new Multilevel list") falls back to the
+    /// classic accumulated dotted pattern — level 0 = <c>%1.</c>, level 1 = <c>%1.%2.</c>, level 2 =
+    /// <c>%1.%2.%3.</c>, … — so Word renders the familiar outline form (1, 1.1, 1.1.1). Every multilevel
+    /// level is w:numFmt="decimal" and the indent grows one step (18pt) per level.
     /// </remarks>
     private static XDocument BuildNumbering(
         bool includeFreeWNumbering,
         PreservedNumberingPlan? preserved,
         IReadOnlyList<ListNumberFormat> multiLevelNumberFormats,
+        IReadOnlyList<string?>? multiLevelLevelTexts = null,
         RestartNumbering? restartOverrides = null,
         bool linkMultiLevelHeadingStyles = false)
     {
@@ -8883,11 +8888,22 @@ public static class DocxWriter
                 new XAttribute(W + "multiLevelType", "multilevel"),
                 Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level,
                     MultiLevelListMarkerFormatter.ToOoxmlToken(GetMultiLevelNumberFormat(level)),
-                    string.Concat(Enumerable.Range(1, level + 1).Select(n => $"%{n}.")),
+                    GetMultiLevelLevelText(level),
                     linkMultiLevelHeadingStyles ? $"Heading{level + 1}" : null)));
 
         ListNumberFormat GetMultiLevelNumberFormat(int level) =>
             level < multiLevelNumberFormats.Count ? multiLevelNumberFormats[level] : ListNumberFormat.Decimal;
+
+        // Sweep103 F1: a level's real captured lvlText (from a foreign document's numbering.xml, e.g.
+        // "%1)" or "%1.%2)") must be re-emitted verbatim instead of always rebuilding the hardcoded
+        // accumulated dotted pattern -- otherwise every non-default outline style is silently rewritten
+        // to "1.", "1.1.", ... on the very first save. A level with no captured pattern (every level of
+        // a FreeW-authored "Define new Multilevel list", which only ever models a NumberFormat) keeps the
+        // classic dotted fallback this writer has always produced.
+        string GetMultiLevelLevelText(int level) =>
+            level < (multiLevelLevelTexts?.Count ?? 0) && multiLevelLevelTexts![level] is { } captured
+                ? captured
+                : string.Concat(Enumerable.Range(1, level + 1).Select(n => $"%{n}."));
 
         XElement Num(int numId, int abstractNumId) =>
             new(W + "num", new XAttribute(W + "numId", numId),

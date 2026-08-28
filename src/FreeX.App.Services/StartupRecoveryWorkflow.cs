@@ -10,7 +10,11 @@ public sealed record StartupRecoveryWorkflowHost<TTarget>(
     TTarget PrimaryTarget,
     Func<AutosaveRecoveryOfferPlan, CancellationToken, ValueTask<bool>> OfferAsync,
     Func<CancellationToken, ValueTask<TTarget>> CreateAdditionalTargetAsync,
-    Func<TTarget, AutosaveRecoveryCandidate, CancellationToken, Task> RestoreAsync,
+    // Returns true only when the candidate's content actually loaded into the target. The
+    // candidate is retired (deleted) ONLY on true -- a false/failed/thrown restore leaves the
+    // snapshot on disk, since it may be the only surviving copy of the crash-time edits
+    // (R165-shared-autosave-recovery-F1).
+    Func<TTarget, AutosaveRecoveryCandidate, CancellationToken, Task<bool>> RestoreAsync,
     Func<Func<Task>, CancellationToken, ValueTask> ExecuteRestoreAsync,
     Action<AutosaveRecoveryCandidate> DeleteCandidate)
     where TTarget : class;
@@ -81,12 +85,13 @@ public static class StartupRecoveryWorkflow
 
                 async Task RestoreAndRetireCandidateAsync()
                 {
+                    var restored = false;
                     try
                     {
                         var target = usePrimaryTarget
                             ? host.PrimaryTarget
                             : await host.CreateAdditionalTargetAsync(cancellationToken);
-                        await host.RestoreAsync(target, offer.Candidate, cancellationToken);
+                        restored = await host.RestoreAsync(target, offer.Candidate, cancellationToken);
                     }
                     catch
                     {
@@ -94,7 +99,16 @@ public static class StartupRecoveryWorkflow
                     }
                     finally
                     {
-                        TryDelete(host.DeleteCandidate, offer.Candidate);
+                        // Only retire (delete) the candidate once the restore is CONFIRMED to have
+                        // loaded the crash-time content. A failed or thrown restore must leave the
+                        // snapshot on disk -- it is the only surviving copy of the user's unsaved
+                        // work, and deleting it here regardless of outcome previously destroyed that
+                        // copy the moment recovery merely LOOKED like it ran (R165-shared-autosave-
+                        // recovery-F1).
+                        if (restored)
+                        {
+                            TryDelete(host.DeleteCandidate, offer.Candidate);
+                        }
                     }
                 }
 

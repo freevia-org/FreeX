@@ -471,12 +471,7 @@ public partial class App : Application
                 UiText.Format(offer.PromptKey, offer.PromptArguments),
                 UiText.Get(offer.TitleKey))),
             CreateAdditionalTargetAsync: _ => ValueTask.FromResult(OpenRecoveryWindow()),
-            RestoreAsync: async (target, candidate, _) =>
-            {
-                await target.OpenRecoverySnapshotAsync(candidate.SnapshotPath);
-                target.SetCurrentFilePathForRecovery(candidate.Sidecar.OriginalFilePath);
-                target.MarkWorkbookDirtyForRecovery();
-            },
+            RestoreAsync: (target, candidate, _) => RestoreRecoveryCandidateAsync(target, candidate),
             ExecuteRestoreAsync: (operation, _) =>
             {
                 mainWindow.Dispatcher.BeginInvoke(async () => await operation());
@@ -487,6 +482,36 @@ public partial class App : Application
         return StartupRecoveryWorkflow.RunAsync(snapshotStore, host)
             .GetAwaiter()
             .GetResult();
+    }
+
+    /// <summary>
+    /// Restores one accepted crash-recovery candidate into <paramref name="target"/>. Only repoints
+    /// <c>CurrentFilePath</c> at the original file and marks the window dirty when the snapshot
+    /// actually loaded -- <see cref="MainWindow.OpenRecoverySnapshotAsync"/> returns <c>false</c>
+    /// (never throws) when the underlying open failed (corrupt snapshot, a
+    /// <c>SchemaVersion</c>/<c>MinimumReaderVersion</c> mismatch after an auto-update between the
+    /// crash and this launch, or a transient file lock), in which case this method must leave the
+    /// target's pre-existing session completely untouched and report failure back to
+    /// <c>StartupRecoveryWorkflow</c> so it does NOT delete the candidate -- the snapshot is the
+    /// ONLY surviving copy of the crash-time edits (R165-shared-autosave-recovery-F1). Before this
+    /// fix the three steps ran unconditionally, so a failed load still repointed the target's blank
+    /// session at the original file and marked it dirty, and the snapshot was deleted regardless --
+    /// leaving the user one Ctrl+S away from silently overwriting their last good save with a blank
+    /// workbook, with no way to recover the crash-time edits afterward.
+    /// </summary>
+    internal static async Task<bool> RestoreRecoveryCandidateAsync(
+        MainWindow target,
+        AutosaveRecoveryCandidate candidate)
+    {
+        var loaded = await target.OpenRecoverySnapshotAsync(candidate.SnapshotPath);
+        if (!loaded)
+        {
+            return false;
+        }
+
+        target.SetCurrentFilePathForRecovery(candidate.Sidecar.OriginalFilePath);
+        target.MarkWorkbookDirtyForRecovery();
+        return true;
     }
 
     private static MainWindow OpenRecoveryWindow()

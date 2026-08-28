@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using Free.Shared.Drawing;
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -135,8 +136,14 @@ public static class SummaryZoomInsertionPlanner
         var summaryObjects = targets.Select(target =>
             new XElement(psuz + "summaryZmObj",
                 new XAttribute("sectionId", target.SectionId),
-                new XAttribute("title", target.Title),
-                new XAttribute("descr", target.Description),
+                // target.Title is a user-editable section name (Rename Section); NormalizeSectionName
+                // only collapses whitespace, so an XML 1.0-illegal control character or lone surrogate
+                // embedded inside a word survives into section.Name and reaches this XAttribute
+                // unchanged. XElement.ToString() below validates on write and throws synchronously,
+                // failing the whole Insert Summary Zoom command before AddShape ever runs -- sanitize
+                // here, at the point user text becomes XML, the same way the SmartArt planners do.
+                new XAttribute("title", XmlTextSanitizer.Sanitize(target.Title)),
+                new XAttribute("descr", XmlTextSanitizer.Sanitize(target.Description)),
                 new XAttribute("offsetFactorX", target.OffsetFactorX),
                 new XAttribute("offsetFactorY", target.OffsetFactorY),
                 new XAttribute("scaleFactorX", target.ScaleFactorX),
