@@ -15,7 +15,7 @@ namespace FreeP.App.Rendering.Avalonia;
 /// </summary>
 public sealed class AvaloniaInCanvasTextEditor : IDisposable
 {
-    private const double WpfRasterAlignmentOffsetX = -0.25;
+    internal const double WpfRasterAlignmentOffsetX = -0.25;
 
     private readonly SlideCanvas _canvas;
     private readonly EditingSession _editor;
@@ -93,6 +93,25 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         _textBox.SelectionEnd = end;
         _textBox.FocusEditor();
         return true;
+    }
+
+    internal static double AlignShapeEditorWidthToWpfRaster(
+        double left,
+        double width,
+        double renderScaling)
+    {
+        if (!double.IsFinite(left) || !double.IsFinite(width) || width <= 0 ||
+            !double.IsFinite(renderScaling) || renderScaling <= 0)
+            return width;
+
+        var renderedLeft = left + WpfRasterAlignmentOffsetX;
+        var snappedRight = Math.Round(
+            renderedLeft + width,
+            MidpointRounding.AwayFromZero);
+        var targetWidth = snappedRight - renderedLeft;
+        return Math.Max(
+            1,
+            Math.Floor(targetWidth * renderScaling) / renderScaling);
     }
 
     public bool TryActivateInlineOleObject() =>
@@ -621,6 +640,10 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         _editSession = InCanvasRichTextEditSession.BeginShape(startPlan);
 
         var placement = startPlan.Placement.Value;
+        var rasterAlignedWidth = AlignShapeEditorWidthToWpfRaster(
+            placement.Left,
+            placement.Width,
+            TopLevel.GetTopLevel(_overlay)?.RenderScaling ?? 1);
 
         var shapeFallbackFontSizePt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
             startPlan.OriginalBody,
@@ -633,9 +656,9 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             masterTextStyles: startPlan.InheritedMasterTextStyles,
             category: startPlan.InheritedStyleCategory)
         {
-            MinWidth = placement.Width,
+            MinWidth = rasterAlignedWidth,
             MinHeight = placement.Height,
-            Width = placement.Width,
+            Width = rasterAlignedWidth,
             Height = placement.Height,
         };
         AvaloniaInCanvasTextEditAdapter.ApplyRichTextEditorPlan(_textBox, startPlan.RichTextPlan);
