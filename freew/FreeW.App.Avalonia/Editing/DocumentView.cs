@@ -9031,6 +9031,26 @@ public sealed partial class DocumentView : Control
                     AdvanceToNextPageBoundary(forceAdvance: true);
                 else
                     AdvanceToNextColumnSlot();
+
+                // AV-PAGE-CARET: an inline flow break has no model-text width, so a break at the end
+                // of a paragraph used to leave the post-break caret position without a PlacedChar.
+                // The next glyph normally happened to supply that source offset, masking the gap;
+                // for a trailing break (or consecutive breaks) CaretPageIndex fell back to page 0
+                // and TryGetCaretRect could not draw the caret. Publish the boundary after advancing
+                // so its page/column is the same slot where following text would be laid out.
+                var boundaryContentY = _layoutContentY;
+                var boundaryPageSpaceY = ContentYToPageSpaceY(boundaryContentY);
+                var boundaryLineHeight = DefaultFontSizePt * PxPerPoint * 1.3;
+                _placed.Add(new PlacedChar(
+                    blockIndex,
+                    flowBreakPlan.Runs[i].SourceOffset,
+                    ColumnLeftFor(boundaryContentY),
+                    boundaryPageSpaceY,
+                    0,
+                    boundaryLineHeight,
+                    RunFormatting.Default,
+                    '\0',
+                    Sentinel: true));
                 i++;
                 lineStart = i;
                 lineWidth = 0;

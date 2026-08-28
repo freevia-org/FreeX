@@ -856,6 +856,57 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task TrailingInlineFlowBreak_PlacesCaretOnThePostBreakPageOrColumn()
+    {
+        var pageCaretPage = -1;
+        var pageCaretTop = 0d;
+        var columnCaretPage = -1;
+        var columnCaretTop = 0d;
+        var ran = await OnUiThread(() =>
+        {
+            var pageDoc = TextDocument.CreateEmpty();
+            pageDoc.Blocks.Clear();
+            pageDoc.Blocks.Add(new Paragraph
+            {
+                Runs = { new Run("Before"), Run.PageBreak() }
+            });
+            var pageView = new DocumentView();
+            pageView.LoadDocument(pageDoc);
+            pageView.Measure(new Size(800, 5000));
+            pageView.MoveCaretToBlockForTest(0, "Before".Length);
+            pageCaretPage = pageView.CaretPageIndex;
+            pageCaretTop = pageView.CaretTop;
+
+            var columnDoc = TextDocument.CreateEmpty();
+            columnDoc.Blocks.Clear();
+            columnDoc.Page.ColumnCount = 2;
+            columnDoc.Page.ColumnSpacingPt = 36;
+            columnDoc.Blocks.Add(new Paragraph
+            {
+                Runs = { new Run("Before"), Run.ColumnBreak() }
+            });
+            var columnView = new DocumentView();
+            columnView.LoadDocument(columnDoc);
+            columnView.Measure(new Size(800, 5000));
+            columnView.MoveCaretToBlockForTest(0, "Before".Length);
+            columnCaretPage = columnView.CaretPageIndex;
+            columnCaretTop = columnView.CaretTop;
+        });
+
+        if (!ran)
+            return;
+
+        pageCaretPage.Should().Be(1,
+            "a trailing inline page break places the caret at the start of the following page");
+        pageCaretTop.Should().BeGreaterThan(0,
+            "the post-break page has a real caret slot even without a following glyph");
+        columnCaretPage.Should().Be(0,
+            "a trailing inline column break remains on the same physical page");
+        columnCaretTop.Should().BeGreaterThan(0,
+            "the post-break column has a real caret slot even without a following glyph");
+    }
+
+    [Fact]
     public async Task InlineFlowBreaks_InListItem_UseSharedPrecedenceAndSourceOffsets()
     {
         var pageCount = 0;
