@@ -26,10 +26,10 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("SisterBackstageHostController");
         source.Should().Contain("new SisterBackstageHostSpec(");
         source.Should().Contain("Chrome = BackstageRibbonChrome.Create()");
-        source.Should().Contain("public void Show() => _backstage.Show(\"Home\");");
         source.Should().Contain("public void Hide() => _backstage.Hide();");
         if (appFolder == "freew")
         {
+            source.Should().Contain("public void Show() => _backstage.Show(\"Home\");");
             source.Should().Contain("new FreeWBackstageSession(");
             source.Should().Contain("BackstageActionBinder.DismissBefore(Hide)");
             source.Should().Contain("SisterBackstagePaneSpecPlanner");
@@ -79,7 +79,8 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("HideRecentPane = true");
             source.Should().Contain("Panes.BuildActionPane(surface.ToPaneSpec())");
             source.Should().Contain("Panes.BuildExportActionPane(surface.ToPaneSpec())");
-            source.Should().Contain("_backstage.ShowPane(\"Open\")");
+            source.Should().Contain("backstage.FrameCommand(_callbacks.Browse)");
+            source.Should().NotContain("_backstage.ShowPane(\"Open\")");
             source.Should().NotContain("BackstagePaneRenderer.");
             source.Should().NotContain("BackstagePaneSurfacePlanner.Build");
             source.Should().NotContain("SisterBackstageInfoPanePlanner.Build(");
@@ -89,6 +90,7 @@ public sealed class BackstagePaneDedupSourceTests
         }
         else
         {
+            source.Should().Contain("public void Show() => _backstage.Show();");
             source.Should().Contain("backstage.FrameCommand(_endpoints.New)");
             source.Should().Contain("_backstage.HideThen");
             source.Should().NotContain("BuildHomePane = BuildHomePane");
