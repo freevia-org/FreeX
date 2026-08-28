@@ -441,30 +441,38 @@ public static class FreeWClipboardApplicationWorkflow
         return document;
     }
 
-    /// <summary>
-    /// The plain-text offset immediately before <paramref name="runIndex"/> in <paramref name="paragraph"/>
-    /// -- the same position <see cref="BookmarkBoundary.RunIndex"/> names, but expressed as an offset so it
-    /// can be carried through a text-range slice (see <see cref="BuildSelectionNativeDocument"/>) the way
-    /// <c>BookmarkBoundaryMapper.Capture</c> does for the paragraph-internal clone paths in FreeW.Core.Model.
-    /// </summary>
+
     /// <summary>
     /// True when the bookmark <paramref name="boundary"/> belongs to a span that actually overlaps the
     /// selected character range [<paramref name="start"/>, <paramref name="end"/>).
     /// <para>
     /// Both halves of a pair are located by PairKey, because a boundary on its own says nothing about
     /// the span's extent: a Start at offset 0 with its End at offset 3 does not reach a selection that
-    /// begins at 6. A boundary whose partner is in another paragraph counts as overlapping, since the
-    /// span continues past this paragraph in that direction.
+    /// begins at 6.
+    /// </para>
+    /// <para>
+    /// r166: a partner in ANOTHER paragraph used to count as overlapping unconditionally, on the
+    /// reasoning that the span continues past this paragraph. That is half right and was wrong where it
+    /// mattered -- the span continues in one direction only, and this boundary still has a position. A
+    /// bookmark starting at the end of a paragraph does not cover a selection taken from its beginning,
+    /// so copying that selection carried a dangling Start into text the bookmark never touched. A
+    /// half-pair is therefore treated as the open-ended span it is: a Start covers everything at or
+    /// after it, an End everything before it.
     /// </para>
     /// </summary>
     private static bool BookmarkPairIntersects(Paragraph paragraph, BookmarkBoundary boundary, int start, int end)
     {
+        var own = ParagraphRunOffset(paragraph, boundary.RunIndex);
         var partner = paragraph.BookmarkBoundaries
             .FirstOrDefault(other => other.PairKey == boundary.PairKey && !ReferenceEquals(other, boundary));
-        if (partner is null)
-            return true;
 
-        var own = ParagraphRunOffset(paragraph, boundary.RunIndex);
+        if (partner is null)
+        {
+            return boundary.Kind == BookmarkBoundaryKind.Start
+                ? own < end
+                : own > start;
+        }
+
         var other = ParagraphRunOffset(paragraph, partner.RunIndex);
         var spanStart = Math.Min(own, other);
         var spanEnd = Math.Max(own, other);
@@ -476,6 +484,12 @@ public static class FreeWClipboardApplicationWorkflow
             : spanStart < end && spanEnd > start;
     }
 
+    /// <summary>
+    /// The plain-text offset immediately before <paramref name="runIndex"/> in <paramref name="paragraph"/>
+    /// -- the same position <see cref="BookmarkBoundary.RunIndex"/> names, but expressed as an offset so it
+    /// can be carried through a text-range slice (see <see cref="BuildSelectionNativeDocument"/>) the way
+    /// <c>BookmarkBoundaryMapper.Capture</c> does for the paragraph-internal clone paths in FreeW.Core.Model.
+    /// </summary>
     private static int ParagraphRunOffset(Paragraph paragraph, int runIndex)
     {
         var clampedIndex = Math.Clamp(runIndex, 0, paragraph.Runs.Count);

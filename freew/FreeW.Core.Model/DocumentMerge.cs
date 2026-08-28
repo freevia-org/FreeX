@@ -229,13 +229,39 @@ public static class DocumentMerge
 
         var usedIds = new HashSet<string>(target.Styles.Keys, StringComparer.OrdinalIgnoreCase);
         var styleNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var reusedTargetStyleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var sourceId in styleIds)
-            styleNames[sourceId] = usedIds.Add(sourceId)
-                ? sourceId
-                : AllocateStyleId(sourceId, usedIds);
+        {
+            if (usedIds.Add(sourceId))
+            {
+                styleNames[sourceId] = sourceId;
+                continue;
+            }
+
+            // The target already defines this id. When its existing style already carries the same
+            // display name (the common case for a built-in like Heading1, seeded identically into every
+            // document by BuiltInStyles), treat it as the same style and reuse the target's own
+            // definition rather than importing a shadow copy under a synthesized id — that would give
+            // styles.xml two <w:style> elements sharing one <w:name>, which is invalid OOXML that real
+            // Word collapses unpredictably on reload (see StyleManager.GenerateUniqueName's remarks on
+            // Word's name-uniqueness rule). This also matches Word's own paste behaviour: pasting content
+            // whose style name already exists in the destination reuses the destination's definition.
+            if (target.Styles.TryGetValue(sourceId, out var existingTargetStyle)
+                && string.Equals(existingTargetStyle.Name, sourceStyles[sourceId].Name, StringComparison.OrdinalIgnoreCase))
+            {
+                styleNames[sourceId] = sourceId;
+                reusedTargetStyleIds.Add(sourceId);
+                continue;
+            }
+
+            styleNames[sourceId] = AllocateStyleId(sourceId, usedIds);
+        }
 
         foreach (var sourceId in styleIds)
         {
+            if (reusedTargetStyleIds.Contains(sourceId))
+                continue;
+
             var sourceStyle = sourceStyles[sourceId];
             target.Styles[styleNames[sourceId]] = new DocumentStyle
             {

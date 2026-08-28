@@ -52,14 +52,17 @@ internal abstract class RevisionResolveCommandBase : IDocumentCommand
     public abstract string Label { get; }
 
     /// <summary>
-    /// Single-entry resolution (<see cref="ResolveOneRevisionCommand"/>) only ever mutates this one
-    /// paragraph's own Runs list -- <see cref="RevisionList"/>.Accept/Reject never merges paragraphs away
-    /// or drops table rows the way <see cref="TrackChanges"/>.AcceptAll/RejectAll can -- so undo only needs
-    /// this paragraph's fields snapshotted, not a full-document walk. Bulk commands (Accept All/Reject All)
-    /// leave this null and fall back to the full structural snapshot below, since those DO resolve via
-    /// <see cref="TrackChanges"/> and can merge/drop content anywhere in the document.
+    /// Single-entry resolution (<see cref="ResolveOneRevisionCommand"/>) only ever mutates the paragraph(s)
+    /// this returns -- <see cref="RevisionList"/>.Accept/Reject never merges paragraphs away or drops table
+    /// rows the way <see cref="TrackChanges"/>.AcceptAll/RejectAll can -- so undo only needs those
+    /// paragraphs' fields snapshotted, not a full-document walk. Normally that's just the entry's own
+    /// paragraph, but a tracked move (<see cref="Run.MoveRevisionId"/>) resolves in a linked pair possibly
+    /// living in a DIFFERENT paragraph (see <see cref="RevisionList.FindMovePairParagraph"/>), so
+    /// <see cref="ResolveOneRevisionCommand"/> includes that paragraph too when there is one. Bulk commands
+    /// (Accept All/Reject All) leave this null and fall back to the full structural snapshot below, since
+    /// those DO resolve via <see cref="TrackChanges"/> and can merge/drop content anywhere in the document.
     /// </summary>
-    protected virtual Paragraph? TargetParagraph => null;
+    protected virtual IReadOnlyList<Paragraph>? TargetParagraphs(TextDocument document) => null;
 
     protected abstract bool Resolve(TextDocument document);
 
@@ -72,9 +75,10 @@ internal abstract class RevisionResolveCommandBase : IDocumentCommand
         _paragraphListSnapshots = [];
 
         var document = context.Document;
-        if (TargetParagraph is { } targetParagraph)
+        if (TargetParagraphs(document) is { } targetParagraphs)
         {
-            CaptureParagraph(targetParagraph);
+            foreach (var targetParagraph in targetParagraphs)
+                CaptureParagraph(targetParagraph);
         }
         else
         {
@@ -259,7 +263,18 @@ internal sealed class ResolveOneRevisionCommand(
         ? "Accept Change"
         : "Reject Change";
 
-    protected override Paragraph? TargetParagraph => target.Entry.Paragraph;
+    protected override IReadOnlyList<Paragraph>? TargetParagraphs(TextDocument document)
+    {
+        var paragraph = target.Entry.Paragraph;
+        if (target.Entry.Run is { } run
+            && RevisionList.FindMovePairParagraph(document, run) is { } pairParagraph
+            && !ReferenceEquals(pairParagraph, paragraph))
+        {
+            return [paragraph, pairParagraph];
+        }
+
+        return [paragraph];
+    }
 
     protected override bool Resolve(TextDocument document) => target.TryApply(document, action);
 }
