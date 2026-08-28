@@ -245,8 +245,12 @@ public sealed class InCanvasTextEditor : IDisposable
         {
             AcceptsReturn = true,
             Background = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
-            BorderThickness = new Thickness(1.5),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(
+                InCanvasRichTextSelectionVisualContract.EditorBorderRed,
+                InCanvasRichTextSelectionVisualContract.EditorBorderGreen,
+                InCanvasRichTextSelectionVisualContract.EditorBorderBlue)),
+            BorderThickness = new Thickness(
+                InCanvasRichTextSelectionVisualContract.EditorBorderThicknessDip),
             MinWidth = placement.Width,
             MinHeight = placement.Height,
             Width = placement.Width,
