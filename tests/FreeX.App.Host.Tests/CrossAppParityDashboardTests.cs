@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentAssertions;
@@ -38,8 +39,8 @@ public sealed class CrossAppParityDashboardTests
         var root = json.RootElement;
         root.GetProperty("schema").GetString().Should().Be("freex.parity.cross-app-dashboard.v3");
         root.GetProperty("scopeBoundary").GetString().Should().Contain("do not prove complete visual parity");
-        root.GetProperty("wave").GetInt32().Should().Be(197);
-        root.GetProperty("cumulativeAppSlices").GetInt32().Should().Be(591);
+        root.GetProperty("wave").GetInt32().Should().Be(198);
+        root.GetProperty("cumulativeAppSlices").GetInt32().Should().Be(594);
         root.GetProperty("cumulativeAppSlicesStatus").GetString().Should().Be("accepted-local-gates");
         root.GetProperty("integrationGateStatus").GetString().Should().Be("accepted-local-gates");
         root.GetProperty("pendingIntegrationGates").GetArrayLength().Should().Be(0);
@@ -47,13 +48,13 @@ public sealed class CrossAppParityDashboardTests
         var integrationEvidence = root.GetProperty("integrationGateEvidence");
         integrationEvidence.GetProperty("status").GetString().Should().Be("accepted-local-gates");
         integrationEvidence.GetProperty("acceptanceStatus").GetString().Should().Be("accepted-local-gates");
-        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("a6b1f27e02d15a7495644db64c9bda3a839f126a");
+        integrationEvidence.GetProperty("testedSourceCommit").GetString().Should().Be("1c6cb5e8019dd0098465c67f8f0261929a3d3bbc");
         integrationEvidence.GetProperty("pendingIntegrationGates").GetArrayLength().Should().Be(0);
         integrationEvidence.GetProperty("acceptedLocalGates").GetArrayLength().Should().Be(2);
         integrationEvidence.GetProperty("acceptanceRefreshAllowedPaths").GetArrayLength().Should().Be(6);
         integrationEvidence.GetProperty("sliceAccounting").GetString().Should().Be(
-            "Wave 197 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 591 app slices (197 per app).");
-        integrationEvidence.GetProperty("gateBoundary").GetString().Should().Contain("a6b1f27e02d15a7495644db64c9bda3a839f126a");
+            "Wave 198 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 594 app slices (198 per app).");
+        integrationEvidence.GetProperty("gateBoundary").GetString().Should().Contain("1c6cb5e8019dd0098465c67f8f0261929a3d3bbc");
         integrationEvidence.GetProperty("gateBoundary").GetString().Should().Contain("six allowlisted acceptance/report paths");
         integrationEvidence.GetProperty("gateBoundary").GetString().Should().Contain("full Avalonia/WPF parity is not claimed");
         integrationEvidence.GetProperty("delegatedGitHubGateStatus").GetString().Should().Be("not-run-locally");
@@ -61,11 +62,16 @@ public sealed class CrossAppParityDashboardTests
         integrationEvidence.GetProperty("localGatePolicy").GetString().Should().Contain("delegated to GitHub");
         integrationEvidence.GetProperty("delegatedGitHubGates").GetArrayLength().Should().Be(2);
 
-        integrationEvidence.GetProperty("focusedTests").GetString().Should().Contain("FreeX 16/16; FreeW 20/20; FreeP 4/4");
-        integrationEvidence.GetProperty("fullReleaseBuild").GetString().Should().Contain("MSBuild 00:07:04.93; wrapper 00:07:05.2629619");
-        integrationEvidence.GetProperty("independentReview").GetString().Should().Contain("no P1/P2 findings after all remediation");
+        integrationEvidence.GetProperty("focusedTests").GetString().Should().Contain("FreeX Wave198 3/3 (combined Wave198/Wave197 command 5/5); shared DialogTabChromeParityTests 3/3; FreeW target suite 32/32 plus FontDialog/Wave198 review suite 6/6; FreeP Wave198 evidence 2/2");
+        integrationEvidence.GetProperty("fullReleaseBuild").GetString().Should().Contain("MSBuild 00:09:30.47; wrapper 00:09:30.8983681");
+        integrationEvidence.GetProperty("independentReview").GetString().Should().Contain("no P1 findings");
 
-        var historicalWave196 = integrationEvidence.GetProperty("historicalWave196Acceptance");
+        var historicalWave197 = integrationEvidence.GetProperty("historicalWave197Acceptance");
+        historicalWave197.GetProperty("status").GetString().Should().Be("accepted-local-gates");
+        historicalWave197.GetProperty("testedSourceCommit").GetString().Should().Be("a6b1f27e02d15a7495644db64c9bda3a839f126a");
+        historicalWave197.GetProperty("sliceAccounting").GetString().Should().Be(
+            "Wave 197 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 591 app slices (197 per app).");
+        var historicalWave196 = historicalWave197.GetProperty("historicalWave196Acceptance");
         historicalWave196.GetProperty("status").GetString().Should().Be("accepted-local-gates");
         historicalWave196.GetProperty("testedSourceCommit").GetString().Should().Be("100f4aea399e3bc9d194c15cf962ded7d0cf3772");
         historicalWave196.GetProperty("pendingIntegrationGates").GetArrayLength().Should().Be(0);
@@ -130,6 +136,26 @@ public sealed class CrossAppParityDashboardTests
         freeXWave197.GetProperty("saveClean").GetBoolean().Should().BeTrue();
         freeXWave197.GetProperty("ordinaryBubbleKeyRouting").GetString().Should().Be("retained");
         freeXWave197.GetProperty("deferredComboDismissFocusRestore").GetString().Should().Contain("rechecks focus immediately and synchronously restores worksheet focus");
+        var freeXWave198 = freeX.GetProperty("renderedEvidence").GetProperty("physicalEvidence").GetProperty("wave198");
+        freeXWave198.GetProperty("status").GetString().Should().Be("evidence-recorded");
+        freeXWave198.GetProperty("physicalPassed").GetInt32().Should().Be(1);
+        freeXWave198.GetProperty("physicalTotal").GetInt32().Should().Be(1);
+        freeXWave198.GetProperty("focusedSourceTestsPassed").GetInt32().Should().Be(3);
+        freeXWave198.GetProperty("focusedSourceTestsTotal").GetInt32().Should().Be(3);
+        freeXWave198.GetProperty("persistedStyle").GetString().Should().Be("style-id=1|font-id=1|font-name=Arial|font-family=true");
+        freeXWave198.GetProperty("saveClean").GetBoolean().Should().BeTrue();
+        freeXWave198.GetProperty("automaticComboCloseFocus").GetString().Should().Be("not-measured");
+        freeXWave198.GetProperty("checksumStatus").GetString().Should().Contain("verified");
+
+        var freeXEvidenceDirectory = Path.Combine(repoRoot, "docs", "parity", "freex-wave198-ribbon-font-family", "evidence");
+        foreach (var line in File.ReadAllLines(Path.Combine(freeXEvidenceDirectory, "SHA256SUMS.txt")))
+        {
+            var parts = line.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            parts.Should().HaveCount(2);
+            using var stream = File.OpenRead(Path.Combine(freeXEvidenceDirectory, parts[1]));
+            var actualHash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+            actualHash.Should().Be(parts[0].ToLowerInvariant());
+        }
         var candidateCount = visualEvidence.GetProperty("visualReviewCandidateCount").GetInt32();
         var threshold = visualEvidence.GetProperty("visualReviewTriageThreshold").GetDouble();
         var highestScore = visualEvidence.GetProperty("highestTriageScore").GetDouble();
@@ -177,6 +203,20 @@ public sealed class CrossAppParityDashboardTests
         freeWWave197.GetProperty("surfaceMarginCandidate").GetString().Should().Contain("regressed all six");
         freeWWave197.GetProperty("lineBoxCandidate").GetString().Should().Contain("improved two long rows and regressed two");
         freeWWave197.GetProperty("productionCandidateRetained").GetBoolean().Should().BeFalse();
+        var freeWWave198 = freeW.GetProperty("renderedEvidence").GetProperty("wave198");
+        freeWWave198.GetProperty("status").GetString().Should().Be("evidence-recorded");
+        freeWWave198.GetProperty("targetScenarioCount").GetInt32().Should().Be(7);
+        freeWWave198.GetProperty("controlScenarioCount").GetInt32().Should().Be(3);
+        freeWWave198.GetProperty("scenarioCount").GetInt32().Should().Be(10);
+        freeWWave198.GetProperty("targetBeforeChangedPixels").GetInt32().Should().Be(191369);
+        freeWWave198.GetProperty("targetAfterChangedPixels").GetInt32().Should().Be(187872);
+        freeWWave198.GetProperty("targetChangedPixelsReduction").GetInt32().Should().Be(3497);
+        freeWWave198.GetProperty("controlBeforeChangedPixels").GetInt32().Should().Be(106540);
+        freeWWave198.GetProperty("controlAfterChangedPixels").GetInt32().Should().Be(104932);
+        freeWWave198.GetProperty("controlChangedPixelsReduction").GetInt32().Should().Be(1608);
+        freeWWave198.GetProperty("focusedSourceTestsPassed").GetInt32().Should().Be(6);
+        freeWWave198.GetProperty("focusedSourceTestsTotal").GetInt32().Should().Be(6);
+        freeWWave198.GetProperty("evidenceBoundary").GetString().Should().Contain("metadata-only").And.Contain("untracked");
 
         using var freeWComparison = JsonDocument.Parse(
             File.ReadAllText(Path.Combine(repoRoot, "docs", "parity", "freew-dialog-harness", "freew_dialog_visual_comparison.json")));
@@ -267,21 +307,32 @@ public sealed class CrossAppParityDashboardTests
         freePWave197.GetProperty("productionCandidateRetained").GetBoolean().Should().BeFalse();
         freePWave197.GetProperty("trackedImageBytesAndHashes").GetString().Should().Contain("verified").And.Contain("generation linkage is explicitly unproven");
         freePWave197.GetProperty("residualBoundary").GetString().Should().Contain("unresolved text-raster residual").And.Contain("not a fallback-font diagnosis");
+        var freePWave198 = freeP.GetProperty("renderedEvidence").GetProperty("wave198");
+        freePWave198.GetProperty("status").GetString().Should().Be("candidate-refuted");
+        freePWave198.GetProperty("focusedSourceTestsPassed").GetInt32().Should().Be(2);
+        freePWave198.GetProperty("focusedSourceTestsTotal").GetInt32().Should().Be(2);
+        freePWave198.GetProperty("productionCandidateRetained").GetBoolean().Should().BeFalse();
+        freePWave198.GetProperty("avaloniaOfficeDeltaPercentagePoints").GetDouble().Should().Be(-0.0237);
+        freePWave198.GetProperty("wpfAvaloniaDeltaPercentagePoints").GetDouble().Should().Be(0.0092);
+        freePWave198.GetProperty("generationLinkage").GetString().Should().Be("not-independently-proven");
 
         var markdown = File.ReadAllText(Path.Combine(repoRoot, "docs", "parity", "avalonia-wpf-cross-app-dashboard.md"));
         markdown.Should().Contain("These are coverage/triage metrics, not a visual-parity claim.");
-        markdown.Should().Contain("Wave197 local integration gates are **accepted**");
-        markdown.Should().Contain("a6b1f27e02d15a7495644db64c9bda3a839f126a");
+        markdown.Should().Contain("Wave198 local integration gates are **accepted**");
+        markdown.Should().Contain("1c6cb5e8019dd0098465c67f8f0261929a3d3bbc");
         markdown.Should().Contain("Pending local gates: none");
-        markdown.Should().Contain("cumulative 591 app slices (197 per app)");
+        markdown.Should().Contain("cumulative 594 app slices (198 per app)");
+        markdown.Should().Contain("Wave197 remains historical acceptance context");
         markdown.Should().Contain("Wave196 remains historical acceptance context");
         markdown.Should().Contain("FreeW Wave196 evidence: the committed trailing inline flow-break caret oracle");
-        markdown.Should().Contain("16/16 focused source tests");
-        markdown.Should().Contain("20/20 focused tests");
-        markdown.Should().Contain("4/4 focused tests");
+        markdown.Should().Contain("**22/22** focused source tests");
+        markdown.Should().Contain("**20/20** focused tests");
+        markdown.Should().Contain("**4/4** focused tests");
         markdown.Should().Contain("FreeW Wave197 evidence: **20/20** focused tests cover exactly **6** unique Legal Notices scenarios");
+        markdown.Should().Contain("FreeX Wave198 evidence: **1/1** production Docker/X11 font-family probe");
+        markdown.Should().Contain("FreeW Wave198 evidence: shared tab-pane trailing-frame correction");
+        markdown.Should().Contain("FreeP Wave198 evidence: SubpixelAntialias is rejected");
         markdown.Should().Contain("surface-margin candidate regressed all six rows");
-        markdown.Should().Contain($"{expectedBaselineChangedPixels} to {expectedChangedPixels}");
         markdown.Should().Contain("0.1809518682");
         markdown.Should().Contain("## FreeX Visual Review Queue");
         markdown.Should().Contain("equal dimensions or paired ids do not establish visual parity.");
