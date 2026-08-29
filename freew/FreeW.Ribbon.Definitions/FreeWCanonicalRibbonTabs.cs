@@ -22,6 +22,9 @@ internal static partial class FreeWCanonicalRibbonTabs
                 "layout.page-setup",
                 tab => tab.Group("page-setup", "Page Setup", "P", 100, group =>
                     {
+                        // Word retains the Page Setup commands as a compact two-row block at narrow
+                        // widths instead of spilling them into a generic group flyout.
+                        group.Sizing(RibbonGroupSizing.Default with { MaximumRowsPerColumn = 2 });
                         group.Large("freew.margins", "Margins", RibbonCommandIconKind.Margins, "M", menu: menu =>
                         {
                             menu.Item("freew.margins", "Normal / Narrow (toggle)", "N");
@@ -52,8 +55,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                             menu.Item("freew.section-break-even-page", "Even Page", "E");
                             menu.Item("freew.section-break-odd-page", "Odd Page", "D");
                         });
-                        group.RowBreak();
-                        group.Icon("freew.page-setup", "Page Setup", RibbonCommandIconKind.Margins, "G");
+                        group.DialogLauncher("freew.page-setup", "Page Setup", "Open Page Setup.", "G");
                         group.Icon("freew.line-numbers", "Line Numbers", RibbonCommandIconKind.Number, menu: menu =>
                         {
                             menu.Item("freew.line-numbers-none", "None", "N");
@@ -91,7 +93,7 @@ internal static partial class FreeWCanonicalRibbonTabs
 
             topology.Section(
                 "layout.paragraph",
-                tab => tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, "A", 76, group =>
+                tab => tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, "A", 95, group =>
                     {
                         group.Icon("freew.indent-decrease", "Decrease Indent", RibbonCommandIconKind.IndentDecrease);
                         group.Icon("freew.indent-increase", "Increase Indent", RibbonCommandIconKind.IndentIncrease);
@@ -128,10 +130,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                             Icon = new RibbonCommandIcon(RibbonCommandIconKind.SpaceAfter),
                             Width = 52,
                         });
-                        group.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
+                        group.DialogLauncher("freew.paragraph-dialog", "Paragraph Settings", "Open Paragraph settings.");
                         group.Icon("freew.tabs-dialog", "Tabs", RibbonCommandIconKind.Ruler);
                     }),
-                tab => tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, null, 92, group =>
+                tab => tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, null, 95, group =>
                     {
                         group.Button("freew.indent-decrease", "Decrease Indent", control => control with
                         {
@@ -165,15 +167,15 @@ internal static partial class FreeWCanonicalRibbonTabs
                             Items = new[] { "0", "6", "8", "12", "18", "24" },
                             Width = 52,
                         });
-                        group.Button("freew.paragraph-dialog", "Paragraph Settings");
+                        group.DialogLauncher("freew.paragraph-dialog", "Paragraph Settings", "Open Paragraph settings.");
                         group.Button("freew.tabs-dialog", "Tabs");
                     }));
 
             topology.Section(
                 "layout.preview",
-                tab => tab.Group("preview", "Preview", "V", 90, group =>
+                tab => tab.Group("preview", "Preview", "V", 60, group =>
                     group.Large("freew.print-preview", "Print Preview", RibbonCommandIconKind.Print)),
-                tab => tab.Group("preview", "Preview", null, 90, group =>
+                tab => tab.Group("preview", "Preview", null, 60, group =>
                     group.Button("freew.print-preview", "Print Preview", control => control with
                     {
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Print),
@@ -224,13 +226,13 @@ internal static partial class FreeWCanonicalRibbonTabs
 
             topology.Section(
                 "layout.data",
-                tab => tab.Group("data", "Data", "D", 88, group =>
+                tab => tab.Group("data", "Data", "D", 55, group =>
                     {
                         group.Medium("freew.text-to-table", "Text to Table", RibbonCommandIconKind.Table,
                             accent: RibbonCommandIconAccent.Green);
                         group.Medium("freew.table-to-text", "Table to Text", RibbonCommandIconKind.TextFunction);
                     }),
-                tab => tab.Group("data", "Data", null, 95, group =>
+                tab => tab.Group("data", "Data", null, 55, group =>
                     {
                         group.Button("freew.text-to-table", "Text to Table", control => control with
                         {

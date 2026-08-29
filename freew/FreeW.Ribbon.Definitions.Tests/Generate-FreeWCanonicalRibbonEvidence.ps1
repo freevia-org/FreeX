@@ -58,7 +58,8 @@ static string TabSignature(RibbonTab tab) =>
 
 static string GroupSignature(RibbonGroup group) =>
     $"{group.Id}|{group.Header}|{group.KeyTip}|{group.Priority}|" +
-    $"{string.Join(',', group.Sizing.SupportedVariants)}|{group.Sizing.Hints}|" +
+    $"{string.Join(',', group.Sizing.SupportedVariants)}|{group.Sizing.Hints}|{group.Sizing.MaximumRowsPerColumn}|" +
+    $"{group.Launcher?.CommandId.Value}|{group.Launcher?.TooltipTitle}|{group.Launcher?.TooltipDescription}|{group.Launcher?.KeyTip}|" +
     string.Join(';', group.Controls.Select(ControlSignature));
 
 static string ControlSignature(RibbonControl control) =>

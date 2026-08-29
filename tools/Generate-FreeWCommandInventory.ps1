@@ -1462,6 +1462,19 @@ internal static class FreeWCommandInventory
         {
             foreach (var group in tab.Groups)
             {
+                if (group.Launcher is { } launcher)
+                {
+                    AddLocation(locations, launcher.CommandId.Value, new CommandLocation(
+                        Profile: profile,
+                        TabId: tab.Id,
+                        Tab: tab.Header,
+                        GroupId: group.Id,
+                        Group: group.Header,
+                        Label: launcher.TooltipTitle,
+                        ControlType: nameof(RibbonGroupLauncher),
+                        Layout: "DialogLauncher"));
+                }
+
                 foreach (var control in group.Controls)
                     AddControl(locations, tab, group, control, profile);
             }
