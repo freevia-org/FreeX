@@ -36,9 +36,32 @@ foreach ($gate in @($manifest.gates)) {
     if (@($gate.platforms).Count -eq 0 -or @($gate.platforms | Where-Object { $allowedPlatforms -notcontains $_ }).Count -gt 0) {
         $errors.Add("Gate '$($gate.id)' must target one or more supported platforms.")
     }
-    if (@($gate.projects).Count -eq 0) {
+    $platformProjects = [System.Collections.Generic.List[object]]::new()
+    if ($gate.PSObject.Properties.Name -contains "platformProjects") {
+        foreach ($platformProperty in @($gate.platformProjects.PSObject.Properties)) {
+            if ($allowedPlatforms -notcontains $platformProperty.Name -or @($gate.platforms) -notcontains $platformProperty.Name) {
+                $errors.Add("Gate '$($gate.id)' has platformProjects for unsupported or untargeted platform '$($platformProperty.Name)'.")
+            }
+            foreach ($projectPath in @($platformProperty.Value)) {
+                $platformProjects.Add($projectPath)
+            }
+        }
+    }
+    if (@($gate.projects).Count + $platformProjects.Count -eq 0) {
         $errors.Add("Gate '$($gate.id)' has no test projects.")
         continue
+    }
+
+    $partitionCount = if ($gate.PSObject.Properties.Name -contains "partitions") { [int]$gate.partitions } else { 1 }
+    $partitionProjects = @(if ($gate.PSObject.Properties.Name -contains "partitionProjects") { @($gate.partitionProjects) })
+    if ($partitionCount -lt 1 -or $partitionCount -gt 64) {
+        $errors.Add("Gate '$($gate.id)' must declare between 1 and 64 partitions.")
+    }
+    if ($partitionCount -gt 1 -and $partitionProjects.Count -eq 0) {
+        $errors.Add("Gate '$($gate.id)' must name partitionProjects when it declares multiple partitions.")
+    }
+    if ($partitionCount -eq 1 -and $partitionProjects.Count -gt 0) {
+        $errors.Add("Gate '$($gate.id)' names partitionProjects without declaring multiple partitions.")
     }
 
     $buildProjectsInGate = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -62,7 +85,8 @@ foreach ($gate in @($manifest.gates)) {
     }
 
     $projectsInGate = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($projectPath in @($gate.projects)) {
+    $allGateProjects = @($gate.projects) + @($platformProjects)
+    foreach ($projectPath in $allGateProjects) {
         if ($projectPath -isnot [string] -or [string]::IsNullOrWhiteSpace($projectPath)) {
             $errors.Add("Gate '$($gate.id)' contains an invalid test project path.")
             continue
@@ -74,6 +98,11 @@ foreach ($gate in @($manifest.gates)) {
             $errors.Add("Gate '$($gate.id)' references missing project '$projectPath'.")
         }
         [void]$coveredProjects.Add($projectPath.Replace('\\', '/'))
+    }
+    foreach ($projectPath in $partitionProjects) {
+        if ($allGateProjects -notcontains $projectPath) {
+            $errors.Add("Gate '$($gate.id)' partitions unassigned project '$projectPath'.")
+        }
     }
 }
 
@@ -128,6 +157,8 @@ Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-Gate "${{ m
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-App "${{ matrix.app }}"'
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-Platform "${{ matrix.platform }}"'
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-GateId "${{ matrix.gateId }}"'
+Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-PartitionIndex ${{ matrix.partitionIndex }}'
+Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-PartitionCount ${{ matrix.partitionCount }}'
 Assert-WorkflowContains -Path ".github/workflows/freew-ci.yml" -Expected '-Gate commit -App FreeW -Platform ${{ matrix.platform }}'
 Assert-WorkflowContains -Path ".github/workflows/freep-ci.yml" -Expected '-Gate commit -App FreeP -Platform ${{ matrix.platform }}'
 Assert-WorkflowContains -Path ".github/workflows/tester-release.yml" -Expected '-Gate release -App FreeX -Platform windows'

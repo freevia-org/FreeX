@@ -21,8 +21,9 @@ pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate commit -App FreeP -Platfor
 
 Every app has a native commit lane on all platforms. Tests with observable filesystem, runtime,
 globalization, process, or OS behavior stay in `*-portable` gates on Windows, Linux, and macOS.
-Pure calculation/model/localization/definition suites with no platform behavior run once in the
-Linux `*-neutral` gates rather than repeating identical assertions on three operating systems.
+Pure calculation/model/localization/definition suites with no platform behavior run once through
+the `platformProjects.linux` portion of an existing underloaded Linux gate rather than repeating
+identical assertions on three operating systems or paying for a separate runner checkout and setup.
 The canonical `CI` workflow runs automatically
 for `main` pushes, remains manually dispatchable, and cancels superseded runs for the same ref.
 Branches are integrated after repository preflight and a successful Release build; this repository
@@ -46,7 +47,13 @@ pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate release -App all -Platform
 ```
 
 Projects remain serial within a gate where process isolation matters, while independent gates and
-platforms run concurrently. The seven WPF host batches are separate release gates so each receives
+platforms run concurrently. A gate can declare `partitions` and `partitionProjects` when one safe,
+isolated test assembly dominates the critical path. The runner deterministically balances source
+files by declared test-method count, combines the generated partition with the project's existing
+VSTest exclusions, and runs every non-partitioned sibling only in partition one. The FreeX Avalonia
+commit gate uses two processes per OS for its 2,000+ test assembly without increasing the overall
+test-job count because the former neutral jobs were folded into existing Linux lanes. The seven WPF
+host batches are separate release gates so each receives
 an isolated Windows runner and no single batch determines a 25-minute serial critical path. A
 project may belong to one gate only.
 

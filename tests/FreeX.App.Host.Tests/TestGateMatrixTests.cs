@@ -24,15 +24,20 @@ public sealed class TestGateMatrixTests
         var expectedEntries = manifest.RootElement.GetProperty("gates")
             .EnumerateArray()
             .SelectMany(gate => gate.GetProperty("platforms").EnumerateArray()
-                .Select(platform => new
-                {
-                    GateId = gate.GetProperty("id").GetString(),
-                    App = gate.GetProperty("app").GetString(),
-                    Platform = platform.GetString(),
-                    FetchDepth = gate.TryGetProperty("requiresFullHistory", out var property) && property.GetBoolean()
-                        ? 0
-                        : 1,
-                }))
+                .SelectMany(platform => Enumerable.Range(
+                        0,
+                        gate.TryGetProperty("partitions", out var partitions) ? partitions.GetInt32() : 1)
+                    .Select(partitionIndex => new
+                    {
+                        GateId = gate.GetProperty("id").GetString(),
+                        App = gate.GetProperty("app").GetString(),
+                        Platform = platform.GetString(),
+                        FetchDepth = gate.TryGetProperty("requiresFullHistory", out var property) && property.GetBoolean()
+                            ? 0
+                            : 1,
+                        PartitionIndex = partitionIndex,
+                        PartitionCount = gate.TryGetProperty("partitions", out var count) ? count.GetInt32() : 1,
+                    })))
             .ToArray();
 
         entries.Should().HaveCount(expectedEntries.Length);
@@ -42,6 +47,8 @@ public sealed class TestGateMatrixTests
                 App = entry.GetProperty("app").GetString(),
                 Platform = entry.GetProperty("platform").GetString(),
                 FetchDepth = entry.GetProperty("fetchDepth").GetInt32(),
+                PartitionIndex = entry.GetProperty("partitionIndex").GetInt32(),
+                PartitionCount = entry.GetProperty("partitionCount").GetInt32(),
             })
             .Should().BeEquivalentTo(expectedEntries);
         entries.Select(entry => entry.GetProperty("app").GetString())
@@ -80,18 +87,20 @@ public sealed class TestGateMatrixTests
     }
 
     [Fact]
-    public void Manifest_RunsPlatformNeutralSuitesOnceAndKeepsPortableSuitesCrossPlatform()
+    public void Manifest_FoldsPlatformNeutralSuitesIntoLinuxAndPartitionsTheLongAvaloniaLane()
     {
         using var manifest = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("eng", "test-gates.json"));
         var gates = manifest.RootElement.GetProperty("gates").EnumerateArray().ToArray();
 
-        var neutral = gates.Where(gate =>
-            gate.GetProperty("id").GetString()!.EndsWith("-neutral", StringComparison.Ordinal)).ToArray();
-        neutral.Should().HaveCount(3);
-        neutral.Should().OnlyContain(gate =>
-            gate.GetProperty("gate").GetString() == "commit" &&
-            gate.GetProperty("platforms").GetArrayLength() == 1 &&
-            gate.GetProperty("platforms").EnumerateArray().Single().GetString() == "linux");
+        gates.Should().NotContain(gate =>
+            gate.GetProperty("id").GetString()!.EndsWith("-neutral", StringComparison.Ordinal));
+        var platformSpecificProjects = gates
+            .Where(gate => gate.TryGetProperty("platformProjects", out _))
+            .Select(gate => gate.GetProperty("platformProjects"))
+            .ToArray();
+        platformSpecificProjects.Should().HaveCount(3);
+        platformSpecificProjects.Should().OnlyContain(projects =>
+            projects.EnumerateObject().Select(property => property.Name).SequenceEqual(new[] { "linux" }));
 
         var portable = gates.Where(gate =>
             gate.GetProperty("id").GetString()!.EndsWith("-portable", StringComparison.Ordinal)).ToArray();
@@ -99,6 +108,11 @@ public sealed class TestGateMatrixTests
         portable.Should().OnlyContain(gate =>
             gate.GetProperty("platforms").EnumerateArray().Select(value => value.GetString())
                 .SequenceEqual(new[] { "windows", "linux", "macos" }));
+
+        var avalonia = gates.Single(gate => gate.GetProperty("id").GetString() == "freex-avalonia");
+        avalonia.GetProperty("partitions").GetInt32().Should().Be(2);
+        avalonia.GetProperty("partitionProjects").EnumerateArray().Select(value => value.GetString())
+            .Should().Equal("tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj");
     }
 
     [Fact]

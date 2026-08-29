@@ -96,7 +96,7 @@ jobs:
         run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1 -Mode Platform
 
   tests:
-    name: ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.gateId }}
+    name: ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}
     needs: prepare
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
@@ -127,13 +127,15 @@ jobs:
             -App "${{ matrix.app }}" `
             -Platform "${{ matrix.platform }}" `
             -GateId "${{ matrix.gateId }}" `
+            -PartitionIndex ${{ matrix.partitionIndex }} `
+            -PartitionCount ${{ matrix.partitionCount }} `
             -HangTimeout 15m `
             -ResultsDirectory TestResults
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: ci-${{ matrix.platform }}-${{ matrix.gateId }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ci-${{ matrix.platform }}-${{ matrix.displayGateId }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: "**/TestResults/**"
           if-no-files-found: warn
           retention-days: 7

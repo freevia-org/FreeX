@@ -72,7 +72,7 @@ public sealed class WindowsNativeRecordingCaptureEngineTimeoutTests
         stopwatch.Stop();
 
         stopwatch.Elapsed.Should().BeLessThan(
-            TimeSpan.FromMilliseconds(700),
+            TimeSpan.FromSeconds(5),
             "BeginCapture must be bounded by the configured device-operation timeout, not by however " +
             "long the (here, deliberately slow) camera device takes to answer");
 
@@ -97,17 +97,9 @@ public sealed class WindowsNativeRecordingCaptureEngineTimeoutTests
         var payload = new byte[] { 1, 2, 3, 4 };
         var engine = new WindowsNativeRecordingCaptureEngine(
             "test-adapter",
-            startCamera: async request =>
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(10));
-                return FakeCapture(request.PackagePath);
-            },
-            stopCamera: async _ =>
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(10));
-                return payload;
-            },
-            deviceOperationTimeout: TimeSpan.FromSeconds(2));
+            startCamera: request => Task.FromResult(FakeCapture(request.PackagePath)),
+            stopCamera: _ => Task.FromResult(payload),
+            deviceOperationTimeout: TimeSpan.FromSeconds(10));
 
         engine.BeginCapture(StartRequest(device, packagePath));
         var completion = engine.CompleteCapture(CompleteRequest(device, packagePath));

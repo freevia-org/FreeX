@@ -56,6 +56,7 @@ public sealed class SharedReadonlyLockingF2_SaveFailureBlockingNoticeTests
             var originalBytes = File.ReadAllBytes(path);
 
             var window = new MainWindow([]);
+            UnixFileMode? originalDirectoryMode = null;
             try
             {
                 var target = new WorkbookOpenTarget(path, adapter, ".xlsx", format);
@@ -66,9 +67,22 @@ public sealed class SharedReadonlyLockingF2_SaveFailureBlockingNoticeTests
                 // write, exactly like a real user who edited the workbook after opening it.
                 window.Session.MarkDirtyForRecovery();
 
-                // Make the OS genuinely refuse to overwrite the file -- this is the exact class the
-                // finding names (File.Replace throws UnauthorizedAccessException).
-                File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+                // Windows denies replacement of a read-only file. Unix replacement is controlled by
+                // the containing directory instead, so a read-only file can still be atomically
+                // unlinked and replaced. Exercise the native rule on each platform rather than
+                // relying on the Windows-only FileAttributes interpretation on Linux and macOS.
+                if (OperatingSystem.IsWindows())
+                {
+                    File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+                }
+                else
+                {
+                    originalDirectoryMode = File.GetUnixFileMode(tempDir.Path);
+                    File.SetUnixFileMode(
+                        tempDir.Path,
+                        originalDirectoryMode.Value &
+                        ~(UnixFileMode.UserWrite | UnixFileMode.GroupWrite | UnixFileMode.OtherWrite));
+                }
 
                 string? noticeTitle = null;
                 string? noticeMessage = null;
@@ -100,8 +114,10 @@ public sealed class SharedReadonlyLockingF2_SaveFailureBlockingNoticeTests
             }
             finally
             {
-                // Clear the read-only attribute so the temp-directory cleanup below can delete it.
-                if (File.Exists(path))
+                // Restore the containing directory first so Unix cleanup can reach the file.
+                if (!OperatingSystem.IsWindows() && originalDirectoryMode is { } directoryMode)
+                    File.SetUnixFileMode(tempDir.Path, directoryMode);
+                if (OperatingSystem.IsWindows() && File.Exists(path))
                     File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
 
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
