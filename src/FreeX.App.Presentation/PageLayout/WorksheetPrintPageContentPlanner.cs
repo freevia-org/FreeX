@@ -519,27 +519,6 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
 {
     private const double UnalignedMargin = 0.3 * 96.0;
 
-    /// <summary>
-    /// R167-presentation-headerfooter-band-bound-1: the largest fraction of the page a single
-    /// header OR footer band may claim once <c>sizeToContent</c> lets it grow past its base line
-    /// height to fit a picture. Round 166 fixed a header/footer picture's own DIP-unit conversion
-    /// (a picture is no longer stored at 1-4x its physical size), but that narrows the range of
-    /// inputs that reach this code -- it does not bound them: even a correctly-converted, genuinely
-    /// large photo (the auditor's own probe used a 72 DPI image, whose DIP-converted size is LARGER
-    /// than its raw pixel count) still flowed straight into <see cref="ResolveLineHeight"/> with no
-    /// upper limit, so the band could balloon to many times the page itself. There is no Excel
-    /// precedent to match here -- real Excel does not grow the header/footer margin to fit an
-    /// inserted picture at all (an oversized picture there simply overlaps the sheet body); this
-    /// app's <c>SizeHeaderFooterBandsToContent</c> WPF-native behavior is a deliberate departure
-    /// (see the existing 48px-band test for a 96x48 default picture, comfortably exceeding the
-    /// 28.8px default header margin -- so the bound below must stay well above a "page margin"-sized
-    /// cap or it would break that already-intentional growth). A quarter of the page leaves the
-    /// other three quarters for the printed body even in the worst case of both header and footer
-    /// maxing out simultaneously, while comfortably fitting every legitimate case (multi-line text,
-    /// or a picture sized through the app's own Format Picture / header-footer picture dialogs).
-    /// </summary>
-    private const double MaxBandHeightFraction = 0.25;
-
     public static WorksheetPrintHeaderFooterBandGeometry BuildBand(
         WorksheetHeaderFooter value,
         WorksheetHeaderFooterPictureSet pictures,
@@ -556,15 +535,14 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
         double baseLineHeight,
         bool sizeToContent)
     {
-        var lineHeight = Math.Min(
-            ResolveLineHeight(
-                value,
-                pictures,
-                draftQuality,
-                fontScale,
-                baseLineHeight,
-                sizeToContent),
-            Math.Max(1, pageHeight * MaxBandHeightFraction));
+        var lineHeight = ResolveLineHeight(
+            value,
+            pictures,
+            draftQuality,
+            fontScale,
+            baseLineHeight,
+            sizeToContent,
+            pageHeight);
         var y = isFooter
             ? Math.Max(
                 Math.Max(4, pageHeight - bandMargin - lineHeight),
@@ -598,19 +576,29 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
             textLineHeight);
     }
 
+    /// <summary>
+    /// Resolves the header/footer band's line height. <paramref name="pageHeight"/> (added
+    /// R168-shared-headerfooter-band-cap-1) supplies the page context this method needs to apply the
+    /// shared band cap; it defaults to <see cref="double.PositiveInfinity"/> -- i.e. uncapped -- for
+    /// callers that only want the content-derived height and have no page geometry to hand
+    /// (<c>PrintRenderer.CalculateHeaderFooterLineHeight</c>). <see cref="BuildBand"/>, which does
+    /// have the page height, passes it so the band stays bounded exactly as its own inline
+    /// <c>Math.Min</c> used to bound it.
+    /// </summary>
     public static double ResolveLineHeight(
         WorksheetHeaderFooter value,
         WorksheetHeaderFooterPictureSet pictures,
         bool draftQuality,
         double fontScale,
         double baseLineHeight,
-        bool sizeToContent)
+        bool sizeToContent,
+        double pageHeight = double.PositiveInfinity)
     {
         var normalizedBaseHeight = double.IsFinite(baseLineHeight) && baseLineHeight > 0
             ? baseLineHeight
             : 1.0;
         if (!sizeToContent || draftQuality)
-            return normalizedBaseHeight;
+            return PageGeometryRules.ResolveHeaderFooterBandHeight(normalizedBaseHeight, 0, pageHeight);
 
         var maxLines = Math.Max(1, Math.Max(
             PagePrintTextPlanner.CountSectionLines(value.Left),
@@ -619,13 +607,20 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
                 PagePrintTextPlanner.CountSectionLines(value.Right))));
         var height = normalizedBaseHeight * fontScale * maxLines;
 
+        var tallestPicture = 0.0;
         if (HasPictureToken(value.Left) && pictures.Left is { } left)
-            height = Math.Max(height, Math.Max(1, left.Height));
+            tallestPicture = Math.Max(tallestPicture, Math.Max(1, left.Height));
         if (HasPictureToken(value.Center) && pictures.Center is { } center)
-            height = Math.Max(height, Math.Max(1, center.Height));
+            tallestPicture = Math.Max(tallestPicture, Math.Max(1, center.Height));
         if (HasPictureToken(value.Right) && pictures.Right is { } right)
-            height = Math.Max(height, Math.Max(1, right.Height));
-        return height;
+            tallestPicture = Math.Max(tallestPicture, Math.Max(1, right.Height));
+
+        // R168-shared-headerfooter-band-cap-1: the grow-to-the-tallest-picture-then-cap-at-a-fraction
+        // -of-the-page arithmetic now lives once in PageGeometryRules (alongside ResolveUniformScale /
+        // ResolveBodyEdge / ResolveHeaderFooterFontScale), so the Avalonia/Skia PDF export path --
+        // which builds its own geometry and cannot reuse this planner's LayoutRect band model -- caps
+        // against the same single source of truth instead of a duplicated 0.25 constant.
+        return PageGeometryRules.ResolveHeaderFooterBandHeight(height, tallestPicture, pageHeight);
     }
 
     /// <summary>

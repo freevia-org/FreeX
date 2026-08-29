@@ -50,16 +50,14 @@ public static class WorkbookPdfContentBuilder
     private const double HeadingGutterHeightPx = 20.0;
     private const double HeadingFontSize = 9.0;
 
-    // R167-services-avalonia-headerfooter-picture-band-1: mirrors
-    // WorksheetPrintHeaderFooterGeometryPlanner.MaxBandHeightFraction (R167-presentation-headerfooter-
-    // band-bound-1) -- the largest fraction of the page a single header OR footer band may grow to
-    // once a configured picture is taller than the text-only band. Kept as an independent constant
-    // here rather than a shared one because this Skia/Avalonia PDF path cannot call the WPF-side
-    // planner directly (see the "why not share the planner" note on GrowHeaderFooterBandHeightForPictures
-    // below); the value must stay equal to that planner's constant by inspection, which is why both
-    // carry the identical rationale comment and this file's R92/R87/new picture-aspect tests assert
-    // the same 25%-of-page bound this constant encodes.
-    private const double MaxHeaderFooterBandHeightFraction = 0.25;
+    // R168-shared-headerfooter-band-cap-1: thin alias for the single shared definition of the bound
+    // (PageGeometryRules.MaxHeaderFooterBandHeightFraction), kept only so this file's local doc
+    // comments can keep naming it. Round 167 declared an independent 0.25 here that had to stay equal
+    // to the WPF-side planner's own constant "by inspection"; it no longer does -- both sides now read
+    // the same constant and call the same PageGeometryRules.ResolveHeaderFooterBandHeight rule, so a
+    // future round changing the bound changes it in exactly one place.
+    private const double MaxHeaderFooterBandHeightFraction =
+        PageGeometryRules.MaxHeaderFooterBandHeightFraction;
 
     // R96-render-cf-databar-iconset-1 / R96-render-sparkline-pdf-1: fixed 96dpi(px)->72dpi(pt)
     // conversion for the "device pixels at 100% zoom" constants the portable conditional-format
@@ -1904,30 +1902,32 @@ public static class WorkbookPdfContentBuilder
     /// sectionWidth) to match the planner's shape instead of this file's already-established
     /// page-setup math, which is a bigger, riskier change than this finding's gesture calls for.
     /// What CAN and should be shared -- and now is -- is the arithmetic RULE, not the geometry
-    /// model: both this method and <c>ResolveLineHeight</c>/<c>BuildBand</c> apply the identical
-    /// "grow to the tallest picture, then cap at 25% of the page" rule, and the picture-fitting clamp
-    /// in <see cref="RenderHeaderFooterSection"/> calls the same <see
-    /// cref="PageGeometryRules.ResolveUniformScale"/> the shared planner's <c>ResolvePictureBounds</c>
-    /// calls. <see cref="MaxHeaderFooterBandHeightFraction"/> is intentionally declared next to <see
-    /// cref="WorksheetPrintHeaderFooterGeometryPlanner.MaxBandHeightFraction"/>'s value (0.25) rather
-    /// than referencing it, because the two constants cannot share a definition across the
-    /// FreeX.App.Services -&gt; FreeX.App.Presentation project-reference direction without an
-    /// unwanted new shared-constants module; keeping both in step is a code-review/source-contract-
-    /// test concern (this round adds tests asserting each side of the 25% bound independently) rather
-    /// than a runtime one.
+    /// model: this method's grow-then-cap step and the shared planner's
+    /// <c>ResolveLineHeight</c>/<c>BuildBand</c> both call the one
+    /// <see cref="PageGeometryRules.ResolveHeaderFooterBandHeight"/>
+    /// (R168-shared-headerfooter-band-cap-1), and the picture-fitting clamp in
+    /// <see cref="RenderHeaderFooterSection"/> calls the same
+    /// <see cref="PageGeometryRules.ResolveUniformScale"/> the shared planner's
+    /// <c>ResolvePictureBounds</c> calls. Round 167 declared this file's own 0.25 constant instead,
+    /// on the mistaken premise that the two could not share a definition across the
+    /// FreeX.App.Services -&gt; FreeX.App.Presentation reference direction -- this file already
+    /// referenced <c>PageGeometryRules</c> for its fit-to-N-pages scaling, so the shared home was
+    /// there all along, and keeping the bound in step is now a compile-time fact rather than a
+    /// "remember to change both" code-review concern (which had already failed across rounds
+    /// 166/167).
     /// </summary>
     private static double GrowHeaderFooterBandHeightForPictures(
         double baseHeightPt, WorksheetHeaderFooter band, WorksheetHeaderFooterPictureSet pictures, double pageHeightPt)
     {
         const double ptPerPx = 72.0 / 96.0;
-        var height = baseHeightPt;
+        var tallestPicturePt = 0.0;
         if (HasHeaderFooterPictureToken(band.Left) && pictures.Left is { } left)
-            height = Math.Max(height, Math.Max(1.0, left.Height * ptPerPx));
+            tallestPicturePt = Math.Max(tallestPicturePt, Math.Max(1.0, left.Height * ptPerPx));
         if (HasHeaderFooterPictureToken(band.Center) && pictures.Center is { } center)
-            height = Math.Max(height, Math.Max(1.0, center.Height * ptPerPx));
+            tallestPicturePt = Math.Max(tallestPicturePt, Math.Max(1.0, center.Height * ptPerPx));
         if (HasHeaderFooterPictureToken(band.Right) && pictures.Right is { } right)
-            height = Math.Max(height, Math.Max(1.0, right.Height * ptPerPx));
-        return Math.Min(height, Math.Max(1.0, pageHeightPt * MaxHeaderFooterBandHeightFraction));
+            tallestPicturePt = Math.Max(tallestPicturePt, Math.Max(1.0, right.Height * ptPerPx));
+        return PageGeometryRules.ResolveHeaderFooterBandHeight(baseHeightPt, tallestPicturePt, pageHeightPt);
     }
 
     private static void RenderHeaderFooterBand(
