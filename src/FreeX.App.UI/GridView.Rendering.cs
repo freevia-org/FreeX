@@ -385,6 +385,11 @@ public partial class GridView
         var splitSuperSubBaselineOffsetPx = textMaterialization.BaselineOffset;
         var hasSplitRichRuns = textMaterialization.HasRichText;
         var materializedIsNumeric = textMaterialization.Formatting.IsNumericOrDate;
+        var effectiveHAlign = ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue);
+        var shouldClipRightAlignedText = ShouldClipRightAlignedText(
+            effectiveHAlign,
+            materializedIsNumeric,
+            isEffectivelyRightToLeft);
 
         // The cached default-layout fast paths below always build FlowDirection.LeftToRight text keyed
         // without regard to reading order, so an effectively-RTL cell must bypass them and take the
@@ -441,7 +446,7 @@ public partial class GridView
             rect,
             layoutTextWidth,
             text.Height,
-            ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue),
+            effectiveHAlign,
             style?.VerticalAlignment,
             materializedIsNumeric,
             indentPx,
@@ -463,7 +468,7 @@ public partial class GridView
             return;
         }
 
-        var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textLayout);
+        var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textLayout) || shouldClipRightAlignedText;
         if (shouldClipText)
             dc.PushClip(GetCellClipGeometry(textClipRect));
 
@@ -898,6 +903,11 @@ public partial class GridView
             var superSubBaselineOffsetPx = textMaterialization.BaselineOffset;
             var hasRichRuns = textMaterialization.HasRichText;
             var materializedIsNumeric = textMaterialization.Formatting.IsNumericOrDate;
+            var effectiveHAlign = ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue);
+            var shouldClipRightAlignedText = ShouldClipRightAlignedText(
+                effectiveHAlign,
+                materializedIsNumeric,
+                isEffectivelyRightToLeft);
 
             // When the cell has per-run rich text, force the full (non-cached) FormattedText path so
             // ApplyRichRunFormatting can mutate font/color ranges without corrupting the shared cache.
@@ -957,7 +967,7 @@ public partial class GridView
                 rect,
                 layoutTextWidth,
                 text.Height,
-                ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue),
+                effectiveHAlign,
                 style?.VerticalAlignment,
                 materializedIsNumeric,
                 indentPx,
@@ -965,7 +975,7 @@ public partial class GridView
                 isEffectivelyRightToLeft);
 
             double clipLeft = rect.Left;
-            var overflowRight = canOverflow && textLayout.Bounds.Right > rect.Right;
+            var overflowRight = canOverflow && !shouldClipRightAlignedText && textLayout.Bounds.Right > rect.Right;
             var overflowLeft = canOverflow && textLayout.Bounds.Left < rect.Left && colMetric.Col > 1;
             if (overflowRight || overflowLeft)
             {
@@ -1008,7 +1018,7 @@ public partial class GridView
                 continue;
             }
 
-            var shouldClipText = ShouldClipText(wrapText, clipRect, text, textLayout);
+            var shouldClipText = ShouldClipText(wrapText, clipRect, text, textLayout) || shouldClipRightAlignedText;
             if (shouldClipText)
                 dc.PushClip(GetCellClipGeometry(clipRect));
 
@@ -1452,6 +1462,15 @@ public partial class GridView
         hAlign == CellHAlign.General && rawValue is BoolValue or ErrorValue
             ? CellHAlign.Center
             : hAlign;
+
+    internal static bool ShouldClipRightAlignedText(
+        CellHAlign hAlign,
+        bool isNumeric,
+        bool isEffectivelyRightToLeft) =>
+        CellTextOrientationLayoutPlanner.ResolveEffectiveHorizontalAlignment(
+            hAlign,
+            isNumeric,
+            isEffectivelyRightToLeft) == CellHAlign.Right;
 
     /// <summary>
     /// Format Cells &gt; Alignment &gt; Indent only pulls text away from the edge it anchors to

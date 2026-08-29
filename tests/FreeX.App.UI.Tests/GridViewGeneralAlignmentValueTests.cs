@@ -51,6 +51,23 @@ public sealed class GridViewGeneralAlignmentValueTests
             .Should().Be(CellHAlign.Left);
     }
 
+    [Theory]
+    [InlineData(CellHAlign.Right, true, false, true)]
+    [InlineData(CellHAlign.General, true, false, true)]
+    [InlineData(CellHAlign.General, true, true, false)]
+    [InlineData(CellHAlign.General, false, false, false)]
+    [InlineData(CellHAlign.General, false, true, true)]
+    [InlineData(CellHAlign.Center, true, false, false)]
+    public void ShouldClipRightAlignedText_TracksEffectiveRightAlignment(
+        CellHAlign hAlign,
+        bool isNumeric,
+        bool isEffectivelyRightToLeft,
+        bool expected)
+    {
+        GridView.ShouldClipRightAlignedText(hAlign, isNumeric, isEffectivelyRightToLeft)
+            .Should().Be(expected);
+    }
+
     [Fact]
     public void CalculateCellTextRenderLayout_BooleanGeneralAlignment_CentersTextInCell()
     {

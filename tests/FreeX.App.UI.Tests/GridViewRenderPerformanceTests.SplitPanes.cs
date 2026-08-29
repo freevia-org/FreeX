@@ -355,7 +355,7 @@ public sealed partial class GridViewRenderPerformanceTests
         renderSplitPaneCells.Should().Contain("var textClipRect = layout.TextClipRect;");
         conditionalIconBlock.Should().Contain("rect = iconLayout.TextRect;");
         conditionalIconBlock.Should().Contain("textClipRect = AdjustConditionalIconTextClipRect(layout.TextClipRect, rect);");
-        renderSplitPaneCells.Should().Contain("var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textLayout);");
+        renderSplitPaneCells.Should().Contain("var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textLayout) || shouldClipRightAlignedText;");
         renderSplitPaneCells.Should().Contain("if (shouldClipText)");
         renderSplitPaneCells.Should().Contain("dc.PushClip(GetCellClipGeometry(textClipRect));");
         renderSplitPaneCells.Should().Contain("private static Rect AdjustConditionalIconTextClipRect(Rect clipRect, Rect textRect)");
@@ -370,7 +370,7 @@ public sealed partial class GridViewRenderPerformanceTests
             rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
 
         renderSplitPaneCells.Should().Contain("var textLayout = CalculateCellTextRenderLayout(");
-        renderSplitPaneCells.Should().Contain("var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textLayout);");
+        renderSplitPaneCells.Should().Contain("var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textLayout) || shouldClipRightAlignedText;");
         renderSplitPaneCells.IndexOf("dc.PushClip(GetCellClipGeometry(textClipRect));", StringComparison.Ordinal)
             .Should()
             .BeLessThan(renderSplitPaneCells.IndexOf("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache,", StringComparison.Ordinal));
