@@ -590,7 +590,7 @@ $freePWave197 = $freeP.renderedEvidence.wave197
 Assert-DashboardCondition ([string]$freePWave197.status -eq "candidate-refuted") "FreeP Wave197 candidate review must be recorded as rejected."
 Assert-DashboardCondition ($freePWave197.focusedSourceTestsPassed -eq 4 -and $freePWave197.focusedSourceTestsTotal -eq 4) "FreeP Wave197 focused tests must be 4/4."
 Assert-DashboardCondition ($freePWave197.productionCandidateRetained -eq $false) "FreeP Wave197 must retain no production candidate."
-Assert-DashboardCondition ([string]$freePWave197.trackedImageBytesAndHashes -match "verified.*generation linkage is explicitly unproven") "FreeP Wave197 image provenance boundary must remain explicit."
+Assert-DashboardCondition ([string]$freePWave197.trackedImageBytesAndHashes -match "Leading-candidate.*verified.*four missing untracked candidate images.*no current byte-integrity claim") "FreeP Wave197 image provenance boundary must remain explicit."
 Assert-DashboardCondition ([string]$freePWave197.residualBoundary -match "unresolved text-raster residual.*not a fallback-font diagnosis") "FreeP Wave197 residual boundary must remain explicit."
 $freePWave198 = $freeP.renderedEvidence.wave198
 Assert-DashboardCondition ([string]$freePWave198.status -eq "candidate-refuted") "FreeP Wave198 candidate review must be recorded as rejected."
