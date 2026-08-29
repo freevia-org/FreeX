@@ -35,14 +35,29 @@ internal static class XlsxWorksheetHeaderNormalization
     /// <c>sheetData</c>; normalizers that touch cell rows (grid XML) cannot use this driver.
     /// </summary>
     public static void NormalizeWorksheets(ZipArchive archive, Func<XElement, bool> normalizeWorksheetRoot)
+        => NormalizeWorksheets(archive, [normalizeWorksheetRoot]);
+
+    /// <summary>
+    /// Runs an ordered set of header-only normalizers in one worksheet traversal. Each worksheet's
+    /// pruned header is cloned once, all normalizers are applied to that clone in order, and a
+    /// changed worksheet is fully parsed, replayed, and written only once.
+    /// </summary>
+    public static void NormalizeWorksheets(
+        ZipArchive archive,
+        IReadOnlyList<Func<XElement, bool>> normalizeWorksheetRoots)
     {
+        ArgumentNullException.ThrowIfNull(archive);
+        ArgumentNullException.ThrowIfNull(normalizeWorksheetRoots);
+        if (normalizeWorksheetRoots.Count == 0)
+            return;
+
         var cache = Caches.GetValue(archive, static _ => new PrunedHeaderCache());
         foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
         {
             var prunedRoot = cache.GetOrLoad(worksheetEntry);
-            if (prunedRoot is not null && !normalizeWorksheetRoot(new XElement(prunedRoot)))
+            if (prunedRoot is not null && !NormalizeWorksheetRoot(new XElement(prunedRoot), normalizeWorksheetRoots))
             {
-                // Header already canonical for this normalizer — skip the full per-cell parse.
+                // Header already canonical for every normalizer — skip the full per-cell parse.
                 continue;
             }
 
@@ -51,13 +66,24 @@ internal static class XlsxWorksheetHeaderNormalization
             if (root is null)
                 continue;
 
-            if (normalizeWorksheetRoot(root))
+            if (NormalizeWorksheetRoot(root, normalizeWorksheetRoots))
             {
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-                // The stored bytes changed; drop the memoized header so later normalizers re-prune.
+                // The stored bytes changed; drop the memoized header so later phases re-prune.
                 cache.Invalidate(worksheetEntry.FullName);
             }
         }
+    }
+
+    private static bool NormalizeWorksheetRoot(
+        XElement root,
+        IReadOnlyList<Func<XElement, bool>> normalizers)
+    {
+        var changed = false;
+        for (var index = 0; index < normalizers.Count; index++)
+            changed |= normalizers[index](root);
+
+        return changed;
     }
 
     /// <summary>

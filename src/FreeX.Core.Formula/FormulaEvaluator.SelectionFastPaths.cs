@@ -213,8 +213,8 @@ public sealed partial class FormulaEvaluator
 
     // Estimate how many cells in `range` could plausibly hold a number, without changing what
     // CollectDirectRangeNumbers/CollectDirectAggregateNumbers actually scan. Every cell outside
-    // the sheet's used-range bounding box is guaranteed blank (Sheet.GetUsedRange's box covers
-    // every populated cell on the sheet), so intersecting the requested rectangle with it gives a
+    // the sheet's content-range bounding box is guaranteed blank (Sheet.GetContentUsedRange's box
+    // covers every value/formula/spill cell), so intersecting the requested rectangle with it gives a
     // safe upper bound on the populated count -- these direct-selection functions (LARGE, SMALL,
     // PERCENTILE(.INC/.EXC), QUARTILE(.INC/.EXC), MEDIAN/AGGREGATE's direct-range mode) only ever
     // flatten their range into an unordered bag of numbers (see the "shape-agnostic" family noted
@@ -233,7 +233,7 @@ public sealed partial class FormulaEvaluator
         if (sheet is null)
             return nominal;
 
-        if (sheet.GetUsedRange() is not { } used)
+        if (sheet.GetContentUsedRange() is not { } used)
             return 0;
 
         var startRow = Math.Max(range.StartRow, used.Start.Row);

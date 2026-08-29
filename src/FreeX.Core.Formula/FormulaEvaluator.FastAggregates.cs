@@ -363,7 +363,7 @@ public sealed partial class FormulaEvaluator
         long count = 0;
         foreach (var range in ranges)
         {
-            // Only the used-range-clamped Start/End rectangle (never the un-clamped nominal
+            // Only the content-range-clamped Start/End rectangle (never the un-clamped nominal
             // full-column/full-row extent) is actually scanned here, so a full-sheet
             // COUNTBLANK(A:XFD) never iterates billions of cells. Everything counted below is
             // the number of NON-blank cells found inside that scanned rectangle.
@@ -408,9 +408,9 @@ public sealed partial class FormulaEvaluator
             // range.NominalCellCount carries the un-clamped nominal cell count when the
             // rectangle above was narrowed from a full-column/full-row (or full-span
             // named-range) extent down to the sheet's used range (see
-            // TryResolveFastAggregateRange). Every nominal cell outside that used-range-clamped
-            // rectangle is guaranteed blank (Sheet.GetUsedRange's bounding box covers every
-            // populated/formatted cell), so blanks = nominal cells - non-blank cells found
+            // TryResolveFastAggregateRange). Every nominal cell outside that content-range-clamped
+            // rectangle is guaranteed blank (Sheet.GetContentUsedRange's bounding box covers every
+            // value/formula/spill cell), so blanks = nominal cells - non-blank cells found
             // inside the scanned rectangle. For an ordinary bounded range NominalCellCount is
             // null, and the scanned rectangle already covers every cell that needs counting.
             var totalCells = range.NominalCellCount
@@ -502,7 +502,8 @@ public sealed partial class FormulaEvaluator
     private static Sheet? ResolveFastAggregateSheet(FastAggregateRange range, SheetEvalContext context)
         => context.ResolveSheetForFastRange(range.SheetName);
 
-    // Intersect a full-column/full-row range with the target sheet's used (populated) extent.
+    // Intersect a full-column/full-row range with the target sheet's content extent. Formatting-only
+    // cells are blank to aggregate functions and must not expand the scanned rectangle.
     // Returns false when there is nothing to aggregate (empty sheet or no overlap), in which
     // case the caller should treat the range as containing zero cells. When the context cannot
     // resolve a sheet (non-sheet context), the range is left unchanged.
@@ -521,7 +522,7 @@ public sealed partial class FormulaEvaluator
         if (sheet is null)
             return true;
 
-        if (sheet.GetUsedRange() is not { } used)
+        if (sheet.GetContentUsedRange() is not { } used)
             return false;
 
         var clampedStartRow = Math.Max(startRow, used.Start.Row);
@@ -568,12 +569,12 @@ public sealed partial class FormulaEvaluator
             // cap (so e.g. SUM(A:C) no longer wrongly returns #REF!), and is far faster.
             // For CountBlank, the un-clamped nominal cell count is preserved separately (see
             // FastAggregateRange.NominalCellCount) so it can still count blanks across the
-            // whole nominal range without ever iterating past the used-range-clamped extent.
+            // whole nominal range without ever iterating past the content-range-clamped extent.
             //
             // The clamp is applied for ANY range shape, not just full-column/full-row: an
             // ordinary explicit BOUNDED range (e.g. A1:J200000 -- 10 cols x 200,000 rows =
             // 2,000,000 cells, well inside Excel's real 1,048,576-row/16,384-col sheet limits)
-            // must scan only its used-range intersection too, or a mostly-empty large range
+            // must scan only its content-range intersection too, or a mostly-empty large range
             // would be wrongly rejected by the streaming cap below even though the underlying
             // accumulator never materializes anything and the actual scan is tiny. Intersecting
             // with the used range can only ever SHRINK the queried rectangle (Math.Max/Math.Min
@@ -626,7 +627,7 @@ public sealed partial class FormulaEvaluator
 
             // Clamp for ANY range shape, not just full-column/full-row -- see the matching
             // comment on the literal-range path above for why an ordinary bounded range (e.g.
-            // INDIRECT("A1:J200000")) needs the same used-range intersection.
+            // INDIRECT("A1:J200000")) needs the same content-range intersection.
             if (!TryClampFullRangeToUsed(indirectRange.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
             {
                 range = new FastAggregateRange(indirectRange.SheetName, 1, 1, 0, 0, nominalCellCount);
@@ -672,11 +673,11 @@ public sealed partial class FormulaEvaluator
             var endRow = gridRange.End.Row;
             var endCol = gridRange.End.Col;
 
-            // Apply the same used-range clamp that literal range and INDIRECT paths use, for ANY
+            // Apply the same content-range clamp that literal range and INDIRECT paths use, for ANY
             // range shape -- not just full-column/full-row. A named range like =Data where
             // Data=$A:$B spans all 1,048,576 rows and would exceed MaxStreamingRangeCells without
             // this clamp; an ordinary bounded named range (e.g. Data=$A$1:$J$200000) needs the
-            // same used-range intersection for the same reason the literal-range path does.
+            // same content-range intersection for the same reason the literal-range path does.
             long? nominalCellCount = null;
             if (kind == FastAggregateKind.CountBlank)
                 nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
@@ -703,7 +704,7 @@ public sealed partial class FormulaEvaluator
     {
         error = null;
 
-        // COUNTBLANK now scans only the used-range-clamped Start/End rectangle (see
+        // COUNTBLANK now scans only the content-range-clamped Start/End rectangle (see
         // TryResolveFastAggregateRange), never the un-clamped nominal full-column/full-row
         // extent, so the same streaming cap that guards SUM/AVERAGE/etc. applies to the
         // rectangle it actually iterates.
@@ -832,7 +833,7 @@ public sealed partial class FormulaEvaluator
         uint EndRow,
         uint EndCol,
         // Set only for CountBlank ranges that were narrowed from a full-column/full-row
-        // (or full-span named-range) nominal extent down to the sheet's used-range for
+        // (or full-span named-range) nominal extent down to the sheet's content range for
         // scanning. Carries the un-clamped nominal cell count so EvaluateFastRangeOnlyCountBlank
         // can add back the cells outside the used range (all guaranteed blank) without ever
         // iterating them. Null for ordinary bounded ranges, where the scanned rectangle already

@@ -110,6 +110,48 @@ public sealed class XlsxFinalCoreIoTailDeduplicationTests
     }
 
     [Fact]
+    public void WorksheetHeaderNormalization_BatchesOrderedNormalizersPerWorksheet()
+    {
+        using var package = CreateWorkbookPackage();
+        using var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true);
+        var trimCalls = 0;
+        var markerCalls = 0;
+
+        bool TrimDimension(XElement root)
+        {
+            trimCalls++;
+            var reference = root.Element(SpreadsheetNs + "dimension")?.Attribute("ref");
+            if (reference is null || reference.Value == reference.Value.Trim())
+                return false;
+
+            reference.Value = reference.Value.Trim();
+            return true;
+        }
+
+        bool MarkNormalizedDimension(XElement root)
+        {
+            markerCalls++;
+            var dimension = root.Element(SpreadsheetNs + "dimension");
+            if (dimension?.Attribute("ref")?.Value != "A1:A1" || dimension.Attribute("normalized") is not null)
+                return false;
+
+            dimension.SetAttributeValue("normalized", "true");
+            return true;
+        }
+
+        XlsxWorksheetHeaderNormalization.NormalizeWorksheets(
+            archive,
+            new Func<XElement, bool>[] { TrimDimension, MarkNormalizedDimension });
+
+        var first = XlsxPackageXmlEditor.LoadXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var dimension = first.Root!.Element(SpreadsheetNs + "dimension")!;
+        dimension.Attribute("ref")!.Value.Should().Be("A1:A1");
+        dimension.Attribute("normalized")!.Value.Should().Be("true");
+        trimCalls.Should().Be(3, "the changed sheet is checked on its pruned header and replayed once on full XML");
+        markerCalls.Should().Be(3);
+    }
+
+    [Fact]
     public void WorkbookWorksheetPathMap_PreservesWorkbookOrderAndResolvedTargets()
     {
         using var package = CreateWorkbookPackage();
@@ -145,6 +187,42 @@ public sealed class XlsxFinalCoreIoTailDeduplicationTests
 
         foreach (var file in new[] { "XlsxCellBorderStyleReader.cs", "XlsxDifferentialStyleReader.cs", "XlsxStructuredTableStyleMetadataReader.cs" })
             TestWorkspaceFiles.ReadCoreIoSource(file).Should().Contain("XlsxBorderStyleCodec.Decode");
+    }
+
+    [Fact]
+    public void LegacyWorksheetNormalizerArchiveWrappers_AreRemoved()
+    {
+        foreach (var file in new[]
+                 {
+                     "XlsxWorksheetAutoFilterNormalizer.cs",
+                     "XlsxWorksheetCalculationPropertyNormalizer.cs",
+                     "XlsxWorksheetCellWatchesNormalizer.cs",
+                     "XlsxWorksheetConditionalFormatNormalizer.cs",
+                     "XlsxWorksheetCustomPropertiesNormalizer.cs",
+                     "XlsxWorksheetCustomSheetViewExtensionListNormalizer.cs",
+                     "XlsxWorksheetDataConsolidationNormalizer.cs",
+                     "XlsxWorksheetDataValidationNormalizer.cs",
+                     "XlsxWorksheetDimensionNormalizer.cs",
+                     "XlsxWorksheetExtensionListNormalizer.cs",
+                     "XlsxWorksheetHyperlinkNormalizer.cs",
+                     "XlsxWorksheetIgnoredErrorsNormalizer.cs",
+                     "XlsxWorksheetMergeCellsNormalizer.cs",
+                     "XlsxWorksheetPageBreakNormalizer.cs",
+                     "XlsxWorksheetPageLayoutNormalizer.cs",
+                     "XlsxWorksheetPhoneticPropertyNormalizer.cs",
+                     "XlsxWorksheetProtectedRangeNormalizer.cs",
+                     "XlsxWorksheetProtectionNormalizer.cs",
+                     "XlsxWorksheetScenarioNormalizer.cs",
+                     "XlsxWorksheetSheetFormatNormalizer.cs",
+                     "XlsxWorksheetSheetPropertiesNormalizer.cs",
+                     "XlsxWorksheetSheetViewNormalizer.cs",
+                     "XlsxWorksheetSmartTagNormalizer.cs",
+                     "XlsxWorksheetSortStateNormalizer.cs"
+                 })
+        {
+            TestWorkspaceFiles.ReadCoreIoSource(file)
+                .Should().NotContain("NormalizeWorksheets(ZipArchive archive)");
+        }
     }
 
     private static MemoryStream CreateWorkbookPackage()

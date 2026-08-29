@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -45,20 +44,6 @@ internal static class XlsxWorksheetSortStateNormalizer
     {
         var sortState = worksheetRoot.Element(WorksheetNs + "sortState");
         return sortState is not null && NormalizeElement(sortState);
-    }
-
-    public static void NormalizeWorksheets(ZipArchive archive)
-    {
-        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
-        {
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is not null &&
-                NormalizeWorksheetRoot(root))
-            {
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-            }
-        }
     }
 
     private static int SortStateChildOrder(XElement child) =>

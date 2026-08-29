@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
@@ -45,20 +44,6 @@ internal static class XlsxWorksheetDimensionNormalizer
         }
 
         return changed;
-    }
-
-    public static void NormalizeWorksheets(ZipArchive archive)
-    {
-        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
-        {
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            if (NormalizeWorksheetRoot(root))
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-        }
     }
 
     private static string? NormalizeCellRange(string? value)

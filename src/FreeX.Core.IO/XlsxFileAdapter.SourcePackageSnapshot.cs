@@ -1309,29 +1309,10 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchStylesheetTableStyles(archive);
                 NormalizePatchStylesheetExtensionLists(archive);
                 NormalizePatchWorksheetGridXml(archive);
-                NormalizePatchWorksheetMergeCells(archive);
-                NormalizePatchWorksheetDimension(archive);
-                NormalizePatchWorksheetCalculationProperties(archive);
-                NormalizePatchWorksheetSheetFormat(archive);
-                NormalizePatchWorksheetSheetProperties(archive);
-                NormalizePatchWorksheetSheetViews(archive);
-                NormalizePatchWorksheetProtection(archive);
-                NormalizePatchWorksheetProtectedRanges(archive);
-                NormalizePatchWorksheetScenarios(archive);
-                NormalizePatchWorksheetSmartTags(archive);
-                NormalizePatchWorksheetPhoneticProperties(archive);
-                NormalizePatchWorksheetCellWatches(archive);
-                NormalizePatchWorksheetCustomProperties(archive);
-                NormalizePatchWorksheetIgnoredErrors(archive);
-                NormalizePatchWorksheetHyperlinks(archive);
-                NormalizePatchWorksheetConditionalFormats(archive);
-                NormalizePatchWorksheetDataValidations(archive);
-                NormalizePatchWorksheetExtensionLists(archive);
+                NormalizePatchWorksheetCoreHeaders(archive);
                 NormalizePatchWorksheetWebPublishItems(archive);
                 NormalizePatchWorksheetOleControls(archive);
-                NormalizePatchWorksheetRelationshipMarkers(archive);
-                NormalizePatchWorksheetPageLayout(archive);
-                NormalizePatchWorksheetPageBreaks(archive);
+                NormalizePatchWorksheetTrailingHeaders(archive);
                 NormalizePatchWorksheetSingleXmlCells(archive);
                 NormalizePatchSingleCellTableParts(archive);
                 NormalizePatchWorksheetAutoFilters(archive);
@@ -1460,10 +1441,7 @@ public sealed partial class XlsxFileAdapter
 
                 NormalizePatchWorksheetSheetProperties(archive);
                 NormalizePatchWorksheetSingleXmlCells(archive);
-                NormalizePatchWorksheetProtection(archive);
-                NormalizePatchWorksheetProtectedRanges(archive);
-                NormalizePatchWorksheetScenarios(archive);
-                NormalizePatchWorksheetSmartTags(archive);
+                NormalizePatchWorksheetProtectionHeaders(archive);
                 NormalizePatchWorksheetWebPublishItems(archive);
                 NormalizePatchWorksheetOleControls(archive);
                 NormalizePatchWorksheetRelationshipMarkers(archive);
@@ -2428,29 +2406,51 @@ public sealed partial class XlsxFileAdapter
             XlsxPackageXmlEditor.ReplaceXml(archive, "xl/styles.xml", stylesXml);
         }
 
-        private static void NormalizePatchWorksheetPhoneticProperties(ZipArchive archive)
-            => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheetRoot);
+        private static readonly Func<XElement, bool>[] PatchWorksheetCoreHeaderNormalizers =
+        [
+            XlsxWorksheetMergeCellsNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetDimensionNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetSheetPropertiesNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetSheetViewNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetProtectionNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetScenarioNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetSmartTagNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetConditionalFormatNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetDataValidationNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetExtensionListNormalizer.NormalizeWorksheetRoot
+        ];
 
-        private static void NormalizePatchWorksheetCellWatches(ZipArchive archive)
-            => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheetRoot);
+        private static readonly Func<XElement, bool>[] PatchWorksheetTrailingHeaderNormalizers =
+        [
+            XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetPageBreakNormalizer.NormalizeWorksheetRoot
+        ];
 
-        private static void NormalizePatchWorksheetCustomProperties(ZipArchive archive)
-            => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheetRoot);
+        private static readonly Func<XElement, bool>[] PatchWorksheetProtectionHeaderNormalizers =
+        [
+            XlsxWorksheetProtectionNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetScenarioNormalizer.NormalizeWorksheetRoot,
+            XlsxWorksheetSmartTagNormalizer.NormalizeWorksheetRoot
+        ];
 
-        private static void NormalizePatchWorksheetIgnoredErrors(ZipArchive archive)
-            => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheetRoot);
+        private static void NormalizePatchWorksheetCoreHeaders(ZipArchive archive) =>
+            XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, PatchWorksheetCoreHeaderNormalizers);
 
-        private static void NormalizePatchWorksheetHyperlinks(ZipArchive archive)
-            => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheetRoot);
+        private static void NormalizePatchWorksheetTrailingHeaders(ZipArchive archive) =>
+            XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, PatchWorksheetTrailingHeaderNormalizers);
 
-        private static void NormalizePatchWorksheetConditionalFormats(ZipArchive archive)
-            => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetConditionalFormatNormalizer.NormalizeWorksheetRoot);
-
-        private static void NormalizePatchWorksheetDataValidations(ZipArchive archive)
-            => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetDataValidationNormalizer.NormalizeWorksheetRoot);
-
-        private static void NormalizePatchWorksheetExtensionLists(ZipArchive archive)
-            => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetExtensionListNormalizer.NormalizeWorksheetRoot);
+        private static void NormalizePatchWorksheetProtectionHeaders(ZipArchive archive) =>
+            XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, PatchWorksheetProtectionHeaderNormalizers);
 
         private static void NormalizePatchWorksheetWebPublishItems(ZipArchive archive)
         {
@@ -2464,6 +2464,7 @@ public sealed partial class XlsxFileAdapter
                     root => root.Elements(workbookNs + "webPublishItems").Any()))
             {
                 XlsxWorksheetWebPublishItemsNormalizer.NormalizePackage(archive);
+                XlsxWorksheetHeaderNormalization.InvalidateAll(archive);
             }
         }
 
@@ -2478,6 +2479,7 @@ public sealed partial class XlsxFileAdapter
                             root.Elements(workbookNs + "controls").Any()))
             {
                 XlsxWorksheetOleControlNormalizer.NormalizeWorksheets(archive);
+                XlsxWorksheetHeaderNormalization.InvalidateAll(archive);
             }
         }
 
@@ -2511,46 +2513,18 @@ public sealed partial class XlsxFileAdapter
                         element.Remove();
                     XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
                 }
+
+                XlsxWorksheetHeaderNormalization.InvalidateAll(archive);
             }
 
             XlsxWorksheetSingleXmlCellMapper.NormalizePackage(archive);
         }
 
-        private static void NormalizePatchWorksheetPageLayout(ZipArchive archive)
-            => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheetRoot);
-
         private static void NormalizePatchWorksheetGridXml(ZipArchive archive) =>
             XlsxWorksheetGridXmlNormalizer.NormalizeWorksheets(archive);
 
-        private static void NormalizePatchWorksheetMergeCells(ZipArchive archive) =>
-            XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetMergeCellsNormalizer.NormalizeWorksheetRoot);
-
-        private static void NormalizePatchWorksheetDimension(ZipArchive archive) =>
-            XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetDimensionNormalizer.NormalizeWorksheetRoot);
-
-        private static void NormalizePatchWorksheetCalculationProperties(ZipArchive archive) =>
-            XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheetRoot);
-
-        private static void NormalizePatchWorksheetSheetFormat(ZipArchive archive) =>
-            XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheetRoot);
-
         private static void NormalizePatchWorksheetSheetProperties(ZipArchive archive) =>
             XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetSheetPropertiesNormalizer.NormalizeWorksheetRoot);
-
-        private static void NormalizePatchWorksheetProtection(ZipArchive archive) =>
-            XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetProtectionNormalizer.NormalizeWorksheetRoot);
-
-        private static void NormalizePatchWorksheetProtectedRanges(ZipArchive archive) =>
-            XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheetRoot);
-
-        private static void NormalizePatchWorksheetScenarios(ZipArchive archive) =>
-            XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetScenarioNormalizer.NormalizeWorksheetRoot);
-
-        private static void NormalizePatchWorksheetSmartTags(ZipArchive archive) =>
-            XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetSmartTagNormalizer.NormalizeWorksheetRoot);
-
-        private static void NormalizePatchWorksheetPageBreaks(ZipArchive archive)
-            => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetPageBreakNormalizer.NormalizeWorksheetRoot);
 
         private static bool HasPartBackedSingleXmlCells(ZipArchive archive, string worksheetPath)
         {
@@ -2610,11 +2584,6 @@ public sealed partial class XlsxFileAdapter
                 XlsxPackageXmlEditor.ReplaceXml(archive, singleCellTableEntry.FullName, tableXml);
             }
         }
-
-        private static void NormalizePatchWorksheetSheetViews(ZipArchive archive)
-            => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(
-                archive,
-                XlsxWorksheetSheetViewNormalizer.NormalizeWorksheetRoot);
 
         private static void NormalizePatchWorksheetSortStates(ZipArchive archive)
             => XlsxWorksheetHeaderNormalization.NormalizeWorksheets(archive, XlsxWorksheetSortStateNormalizer.NormalizeWorksheetRoot);

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -65,20 +64,6 @@ internal static class XlsxWorksheetSheetFormatNormalizer
 
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(sheetFormat);
         return changed;
-    }
-
-    public static void NormalizeWorksheets(ZipArchive archive)
-    {
-        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
-        {
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            if (NormalizeWorksheetRoot(root))
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-        }
     }
 
     private static string? NormalizeNonNegativeDouble(string? value)

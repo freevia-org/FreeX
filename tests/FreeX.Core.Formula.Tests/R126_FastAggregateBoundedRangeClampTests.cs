@@ -219,4 +219,19 @@ public sealed class R126_FastAggregateBoundedRangeClampTests
 
         result.Should().Be(new NumberValue(6));
     }
+
+    [Fact]
+    public void Sum_FullColumnRange_IgnoresFarFormattingOnlyExtent()
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(6)));
+        sheet.SetStyleOnly(
+            CellAddress.MaxRow,
+            1,
+            wb.RegisterStyle(new CellStyle { Bold = true }));
+
+        sheet.GetUsedRange()!.Value.End.Row.Should().Be(CellAddress.MaxRow);
+        sheet.GetContentUsedRange()!.Value.End.Row.Should().Be(1);
+
+        _eval.Evaluate("=SUM(A:A)", sheet, wb).Should().Be(new NumberValue(6));
+    }
 }

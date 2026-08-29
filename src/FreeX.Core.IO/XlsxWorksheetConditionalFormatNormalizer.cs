@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -25,18 +24,6 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
         "type"
     ];
     private static readonly HashSet<string> CfRuleChildren = ["formula", "colorScale", "dataBar", "iconSet", "extLst"];
-
-    public static void NormalizeWorksheets(ZipArchive archive)
-    {
-        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
-        {
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            if (!NormalizeWorksheet(worksheetXml))
-                continue;
-
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-        }
-    }
 
     public static bool NormalizeWorksheetRoot(XElement worksheetRoot)
     {

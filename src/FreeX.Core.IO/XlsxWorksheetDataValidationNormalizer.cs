@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -8,18 +7,6 @@ internal static class XlsxWorksheetDataValidationNormalizer
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly HashSet<string> DataValidationsChildren = ["dataValidation"];
     private static readonly HashSet<string> DataValidationChildren = ["formula1", "formula2"];
-
-    public static void NormalizeWorksheets(ZipArchive archive)
-    {
-        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
-        {
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            if (!NormalizeWorksheet(worksheetXml))
-                continue;
-
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-        }
-    }
 
     public static bool NormalizeWorksheetRoot(XElement worksheetRoot)
     {

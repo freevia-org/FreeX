@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -113,19 +112,6 @@ internal static class XlsxWorksheetSheetViewNormalizer
             return false;
 
         return NormalizeSheetViewsElement(sheetViews);
-    }
-
-    public static void NormalizeWorksheets(ZipArchive archive)
-    {
-        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
-        {
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null || !NormalizeWorksheetRoot(root))
-                continue;
-
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-        }
     }
 
     public static bool NormalizeSheetViewElement(XElement sheetView)

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -37,20 +36,6 @@ internal static class XlsxWorksheetPageBreakNormalizer
         if (worksheetRoot.Element(WorksheetNs + "colBreaks") is { } columnBreaks)
             changed |= NormalizeElement(columnBreaks);
         return changed;
-    }
-
-    public static void NormalizeWorksheets(ZipArchive archive)
-    {
-        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
-        {
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is not null &&
-                NormalizeWorksheetRoot(root))
-            {
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-            }
-        }
     }
 
     private static bool NormalizeBreakElement(XElement breakElement)

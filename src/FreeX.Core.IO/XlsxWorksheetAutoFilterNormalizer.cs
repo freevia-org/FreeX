@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 using static Free.Shared.Opc.XlsxXmlNormalizationHelpers;
@@ -158,20 +157,6 @@ internal static class XlsxWorksheetAutoFilterNormalizer
     {
         var autoFilter = worksheetRoot.Element(WorksheetNs + "autoFilter");
         return autoFilter is not null && NormalizeElement(autoFilter);
-    }
-
-    public static void NormalizeWorksheets(ZipArchive archive)
-    {
-        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
-        {
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is not null &&
-                NormalizeWorksheetRoot(root))
-            {
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-            }
-        }
     }
 
     private static bool NormalizeFilterColumnElement(XElement filterColumn)
