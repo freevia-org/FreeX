@@ -7,7 +7,7 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class Wave199RibbonFontFamilyEvidenceTests
 {
     private static readonly Regex LocalEvidenceReferencePattern = new(
-        @"(?<path>(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+\.(?:html|json|png|txt))",
+        @"(?<![A-Za-z0-9._/\\-])(?<path>(?:(?:\.\.|[A-Za-z0-9._-]+)[/\\])*[A-Za-z0-9._-]+\.(?:html|json|png|txt))(?![A-Za-z0-9._/\\-])",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     [Fact]
@@ -30,6 +30,21 @@ public sealed class Wave199RibbonFontFamilyEvidenceTests
         postcondition.Should().Contain("font-name=Calibri");
         attributes.Should().Contain("*.json text eol=lf");
         attributes.Should().Contain("*.txt text eol=lf");
+
+        var traversalReferences = ExtractLocalEvidenceReferences("../outside.json ..\\outside.txt");
+        traversalReferences.Should().Equal("../outside.json", "..\\outside.txt");
+        foreach (var traversalReference in traversalReferences)
+        {
+            var resolveTraversal = () => ResolveWithinEvidenceRoot(root, traversalReference);
+            resolveTraversal.Should().Throw<InvalidDataException>()
+                .WithMessage($"*{traversalReference}*");
+        }
+
+        var mixedLineEndings = System.Text.Encoding.UTF8.GetBytes("alpha\r\nbeta\rgamma\n");
+        var canonicalLineEndings = NormalizeCanonicalTextBytes(mixedLineEndings);
+        System.Text.Encoding.UTF8.GetString(canonicalLineEndings)
+            .Should().Be("alpha\nbeta\ngamma\n");
+        canonicalLineEndings.Should().NotContain((byte)'\r');
 
         using var reportDocument = System.Text.Json.JsonDocument.Parse(report);
         var evidenceDirectory = reportDocument.RootElement
@@ -75,20 +90,24 @@ public sealed class Wave199RibbonFontFamilyEvidenceTests
         {
             // Evidence text is tracked with eol=lf. Hash the Git/blob representation so a Windows
             // checkout with CRLF conversion and a Linux checkout with LF bytes verify identically.
-            var text = System.Text.Encoding.UTF8.GetString(bytes).Replace("\r\n", "\n");
-            return System.Text.Encoding.UTF8.GetBytes(text);
+            return NormalizeCanonicalTextBytes(bytes);
         }
 
         return bytes;
     }
 
+    private static byte[] NormalizeCanonicalTextBytes(byte[] bytes)
+    {
+        var text = System.Text.Encoding.UTF8.GetString(bytes)
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n');
+        return System.Text.Encoding.UTF8.GetBytes(text);
+    }
+
     private static void AssertEveryLocalEvidenceReferenceExists(string root, string sourceName)
     {
         var source = File.ReadAllText(Path.Combine(root, sourceName));
-        var references = LocalEvidenceReferencePattern.Matches(source)
-            .Select(match => match.Groups["path"].Value)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+        var references = ExtractLocalEvidenceReferences(source);
 
         references.Should().NotBeEmpty($"{sourceName} must retain its local evidence references");
         foreach (var reference in references)
@@ -96,6 +115,14 @@ public sealed class Wave199RibbonFontFamilyEvidenceTests
             var target = ResolveWithinEvidenceRoot(root, reference);
             File.Exists(target).Should().BeTrue($"{sourceName} references promoted evidence {reference}");
         }
+    }
+
+    private static string[] ExtractLocalEvidenceReferences(string source)
+    {
+        return LocalEvidenceReferencePattern.Matches(source)
+            .Select(match => match.Groups["path"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static string ResolveWithinEvidenceRoot(string root, string relativePath)
@@ -106,11 +133,17 @@ public sealed class Wave199RibbonFontFamilyEvidenceTests
             : rootPath + Path.DirectorySeparatorChar;
         var target = Path.GetFullPath(Path.Combine(
             rootPath,
-            relativePath.Replace('/', Path.DirectorySeparatorChar)));
+            relativePath
+                .Replace('/', Path.DirectorySeparatorChar)
+                .Replace('\\', Path.DirectorySeparatorChar)));
 
-        (target.Equals(rootPath, StringComparison.OrdinalIgnoreCase)
-         || target.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
-            .Should().BeTrue($"local evidence reference {relativePath} must stay inside the promoted bundle");
+        if (!target.Equals(rootPath, StringComparison.OrdinalIgnoreCase)
+            && !target.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"Local evidence reference {relativePath} escapes the promoted bundle.");
+        }
+
         return target;
     }
 }
