@@ -308,8 +308,8 @@ internal static class FreePRibbonText
     public static string RemoveLinkLabel => Get("Ribbon_Command_RemoveLink_Label");
     public static string RemoveLinkKeyTip => Get("Ribbon_Command_RemoveLink_KeyTip");
 
-    public static string IllustrationsGroupLabel => Get("Ribbon_Group_Illustrations_Label");
-    public static string IllustrationsGroupKeyTip => Get("Ribbon_Group_Illustrations_KeyTip");
+    public static string ImagesGroupLabel => Get("Ribbon_Group_Images_Label");
+    public static string ImagesGroupKeyTip => Get("Ribbon_Group_Images_KeyTip");
     public static string MediaGroupLabel => Get("Ribbon_Group_Media_Label");
     public static string MediaGroupKeyTip => Get("Ribbon_Group_Media_KeyTip");
     public static string ShapesEffectsGroupLabel => Get("Ribbon_Group_ShapesEffects_Label");

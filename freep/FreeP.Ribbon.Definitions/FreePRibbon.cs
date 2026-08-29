@@ -605,18 +605,19 @@ public static class FreePRibbon
             group.Large("freep.new-slide", FreePRibbonText.NewSlideLabel, RibbonCommandIconKind.Insert,
                 FreePRibbonText.NewSlideKeyTip);
         });
-        tab.Group("text", FreePRibbonText.TextGroupLabel, FreePRibbonText.TextGroupKeyTip, 100, group =>
-        {
-            group.Large("freep.text-box", FreePRibbonText.TextBoxLabel, RibbonCommandIconKind.TextBox, FreePRibbonText.TextBoxKeyTip);
-            group.Medium("freep.header-footer", FreePRibbonText.HeaderFooterLabel, RibbonCommandIconKind.HeaderFooter, FreePRibbonText.HeaderFooterKeyTip);
-            group.Medium("freep.date-time", FreePRibbonText.DateTimeLabel, RibbonCommandIconKind.Date, FreePRibbonText.DateTimeKeyTip);
-            group.Medium("freep.slide-number", FreePRibbonText.SlideNumberLabel, RibbonCommandIconKind.PageNumber, FreePRibbonText.SlideNumberKeyTip);
-        });
         tab.Group("tables", FreePRibbonText.TablesGroupLabel, FreePRibbonText.TablesGroupKeyTip, 95, group =>
         {
             group.Large("freep.insert-table-3x3", FreePRibbonText.InsertTable3x3Label, RibbonCommandIconKind.Table, FreePRibbonText.InsertTable3x3KeyTip);
             group.Medium("freep.insert-table-2x2", FreePRibbonText.InsertTable2x2Label, RibbonCommandIconKind.Table, FreePRibbonText.InsertTable2x2KeyTip);
             group.Medium("freep.insert-table-4x4", FreePRibbonText.InsertTable4x4Label, RibbonCommandIconKind.Table, FreePRibbonText.InsertTable4x4KeyTip);
+        });
+        // Keep the backed image picker beside Tables, matching PowerPoint's leading Insert hierarchy.
+        // The group id remains stable so the existing command registry and adaptive renderer bindings
+        // continue to expose the same Picture route.
+        tab.Group("illustrations", FreePRibbonText.ImagesGroupLabel, FreePRibbonText.ImagesGroupKeyTip, 94, group =>
+        {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+            group.Large("freep.picture", FreePRibbonText.PictureLabel, RibbonCommandIconKind.Picture, FreePRibbonText.PictureKeyTip);
         });
         tab.Group("charts", FreePRibbonText.ChartsGroupLabel, FreePRibbonText.ChartsGroupKeyTip, 93, group =>
         {
@@ -752,10 +753,13 @@ public static class FreePRibbon
                     FreePRibbonText.ReviewNewCommentCommand.Label, RibbonCommandIconKind.Comment,
                     FreePRibbonText.ReviewNewCommentCommand.KeyTip);
             });
-        tab.Group("illustrations", FreePRibbonText.IllustrationsGroupLabel, FreePRibbonText.IllustrationsGroupKeyTip, 90, group =>
+        tab.Group("text", FreePRibbonText.TextGroupLabel, FreePRibbonText.TextGroupKeyTip, 100, group =>
         {
             group.Sizing(RibbonGroupSizing.OfficeAdaptive);
-            group.Large("freep.picture", FreePRibbonText.PictureLabel, RibbonCommandIconKind.Picture, FreePRibbonText.PictureKeyTip);
+            group.Large("freep.text-box", FreePRibbonText.TextBoxLabel, RibbonCommandIconKind.TextBox, FreePRibbonText.TextBoxKeyTip);
+            group.Medium("freep.header-footer", FreePRibbonText.HeaderFooterLabel, RibbonCommandIconKind.HeaderFooter, FreePRibbonText.HeaderFooterKeyTip);
+            group.Medium("freep.date-time", FreePRibbonText.DateTimeLabel, RibbonCommandIconKind.Date, FreePRibbonText.DateTimeKeyTip);
+            group.Medium("freep.slide-number", FreePRibbonText.SlideNumberLabel, RibbonCommandIconKind.PageNumber, FreePRibbonText.SlideNumberKeyTip);
         });
         tab.Group("media", FreePRibbonText.MediaGroupLabel, FreePRibbonText.MediaGroupKeyTip, 88, group =>
         {

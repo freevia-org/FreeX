@@ -245,7 +245,13 @@ public sealed class FreePRibbonDefinitionProfileTests
             var insert = definition.FindTab("insert")!;
             var illustrations = insert.FindGroup("illustrations")!;
             illustrations.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+            illustrations.Header.Should().Be("Images");
             illustrations.Controls.Select(control => control.CommandId.Value).Should().Equal("freep.picture");
+
+            var groupIds = insert.Groups.Select(group => group.Id).ToArray();
+            Array.IndexOf(groupIds, "tables").Should().BeLessThan(Array.IndexOf(groupIds, "illustrations"));
+            Array.IndexOf(groupIds, "illustrations").Should().BeLessThan(Array.IndexOf(groupIds, "charts"));
+            Array.IndexOf(groupIds, "comments").Should().BeLessThan(Array.IndexOf(groupIds, "text"));
 
             var media = insert.FindGroup("media")!;
             media.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);

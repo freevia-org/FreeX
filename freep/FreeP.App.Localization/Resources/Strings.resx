@@ -856,6 +856,12 @@
   <data name="Ribbon_Group_Illustrations_KeyTip" xml:space="preserve">
     <value>I</value>
   </data>
+  <data name="Ribbon_Group_Images_Label" xml:space="preserve">
+    <value>Images</value>
+  </data>
+  <data name="Ribbon_Group_Images_KeyTip" xml:space="preserve">
+    <value>I</value>
+  </data>
   <data name="Ribbon_Group_Media_Label" xml:space="preserve">
     <value>Media</value>
   </data>

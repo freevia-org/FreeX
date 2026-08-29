@@ -11,6 +11,7 @@ using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using FreeP.Ribbon.Definitions;
 
 namespace FreeP.App.Avalonia.Tests;
 
@@ -152,11 +153,26 @@ public sealed class KeyboardContextParityTests
             try
             {
                 var before = window.Editor.CurrentSlide!.Shapes.Count;
+                var insert = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia).FindTab("insert")!;
+                var textGroup = insert.Groups.Single(group => group.Id == "text");
+                var usedGroupKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var collapsedTextGroupKeyTip = insert.Groups
+                    .Select(group => (group, keyTip: RibbonCollapsedGroupPresentationPlanner.DeriveGroupKeyTip(
+                        group.Header,
+                        usedGroupKeyTips)))
+                    .Single(entry => entry.group.Id == "text")
+                    .keyTip;
+                var textGroupIsCollapsed = window.GetVisualDescendants()
+                    .OfType<Button>()
+                    .Any(button => string.Equals(button.Tag as string, "collapsed:text", StringComparison.Ordinal));
+                var textBoxKeyTip = textGroup.Controls
+                    .Single(control => control.CommandId.Value == "freep.text-box")
+                    .KeyTip!;
 
                 Press(window, Key.LeftAlt).Handled.Should().BeTrue();
                 Press(window, Key.N).Handled.Should().BeTrue(); // Insert tab
-                Press(window, Key.T).Handled.Should().BeTrue(); // Text group
-                Press(window, Key.X).Handled.Should().BeTrue(); // Text Box
+                PressKeyTip(window, textGroupIsCollapsed ? collapsedTextGroupKeyTip : textGroup.KeyTip!);
+                PressKeyTip(window, textBoxKeyTip); // Text Box
 
                 window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
                 window.Editor.CurrentSlide.Shapes.Should().HaveCount(before + 1);
