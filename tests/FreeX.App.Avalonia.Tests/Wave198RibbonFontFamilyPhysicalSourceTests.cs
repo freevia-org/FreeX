@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Security.Cryptography;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -27,8 +28,8 @@ public sealed class Wave198RibbonFontFamilyPhysicalSourceTests
         probe.Should().Contain("font-name");
         probe.Should().Contain("name.lower() == 'arial'");
         probe.Should().Contain("save-clean=$save_clean");
-        probe.Should().Contain("automatic-focus-after-combo=false");
-        probe.Should().Contain("automatic-focus-status=unresolved-observed");
+        probe.Should().Contain("automatic-focus-after-combo=not-measured");
+        probe.Should().Contain("automatic-focus-status=unresolved-not-measured");
         probe.Should().Contain("worksheet-focus-after-reselect=$worksheet_focus");
         fixture.Should().Contain("Wave198 Font Family Target");
         fixture.Should().Contain("<name val=\"Calibri\"/>");
@@ -78,8 +79,8 @@ public sealed class Wave198RibbonFontFamilyPhysicalSourceTests
         report.Should().Contain("\"id\": \"ribbon-home-font-family-combo-physical\"");
         report.Should().Contain("\"status\": \"passed\"");
         report.Should().Contain("\"passed\": 1");
-        postcondition.Should().Contain("automatic-focus-after-combo=false");
-        postcondition.Should().Contain("automatic-focus-status=unresolved-observed");
+        postcondition.Should().Contain("automatic-focus-after-combo=not-measured");
+        postcondition.Should().Contain("automatic-focus-status=unresolved-not-measured");
         postcondition.Should().Contain("worksheet-focus-after-reselect=true");
         postcondition.Should().Contain("focus-clipboard=Unchanged");
         postcondition.Should().Contain("save-clean=true");
@@ -92,9 +93,25 @@ public sealed class Wave198RibbonFontFamilyPhysicalSourceTests
         manifest.Should().Contain("\"status\":\"passed\"");
         packageProof.Should().Contain("saved-package-retained=false");
         packageProof.Should().Contain("style-id=1|font-id=1|font-name=Arial|font-family=true");
-        hashes.Should().Contain("d5d393035b01e0d14dfd76a06df741eb2fcf2e65a11147b6ff45de43a44ade8c  interaction-validation.json");
-        hashes.Should().Contain("c2aa3289626f201cb53d7c9b5b247ae212143d2448d0fd6e637995e38007974f  resume-provenance.json");
-        hashes.Should().Contain("8cc37f21159521924032a039a410ce659d8c3a593268e0b5b30c2f6336353c3e  ribbon-home-font-family-combo-postcondition.txt");
-        hashes.Should().Contain("a99972c8fecb1bdbb7657be93b75cfa272902968822dcf1b779aa6400456f2ef  x11-input-results.json");
+        var evidenceDirectory = Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"),
+            "docs", "parity", "freex-wave198-ribbon-font-family", "evidence");
+        var recordedHashes = hashes.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.TrimEnd('\r').Split("  ", 2, StringSplitOptions.None))
+            .ToDictionary(parts => parts[1], parts => parts[0], StringComparer.Ordinal);
+        var promotedFiles = Directory.EnumerateFiles(evidenceDirectory)
+            .Select(Path.GetFileName)
+            .Where(name => name != "SHA256SUMS.txt")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        recordedHashes.Keys.Order(StringComparer.Ordinal).Should().Equal(promotedFiles);
+        foreach (var (name, expectedHash) in recordedHashes)
+        {
+            var actualHash = Convert.ToHexString(
+                SHA256.HashData(File.ReadAllBytes(Path.Combine(evidenceDirectory, name))))
+                .ToLowerInvariant();
+            actualHash.Should().Be(expectedHash, $"the promoted evidence hash must match {name}");
+        }
     }
 }

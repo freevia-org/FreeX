@@ -5936,11 +5936,11 @@ PY
     font_name="${font_name%%|*}"
     font_family="${package_signature##*font-family=}"
     write_artifact "ribbon-home-font-family-combo-postcondition.txt" \
-        "selector=ribbon-font-family\ndocument-path=$document_path\ncell=A1\nkeytip-sequence=Alt,H\ncombo-open-coordinate=323,96\nselected-item-coordinate=280,149\nselected-font=Arial\nautomatic-focus-after-combo=false\nautomatic-focus-status=unresolved-observed\nworksheet-focus-after-reselect=$worksheet_focus\nfocus-reselect-coordinate=29,236\nfocus-clipboard=$focus_clipboard\nsave-clean=$save_clean\npackage-signature=$package_signature"
+        "selector=ribbon-font-family\ndocument-path=$document_path\ncell=A1\nkeytip-sequence=Alt,H\ncombo-open-coordinate=323,96\nselected-item-coordinate=280,149\nselected-font=Arial\nautomatic-focus-after-combo=not-measured\nautomatic-focus-status=unresolved-not-measured\nworksheet-focus-after-reselect=$worksheet_focus\nfocus-reselect-coordinate=29,236\nfocus-clipboard=$focus_clipboard\nsave-clean=$save_clean\npackage-signature=$package_signature"
 
     if $save_clean && [[ "$font_family" == true ]] && $worksheet_focus; then
         record "ribbon-home-font-family-combo-physical" "passed" \
-            "ribbon-home-font-family-combo-before.png; ribbon-home-font-family-combo-keytips.png; ribbon-home-font-family-combo-open.png; ribbon-home-font-family-combo-after.png; ribbon-home-font-family-combo-focus-reselect.png; cell=A1; font-id=$font_id; font-name=$font_name; automatic-focus-after-combo=false; worksheet-focus-after-reselect=true; save-clean=true" \
+            "ribbon-home-font-family-combo-before.png; ribbon-home-font-family-combo-keytips.png; ribbon-home-font-family-combo-open.png; ribbon-home-font-family-combo-after.png; ribbon-home-font-family-combo-focus-reselect.png; cell=A1; font-id=$font_id; font-name=$font_name; automatic-focus-after-combo=not-measured; worksheet-focus-after-reselect=true; save-clean=true" \
             "The production Home Font combo selected Arial for A1; a physical worksheet reselect restored the keyboard route, and the saved XLSX package contains the Arial font record for the target cell." "$artifacts"
     else
         record "ribbon-home-font-family-combo-physical" "failed" \

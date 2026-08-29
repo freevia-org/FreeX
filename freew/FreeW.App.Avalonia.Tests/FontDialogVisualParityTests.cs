@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -57,6 +58,34 @@ public sealed class FontDialogVisualParityTests
             buttons.Should().OnlyContain(button => button.Height == 26);
             ((ISolidColorBrush)buttons.Single(button => button.IsCancel).BorderBrush!).Color
                 .Should().Be(Color.FromRgb(0xC8, 0xC8, 0xC8));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Font_dialog_preserves_the_Wpf_trailing_tab_pane_frame()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new FontDialog(new RunFormatting { FontSizePt = 12 });
+            try
+            {
+                dialog.Width = 460;
+                dialog.Height = 340;
+                dialog.Show();
+                dialog.Measure(new Size(460, 340));
+                dialog.Arrange(new Rect(0, 0, 460, 340));
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var selectedPane = dialog.GetVisualDescendants()
+                    .OfType<ContentPresenter>()
+                    .Single(presenter => presenter.Name == "PART_SelectedContentHost");
+                selectedPane.Margin.Should().Be(new Thickness(0, -1, 1, 0));
+            }
+            finally
+            {
+                dialog.Close();
+            }
         }, CancellationToken.None);
     }
 
