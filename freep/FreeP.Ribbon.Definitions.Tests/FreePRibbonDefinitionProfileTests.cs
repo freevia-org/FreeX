@@ -214,6 +214,22 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Insert_exposes_the_existing_new_comment_route_in_both_profiles()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var comments = RequiredGroup(definition, "insert", "comments");
+            comments.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+            comments.Controls.Select(control => control.CommandId.Value)
+                .Should().Equal(PresentationReviewWorkflowPlanner.AddCommentCommandId);
+        }
+    }
+
+    [Fact]
     public void Insert_keeps_picture_direct_and_moves_media_and_effects_to_separate_groups()
     {
         foreach (var definition in new[]

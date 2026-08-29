@@ -386,7 +386,7 @@
     <value>New Comment</value>
   </data>
   <data name="Ribbon_Command_ReviewNewComment_KeyTip" xml:space="preserve">
-    <value>N</value>
+    <value>NC</value>
   </data>
   <data name="Ribbon_Command_ReviewReply_Label" xml:space="preserve">
     <value>Reply</value>

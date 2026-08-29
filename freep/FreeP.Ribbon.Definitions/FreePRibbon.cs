@@ -742,6 +742,16 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Delete, FreePRibbonText.ResetZoomCoverImageKeyTip);
             group.Medium("freep.remove-link", FreePRibbonText.RemoveLinkLabel, RibbonCommandIconKind.Delete, FreePRibbonText.RemoveLinkKeyTip);
         });
+        // PowerPoint keeps New Comment directly available on Insert. Reuse the established
+        // Review workflow route so both locations add the same presentation comment.
+        tab.Group("comments", FreePRibbonText.ReviewCommentsGroup.Label,
+            FreePRibbonText.ReviewCommentsGroup.KeyTip, 89, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Medium(PresentationReviewWorkflowPlanner.AddCommentCommandId,
+                    FreePRibbonText.ReviewNewCommentCommand.Label, RibbonCommandIconKind.Comment,
+                    FreePRibbonText.ReviewNewCommentCommand.KeyTip);
+            });
         tab.Group("illustrations", FreePRibbonText.IllustrationsGroupLabel, FreePRibbonText.IllustrationsGroupKeyTip, 90, group =>
         {
             group.Sizing(RibbonGroupSizing.OfficeAdaptive);
