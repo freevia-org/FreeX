@@ -1463,6 +1463,7 @@ public static class FreePRibbon
         tab.Group("presentation-views", FreePRibbonText.ViewPresentationViewsGroup.Label,
             FreePRibbonText.ViewPresentationViewsGroup.KeyTip, 110, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Large(PresentationViewModePlanner.NormalCommandId,
                 FreePRibbonText.ViewNormalCommand.Label, RibbonCommandIconKind.View,
                 FreePRibbonText.ViewNormalCommand.KeyTip);
@@ -1485,6 +1486,7 @@ public static class FreePRibbon
         tab.Group("color-grayscale", FreePRibbonText.ViewColorGrayscaleGroup.Label,
             FreePRibbonText.ViewColorGrayscaleGroup.KeyTip, 70, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Medium(PresentationViewColorModePlanner.ColorCommandId,
                 FreePRibbonText.ViewColorCommand.Label, RibbonCommandIconKind.Color,
                 FreePRibbonText.ViewColorCommand.KeyTip);
@@ -1497,6 +1499,7 @@ public static class FreePRibbon
         });
         tab.Group("show", FreePRibbonText.ViewShowGroup.Label, FreePRibbonText.ViewShowGroup.KeyTip, 100, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.MediumToggle(PresentationViewShowPlanner.RulerCommandId, FreePRibbonText.ViewRulerCommand.Label,
                 RibbonCommandIconKind.Ruler, FreePRibbonText.ViewRulerCommand.KeyTip);
             group.MediumToggle("freep.view.show.gridlines", FreePRibbonText.ViewGridlinesCommand.Label,
@@ -1510,6 +1513,7 @@ public static class FreePRibbon
         });
         tab.Group("zoom", FreePRibbonText.ViewZoomGroup.Label, FreePRibbonText.ViewZoomGroup.KeyTip, 90, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Large("freep.view.zoom", FreePRibbonText.ViewZoomCommand.Label, RibbonCommandIconKind.Zoom,
                 FreePRibbonText.ViewZoomCommand.KeyTip);
             group.Medium("freep.view.fit-to-window", FreePRibbonText.ViewFitToWindowCommand.Label,
@@ -1517,6 +1521,7 @@ public static class FreePRibbon
         });
         tab.Group("window", FreePRibbonText.ViewWindowGroup.Label, FreePRibbonText.ViewWindowGroup.KeyTip, 65, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Medium("freep.view.new-window", FreePRibbonText.ViewNewWindowCommand.Label,
                 RibbonCommandIconKind.Window, FreePRibbonText.ViewNewWindowCommand.KeyTip);
             group.Medium("freep.view.arrange-all", FreePRibbonText.ViewArrangeAllCommand.Label,

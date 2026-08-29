@@ -164,6 +164,26 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void View_groups_keep_labeled_compact_presentations_in_both_profiles()
+    {
+        var expectedGroupIds = new[]
+        {
+            "presentation-views", "color-grayscale", "show", "zoom", "window",
+        };
+
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var view = definition.FindTab("view")!;
+            view.Groups.Select(group => group.Id).Should().Equal(expectedGroupIds);
+            view.Groups.Should().OnlyContain(group => group.Sizing == RibbonGroupSizing.OfficeAdaptive);
+        }
+    }
+
+    [Fact]
     public void Insert_charts_group_uses_icon_adaptive_sizing_in_both_profiles()
     {
         foreach (var definition in new[]
