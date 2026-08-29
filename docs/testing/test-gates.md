@@ -59,8 +59,10 @@ commit gate uses two processes per OS for its 2,000+ test assembly; folding the 
 into existing Linux lanes makes that expansion job-count neutral. FreeP adds one purposeful Windows
 job to separate its independent WPF and Avalonia stacks, replacing the former nine-minute serial
 critical path. The seven WPF host batches are separate release gates so each receives
-an isolated Windows runner and no single batch determines a 25-minute serial critical path. A
-project may belong to one gate only.
+an isolated Windows runner and no single batch determines a 25-minute serial critical path. The
+seven render-evidence assemblies are divided between two gates per operating system, cutting their
+serial critical path roughly in half without launching an unbounded renderer fan-out. A project may
+belong to one gate only.
 
 Hosted CI and release gates retain TRX and hang-diagnostic output and use a 15-minute test-host hang
 timeout. They do not silently retry a failed project; a failure remains visible and the individual
@@ -83,6 +85,15 @@ and macOS platform preflights.
 native packaging and installation work in parallel. App publication still waits for the complete
 release-only test gate, every selected package, and the
 all-app workflow also waits for every suite package before creating or updating any release.
+The all-platform release matrix deliberately budgets the observed 20 concurrent GitHub runner slots:
+15 release-test entries run immediately while speculative packaging is capped at five concurrent
+jobs. This prevents package builds from queueing the tests that decide whether publication is allowed;
+remaining package jobs still overlap the longer release-only UI and render lanes.
+Release packaging and publication checkouts are shallow because they only need the immutable checked-out
+SHA and query remote tags through GitHub or `git ls-remote`; no release script reads historical objects.
+This avoids fetching the complete repository history independently in every packaging job.
+Platform-specific suite dispatches also generate only the requested suite-runtime matrix entries;
+they no longer allocate five jobs and skip most of their steps at runtime.
 
 NuGet caches are keyed from the SDK, central package versions, and repository-wide build props and
 targets. Individual project files are intentionally excluded from the key: adding or moving a project

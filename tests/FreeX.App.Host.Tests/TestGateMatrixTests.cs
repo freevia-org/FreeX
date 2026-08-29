@@ -84,6 +84,16 @@ public sealed class TestGateMatrixTests
         batches.Should().OnlyContain(gate =>
             gate.GetProperty("gate").GetString() == "release" &&
             gate.GetProperty("projects").GetArrayLength() == 1);
+
+        var renderEvidence = gates.Where(gate =>
+            gate.GetProperty("id").GetString()!.StartsWith("freex-render-evidence-", StringComparison.Ordinal)).ToArray();
+        renderEvidence.Should().HaveCount(2);
+        renderEvidence.Sum(gate => gate.GetProperty("projects").GetArrayLength()).Should().Be(7);
+        renderEvidence.Should().OnlyContain(gate =>
+            gate.GetProperty("gate").GetString() == "release" &&
+            gate.GetProperty("platforms").GetArrayLength() == 3 &&
+            (gate.GetProperty("projects").GetArrayLength() == 3 ||
+             gate.GetProperty("projects").GetArrayLength() == 4));
     }
 
     [Fact]
