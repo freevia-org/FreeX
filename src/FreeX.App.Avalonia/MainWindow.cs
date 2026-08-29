@@ -977,7 +977,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (source is not null)
             RecordStartupRecentWorkbook(source);
         ConfigureWorkbookDropTarget();
-        KeyDown += MainWindow_KeyDown;
+        // Application shortcuts must see key events before an editable ribbon ComboBox child can
+        // consume them. The handler still applies IsTextEditingEventSource guards for ordinary
+        // editor input, while tunnel + handledEventsToo preserves global Save/Close/Print chords.
+        AddHandler(
+            InputElement.KeyDownEvent,
+            MainWindow_KeyDown,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
         TextInput += MainWindow_TextInput;
         Closing += MainWindow_Closing;
         WindowRegistry.Register(this);

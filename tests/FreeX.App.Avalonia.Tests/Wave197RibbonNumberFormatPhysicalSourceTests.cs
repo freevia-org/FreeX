@@ -42,6 +42,11 @@ public sealed class Wave197RibbonNumberFormatPhysicalSourceTests
             "src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs");
 
         avalonia.Should().Contain("SetNumberFormat = ApplyRibbonNumberFormat");
+        avalonia.Should().Contain("AddHandler(");
+        avalonia.Should().Contain("InputElement.KeyDownEvent");
+        avalonia.Should().Contain("RoutingStrategies.Tunnel");
+        avalonia.Should().Contain("handledEventsToo: true");
+        avalonia.Should().NotContain("KeyDown += MainWindow_KeyDown");
         avalonia.Should().Contain("_session.SetSelectedRangeNumberFormat(numberFormat)");
         host.Should().Contain("Register(registry, \"Number Format\", new ValueRibbonCommand(setNumberFormat))");
         composition.Should().Contain("\"Number Format\" => HomeNumberFormatGalleryPlanner.Choices");
