@@ -283,11 +283,8 @@ public sealed partial class SlideCanvas : FrameworkElement
     {
         _viewShowState = state;
         InvalidateVisual();
-        if (_gestureHandler is null)
-            return;
-
-        _gestureHandler.SnapToGrid = state.ShowGridlines;
-        _gestureHandler.SnapToShapes = state.ShowGuides;
+        // View commands control only rendered chrome. Canvas snapping remains an
+        // editing preference and retains its independently configured defaults.
     }
 
     private static void RenderRulers(

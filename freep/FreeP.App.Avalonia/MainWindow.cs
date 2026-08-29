@@ -2404,11 +2404,6 @@ public sealed partial class MainWindow : Window,
         _notesBox.IsVisible = _viewModeState.Mode is not PresentationViewMode.SlideSorter and not PresentationViewMode.SlideMaster &&
                               (_viewModeState.Mode == PresentationViewMode.NotesPage || state.ShowNotesPane);
         _slideCanvas.ApplyViewShowState(state);
-        if (_gestureHandler is null)
-            return;
-
-        _gestureHandler.SnapToGrid = state.ShowGridlines;
-        _gestureHandler.SnapToShapes = state.ShowGuides;
     }
 
     private void ApplyPresentationViewZoomState(PresentationViewZoomState state)

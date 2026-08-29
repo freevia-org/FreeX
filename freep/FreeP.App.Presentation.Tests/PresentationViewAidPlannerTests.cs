@@ -32,7 +32,13 @@ public sealed class PresentationViewAidPlannerTests
     {
         var transform = new SlideTransformCore(0.25, 10, 20, 256, 128);
 
-        var plan = PresentationViewAidPlanner.Build(transform, PresentationViewShowState.Default);
+        var plan = PresentationViewAidPlanner.Build(
+            transform,
+            new PresentationViewShowState(
+                ShowGridlines: true,
+                ShowGuides: true,
+                ShowNotesPane: true,
+                ShowRulers: false));
 
         plan.Gridlines.Should().HaveCount(10);
         plan.Gridlines[0].Should().Be(new PresentationViewAidLine(18, 20, 18, 52));

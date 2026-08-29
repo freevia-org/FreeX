@@ -15,10 +15,10 @@ public readonly record struct PresentationViewShowState(
     bool ShowRulers = true)
 {
     public static PresentationViewShowState Default { get; } = new(
-        ShowGridlines: true,
-        ShowGuides: true,
+        ShowGridlines: false,
+        ShowGuides: false,
         ShowNotesPane: true,
-        ShowRulers: true);
+        ShowRulers: false);
 }
 
 public readonly record struct PresentationViewShowCommandPlan(

@@ -920,15 +920,15 @@ public class RibbonEditorCompleteness5BTests
 
         Exec(reg, PresentationViewShowPlanner.GridlinesCommandId);
 
-        Assert.False(state.ShowGridlines);
-        Assert.True(state.ShowGuides);
-        Assert.False(stateStore.GetState(PresentationViewShowPlanner.GridlinesCommandId).IsChecked);
+        Assert.True(state.ShowGridlines);
+        Assert.False(state.ShowGuides);
+        Assert.True(stateStore.GetState(PresentationViewShowPlanner.GridlinesCommandId).IsChecked);
 
         Exec(reg, PresentationViewShowPlanner.GuidesCommandId);
 
-        Assert.False(state.ShowGridlines);
-        Assert.False(state.ShowGuides);
-        Assert.False(stateStore.GetState(PresentationViewShowPlanner.GuidesCommandId).IsChecked);
+        Assert.True(state.ShowGridlines);
+        Assert.True(state.ShowGuides);
+        Assert.True(stateStore.GetState(PresentationViewShowPlanner.GuidesCommandId).IsChecked);
 
         Exec(reg, PresentationViewShowPlanner.NotesCommandId);
 

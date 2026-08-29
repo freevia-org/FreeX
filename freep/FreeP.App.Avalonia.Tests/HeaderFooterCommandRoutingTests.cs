@@ -159,7 +159,7 @@ public sealed class HeaderFooterCommandRoutingTests
     }
 
     [Fact]
-    public async Task View_show_commands_toggle_shared_state_and_gesture_snap_flags()
+    public async Task View_show_commands_toggle_shared_state_without_changing_gesture_snap()
     {
         PresentationViewShowState state = default;
         bool? snapToGrid = null;
@@ -181,11 +181,11 @@ public sealed class HeaderFooterCommandRoutingTests
         });
 
         if (!ran) return;
-        state.ShowGridlines.Should().BeFalse();
-        state.ShowGuides.Should().BeFalse();
+        state.ShowGridlines.Should().BeTrue();
+        state.ShowGuides.Should().BeTrue();
         state.ShowNotesPane.Should().BeFalse();
-        snapToGrid.Should().BeFalse();
-        snapToShapes.Should().BeFalse();
+        snapToGrid.Should().BeTrue();
+        snapToShapes.Should().BeTrue();
         notesPaneVisible.Should().BeFalse();
     }
 

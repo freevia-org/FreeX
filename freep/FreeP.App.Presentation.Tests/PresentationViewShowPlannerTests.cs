@@ -5,13 +5,13 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class PresentationViewShowPlannerTests
 {
     [Fact]
-    public void Default_state_keeps_existing_snap_intents_enabled()
+    public void Default_state_hides_optional_view_aids()
     {
         var state = PresentationViewShowState.Default;
 
-        state.ShowRulers.Should().BeTrue();
-        state.ShowGridlines.Should().BeTrue();
-        state.ShowGuides.Should().BeTrue();
+        state.ShowRulers.Should().BeFalse();
+        state.ShowGridlines.Should().BeFalse();
+        state.ShowGuides.Should().BeFalse();
         state.ShowNotesPane.Should().BeTrue();
         PresentationViewShowPlanner.BuildPlans(state)
             .Select(plan => plan.CommandId)
@@ -24,7 +24,7 @@ public sealed class PresentationViewShowPlannerTests
     }
 
     [Fact]
-    public void Gridlines_toggle_flips_only_grid_visibility_and_snap_intent()
+    public void Gridlines_toggle_flips_only_grid_visibility()
     {
         var state = new PresentationViewShowState(
             ShowRulers: true,
@@ -44,7 +44,7 @@ public sealed class PresentationViewShowPlannerTests
     }
 
     [Fact]
-    public void Guides_toggle_flips_only_guides_visibility_and_shape_snap_intent()
+    public void Guides_toggle_flips_only_guides_visibility()
     {
         var state = new PresentationViewShowState(
             ShowRulers: true,
@@ -73,8 +73,8 @@ public sealed class PresentationViewShowPlannerTests
             .Should()
             .BeTrue();
 
-        result.State.ShowGridlines.Should().BeTrue();
-        result.State.ShowGuides.Should().BeTrue();
+        result.State.ShowGridlines.Should().BeFalse();
+        result.State.ShowGuides.Should().BeFalse();
         result.State.ShowNotesPane.Should().BeFalse();
         result.IsChecked.Should().BeFalse();
     }
@@ -89,10 +89,10 @@ public sealed class PresentationViewShowPlannerTests
             .Should()
             .BeTrue();
 
-        result.State.ShowRulers.Should().BeFalse();
-        result.State.ShowGridlines.Should().BeTrue();
-        result.State.ShowGuides.Should().BeTrue();
-        result.IsChecked.Should().BeFalse();
+        result.State.ShowRulers.Should().BeTrue();
+        result.State.ShowGridlines.Should().BeFalse();
+        result.State.ShowGuides.Should().BeFalse();
+        result.IsChecked.Should().BeTrue();
     }
 
     [Fact]
