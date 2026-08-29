@@ -158,7 +158,6 @@ $powerPoint = $null
 $presentation = $null
 $powerPointProcessId = 0
 try {
-    Clear-CurrentCapture
     $logicalWidths = @(Resolve-WidthSpecs $Widths)
     $screenDpi = [ScreenshotWin32]::GetScreenDpi()
     $scale = $screenDpi / 96.0
@@ -202,6 +201,11 @@ try {
         }
         $tabs[$tabName] = $tab
     }
+
+    # Preserve the last complete reference set until the native window and its
+    # entire mapped tab surface have passed foreground and UIA preflight.
+    # A blocked desktop session must not erase usable evidence.
+    Clear-CurrentCapture
 
     $captures = @()
     foreach ($logicalWidth in $logicalWidths) {
@@ -275,8 +279,14 @@ try {
     Write-Host "Captured $($captures.Count)/$expectedCaptureCount PowerPoint native ribbon states in $resolvedOutputDirectory"
 }
 catch {
-    Clear-CurrentCapture
-    Write-BlockerManifest $_.Exception.Message
+    $manifestPath = Join-Path $resolvedOutputDirectory "manifest.json"
+    if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+        Write-Warning "PowerPoint chrome capture was blocked; retained the previous complete reference set. $($_.Exception.Message)"
+    }
+    else {
+        Clear-CurrentCapture
+        Write-BlockerManifest $_.Exception.Message
+    }
     throw
 }
 finally {
