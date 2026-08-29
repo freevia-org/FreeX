@@ -1,10 +1,15 @@
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.App.Avalonia.Tests;
 
 public sealed class Wave199RibbonFontFamilyEvidenceTests
 {
+    private static readonly Regex LocalEvidenceReferencePattern = new(
+        @"(?<path>(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+\.(?:html|json|png|txt))",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     [Fact]
     public void RejectedPhysicalRun_IsDurableAndHashComplete()
     {
@@ -25,6 +30,24 @@ public sealed class Wave199RibbonFontFamilyEvidenceTests
         postcondition.Should().Contain("font-name=Calibri");
         attributes.Should().Contain("*.json text eol=lf");
         attributes.Should().Contain("*.txt text eol=lf");
+
+        using var reportDocument = System.Text.Json.JsonDocument.Parse(report);
+        var evidenceDirectory = reportDocument.RootElement
+            .GetProperty("physicalX11")
+            .GetProperty("evidenceDirectory")
+            .GetString();
+        evidenceDirectory.Should().NotBeNullOrWhiteSpace();
+        Directory.Exists(ResolveWithinEvidenceRoot(root, evidenceDirectory!)).Should().BeTrue();
+
+        foreach (var sourceName in new[]
+                 {
+                     "interaction-validation.json",
+                     "x11-input-results.json",
+                     "interaction-validation.html",
+                 })
+        {
+            AssertEveryLocalEvidenceReferenceExists(root, sourceName);
+        }
 
         var recordedHashes = hashes.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.TrimEnd('\r').Split("  ", 2, StringSplitOptions.None))
@@ -57,5 +80,37 @@ public sealed class Wave199RibbonFontFamilyEvidenceTests
         }
 
         return bytes;
+    }
+
+    private static void AssertEveryLocalEvidenceReferenceExists(string root, string sourceName)
+    {
+        var source = File.ReadAllText(Path.Combine(root, sourceName));
+        var references = LocalEvidenceReferencePattern.Matches(source)
+            .Select(match => match.Groups["path"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        references.Should().NotBeEmpty($"{sourceName} must retain its local evidence references");
+        foreach (var reference in references)
+        {
+            var target = ResolveWithinEvidenceRoot(root, reference);
+            File.Exists(target).Should().BeTrue($"{sourceName} references promoted evidence {reference}");
+        }
+    }
+
+    private static string ResolveWithinEvidenceRoot(string root, string relativePath)
+    {
+        var rootPath = Path.GetFullPath(root);
+        var rootPrefix = rootPath.EndsWith(Path.DirectorySeparatorChar)
+            ? rootPath
+            : rootPath + Path.DirectorySeparatorChar;
+        var target = Path.GetFullPath(Path.Combine(
+            rootPath,
+            relativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+        (target.Equals(rootPath, StringComparison.OrdinalIgnoreCase)
+         || target.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+            .Should().BeTrue($"local evidence reference {relativePath} must stay inside the promoted bundle");
+        return target;
     }
 }
