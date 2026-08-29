@@ -146,6 +146,23 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Home_font_and_paragraph_use_group_dialog_launchers_on_both_renderers()
+    {
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var definition = FreeWRibbon.Build(capabilities);
+            var font = RequiredGroup(definition, "home", "font");
+            var paragraph = RequiredGroup(definition, "home", "paragraph");
+
+            font.Launcher!.CommandId.Value.Should().Be("freew.font-dialog");
+            font.Launcher.TooltipTitle.Should().Be(Loc.Get("Ribbon_Command_FontDialog_Label"));
+            font.Controls.Should().NotContain(control => control.CommandId.Value == "freew.font-dialog");
+            paragraph.Launcher!.CommandId.Value.Should().Be("freew.paragraph-dialog");
+            paragraph.Controls.Should().NotContain(control => control.CommandId.Value == "freew.paragraph-dialog");
+        }
+    }
+
+    [Fact]
     public void Layout_keeps_page_setup_and_paragraph_directly_reachable_before_preview_or_data()
     {
         var wpf = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf);
@@ -1746,7 +1763,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         var italic = RequiredControl(font!, "freew.italic");
         var underline = RequiredControl(font!, "freew.underline");
         var strikethrough = RequiredControl(font!, "freew.strikethrough");
-        var fontDialog = RequiredControl(font!, "freew.font-dialog");
+        var fontDialog = font!.Launcher;
+        fontDialog.Should().NotBeNull();
 
         return new FontCoreRibbonSurface(
             font.Header,
@@ -1760,7 +1778,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             underline.Label,
             underline.KeyTip,
             strikethrough.Label,
-            fontDialog.Label);
+            fontDialog!.TooltipTitle);
     }
 
     private static void AssertFontCoreSurfaceUsesResources(FontCoreRibbonSurface surface)

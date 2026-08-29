@@ -10,9 +10,9 @@ public sealed class ShapeShadowRibbonTests
     public void ShapeShadowPresets_AreDefinedAndRoutedByHost()
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
-        var illustrations = definition.Tabs
+        var shapeEffects = definition.Tabs
             .SelectMany(tab => tab.Groups)
-            .Single(group => group.Id == "illustrations");
+            .Single(group => group.Id == "shapes-effects");
 
         foreach (var commandId in new[]
         {
@@ -21,7 +21,7 @@ public sealed class ShapeShadowRibbonTests
             ShapeEffectAuthoringPlanner.OffsetCommandId,
         })
         {
-            illustrations.Controls.Should().Contain(control => control.CommandId.Value == commandId);
+            shapeEffects.Controls.Should().Contain(control => control.CommandId.Value == commandId);
         }
 
         var presentation = Presentation.CreateEmpty();
@@ -44,9 +44,9 @@ public sealed class ShapeShadowRibbonTests
     public void ShapeGlowPresets_AreDefinedAndRoutedByHost()
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
-        var illustrations = definition.Tabs
+        var shapeEffects = definition.Tabs
             .SelectMany(tab => tab.Groups)
-            .Single(group => group.Id == "illustrations");
+            .Single(group => group.Id == "shapes-effects");
 
         foreach (var commandId in new[]
         {
@@ -55,7 +55,7 @@ public sealed class ShapeShadowRibbonTests
             ShapeEffectAuthoringPlanner.GlowStrongCommandId,
         })
         {
-            illustrations.Controls.Should().Contain(control => control.CommandId.Value == commandId);
+            shapeEffects.Controls.Should().Contain(control => control.CommandId.Value == commandId);
         }
 
         var presentation = Presentation.CreateEmpty();
@@ -78,9 +78,9 @@ public sealed class ShapeShadowRibbonTests
     public void ShapeSoftEdgePresets_AreDefinedAndRoutedByHost()
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
-        var illustrations = definition.Tabs
+        var shapeEffects = definition.Tabs
             .SelectMany(tab => tab.Groups)
-            .Single(group => group.Id == "illustrations");
+            .Single(group => group.Id == "shapes-effects");
 
         foreach (var commandId in new[]
         {
@@ -89,7 +89,7 @@ public sealed class ShapeShadowRibbonTests
             ShapeEffectAuthoringPlanner.SoftEdgeStrongCommandId,
         })
         {
-            illustrations.Controls.Should().Contain(control => control.CommandId.Value == commandId);
+            shapeEffects.Controls.Should().Contain(control => control.CommandId.Value == commandId);
         }
 
         var presentation = Presentation.CreateEmpty();
@@ -112,9 +112,9 @@ public sealed class ShapeShadowRibbonTests
     public void ShapeBevelPresets_AreDefinedAndRoutedByHost()
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
-        var illustrations = definition.Tabs
+        var shapeEffects = definition.Tabs
             .SelectMany(tab => tab.Groups)
-            .Single(group => group.Id == "illustrations");
+            .Single(group => group.Id == "shapes-effects");
 
         foreach (var commandId in new[]
         {
@@ -123,7 +123,7 @@ public sealed class ShapeShadowRibbonTests
             ShapeEffectAuthoringPlanner.BevelStrongCommandId,
         })
         {
-            illustrations.Controls.Should().Contain(control => control.CommandId.Value == commandId);
+            shapeEffects.Controls.Should().Contain(control => control.CommandId.Value == commandId);
         }
 
         var presentation = Presentation.CreateEmpty();
@@ -146,9 +146,9 @@ public sealed class ShapeShadowRibbonTests
     public void Shape3dPresets_AreDefinedAndRoutedByHost()
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
-        var illustrations = definition.Tabs
+        var shapeEffects = definition.Tabs
             .SelectMany(tab => tab.Groups)
-            .Single(group => group.Id == "illustrations");
+            .Single(group => group.Id == "shapes-effects");
 
         foreach (var commandId in new[]
         {
@@ -157,7 +157,7 @@ public sealed class ShapeShadowRibbonTests
             ShapeEffectAuthoringPlanner.Shape3dStrongCommandId,
         })
         {
-            illustrations.Controls.Should().Contain(control => control.CommandId.Value == commandId);
+            shapeEffects.Controls.Should().Contain(control => control.CommandId.Value == commandId);
         }
 
         var presentation = Presentation.CreateEmpty();

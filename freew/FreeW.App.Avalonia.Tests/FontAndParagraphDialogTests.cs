@@ -74,41 +74,25 @@ public sealed class FontAndParagraphDialogTests
     }
 
     [Fact]
-    public void Ribbon_definition_contains_font_dialog_button()
+    public void Ribbon_definition_uses_font_dialog_launcher()
     {
         var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
-        var allIds = definition.Tabs
-            .SelectMany(t => t.Groups)
-            .SelectMany(g => g.Controls)
-            .Select(c => c switch
-            {
-                RibbonButton b => b.CommandId.Value,
-                _ => null,
-            })
-            .Where(id => id is not null)
-            .ToList();
+        var font = definition.FindTab("home")!.FindGroup("font")!;
 
-        allIds.Should().Contain("freew.font-dialog",
-            "the Font group in the Home tab must have a 'Font…' button");
+        font.Launcher!.CommandId.Value.Should().Be("freew.font-dialog",
+            "the Font group in the Home tab must expose the Word-style Font dialog launcher");
+        font.Controls.Should().NotContain(control => control.CommandId.Value == "freew.font-dialog");
     }
 
     [Fact]
-    public void Ribbon_definition_contains_paragraph_dialog_button()
+    public void Ribbon_definition_uses_paragraph_dialog_launcher()
     {
         var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
-        var allIds = definition.Tabs
-            .SelectMany(t => t.Groups)
-            .SelectMany(g => g.Controls)
-            .Select(c => c switch
-            {
-                RibbonButton b => b.CommandId.Value,
-                _ => null,
-            })
-            .Where(id => id is not null)
-            .ToList();
+        var paragraph = definition.FindTab("home")!.FindGroup("paragraph")!;
 
-        allIds.Should().Contain("freew.paragraph-dialog",
-            "the Paragraph group in the Home tab must have a 'Paragraph…' button");
+        paragraph.Launcher!.CommandId.Value.Should().Be("freew.paragraph-dialog",
+            "the Paragraph group in the Home tab must expose the Word-style Paragraph dialog launcher");
+        paragraph.Controls.Should().NotContain(control => control.CommandId.Value == "freew.paragraph-dialog");
     }
 
     // ── FontDialog.ApplyResult: apply changes to the editor model ────────────

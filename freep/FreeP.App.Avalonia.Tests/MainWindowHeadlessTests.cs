@@ -1004,15 +1004,20 @@ public sealed class MainWindowHeadlessTests : IDisposable
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var slideShowTab = definition.Tabs.Single(t => t.Id == "slide-show");
-        var slideShow = slideShowTab.Groups.Single(g => g.Id == "slide-show");
-        slideShow.Controls.Select(i => i.CommandId.Value).Should().Equal(
+        var start = slideShowTab.Groups.Single(g => g.Id == "slide-show-start");
+        var setup = slideShowTab.Groups.Single(g => g.Id == "slide-show-setup");
+        var rehearse = slideShowTab.Groups.Single(g => g.Id == "slide-show-rehearse");
+
+        start.Controls.Select(i => i.CommandId.Value).Should().Equal(
             "freep.slideshow.from-beginning",
             "freep.slideshow.from-current-slide",
-            "freep.slideshow.hide-slide",
-            "freep.slideshow.rehearse-timings",
-            "freep.slideshow.record-timings",
-            "freep.slideshow.setup",
             "freep.slideshow.custom-shows");
+        setup.Controls.Select(i => i.CommandId.Value).Should().Equal(
+            "freep.slideshow.hide-slide",
+            "freep.slideshow.setup");
+        rehearse.Controls.Select(i => i.CommandId.Value).Should().Equal(
+            "freep.slideshow.rehearse-timings",
+            "freep.slideshow.record-timings");
     }
 
     [Fact]
@@ -1143,6 +1148,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         insert.Groups.Should().Contain(g => g.Id == "charts", "Charts group required");
         insert.Groups.Should().Contain(g => g.Id == "links", "Links group required");
         insert.Groups.Should().Contain(g => g.Id == "illustrations", "Illustrations group required");
+        insert.Groups.Should().Contain(g => g.Id == "shapes-effects", "Shapes and Effects group required");
 
         var textIds = insert.Groups.Single(g => g.Id == "text")
             .Controls.Select(i => i.CommandId.Value).ToList();
@@ -1153,6 +1159,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
         var linkIds = insert.Groups.Single(g => g.Id == "links")
             .Controls.Select(i => i.CommandId.Value).ToList();
         var illustrationIds = insert.Groups.Single(g => g.Id == "illustrations")
+            .Controls.Select(i => i.CommandId.Value).ToList();
+        var shapeEffectsIds = insert.Groups.Single(g => g.Id == "shapes-effects")
             .Controls.Select(i => i.CommandId.Value).ToList();
 
         textIds.Should().Contain("freep.text-box", "Text Box command required");
@@ -1167,13 +1175,13 @@ public sealed class MainWindowHeadlessTests : IDisposable
         linkIds.Should().Contain("freep.insert-link", "Insert Link command required");
         linkIds.Should().Contain("freep.remove-link", "Remove Link command required");
         illustrationIds.Should().Contain("freep.picture", "Picture command required");
-        illustrationIds.Should().Contain(PictureCropAuthoringPlanner.InsetCommandId, "Crop Inset command required");
-        illustrationIds.Should().Contain(PictureCropAuthoringPlanner.ResetCommandId, "Reset Crop command required");
-        illustrationIds.Should().Contain(PictureColorEffectAuthoringPlanner.GrayscaleCommandId, "Grayscale command required");
-        illustrationIds.Should().Contain(PictureColorEffectAuthoringPlanner.ResetCommandId, "Reset Effects command required");
-        illustrationIds.Should().Contain("freep.shape-rectangle", "Rectangle command required");
-        illustrationIds.Should().Contain("freep.shape-ellipse", "Ellipse command required");
-        illustrationIds.Should().Contain("freep.shape-heart", "Heart command required");
+        shapeEffectsIds.Should().Contain(PictureCropAuthoringPlanner.InsetCommandId, "Crop Inset command required");
+        shapeEffectsIds.Should().Contain(PictureCropAuthoringPlanner.ResetCommandId, "Reset Crop command required");
+        shapeEffectsIds.Should().Contain(PictureColorEffectAuthoringPlanner.GrayscaleCommandId, "Grayscale command required");
+        shapeEffectsIds.Should().Contain(PictureColorEffectAuthoringPlanner.ResetCommandId, "Reset Effects command required");
+        shapeEffectsIds.Should().Contain("freep.shape-rectangle", "Rectangle command required");
+        shapeEffectsIds.Should().Contain("freep.shape-ellipse", "Ellipse command required");
+        shapeEffectsIds.Should().Contain("freep.shape-heart", "Heart command required");
     }
 
     [Fact]

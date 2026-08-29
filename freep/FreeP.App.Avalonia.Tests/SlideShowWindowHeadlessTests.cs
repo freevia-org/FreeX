@@ -1474,8 +1474,9 @@ public sealed class SlideShowWindowHeadlessTests
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var slideShow = definition.Tabs.Single(t => t.Id == "slide-show");
-        slideShow.Groups.Should().Contain(g => g.Id == "slide-show",
-            "the Slide Show commands belong on PowerPoint's normal Slide Show tab");
+        slideShow.Groups.Select(group => group.Id).Should().Contain(
+            "slide-show-start", "slide-show-setup", "slide-show-rehearse",
+            "the Slide Show commands belong on PowerPoint's normal Slide Show tab in their native task groups");
     }
 
     [Fact]
@@ -1483,14 +1484,13 @@ public sealed class SlideShowWindowHeadlessTests
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var slideShow = definition.Tabs.Single(t => t.Id == "slide-show");
-        var sg = slideShow.Groups.Single(g => g.Id == "slide-show");
-        var ids   = sg.Controls.Select(i => i.CommandId.Value).ToList();
-        ids.Should().Contain("freep.slideshow.from-beginning");
-        ids.Should().Contain("freep.slideshow.from-current-slide");
-        ids.Should().Contain("freep.slideshow.hide-slide");
-        ids.Should().Contain("freep.slideshow.rehearse-timings");
-        ids.Should().Contain("freep.slideshow.record-timings");
-        ids.Should().Contain("freep.slideshow.custom-shows");
+        var startIds = slideShow.Groups.Single(g => g.Id == "slide-show-start").Controls.Select(i => i.CommandId.Value).ToList();
+        var setupIds = slideShow.Groups.Single(g => g.Id == "slide-show-setup").Controls.Select(i => i.CommandId.Value).ToList();
+        var rehearseIds = slideShow.Groups.Single(g => g.Id == "slide-show-rehearse").Controls.Select(i => i.CommandId.Value).ToList();
+
+        startIds.Should().Contain("freep.slideshow.from-beginning", "freep.slideshow.from-current-slide", "freep.slideshow.custom-shows");
+        setupIds.Should().Contain("freep.slideshow.hide-slide");
+        rehearseIds.Should().Contain("freep.slideshow.rehearse-timings", "freep.slideshow.record-timings");
     }
 
     // ── DA2 + DA3: timer tracking ─────────────────────────────────────────────
