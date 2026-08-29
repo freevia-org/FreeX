@@ -425,6 +425,7 @@ public sealed partial class ReviewingPane
 internal sealed partial class ThesaurusPane
 {
     internal string HeadingForTest => _heading.Text ?? string.Empty;
+    internal string StatusForTest => _status.Text ?? string.Empty;
     internal int SenseCountForTest => _senses.Children.OfType<StackPanel>().Count();
     internal IReadOnlyList<(bool InsertEnabled, bool CopyEnabled)> ActionStatesForTest =>
         _actionButtons.Select(buttons => (buttons.Insert.IsEnabled, buttons.Copy.IsEnabled)).ToArray();

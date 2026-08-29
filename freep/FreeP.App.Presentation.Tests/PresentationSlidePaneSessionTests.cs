@@ -169,6 +169,24 @@ public sealed class PresentationSlidePaneSessionTests
             PresentationWorkareaOperation.RefreshSlidePaneChrome);
     }
 
+    [Theory]
+    [InlineData(SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier)]
+    [InlineData(SlidePaneKeyboardIntentKind.MoveCurrentSlideLater)]
+    public void MoveKeyboardActionWithNoSlidesIsDisabledInsteadOfThrowing(
+        SlidePaneKeyboardIntentKind intent)
+    {
+        var presentation = new Presentation();
+        var editor = CreateEditor(presentation);
+        var session = new PresentationSlidePaneSession(() => editor);
+
+        var action = session.BuildKeyboardAction(intent);
+
+        action.Kind.Should().Be(SlidePaneActionKind.MoveSlide);
+        action.SourceSlideIndices.Should().BeEmpty();
+        action.TargetInsertionIndex.Should().Be(-1);
+        action.IsEnabled.Should().BeFalse();
+    }
+
     private static Presentation CreatePresentation(params string[] titles)
     {
         var presentation = Presentation.CreateEmpty();

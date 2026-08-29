@@ -75,6 +75,30 @@ public sealed class ThesaurusPaneParityTests
     }
 
     [Fact]
+    public async Task Copy_contains_platform_clipboard_exception_and_reports_failure()
+    {
+        bool copyResult = true;
+        var status = string.Empty;
+
+        await Session.Dispatch(async () =>
+        {
+            var editor = NewEditor("happy");
+            editor.MoveCaretToBlock(0, 2);
+            var pane = new ThesaurusPane(
+                editor,
+                (Func<string, Task<bool>>)(_ => throw new InvalidOperationException("clipboard portal closed")));
+            pane.Toggle();
+
+            copyResult = await pane.CopyForTestAsync("pleased");
+            status = pane.StatusForTest;
+        }, CancellationToken.None);
+
+        copyResult.Should().BeFalse();
+        status.ToLowerInvariant().Should().Contain("clipboard operation failed");
+        status.Should().Contain("clipboard portal closed");
+    }
+
+    [Fact]
     public void Source_keeps_avalonia_actions_shared_and_platform_honest()
     {
         var pane = File.ReadAllText(RepoFile("freew", "FreeW.App.Avalonia", "ThesaurusPane.cs"));

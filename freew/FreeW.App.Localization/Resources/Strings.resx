@@ -614,6 +614,7 @@
   <data name="ImageCrop_Instruction" xml:space="preserve"><value>Enter the percentage of width/height to remove from each edge (0-99).</value></data>
   <data name="Operation_InsertIcon" xml:space="preserve"><value>Insert Icon</value></data>
   <data name="Operation_PrintPreview" xml:space="preserve"><value>Print Preview</value></data>
+  <data name="PrintPreview_ActionFailed_Status_Format" xml:space="preserve"><value>The print preview action failed: {0}</value></data>
   <data name="Operation_Editor" xml:space="preserve"><value>Editor</value></data>
   <data name="Proofing_SpellCheckOn_Status" xml:space="preserve"><value>Spelling proofing is on.</value></data>
   <data name="Proofing_SpellCheckOff_Status" xml:space="preserve"><value>Spelling proofing is off.</value></data>

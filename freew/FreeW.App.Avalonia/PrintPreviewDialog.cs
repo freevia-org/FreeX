@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
@@ -20,6 +21,14 @@ internal sealed class PrintPreviewDialog : Window
 {
     private readonly DocumentView _preview = new();
     private readonly TextBlock _pageCount = new();
+    private readonly TextBlock _actionStatus = new()
+    {
+        Foreground = Brushes.Firebrick,
+        IsVisible = false,
+        Margin = new Thickness(8, 0),
+        TextWrapping = TextWrapping.Wrap,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
     private readonly Func<Task>? _createPdf;
     private readonly Func<Task>? _directPrint;
     private readonly FreeWPrintPreviewSession _session;
@@ -135,19 +144,14 @@ internal sealed class PrintPreviewDialog : Window
             Padding = new Thickness(14, 6),
         };
         AutomationProperties.SetAutomationId(printButton, "PrintPreviewPrintButton");
+        AutomationProperties.SetAutomationId(_actionStatus, "PrintPreviewActionStatus");
         ToolTip.SetTip(
             printButton,
             action.Description);
         if (action.Action == FreeWPrintPreviewPrimaryAction.DirectPrint)
-        {
-            var directPrint = _directPrint!;
-            printButton.Click += async (_, _) => await directPrint();
-        }
+            printButton.Click += OnPrimaryActionClick;
         else if (action.Action == FreeWPrintPreviewPrimaryAction.CreatePdf)
-        {
-            var createPdf = _createPdf!;
-            printButton.Click += async (_, _) => await createPdf();
-        }
+            printButton.Click += OnPrimaryActionClick;
         DockPanel.SetDock(printButton, Dock.Left);
         toolbar.Children.Add(printButton);
 
@@ -166,8 +170,44 @@ internal sealed class PrintPreviewDialog : Window
         _pageCount.Foreground = new SolidColorBrush(Color.FromRgb(0x35, 0x3C, 0x45));
         AutomationProperties.SetAutomationId(_pageCount, "PrintPreviewPageCount");
         toolbar.Children.Add(_pageCount);
+        toolbar.Children.Add(_actionStatus);
 
         return toolbar;
+    }
+
+    // Avalonia click handlers are async void. A printer driver, picker, or PDF writer can fail after
+    // the first await; if that exception escapes the handler, Avalonia has no dispatcher-level
+    // exception boundary and the whole process terminates. Keep the exception inside the dialog and
+    // leave the preview open so the user can retry or close it.
+    private async void OnPrimaryActionClick(object? sender, RoutedEventArgs e) =>
+        await ExecutePrimaryActionAsync();
+
+    internal async Task ExecutePrimaryActionAsync()
+    {
+        var action = _session.State.PrimaryAction.Action switch
+        {
+            FreeWPrintPreviewPrimaryAction.DirectPrint => _directPrint,
+            FreeWPrintPreviewPrimaryAction.CreatePdf => _createPdf,
+            _ => null,
+        };
+        if (action is null)
+            return;
+
+        _actionStatus.IsVisible = false;
+        _actionStatus.Text = string.Empty;
+        try
+        {
+            await action();
+        }
+        catch (OperationCanceledException)
+        {
+            // Closing an OS picker or cancelling printer discovery is not an error.
+        }
+        catch (Exception ex)
+        {
+            _actionStatus.Text = UiText.Format("PrintPreview_ActionFailed_Status_Format", ex.Message);
+            _actionStatus.IsVisible = true;
+        }
     }
 
     private static Control BuildSummaryPane(FreeWPrintPreviewState state)

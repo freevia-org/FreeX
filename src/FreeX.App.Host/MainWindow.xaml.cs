@@ -594,6 +594,21 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private void RecordDiagnosticEvent(string eventName, IReadOnlyDictionary<string, string?>? properties = null) =>
         _diagnostics?.RecordEvent(eventName, properties);
 
+    private void ReportAsyncCommandFailure(string command, Exception exception)
+    {
+        RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
+        {
+            ["command"] = command,
+            ["status"] = "failed",
+            ["reason"] = exception.GetType().Name
+        });
+        ShowOwnedMessage(
+            UiText.Format("InsertLoc_CommandFailed", exception.Message),
+            UiText.Get("MainWindowMessage_CommandErrorTitle"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+    }
+
     /// <summary>
     /// Handles a fill-handle double-click: fill straight down to match the populated extent of the
     /// nearest non-blank adjacent column (checked to the left first, then the right, matching

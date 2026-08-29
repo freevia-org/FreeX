@@ -6,6 +6,22 @@ namespace FreeX.App.Services.Tests;
 public sealed class AvaloniaShellSourceTests
 {
     [Fact]
+    public void WorksheetContextMenu_ContainsAsyncCommandFailures()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var dispatchStart = source.IndexOf(
+            "private async void DispatchWorksheetContextMenuCommand(",
+            StringComparison.Ordinal);
+        var nextMethod = source.IndexOf("private static Border CreateCellBorder(", dispatchStart, StringComparison.Ordinal);
+
+        dispatchStart.Should().BeGreaterThanOrEqualTo(0);
+        nextMethod.Should().BeGreaterThan(dispatchStart);
+        var dispatch = source[dispatchStart..nextMethod];
+        dispatch.Should().Contain("catch (Exception ex)");
+        dispatch.Should().Contain("RefreshShell(UiText.Format(\"InsertLoc_CommandFailed\", ex.Message));");
+    }
+
+    [Fact]
     public void AddWatchParityCapture_UsesSharedFixtureAndStripsAvaloniaLabelMnemonic()
     {
         var avaloniaCaptureSource = File.ReadAllText(RepositoryFileLocator.Find(
