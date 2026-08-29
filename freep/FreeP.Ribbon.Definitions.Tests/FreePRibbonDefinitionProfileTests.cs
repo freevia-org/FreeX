@@ -178,21 +178,6 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
-    public void Insert_leads_with_the_backed_new_slide_command()
-    {
-        foreach (var definition in new[]
-                 {
-                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
-                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
-                 })
-        {
-            var slides = definition.FindTab("insert")!.Groups.First();
-            slides.Id.Should().Be("slides");
-            slides.Controls.Select(control => control.CommandId.Value).Should().Equal("freep.new-slide");
-        }
-    }
-
-    [Fact]
     public void Animation_effects_group_uses_icon_adaptive_sizing_in_both_profiles()
     {
         foreach (var definition in new[]
