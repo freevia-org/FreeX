@@ -229,6 +229,27 @@ public sealed class RibbonShellBuilderTests
         pageBackground.Collapsed.Should().BeFalse("Page Background stays directly reachable beside compact Document Formatting");
     }
 
+    [StaFact]
+    public void Mailings_compact_presentation_keeps_write_and_insert_fields_direct_at750Dips()
+    {
+        var mailings = FreeW.Ribbon.Definitions.FreeWRibbon
+            .Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf)
+            .FindTab("mailings")!;
+        var content = RibbonWpfRenderer.BuildTabContent(mailings, new Button());
+        var panel = FindLogicalChild<RibbonAdaptivePanel>(content)!;
+
+        content.Measure(new Size(750, 180));
+        content.Arrange(new Rect(0, 0, 750, 180));
+        content.UpdateLayout();
+
+        var writeInsertFields = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Write & Insert Fields");
+
+        writeInsertFields.LayoutState.Should().Be(RibbonAdaptiveGroupState.SmallWithLabels,
+            "Word keeps the compact Write & Insert Fields actions visible at the narrow reference width");
+    }
+
     private sealed class CaptureValueCommand(Action<string?> capture) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => capture(context.SelectedValue);

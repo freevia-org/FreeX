@@ -515,6 +515,10 @@ internal static partial class FreeWCanonicalRibbonTabs
             });
             tab.Group("merge-write", "Write & Insert Fields", "W", avalonia ? 100 : 145, group =>
             {
+                // Word keeps Write & Insert Fields visible as compact disabled icons at the
+                // narrow reference width. Preserve that discoverability before overflow.
+                if (!avalonia)
+                    group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                 AddProfiledButton(group, avalonia, "freew.merge-address-block", "Address Block",
                     RibbonCommandIconKind.Recipients, wpfKeyTip: "A");
                 AddProfiledButton(group, avalonia, "freew.merge-greeting-line", "Greeting Line",
