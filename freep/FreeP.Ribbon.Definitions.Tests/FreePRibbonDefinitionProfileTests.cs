@@ -41,6 +41,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             themeSizing.EnableCompactPresentation.Should().BeTrue();
             themeSizing.SupportedVariants.Should().Equal(
                 RibbonAdaptiveGroupState.Full,
+                RibbonAdaptiveGroupState.SmallWithLabels,
                 RibbonAdaptiveGroupState.Collapsed);
             definition.FindTab("design")!.FindGroup("customize")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
             definition.FindTab("design")!.FindGroup("slides")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);

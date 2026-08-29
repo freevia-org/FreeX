@@ -976,6 +976,7 @@ public static class FreePRibbon
                 SupportedVariants = new[]
                 {
                     RibbonAdaptiveGroupState.Full,
+                    RibbonAdaptiveGroupState.SmallWithLabels,
                     RibbonAdaptiveGroupState.Collapsed
                 }
             });
