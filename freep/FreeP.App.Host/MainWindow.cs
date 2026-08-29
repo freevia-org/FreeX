@@ -4309,17 +4309,17 @@ public sealed partial class MainWindow : Window,
                     InjectRibbonGallery(
                         content,
                         FreeP.Ribbon.Definitions.FreePRibbon.ThemesGroupId,
-                        state => PresentationThemeGallery.Build(registry, state, () => Editor.Presentation.Theme.Name));
+                        (state, _) => PresentationThemeGallery.Build(registry, state, () => Editor.Presentation.Theme.Name));
                 else if (tab.Id == FreeP.Ribbon.Definitions.FreePRibbon.TransitionsTabId)
                     InjectRibbonGallery(
                         content,
                         FreeP.Ribbon.Definitions.FreePRibbon.TransitionGalleryGroupId,
-                        state => PresentationTransitionGallery.Build(registry, state));
+                        (state, availableWidth) => PresentationTransitionGallery.Build(registry, state, availableWidth));
                 else if (tab.Id == FreeP.Ribbon.Definitions.FreePRibbon.AnimationsTabId)
                     InjectRibbonGallery(
                         content,
                         "animation-effects",
-                        groupState => PresentationAnimationGallery.Build(tab, registry, stateStore, groupState));
+                        (groupState, _) => PresentationAnimationGallery.Build(tab, registry, stateStore, groupState));
             },
         });
 
@@ -4336,7 +4336,7 @@ public sealed partial class MainWindow : Window,
     private static void InjectRibbonGallery(
         DependencyObject content,
         string groupId,
-        Func<RibbonAdaptiveGroupState, FrameworkElement> createGallery)
+        Func<RibbonAdaptiveGroupState, double, FrameworkElement> createGallery)
     {
         var panel = (content as Border)?.Child as Panel;
         if (panel is null)
@@ -4349,7 +4349,7 @@ public sealed partial class MainWindow : Window,
 
         // The shared adaptive host creates compact presentations lazily. A native gallery must be
         // recreated for each presentation because WPF elements cannot be reparented between group grids.
-        var injectedLanes = new HashSet<Panel>();
+        var injectedLanes = new Dictionary<Panel, double>();
         void InjectInto(FrameworkElement presentation)
         {
             if (presentation is not Grid grid)
@@ -4357,11 +4357,15 @@ public sealed partial class MainWindow : Window,
 
             var lane = grid.Children.OfType<FrameworkElement>()
                 .FirstOrDefault(child => Grid.GetRow(child) == 0) as Panel;
-            if (lane is null || !injectedLanes.Add(lane))
+            var availableWidth = panel.ActualWidth;
+            if (lane is null ||
+                (injectedLanes.TryGetValue(lane, out var previousWidth) &&
+                 Math.Abs(previousWidth - availableWidth) < 0.5))
                 return;
 
             lane.Children.Clear();
-            lane.Children.Add(createGallery(group.LayoutState));
+            lane.Children.Add(createGallery(group.LayoutState, availableWidth));
+            injectedLanes[lane] = availableWidth;
         }
 
         InjectInto(group.GroupContent);

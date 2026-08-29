@@ -23,21 +23,37 @@ public sealed class PresentationTransitionGalleryTests
         editor.CurrentSlideTransition.Should().NotBeNull();
         editor.CurrentSlideTransition!.Kind.Should().Be(TransitionKind.Fade);
         buttons.Select(AutomationProperties.GetName)
-            .Should().Contain(["None", "Fade", "Push", "Wipe", "Split", "Reveal", "Cut", "Random Bars"]);
+            .Should().Equal("None", "Fade", "Push", "Wipe", "Split", "Reveal");
     }
 
     [StaFact]
-    public void Transition_preview_gallery_keeps_first_three_effects_directly_selectable_when_compact()
+    public void Transition_preview_gallery_matches_the_powerpoint_preview_density_ladder()
     {
         var presentation = Presentation.CreateEmpty();
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
         var registry = FreePRibbonTestRegistry.Compose(editor);
 
-        var gallery = PresentationTransitionGallery
-            .Build(registry, RibbonAdaptiveGroupState.SmallWithLabels)
-            .Should().BeOfType<StackPanel>().Subject;
+        var expectedByState = new Dictionary<RibbonAdaptiveGroupState, string[]>
+        {
+            [RibbonAdaptiveGroupState.Full] = ["None", "Fade", "Push", "Wipe", "Split", "Reveal"],
+            [RibbonAdaptiveGroupState.SmallWithLabels] = ["None", "Fade", "Push", "Wipe"],
+            [RibbonAdaptiveGroupState.IconOnly] = ["None", "Fade", "Push"],
+        };
 
-        gallery.Children.OfType<Button>().Select(AutomationProperties.GetName)
+        foreach (var (state, expected) in expectedByState)
+        {
+            var gallery = PresentationTransitionGallery
+                .Build(registry, state)
+                .Should().BeOfType<StackPanel>().Subject;
+
+            gallery.Children.OfType<Button>().Select(AutomationProperties.GetName)
+                .Should().Equal(expected);
+        }
+
+        PresentationTransitionGallery
+            .Build(registry, RibbonAdaptiveGroupState.SmallWithLabels, availableRibbonWidth: 750)
+            .Should().BeOfType<StackPanel>().Subject
+            .Children.OfType<Button>().Select(AutomationProperties.GetName)
             .Should().Equal("None", "Fade", "Push");
     }
 }

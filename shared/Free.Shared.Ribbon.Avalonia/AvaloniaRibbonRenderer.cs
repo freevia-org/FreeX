@@ -412,7 +412,7 @@ public static class AvaloniaRibbonRenderer
         Func<Control> createContent)
     {
         ArgumentNullException.ThrowIfNull(createContent);
-        return TryInjectGroupContent(ribbon, groupId, _ => createContent());
+        return TryInjectGroupContent(ribbon, groupId, (_, _) => createContent());
     }
 
     /// <summary>
@@ -425,11 +425,26 @@ public static class AvaloniaRibbonRenderer
         string groupId,
         Func<RibbonAdaptiveGroupState, Control> createContent)
     {
+        ArgumentNullException.ThrowIfNull(createContent);
+        return TryInjectGroupContent(ribbon, groupId, (state, _) => createContent(state));
+    }
+
+    /// <summary>
+    /// Replaces a generated group's visible content lane with host-native content that can adapt to
+    /// the current group presentation and ribbon width. The factory is reinvoked only when that width
+    /// changes, allowing a dense gallery to use native reference breakpoints without altering the
+    /// shared group's command or overflow behavior.
+    /// </summary>
+    public static bool TryInjectGroupContent(
+        Control ribbon,
+        string groupId,
+        Func<RibbonAdaptiveGroupState, double, Control> createContent)
+    {
         ArgumentNullException.ThrowIfNull(ribbon);
         ArgumentException.ThrowIfNullOrWhiteSpace(groupId);
         ArgumentNullException.ThrowIfNull(createContent);
 
-        var injectedLanes = new HashSet<Panel>();
+        var injectedLanes = new Dictionary<Panel, double>();
         var attachedHosts = new HashSet<AvaloniaRibbonGroupHost>();
         void InjectInto(Control presentation, RibbonAdaptiveGroupState state)
         {
@@ -438,11 +453,15 @@ public static class AvaloniaRibbonRenderer
 
             var lane = grid.Children.OfType<Control>()
                 .FirstOrDefault(child => Grid.GetRow(child) == 0) as Panel;
-            if (lane is null || !injectedLanes.Add(lane))
+            var availableWidth = ribbon.Bounds.Width;
+            if (lane is null ||
+                (injectedLanes.TryGetValue(lane, out var previousWidth) &&
+                 Math.Abs(previousWidth - availableWidth) < 0.5))
                 return;
 
             lane.Children.Clear();
-            lane.Children.Add(createContent(state));
+            lane.Children.Add(createContent(state, availableWidth));
+            injectedLanes[lane] = availableWidth;
         }
 
         void Attach(AvaloniaRibbonGroupHost groupHost)
@@ -474,9 +493,18 @@ public static class AvaloniaRibbonRenderer
         }
 
         // Contextual tabs are added after the initial ribbon tree is built. Re-check during layout
-        // so a host can register a visual gallery before its contextual group is first shown.
+        // so a host can register a visual gallery before its contextual group is first shown, and
+        // refresh an already injected gallery after a responsive ribbon-width change.
         DiscoverAndAttach();
-        ribbon.LayoutUpdated += (_, _) => DiscoverAndAttach();
+        ribbon.LayoutUpdated += (_, _) =>
+        {
+            DiscoverAndAttach();
+            foreach (var groupHost in attachedHosts)
+            {
+                if (groupHost.Content is Control presentation)
+                    InjectInto(presentation, groupHost.LayoutState);
+            }
+        };
         return true;
     }
 

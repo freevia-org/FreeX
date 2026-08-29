@@ -23,7 +23,10 @@ internal static class PresentationTransitionGallery
         ("freep.transition.random-bars", "Ribbon_Command_TransitionRandomBars_Label", TransitionPreview.RandomBars),
     ];
 
-    public static Control Build(IRibbonCommandRegistry registry)
+    public static Control Build(
+        IRibbonCommandRegistry registry,
+        RibbonAdaptiveGroupState state = RibbonAdaptiveGroupState.Full,
+        double availableRibbonWidth = double.PositiveInfinity)
     {
         var strip = new StackPanel
         {
@@ -31,10 +34,18 @@ internal static class PresentationTransitionGallery
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2, 1, 2, 0),
         };
-        foreach (var entry in Entries)
+        foreach (var entry in Entries.Take(GetVisibleEntryCount(state, availableRibbonWidth)))
             strip.Children.Add(BuildButton(entry, registry));
         return strip;
     }
+
+    private static int GetVisibleEntryCount(RibbonAdaptiveGroupState state, double availableRibbonWidth) => state switch
+    {
+        RibbonAdaptiveGroupState.Full => 6,
+        RibbonAdaptiveGroupState.SmallWithLabels => availableRibbonWidth <= 800 ? 3 : 4,
+        RibbonAdaptiveGroupState.IconOnly => 3,
+        _ => 3,
+    };
 
     private static Control BuildButton(
         (string CommandId, string LabelKey, TransitionPreview Preview) entry,

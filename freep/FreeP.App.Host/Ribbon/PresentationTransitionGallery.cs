@@ -27,7 +27,8 @@ internal static class PresentationTransitionGallery
 
     public static FrameworkElement Build(
         IRibbonCommandRegistry registry,
-        RibbonAdaptiveGroupState state = RibbonAdaptiveGroupState.Full)
+        RibbonAdaptiveGroupState state = RibbonAdaptiveGroupState.Full,
+        double availableRibbonWidth = double.PositiveInfinity)
     {
         var strip = new StackPanel
         {
@@ -36,17 +37,22 @@ internal static class PresentationTransitionGallery
             Margin = new Thickness(2, 1, 2, 0),
         };
 
-        // At narrow widths PowerPoint retains a small, directly selectable transition strip rather
-        // than replacing the entire gallery with overflow. The adjacent More group still exposes
-        // the full catalog.
-        var visibleEntries = state == RibbonAdaptiveGroupState.SmallWithLabels
-            ? Entries.Take(3)
-            : Entries.AsEnumerable();
+        // PowerPoint reveals a progressively wider first row as the Transitions tab gains room.
+        // The adjacent More group retains the complete catalog, including effects not shown here.
+        var visibleEntries = Entries.Take(GetVisibleEntryCount(state, availableRibbonWidth));
         foreach (var entry in visibleEntries)
             strip.Children.Add(BuildButton(entry, registry));
 
         return strip;
     }
+
+    private static int GetVisibleEntryCount(RibbonAdaptiveGroupState state, double availableRibbonWidth) => state switch
+    {
+        RibbonAdaptiveGroupState.Full => 6,
+        RibbonAdaptiveGroupState.SmallWithLabels => availableRibbonWidth <= 800 ? 3 : 4,
+        RibbonAdaptiveGroupState.IconOnly => 3,
+        _ => 3,
+    };
 
     private static FrameworkElement BuildButton((string CommandId, string LabelKey, TransitionPreview Preview) entry, IRibbonCommandRegistry registry)
     {

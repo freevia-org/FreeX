@@ -1397,7 +1397,8 @@ public static class FreePRibbon
     private static void AddTransitionGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
     {
         // At narrow widths PowerPoint preserves the timing controls. Let the adaptive
-        // panel reclaim this broad gallery before it collapses the concise timing surface.
+        // panel trim the preview row from six to four to three tiles before it collapses
+        // the concise timing surface, keeping the full catalog in More.
         tab.Group("transition-gallery", FreePRibbonText.TransitionGalleryGroup.Label, FreePRibbonText.TransitionGalleryGroup.KeyTip, 85, group =>
         {
             group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
