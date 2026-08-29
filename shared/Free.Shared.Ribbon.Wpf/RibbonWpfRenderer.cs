@@ -307,6 +307,16 @@ public static class RibbonWpfRenderer
         RibbonControl control,
         RibbonAdaptiveGroupState state)
     {
+        if (control is RibbonComboBox combo &&
+            state == RibbonAdaptiveGroupState.SmallWithLabels &&
+            group.Sizing.CompactControlsAsIcons)
+        {
+            // A compact Office group must reclaim space from its editable fields too. Keeping the
+            // full font-name lane in the intermediate state made an adaptive Font group visually
+            // indistinguishable from Full and starved the neighbouring Paragraph group.
+            return combo with { Width = Math.Max(36, (combo.Width ?? 120) * 0.7) };
+        }
+
         if (control is RibbonSeparator or RibbonRowBreak or RibbonComboBox or RibbonCheckBox)
             return control;
 

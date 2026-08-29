@@ -129,6 +129,34 @@ public sealed class RibbonShellBuilderTests
             .HaveCount(3, "the WPF Font group keeps its command set expanded across compact rows before adaptive collapse");
     }
 
+    [StaFact]
+    public void HomeFont_CompactPresentationShrinksEditableFieldsAndKeepsPasteReachable()
+    {
+        var home = FreeW.Ribbon.Definitions.FreeWRibbon
+            .Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf)
+            .FindTab("home")!;
+        var content = RibbonWpfRenderer.BuildTabContent(home, new Button());
+        var panel = FindLogicalChild<RibbonAdaptivePanel>(content)!;
+
+        content.Measure(new Size(750, 180));
+        content.Arrange(new Rect(0, 0, 750, 180));
+        content.UpdateLayout();
+
+        var clipboard = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Clipboard");
+        var font = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Font");
+
+        clipboard.Collapsed.Should().BeFalse("Paste remains a primary Home command at the narrow evidence width");
+        font.LayoutState.Should().Be(RibbonAdaptiveGroupState.SmallWithLabels);
+
+        var compactFontName = FindLogicalChild<ComboBox>(Assert.IsAssignableFrom<DependencyObject>(font.Content));
+        compactFontName.Should().NotBeNull();
+        compactFontName!.Width.Should().Be(98, "the compact Font presentation reduces the full 140-DIP font-name field");
+    }
+
     private sealed class CaptureValueCommand(Action<string?> capture) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => capture(context.SelectedValue);
