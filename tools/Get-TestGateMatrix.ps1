@@ -33,18 +33,36 @@ $entries = @(
         $requiresFullHistory =
             $testGate.PSObject.Properties.Name -contains 'requiresFullHistory' -and
             [bool]$testGate.requiresFullHistory
+        $partitionCount = if ($testGate.PSObject.Properties.Name -contains 'partitions') {
+            [int]$testGate.partitions
+        }
+        else {
+            1
+        }
         foreach ($platform in @($testGate.platforms)) {
             if (-not $runnerByPlatform.ContainsKey([string]$platform)) {
                 throw "Gate '$($testGate.id)' uses unsupported platform '$platform'."
             }
 
-            [ordered]@{
-                gateId = [string]$testGate.id
-                gate = [string]$testGate.gate
-                app = [string]$testGate.app
-                platform = [string]$platform
-                runner = $runnerByPlatform[[string]$platform]
-                fetchDepth = if ($requiresFullHistory) { 0 } else { 1 }
+            for ($partitionIndex = 0; $partitionIndex -lt $partitionCount; $partitionIndex++) {
+                $displayGateId = if ($partitionCount -eq 1) {
+                    [string]$testGate.id
+                }
+                else {
+                    "$($testGate.id)-$($partitionIndex + 1)of$partitionCount"
+                }
+
+                [ordered]@{
+                    gateId = [string]$testGate.id
+                    displayGateId = $displayGateId
+                    gate = [string]$testGate.gate
+                    app = [string]$testGate.app
+                    platform = [string]$platform
+                    runner = $runnerByPlatform[[string]$platform]
+                    fetchDepth = if ($requiresFullHistory) { 0 } else { 1 }
+                    partitionIndex = $partitionIndex
+                    partitionCount = $partitionCount
+                }
             }
         }
     }

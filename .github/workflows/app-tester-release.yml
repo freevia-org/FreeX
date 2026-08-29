@@ -137,7 +137,7 @@ jobs:
             -RequiredWorkflows ci.yml,codeql.yml
 
   release-tests:
-    name: Release test ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.gateId }}
+    name: Release test ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}
     needs: [prepare, candidate]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
@@ -169,13 +169,15 @@ jobs:
             -App "${{ matrix.app }}" `
             -Platform "${{ matrix.platform }}" `
             -GateId "${{ matrix.gateId }}" `
+            -PartitionIndex ${{ matrix.partitionIndex }} `
+            -PartitionCount ${{ matrix.partitionCount }} `
             -HangTimeout 15m `
             -ResultsDirectory TestResults
       - name: Upload release test diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: release-tests-${{ matrix.platform }}-${{ matrix.gateId }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: release-tests-${{ matrix.platform }}-${{ matrix.displayGateId }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: "**/TestResults/**"
           if-no-files-found: warn
           retention-days: 14
