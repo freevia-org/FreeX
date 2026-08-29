@@ -30,6 +30,7 @@ public sealed class PresentationDesignCommandPlannerTests
     }
 
     [Theory]
+    [InlineData("freep.theme-variants.office", "Office")]
     [InlineData("freep.theme-colors.office", "Office")]
     [InlineData("freep.theme-colors.berlin", "Berlin")]
     [InlineData("freep.theme-colors.facet", "Facet")]

@@ -991,6 +991,20 @@ public static class FreePRibbon
         tab.Group("customize", FreePRibbonText.CustomizeGroup.Label, FreePRibbonText.CustomizeGroup.KeyTip, 95, group =>
         {
             group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+            // PowerPoint presents theme variants separately from the Colors picker. FreeP's current
+            // variant model is backed by the same color-set operations, so this is a real selection
+            // surface rather than a cosmetic duplicate; it preserves the active theme's fonts and
+            // format scheme while applying the chosen color variation.
+            group.Dropdown(
+                "freep.theme-variants.office",
+                FreePRibbonText.ThemeVariantsCommand.Label,
+                BuildThemeVariantMenu(),
+                dropdown => dropdown with
+                {
+                    PreferredLayout = RibbonCommandLayoutKind.Medium,
+                    Icon = new RibbonCommandIcon(RibbonCommandIconKind.Theme),
+                    KeyTip = FreePRibbonText.ThemeVariantsCommand.KeyTip,
+                });
             group.Dropdown(
                 "freep.theme-colors.office",
                 FreePRibbonText.ThemeColorsCommand.Label,
@@ -1034,6 +1048,8 @@ public static class FreePRibbon
             new RibbonMenuItem(FreePRibbonText.ThemeIonCommand.Label, new RibbonCommandId("freep.theme-colors.ion"), KeyTip: FreePRibbonText.ThemeIonCommand.KeyTip),
             new RibbonMenuItem(FreePRibbonText.ThemeSliceCommand.Label, new RibbonCommandId("freep.theme-colors.slice"), KeyTip: FreePRibbonText.ThemeSliceCommand.KeyTip),
         ]);
+
+    private static RibbonMenu BuildThemeVariantMenu() => BuildThemeColorMenu();
 
     private static RibbonMenu BuildSlideSizeMenu() =>
         new(

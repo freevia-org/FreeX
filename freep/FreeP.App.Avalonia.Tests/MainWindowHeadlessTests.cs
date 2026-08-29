@@ -3181,6 +3181,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     public async Task Ribbon_design_commands_route_through_shared_planner()
     {
         var foundTheme = false;
+        var foundThemeVariants = false;
         var foundThemeColors = false;
         var foundSlideSize = false;
         var foundCustom = false;
@@ -3196,6 +3197,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
             var window = new MainWindow(Array.Empty<string>());
             var registry = window.BuildCommandRegistry();
             foundTheme = registry.TryGet("freep.theme.berlin", out var theme);
+            foundThemeVariants = registry.TryGet("freep.theme-variants.office", out var themeVariants);
             foundThemeColors = registry.TryGet("freep.theme-colors.ion", out var themeColors);
             foundSlideSize = registry.TryGet("freep.slide-size-4x3", out var slideSize);
             foundCustom = registry.TryGet("freep.slide-size-custom", out var customSlideSize);
@@ -3216,6 +3218,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
 
         if (!ran) return;
         foundTheme.Should().BeTrue("theme commands must be registered through the Avalonia registry");
+        foundThemeVariants.Should().BeTrue("theme variant commands must be registered through the Avalonia registry");
         foundThemeColors.Should().BeTrue("theme color commands must be registered through the Avalonia registry");
         foundSlideSize.Should().BeTrue("slide-size commands must be registered through the Avalonia registry");
         foundCustom.Should().BeTrue("custom slide-size should be exposed as a planner callback intent");
