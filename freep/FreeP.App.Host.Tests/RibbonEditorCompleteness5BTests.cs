@@ -194,15 +194,15 @@ public class RibbonEditorCompleteness5BTests
     public void PictureCropCommands_AreDefinedAndRouteThroughSharedSession()
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
-        var illustrationIds = definition.Tabs
+        var shapeEffectsIds = definition.Tabs
             .Single(tab => tab.Id == "insert")
-            .Groups.Single(group => group.Id == "illustrations")
+            .Groups.Single(group => group.Id == "shapes-effects")
             .Controls.Select(control => control.CommandId.Value)
             .ToArray();
-        Assert.Contains(PictureCropAuthoringPlanner.InsetCommandId, illustrationIds);
-        Assert.Contains(PictureCropAuthoringPlanner.ResetCommandId, illustrationIds);
-        Assert.Contains(PictureColorEffectAuthoringPlanner.GrayscaleCommandId, illustrationIds);
-        Assert.Contains(PictureColorEffectAuthoringPlanner.ResetCommandId, illustrationIds);
+        Assert.Contains(PictureCropAuthoringPlanner.InsetCommandId, shapeEffectsIds);
+        Assert.Contains(PictureCropAuthoringPlanner.ResetCommandId, shapeEffectsIds);
+        Assert.Contains(PictureColorEffectAuthoringPlanner.GrayscaleCommandId, shapeEffectsIds);
+        Assert.Contains(PictureColorEffectAuthoringPlanner.ResetCommandId, shapeEffectsIds);
 
         var (editor, presentation) = MakeSession();
         presentation.Slides[0].Shapes.Clear();
@@ -349,11 +349,11 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
-    public void IllustrationsGroup_ContainsCommonShapeIds()
+    public void ShapesEffectsGroup_ContainsCommonShapeIds()
     {
         var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "insert");
-        var group = tab.Groups.Single(g => g.Id == "illustrations");
+        var group = tab.Groups.Single(g => g.Id == "shapes-effects");
         var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
         Assert.Contains(SlideObjectInsertionPlanner.TriangleCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.RoundedRectangleCommandId, ids);
