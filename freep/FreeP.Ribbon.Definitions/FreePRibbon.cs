@@ -597,6 +597,14 @@ public static class FreePRibbon
 
     private static void AddInsertGroups(RibbonTabBuilder tab)
     {
+        // PowerPoint exposes this backed action at the leading edge of both Home and Insert.
+        // It is one command route rendered twice, not a duplicate action implementation.
+        tab.Group("slides", FreePRibbonText.SlidesGroupLabel, FreePRibbonText.SlidesGroupKeyTip, 110, group =>
+        {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+            group.Large("freep.new-slide", FreePRibbonText.NewSlideLabel, RibbonCommandIconKind.Insert,
+                FreePRibbonText.NewSlideKeyTip);
+        });
         tab.Group("text", FreePRibbonText.TextGroupLabel, FreePRibbonText.TextGroupKeyTip, 100, group =>
         {
             group.Large("freep.text-box", FreePRibbonText.TextBoxLabel, RibbonCommandIconKind.TextBox, FreePRibbonText.TextBoxKeyTip);
