@@ -91,6 +91,7 @@ public sealed class ThesaurusPaneParityTests
 
             copyResult = await pane.CopyForTestAsync("pleased");
             status = pane.StatusForTest;
+            return true;
         }, CancellationToken.None);
 
         copyResult.Should().BeFalse();

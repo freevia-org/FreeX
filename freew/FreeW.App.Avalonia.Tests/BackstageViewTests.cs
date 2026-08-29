@@ -751,6 +751,7 @@ public class BackstageViewTests : IDisposable
             status.IsVisible.Should().BeTrue();
             status.Text.Should().Contain("destination disappeared");
             FindControl<Button>(dialog, "PrintPreviewPrintButton").IsEnabled.Should().BeTrue();
+            return true;
         }, CancellationToken.None);
     }
 
