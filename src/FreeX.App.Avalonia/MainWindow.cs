@@ -28150,9 +28150,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             if (workflowResult.Outcome == WorkbookFileOperationOutcome.ExternalWriteConflict)
             {
-                ShowSaveIssue(UiText.Format(
-                    "MainWindowMessage_ExternallyModifiedFileBody",
-                    Path.GetFileName(targetPath)));
+                ShowBlockingSaveFailure(
+                    UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
+                    UiText.Format(
+                        "MainWindowMessage_ExternallyModifiedFileBody",
+                        Path.GetFileName(targetPath)),
+                    UserMessageIcon.Warning);
                 return false;
             }
 
@@ -28176,9 +28179,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             if (workflowResult.Outcome == WorkbookFileOperationOutcome.Failed)
             {
-                ShowSaveIssue(UiText.Format(
-                    "File_SaveFailedFormat",
-                    workflowResult.Exception?.Message ?? UiText.Get("Common_UnknownError")));
+                ShowBlockingSaveFailure(
+                    UiText.Get("MainWindowMessage_SaveErrorTitle"),
+                    UiText.Format(
+                        "File_SaveFailedFormat",
+                        workflowResult.Exception?.Message ?? UiText.Get("Common_UnknownError")),
+                    UserMessageIcon.Error);
                 return false;
             }
 
@@ -28241,6 +28247,44 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
     }
+
+    /// <summary>
+    /// A save that did not reach disk (the target is locked/read-only, was externally modified,
+    /// or otherwise failed) is not a routine status update the user can miss without losing work
+    /// -- their edits are still only in memory. The WPF host stops the user with a must-acknowledge
+    /// MessageBox for this exact class of outcome (MainWindow.Backstage.cs, ShowOwnedMessage with
+    /// MessageBoxImage.Error/Warning); mirror that here instead of only recoloring the status bar,
+    /// which a maximized/alt-tabbed user can walk past without noticing (shared-readonly-locking F2).
+    /// </summary>
+    private void ShowBlockingSaveFailure(string title, string message, UserMessageIcon icon)
+    {
+        // Headless tests cannot safely pump a real owned dialog to completion the way a live user
+        // dismisses it (mirrors this file's other ResolveXHandler seams, e.g.
+        // ResolveExternallyModifiedFileOverwriteConfirmHandler) -- let a test observe the notice
+        // without spawning an actual Avalonia window.
+        Action<string, string, UserMessageIcon>? handler = null;
+        ResolveSaveFailureNoticeHandler(ref handler);
+        if (handler is not null)
+        {
+            handler(title, message, icon);
+            return;
+        }
+
+        if (!IsVisible)
+        {
+            // Mirrors ShowSynchronousPrompt's own degradation: Avalonia cannot own a dialog to a
+            // window that isn't shown yet, so fall back to the status-bar signal rather than throw.
+            ShowSaveIssue(message);
+            return;
+        }
+
+        AvaloniaSynchronousUserMessageDialog.ShowMessage(
+            this,
+            new UserMessageRequest(message, title, UserMessageButtons.Ok, icon),
+            UserMessageResult.Ok);
+    }
+
+    partial void ResolveSaveFailureNoticeHandler(ref Action<string, string, UserMessageIcon>? handler);
 
     private static string FormatSaveCompletionStatus(string path, IReadOnlyList<string> warnings) =>
         warnings.Count == 0

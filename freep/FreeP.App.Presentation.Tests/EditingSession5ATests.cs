@@ -436,6 +436,79 @@ public sealed class EditingSession5ATests
     }
 
     [Fact]
+    public void SetTheme_ClearsPopulatedMasterTheme_SoNewThemeIsNotShadowed()
+    {
+        // freep-master-theme F1: a master read from a real .pptx has master.Theme populated
+        // (PptxPackageReader.cs). Both SlideCompositor (rendering) and PptxPackageWriter (save)
+        // resolve the effective theme as (master.Theme ?? presentation.Theme), so unless
+        // SetTheme also clears the master's own Theme, picking a new deck theme from the Design
+        // tab has no visible or saved effect on any deck that has ever been opened from disk.
+        var sess     = Make();
+        var master   = new SlideMaster { Id = "rId1" };
+        var oldTheme = new PresentationTheme { Name = "Office Theme" };
+        oldTheme.ColorScheme[ThemeColorSlot.Accent1] = SrgbColor.FromRgb(0x4472C4);
+        master.Theme = oldTheme;
+        sess.Presentation.Masters.Add(master);
+
+        var newTheme = BuiltInThemes.GetById(BuiltInThemes.Id.Berlin)!;
+        sess.SetTheme(newTheme);
+
+        sess.Presentation.Theme.Should().BeSameAs(newTheme);
+        master.Theme.Should().BeNull(
+            "a populated master.Theme must be cleared so (master.Theme ?? presentation.Theme) " +
+            "resolves to the newly chosen deck theme instead of continuing to shadow it with " +
+            "the master's old, now-stale theme");
+    }
+
+    [Fact]
+    public void SetTheme_ThenUndo_RestoresPopulatedMasterTheme()
+    {
+        // Undo companion to the fix above: undoing a deck-wide theme change must bring back the
+        // exact master.Theme instance that was in effect before, not merely restore
+        // Presentation.Theme.
+        var sess     = Make();
+        var master   = new SlideMaster { Id = "rId1" };
+        var oldTheme = new PresentationTheme { Name = "Office Theme" };
+        master.Theme = oldTheme;
+        sess.Presentation.Masters.Add(master);
+        var originalPresentationTheme = sess.Presentation.Theme;
+
+        var newTheme = BuiltInThemes.GetById(BuiltInThemes.Id.Berlin)!;
+        sess.SetTheme(newTheme);
+        sess.Undo();
+
+        sess.Presentation.Theme.Should().BeSameAs(originalPresentationTheme);
+        master.Theme.Should().BeSameAs(oldTheme,
+            "Undo must restore the master's own theme instance, not just Presentation.Theme");
+    }
+
+    [Fact]
+    public void SetTheme_MasterWithOnlyThemePartPath_StillClearsPreservationGuard()
+    {
+        // Sibling no-regression case (the pre-existing corrupted-theme-preservation scenario):
+        // a master with NO parsed Theme (null) but a recorded ThemePartPath -- e.g. a theme part
+        // that failed to parse -- must keep having that path cleared on SetTheme, exactly as
+        // before this fix, so the writer's byte-preservation guard does not shadow the user's
+        // explicit new pick. See also CorruptedThemePreservationTests for the full read/write
+        // round-trip version of this case.
+        var sess   = Make();
+        var master = new SlideMaster { Id = "rId1", Theme = null, ThemePartPath = "ppt/theme/theme1.xml" };
+        sess.Presentation.Masters.Add(master);
+
+        var newTheme = BuiltInThemes.GetById(BuiltInThemes.Id.Berlin)!;
+        sess.SetTheme(newTheme);
+
+        master.Theme.Should().BeNull("this master never had a parsed theme to begin with");
+        master.ThemePartPath.Should().BeNull(
+            "the preservation guard must still be cleared so the writer emits the newly chosen " +
+            "theme instead of re-emitting the original (unparseable) theme part bytes");
+
+        sess.Undo();
+        master.ThemePartPath.Should().Be("ppt/theme/theme1.xml",
+            "undo must restore the preservation bookkeeping exactly as before this fix");
+    }
+
+    [Fact]
     public void SetTheme_SchemeColorResolvesToNewTheme()
     {
         var sess  = Make();

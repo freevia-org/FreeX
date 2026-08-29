@@ -4112,6 +4112,177 @@ public sealed class SlideCanvasAvaloniaTests
         return RenderPixels(canvas, width, height);
     }
 
+    // ── freep-tables F2: table cell text must be clipped to the cell it belongs to ──
+    // Table rows are never grown to fit typed text (row height only changes via explicit
+    // resize commands), so wrapped text routinely needs more vertical room than the row
+    // currently has. Before the fix, RenderTableCellText drew the cell's ResolvedTextLayout
+    // straight into the cell rect with no clip, so overflow bled past the row -- into the
+    // row below, or, as reproduced here with a single-row table, off the bottom of the
+    // table entirely. These tests render the real production SlideCanvas end to end and
+    // inspect raw pixels, so they fail if the paint path regresses.
+
+    /// <summary>
+    /// A single-row table whose cell holds far more wrapped text than the 20px row is tall
+    /// must not paint any of that text below the row/cell bounds. Reproduces the bug's
+    /// "spills off the table on the last row" case named in the finding.
+    /// </summary>
+    [Fact]
+    public async Task SlideCanvas_TableCellText_OverflowingRow_IsClippedToCellBounds()
+    {
+        const int width = 120, height = 150;
+        const int rowBottomPx = 30; // OffsetY 10 + HeightEmu 20px
+        byte[]? pixels = null;
+
+        await Run(() =>
+        {
+            var p = MakePresentation(pres =>
+            {
+                pres.SlideSizeCxEmu = (long)width * DrawingMlCoordinateUnits.EmuPerPixel;
+                pres.SlideSizeCyEmu = (long)height * DrawingMlCoordinateUnits.EmuPerPixel;
+                var slide = pres.Slides[0];
+                slide.Background = new ShapeFill.Solid(SrgbColor.White);
+                slide.Shapes.Clear();
+
+                var table = new TableShape();
+                table.ColumnWidthsEmu.Add(80L * DrawingMlCoordinateUnits.EmuPerPixel);
+                var row = new TableRow { HeightEmu = 20L * DrawingMlCoordinateUnits.EmuPerPixel };
+                var body = new TextBody { Wrap = true };
+                var paragraph = new Paragraph();
+                paragraph.Runs.Add(new Run
+                {
+                    Text = "wrap wrap wrap wrap wrap wrap wrap wrap",
+                    FontFamily = "Aptos",
+                    FontSizePt = 28,
+                    Color = new ThemeAwareColor(SrgbColor.Black),
+                });
+                body.Paragraphs.Add(paragraph);
+                row.Cells.Add(new TableCell
+                {
+                    TextBody = body,
+                    Fill = new ShapeFill.Solid(SrgbColor.White),
+                    InsetLeftPt = 0,
+                    InsetRightPt = 0,
+                    InsetTopPt = 0,
+                    InsetBottomPt = 0,
+                });
+                table.Rows.Add(row);
+
+                slide.Shapes.Add(new SlideShape
+                {
+                    Id = 60,
+                    Kind = SlideShapeKind.Table,
+                    OffsetXEmu = 10L * DrawingMlCoordinateUnits.EmuPerPixel,
+                    OffsetYEmu = 10L * DrawingMlCoordinateUnits.EmuPerPixel,
+                    ExtentCxEmu = 80L * DrawingMlCoordinateUnits.EmuPerPixel,
+                    ExtentCyEmu = 20L * DrawingMlCoordinateUnits.EmuPerPixel,
+                    Table = table,
+                });
+            });
+
+            var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+            pixels = RenderPixels(canvas, width, height);
+        });
+
+        pixels.Should().NotBeNull();
+
+        // A margin below the row bottom absorbs anti-aliasing; anything past it must still be
+        // pure white background if the overflow is actually clipped to the cell.
+        var bleedPixels = 0;
+        for (int y = rowBottomPx + 3; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int o = (y * width + x) * 4;
+                if (pixels![o] < 250 || pixels[o + 1] < 250 || pixels[o + 2] < 250)
+                    bleedPixels++;
+            }
+        }
+
+        bleedPixels.Should().Be(0,
+            "overflowing cell text must be clipped to the cell/row bounds, not bleed past the " +
+            "bottom of the table");
+    }
+
+    /// <summary>
+    /// Sibling/regression case for the fix above: short text that fully fits inside a normal
+    /// row must keep rendering -- the new clip geometry must exactly match the cell bounds
+    /// (not, say, an off-by-one empty rect) or it would silently hide fitting text too.
+    /// </summary>
+    [Fact]
+    public async Task SlideCanvas_TableCellText_ThatFitsWithinRow_StillRendersVisibly()
+    {
+        const int width = 120, height = 150;
+        byte[]? pixels = null;
+
+        await Run(() =>
+        {
+            var p = MakePresentation(pres =>
+            {
+                pres.SlideSizeCxEmu = (long)width * DrawingMlCoordinateUnits.EmuPerPixel;
+                pres.SlideSizeCyEmu = (long)height * DrawingMlCoordinateUnits.EmuPerPixel;
+                var slide = pres.Slides[0];
+                slide.Background = new ShapeFill.Solid(SrgbColor.White);
+                slide.Shapes.Clear();
+
+                var table = new TableShape();
+                table.ColumnWidthsEmu.Add(80L * DrawingMlCoordinateUnits.EmuPerPixel);
+                var row = new TableRow { HeightEmu = 40L * DrawingMlCoordinateUnits.EmuPerPixel };
+                var body = new TextBody { Wrap = true };
+                var paragraph = new Paragraph();
+                paragraph.Runs.Add(new Run
+                {
+                    Text = "Hi",
+                    FontFamily = "Aptos",
+                    FontSizePt = 14,
+                    Color = new ThemeAwareColor(SrgbColor.Black),
+                });
+                body.Paragraphs.Add(paragraph);
+                row.Cells.Add(new TableCell
+                {
+                    TextBody = body,
+                    Fill = new ShapeFill.Solid(SrgbColor.White),
+                    InsetLeftPt = 0,
+                    InsetRightPt = 0,
+                    InsetTopPt = 0,
+                    InsetBottomPt = 0,
+                });
+                table.Rows.Add(row);
+
+                slide.Shapes.Add(new SlideShape
+                {
+                    Id = 61,
+                    Kind = SlideShapeKind.Table,
+                    OffsetXEmu = 10L * DrawingMlCoordinateUnits.EmuPerPixel,
+                    OffsetYEmu = 10L * DrawingMlCoordinateUnits.EmuPerPixel,
+                    ExtentCxEmu = 80L * DrawingMlCoordinateUnits.EmuPerPixel,
+                    ExtentCyEmu = 40L * DrawingMlCoordinateUnits.EmuPerPixel,
+                    Table = table,
+                });
+            });
+
+            var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+            pixels = RenderPixels(canvas, width, height);
+        });
+
+        pixels.Should().NotBeNull();
+
+        // The cell interior (10,10)-(90,50) should contain visible (non-white) glyph pixels.
+        var glyphPixels = 0;
+        for (int y = 12; y < 48; y++)
+        {
+            for (int x = 12; x < 88; x++)
+            {
+                int o = (y * width + x) * 4;
+                if (pixels![o] < 250 || pixels[o + 1] < 250 || pixels[o + 2] < 250)
+                    glyphPixels++;
+            }
+        }
+
+        glyphPixels.Should().BeGreaterThan(0,
+            "text that fits inside the cell must still render -- the overflow clip must match " +
+            "the cell bounds exactly, not clip away in-bounds text too");
+    }
+
     private static async Task DrainInputAsync()
     {
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);

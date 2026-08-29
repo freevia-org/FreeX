@@ -460,6 +460,11 @@ public static class DocumentViewLayoutPlanner
     private const double MinimumTableRowHeightDip = 14.0;
     private const double EstimatedTableLineHeightDip = 18.0;
     private const double EstimatedTableVerticalPaddingDip = 8.0;
+    // FreeW's own document default (TextDocument.DefaultRun.FontSizePt); the fallback assumed for a
+    // table cell paragraph whose runs carry no explicit FontSizePt of their own.
+    private const double DefaultTableFontSizePt = 11.0;
+    // A 9pt Word table character occupies roughly 7dip, i.e. ~7/9 dip per point of font size.
+    private const double TableCharWidthDipPerPt = 7.0 / 9.0;
 
     public static DocumentPageMetricsPlan BuildPageMetrics(PageSettings page)
     {
@@ -2852,7 +2857,7 @@ public static class DocumentViewLayoutPlanner
             Math.Max(0, margins.LeftPt) + Math.Max(0, margins.RightPt));
         var contentWidthDip = Math.Max(12, cellWidthDip - horizontalPaddingDip);
         var lines = Math.Max(1, cell.Paragraphs.Sum(paragraph =>
-            EstimateParagraphLineCount(paragraph, contentWidthDip)));
+            EstimateParagraphLineCount(paragraph, contentWidthDip, ResolveEffectiveFontSizePt(paragraph))));
         var verticalPaddingDip = PageLayout.PointsToDip(
             Math.Max(0, margins.TopPt) + Math.Max(0, margins.BottomPt));
         var textHeightDip = lines * EstimatedTableLineHeightDip
@@ -2871,16 +2876,45 @@ public static class DocumentViewLayoutPlanner
         return table.Rows.Sum(row => EstimateTableRowHeightDip(table, row, widths));
     }
 
-    private static int EstimateParagraphLineCount(Paragraph paragraph, double contentWidthDip)
+    /// <summary>
+    /// The font size (in points) this pagination estimate should assume for a table cell paragraph.
+    /// Tables carry no reference back to their owning <see cref="TextDocument"/>, so this can only see
+    /// each run's own direct <see cref="RunFormatting.FontSizePt"/> -- it cannot walk a paragraph/table
+    /// style chain or the document's default run the way <see cref="DocumentRunFormattingResolver"/>
+    /// does. Falling back to <see cref="DefaultTableFontSizePt"/> (FreeW's own document default, see
+    /// <see cref="TextDocument.DefaultRun"/>) rather than silently assuming a smaller size keeps an
+    /// untouched default-styled table's estimate from undercounting wrapped lines. Takes the largest
+    /// explicit size among the paragraph's runs so a bigger font (a styled header cell, for instance)
+    /// widens the assumed character width instead of being averaged away by smaller neighbouring runs.
+    /// </summary>
+    private static double ResolveEffectiveFontSizePt(Paragraph paragraph)
+    {
+        var largestExplicitSizePt = 0.0;
+        foreach (var run in paragraph.Runs)
+        {
+            var sizePt = run.Formatting.FontSizePt ?? 0;
+            if (sizePt > largestExplicitSizePt)
+                largestExplicitSizePt = sizePt;
+        }
+
+        return largestExplicitSizePt > 0 ? largestExplicitSizePt : DefaultTableFontSizePt;
+    }
+
+    private static int EstimateParagraphLineCount(Paragraph paragraph, double contentWidthDip, double fontSizePt)
     {
         var text = paragraph.PlainText;
         if (string.IsNullOrEmpty(text))
             return 1;
 
         var explicitLines = text.Count(ch => ch == '\n') + 1;
-        // A 9pt Word table character occupies roughly 7dip. Use the authored grid width so the
-        // pagination plan agrees with both hosts when a narrow cell wraps before a page boundary.
-        var charsPerLine = Math.Max(1, (int)Math.Floor(Math.Max(12, contentWidthDip) / 7.0));
+        // A 9pt Word table character occupies roughly 7dip (TableCharWidthDipPerPt = 7/9), so scale that
+        // per-character width by the paragraph's own font size rather than assuming every cell is set in
+        // 9pt: FreeW's own document default is 11pt (TextDocument.DefaultRun), and an unscaled 9pt-shaped
+        // estimate undercounts wrapped lines -- and diverges further still for a larger font -- on
+        // virtually every real table. Use the authored grid width so the pagination plan agrees with both
+        // hosts when a narrow cell wraps before a page boundary.
+        var charWidthDip = Math.Max(2.0, fontSizePt * TableCharWidthDipPerPt);
+        var charsPerLine = Math.Max(1, (int)Math.Floor(Math.Max(12, contentWidthDip) / charWidthDip));
         var wrappedLines = Math.Max(1, (int)Math.Ceiling(text.Length / (double)charsPerLine));
         return Math.Max(explicitLines, wrappedLines);
     }

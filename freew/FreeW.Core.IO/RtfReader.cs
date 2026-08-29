@@ -473,6 +473,20 @@ public static class RtfReader
                         _pos = Math.Min(_pos + binCount, _rtf.Length);
                     break;
 
+                // ---- section columns (round 167, F2) ----
+                // \colsN / \colsxN are section-level (not run/paragraph-scoped) control words RtfWriter
+                // emits once, document-level, for the single implicit section this reader/writer pair
+                // models. Restoring PageSettings.ColumnCount here is what makes a \column break run (below)
+                // land in a multi-column section again instead of silently falling back to a page break.
+                case "cols":
+                    if (param is { } colCount && colCount > 0)
+                        _document.Page.ColumnCount = colCount;
+                    break;
+                case "colsx":
+                    if (param is { } colsxTwips)
+                        _document.Page.ColumnSpacingPt = TwipsToPt(colsxTwips);
+                    break;
+
                 // ---- breaks / structure ----
                 case "par": ParPlain(); break;
                 case "line": AppendChar('\n'); break;

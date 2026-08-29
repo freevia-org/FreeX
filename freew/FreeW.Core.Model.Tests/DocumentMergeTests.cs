@@ -1117,6 +1117,42 @@ public class DocumentMergeTests
         target.Styles["Heading1"].Run.ColorHex.Should().Be("#AA0000");
     }
 
+    [Fact]
+    public void Merge_ReusesTargetStyle_WhenSourceStyleUnderANewIdCollidesWithMatchingName()
+    {
+        // Round 167: unlike the two tests above (same id, matching/differing names), the source style here
+        // has an id the target has NEVER seen ("SourceCustomId") but its display Name ("MyStyle") matches a
+        // target style parked under a completely DIFFERENT id ("TargetCustomId") -- exactly what happens
+        // when two documents each independently created a custom style with the same name. Before the fix,
+        // usedIds.Add(sourceId) succeeded (the id really is new) so the style was imported verbatim under
+        // its own id, leaving target.Styles with two entries sharing the Name "MyStyle" -- invalid OOXML.
+        var source = new TextDocument();
+        source.Styles["SourceCustomId"] = new DocumentStyle
+        {
+            Id = "SourceCustomId", Name = "MyStyle", Run = new RunFormatting { Bold = true, ColorHex = "#0066AA" }
+        };
+        source.Blocks.Add(new Paragraph("Source paragraph") { StyleId = "SourceCustomId" });
+
+        var target = new TextDocument();
+        target.Styles["TargetCustomId"] = new DocumentStyle
+        {
+            Id = "TargetCustomId", Name = "MyStyle", Run = new RunFormatting { Bold = true, ColorHex = "#AA0000" }
+        };
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        // The pasted paragraph resolves to the target's own differently-id'd "MyStyle", not a shadow copy
+        // imported under the source's own id.
+        inserted.Single().Should().BeOfType<Paragraph>().Which.StyleId.Should().Be("TargetCustomId");
+        target.Styles.Should().NotContainKey("SourceCustomId");
+        target.Styles.Values.Select(style => style.Name)
+            .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .Should().OnlyContain(group => group.Count() == 1, "no two styles may share a display name");
+        // The target's pre-existing definition wins, matching Word's own same-name paste behaviour and the
+        // same-id case above.
+        target.Styles["TargetCustomId"].Run.ColorHex.Should().Be("#AA0000");
+    }
+
     private static XElement Numbering(XNamespace wordprocessing, int abstractId, int numberId, string label) =>
         new(wordprocessing + "numbering",
             new XAttribute(XNamespace.Xmlns + "w", wordprocessing.NamespaceName),

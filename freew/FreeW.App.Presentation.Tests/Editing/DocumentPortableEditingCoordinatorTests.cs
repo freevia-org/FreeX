@@ -755,6 +755,45 @@ public sealed class DocumentReferenceEditingCoordinatorTests
             .Should().OnlyContain(run => !run.ComplexField!.ShowCode);
     }
 
+    /// <summary>
+    /// Round 167 correction: sibling of <see cref="FieldCodeToggleUsesOnePortableDocumentWideMajorityDecision"/>
+    /// for a document mixing a <see cref="ComplexField"/> run with a <see cref="RunFieldKind"/> simple field
+    /// (the form Insert &gt; Header &amp; Footer &gt; Page Number produces). Real Word's Alt+F9 flips BOTH
+    /// kinds of field to one shared state, so the document-wide toggle must count and flip the simple field
+    /// too -- not leave it behind the way the round-166/167 carryover wrongly recorded as deliberate. The
+    /// simple field's kind and lock are untouched by the toggle (only its new
+    /// <see cref="Run.FieldCodeVisible"/> presentation flag changes) -- its cached <see cref="Run.Text"/>
+    /// result also stays put, mirroring how flipping <see cref="ComplexField.ShowCode"/> never rewrites
+    /// <see cref="ComplexField.Instruction"/> or the run's cached result either.
+    /// </summary>
+    [Fact]
+    public void FieldCodeToggleAppliesToBothComplexAndSimpleRunFieldKindFields()
+    {
+        var complex = Run.ComplexFieldRun(" PAGE ", "1");
+        var simplePageNumber = new Run("3") { FieldKind = RunFieldKind.PageNumber, FieldLocked = false };
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph { Runs = { complex, simplePageNumber } });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var result = session.References.ToggleFieldCodes();
+
+        result.Should().Be(new DocumentFieldCodeToggleResult(true, true, 2));
+        complex.ComplexField!.ShowCode.Should().BeTrue();
+        simplePageNumber.FieldKind.Should().Be(RunFieldKind.PageNumber);
+        simplePageNumber.FieldCodeVisible.Should().BeTrue(
+            "Alt+F9 must show a simple field's code together with a complex field's, not skip it");
+        simplePageNumber.Text.Should().Be("3", "the cached result must survive a display-mode toggle");
+        simplePageNumber.FieldLocked.Should().BeFalse();
+
+        var toggledBack = session.References.ToggleFieldCodes();
+
+        toggledBack.Should().Be(new DocumentFieldCodeToggleResult(true, false, 2));
+        complex.ComplexField!.ShowCode.Should().BeFalse();
+        simplePageNumber.FieldCodeVisible.Should().BeFalse();
+        simplePageNumber.Text.Should().Be("3");
+    }
+
     [Fact]
     public void SelectedComplexFieldTransitionsAreCoordinatorOwned()
     {
@@ -2171,6 +2210,23 @@ public sealed class DocumentReferenceEditingCoordinatorTests
 
 public sealed class DocumentPortableEditingOwnershipTests
 {
+    /// <summary>
+    /// Round 167 correction: the C3-remediation doc comment this guarded ("no field-code state to toggle
+    /// for these runs") was wrong -- real Word toggles field-code display for a simple
+    /// <see cref="RunFieldKind"/> field exactly like a <see cref="ComplexField"/> -- and pinning it with a
+    /// source-contract test turned a fixable gap into a guarded "this is correct" regression trap. This now
+    /// guards the corrected explanation instead: <see cref="DocumentReferenceEditingCoordinator.ToggleFieldCodes"/>
+    /// including both field forms must stay documented, not silently revert to looking unexplained.
+    /// </summary>
+    [Fact]
+    public void ToggleFieldCodesDocumentsThatItIncludesSimpleFields()
+    {
+        var source = ReadSource("freew", "FreeW.App.Presentation", "Editing", "DocumentReferenceEditingCoordinator.cs");
+
+        source.Should().Contain("for a simple field exactly like it shows");
+        source.Should().NotContain("no field-code state to toggle for these runs");
+    }
+
     [Fact]
     public void RenderersDelegateMigratedTableParagraphAndReferenceCommands()
     {

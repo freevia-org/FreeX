@@ -9096,17 +9096,26 @@ public sealed partial class DocumentView : RichTextBox
                 // value, which we keep as the cached fallback (matching Word's cached-field behaviour).
                 // If the run somehow lost its text, fall back to the marker's stored cached value. A
                 // locked field (Ctrl+F11) must never have a recomputed/displayed value committed back --
-                // it keeps the marker's cached value, mirroring the ComplexFieldMarker case below.
-                var cachedText = fieldMarker.Locked
+                // it keeps the marker's cached value, mirroring the ComplexFieldMarker case below. When
+                // field codes are shown (Shift+F9/Alt+F9) the visible text is the code, not the result, so
+                // the cached result is taken from the marker there too -- mirroring how the ComplexFieldMarker
+                // case below keeps ShowCode from ever baking the code text into the cached result.
+                var cachedText = fieldMarker.Locked || fieldMarker.ShowCode
                     ? fieldMarker.Cached
                     : (fieldRun.Text.Length > 0 ? fieldRun.Text : fieldMarker.Cached);
-                modelParagraph.Runs.Add(new ModelRun(cachedText, ReadRunFormatting(fieldRun))
+                var fieldFormatting = ReadRunFormatting(fieldRun);
+                // The code-display foreground (gray) BuildFieldRun applies is view-only, mirroring the
+                // ComplexFieldMarker case below -- restore the run's true color rather than baking gray in.
+                if (fieldMarker is { ShowCode: true, Formatting: { } trueFormatting })
+                    fieldFormatting = fieldFormatting with { ColorHex = trueFormatting.ColorHex };
+                modelParagraph.Runs.Add(new ModelRun(cachedText, fieldFormatting)
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
                     HyperlinkTooltip = hyperlinkTooltip,
                     FieldKind = fieldMarker.Kind,
-                    FieldLocked = fieldMarker.Locked
+                    FieldLocked = fieldMarker.Locked,
+                    FieldCodeVisible = fieldMarker.ShowCode
                 });
                 break;
             case WpfRun { Tag: ComplexFieldMarker complexMarker } complexFieldRun:
@@ -12770,15 +12779,20 @@ public sealed partial class DocumentView : RichTextBox
         // identical guard for the ComplexField form. Without this, a locked DATE/TIME/PAGE/AUTHOR/
         // FILENAME/NUMPAGES field kept recalculating from live state on every render even after being
         // locked, and the recomputed value then got written back into the model by CommitToModel.
-        var display = run.FieldLocked
-            ? run.Text
-            : ResolveFieldText(run.FieldKind, run.Text, fieldDocument, fieldFileName);
+        // Field-code display (Shift+F9/Alt+F9) takes priority over both -- matching how
+        // ComplexFieldDisplayPlanner.Build checks ShowCode before anything else -- so the code is shown
+        // even for a locked field, exactly like Word.
+        var display = run.FieldCodeVisible
+            ? DocumentFieldDisplayPlanner.ResolveCode(run.FieldKind)
+            : run.FieldLocked
+                ? run.Text
+                : ResolveFieldText(run.FieldKind, run.Text, fieldDocument, fieldFileName);
         var fmt = run.Formatting ?? document.DefaultRun;
         var wpf = new WpfRun(display)
         {
             FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
-            Tag = new FieldMarker(run.FieldKind, run.Text, run.FieldLocked)
+            Tag = new FieldMarker(run.FieldKind, run.Text, run.FieldLocked, run.FieldCodeVisible, fmt)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
             wpf.FontFamily = new FontFamily(family);
@@ -12786,7 +12800,9 @@ public sealed partial class DocumentView : RichTextBox
             wpf.FontSize = size * PxPerPoint;
         ApplyBaselinePositionPresentation(wpf, fmt);
         ApplyOpenTypeTypography(wpf, fmt);
-        if (TryParseColor(fmt.ColorHex, out var color))
+        if (run.FieldCodeVisible)
+            wpf.Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80));
+        else if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         wpf.ToolTip = run.FieldKind + " field";
         return wpf;
@@ -12814,14 +12830,25 @@ public sealed partial class DocumentView : RichTextBox
 
     /// <summary>
     /// Carried on a field WPF run's Tag so CommitToModel can round-trip the field kind and its cached
-    /// (last-computed) text. The WPF run's visible text is the resolved value; the cached text is what
-    /// the model keeps so a re-resolve next render is possible and field-unaware consumers still render.
-    /// <see cref="Locked"/> mirrors <see cref="ComplexFieldMarker"/>'s reliance on <c>ComplexField.IsLocked</c>:
-    /// a <see cref="RunFieldKind"/> field has no wrapper object to carry the flag by reference across a
-    /// render/commit round trip, so the marker snapshots it here and <see cref="SetFieldLockAtCaret"/>
-    /// mutates it directly (see <c>SetSimpleFieldLockAtCaret</c>).
+    /// (last-computed) text. The WPF run's visible text is the resolved value, or the field code (e.g.
+    /// <c>{ PAGE }</c>) when <see cref="ShowCode"/> is set; the cached text is what the model keeps so a
+    /// re-resolve next render is possible and field-unaware consumers still render.
+    /// <see cref="Locked"/> mirrors <see cref="ComplexFieldMarker"/>'s reliance on <c>ComplexField.IsLocked</c>,
+    /// and <see cref="ShowCode"/> mirrors its reliance on <c>ComplexField.ShowCode</c>: a
+    /// <see cref="RunFieldKind"/> field has no wrapper object to carry either flag by reference across a
+    /// render/commit round trip, so the marker snapshots them here -- <see cref="SetFieldLockAtCaret"/>
+    /// mutates <see cref="Locked"/> directly (see <c>SetSimpleFieldLockAtCaret</c>), and
+    /// <see cref="ToggleFieldCodeAtCaret"/> mutates <see cref="ShowCode"/> the same way (see
+    /// <c>ToggleSimpleFieldCodeAtCaret</c>). <see cref="Formatting"/> mirrors
+    /// <see cref="ComplexFieldMarker.Formatting"/>: the run's true (non-code-gray) formatting, restored on
+    /// commit so the code-display foreground override never gets baked into the model as real formatting.
     /// </summary>
-    private sealed record FieldMarker(RunFieldKind Kind, string Cached, bool Locked = false);
+    private sealed record FieldMarker(
+        RunFieldKind Kind,
+        string Cached,
+        bool Locked = false,
+        bool ShowCode = false,
+        RunFormatting? Formatting = null);
 
     /// <summary>
     /// Carried on a table-formula WPF run's Tag so <see cref="CommitToModel"/> can round-trip the formula
@@ -13206,7 +13233,11 @@ public sealed partial class DocumentView : RichTextBox
 
     /// <summary>
     /// Shift+F9: toggles field-code display for selected complex fields, or only the field containing the
-    /// caret when the selection does not intersect a field.
+    /// caret when the selection does not intersect a field. Falls back to
+    /// <see cref="ToggleSimpleFieldCodeAtCaret"/> when the caret is on a <see cref="RunFieldKind"/> field
+    /// instead (the form Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt;
+    /// Date, and Quick Parts &gt; Document Property &gt; Author all produce) -- mirroring the
+    /// <see cref="SetFieldLockAtCaret"/> fallback to <see cref="SetSimpleFieldLockAtCaret"/>.
     /// </summary>
     public void ToggleFieldCodeAtCaret()
     {
@@ -13217,13 +13248,45 @@ public sealed partial class DocumentView : RichTextBox
                 ?? ComplexFieldRunAtPointer(Selection.Start)
                 ?? ComplexFieldRunAtPointer(Selection.End);
             if (fieldRun?.Tag is not ComplexFieldMarker marker)
+            {
+                ToggleSimpleFieldCodeAtCaret();
                 return;
+            }
             fields = [marker.Field];
         }
 
         CommitToModel();
         if (ReferenceEdits.ToggleComplexFieldCodes(fields).Applied)
             Render();
+    }
+
+    /// <summary>
+    /// Shift+F9 for a simple <see cref="RunFieldKind"/> field (DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES/...
+    /// inserted via Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt; Date, or
+    /// Quick Parts &gt; Document Property &gt; Author/Title/etc.). Unlike <see cref="ComplexField"/>, a
+    /// simple field carries no wrapper object to hold the code-display flag, so it is applied by mutating
+    /// the caret's <see cref="FieldMarker"/> tag directly, the same way <see cref="SetSimpleFieldLockAtCaret"/>
+    /// mutates the lock -- <see cref="ReadInline"/>'s <c>FieldMarker</c> case then writes it onto the fresh
+    /// model run <see cref="CommitToModel"/> creates as <see cref="ModelRun.FieldCodeVisible"/>.
+    /// </summary>
+    private void ToggleSimpleFieldCodeAtCaret()
+    {
+        var fieldRun = FieldRunAtPointer(CaretPosition)
+            ?? FieldRunAtPointer(Selection.Start)
+            ?? FieldRunAtPointer(Selection.End);
+        if (fieldRun?.Tag is not FieldMarker marker)
+            return;
+
+        var codeVisible = !marker.ShowCode;
+        // Restore the run's visible text to the cached result when turning code display back off --
+        // CommitToModel's FieldMarker case only re-derives the cached text from fieldRun.Text itself when
+        // ShowCode is false, so leaving the WPF run's text at the still-displayed "{ CODE }" string here
+        // would otherwise get baked into the model as the field's new "result".
+        if (!codeVisible)
+            fieldRun.Text = marker.Cached;
+        fieldRun.Tag = marker with { ShowCode = codeVisible };
+        CommitToModel();
+        Render();
     }
 
     /// <summary>
@@ -13372,7 +13435,15 @@ public sealed partial class DocumentView : RichTextBox
 
     /// <summary>
     /// Ctrl+Shift+F9: replaces selected complex fields with their displayed results, or only the field
-    /// containing the caret when the selection does not intersect a field.
+    /// containing the caret when the selection does not intersect a field. Falls back to
+    /// <see cref="UnlinkSimpleFieldAtCaret"/> when the caret is on a <see cref="RunFieldKind"/> field
+    /// instead (the form Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt;
+    /// Date, and Quick Parts &gt; Document Property &gt; Author all produce) -- mirroring the
+    /// <see cref="SetFieldLockAtCaret"/> fallback to <see cref="SetSimpleFieldLockAtCaret"/>. Without this
+    /// fallback (the Avalonia host's identical gap was closed at round 166), Ctrl+Shift+F9 was a silent
+    /// no-op on every RunFieldKind field in this shell: <c>ComplexFieldRunAtPointer</c> only ever matches
+    /// a <see cref="ComplexFieldMarker"/> tag, and a simple field is tagged with the distinct
+    /// <see cref="FieldMarker"/> record, so the match could never succeed.
     /// </summary>
     public void UnlinkFieldAtCaret()
     {
@@ -13383,7 +13454,10 @@ public sealed partial class DocumentView : RichTextBox
                 ?? ComplexFieldRunAtPointer(Selection.Start)
                 ?? ComplexFieldRunAtPointer(Selection.End);
             if (fieldRun?.Tag is not ComplexFieldMarker marker)
+            {
+                UnlinkSimpleFieldAtCaret();
                 return;
+            }
             markers = [marker];
         }
 
@@ -13393,6 +13467,36 @@ public sealed partial class DocumentView : RichTextBox
         CommitToModel();
         if (ReferenceEdits.UnlinkComplexFields(targets).Applied)
             Render();
+    }
+
+    /// <summary>
+    /// Ctrl+Shift+F9 for a simple <see cref="RunFieldKind"/> field (DATE/TIME/PAGE/AUTHOR/FILENAME/
+    /// NUMPAGES/... inserted via Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick
+    /// Parts &gt; Date, or Quick Parts &gt; Document Property &gt; Author/Title/etc.). Unlike
+    /// <see cref="ComplexField"/>, a simple field carries no model object identity that survives a
+    /// render/commit round trip, so the unlink is applied the same way <see cref="SetSimpleFieldLockAtCaret"/>
+    /// applies a lock: by rewriting the caret's <see cref="FieldMarker"/> tag to <see cref="RunFieldKind.None"/>
+    /// before <see cref="CommitToModel"/> writes it onto the fresh model run. The WPF run's current text
+    /// (already the resolved display value <see cref="BuildFieldRun"/> renders, or the locked cache) becomes
+    /// the baked-in static text, matching Avalonia's <c>UnlinkSimpleFieldAtCaret</c> -- except when field
+    /// codes are shown (Shift+F9/Alt+F9), where the visible text is the code (e.g. <c>{ PAGE }</c>) rather
+    /// than the result: Word always unlinks to the result, so the marker's cached result is restored onto
+    /// the run first, mirroring how <see cref="UnlinkFieldAtCaret"/> unlinks a ComplexField to
+    /// <c>marker.Cached</c> rather than whatever its ShowCode display currently shows.
+    /// </summary>
+    private void UnlinkSimpleFieldAtCaret()
+    {
+        var fieldRun = FieldRunAtPointer(CaretPosition)
+            ?? FieldRunAtPointer(Selection.Start)
+            ?? FieldRunAtPointer(Selection.End);
+        if (fieldRun?.Tag is not FieldMarker marker)
+            return;
+
+        if (marker.ShowCode)
+            fieldRun.Text = marker.Cached;
+        fieldRun.Tag = marker with { Kind = RunFieldKind.None, Locked = false, ShowCode = false };
+        CommitToModel();
+        Render();
     }
 
     private ModelRun? FindComplexFieldRun(ComplexField field) =>
@@ -13433,9 +13537,10 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Alt+F9: toggles whether complex fields in the document show their field <em>codes</em> (e.g.
-    /// <c>{ PAGE }</c>) or their <em>results</em>. Flips every complex field's
-    /// <see cref="ComplexField.ShowCode"/> to the opposite of the current majority state and re-renders.
+    /// Alt+F9: toggles whether every field in the document -- both <see cref="ComplexField"/> fields and
+    /// simple <see cref="RunFieldKind"/> fields (PAGE/DATE/TIME/AUTHOR/FILENAME/NUMPAGES/document-property)
+    /// -- shows its field <em>code</em> (e.g. <c>{ PAGE }</c>) or its <em>result</em>. Flips every field to
+    /// the opposite of the current combined majority state and re-renders.
     /// </summary>
     public void ToggleFieldCodes()
     {

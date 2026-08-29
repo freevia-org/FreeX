@@ -181,6 +181,14 @@ public static class HeaderFooterVisualPlanner
 
         var field = run.ComplexField;
 
+        // r167: a simple field showing its code renders the code, exactly as the ComplexField branch
+        // below does through ComplexFieldDisplayPlanner.Build. Without this the model flag flipped and
+        // nothing changed on screen for the very gesture the finding names -- Insert > Header & Footer >
+        // Page Number, then Shift+F9 -- because this planner paints the Avalonia header/footer band and
+        // resolved the live value regardless.
+        if (field is null && run.FieldCodeVisible)
+            return DocumentFieldDisplayPlanner.ResolveCode(run.FieldKind);
+
         // A locked field (Ctrl+F11) must not recompute on render, matching the WPF host's identical
         // guards in BuildFieldRun (DocumentView.cs ~12773) and ResolveComplexFieldText (~12933).
         // Without this, a locked DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES field in a header/footer keeps

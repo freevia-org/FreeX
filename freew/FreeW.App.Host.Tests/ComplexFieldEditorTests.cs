@@ -257,6 +257,204 @@ public sealed class ComplexFieldEditorTests
         runs[3].ComplexField!.Instruction.Should().Be(" SECOND ");
     }
 
+    /// <summary>
+    /// C1 remediation: <see cref="DocumentView.UnlinkFieldAtCaret"/> had the identical <see cref="RunFieldKind"/>
+    /// blind spot <see cref="DocumentView.SetFieldLockAtCaret"/> was fixed for at round 165 (see
+    /// <see cref="SetFieldLockAtCaret_SimpleAuthorField_PreventsRecomputeOnUpdateFields"/> above) --
+    /// <c>ComplexFieldRunAtPointer</c> only ever matches a <c>ComplexFieldMarker</c> tag, so Ctrl+Shift+F9 was a
+    /// silent no-op on every RunFieldKind field (Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt;
+    /// Quick Parts &gt; Date, Quick Parts &gt; Document Property &gt; Author) in this shell. Round 166 fixed the
+    /// Avalonia sibling (<c>R166_UnlinkFieldSiblingTests</c>); this is the WPF fix.
+    /// </summary>
+    [StaFact]
+    public void UnlinkFieldAtCaret_SimpleAuthorField_ConvertsToStaticText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Author = "Ada Lovelace";
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("By "), Run.AuthorField("Ada Lovelace") } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var renderedField = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "Ada Lovelace");
+        view.CaretPosition = renderedField.ContentStart.GetPositionAtOffset(2)
+            ?? renderedField.ContentStart;
+
+        view.UnlinkFieldAtCaret();
+
+        var runs = view.Model.Blocks.OfType<Paragraph>().Single().Runs;
+        var unlinkedRun = runs.Single(r => r.Text == "Ada Lovelace");
+        unlinkedRun.FieldKind.Should().Be(
+            RunFieldKind.None,
+            "Ctrl+Shift+F9 must convert the field run into plain static text, the same way it already does " +
+            "for a ComplexField");
+        unlinkedRun.FieldLocked.Should().BeFalse();
+    }
+
+    /// <summary>Sibling no-regression: a caret sitting on ordinary text (no field of either kind under it)
+    /// keeps the original silent no-op -- there is nothing to unlink.</summary>
+    [StaFact]
+    public void UnlinkFieldAtCaret_OnPlainTextCaret_RemainsANoOp()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Just plain text"));
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var renderedText = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "Just plain text");
+        view.CaretPosition = renderedText.ContentStart.GetPositionAtOffset(4)
+            ?? renderedText.ContentStart;
+
+        view.UnlinkFieldAtCaret();
+
+        var run = view.Model.Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.Text.Should().Be("Just plain text");
+        run.FieldKind.Should().Be(RunFieldKind.None);
+    }
+
+    /// <summary>
+    /// Round 167 correction: <see cref="DocumentView.ToggleFieldCodeAtCaret"/> ("Shift+F9") was wrongly
+    /// recorded (first at round 166, then re-affirmed at round 167 with a characterization test) as a
+    /// deliberate no-op for a simple <see cref="RunFieldKind"/> field. Real Word toggles field-code display
+    /// for a simple field exactly like a complex one -- an AUTHOR field shows <c>{ AUTHOR }</c>. The flag
+    /// lives on the new <see cref="Run.FieldCodeVisible"/>, mirroring how <see cref="Run.FieldLocked"/>
+    /// already carries the Ctrl+F11 lock for the same run shape; <see cref="ToggleSimpleFieldCodeAtCaret"/>
+    /// (private) is the fallback this exercises, the same way <c>SetSimpleFieldLockAtCaret</c> and
+    /// <c>UnlinkSimpleFieldAtCaret</c> already fall back for Ctrl+F11 and Ctrl+Shift+F9.
+    /// </summary>
+    [StaFact]
+    public void ToggleFieldCodeAtCaret_SimpleAuthorField_TogglesCodeDisplayAndBack()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Author = "Ada Lovelace";
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("By "), Run.AuthorField("Ada Lovelace") } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var renderedField = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "Ada Lovelace");
+        view.CaretPosition = renderedField.ContentStart.GetPositionAtOffset(2)
+            ?? renderedField.ContentStart;
+
+        view.ToggleFieldCodeAtCaret();
+
+        var runAfterFirstToggle = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.Author);
+        runAfterFirstToggle.FieldCodeVisible.Should().BeTrue(
+            "Shift+F9 must show a simple field's code just like a complex field's");
+        var renderedCode = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "{ AUTHOR }");
+
+        view.CaretPosition = renderedCode.ContentStart.GetPositionAtOffset(2)
+            ?? renderedCode.ContentStart;
+        view.ToggleFieldCodeAtCaret();
+
+        var runAfterSecondToggle = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.Author);
+        runAfterSecondToggle.FieldCodeVisible.Should().BeFalse("toggling again must restore the result view");
+        runAfterSecondToggle.Text.Should().Be("Ada Lovelace");
+        runAfterSecondToggle.FieldLocked.Should().BeFalse();
+    }
+
+    /// <summary>Sibling no-regression: a caret sitting on ordinary text (no field of either kind under it)
+    /// keeps the original silent no-op -- there is nothing to toggle.</summary>
+    [StaFact]
+    public void ToggleFieldCodeAtCaret_OnPlainTextCaret_RemainsANoOp()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Just plain text"));
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var renderedText = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "Just plain text");
+        view.CaretPosition = renderedText.ContentStart.GetPositionAtOffset(4)
+            ?? renderedText.ContentStart;
+
+        view.ToggleFieldCodeAtCaret();
+
+        var run = view.Model.Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.Text.Should().Be("Just plain text");
+    }
+
+    /// <summary>
+    /// Round 167 correction, document-wide surface: Alt+F9 (<see cref="DocumentView.ToggleFieldCodes"/>)
+    /// must show a ribbon-inserted (Insert &gt; Header &amp; Footer &gt; Page Number) PAGE field's code
+    /// exactly like it already does for a ComplexField, and toggle back to the resolved page number.
+    /// </summary>
+    [StaFact]
+    public void ToggleFieldCodes_RibbonInsertedPageNumberField_ShowsAndHidesTheFieldCode()
+    {
+        var view = new DocumentView();
+        view.LoadModel(TextDocument.CreateEmpty());
+        view.InsertField(RunFieldKind.PageNumber);
+        view.CommitToModel();
+        var resultTextBefore = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.PageNumber).Text;
+
+        view.ToggleFieldCodes();
+
+        view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.PageNumber).FieldCodeVisible.Should().BeTrue();
+        view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Should().Contain(run => run.Text == "{ PAGE }");
+
+        view.ToggleFieldCodes();
+
+        var runAfter = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.PageNumber);
+        runAfter.FieldCodeVisible.Should().BeFalse();
+        runAfter.Text.Should().Be(resultTextBefore);
+        view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Should().Contain(run => run.Text == resultTextBefore);
+    }
+
+    /// <summary>
+    /// Round 167 correction, document-wide surface: Alt+F9 must show a ribbon-inserted (Insert &gt; Quick
+    /// Parts &gt; Date) DATE field's code exactly like it already does for a ComplexField, and toggle back
+    /// to the resolved date.
+    /// </summary>
+    [StaFact]
+    public void ToggleFieldCodes_RibbonInsertedDateField_ShowsAndHidesTheFieldCode()
+    {
+        var view = new DocumentView();
+        view.LoadModel(TextDocument.CreateEmpty());
+        view.InsertField(RunFieldKind.Date);
+        view.CommitToModel();
+        var resultTextBefore = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.Date).Text;
+
+        view.ToggleFieldCodes();
+
+        view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.Date).FieldCodeVisible.Should().BeTrue();
+        view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Should().Contain(run => run.Text == "{ DATE }");
+
+        view.ToggleFieldCodes();
+
+        var runAfter = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(r => r.FieldKind == RunFieldKind.Date);
+        runAfter.FieldCodeVisible.Should().BeFalse();
+        runAfter.Text.Should().Be(resultTextBefore);
+        view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Should().Contain(run => run.Text == resultTextBefore);
+    }
+
     [StaFact]
     public void SetFieldLockAtCaret_ChangesOnlyCurrentField_AndPreservesDirtyState()
     {

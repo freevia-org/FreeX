@@ -30,6 +30,13 @@ public sealed record PresentationClipboardContent(
     public bool HasSelection => SelectionBytes is { Length: > 0 };
     public bool HasImage => PngBytes is { Length: > 0 };
     public bool HasText => !string.IsNullOrEmpty(Text);
+
+    // freep-tables F1: a standalone plain-text payload whose lines contain a tab character is a
+    // tab-delimited table projection (FreeX's Ctrl+C on a cell range writes exactly this: TSV
+    // Text plus CF_HTML/CSV/a rendered bitmap, but no RTF or XamlPackage). Callers use this to
+    // let that structured text win over an accompanying flat image, the same way richer RichText
+    // / XamlPackage payloads already do, instead of collapsing to an inert picture of the cells.
+    public bool HasTabularText => HasText && Text!.Contains('\t');
     public bool HasRichText => RichTextBytes is { Length: > 0 } || RtfBytes is { Length: > 0 };
     public bool HasXamlPackage => XamlPackageBytes is { Length: > 0 };
     public bool IsEmpty => !HasSelection && !HasImage && !HasText && !HasRichText && !HasXamlPackage;
@@ -221,7 +228,8 @@ public static class PresentationClipboardPastePlanner
         bool internalHasData,
         bool ownCopyIsCurrent,
         bool hasRichText = false,
-        bool hasXamlPackage = false)
+        bool hasXamlPackage = false,
+        bool hasTabularText = false)
     {
         if (ownCopyIsCurrent && internalHasData)
             return PresentationClipboardPasteSource.Internal;
@@ -231,6 +239,12 @@ public static class PresentationClipboardPastePlanner
             return PresentationClipboardPasteSource.RichText;
         if (hasXamlPackage)
             return PresentationClipboardPasteSource.XamlPackage;
+        // freep-tables F1: tab-delimited standalone text (FreeX's cell-range Ctrl+C payload) is
+        // structured content, same as RichText/XamlPackage -- it must win over an accompanying
+        // flat image instead of collapsing the paste into an inert picture of the cells. Plain,
+        // non-tabular text still loses to an image, unchanged from prior behavior.
+        if (hasTabularText)
+            return PresentationClipboardPasteSource.Text;
         if (hasImage)
             return PresentationClipboardPasteSource.Image;
         if (hasText)

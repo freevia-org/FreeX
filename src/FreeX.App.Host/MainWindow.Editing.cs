@@ -1624,6 +1624,15 @@ public partial class MainWindow
         InvalidateNavigationCaches();
         UpdateTitleBar();
         _windowRegistry?.NotifyDocumentStateChanged(this);
+        // R167-data-validation-ui-F1: this is the real per-edit commit path for ordinary typed
+        // cell edits (CommitEdit/CommitEditAcrossSelection). Excel auto-clears a cell's red
+        // Circle Invalid Data oval the instant the flagged value is corrected, but that re-check
+        // previously only ran from seven specific Data-ribbon commands (see the comment on
+        // PruneCorrectedValidationCircles in MainWindow.DataCommands.cs) -- typing a fix directly
+        // into a circled cell and pressing Enter never pruned it, leaving a stale circle on an
+        // already-valid cell. Must run before UpdateViewport() so its refreshed
+        // sheet.ValidationCircleCells is what UpdateViewport projects onto SheetGrid.
+        PruneCorrectedValidationCircles();
         UpdateViewport();
         RefreshStatusBar();
         RefreshValidationDropdown();

@@ -284,6 +284,7 @@ public static class DocumentModelCloner
         SubDocument = source.SubDocument,
         FieldKind = source.FieldKind,
         FieldLocked = source.FieldLocked,
+        FieldCodeVisible = source.FieldCodeVisible,
         TableFormula = source.TableFormula,
         FootnoteId = source.FootnoteId,
         EndnoteId = source.EndnoteId,

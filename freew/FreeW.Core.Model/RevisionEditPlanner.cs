@@ -296,6 +296,7 @@ public static class RevisionEditPlanner
         SubDocument = source.SubDocument,
         FieldKind = source.FieldKind,
         FieldLocked = source.FieldLocked,
+        FieldCodeVisible = source.FieldCodeVisible,
         TableFormula = source.TableFormula,
         Citation = source.Citation,
         CrossReference = source.CrossReference,

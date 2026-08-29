@@ -70,6 +70,44 @@ public class RtfRoundTripTests
         paragraph.Runs.Should().NotContain(run => run.IsPageBreak);
     }
 
+    // freew-columns-sections F2 — a section's ColumnCount (and its ColumnSpacingPt) must survive an RTF
+    // round trip. Previously RtfWriter emitted no \cols control word at all, so a 2-column document always
+    // reloaded as ColumnCount=1; combined with the \column break run surviving (see the test above), a
+    // manual column break on reload silently became a spurious extra page (WPF's Block.BreakColumnBefore
+    // falls back to a page break when the surrounding section has only one column).
+    [Fact]
+    public void MultiColumnSection_PreservesColumnCountAndSpacingOnRoundTrip()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Page.ColumnCount = 2;
+        document.Page.ColumnSpacingPt = 24;
+        document.Blocks.Add(DocumentOps.CreateColumnBreak());
+        document.Blocks.Add(new Paragraph("after the break"));
+
+        var bytes = Save(document);
+        Encoding.ASCII.GetString(bytes).Should().Contain(@"\cols2");
+
+        var reloaded = Load(bytes);
+        reloaded.Page.ColumnCount.Should().Be(2);
+        reloaded.Page.ColumnSpacingPt.Should().Be(24);
+        reloaded.Blocks.OfType<Paragraph>().Should().Contain(p => p.Runs.Any(run => run.IsColumnBreak));
+    }
+
+    // Sibling case: a single-column document must NOT gain a \cols control word it never needed, and must
+    // keep reloading as ColumnCount=1 (the RTF default when no \cols is present).
+    [Fact]
+    public void SingleColumnSection_EmitsNoColsControlAndRoundTripsAsOneColumn()
+    {
+        var document = DocOf("Just one column");
+
+        var bytes = Save(document);
+        Encoding.ASCII.GetString(bytes).Should().NotContain(@"\cols");
+
+        var reloaded = Load(bytes);
+        reloaded.Page.ColumnCount.Should().Be(1);
+    }
+
     [Fact]
     public void Adapter_ExposesRtfOpenSaveFormat()
     {

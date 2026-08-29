@@ -1499,6 +1499,14 @@ public sealed partial class SlideCanvas : Control
         DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds,
         TableCellAnchor anchor)
     {
+        // Table rows are never grown to fit typed text (row height only changes via explicit
+        // resize/insert commands), so wrapped text can need more vertical room than the row
+        // currently has. Clip to the cell's own bounds so overflow is cropped instead of
+        // bleeding into the row below (or off the table on the last row), matching the
+        // picture-frame clip pattern used elsewhere in this file.
+        using var clipScope = dc.PushGeometryClip(
+            new RectangleGeometry(new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height)));
+
         if (!TextParagraphNativeRenderDispatcher.TryRenderTableCell(
                 text,
                 bounds,

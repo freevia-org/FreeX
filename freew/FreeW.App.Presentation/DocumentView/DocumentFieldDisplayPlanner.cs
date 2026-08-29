@@ -64,4 +64,37 @@ public static class DocumentFieldDisplayPlanner
             firstValue,
             document.Page.PageNumberFormat);
     }
+
+    /// <summary>
+    /// The <c>w:fldSimple/@w:instr</c> keyword a <see cref="RunFieldKind"/> serialises as (matching
+    /// <see cref="RunFieldKind"/>'s own doc comment, e.g. <see cref="RunFieldKind.PageNumber"/> is
+    /// "PAGE", <see cref="RunFieldKind.Date"/> is "DATE"). <see cref="RunFieldKind.None"/> has no
+    /// keyword and returns "".
+    /// </summary>
+    public static string FieldCodeKeyword(RunFieldKind kind) => kind switch
+    {
+        RunFieldKind.PageNumber => "PAGE",
+        RunFieldKind.Date => "DATE",
+        RunFieldKind.Time => "TIME",
+        RunFieldKind.FileName => "FILENAME",
+        RunFieldKind.Author => "AUTHOR",
+        RunFieldKind.NumPages => "NUMPAGES",
+        RunFieldKind.Title => "TITLE",
+        RunFieldKind.Subject => "SUBJECT",
+        RunFieldKind.Keywords => "KEYWORDS",
+        RunFieldKind.DocComments => "COMMENTS",
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// The field-code text Shift+F9 / Alt+F9 shows in place of the result for a <see cref="RunFieldKind"/>
+    /// field (e.g. <c>{ PAGE }</c>), matching the brace format
+    /// <see cref="ComplexFieldDisplayPlanner.Build"/> uses for the <see cref="ComplexField"/> form: "{" +
+    /// the instruction + " }". Returns "" for <see cref="RunFieldKind.None"/> (nothing to show a code for).
+    /// </summary>
+    public static string ResolveCode(RunFieldKind kind)
+    {
+        var keyword = FieldCodeKeyword(kind);
+        return keyword.Length == 0 ? string.Empty : "{ " + keyword + " }";
+    }
 }

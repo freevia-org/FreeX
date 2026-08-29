@@ -754,6 +754,12 @@ public sealed partial class MainWindow
 
     internal Func<string, UserMessageResult>? LossyFormatFeatureLossConfirmOverrideForTest;
 
+    /// <summary>Test-only observer for <see cref="ShowBlockingSaveFailure"/> (shared-readonly-locking
+    /// F2) -- headless tests cannot safely pump a real owned message dialog to completion, so this
+    /// records the (title, message, icon) the production code would have shown instead of spawning
+    /// an actual Avalonia window. Not used by production code paths.</summary>
+    internal Action<string, string, UserMessageIcon>? SaveFailureNoticeOverrideForTest;
+
     partial void ResolveSelectionMoveOverwriteConfirmationHandler(ref Func<Task<bool>>? handler) =>
         handler = ConfirmSelectionMoveOverwriteOverrideForTest;
 
@@ -782,6 +788,9 @@ public sealed partial class MainWindow
     partial void ResolveLossyFormatFeatureLossConfirmHandler(
         ref Func<string, UserMessageResult>? handler) =>
         handler = LossyFormatFeatureLossConfirmOverrideForTest;
+
+    partial void ResolveSaveFailureNoticeHandler(ref Action<string, string, UserMessageIcon>? handler) =>
+        handler = SaveFailureNoticeOverrideForTest;
 
     internal static IReadOnlyList<(TextToColumnsColumnFormat Format, string Label)>
         TextToColumnsFormatChoicesForTest => TextToColumnsFormatChoices;
