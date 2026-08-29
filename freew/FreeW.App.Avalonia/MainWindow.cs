@@ -1457,13 +1457,7 @@ public sealed partial class MainWindow : Window
         try
         {
             var doc = DocxReader.Read(candidate.SnapshotPath);
-            var newWindow = new MainWindow(
-                Array.Empty<string>(),
-                null,
-                ApplicationOptionsStore<FreeWOptions>.Create(PlatformApplicationDataPathProvider.LocalInstance),
-                suppressStartupRecoveryOffer: true);
-            newWindow.LoadDocumentContent(doc);
-            newWindow._fileWorkflow.MarkDirtyWithPath(candidate.Sidecar.OriginalFilePath);
+            var newWindow = CreateRecoveredSnapshotWindow(doc, candidate.Sidecar.OriginalFilePath);
             newWindow.Show();
             newWindow.Activate();
             return true;
@@ -1472,6 +1466,29 @@ public sealed partial class MainWindow : Window
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Builds the extra window a multi-document crash recovery opens. Its options store must resolve
+    /// to the SAME settings file normal startup uses -- %APPDATA%\FreeW\settings.json, via
+    /// <c>ApplicationOptionsStore.Create()</c>'s default
+    /// <see cref="PlatformApplicationDataPathProvider.Instance"/>, matching the FreeW.App.Host (WPF)
+    /// shell. Overriding the provider with <c>LocalInstance</c> here rooted recovery windows at
+    /// %LOCALAPPDATA% instead, so a user who recovered more than one crashed document got a real
+    /// on-screen window whose shell/window settings silently diverged from every other window's.
+    /// Factored out of <see cref="OpenNewWindowWithRecoveredSnapshotAsync"/> so tests can observe the
+    /// store the production path builds without showing a window.
+    /// </summary>
+    internal static MainWindow CreateRecoveredSnapshotWindow(TextDocument document, string? originalFilePath)
+    {
+        var newWindow = new MainWindow(
+            Array.Empty<string>(),
+            null,
+            ApplicationOptionsStore<FreeWOptions>.Create(),
+            suppressStartupRecoveryOffer: true);
+        newWindow.LoadDocumentContent(document);
+        newWindow._fileWorkflow.MarkDirtyWithPath(originalFilePath);
+        return newWindow;
     }
 
     private void OpenMailMergeErrorReport(TextDocument report)
