@@ -779,6 +779,141 @@ public sealed class ConnectorAttachmentTests
     }
 
     [Fact]
+    public void MoveShape_StraightConnector_FlipsToStayAttachedAfterDiagonalReversal()
+    {
+        var (p, bus, slide) = MakePresentation();
+
+        // shapeA (0,0,2000,1000): site 2 (right-mid) = (2000, 500)
+        // shapeB (5000,5000,2000,1000): site 0 (left-mid) = (5000, 5500)
+        var shapeA = MakeRect(1, 0, 0, 2000, 1000);
+        var shapeB = MakeRect(2, 5000, 5000, 2000, 1000);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = 1, SiteIndex = 2 },
+            end:   new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 });
+        connector.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Line;
+
+        slide.Shapes.Add(shapeA);
+        slide.Shapes.Add(shapeB);
+        slide.Shapes.Add(connector);
+
+        // Establish a correctly-routed initial state (a real connector, e.g. one created via
+        // Insert Connector, starts out touching both attachment points).
+        bus.Execute(new MoveShapeCommand(0, 1, 0, 0));
+        var c0 = slide.Shapes.First(s => s.Id == 3);
+        TouchesBothSites(c0, slide).Should().BeTrue("initial diagonal must render as attached");
+        c0.FlipH.Should().BeFalse();
+        c0.FlipV.Should().BeFalse();
+
+        // An ordinary downward drag of shapeA past shapeB flips their relative diagonal:
+        // shapeA's connection site ends up below shapeB's instead of above it.
+        bus.Execute(new MoveShapeCommand(0, 1, 0, 6000));
+
+        var c = slide.Shapes.First(s => s.Id == 3);
+        TouchesBothSites(c, slide).Should().BeTrue(
+            "the straight connector must keep touching both attached shapes after an ordinary move flips their relative diagonal");
+        c.FlipV.Should().BeTrue("FlipV must flip so the anti-diagonal renders correctly");
+    }
+
+    [Fact]
+    public void MoveShape_StraightConnector_Undo_RestoresFlip()
+    {
+        var (p, bus, slide) = MakePresentation();
+
+        var shapeA = MakeRect(1, 0, 0, 2000, 1000);
+        var shapeB = MakeRect(2, 5000, 5000, 2000, 1000);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = 1, SiteIndex = 2 },
+            end:   new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 });
+        connector.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Line;
+
+        slide.Shapes.Add(shapeA);
+        slide.Shapes.Add(shapeB);
+        slide.Shapes.Add(connector);
+
+        bus.Execute(new MoveShapeCommand(0, 1, 0, 0)); // establish correct initial bounds/flip
+        var before = slide.Shapes.First(s => s.Id == 3);
+        bool flipHBefore = before.FlipH, flipVBefore = before.FlipV;
+
+        bus.Execute(new MoveShapeCommand(0, 1, 0, 6000)); // flips the diagonal
+        bus.Undo();
+
+        var c = slide.Shapes.First(s => s.Id == 3);
+        c.FlipH.Should().Be(flipHBefore);
+        c.FlipV.Should().Be(flipVBefore);
+        TouchesBothSites(c, slide).Should().BeTrue(
+            "undoing the move must restore both the bounds and the flip so the connector re-attaches");
+    }
+
+    [Fact]
+    public void MoveShape_ElbowConnector_ReroutingDoesNotTouchFlip()
+    {
+        // Sibling / no-regression check: an ElbowConnector renders from its explicit
+        // ElbowRoute polyline, not from FlipH/FlipV, so rerouting one must leave the
+        // flip flags untouched (they stay false unless something else set them).
+        var (p, bus, slide) = MakePresentation();
+
+        var shapeA = MakeRect(1, 1000, 1000, 2000, 1000);
+        var shapeB = MakeRect(2, 6000, 1000, 2000, 1000);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = 1, SiteIndex = 2 },
+            end:   new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 });
+        // MakeConnector already defaults AutoShapeKind to ElbowConnector.
+
+        slide.Shapes.Add(shapeA);
+        slide.Shapes.Add(shapeB);
+        slide.Shapes.Add(connector);
+
+        bus.Execute(new MoveShapeCommand(0, 1, 500, 200));
+
+        var c = slide.Shapes.First(s => s.Id == 3);
+        c.FlipH.Should().BeFalse();
+        c.FlipV.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Mirrors ShapeGeometryBuilder.LinePath's diagonal branch (local top-left -> bottom-right)
+    /// plus the FlipH/FlipV mirror-about-center transform applied by the shared renderer (the
+    /// same transform as ConnectionSiteHelper.TransformSite), to check whether the rendered
+    /// line's two endpoints coincide with the connector's two resolved connection-site points.
+    /// </summary>
+    private static bool TouchesBothSites(SlideShape connector, Slide slide)
+    {
+        var (p1, p2) = RenderedLineEndpoints(connector);
+
+        var site1 = connector.ConnectionStart is not null
+            ? ConnectionSiteHelper.Resolve(connector.ConnectionStart, slide)
+            : (connector.OffsetXEmu, connector.OffsetYEmu);
+        var site2 = connector.ConnectionEnd is not null
+            ? ConnectionSiteHelper.Resolve(connector.ConnectionEnd, slide)
+            : (connector.OffsetXEmu + connector.ExtentCxEmu, connector.OffsetYEmu + connector.ExtentCyEmu);
+
+        bool touchesSite1 = p1 == site1 || p2 == site1;
+        bool touchesSite2 = p1 == site2 || p2 == site2;
+        return touchesSite1 && touchesSite2;
+    }
+
+    private static ((long X, long Y) A, (long X, long Y) B) RenderedLineEndpoints(SlideShape c)
+    {
+        (long X, long Y) local1 = (c.OffsetXEmu, c.OffsetYEmu);
+        (long X, long Y) local2 = (c.OffsetXEmu + c.ExtentCxEmu, c.OffsetYEmu + c.ExtentCyEmu);
+
+        double centerX = c.OffsetXEmu + c.ExtentCxEmu / 2.0;
+        double centerY = c.OffsetYEmu + c.ExtentCyEmu / 2.0;
+
+        return (ApplyFlip(local1, centerX, centerY, c.FlipH, c.FlipV),
+                ApplyFlip(local2, centerX, centerY, c.FlipH, c.FlipV));
+    }
+
+    private static (long X, long Y) ApplyFlip((long X, long Y) pt, double centerX, double centerY, bool flipH, bool flipV)
+    {
+        double dx = pt.X - centerX;
+        double dy = pt.Y - centerY;
+        if (flipH) dx = -dx;
+        if (flipV) dy = -dy;
+        return ((long)Math.Round(centerX + dx), (long)Math.Round(centerY + dy));
+    }
+
+    [Fact]
     public void ResizeShape_ReroutesAttachedConnector()
     {
         var (p, bus, slide) = MakePresentation();

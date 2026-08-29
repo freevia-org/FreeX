@@ -325,13 +325,13 @@ public static class PresentationClipboardWorkflow
                 // picture. Try the same ClipboardTablePlanner pipeline InsertTableFromClipboard uses
                 // for rich payloads before falling back to a plain text box.
                 //
-                // r167 remediation: this deliberately requires the image. Tabs alone do not mean a
-                // table -- pasting tab-indented code or a single "Name<tab>Value" line onto a slide
-                // is ordinary text, and treating it as tabular consumed the leading tab as a column
-                // delimiter and silently restructured what the user pasted. Only a payload that would
-                // otherwise be swallowed by its own image flavour needs this branch.
+                // r168: the image requirement added in r167 is gone. It was the wrong question --
+                // FreeX omits the picture flavour for a range over 2000 cells, so an ordinary
+                // data-table copy arrived as text alone and pasted as a flat tab-riddled box, which
+                // is the very defect this branch exists to prevent. HasTabularText now asks about the
+                // TEXT's shape instead, which excludes tab-indented prose without depending on how
+                // the payload happens to be packaged.
                 if (content.HasTabularText
-                    && content.HasImage
                     && editor.InsertTableFromClipboard(BuildPlainTextBody(content.Text!)) is not null)
                 {
                     break;

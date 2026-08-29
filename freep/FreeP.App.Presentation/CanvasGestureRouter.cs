@@ -483,7 +483,7 @@ public sealed class CanvasGestureRouter
                     null);
 
             case CanvasGestureKind.GeometryAdjustment:
-                var geometryPoint = transform.ScreenToSlide(currentScreen.X, currentScreen.Y);
+                var geometryPoint = ResolveGeometryPointerSlide(slide, currentScreen, transform);
                 return new CanvasGesturePreviewPlan(
                     CanvasGestureKind.GeometryAdjustment,
                     _session.Geometry?.ShapeId ?? 0,
@@ -566,7 +566,7 @@ public sealed class CanvasGestureRouter
                     break;
 
                 case CanvasGestureKind.GeometryAdjustment when shouldCommit:
-                    var geometryPoint = transform.ScreenToSlide(currentScreen.X, currentScreen.Y);
+                    var geometryPoint = ResolveGeometryPointerSlide(_editor.CurrentSlide, currentScreen, transform);
                     _session.CommitGeometryAdjustment(
                         _editor,
                         _editor.CurrentSlide,
@@ -701,6 +701,38 @@ public sealed class CanvasGestureRouter
             SnapToGrid,
             SnapToShapes,
             (modifiers & CanvasGestureModifiers.Alt) != 0);
+
+    /// <summary>
+    /// Converts a screen-space pointer into the un-rotated local slide frame that
+    /// <see cref="ShapeGeometryAdjustmentPlanner"/> and <see cref="PictureCropAuthoringPlanner"/>
+    /// expect: both compare the pointer against <see cref="CanvasGeometryGestureState.BoundsDip"/>,
+    /// which is the shape's un-rotated AABB (see ShapeHitTester.GetShapeBoundsDip). Without this
+    /// step, a rotated shape's adjust-handle drag is measured against axes the shape no longer has
+    /// on screen, corrupting the committed adjustment/vertex. Mirrors the same un-rotation resize
+    /// already applies via SlideTransformCore.UnRotateDelta and chart hit-testing applies via
+    /// SlideTransformCore.UnRotatePoint.
+    /// </summary>
+    private (double X, double Y) ResolveGeometryPointerSlide(
+        Slide? slide,
+        CanvasGesturePoint currentScreen,
+        SlideTransformCore transform)
+    {
+        var raw = transform.ScreenToSlide(currentScreen.X, currentScreen.Y);
+        if (slide is null || _session.Geometry is not { } geometry)
+            return raw;
+
+        var shape = ShapeHitTester.FindShape(slide, geometry.ShapeId);
+        if (shape is null || shape.RotationDeg == 0)
+            return raw;
+
+        var center = geometry.BoundsDip.Center;
+        return SlideTransformCore.UnRotatePoint(
+            raw.X,
+            raw.Y,
+            center.X,
+            center.Y,
+            shape.RotationDeg);
+    }
 
     private CanvasMultiTransformPlan PlanMultiResize(
         CanvasGesturePoint currentScreen,

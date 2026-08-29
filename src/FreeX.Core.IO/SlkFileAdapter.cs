@@ -386,6 +386,19 @@ public sealed class SlkFileAdapter : IFileAdapter
     /// one. A record's quotes always balance in pairs, so an odd running count of <c>"</c> means the
     /// value's closing quote (and the newline it swallowed) is still ahead; keep pulling physical lines,
     /// rejoining with the '\n' that was in the original value, until the quote closes or the file ends.
+    /// <para>
+    /// The join uses a <see cref="StringBuilder"/> (never repeated string concatenation) and tracks the
+    /// running open/closed parity incrementally — XORing in whether just the newly read line's own quote
+    /// count is odd — instead of recounting every <c>"</c> in the whole accumulated record on every
+    /// physical line. Total parity is associative, so XORing in each new line's parity is equivalent to
+    /// recounting from scratch; it is just O(that one line) instead of O(everything accumulated so far).
+    /// A corrupted or hostile file with an unbalanced quote near the top used to degrade worse than
+    /// quadratically this way (a full string copy AND a full recount of the ever-growing record on every
+    /// remaining physical line) and could hang the open for minutes on a multi-MB file; this is now
+    /// linear in the file's total size. A quote still open at EOF (a genuinely truncated/malformed file)
+    /// simply returns whatever was accumulated, same as before — it is not a crash, and the record's
+    /// fields still get parsed as best-effort text by <see cref="SplitFields"/>.
+    /// </para>
     /// </summary>
     private static string? ReadLogicalLine(TextReader reader)
     {
@@ -393,15 +406,23 @@ public sealed class SlkFileAdapter : IFileAdapter
         if (line is null)
             return null;
 
-        while (CountQuotes(line) % 2 != 0)
+        var isOpen = CountQuotes(line) % 2 != 0;
+        if (!isOpen)
+            return line;
+
+        var sb = new StringBuilder(line);
+        while (isOpen)
         {
             var next = reader.ReadLine();
             if (next is null)
                 break;
-            line += "\n" + next;
+
+            sb.Append('\n').Append(next);
+            if (CountQuotes(next) % 2 != 0)
+                isOpen = !isOpen;
         }
 
-        return line;
+        return sb.ToString();
     }
 
     private static int CountQuotes(string s)

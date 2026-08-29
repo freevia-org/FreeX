@@ -135,6 +135,20 @@ public sealed partial class MainWindow : Window
             App.StartupArguments,
             _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth),
             _optionsRuntimeSession);
+        // R168-avalonia-newwindow-readonly-bypass: propagate THIS window's Read-Only-Recommended /
+        // write-reservation-password decision (_workbookReadOnlySession.IsReadOnly) into the new
+        // sibling before it is shown -- mirrors the WPF host's ApplyAdoptedReadOnlySession
+        // (src/FreeX.App.Host/MainWindow.MultiWindow.cs, round-167). A freshly-constructed sibling's
+        // own per-window _workbookReadOnlySession (MainWindow.cs) otherwise defaults to
+        // IsReadOnly=false even though the shared workbook was opened read-only/protected in this
+        // window, so ResolveExistingSaveTarget() on the new window -- which consults only that
+        // window's own session -- would resolve the real on-disk path and let a direct Ctrl+S there
+        // silently overwrite a protected file. Unlike WPF's DI-constructed sibling, Avalonia's
+        // NewWindow holds a direct reference to the new window from construction, so no source-hint
+        // indirection is needed here -- only ever raises the new session to read-only, matching
+        // WorkbookReadOnlySession's own default.
+        if (_workbookReadOnlySession.IsReadOnly)
+            window._workbookReadOnlySession.ApplyPromptDecision(openReadOnly: true);
         var snapshotStore = AutosaveSnapshotStore.CreateDefault(
             PlatformApplicationDataPathProvider.LocalInstance);
         var autosaveCoordinator = new AvaloniaAutosaveCoordinator(window, snapshotStore);

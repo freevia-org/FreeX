@@ -29,12 +29,20 @@ public sealed class UpdateConnectorBoundsCommand : IPresentationCommand
     // Wave 26: optional Manhattan route for elbow connectors.
     private readonly List<(long X, long Y)>? _newRoute;
 
+    // Wave 27: optional flip flags for straight (Line) connectors. Null means "leave the
+    // connector's current FlipH/FlipV alone" -- used for connector kinds (elbow/curved)
+    // whose renderer does not derive orientation from these flags.
+    private readonly bool? _newFlipH;
+    private readonly bool? _newFlipV;
+
     // Captured on first Apply for Revert.
     private long _oldX;
     private long _oldY;
     private long _oldCx;
     private long _oldCy;
     private List<(long X, long Y)>? _oldRoute;
+    private bool _oldFlipH;
+    private bool _oldFlipV;
 
     // Internal read-only accessors used by the parent command's capture logic.
     internal uint ConnectorId => _connectorId;
@@ -46,7 +54,8 @@ public sealed class UpdateConnectorBoundsCommand : IPresentationCommand
     public UpdateConnectorBoundsCommand(
         int slideIndex, uint connectorId,
         long newX, long newY, long newCx, long newCy,
-        List<(long X, long Y)>? newRoute = null)
+        List<(long X, long Y)>? newRoute = null,
+        bool? newFlipH = null, bool? newFlipV = null)
     {
         _slideIndex  = slideIndex;
         _connectorId = connectorId;
@@ -55,6 +64,8 @@ public sealed class UpdateConnectorBoundsCommand : IPresentationCommand
         _newCx       = newCx;
         _newCy       = newCy;
         _newRoute    = newRoute;
+        _newFlipH    = newFlipH;
+        _newFlipV    = newFlipV;
     }
 
     public string Label => "Reroute Connector";
@@ -68,14 +79,16 @@ public sealed class UpdateConnectorBoundsCommand : IPresentationCommand
         _oldCx    = c.ExtentCxEmu;
         _oldCy    = c.ExtentCyEmu;
         _oldRoute = c.ElbowRoute;
-        ApplyBounds(c, _newX, _newY, _newCx, _newCy, _newRoute);
+        _oldFlipH = c.FlipH;
+        _oldFlipV = c.FlipV;
+        ApplyBounds(c, _newX, _newY, _newCx, _newCy, _newRoute, _newFlipH, _newFlipV);
     }
 
     public void Revert(Presentation p)
     {
         var c = FindConnector(p);
         if (c is null) return;
-        ApplyBounds(c, _oldX, _oldY, _oldCx, _oldCy, _oldRoute);
+        ApplyBounds(c, _oldX, _oldY, _oldCx, _oldCy, _oldRoute, _oldFlipH, _oldFlipV);
     }
 
     private SlideShape? FindConnector(Presentation p)
@@ -85,13 +98,15 @@ public sealed class UpdateConnectorBoundsCommand : IPresentationCommand
     }
 
     private static void ApplyBounds(SlideShape c, long x, long y, long cx, long cy,
-        List<(long X, long Y)>? route)
+        List<(long X, long Y)>? route, bool? flipH = null, bool? flipV = null)
     {
         c.OffsetXEmu  = x;
         c.OffsetYEmu  = y;
         c.ExtentCxEmu = cx;
         c.ExtentCyEmu = cy;
         c.ElbowRoute  = route;
+        if (flipH.HasValue) c.FlipH = flipH.Value;
+        if (flipV.HasValue) c.FlipV = flipV.Value;
     }
 }
 
@@ -568,6 +583,21 @@ internal static class ConnectorRouter
             long newCx = Math.Max(Math.Abs(ex - sx), 1L); // minimum 1 EMU to keep valid
             long newCy = Math.Max(Math.Abs(ey - sy), 1L);
 
+            // Wave 27: for a straight (Line) connector, ShapeGeometryBuilder.LinePath always
+            // draws the diagonal of the shape's *local* top-left -> bottom-right corner; which
+            // physical diagonal that becomes on screen depends entirely on FlipH/FlipV (see that
+            // method's doc comment). Recompute them from the resolved endpoints so the rendered
+            // line keeps touching both connection sites when a move/resize/rotate flips their
+            // relative diagonal. Other connector kinds (elbow/curved) don't derive orientation
+            // from these flags, so leave them untouched (null) for those.
+            bool? newFlipH = null;
+            bool? newFlipV = null;
+            if (shape.AutoShapeKind == DrawingShapeKind.Line)
+            {
+                newFlipH = ex < sx;
+                newFlipV = ey < sy;
+            }
+
             // Wave 26: compute elbow route for ElbowConnector shapes with both ends attached.
             List<(long X, long Y)>? elbowRoute = null;
             if (shape.AutoShapeKind == DrawingShapeKind.ElbowConnector
@@ -595,7 +625,7 @@ internal static class ConnectorRouter
                     obstacles);
             }
 
-            yield return new UpdateConnectorBoundsCommand(slideIndex, shape.Id, newX, newY, newCx, newCy, elbowRoute);
+            yield return new UpdateConnectorBoundsCommand(slideIndex, shape.Id, newX, newY, newCx, newCy, elbowRoute, newFlipH, newFlipV);
         }
     }
 }

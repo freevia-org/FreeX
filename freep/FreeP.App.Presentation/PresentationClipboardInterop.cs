@@ -1,3 +1,4 @@
+using System.Linq;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
 
@@ -31,12 +32,38 @@ public sealed record PresentationClipboardContent(
     public bool HasImage => PngBytes is { Length: > 0 };
     public bool HasText => !string.IsNullOrEmpty(Text);
 
-    // freep-tables F1: a standalone plain-text payload whose lines contain a tab character is a
-    // tab-delimited table projection (FreeX's Ctrl+C on a cell range writes exactly this: TSV
-    // Text plus CF_HTML/CSV/a rendered bitmap, but no RTF or XamlPackage). Callers use this to
-    // let that structured text win over an accompanying flat image, the same way richer RichText
-    // / XamlPackage payloads already do, instead of collapsing to an inert picture of the cells.
-    public bool HasTabularText => HasText && Text!.Contains('\t');
+    /// <summary>
+    /// True when the plain text is shaped like a grid rather than merely containing tabs.
+    /// <para>
+    /// r168: "contains a tab" is not the same question. Round 167 first treated every tab-containing
+    /// paste as a table, which turned tab-indented code into cells; the correction required an image
+    /// flavour alongside, which then dropped a FreeX range copy of more than 2000 cells, because
+    /// FreeX omits the picture above that size and sends text alone. Both attempts asked about the
+    /// payload's packaging. The reliable question is about the text: a copied range has several lines
+    /// with the same number of fields, and its first column is not uniformly empty -- indentation is
+    /// exactly what makes it uniformly empty.
+    /// </para>
+    /// </summary>
+    public bool HasTabularText
+    {
+        get
+        {
+            if (!HasText || !Text!.Contains('\t'))
+                return false;
+
+            var lines = Text.Replace("\r\n", "\n").Replace('\r', '\n')
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length < 2)
+                return false;
+
+            var columns = lines[0].Split('\t').Length;
+            if (columns < 2 || lines.Any(line => line.Split('\t').Length != columns))
+                return false;
+
+            return lines.Any(line => line.Split('\t')[0].Length > 0);
+        }
+    }
+
     public bool HasRichText => RichTextBytes is { Length: > 0 } || RtfBytes is { Length: > 0 };
     public bool HasXamlPackage => XamlPackageBytes is { Length: > 0 };
     public bool IsEmpty => !HasSelection && !HasImage && !HasText && !HasRichText && !HasXamlPackage;

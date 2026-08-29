@@ -628,8 +628,22 @@ public static class DocumentNoteRegionPlanner
             Environment.NewLine,
             content.Select(paragraph => string.Concat(paragraph.Runs
                 .Where(run => !IsRunHidden(document, paragraph, run))
-                .Select(run => run.Text))));
+                .Select(ResolveRunDisplayText))));
     }
+
+    /// <summary>
+    /// Resolves one note-content run's displayed text: the field code (e.g. <c>{ PAGE }</c>) when
+    /// <see cref="Run.FieldCodeVisible"/> is set (Shift+F9/Alt+F9), matching how the body run-display
+    /// path (<c>ResolveSimpleFieldDisplayText</c> in both hosts) and <see cref="HeaderFooterVisualPlanner"/>
+    /// resolve a <see cref="RunFieldKind"/> simple field, otherwise the run's ordinary cached text.
+    /// r168: footnote/endnote content previously read <see cref="Run.Text"/> raw and never consulted
+    /// <see cref="Run.FieldCodeVisible"/> at all, so a PAGE/DATE/etc field placed inside a note never
+    /// toggled its code even though the same gesture worked in the body, table cells, and header/footer.
+    /// </summary>
+    private static string ResolveRunDisplayText(Run run) =>
+        run.FieldCodeVisible
+            ? DocumentFieldDisplayPlanner.ResolveCode(run.FieldKind)
+            : run.Text;
 
     private static bool IsRunHidden(TextDocument document, Paragraph paragraph, Run run)
     {

@@ -319,15 +319,33 @@ public sealed class DifFileAdapter : IFileAdapter
         if (start >= lines.Count)
             return (string.Empty, start);
 
-        var value = lines[start];
+        var first = lines[start];
+        if (IsQuoteClosed(first))
+            return (first, start + 1);
+
+        // Unterminated quote: fold subsequent physical lines in. Each newly appended line's quotes are
+        // scanned exactly once (never the whole accumulated value again), and the growing value itself
+        // is built with a StringBuilder rather than repeated string concatenation — so a value that
+        // stays open for many lines (e.g. a truncated/corrupted file with an odd number of '"' before
+        // EOF) costs time linear in the file size instead of quadratic (or worse, since re-scanning the
+        // ever-growing `value` from the start each iteration on top of re-concatenating it is O(n^2) in
+        // characters copied alone).
+        var sb = new StringBuilder(first);
         var index = start + 1;
-        while (!IsQuoteClosed(value) && index < lines.Count)
+        var closed = false;
+        while (!closed && index < lines.Count)
         {
-            value = string.Concat(value, "\n", lines[index]);
+            var next = lines[index];
+            sb.Append('\n').Append(next);
+            // A doubled "" escape pair (see Escape()/Unquote()) is always two adjacent characters in the
+            // original text, so it can never straddle the '\n' this loop reinserts between physical
+            // lines — scanning only the newly appended fragment for an unescaped closing quote is
+            // equivalent to re-scanning the whole accumulated value from the top.
+            closed = ScanForUnescapedQuote(next, 0);
             index++;
         }
 
-        return (value, index);
+        return (sb.ToString(), index);
     }
 
     /// <summary>
@@ -340,7 +358,18 @@ public sealed class DifFileAdapter : IFileAdapter
         if (text.Length == 0 || text[0] != '"')
             return true; // not a quoted value — nothing to close, single line stands as-is
 
-        var i = 1;
+        return ScanForUnescapedQuote(text, 1);
+    }
+
+    /// <summary>
+    /// Scans <paramref name="text"/> from <paramref name="start"/> for an unescaped closing double-quote,
+    /// skipping "" escape pairs. Shared by <see cref="IsQuoteClosed"/> (scanning a value's own opening
+    /// line, so it starts after the opening quote) and <see cref="ReadQuotedAwareContent"/>'s continuation
+    /// loop (scanning a later folded-in line in its entirety, already known to be inside an open quote).
+    /// </summary>
+    private static bool ScanForUnescapedQuote(string text, int start)
+    {
+        var i = start;
         while (i < text.Length)
         {
             if (text[i] == '"')

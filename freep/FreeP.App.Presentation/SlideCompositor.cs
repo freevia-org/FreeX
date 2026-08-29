@@ -273,15 +273,17 @@ public static class SlideCompositor
                 break;
 
             case SlideShapeKind.Group:
-                // Flatten group children (still no group-level ROTATION transform — pre-existing
-                // gap, out of scope here). Children are stored with absolute slide-space EMU
+                // Flatten group children. Children are stored with absolute slide-space EMU
                 // coordinates authored relative to the group's a:chOff/a:chExt child space; for a
                 // freshly-authored (never-resized) group that space is numerically identical to
                 // the group's own off/ext, so most files need no correction. When PowerPoint
                 // resizes a group after its children were authored, chOff/chExt stay at their
                 // original values while off/ext move to the new box, so the two spaces diverge —
                 // apply that mapping here so descendants land where PowerPoint actually renders
-                // them: absolute = groupOff + (childRaw - chOff) * (groupExt / chExt).
+                // them: absolute = groupOff + (childRaw - chOff) * (groupExt / chExt). When the
+                // group itself is rotated, TransformGroupChild also rotates each child's center
+                // around the group's own center and composes the group's angle into the child's
+                // own RotationDeg, so a rotated group's members actually move on screen.
                 foreach (var child in shape.Children)
                     ComposeShape(
                         TransformGroupChild(shape, child),
@@ -352,10 +354,18 @@ public static class SlideCompositor
     /// <summary>
     /// Maps a group child's authored (child-space) offset/extent into the group's own absolute
     /// space using the standard ECMA-376 group transform: absolute = groupOff + (raw - chOff) *
-    /// (groupExt / chExt). Returns the original child unchanged (no allocation) when the group's
-    /// child space is absent or numerically identical to its own off/ext — the overwhelmingly
-    /// common case for groups that were never resized after authoring, including every group this
-    /// app itself writes (PptxPackageWriter always emits chOff==off, chExt==ext).
+    /// (groupExt / chExt). When the group itself carries a non-zero <see cref="SlideShape.RotationDeg"/>,
+    /// that rotation is then applied as a final step: the child's (still axis-aligned) center is
+    /// rotated around the group's own center by the group's angle, and the group's angle is
+    /// composed into the child's own <see cref="SlideShape.RotationDeg"/> — matching how PowerPoint
+    /// renders a rotated group (rotate the fully-assembled, already-positioned contents as one
+    /// rigid body around the group's own bounding-box center), and how <c>ShapeTransformPlanner</c>
+    /// / <c>PlanShapeTransform</c> render every leaf <see cref="DrawOp"/> (rotate around its own
+    /// resolved bounds center). Returns the original child unchanged (no allocation) when the
+    /// group's child space is absent or numerically identical to its own off/ext AND the group has
+    /// no rotation — the overwhelmingly common case for groups that were never resized or rotated
+    /// after authoring, including every group this app itself writes (PptxPackageWriter always
+    /// emits chOff==off, chExt==ext).
     /// </summary>
     private static SlideShape TransformGroupChild(SlideShape group, SlideShape child)
     {
@@ -364,21 +374,57 @@ public static class SlideCompositor
         long chExtCx = group.ChildExtentCxEmu ?? group.ExtentCxEmu;
         long chExtCy = group.ChildExtentCyEmu ?? group.ExtentCyEmu;
 
-        if (chOffX == group.OffsetXEmu && chOffY == group.OffsetYEmu &&
-            chExtCx == group.ExtentCxEmu && chExtCy == group.ExtentCyEmu)
+        bool identityBounds = chOffX == group.OffsetXEmu && chOffY == group.OffsetYEmu &&
+            chExtCx == group.ExtentCxEmu && chExtCy == group.ExtentCyEmu;
+
+        long absX, absY, absCx, absCy;
+        if (identityBounds)
         {
-            return child; // identity transform — nothing to correct
+            absX = child.OffsetXEmu;
+            absY = child.OffsetYEmu;
+            absCx = child.ExtentCxEmu;
+            absCy = child.ExtentCyEmu;
+        }
+        else
+        {
+            double scaleX = chExtCx != 0 ? (double)group.ExtentCxEmu / chExtCx : 1.0;
+            double scaleY = chExtCy != 0 ? (double)group.ExtentCyEmu / chExtCy : 1.0;
+
+            absX  = group.OffsetXEmu + (long)Math.Round((child.OffsetXEmu - chOffX) * scaleX);
+            absY  = group.OffsetYEmu + (long)Math.Round((child.OffsetYEmu - chOffY) * scaleY);
+            absCx = (long)Math.Round(child.ExtentCxEmu * scaleX);
+            absCy = (long)Math.Round(child.ExtentCyEmu * scaleY);
         }
 
-        double scaleX = chExtCx != 0 ? (double)group.ExtentCxEmu / chExtCx : 1.0;
-        double scaleY = chExtCy != 0 ? (double)group.ExtentCyEmu / chExtCy : 1.0;
+        if (group.RotationDeg == 0)
+        {
+            return identityBounds ? child : child.WithTransformedBounds(absX, absY, absCx, absCy);
+        }
 
-        long absX  = group.OffsetXEmu + (long)Math.Round((child.OffsetXEmu - chOffX) * scaleX);
-        long absY  = group.OffsetYEmu + (long)Math.Round((child.OffsetYEmu - chOffY) * scaleY);
-        long absCx = (long)Math.Round(child.ExtentCxEmu * scaleX);
-        long absCy = (long)Math.Round(child.ExtentCyEmu * scaleY);
+        // Rotate the child's (still axis-aligned) center around the group's own bounding-box
+        // center by the group's angle — same clockwise, Y-down rotation matrix used elsewhere in
+        // this model (see ConnectionSiteHelper.TransformSite) — then compose the group's angle
+        // into the child's own rotation so it renders tilted by both amounts around its new
+        // center, exactly like a nested a:xfrm rot in PowerPoint.
+        double groupCenterX = group.OffsetXEmu + group.ExtentCxEmu / 2.0;
+        double groupCenterY = group.OffsetYEmu + group.ExtentCyEmu / 2.0;
+        double childCenterX = absX + absCx / 2.0;
+        double childCenterY = absY + absCy / 2.0;
 
-        return child.WithTransformedBounds(absX, absY, absCx, absCy);
+        double radians = group.RotationDeg * Math.PI / 180.0;
+        double cos = Math.Cos(radians);
+        double sin = Math.Sin(radians);
+        double dx = childCenterX - groupCenterX;
+        double dy = childCenterY - groupCenterY;
+        double rotatedCenterX = groupCenterX + dx * cos - dy * sin;
+        double rotatedCenterY = groupCenterY + dx * sin + dy * cos;
+
+        long rotatedOffX = (long)Math.Round(rotatedCenterX - absCx / 2.0);
+        long rotatedOffY = (long)Math.Round(rotatedCenterY - absCy / 2.0);
+
+        var transformed = child.WithTransformedBounds(rotatedOffX, rotatedOffY, absCx, absCy);
+        transformed.RotationDeg = child.RotationDeg + group.RotationDeg;
+        return transformed;
     }
 
     // ─── AutoShape / textbox / connector ────────────────────────────────────────────────────
