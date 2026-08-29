@@ -800,6 +800,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Guid? _selectedDrawingObjectId;
     private readonly AvaloniaRibbonContextSource _ribbonContextSource = new();
     private readonly RibbonStateStore _ribbonStateStore = new();
+    private readonly HashSet<ComboBox> _configuredWorksheetRibbonCombos = [];
     private Action? _refreshRibbonToggleStates;
 
     /// <summary>
@@ -977,14 +978,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (source is not null)
             RecordStartupRecentWorkbook(source);
         ConfigureWorkbookDropTarget();
-        // Application shortcuts must see key events before an editable ribbon ComboBox child can
-        // consume them. The handler still applies IsTextEditingEventSource guards for ordinary
-        // editor input, while tunnel + handledEventsToo preserves global Save/Close/Print chords.
-        AddHandler(
-            InputElement.KeyDownEvent,
-            MainWindow_KeyDown,
-            RoutingStrategies.Tunnel,
-            handledEventsToo: true);
+        KeyDown += MainWindow_KeyDown;
         TextInput += MainWindow_TextInput;
         Closing += MainWindow_Closing;
         WindowRegistry.Register(this);
@@ -1650,6 +1644,35 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     break;
             }
         }
+
+        foreach (var combo in EnumerateRibbonControls(ribbon).OfType<ComboBox>())
+            ConfigureWorksheetRibbonComboFocus(combo);
+    }
+
+    internal void ConfigureWorksheetRibbonComboFocus(ComboBox combo)
+    {
+        if (!_configuredWorksheetRibbonCombos.Add(combo))
+            return;
+
+        combo.DropDownClosed += (_, _) => Dispatcher.UIThread.Post(
+            () => ScheduleWorksheetFocusAfterRibbonComboClosed(combo.IsKeyboardFocusWithin),
+            DispatcherPriority.Input);
+    }
+
+    /// <summary>
+    /// Applies the post-dismissal focus policy for an editable worksheet ribbon combo. The event
+    /// handler supplies the combo's focus state captured after popup dismissal; keeping the policy
+    /// here makes it deterministic to verify without depending on Avalonia popup or OS focus timing.
+    /// </summary>
+    internal bool ScheduleWorksheetFocusAfterRibbonComboClosed(bool comboOwnsKeyboardFocus)
+    {
+        if (!comboOwnsKeyboardFocus)
+            return false;
+
+        Dispatcher.UIThread.Post(
+            () => FocusShellRegion(ShellFocusTarget.Worksheet),
+            DispatcherPriority.Input);
+        return true;
     }
 
     private static IEnumerable<Control> EnumerateRibbonControls(Control root)

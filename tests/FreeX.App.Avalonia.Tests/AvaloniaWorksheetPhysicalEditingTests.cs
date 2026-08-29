@@ -190,6 +190,39 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
     }
 
     [Fact]
+    public async Task RibbonComboPopupClose_RestoresWorksheetFocusForWorkbookShortcuts()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = CreateShownWindow(out _);
+            try
+            {
+                var formulaBox = FindByAutomationId<TextBox>(window, "FormulaBox");
+                formulaBox.Focus().Should().BeTrue();
+                await DrainInputAsync();
+
+                window.ScheduleWorksheetFocusAfterRibbonComboClosed(false).Should().BeFalse();
+                await DrainInputAsync();
+                formulaBox.IsFocused.Should().BeTrue(
+                    "a dismissed combo must not steal focus after the user moved elsewhere");
+
+                window.ScheduleWorksheetFocusAfterRibbonComboClosed(true).Should().BeTrue();
+                await DrainInputAsync();
+
+                window.SheetGridHostForTest.IsKeyboardFocusWithin.Should().BeTrue(
+                    "a combo that still owns focus after dismissal must return key input to the worksheet");
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task WorksheetSourcedTextInput_AfterInlineEditorClaimsFocus_UsesTheInlineCaretBoundary()
     {
         await Session.Dispatch(async () =>
