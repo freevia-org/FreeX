@@ -275,10 +275,12 @@ public sealed class CrossAppParityDashboardTests
         markdown.Should().Contain("Pending local gates: none");
         markdown.Should().Contain("cumulative 591 app slices (197 per app)");
         markdown.Should().Contain("Wave196 remains historical acceptance context");
+        markdown.Should().Contain("FreeW Wave196 evidence: the committed trailing inline flow-break caret oracle");
         markdown.Should().Contain("16/16 focused source tests");
         markdown.Should().Contain("20/20 focused tests");
         markdown.Should().Contain("4/4 focused tests");
-        markdown.Should().Contain("two trailing inline flow-break caret regressions");
+        markdown.Should().Contain("FreeW Wave197 evidence: **20/20** focused tests cover exactly **6** unique Legal Notices scenarios");
+        markdown.Should().Contain("surface-margin candidate regressed all six rows");
         markdown.Should().Contain($"{expectedBaselineChangedPixels} to {expectedChangedPixels}");
         markdown.Should().Contain("0.1809518682");
         markdown.Should().Contain("## FreeX Visual Review Queue");
