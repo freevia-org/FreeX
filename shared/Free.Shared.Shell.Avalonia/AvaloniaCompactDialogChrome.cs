@@ -1495,11 +1495,14 @@ public static class AvaloniaCompactDialogChrome
                 // Fluent's template contributes a 12px horizontal inset outside the
                 // presenter. A raw negative margin participates in its measure pass and
                 // can collapse the pane, so consume that compensation at the template
-                // boundary while keeping the selected content host stretched.
+                // boundary while keeping the selected content host stretched. WPF retains
+                // the one-pixel trailing pane frame even when that compensation is negative.
                 selectedPane.Margin = new Thickness(
                     authorityPaneMargin.Left < 0 ? 0 : authorityPaneMargin.Left,
                     authorityPaneMargin.Top,
-                    authorityPaneMargin.Right < 0 ? 0 : authorityPaneMargin.Right,
+                    authorityPaneMargin.Right < 0
+                        ? DialogTabChromeMetrics.PaneBorderThickness
+                        : authorityPaneMargin.Right,
                     authorityPaneMargin.Bottom);
                 selectedPane.HorizontalAlignment = HorizontalAlignment.Stretch;
             }

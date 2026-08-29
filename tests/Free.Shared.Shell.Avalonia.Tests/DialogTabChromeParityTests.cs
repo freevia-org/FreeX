@@ -52,6 +52,37 @@ public sealed class DialogTabChromeParityTests
     }
 
     [Fact]
+    public async Task Negative_authority_pane_compensation_preserves_the_WPF_trailing_frame()
+    {
+        await Session.Dispatch(() =>
+        {
+            var tabs = new TabControl();
+            tabs.Items.Add(new TabItem { Header = "One", Content = new TextBlock { Text = "Body" } });
+            tabs.SelectedIndex = 0;
+
+            AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
+                tabs,
+                contentPaneMargin: new Thickness(-12, 0, -12, 0));
+            var window = new Window { Content = tabs };
+            try
+            {
+                window.Show();
+                tabs.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var selectedContentHost = tabs.GetVisualDescendants()
+                    .OfType<ContentPresenter>()
+                    .Single(presenter => presenter.Name == "PART_SelectedContentHost");
+                selectedContentHost.Margin.Should().Be(new Thickness(0, 0, 1, 0));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Shared_legal_notices_applies_the_WPF_selected_pane_trailing_edge_contract()
     {
         await Session.Dispatch(() =>
