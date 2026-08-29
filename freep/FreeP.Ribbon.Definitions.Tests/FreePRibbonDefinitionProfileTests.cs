@@ -148,7 +148,7 @@ public sealed class FreePRibbonDefinitionProfileTests
     {
         var expectedGroupIds = new[]
         {
-            "slides", "clipboard", "font", "paragraph", "arrange", "edit", "editing",
+            "clipboard", "slides", "font", "paragraph", "arrange", "edit", "editing",
         };
 
         foreach (var definition in new[]
