@@ -31,6 +31,20 @@ public sealed class NumFmtEdge_F1_ConditionSectionLiteralPrefixSignTests
     /// silently is worse than the doubled sign this helper exists to prevent, so a bare LETTER now
     /// ends the scan while a bare symbol (a currency mark) is still skipped.
     /// </summary>
+    /// <summary>
+    /// r169. The r168 rewrite treated a quoted span as wholly inert so a quoted LABEL could be
+    /// skipped -- which meant an author who quotes the SIGN itself was never seen to have written
+    /// one, and .NET prepended a second minus. Quoting a literal character is ordinary authoring
+    /// practice, so this is the same doubled sign the helper exists to prevent, reached by a
+    /// different route.
+    /// </summary>
+    [Fact]
+    public void ConditionedNegativeSection_QuotedSignCharacter_IsNotDoubled()
+    {
+        NumberFormatter.FormatWithColor(new NumberValue(-5.25), "[<0]\"-\"0.00;[>=0]0.00")
+            .Text.Should().Be("-5.25");
+    }
+
     [Fact]
     public void ConditionedNegativeSection_HyphenatedLabelWord_KeepsTheRealMinus()
     {

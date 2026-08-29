@@ -187,6 +187,28 @@ public sealed class PresentationClipboardWorkflowTests
         pasted.Table.Rows[0].Cells.Should().HaveCount(3);
     }
 
+    /// <summary>
+    /// r169. FreeX quotes a cell whose text wraps (Alt+Enter) and leaves the newline INSIDE the
+    /// quotes. Splitting rows on every newline tore that row into pieces with mismatched field
+    /// counts, so the shape check rejected a genuine range copy and pasted the flat tab-riddled box
+    /// this branch exists to prevent. Row splitting is quote-aware now.
+    /// </summary>
+    [Fact]
+    public void ApplyPaste_RangeCopyWithAWrappedCell_StillCreatesATable()
+    {
+        var (editor, slide) = CreateEditor();
+        var content = new PresentationClipboardContent(
+            Text: "Region\tNotes\nNorth\t\"line1\nline2\"\nSouth\tplain");
+
+        PresentationClipboardWorkflow.ApplyPaste(
+            PresentationClipboardWorkflow.PreparePaste(editor),
+            content,
+            ownCopyIsCurrent: false);
+
+        slide.Shapes[^1].Kind.Should().Be(SlideShapeKind.Table,
+            "a wrapped cell is still one row of a real table");
+    }
+
     [Fact]
     public void ApplyPaste_TabIndentedTextWithNoImage_StaysATextBox()
     {
