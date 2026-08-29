@@ -1462,6 +1462,12 @@ function Screenshot-Tab($tabName, $widthSpec) {
     $wrect = New-Object ScreenshotWin32+RECT
     [ScreenshotWin32]::GetWindowRect($hwnd, [ref]$wrect) | Out-Null
     $w = $wrect.Right - $wrect.Left
+    # Keep capture order from leaking into the frame through a hover state on the next ribbon
+    # command. The title bar is a stable, non-command target in the captured top band.
+    [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new(
+        [int]($wrect.Left + ($w / 2)),
+        [int]($wrect.Top + 18))
+    Start-Sleep -Milliseconds 80
     Assert-ForegroundWindowOwnership $wpid $expectedTitle "screen capture" $script:ForegroundWindowOwnershipFailureAction
 
     $safe = $tabName -replace '[^a-zA-Z0-9_]','_'
