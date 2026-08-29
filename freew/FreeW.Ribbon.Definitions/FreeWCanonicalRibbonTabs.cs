@@ -445,7 +445,10 @@ internal static partial class FreeWCanonicalRibbonTabs
 
             topology.Section(
                 "view.window",
-                tab => tab.Group("window", "Window", "N", 70, group =>
+                // At Word's 900-DIP View ribbon width, keep the Window command stack direct while
+                // Zoom yields its secondary presets first. The 750-DIP lane still overflows both
+                // groups naturally once their compact forms no longer fit.
+                tab => tab.Group("window", "Window", "N", 85, group =>
                     {
                         group.MediumToggle("freew.split-window", "Split", RibbonCommandIconKind.Scale);
                         group.Medium("freew.new-window", "New Window", RibbonCommandIconKind.Page);

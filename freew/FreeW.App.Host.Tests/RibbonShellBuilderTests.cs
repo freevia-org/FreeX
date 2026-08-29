@@ -184,6 +184,28 @@ public sealed class RibbonShellBuilderTests
     }
 
     [StaFact]
+    public void View_CompactPresentationKeepsWindowCommandsDirectAt900Dips()
+    {
+        var view = FreeW.Ribbon.Definitions.FreeWRibbon
+            .Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf)
+            .FindTab("view")!;
+        var content = RibbonWpfRenderer.BuildTabContent(view, new Button());
+        var panel = FindLogicalChild<RibbonAdaptivePanel>(content)!;
+
+        content.Measure(new Size(900, 180));
+        content.Arrange(new Rect(0, 0, 900, 180));
+        content.UpdateLayout();
+
+        var window = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Window");
+
+        window.Collapsed.Should().BeFalse(
+            "Word keeps New Window, Arrange All, Split, and Switch Windows reachable before Zoom's secondary presets at 900 DIPs");
+        FindLogicalChild<Button>(Assert.IsAssignableFrom<DependencyObject>(window.Content)).Should().NotBeNull();
+    }
+
+    [StaFact]
     public void Insert_CommentStaysDirectAt750Dips()
     {
         var insert = FreeW.Ribbon.Definitions.FreeWRibbon
