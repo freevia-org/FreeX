@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Free.Shared.Ribbon;
 
 namespace FreeP.App.Host.Tests;
 
@@ -34,6 +35,38 @@ public sealed class PresentationThemeGalleryTests
                 .Count(text => Equals(text.Text, "Aa"))
                 .Should().BeGreaterThanOrEqualTo(5,
                     "each built-in theme preview uses the recognizable PowerPoint-style type sample");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void Compact_design_theme_gallery_keeps_the_active_preview_and_exposes_every_theme_in_more_menu()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var gallery = PresentationThemeGallery.Build(
+                FreePRibbonTestRegistry.Compose(window.Editor),
+                RibbonAdaptiveGroupState.SmallWithLabels,
+                () => "Berlin") as StackPanel;
+
+            gallery.Should().NotBeNull();
+            var buttons = gallery!.Children.OfType<Button>().ToArray();
+            buttons.Should().HaveCount(2);
+            AutomationProperties.GetName(buttons[0]).Should().Be("Berlin");
+            AutomationProperties.GetName(buttons[1]).Should().Be("More Themes");
+
+            var menu = buttons[1].ContextMenu;
+            menu.Should().NotBeNull();
+            menu!.Items.OfType<MenuItem>().Select(item => item.Header)
+                .Should().Equal("Office Theme", "Berlin", "Facet", "Ion", "Slice");
+
+            var facet = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Facet"));
+            facet.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            window.Editor.Presentation.Theme.Name.Should().Be("Facet");
         }
         finally
         {

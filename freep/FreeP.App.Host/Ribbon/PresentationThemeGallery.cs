@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using Free.Shared.Ribbon;
 using FreeP.Core.Model;
@@ -14,7 +15,10 @@ namespace FreeP.App.Host;
 /// </summary>
 internal static class PresentationThemeGallery
 {
-    public static FrameworkElement Build(IRibbonCommandRegistry registry)
+    public static FrameworkElement Build(
+        IRibbonCommandRegistry registry,
+        RibbonAdaptiveGroupState state = RibbonAdaptiveGroupState.Full,
+        Func<string>? activeThemeName = null)
     {
         var strip = new StackPanel
         {
@@ -23,10 +27,57 @@ internal static class PresentationThemeGallery
             Margin = new Thickness(2, 1, 2, 0),
         };
 
-        foreach (var entry in BuiltInThemes.GetAll())
-            strip.Children.Add(BuildThemeButton(entry, registry));
+        var entries = BuiltInThemes.GetAll();
+        if (state == RibbonAdaptiveGroupState.Full)
+        {
+            foreach (var entry in entries)
+                strip.Children.Add(BuildThemeButton(entry, registry));
+        }
+        else
+        {
+            var activeName = activeThemeName?.Invoke();
+            var active = entries.FirstOrDefault(entry => string.Equals(entry.DisplayName, activeName, StringComparison.OrdinalIgnoreCase))
+                ?? entries[0];
+            strip.Children.Add(BuildThemeButton(active, registry));
+            strip.Children.Add(BuildMoreThemesButton(entries, registry));
+        }
 
         return strip;
+    }
+
+    private static FrameworkElement BuildMoreThemesButton(
+        IReadOnlyList<BuiltInThemeEntry> entries,
+        IRibbonCommandRegistry registry)
+    {
+        var button = new Button
+        {
+            Content = "More\u2026",
+            MinWidth = 28,
+            Height = 48,
+            Padding = new Thickness(4, 0, 4, 0),
+            ToolTip = "More Themes",
+        };
+        AutomationProperties.SetName(button, "More Themes");
+
+        var menu = new ContextMenu();
+        foreach (var entry in entries)
+        {
+            var captured = entry;
+            var item = new MenuItem { Header = captured.DisplayName };
+            AutomationProperties.SetName(item, captured.DisplayName);
+            item.Click += (_, _) => ExecuteTheme(captured, registry);
+            menu.Items.Add(item);
+        }
+
+        button.ContextMenu = menu;
+
+        button.Click += (_, _) =>
+        {
+            menu.PlacementTarget = button;
+            menu.Placement = PlacementMode.Bottom;
+            menu.IsOpen = true;
+        };
+        return button;
     }
 
     private static FrameworkElement BuildThemeButton(BuiltInThemeEntry entry, IRibbonCommandRegistry registry)
@@ -79,7 +130,6 @@ internal static class PresentationThemeGallery
         Grid.SetRow(caption, 1);
         preview.Children.Add(caption);
 
-        var commandId = new RibbonCommandId("freep.theme." + entry.Id.ToLowerInvariant());
         var button = new Button
         {
             Content = preview,
@@ -100,12 +150,15 @@ internal static class PresentationThemeGallery
             button.Background = Brushes.Transparent;
             button.BorderBrush = Brushes.Transparent;
         };
-        button.Click += (_, _) =>
-        {
-            if (registry.TryGet(commandId, out var command) && command is not null)
-                command.Execute(RibbonCommandContext.Empty);
-        };
+        button.Click += (_, _) => ExecuteTheme(entry, registry);
         return button;
+    }
+
+    private static void ExecuteTheme(BuiltInThemeEntry entry, IRibbonCommandRegistry registry)
+    {
+        var commandId = new RibbonCommandId("freep.theme." + entry.Id.ToLowerInvariant());
+        if (registry.TryGet(commandId, out var command) && command is not null)
+            command.Execute(RibbonCommandContext.Empty);
     }
 
     private static Border Bar(SrgbColor color, double width, double height) => new()

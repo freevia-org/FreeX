@@ -4305,14 +4305,14 @@ public sealed partial class MainWindow : Window,
                     InjectRibbonGallery(
                         content,
                         FreeP.Ribbon.Definitions.FreePRibbon.ThemesGroupId,
-                        () => PresentationThemeGallery.Build(registry));
+                        state => PresentationThemeGallery.Build(registry, state, () => Editor.Presentation.Theme.Name));
                 else if (tab.Id == FreeP.Ribbon.Definitions.FreePRibbon.TransitionsTabId)
                     InjectRibbonGallery(
                         content,
                         FreeP.Ribbon.Definitions.FreePRibbon.TransitionGalleryGroupId,
-                        () => PresentationTransitionGallery.Build(registry));
+                        _ => PresentationTransitionGallery.Build(registry));
                 else if (tab.Id == FreeP.Ribbon.Definitions.FreePRibbon.AnimationsTabId)
-                    InjectRibbonGallery(content, "animation-effects", () => PresentationAnimationGallery.Build(tab, registry, stateStore));
+                    InjectRibbonGallery(content, "animation-effects", _ => PresentationAnimationGallery.Build(tab, registry, stateStore));
             },
         });
 
@@ -4329,7 +4329,7 @@ public sealed partial class MainWindow : Window,
     private static void InjectRibbonGallery(
         DependencyObject content,
         string groupId,
-        Func<FrameworkElement> createGallery)
+        Func<RibbonAdaptiveGroupState, FrameworkElement> createGallery)
     {
         var panel = (content as Border)?.Child as Panel;
         if (panel is null)
@@ -4354,7 +4354,7 @@ public sealed partial class MainWindow : Window,
                 return;
 
             lane.Children.Clear();
-            lane.Children.Add(createGallery());
+            lane.Children.Add(createGallery(group.LayoutState));
         }
 
         InjectInto(group.GroupContent);

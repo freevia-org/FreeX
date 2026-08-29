@@ -36,6 +36,11 @@ public sealed class FreePRibbonDefinitionProfileTests
 
             definition.FindTab("design")!.Groups.Select(group => group.Id)
                 .Should().Equal("themes", "customize");
+            definition.FindTab("design")!.FindGroup("themes")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive with
+            {
+                Hints = new RibbonWidthHints(470, 130, 130, 64),
+            });
+            definition.FindTab("design")!.FindGroup("customize")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
             definition.FindTab("review")!.Groups.Select(group => group.Id)
                 .Should().Equal("comments", "accessibility", "proofing");
             definition.FindTab("smartart-design")!.Groups.Select(group => group.Id)

@@ -411,13 +411,27 @@ public static class AvaloniaRibbonRenderer
         string groupId,
         Func<Control> createContent)
     {
+        ArgumentNullException.ThrowIfNull(createContent);
+        return TryInjectGroupContent(ribbon, groupId, _ => createContent());
+    }
+
+    /// <summary>
+    /// Replaces a generated group's visible content lane with host-native content that can adapt to
+    /// the current group presentation. Collapsed groups deliberately retain the renderer's standard
+    /// overflow menu, so the factory receives only full or compact presentations.
+    /// </summary>
+    public static bool TryInjectGroupContent(
+        Control ribbon,
+        string groupId,
+        Func<RibbonAdaptiveGroupState, Control> createContent)
+    {
         ArgumentNullException.ThrowIfNull(ribbon);
         ArgumentException.ThrowIfNullOrWhiteSpace(groupId);
         ArgumentNullException.ThrowIfNull(createContent);
 
         var injectedLanes = new HashSet<Panel>();
         var attachedHosts = new HashSet<AvaloniaRibbonGroupHost>();
-        void InjectInto(Control presentation)
+        void InjectInto(Control presentation, RibbonAdaptiveGroupState state)
         {
             if (presentation is not Grid grid)
                 return;
@@ -428,7 +442,7 @@ public static class AvaloniaRibbonRenderer
                 return;
 
             lane.Children.Clear();
-            lane.Children.Add(createContent());
+            lane.Children.Add(createContent(state));
         }
 
         void Attach(AvaloniaRibbonGroupHost groupHost)
@@ -436,13 +450,13 @@ public static class AvaloniaRibbonRenderer
             if (!attachedHosts.Add(groupHost))
                 return;
 
-            InjectInto(groupHost.GroupContent);
+            InjectInto(groupHost.GroupContent, groupHost.LayoutState);
             groupHost.PropertyChanged += (_, change) =>
             {
                 if (change.Property == ContentControl.ContentProperty
                     && groupHost.Content is Control presentation)
                 {
-                    InjectInto(presentation);
+                    InjectInto(presentation, groupHost.LayoutState);
                 }
             };
         }

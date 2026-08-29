@@ -67,6 +67,6 @@ public sealed class FreePRibbonContextSourceTests
 
         source.Should().Contain("contextSource: _ribbonContextSource")
             .And.Contain("_ribbonContextSource.Refresh(Editor);")
-            .And.NotContain("EnableIntermediateGroupPresentations");
+            .And.Contain("EnableIntermediateGroupPresentations: true");
     }
 }
