@@ -42,7 +42,8 @@ public partial class MainWindow
         menu.Opened += WorksheetContextMenu_Opened;
         menu.Closed += (_, _) =>
         {
-            CloseWorksheetContextMiniToolbar();
+            if (!TryKeepWorksheetContextMiniToolbarAfterContextMenuClose())
+                CloseWorksheetContextMiniToolbar();
             if (ReferenceEquals(SheetGrid.ContextMenu, menu))
                 SheetGrid.ContextMenu = null;
         };

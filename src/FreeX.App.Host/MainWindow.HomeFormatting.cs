@@ -455,7 +455,7 @@ public partial class MainWindow
     private static string? GetSelectedFontSizeText(ComboBox? combo) =>
         combo?.SelectedItem as string ?? combo?.Text;
 
-    private void FontColorBtn_Click(object sender, RoutedEventArgs e) => ApplySelectedFontColor();
+    private void FontColorBtn_Click(object sender, RoutedEventArgs e) => FontColorPickerBtn_Click(sender, e);
 
     private void FontColorPickerBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -487,7 +487,7 @@ public partial class MainWindow
             : new StyleDiff(FontColor: _selectedFontColor));
     }
 
-    private void FillColorBtn_Click(object sender, RoutedEventArgs e) => ApplySelectedFillColor();
+    private void FillColorBtn_Click(object sender, RoutedEventArgs e) => FillColorPickerBtn_Click(sender, e);
 
     private void FillColorPickerBtn_Click(object sender, RoutedEventArgs e)
     {

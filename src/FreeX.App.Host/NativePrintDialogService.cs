@@ -14,9 +14,16 @@ internal static class NativePrintDialogService
 {
     public static void ShowPrinterOptionsDialog(Window? owner = null)
     {
-        using var document = CreatePrinterSelectionDocument(null, copies: 1, collated: true, PrintPreviewSidesMode.OneSided);
-        using var dialog = CreatePrinterSelectionDialog(document);
-        ShowDialog(dialog, owner);
+        try
+        {
+            using var document = CreatePrinterSelectionDocument(null, copies: 1, collated: true, PrintPreviewSidesMode.OneSided);
+            using var dialog = CreatePrinterSelectionDialog(document);
+            ShowDialog(dialog, owner);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            ShowPrintFailedMessage(ex, owner);
+        }
     }
 
     public static void ShowPrintDialogAndPrint(
@@ -27,18 +34,18 @@ internal static class NativePrintDialogService
         PrintPreviewSidesMode sidesMode,
         Window? owner = null)
     {
-        using var document = CreatePrinterSelectionDocument(printQueue, copies, collated, sidesMode, paginator);
-        using var dialog = CreatePrinterSelectionDialog(document);
-        if (ShowDialog(dialog, owner) != Forms.DialogResult.OK)
-            return;
-
-        // A printer failure here (offline/removed printer, stopped spooler, driver fault,
-        // invalid PrintTicket, access-denied on a network queue) must never crash the whole
-        // app -- match the ExportAsPdf/ExportAsXps pattern (MainWindow.PrintExport.cs) of
-        // catching and showing an owned error dialog instead of letting the exception reach
-        // the WPF dispatcher unhandled.
         try
         {
+            using var document = CreatePrinterSelectionDocument(printQueue, copies, collated, sidesMode, paginator);
+            using var dialog = CreatePrinterSelectionDialog(document);
+            if (ShowDialog(dialog, owner) != Forms.DialogResult.OK)
+                return;
+
+            // A printer failure here (offline/removed printer, stopped spooler, driver fault,
+            // invalid PrintTicket, access-denied on a network queue) must never crash the whole
+            // app -- match the ExportAsPdf/ExportAsXps pattern (MainWindow.PrintExport.cs) of
+            // catching and showing an owned error dialog instead of letting the exception reach
+            // the WPF dispatcher unhandled.
             var selectedQueue = WpfPrintQueueCatalog.Resolve(
                 dialog.PrinterSettings.PrinterName,
                 WpfPrintQueueResolutionFallback.CreateNamedQueue) ?? printQueue;

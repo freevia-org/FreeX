@@ -116,6 +116,7 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+        SheetGrid.InvalidateVisual();
     }
 
     private void BackgroundBtn_Click(object sender, RoutedEventArgs e)

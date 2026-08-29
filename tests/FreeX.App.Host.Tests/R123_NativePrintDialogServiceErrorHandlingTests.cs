@@ -26,6 +26,23 @@ namespace FreeX.App.Host.Tests;
 public sealed class R123_NativePrintDialogServiceErrorHandlingTests
 {
     [Fact]
+    public void ShowPrinterOptionsDialog_WrapsDialogCreationAndShowInTryCatch_AndShowsOwnedErrorMessage()
+    {
+        var source = DialogSourceTestSupport.ReadHostSourceFile("NativePrintDialogService.cs");
+
+        var method = SourceMethodExtractor.ExtractMethodSource(
+            source,
+            "public static void ShowPrinterOptionsDialog(");
+
+        method.Should().Contain("try");
+        method.Should().Contain("CreatePrinterSelectionDocument(null, copies: 1, collated: true, PrintPreviewSidesMode.OneSided)");
+        method.Should().Contain("CreatePrinterSelectionDialog(document)");
+        method.Should().Contain("ShowDialog(dialog, owner);");
+        method.Should().Contain("catch (Exception ex) when (ex is not OutOfMemoryException)");
+        method.Should().Contain("ShowPrintFailedMessage(ex, owner);");
+    }
+
+    [Fact]
     public void ShowPrintDialogAndPrint_WrapsPrintDocumentCallInTryCatch_AndShowsOwnedErrorMessage()
     {
         var source = DialogSourceTestSupport.ReadHostSourceFile("NativePrintDialogService.cs");

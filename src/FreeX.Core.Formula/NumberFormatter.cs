@@ -1085,7 +1085,30 @@ public static partial class NumberFormatter
         if (start < 0 || end < start)
             return (unquoted, "", "");
 
-        return (unquoted[..start], unquoted[start..(end + 1)], unquoted[(end + 1)..]);
+        return (
+            UnescapeNumericAffix(unquoted[..start]),
+            unquoted[start..(end + 1)],
+            UnescapeNumericAffix(unquoted[(end + 1)..]));
+    }
+
+    private static string UnescapeNumericAffix(string text)
+    {
+        if (text.IndexOf('\\') < 0)
+            return text;
+
+        var result = new System.Text.StringBuilder(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\\' && i + 1 < text.Length)
+            {
+                result.Append(text[++i]);
+                continue;
+            }
+
+            result.Append(text[i]);
+        }
+
+        return result.ToString();
     }
 
     private static bool IsNumericPlaceholder(char c)

@@ -36,6 +36,7 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Colors)");
         source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Effects)");
         source.Should().Contain("WorkbookThemeCommandPlanner.PlanApply(theme)");
+        source.Should().Contain("SheetGrid.InvalidateVisual();");
         source.Should().NotContain("new SetWorkbookThemeCommand(theme)");
         source.Should().Contain("ApplyPageMarginsPreset(PageLayoutMarginPreset.Normal)");
         source.Should().Contain("ApplyPageOrientationPreset(PageLayoutOrientationPreset.Portrait)");

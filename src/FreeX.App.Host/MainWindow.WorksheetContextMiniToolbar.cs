@@ -13,6 +13,7 @@ public partial class MainWindow
     private const string OfficeDefaultNarrowFontName = "Aptos Narrow";
 
     private bool _suppressWorksheetContextMiniToolbar;
+    private bool _preserveWorksheetContextMiniToolbarAfterContextMenuClose;
     private Popup? _worksheetContextMiniToolbar;
 
     private void ShowWorksheetContextMiniToolbar(
@@ -35,8 +36,10 @@ public partial class MainWindow
         };
         AutomationProperties.SetName(toolbar, UiText.Get("WorksheetContextMiniToolbar_AutomationName"));
         AutomationProperties.SetAutomationId(toolbar, "WorksheetContextMiniToolbar");
+        toolbar.PreviewMouseDown += PreserveWorksheetContextMiniToolbarForInput;
+        toolbar.PreviewMouseRightButtonDown += PreserveWorksheetContextMiniToolbarForInput;
 
-        _worksheetContextMiniToolbar = new Popup
+        var popup = new Popup
         {
             AllowsTransparency = true,
             PlacementTarget = SheetGrid,
@@ -44,9 +47,15 @@ public partial class MainWindow
             HorizontalOffset = gridPosition.X,
             VerticalOffset = gridPosition.Y - 44,
             StaysOpen = true,
-            Child = toolbar,
-            IsOpen = true
+            Child = toolbar
         };
+        popup.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_worksheetContextMiniToolbar, popup))
+                _worksheetContextMiniToolbar = null;
+        };
+        _worksheetContextMiniToolbar = popup;
+        popup.IsOpen = true;
     }
 
     private UIElement CreateWorksheetContextMiniToolbarContent()
@@ -122,8 +131,31 @@ public partial class MainWindow
         return button;
     }
 
+    private void PreserveWorksheetContextMiniToolbarForInput(object sender, MouseButtonEventArgs e)
+    {
+        _preserveWorksheetContextMiniToolbarAfterContextMenuClose = true;
+    }
+
+    private bool TryKeepWorksheetContextMiniToolbarAfterContextMenuClose()
+    {
+        if (!_preserveWorksheetContextMiniToolbarAfterContextMenuClose ||
+            _worksheetContextMiniToolbar is not { } toolbar)
+        {
+            return false;
+        }
+
+        _preserveWorksheetContextMiniToolbarAfterContextMenuClose = false;
+        _ = Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (ReferenceEquals(_worksheetContextMiniToolbar, toolbar) && toolbar.IsOpen)
+                toolbar.StaysOpen = false;
+        }));
+        return true;
+    }
+
     private void CloseWorksheetContextMiniToolbar()
     {
+        _preserveWorksheetContextMiniToolbarAfterContextMenuClose = false;
         if (_worksheetContextMiniToolbar is not { } toolbar)
             return;
 

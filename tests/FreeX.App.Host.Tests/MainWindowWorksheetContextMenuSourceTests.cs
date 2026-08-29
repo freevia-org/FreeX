@@ -112,8 +112,12 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
 
         menuSource.Should().Contain("ShowWorksheetContextMiniToolbar(targetKind, gridPos);");
         menuSource.Should().Contain("CloseWorksheetContextMiniToolbar();");
+        menuSource.Should().Contain("if (!TryKeepWorksheetContextMiniToolbarAfterContextMenuClose())");
         toolbarSource.Should().Contain("WorksheetContextMenuTargetKind.Worksheet");
         toolbarSource.Should().Contain("AutomationProperties.SetAutomationId(toolbar, \"WorksheetContextMiniToolbar\")");
+        toolbarSource.Should().Contain("toolbar.PreviewMouseDown += PreserveWorksheetContextMiniToolbarForInput");
+        toolbarSource.Should().Contain("toolbar.PreviewMouseRightButtonDown += PreserveWorksheetContextMiniToolbarForInput");
+        toolbarSource.Should().Contain("toolbar.StaysOpen = false");
         toolbarSource.Should().Contain("ApplyFontToggleShortcut(FontToggleShortcut.Bold)");
         toolbarSource.Should().Contain("ApplyFontToggleShortcut(FontToggleShortcut.Italic)");
         toolbarSource.Should().Contain("ApplyHorizontalAlignment(FreeX.Core.Model.HorizontalAlignment.Center)");

@@ -535,6 +535,8 @@ public class NumberFormatterTests
 
     [Theory]
     [InlineData("[$\u20AC-407]#,##0.00", 1234.5, "\u20AC1.234,50")]
+    [InlineData("\u20AC\\ #,##0.00", 82809, "\u20AC 82,809.00")]
+    [InlineData("[$\u20AC-407]\\ #,##0.00", 1234.5, "\u20AC 1.234,50")]
     [InlineData("[$\u00A3-809] #,##0.00", 1234.5, "\u00A3 1,234.50")]
     [InlineData("[$-409]#,##0.00", 1234.5, "1,234.50")]
     [InlineData("-[$\u20AC-407]#,##0.00", 1234.5, "-\u20AC1.234,50")]
