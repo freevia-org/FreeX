@@ -173,10 +173,23 @@ public static class PresentationBackstagePrintSurfacePlanner
             (plan.NativePrintHandoff.CanOpenNativePrintDialog ||
              plan.NativePrintHandoff.CanSubmitToNativePrinter);
 
+        var helpText = canPrint ? choice.PackagePlan.LayoutSummary : plan.NativePrintHandoff.Reason;
+        if (canPrint && !choice.IsSelected)
+        {
+            // The Preview choice group above only ever renders plan.PreviewPlan.Pages, which
+            // reflects plan.SelectedLayout (the "selected"/previewed layout), never the layout
+            // this specific action is about to send to the printer. Say so explicitly, since
+            // this button submits the job immediately with no intervening preview step.
+            helpText =
+                $"{helpText}. This differs from the layout currently shown in Preview above " +
+                $"({plan.SelectedLayout.Layout.DisplayName}); printing here will not match what " +
+                "the Preview pane is displaying.";
+        }
+
         return new PresentationBackstagePrintAction(
             Resolve(PresentationShellTextCatalog.PrintSurfaceAction(choice.Layout.DisplayName)),
             "BackstagePrint_" + AutomationIdToken.KeepLettersAndDigits(choice.Layout.DisplayName),
-            canPrint ? choice.PackagePlan.LayoutSummary : plan.NativePrintHandoff.Reason,
+            helpText,
             canPrint,
             request);
     }

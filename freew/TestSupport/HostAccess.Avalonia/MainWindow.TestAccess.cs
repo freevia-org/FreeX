@@ -135,4 +135,10 @@ public sealed partial class MainWindow
     // CreateRecoveredSnapshotWindow builds reads/writes the canonical product settings.json rather than
     // a %LOCALAPPDATA% copy of its own.
     internal IApplicationOptionsStore<FreeWOptions> OptionsStoreForTests => _optionsStore;
+
+    // shared-startup-args F1: every startup-argument entry queued for its OWN new window (i.e. every
+    // one beyond the primary), so a test can prove a multi-file launch actually keeps them instead of
+    // silently dropping every file past the first.
+    internal IReadOnlyList<Free.Shared.AppServices.StartupFileOpenEntry> AdditionalStartupEntriesForTests =>
+        _additionalStartupEntries;
 }

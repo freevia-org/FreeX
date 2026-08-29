@@ -184,15 +184,52 @@ public static class FormulaRewriter
             },
             NamedRangeEndpointNode nre => nre with
             {
-                // A NamedRangeNode endpoint stays a name (unrewritable), same as a bare
-                // NamedRangeNode falls through the catch-all below unchanged; only a
-                // CellRefNode endpoint carries row/col coordinates to shift.
+                // A NamedRangeNode endpoint's Name stays a name (unrewritable) -- only a
+                // CellRefNode endpoint carries row/col coordinates to shift. A sheet-qualified
+                // NamedRangeNode endpoint's SheetQualifier IS still rewritable on sheet
+                // rename/delete, same as any bare NamedRangeNode -- see RewriteNamedRange below.
                 Start = RewriteNode(nre.Start, op, hostSheetName, ref changed),
                 End   = RewriteNode(nre.End,   op, hostSheetName, ref changed)
             },
             UnionNode union => RewriteUnion(union, op, hostSheetName, ref changed),
-            _ => node   // NumberNode, StringNode, BooleanNode, NamedRangeNode, ErrorNode
+            NamedRangeNode nr => RewriteNamedRange(nr, op, ref changed),
+            _ => node   // NumberNode, StringNode, BooleanNode, ErrorNode
         };
+    }
+
+    // ── Sheet-qualified defined-name reference (freex-defined-names-scope F1) ──────────────────
+    // A NamedRangeNode produced from an explicit "Sheet!Name" reference (Parser.
+    // ParseSheetQualifiedReference) carries the sheet text on SheetQualifier, not on any
+    // CellRefNode/RangeRefNode -- so without this case, RenameSheetOp/DeleteSheetOp silently left
+    // a stale/dangling sheet name in the formula text (e.g. "=Sheet2!TaxRate" survived a rename of
+    // Sheet2 verbatim instead of following it, and survived a delete of Sheet2 instead of
+    // collapsing to #REF! like an ordinary "=Sheet2!A1" reference does). An unqualified name
+    // (SheetQualifier null) never carries a sheet name to rewrite, and a bracketed external-link
+    // qualifier (e.g. "[1]Sheet1") can never textually equal a local sheet name, so it is left
+    // untouched here (matches RewriteCellRefRenameSheet/Matches' equivalent null/no-match guards
+    // for CellRefNode.SheetName above). Insert/Delete row/col, paste, and move ops carry no sheet
+    // rewrite for a name (a NamedRangeNode has no row/col coordinates of its own to shift), so they
+    // fall through unchanged, same as before this fix.
+    private static FormulaNode RewriteNamedRange(NamedRangeNode nr, RewriteOperation op, ref bool changed)
+    {
+        if (string.IsNullOrEmpty(nr.SheetQualifier))
+            return nr;
+
+        if (op is RenameSheetOp rename &&
+            string.Equals(nr.SheetQualifier, rename.OldSheetName, StringComparison.OrdinalIgnoreCase))
+        {
+            changed = true;
+            return nr with { SheetQualifier = rename.NewSheetName };
+        }
+
+        if (op is DeleteSheetOp deleteSheet &&
+            string.Equals(nr.SheetQualifier, deleteSheet.SheetName, StringComparison.OrdinalIgnoreCase))
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        return nr;
     }
 
     // A ref parameter can't be captured by a lambda (e.g. a List.Select projection), so each area

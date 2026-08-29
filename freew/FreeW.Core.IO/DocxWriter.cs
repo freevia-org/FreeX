@@ -8682,11 +8682,16 @@ public static class DocxWriter
     /// numberListCounter/MultiLevelListMarkerState which continue rather than restart). Those continuation
     /// paragraphs must therefore stay on the SAME dedicated w:numId the restart anchor established — falling
     /// back to the shared base numId would re-join them to the earlier list and renumber them on reopen.
-    /// A w:numId identifies a list INSTANCE, not a level, so the active id is tracked per <see cref="ListKind"/>
-    /// and spans levels; an intervening non-list paragraph does not clear it (numbering continues across
-    /// interrupting body text, exactly as the render layer does). <see cref="BeginStory"/> resets the active
-    /// ids at each story boundary (body, header/footer, footnotes, endnotes, comments) because those stories
-    /// are numbered independently.
+    /// A w:numId identifies a list INSTANCE, and a restart anchor's dedicated override id only carries a
+    /// w:lvlOverride/startOverride for the LEVEL it restarted -- every other level of that new w:num falls
+    /// back to the abstract definition's own declared start when a spec-correct reader (i.e. real Word)
+    /// resolves it. So the active id is tracked per (<see cref="ListKind"/>, level): restarting a nested
+    /// sub-level must not move a later, shallower/ancestor-level continuation paragraph onto that same new
+    /// id, or that ancestor level would silently reset to the abstract's start on reopen even though it was
+    /// never actually restarted (freew-list-continuation F1). An intervening non-list paragraph does not
+    /// clear it (numbering continues across interrupting body text, exactly as the render layer does).
+    /// <see cref="BeginStory"/> resets the active ids at each story boundary (body, header/footer,
+    /// footnotes, endnotes, comments) because those stories are numbered independently.
     /// Each restart ANCHOR gets its own w:numId (allocated per anchor paragraph, not per distinct
     /// (kind, level, startAt) value) so two runs that restart at the same number stay separate list
     /// instances — sharing one id would make the second run continue the first instead of restarting.
@@ -8695,7 +8700,7 @@ public static class DocxWriter
         IReadOnlyDictionary<Paragraph, RestartGroup> anchors,
         IReadOnlyDictionary<(ListKind Kind, string? MarkerText, ListNumberFormat NumberFormat), MarkerGroup>? markerGroups = null)
     {
-        private readonly Dictionary<ListKind, int> _activeNumIds = [];
+        private readonly Dictionary<(ListKind Kind, int Level), int> _activeNumIds = [];
         private readonly IReadOnlyDictionary<(ListKind, string?, ListNumberFormat), MarkerGroup> _markerGroups =
             markerGroups ?? new Dictionary<(ListKind, string?, ListNumberFormat), MarkerGroup>();
 
@@ -8724,7 +8729,11 @@ public static class DocxWriter
 
         /// <summary>
         /// Resolves the w:numId for a list paragraph: a restart anchor claims (and becomes) its dedicated
-        /// override id, a continuation paragraph reuses the id its anchor established, and anything else
+        /// override id for its OWN level, a continuation paragraph reuses the id the last anchor AT THAT
+        /// SAME LEVEL established (a continuation at a level with no restart yet of its own falls through
+        /// to <paramref name="baseNumId"/>, even while a sibling level of the same kind is mid-restart —
+        /// the dedicated id's w:num has no override for any other level, so handing it to an unrelated
+        /// level would silently reset that level's counter on reopen in Word), and anything else
         /// (bullets, or a kind with no restart yet) uses <paramref name="baseNumId"/> — except that a
         /// Bullet/Number paragraph whose captured marker differs from FreeW's own default first resolves
         /// <paramref name="baseNumId"/> to its dedicated marker-group numId (sweep99 F1), so the base a
@@ -8749,7 +8758,7 @@ public static class DocxWriter
             // instance to its dedicated override w:num, which the rest of its run then follows.
             if (anchors.TryGetValue(paragraph, out var group))
             {
-                _activeNumIds[kind] = group.NumId;
+                _activeNumIds[(kind, level)] = group.NumId;
                 return group.NumId;
             }
             if (startOverride is { } startAt)
@@ -8757,10 +8766,10 @@ public static class DocxWriter
                 var resolved = _byValue.TryGetValue((kind, level, startAt), out var equivalent)
                     ? equivalent
                     : baseNumId;
-                _activeNumIds[kind] = resolved;
+                _activeNumIds[(kind, level)] = resolved;
                 return resolved;
             }
-            return _activeNumIds.TryGetValue(kind, out var active) ? active : baseNumId;
+            return _activeNumIds.TryGetValue((kind, level), out var active) ? active : baseNumId;
         }
     }
 

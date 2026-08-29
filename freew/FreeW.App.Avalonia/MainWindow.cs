@@ -97,6 +97,10 @@ public sealed partial class MainWindow : Window
     // see ShowStartupOpenFailureIfAnyAsync.
     private readonly bool _startupOpenFailed;
     private readonly string? _startupOpenFailurePath;
+    // shared-startup-args F1: every planned startup-argument entry beyond the primary one (see
+    // OpenAdditionalStartupDocuments) -- kept as a field, not just a constructor local, so tests can
+    // observe that a multi-file launch actually queues the rest instead of silently dropping them.
+    private readonly IReadOnlyList<StartupFileOpenEntry> _additionalStartupEntries;
     private readonly Border _titleBar;
     private Border? _ribbonHost;
     private Border? _statusBar;
@@ -445,14 +449,29 @@ public sealed partial class MainWindow : Window
         _editor.ContextMenuCommandRequested += OnEditorContextMenuCommandRequested;
 
         UpdateViewModeButtons();
-        var startupDocument = FreeWApplicationStartup.TryOpenStartupDocument(
-            startupArguments,
-            _documentPersistence);
+        // shared-startup-args F1: FreeWApplicationStartup used to plan startup arguments capped at
+        // exactly one candidate, so every file beyond the first -- e.g. several documents dragged onto
+        // the dock/taskbar icon in one launch, which the OS delivers as multiple path arguments to a
+        // single process -- was silently dropped, even though FreeX, FreeP, and FreeW's own WPF host
+        // all open every one, each in its own window. Plan the FULL (uncapped, already deduplicated --
+        // see StartupFileOpenPlanner's seenPaths guard) list once: the first entry opens into THIS
+        // window exactly as before, and every remaining entry opens in its own brand-new window once
+        // this one is shown (below), mirroring OpenNewWindow()'s window-creation pattern.
+        var startupPlan = FreeWApplicationStartup.PlanStartupDocuments(startupArguments, _documentPersistence);
+        var primaryStartupEntry = startupPlan.Entries.FirstOrDefault(entry => !entry.OpenInNewWindow);
+        var startupDocument = primaryStartupEntry is null
+            ? null
+            : FreeWApplicationStartup.TryOpenStartupDocument(primaryStartupEntry, _documentPersistence);
+        _additionalStartupEntries = startupPlan.Entries
+            .Where(entry => entry.OpenInNewWindow)
+            .ToArray();
         // r148-startup-fileopen: TryOpenStartupDocument returns null both when nothing was asked for
         // (no startup arguments -- silently show the blank sample document, unchanged) and when a
         // requested file could not be opened (missing/locked/corrupt/unsupported -- WPF's equivalent
         // OpenPath already pops ShowError for this; Avalonia previously showed nothing at all). Only
-        // the second case should alert, so gate on there having been an actual argument to try.
+        // the second case should alert, so gate on there having been an actual argument to try (NOT on
+        // whether a plan entry was found -- a startup argument that failed planning entirely, e.g. a
+        // missing file, must still alert, matching the WPF host's equivalent gesture).
         _startupOpenFailed = startupDocument is null && startupArguments.Count > 0;
         _startupOpenFailurePath = startupArguments.Count > 0 ? startupArguments[0] : null;
         if (startupDocument is null)
@@ -489,6 +508,13 @@ public sealed partial class MainWindow : Window
                 await _autosave.OfferRecoveryAsync(this);
             await RefreshPrinterDiscoveryAsync();
         };
+
+        // shared-startup-args F1: opens every startup file argument beyond the first (already opened
+        // synchronously above), each in its own new window -- deferred to Opened so the dispatcher is
+        // guaranteed to be pumping first, mirroring the WPF host's own equivalent Loaded-deferred fan-
+        // out and OpenNewWindow()'s (already-proven-safe) window-creation pattern below.
+        if (_additionalStartupEntries.Count > 0)
+            Opened += (_, _) => OpenAdditionalStartupDocuments(_additionalStartupEntries);
 
         // Dirty-gate on close: cancel the synchronous event and let the shared async
         // coordinator resume the close only after the dirty decision settles.
@@ -1409,6 +1435,27 @@ public sealed partial class MainWindow : Window
         {
             ApplyZoom(scale);
             _editor.Focus();
+        }
+    }
+
+    /// <summary>
+    /// shared-startup-args F1: opens every startup file argument beyond the primary one (already
+    /// planned and opened by the constructor), each in its own brand-new window -- mirrors
+    /// <see cref="OpenNewWindow"/>'s window-creation pattern above. Each entry is already
+    /// existence/format-checked and deduplicated by the shared planner, so re-running it as this
+    /// single-path startup array through the same constructor path is safe and does not repeat the
+    /// planning already done for it.
+    /// </summary>
+    private void OpenAdditionalStartupDocuments(IReadOnlyList<StartupFileOpenEntry> entries)
+    {
+        foreach (var entry in entries)
+        {
+            var window = new MainWindow(
+                [entry.Path],
+                _options,
+                _optionsStore,
+                documentWindowPlanner: _documentWindowPlanner);
+            window.Show();
         }
     }
 
