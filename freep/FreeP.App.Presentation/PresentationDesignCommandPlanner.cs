@@ -183,6 +183,10 @@ public static class PresentationDesignCommandPlanner
                 PresentationDesignCommandIntentKind.SetTheme,
                 ThemeId: BuiltInThemes.Id.Slice),
             new PresentationDesignCommandPlan(
+                "freep.theme-variants.office",
+                PresentationDesignCommandIntentKind.SetThemeColors,
+                ThemeColorSetId: BuiltInThemes.Id.Office),
+            new PresentationDesignCommandPlan(
                 "freep.theme-colors.office",
                 PresentationDesignCommandIntentKind.SetThemeColors,
                 ThemeColorSetId: BuiltInThemes.Id.Office),
