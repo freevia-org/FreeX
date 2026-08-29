@@ -50,6 +50,9 @@ public sealed class MediaRenderUtilityPolicyTests
     [InlineData("photo.tiff", OpcMediaContentTypeProfile.PresentationPictureInsertion, "image/png")]
     [InlineData("movie.m4v", OpcMediaContentTypeProfile.PresentationVideoInsertion, "video/x-m4v")]
     [InlineData("sound.m4a", OpcMediaContentTypeProfile.PresentationAudioInsertion, "audio/mp4")]
+    [InlineData("sound.aac", OpcMediaContentTypeProfile.PresentationAudioInsertion, "audio/aac")]
+    [InlineData("sound.ogg", OpcMediaContentTypeProfile.PresentationAudioInsertion, "audio/ogg")]
+    [InlineData("sound.flac", OpcMediaContentTypeProfile.PresentationAudioInsertion, "audio/flac")]
     [InlineData("unknown", OpcMediaContentTypeProfile.PresentationAudioInsertion, "audio/mpeg")]
     public void OpcMediaTypes_PreservesInsertionContentTypeProfiles(
         string input,

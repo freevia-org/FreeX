@@ -2621,6 +2621,75 @@ public class DocxRoundTripTests
         numIds[2].Should().Be(numIds[0]);
     }
 
+    /// <summary>
+    /// freew-list-continuation F1: a restart at a NESTED sub-level must not move a later, shallower/
+    /// ancestor-level continuation paragraph onto the sub-level's dedicated override numId. That id's
+    /// w:num only carries a w:lvlOverride/startOverride for the level that actually restarted (ilvl=1
+    /// here) -- it has no override for ilvl=0, so a spec-correct reader (real Word, unlike FreeW's own
+    /// numId-oblivious render-time counters) would resolve the ancestor paragraph back to the abstract's
+    /// declared start instead of continuing the outer list. Before the fix, <c>RestartNumbering</c> tracked
+    /// one active numId per <see cref="ListKind"/> (spanning ALL levels), so the sub-level restart clobbered
+    /// the id every later paragraph of that kind resolved to, regardless of its own level.
+    /// </summary>
+    [Fact]
+    public void SubLevelRestart_DoesNotMoveALaterAncestorLevelContinuationOntoTheSubLevelNumId()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(ListParagraph("Item1", ListKind.MultiLevel, level: 0));
+        doc.Blocks.Add(ListParagraph("Item2", ListKind.MultiLevel, level: 0));
+        doc.Blocks.Add(ListParagraph("SubA", ListKind.MultiLevel, level: 1));
+        doc.Blocks.Add(ListParagraph("SubRestart", ListKind.MultiLevel, startOverride: 1, level: 1));
+        doc.Blocks.Add(ListParagraph("Item3", ListKind.MultiLevel, level: 0));
+
+        var numIds = WrittenNumIds(doc);
+
+        numIds.Should().HaveCount(5);
+        // Item1/Item2/SubA share the base MultiLevel numId (nothing has restarted yet).
+        numIds[1].Should().Be(numIds[0], "Item2 continues the not-yet-restarted base list");
+        numIds[2].Should().Be(numIds[0], "SubA continues the base list at its own level");
+        // SubRestart claims its own dedicated override numId (it IS the restart anchor).
+        numIds[3].Should().NotBe(numIds[0], "SubRestart is the restart anchor and gets a dedicated numId");
+        // THE FIX: Item3 is a shallower/ancestor level (0) than the restart (1) — it must stay on the base
+        // numId, which already carries its own established counter, NOT jump onto SubRestart's dedicated
+        // sub-level-only override numId (which has no override for level 0 at all).
+        numIds[4].Should().Be(numIds[0],
+            "Item3 is an ancestor level of the sub-level restart and must continue the base list's own " +
+            "level-0 counter, not silently reset via the sub-level's dedicated numId");
+
+        // And the model itself round-trips the intended DISPLAY sequence (1,2,[a],[a-restart],3). Item3
+        // reads back with an EXPLICIT override of 3, not null: FreeW's own reader tracks only the last-seen
+        // numId per ListKind, not per level (NumberingRestartState.Resolve, DocxReader.cs), so seeing Item3's
+        // numId (the base list) differ from SubRestart's (the dedicated sub-level id) makes it apply the
+        // same "resume this numId's own counter after an interleaving different numId" rule proven by
+        // NumberingInstanceRestartTests.NumIdReturnsAfterInterleavingDifferentNumId_ResumesItsOwnCounterInsteadOfRestarting
+        // — an explicit override that resolves to the SAME display value (3) a plain continuation would,
+        // so the round trip is still faithful even though the representation differs from the pre-fix one.
+        var paragraphs = RoundTrip(doc).Paragraphs.ToList();
+        paragraphs.Select(p => p.Formatting.ListStartOverride).Should().Equal(null, null, null, 1, 3);
+    }
+
+    /// <summary>
+    /// Sibling/no-regression coverage for the fix above: a continuation at the SAME level as an active
+    /// sub-level restart must still stay on that restart's dedicated numId (per-level tracking must not
+    /// stop same-level continuations from following their own anchor).
+    /// </summary>
+    [Fact]
+    public void SubLevelRestart_ContinuationAtTheSameSubLevelStillFollowsTheRestartNumId()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(ListParagraph("Item1", ListKind.MultiLevel, level: 0));
+        doc.Blocks.Add(ListParagraph("SubA", ListKind.MultiLevel, level: 1));
+        doc.Blocks.Add(ListParagraph("SubRestart", ListKind.MultiLevel, startOverride: 1, level: 1));
+        doc.Blocks.Add(ListParagraph("SubB", ListKind.MultiLevel, level: 1));
+
+        var numIds = WrittenNumIds(doc);
+
+        numIds.Should().HaveCount(4);
+        numIds[2].Should().NotBe(numIds[0], "SubRestart is the restart anchor and gets a dedicated numId");
+        numIds[3].Should().Be(numIds[2],
+            "SubB continues at the SAME level as the restart and must follow the restart's own numId");
+    }
+
     [Fact]
     public void RestartedList_DoesNotLeakIntoTheHeaderStory()
     {

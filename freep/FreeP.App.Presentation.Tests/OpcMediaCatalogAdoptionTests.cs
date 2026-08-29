@@ -11,7 +11,12 @@ public sealed class OpcMediaCatalogAdoptionTests
     [InlineData("Audio/Wav", OpcMediaExtensionProfile.PackageTransitionSound, false, null, "mp3")]
     [InlineData("video/x-ms-wmv", OpcMediaExtensionProfile.PresentationPackageMediaPart, false, null, "wmv")]
     [InlineData("VIDEO/X-MS-WMV", OpcMediaExtensionProfile.PresentationPackageMediaPart, false, null, "mp4")]
-    [InlineData("audio/ogg", OpcMediaExtensionProfile.PresentationPackageMediaPart, false, null, "mp4")]
+    // r169-remediation: audio/ogg used to fall through this profile's "mp4" default (the same
+    // unhandled-format bug freep-media F2 is about), which named the saved package part
+    // "...mp4" for actual OGG bytes. Now handled explicitly -- see
+    // R169_OpcAudioExtensionAgreesWithContentTypeTests for the round-trip guard across the
+    // whole aac/ogg/flac set and every function of this shape.
+    [InlineData("audio/ogg", OpcMediaExtensionProfile.PresentationPackageMediaPart, false, null, "ogg")]
     [InlineData("image/webp", OpcMediaExtensionProfile.PresentationZoomCoverImage, true, null, ".webp")]
     [InlineData("IMAGE/JPEG", OpcMediaExtensionProfile.PresentationZoomCoverImage, true, null, ".png")]
     [InlineData("IMAGE/JPEG", OpcMediaExtensionProfile.PresentationSmartArtImage, false, null, "jpg")]

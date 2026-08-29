@@ -148,4 +148,79 @@ public sealed class SlideCompositorGroupRotationTests
         composedChild.BoundsDip.Y.Should().BeApproximately(25, 0.5);
         composedChild.RotationDeg.Should().Be(0);
     }
+
+    /// <summary>
+    /// r169. The r168 fix reached the compositor only, so a rotated group's child rendered at its
+    /// rotated position while ShapeHitTester still used the child's authored bounds: clicking where
+    /// the child visibly was selected the GROUP instead. Render and hit-test are two readers of one
+    /// transform, and only one of them was updated.
+    /// </summary>
+    [Fact]
+    public void HitTest_RotatedGroupChild_SelectsTheChildWhereItActuallyRenders()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+
+        var child = new SlideShape
+        {
+            Id = 501,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 10 * EmuPerPx,
+            OffsetYEmu = 10 * EmuPerPx,
+            ExtentCxEmu = 20 * EmuPerPx,
+            ExtentCyEmu = 20 * EmuPerPx,
+        };
+        var group = new SlideShape
+        {
+            Id = 500,
+            Kind = SlideShapeKind.Group,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 200 * EmuPerPx,
+            ExtentCyEmu = 100 * EmuPerPx,
+            RotationDeg = 90,
+        };
+        group.Children.Add(child);
+        slide.Shapes.Add(group);
+
+        // The rendered center of the child, per the compositor test above: (130, -30).
+        ShapeHitTester.HitTest(slide, presentation, 130, -30)
+            .Should().Be(501, "clicking where the child renders must select the child");
+    }
+
+    /// <summary>
+    /// Sibling/no-regression: an unrotated group must still hit-test its child at the child's own
+    /// authored position, so composing the transform did not shift the ordinary case.
+    /// </summary>
+    [Fact]
+    public void HitTest_UnrotatedGroupChild_StillSelectsTheChildAtItsAuthoredPosition()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+
+        var child = new SlideShape
+        {
+            Id = 601,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 10 * EmuPerPx,
+            OffsetYEmu = 10 * EmuPerPx,
+            ExtentCxEmu = 20 * EmuPerPx,
+            ExtentCyEmu = 20 * EmuPerPx,
+        };
+        var group = new SlideShape
+        {
+            Id = 600,
+            Kind = SlideShapeKind.Group,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 200 * EmuPerPx,
+            ExtentCyEmu = 100 * EmuPerPx,
+        };
+        group.Children.Add(child);
+        slide.Shapes.Add(group);
+
+        ShapeHitTester.HitTest(slide, presentation, 20, 20).Should().Be(601);
+    }
 }

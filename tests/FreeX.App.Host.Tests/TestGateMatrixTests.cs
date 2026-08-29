@@ -97,7 +97,7 @@ public sealed class TestGateMatrixTests
     }
 
     [Fact]
-    public void Manifest_FoldsPlatformNeutralSuitesIntoLinuxAndPartitionsTheLongAvaloniaLane()
+    public void Manifest_FoldsPlatformNeutralSuitesIntoLinux_CoalescesUnixSuites_AndPartitionsTheLongAvaloniaLane()
     {
         using var manifest = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("eng", "test-gates.json"));
         var gates = manifest.RootElement.GetProperty("gates").EnumerateArray().ToArray();
@@ -115,9 +115,18 @@ public sealed class TestGateMatrixTests
         var portable = gates.Where(gate =>
             gate.GetProperty("id").GetString()!.EndsWith("-portable", StringComparison.Ordinal)).ToArray();
         portable.Should().HaveCount(3);
-        portable.Should().OnlyContain(gate =>
+        portable.Where(gate => gate.GetProperty("id").GetString() != "freex-core-portable")
+            .Should().OnlyContain(gate =>
             gate.GetProperty("platforms").EnumerateArray().Select(value => value.GetString())
                 .SequenceEqual(new[] { "windows", "linux", "macos" }));
+        portable.Single(gate => gate.GetProperty("id").GetString() == "freex-core-portable")
+            .GetProperty("platforms").EnumerateArray().Select(value => value.GetString())
+            .Should().Equal("windows");
+
+        var unix = gates.Single(gate => gate.GetProperty("id").GetString() == "freex-portable-unix");
+        unix.GetProperty("platforms").EnumerateArray().Select(value => value.GetString())
+            .Should().Equal("linux", "macos");
+        unix.GetProperty("projects").GetArrayLength().Should().Be(9);
 
         var avalonia = gates.Single(gate => gate.GetProperty("id").GetString() == "freex-avalonia");
         avalonia.GetProperty("partitions").GetInt32().Should().Be(2);

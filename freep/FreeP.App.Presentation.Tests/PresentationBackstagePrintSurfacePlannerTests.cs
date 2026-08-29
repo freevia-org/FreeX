@@ -63,6 +63,36 @@ public sealed class PresentationBackstagePrintSurfacePlannerTests
         handoutRequest.IncludeCommentsAndInkMarkup.Should().BeTrue();
     }
 
+    [Fact]
+    public void PrintActions_WarnWhenLayoutDiffersFromCurrentlyPreviewedLayout()
+    {
+        var plan = PresentationPrintBackstagePlanner.Build(
+            new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides),
+            slideCount: 6,
+            hostCapabilities: PresentationNativePrintHandoffHostCapabilities.Available("test host"));
+
+        var surface = PresentationBackstagePrintSurfacePlanner.Build(plan);
+
+        // Full Page Slides is the selected layout, so it is what plan.PreviewPlan.Pages (and
+        // therefore the on-screen Preview group) is currently showing. Its own Print action
+        // matches that preview and must NOT carry a mismatch warning -- this is the sibling
+        // no-regression case for the fix below.
+        var selectedAction = surface.PrintActions.Single(action =>
+            action.Request.Layout == PresentationPrintLayoutKind.FullPageSlides);
+        selectedAction.HelpText.Should().NotContain("differs from the layout currently shown in Preview");
+
+        // Handouts (6 per page) is a DIFFERENT layout choice. Clicking its Print button submits
+        // that layout immediately (BuildRequest uses the choice, not the selected/previewed
+        // layout), even though the Preview group is still rendering Full Page Slides thumbnails.
+        // The action must say so explicitly, since there is no other production signal that the
+        // two disagree before the click.
+        var handoutAction = surface.PrintActions.Single(action =>
+            action.Request.Layout == PresentationPrintLayoutKind.Handouts &&
+            action.Request.HandoutSlidesPerPage == 6);
+        handoutAction.HelpText.Should().Contain(
+            "differs from the layout currently shown in Preview above (Full Page Slides)");
+    }
+
     [Theory]
     [InlineData(null, null)]
     [InlineData("   ", null)]

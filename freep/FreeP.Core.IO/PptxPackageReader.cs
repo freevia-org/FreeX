@@ -4865,10 +4865,13 @@ public static class PptxPackageReader
                 var  mediaRelId = mediaEl.Attribute(R + "link")?.Value
                                ?? mediaEl.Attribute(R + "embed")?.Value;
 
+                // freep-media F1: CT_VideoFile (a:videoFile) has no fullScrn attribute in
+                // ECMA-376 -- fullScrn lives on CT_TLMediaNodeVideo (the p:video element in
+                // the slide's p:timing tree) and is read there by
+                // ReadMediaPlaybackStartModes. Do not read it off a:videoFile/a:audioFile;
+                // a real PowerPoint-authored deck never puts it here, so reading it from
+                // this element would default it off for every foreign deck.
                 var mediaInfo = new MediaInfo { IsVideo = isVideo };
-                mediaInfo.PlayFullScreen = isVideo && ReadBooleanOrDefault(
-                    mediaEl.Attribute("fullScrn")?.Value,
-                    defaultValue: false);
                 ReadMediaTiming(nvPr, mediaInfo);
 
                 if (!string.IsNullOrWhiteSpace(mediaRelId))
@@ -6958,11 +6961,13 @@ public static class PptxPackageReader
 
     private static void ReadMediaPlaybackStartModes(XElement timingEl, Slide slide)
     {
-        foreach (var mediaNode in timingEl.Descendants()
-                     .Where(element => element.Name == P + "video" || element.Name == P + "audio")
-                     .Select(element => element.Element(P + "cMediaNode"))
-                     .OfType<XElement>())
+        foreach (var videoOrAudioEl in timingEl.Descendants()
+                     .Where(element => element.Name == P + "video" || element.Name == P + "audio"))
         {
+            var mediaNode = videoOrAudioEl.Element(P + "cMediaNode");
+            if (mediaNode is null)
+                continue;
+
             var shapeIdText = mediaNode.Element(P + "tgtEl")?.Element(P + "spTgt")?.Attribute("spid")?.Value;
             if (!uint.TryParse(shapeIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId))
                 continue;
@@ -6996,6 +7001,17 @@ public static class PptxPackageReader
             shape.Media.RewindAfterPlaying = ReadBooleanOrDefault(
                 cTn?.Attribute("autoRev")?.Value,
                 defaultValue: false);
+
+            // freep-media F1: fullScrn is an attribute of CT_TLMediaNodeVideo (the p:video
+            // element itself, a sibling of p:cMediaNode) -- not of p:cMediaNode and not of
+            // a:videoFile. CT_TLMediaNodeAudio has no fullScrn attribute, so only p:video
+            // carries it.
+            if (videoOrAudioEl.Name == P + "video")
+            {
+                shape.Media.PlayFullScreen = ReadBooleanOrDefault(
+                    videoOrAudioEl.Attribute("fullScrn")?.Value,
+                    defaultValue: false);
+            }
 
             var conditions = cTn?.Element(P + "stCondLst")?.Elements(P + "cond")
                 ?? Enumerable.Empty<XElement>();

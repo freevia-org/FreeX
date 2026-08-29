@@ -33,9 +33,20 @@ behavior on Windows, Linux, and macOS. The manifest assigns these checks through
 to short existing integration entries, so they reuse the same checkout, SDK setup, NuGet cache,
 and runner slot instead of occupying four additional jobs. The gate contract requires exactly one
 static owner and one platform owner per OS. This also avoids rebuilding generated-document
-validators and rescanning every tracked path three times. All integration entries run in parallel,
-and only gates marked `requiresFullHistory` receive a full checkout. The local command defaults to
+validators and rescanning every tracked path three times. All integration entries run in parallel.
+FreeX keeps core and contract suites isolated on Windows, where they have distinct runtime and
+failure characteristics, but coalesces them on Linux and macOS. This removes two checkout/setup/
+restore jobs and keeps CI plus CodeQL within the repository's observed 20-runner concurrency ceiling.
+Only gates marked `requiresFullHistory` receive a full checkout. The local command defaults to
 `-Mode All` and therefore remains the complete preflight.
+
+Repository-wide static checks batch tracked-file work through Git instead of opening each file from
+PowerShell, build case/Unicode path indexes in one pass, and preselect managed-source candidates
+before detailed path analysis. Generated-document helper projects use the normal incremental,
+parallel .NET build path first and retain the isolated serialized build only as a one-time fallback.
+These are execution optimizations only: conflict markers, line endings, path collisions, Unicode
+normalization, script syntax, platform-specific APIs, generated freshness, and project references
+remain covered.
 
 ## Release Gate
 
@@ -62,7 +73,8 @@ critical path. The seven WPF host batches are separate release gates so each rec
 an isolated Windows runner and no single batch determines a 25-minute serial critical path. The
 seven render-evidence assemblies are divided between two gates per operating system, cutting their
 serial critical path roughly in half without launching an unbounded renderer fan-out. A project may
-belong to one gate only.
+belong to one gate per platform only; platform-specific grouping can differ when it removes runner
+overhead without changing coverage.
 
 Hosted CI and release gates retain TRX and hang-diagnostic output and use a 15-minute test-host hang
 timeout. They do not silently retry a failed project; a failure remains visible and the individual

@@ -40,8 +40,6 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("-HangTimeout 15m");
         workflow.Should().NotContain("-RetryFailedProjectCount");
         workflow.Should().Contain("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9");
-        workflow.Should().Contain("platform: linux");
-        workflow.Should().Contain("platform: macos");
         workflow.Should().NotContain("dotnet test FreeX.DefaultTests.slnx");
         workflow.Should().NotContain("dotnet test FreeX.UiTests.slnx");
         workflow.Should().NotContain("dotnet build FreeX.slnx");

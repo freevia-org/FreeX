@@ -138,6 +138,27 @@ jobs:
           }
           Write-Host "Pinned immutable release candidate $env:GITHUB_SHA. Later main commits do not invalidate this run."
 
+      - name: Validate version and reject conflicting immutable tags
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.release_version }}".Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') {
+            throw "release_version must be a filesystem-safe semantic version such as 0.8.182."
+          }
+          $apps = if ("${{ inputs.app }}" -eq "all") { @("FreeX", "FreeW", "FreeP") } else { @("${{ inputs.app }}") }
+          $tags = @($apps | ForEach-Object { "$($_.ToLowerInvariant())-v$version" })
+          if ("${{ inputs.app }}" -eq "all") { $tags += "free-suite-v$version" }
+          foreach ($tag in $tags) {
+            $remoteRefs = @(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}")
+            if ($LASTEXITCODE -ne 0) { throw "Could not resolve remote tag '$tag'." }
+            if ($remoteRefs.Count -eq 0) { continue }
+            $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
+            $tagSha = (($peeled + $remoteRefs)[0] -split "\`t")[0]
+            if ($tagSha -cne $env:GITHUB_SHA) {
+              throw "Tag '$tag' is immutable at $tagSha; choose a new version before running full release tests."
+            }
+          }
+
       - name: Require successful exact-SHA CI and CodeQL attestations
         shell: pwsh
         env:
@@ -666,7 +687,8 @@ jobs:
           }
           if ($releaseExists) {
             gh release upload $tag @assets --clobber
-            $notes | gh release edit $tag --title $title --notes-file -
+            $prerelease = "${{ inputs.prerelease }}".ToLowerInvariant()
+            $notes | gh release edit $tag --title $title --notes-file - "--prerelease=$prerelease"
           } else {
             $releaseArgs = @()
             if ("${{ inputs.prerelease }}" -eq "true") { $releaseArgs += "--prerelease" }
@@ -748,7 +770,8 @@ jobs:
           }
           if ($releaseExists) {
             gh release upload $tag @assets --clobber
-            $notes | gh release edit $tag --title $title --notes-file -
+            $prerelease = "${{ inputs.prerelease }}".ToLowerInvariant()
+            $notes | gh release edit $tag --title $title --notes-file - "--prerelease=$prerelease"
           } else {
             $releaseArgs = @()
             if ("${{ inputs.prerelease }}" -eq "true") { $releaseArgs += "--prerelease" }

@@ -368,7 +368,10 @@ public static class PresentationClipboardWorkflow
     private static TextBody BuildPlainTextBody(string text)
     {
         var body = new TextBody();
-        foreach (var line in text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+        // r169: the same quote-aware row split HasTabularText uses, so a wrapped cell stays one row
+        // here too. Detecting a table and then building it from torn rows would trade one wrong
+        // answer for another.
+        foreach (var line in PresentationClipboardContent.SplitTabularRows(text))
         {
             var paragraph = new Paragraph();
             paragraph.Runs.Add(new Run { Text = line });

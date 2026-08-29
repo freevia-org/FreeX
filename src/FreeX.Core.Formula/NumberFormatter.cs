@@ -470,12 +470,24 @@ public static partial class NumberFormatter
                 var close = format.IndexOf('"', index + 1);
                 if (close < 0)
                     break;
+
+                // r169: a quoted span was treated as wholly inert so label text could be skipped,
+                // which meant an author who QUOTES the sign -- [<0]"-"0.00, a common way to write a
+                // literal character -- was never seen to have written one, and .NET prepended a
+                // second minus. The quoted content still counts when it IS the sign.
+                var quoted = format[(index + 1)..close];
+                if (quoted.Contains('-') || quoted.Contains('('))
+                    return true;
+
                 index = close + 1;
                 continue;
             }
 
             if (c == '\\' && index + 1 < format.Length)
             {
+                // An escaped sign is the same idiom written a different way.
+                if (format[index + 1] is '-' or '(')
+                    return true;
                 index += 2;
                 continue;
             }

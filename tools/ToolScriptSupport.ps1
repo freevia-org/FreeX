@@ -363,7 +363,14 @@ function Invoke-ToolGeneratedProject {
 "@)
         [IO.File]::WriteAllText($programPath, $Options.Source)
         $outputPaths = @($Options.Outputs.GetEnumerator() | ForEach-Object { [pscustomobject]@{ TempPath = Join-Path $tempRoot (Split-Path -Leaf $_.Key); DestinationPath = $_.Key; Label = $_.Value } })
-        & $Options.DotNetPath @(
+        $buildArguments = @(
+            "build", $projectPath,
+            "--configuration", "Release"
+        )
+        & $Options.DotNetPath $buildArguments
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Generated-project build failed; retrying once with isolated build servers and serialized compilation."
+            & $Options.DotNetPath @(
             "build", $projectPath,
             "--configuration", "Release",
             "--no-incremental",
@@ -372,7 +379,8 @@ function Invoke-ToolGeneratedProject {
             "-p:NodeReuse=false",
             "/nr:false",
             "-m:1"
-        )
+            )
+        }
         if ($LASTEXITCODE -ne 0) {
             throw $Options.Failure
         }

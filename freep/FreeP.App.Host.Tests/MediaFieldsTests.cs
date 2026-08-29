@@ -388,8 +388,13 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
-    public void Media_PlayFullScreen_RoundTripsThroughVideoFile()
+    public void Media_PlayFullScreen_RoundTripsThroughTimingPVideo()
     {
+        // freep-media F1: per ECMA-376, fullScrn is an attribute of CT_TLMediaNodeVideo
+        // (the p:video element in the slide's p:timing tree) -- CT_VideoFile (a:videoFile)
+        // has no fullScrn attribute at all. A real PowerPoint-authored deck (and a real
+        // PowerPoint reader) only ever look at p:video/@fullScrn, so that is the only
+        // location that round-trips through interop.
         var pres = new Presentation();
         var slide = new Slide();
         slide.Shapes.Add(new SlideShape
@@ -415,15 +420,109 @@ public sealed class MediaFieldsTests
         using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
         {
             var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
-            ReadXml(zip, "ppt/slides/slide1.xml")
-                .Descendants(a + "videoFile")
-                .Single()
+            var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+
+            // Must NOT be on a:videoFile -- that is the non-standard location the bug wrote to.
+            slideXml.Descendants(a + "videoFile").Single()
+                .Attribute("fullScrn").Should().BeNull();
+
+            // Must be on p:video itself (sibling of p:cMediaNode), the real ECMA-376 location.
+            slideXml.Descendants(p + "video").Single()
                 .Attribute("fullScrn")!.Value.Should().Be("1");
         }
 
         ms.Position = 0;
         PptxPackageReader.Read(ms).Slides[0].Shapes[0].Media!
             .PlayFullScreen.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Media_PlayFullScreen_ReadFromRealPowerPointTimingLocation()
+    {
+        // Simulates a real-PowerPoint-authored deck: fullScrn on p:video, nothing on
+        // a:videoFile (which has no such attribute in the schema). Before the fix, FreeP's
+        // reader only looked at a:videoFile and silently defaulted this to off for any
+        // foreign deck -- this is the "open a real PowerPoint file" half of the finding.
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 72,
+            Name = "Foreign full-screen video",
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                PlayFullScreen = false, // writer must still emit p:video via other timing props
+                Loop = true,
+                Bytes = [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
+                ContentType = "video/mp4",
+            },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+
+        // Rewrite the package to look like a real PowerPoint file: add fullScrn="1" onto
+        // p:video by hand, simulating what real PowerPoint would have written.
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+            slideXml.Descendants(p + "video").Single().SetAttributeValue("fullScrn", "1");
+            WriteXml(zip, "ppt/slides/slide1.xml", slideXml);
+        }
+
+        ms.Position = 0;
+        PptxPackageReader.Read(ms).Slides[0].Shapes[0].Media!
+            .PlayFullScreen.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Media_Audio_NeverEmitsFullScreenAttribute()
+    {
+        // Sibling no-regression case: CT_TLMediaNodeAudio (p:audio) has no fullScrn
+        // attribute in ECMA-376 at all -- only video (p:video) carries it. Even if
+        // PlayFullScreen were left set to true on a non-video MediaInfo (bypassing the
+        // command-layer guard at PresentationCommands.cs:1735), the writer must not
+        // emit fullScrn onto p:audio, and a reopened audio shape must read back false.
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 73,
+            Name = "Audio with stray PlayFullScreen",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = false,
+                PlayFullScreen = true,
+                Loop = true, // ensures a p:audio timing node is actually emitted
+                Bytes = [0x52, 0x49, 0x46, 0x46],
+                ContentType = "audio/wav",
+            },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            slideXml.Descendants(p + "audio").Single()
+                .Attribute("fullScrn").Should().BeNull();
+        }
+
+        ms.Position = 0;
+        PptxPackageReader.Read(ms).Slides[0].Shapes[0].Media!
+            .PlayFullScreen.Should().BeFalse();
     }
 
     [Fact]

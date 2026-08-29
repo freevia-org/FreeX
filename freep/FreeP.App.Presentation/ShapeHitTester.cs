@@ -91,7 +91,7 @@ public static class ShapeHitTester
             if (IsHiddenForHitTest(shape))
                 continue;
 
-            var childHit = HitTestChildren(shape.Children, slide, presentation, point);
+            var childHit = HitTestChildren(shape, shape.Children, slide, presentation, point);
             if (childHit.HasValue)
                 return childHit;
 
@@ -170,7 +170,17 @@ public static class ShapeHitTester
         return shape is null ? null : GetShapeBoundsDip(shape, slide, presentation);
     }
 
+    /// <summary>
+    /// r169: <paramref name="parent"/> is the group these children belong to, and each child is put
+    /// through <see cref="SlideCompositor.TransformGroupChild"/> before being tested -- the same
+    /// transform the renderer applies. Round 168 fixed rotation for a rotated group's children in the
+    /// compositor only, so a child rendered at its rotated position while still being clickable at
+    /// its authored one: clicking where the child visibly was selected the group instead. The
+    /// transformed child is also what recursion descends into, so a rotated group inside a rotated
+    /// group composes the same way it draws.
+    /// </summary>
     private static uint? HitTestChildren(
+        SlideShape parent,
         IReadOnlyList<SlideShape> children,
         Slide slide,
         Presentation presentation,
@@ -182,14 +192,16 @@ public static class ShapeHitTester
             if (IsHiddenForHitTest(child))
                 continue;
 
-            var descendantHit = HitTestChildren(child.Children, slide, presentation, point);
+            var placed = SlideCompositor.TransformGroupChild(parent, child);
+
+            var descendantHit = HitTestChildren(placed, placed.Children, slide, presentation, point);
             if (descendantHit.HasValue)
                 return descendantHit;
 
             if (DrawingBoundsHitTester.Contains(
-                    GetShapeBoundsDip(child, slide, presentation).ToLayoutRect(),
+                    GetShapeBoundsDip(placed, slide, presentation).ToLayoutRect(),
                     point,
-                    child.RotationDeg))
+                    placed.RotationDeg))
             {
                 return child.Id;
             }

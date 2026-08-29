@@ -810,14 +810,29 @@ public sealed partial class MainWindow : Window
         // (already-proven-safe) window-creation pattern below.
         if (startupFilePaths is { Count: > 0 })
         {
-            _file.OpenPath(startupFilePaths[0]);
-            if (startupFilePaths.Count > 1)
+            // shared-startup-args F2: a path can appear more than once in argv (multi-selecting the
+            // same file and dragging it onto the taskbar icon delivers one launch with the path
+            // duplicated) -- collapse those duplicates to a single occurrence BEFORE splitting into
+            // "primary window" + "additional windows" below, the same guard FreeX/FreeP get for free
+            // from the shared StartupFileOpenPlanner's seenPaths HashSet. Without this, a duplicated
+            // path opened a second, unsynchronized window on the same file with no "already open"
+            // warning.
+            var distinctStartupFilePaths = DeduplicateStartupFilePaths(startupFilePaths);
+            _file.OpenPath(distinctStartupFilePaths[0]);
+            if (distinctStartupFilePaths.Length > 1)
             {
-                var additionalStartupFilePaths = startupFilePaths.Skip(1).ToArray();
+                var additionalStartupFilePaths = distinctStartupFilePaths.Skip(1).ToArray();
                 Loaded += (_, _) => OpenAdditionalStartupFiles(additionalStartupFilePaths);
             }
         }
     }
+
+    // shared-startup-args F2: the same PlatformPathIdentityComparer the shared StartupFileOpenPlanner
+    // uses for its own seenPaths guard (shared/Free.Shared.AppServices/StartupFileOpenPlanner.cs),
+    // applied here because FreeW's WPF host does not route startup arguments through that planner.
+    // Order-preserving so the first occurrence of a duplicated path still becomes the primary window.
+    private static string[] DeduplicateStartupFilePaths(IReadOnlyList<string> startupFilePaths) =>
+        startupFilePaths.Distinct(PlatformPathIdentityComparer.Current).ToArray();
 
     private void MainWindow_DragOver(object sender, DragEventArgs e)
     {

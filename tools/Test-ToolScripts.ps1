@@ -600,6 +600,8 @@ function Assert-CommandInventoryGeneratedProjectCentralization {
             '<Project Sdk="Microsoft.NET.Sdk">',
             '<ProjectReference Include="$($Options.Reference)" />',
             '<NuGetAudit>false</NuGetAudit>',
+            '$buildArguments = @(',
+            'retrying once with isolated build servers and serialized compilation',
             '"--no-incremental"',
             "Test-ToolGeneratedFileContentMatches",
             '-NormalizeNewlines',

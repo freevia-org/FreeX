@@ -61,6 +61,64 @@ public static class PageGeometryRules
         Math.Min(widthScale, heightScale);
 
     /// <summary>
+    /// R168-shared-headerfooter-band-cap-1: the largest fraction of the page a single header OR
+    /// footer band may claim once "size the band to its content" lets it grow past its base line
+    /// height to fit a configured picture. Round 166 fixed a header/footer picture's own DIP-unit
+    /// conversion (a picture is no longer stored at 1-4x its physical size), but that narrows the
+    /// range of inputs reaching the band-height math -- it does not bound them: even a correctly-
+    /// converted, genuinely large photo (the auditor's own probe used a 72 DPI image, whose
+    /// DIP-converted size is LARGER than its raw pixel count) would otherwise flow straight into the
+    /// band height with no upper limit, so the band could balloon to many times the page itself.
+    /// There is no Excel precedent to match here -- real Excel does not grow the header/footer margin
+    /// to fit an inserted picture at all (an oversized picture there simply overlaps the sheet body);
+    /// this app's <c>SizeHeaderFooterBandsToContent</c> behavior is a deliberate departure (see the
+    /// existing 48px-band test for a 96x48 default picture, comfortably exceeding the 28.8px default
+    /// header margin -- so this bound must stay well above a "page margin"-sized cap or it would
+    /// break that already-intentional growth). A quarter of the page leaves the other three quarters
+    /// for the printed body even in the worst case of both header and footer maxing out
+    /// simultaneously, while comfortably fitting every legitimate case (multi-line text, or a picture
+    /// sized through the app's own Format Picture / header-footer picture dialogs).
+    /// </summary>
+    public const double MaxHeaderFooterBandHeightFraction = 0.25;
+
+    /// <summary>
+    /// Resolves a header/footer band's final height: grow the text-derived base height to fit the
+    /// tallest picture actually configured in the band, then cap the result at
+    /// <see cref="MaxHeaderFooterBandHeightFraction"/> of the page height (never below 1, so a
+    /// degenerate page height cannot collapse the band to nothing). An oversized picture must shrink
+    /// to fit the band -- see <see cref="ResolveUniformScale"/>, which each caller then applies to
+    /// fit the picture into whatever height this returns -- rather than the band ballooning to
+    /// swallow the page.
+    ///
+    /// Extracted to this shared home (R168-shared-headerfooter-band-cap-1) after the identical rule,
+    /// and the identical 0.25 bound, had to be written twice: once inline in
+    /// <c>WorksheetPrintHeaderFooterGeometryPlanner</c> (the WPF-shared print/print-preview/WPF-PDF
+    /// geometry, R167-presentation-headerfooter-band-bound-1) and again in
+    /// <c>WorkbookPdfContentBuilder</c> (the Avalonia/Skia PDF export geometry,
+    /// R167-services-avalonia-headerfooter-picture-band-1), because those two files build their own
+    /// geometry models and share no band type. Only the arithmetic RULE is shared here -- this method
+    /// is pure and unit-agnostic (the caller's pixels/points/DIPs are preserved as given), so each
+    /// caller keeps its own picture-token / per-section logic and its own unit conversion and merely
+    /// delegates the grow-then-cap step, instead of the bound relying on "remember to change both"
+    /// (which had already failed twice, across rounds 166 and 167).
+    /// </summary>
+    /// <param name="baseHeight">The band height the text alone requires (line height * line count),
+    /// in any consistent unit.</param>
+    /// <param name="tallestPictureHeight">The height of the tallest picture actually configured in
+    /// this band, already converted to the same unit; 0 when the band has no picture.</param>
+    /// <param name="pageHeight">The full page height in the same unit. Pass
+    /// <see cref="double.PositiveInfinity"/> from a caller that has no page context and must stay
+    /// uncapped.</param>
+    /// <returns>The band height to use, in the same unit.</returns>
+    public static double ResolveHeaderFooterBandHeight(
+        double baseHeight,
+        double tallestPictureHeight,
+        double pageHeight) =>
+        Math.Min(
+            Math.Max(baseHeight, tallestPictureHeight),
+            Math.Max(1.0, pageHeight * MaxHeaderFooterBandHeightFraction));
+
+    /// <summary>
     /// Resolves Excel's Page Setup &gt; Header/Footer &gt; "Scale with document" checkbox
     /// (<c>Sheet.HeaderFooterScaleWithDocument</c>, default checked) into the multiplier a renderer
     /// should apply to header/footer TEXT font size and line spacing. The flag governs ONLY the

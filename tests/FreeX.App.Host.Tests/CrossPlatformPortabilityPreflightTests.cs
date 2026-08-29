@@ -19,6 +19,10 @@ public sealed class CrossPlatformPortabilityPreflightTests
         script.Should().Contain("Unicode/case-normalized tracked-path collision");
         script.Should().Contain("must use LF endings");
         script.Should().Contain("must be tracked executable (Git mode 100755)");
+        script.Should().Contain("Dictionary[string, string]");
+        script.Should().NotContain("Group-Object");
+        script.Should().Contain("git -C $repoRoot grep -l -F $needle");
+        script.Should().Contain("$managedSourceCandidates");
 
         var toolScriptTests = WorkspaceFileLocator.ReadAllText("tools", "Test-ToolScripts.ps1");
         toolScriptTests.Should().Contain("ToolScriptSupport.ps1");

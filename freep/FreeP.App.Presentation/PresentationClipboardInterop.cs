@@ -1,3 +1,4 @@
+using System.Text;
 using System.Linq;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -51,8 +52,13 @@ public sealed record PresentationClipboardContent(
             if (!HasText || !Text!.Contains('\t'))
                 return false;
 
-            var lines = Text.Replace("\r\n", "\n").Replace('\r', '\n')
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            // r169: split on row boundaries only, not on every newline. FreeX quotes a cell whose
+            // text wraps (Alt+Enter) and leaves the newline INSIDE the quotes, so a naive split
+            // tore one row into pieces with mismatched field counts and the shape check rejected a
+            // genuine range copy -- pasting it as the flat tab-riddled box this whole check exists
+            // to prevent. Third distinct way this one branch has been wrong; the quoting rule was
+            // in FreeX's serializer the entire time.
+            var lines = SplitTabularRows(Text!);
             if (lines.Length < 2)
                 return false;
 
@@ -62,6 +68,45 @@ public sealed record PresentationClipboardContent(
 
             return lines.Any(line => line.Split('\t')[0].Length > 0);
         }
+    }
+
+    /// <summary>
+    /// Splits TSV text into rows, treating a newline inside a quoted cell as cell content rather
+    /// than a row boundary -- which is how FreeX writes a wrapped-text cell.
+    /// </summary>
+    internal static string[] SplitTabularRows(string text)
+    {
+        var rows = new List<string>();
+        var row = new StringBuilder();
+        var inQuotes = false;
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == '"')
+            {
+                inQuotes = !inQuotes;
+                row.Append(c);
+                continue;
+            }
+
+            if (!inQuotes && (c == '\n' || c == '\r'))
+            {
+                if (c == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
+                    i++;
+                if (row.Length > 0)
+                    rows.Add(row.ToString());
+                row.Clear();
+                continue;
+            }
+
+            row.Append(c);
+        }
+
+        if (row.Length > 0)
+            rows.Add(row.ToString());
+
+        return rows.ToArray();
     }
 
     public bool HasRichText => RichTextBytes is { Length: > 0 } || RtfBytes is { Length: > 0 };

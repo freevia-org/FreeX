@@ -15564,6 +15564,12 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         PlaceCaretAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset);
+
+        // r169: the same bypass r161 fixed for Backspace/Delete (see TryApplyBodyDeletion's comment),
+        // ported from the Avalonia shell's "fourth door" fix. Typing over a selection deletes that
+        // selection through this same shared portable fast path, so it can orphan a comment whose
+        // last anchoring run sat inside the replaced range exactly as Backspace/Delete can.
+        PruneOrphanedNoteAndCommentAnchorsAfterPortableEdit();
         return true;
     }
 

@@ -52,7 +52,7 @@ public sealed class R168_SlkLogicalLinePerformanceTests
         return stopwatch.Elapsed;
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Load_UnterminatedQuoteRecord_ScalesLinearlyNotQuadratically()
     {
         // Warm up the JIT / assembly load so the timed runs measure the algorithm, not startup cost.
@@ -80,7 +80,7 @@ public sealed class R168_SlkLogicalLinePerformanceTests
             "folding N lines into one unterminated K\"...\" value should cost O(N), not O(N^2) or worse");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Load_ManyLineUnterminatedQuote_CompletesQuickly()
     {
         // A file large enough that the old O(n^2)-or-worse string-concat/full-rescan implementation would

@@ -77,6 +77,7 @@ public static class OpcMediaTypes
             ["wma"] = "audio/x-ms-wma",
             ["ogg"] = "audio/ogg",
             ["aac"] = "audio/aac",
+            ["flac"] = "audio/flac",
         };
 
     private static readonly Dictionary<string, MediaExtensionRule> MediaExtensionsByContentType =
@@ -185,6 +186,9 @@ public static class OpcMediaTypes
                 "m4a" => "audio/mp4",
                 "wav" => "audio/wav",
                 "wma" => "audio/x-ms-wma",
+                "aac" => "audio/aac",
+                "ogg" => "audio/ogg",
+                "flac" => "audio/flac",
                 _ => "audio/mpeg",
             },
             OpcMediaContentTypeProfile.PresentationVideoInsertion => extension switch
@@ -588,7 +592,8 @@ public static class OpcMediaTypes
         if (extension == "m4v")
             return "video/mp4";
 
-        if (extension is "mp4" or "mov" or "avi" or "wmv" or "mp3" or "m4a" or "wav" or "wma" &&
+        if (extension is "mp4" or "mov" or "avi" or "wmv" or "mp3" or "m4a" or "wav" or "wma"
+                or "ogg" or "aac" or "flac" &&
             TryGetDefaultContentType(extension, out var contentType))
         {
             return contentType;
@@ -657,6 +662,9 @@ public static class OpcMediaTypes
             "audio/mp4" => "m4a",
             "audio/wav" => "wav",
             "audio/x-ms-wma" => "wma",
+            "audio/aac" => "aac",
+            "audio/ogg" => "ogg",
+            "audio/flac" => "flac",
             _ => "mp4",
         };
 

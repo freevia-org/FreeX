@@ -138,6 +138,9 @@ public sealed class OpcSharedHelperTests
     [InlineData("ppt/media/movie.m4v", "video/mp4")]
     [InlineData("ppt/media/clip.mov", "video/quicktime")]
     [InlineData("ppt/media/sound.wma", "audio/x-ms-wma")]
+    [InlineData("ppt/media/sound.aac", "audio/aac")]
+    [InlineData("ppt/media/sound.ogg", "audio/ogg")]
+    [InlineData("ppt/media/sound.flac", "audio/flac")]
     [InlineData("ppt/media/unknown.bin", "video/mp4")]
     public void GetAudioVideoContentType_MatchesPresentationMediaDefaults(string path, string expected)
     {

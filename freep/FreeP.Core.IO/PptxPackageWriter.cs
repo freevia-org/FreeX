@@ -2592,7 +2592,11 @@ public static class PptxPackageWriter
                     || shape.Media?.VolumePercent != 80
                     || shape.Media?.ShowWhenStopped == false
                     || shape.Media?.RewindAfterPlaying == true
-                    || shape.Media?.StopAfterSlides > 1))
+                    || shape.Media?.StopAfterSlides > 1
+                    // freep-media F1: fullScrn only exists on the p:video timing element,
+                    // so a full-screen video with otherwise-default timing still needs a
+                    // p:video node written, or the setting has nowhere to live at all.
+                    || (shape.Media?.IsVideo == true && shape.Media?.PlayFullScreen == true)))
             .ToList();
         if (animations.Count == 0 && timedMedia.Count == 0 && string.IsNullOrWhiteSpace(slide.AnimationBuildListXml))
             return null;
@@ -2733,7 +2737,16 @@ public static class PptxPackageWriter
         if (shape.Media?.RewindAfterPlaying == true)
             cTnAttributes.Add(new XAttribute("autoRev", "1"));
 
+        // freep-media F1: fullScrn is an attribute of CT_TLMediaNodeVideo (p:video) itself,
+        // a sibling of cMediaNode -- not an attribute of a:videoFile/a:audioFile and not an
+        // attribute of p:cMediaNode. Only p:video (video) carries it; CT_TLMediaNodeAudio
+        // has no fullScrn attribute at all.
+        var mediaElementAttributes = new List<object>();
+        if (shape.Media?.IsVideo == true && shape.Media?.PlayFullScreen == true)
+            mediaElementAttributes.Add(new XAttribute("fullScrn", "1"));
+
         return new XElement(mediaElementName,
+            mediaElementAttributes,
             new XElement(P + "cMediaNode",
                 mediaNodeAttributes,
                 new XElement(P + "cTn",
@@ -3919,11 +3932,14 @@ public static class PptxPackageWriter
         XElement? mediaFileEl = null;
         if (mediaFileRelId is not null)
         {
-            var mediaFileAttributes = new List<object>();
-            if (isVideo && shape.Media?.PlayFullScreen == true)
-                mediaFileAttributes.Add(new XAttribute("fullScrn", "1"));
+            // freep-media F1: CT_VideoFile/CT_AudioFile (a:videoFile/a:audioFile) has no
+            // fullScrn attribute in ECMA-376 -- fullScrn belongs on CT_TLMediaNodeVideo
+            // (the p:video element in the slide's p:timing tree), which BuildMediaTimingEl
+            // below emits. Do not add it here; a real-PowerPoint reader ignores it on
+            // a:videoFile, and a FreeP-authored fullScrn here would only round-trip
+            // through FreeP's own reader, not through PowerPoint.
             mediaFileEl = isVideo
-                ? new XElement(A + "videoFile", mediaFileAttributes.Concat(new object[] { new XAttribute(R + "link", mediaFileRelId) }))
+                ? new XElement(A + "videoFile", new XAttribute(R + "link", mediaFileRelId))
                 : new XElement(A + "audioFile", new XAttribute(R + "link", mediaFileRelId));
         }
 
