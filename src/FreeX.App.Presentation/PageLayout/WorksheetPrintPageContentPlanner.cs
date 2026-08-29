@@ -629,11 +629,15 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
     /// independent <c>Math.Min</c> calls, each against its own axis of <paramref name="section"/> --
     /// so a picture that overflowed one axis far more than the other (e.g. a wide, short picture
     /// dropped into a narrow, tall section) came out at the wrong aspect ratio instead of merely
-    /// smaller. Reuses <see cref="PageGeometryRules.ResolveUniformScale"/>, the same "take whichever
-    /// axis needs the bigger shrink and apply it to both" rule this app already applies to page-level
-    /// fit-to-N-pages scaling (R101/R20/R100), so a picture that needs to shrink is scaled uniformly
-    /// and a picture that already fits both axes is left at its original size unchanged (scale 1.0),
-    /// exactly matching prior behavior for that common case.
+    /// smaller. Reuses <see cref="PageGeometryRules.ResolveContainScale"/>, which layers the
+    /// shrink-only clamp over the same "take whichever axis needs the bigger shrink and apply it to
+    /// both" rule this app already applies to page-level fit-to-N-pages scaling (R101/R20/R100), so a
+    /// picture that needs to shrink is scaled uniformly and a picture that already fits both axes is
+    /// left at its original size unchanged (scale 1.0), exactly matching prior behavior for that
+    /// common case. R168-shared-picture-contain-scale-1 moved the clamp pair into that shared rule
+    /// too -- round 167 shared only the innermost <c>ResolveUniformScale</c> step, leaving this file
+    /// and the Avalonia/Skia PDF builder each spelling out their own identical
+    /// <c>Math.Min(1, available / content)</c> pair around it.
     /// </summary>
     public static LayoutRect ResolvePictureBounds(
         WorksheetHeaderFooterPicture picture,
@@ -642,9 +646,8 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
     {
         var pictureWidth = Math.Max(1, picture.Width);
         var pictureHeight = Math.Max(1, picture.Height);
-        var widthScale = Math.Min(1, section.Width / pictureWidth);
-        var heightScale = Math.Min(1, section.Height / pictureHeight);
-        var scale = PageGeometryRules.ResolveUniformScale(widthScale, heightScale);
+        var scale = PageGeometryRules.ResolveContainScale(
+            pictureWidth, pictureHeight, section.Width, section.Height);
         var width = pictureWidth * scale;
         var height = pictureHeight * scale;
         var left = alignment switch

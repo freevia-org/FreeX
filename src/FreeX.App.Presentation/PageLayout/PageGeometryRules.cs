@@ -61,6 +61,45 @@ public static class PageGeometryRules
         Math.Min(widthScale, heightScale);
 
     /// <summary>
+    /// Resolves the single uniform scale that fits a picture (or any other fixed-aspect content) of
+    /// <paramref name="contentWidth"/> x <paramref name="contentHeight"/> INSIDE an
+    /// <paramref name="availableWidth"/> x <paramref name="availableHeight"/> box without distorting
+    /// it: whichever axis needs the bigger shrink drives both (via <see cref="ResolveUniformScale"/>),
+    /// and content that already fits both axes is returned at 1.0 -- never enlarged. Multiply both of
+    /// the content's dimensions by the result; the aspect ratio survives by construction.
+    ///
+    /// Extracted to this shared home (R168-shared-picture-contain-scale-1) as the sibling of
+    /// <see cref="ResolveHeaderFooterBandHeight"/>, for the same reason: the header/footer picture
+    /// aspect-ratio fix of round 167 had to be written twice -- once in
+    /// <c>WorksheetPrintHeaderFooterGeometryPlanner.ResolvePictureBounds</c> (the WPF-shared
+    /// print/print-preview/WPF-PDF geometry) and again in
+    /// <c>WorkbookPdfContentBuilder.RenderHeaderFooterSection</c> (the Avalonia/Skia PDF export
+    /// geometry) -- because those two files build their own geometry models and share no section
+    /// type. Round 167 already shared the innermost step (both called
+    /// <see cref="ResolveUniformScale"/>) but each still spelled out its own pair of shrink-only
+    /// <c>Math.Min(1, available / content)</c> clamps around it, which is precisely the "identical
+    /// arithmetic, two copies" shape that let the ORIGINAL bug live on in one file after being fixed
+    /// in the other (the non-uniform independent-axis clamp, fixed in the planner in round 166/167
+    /// and only found in the PDF builder a round later). Pure and unit-agnostic: the caller's
+    /// pixels/points/DIPs are preserved as given, and each caller keeps its own unit conversion,
+    /// minimum-size flooring, and alignment/placement of the result.
+    /// </summary>
+    /// <param name="contentWidth">The content's natural width, in any consistent unit. Callers pass a
+    /// positive value (both current callers floor it at 1 first).</param>
+    /// <param name="contentHeight">The content's natural height, in the same unit.</param>
+    /// <param name="availableWidth">The width of the box the content must fit inside.</param>
+    /// <param name="availableHeight">The height of the box the content must fit inside.</param>
+    /// <returns>The uniform scale to apply to BOTH of the content's dimensions (at most 1.0).</returns>
+    public static double ResolveContainScale(
+        double contentWidth,
+        double contentHeight,
+        double availableWidth,
+        double availableHeight) =>
+        ResolveUniformScale(
+            Math.Min(1.0, availableWidth / contentWidth),
+            Math.Min(1.0, availableHeight / contentHeight));
+
+    /// <summary>
     /// R168-shared-headerfooter-band-cap-1: the largest fraction of the page a single header OR
     /// footer band may claim once "size the band to its content" lets it grow past its base line
     /// height to fit a configured picture. Round 166 fixed a header/footer picture's own DIP-unit
@@ -86,7 +125,7 @@ public static class PageGeometryRules
     /// tallest picture actually configured in the band, then cap the result at
     /// <see cref="MaxHeaderFooterBandHeightFraction"/> of the page height (never below 1, so a
     /// degenerate page height cannot collapse the band to nothing). An oversized picture must shrink
-    /// to fit the band -- see <see cref="ResolveUniformScale"/>, which each caller then applies to
+    /// to fit the band -- see <see cref="ResolveContainScale"/>, which each caller then applies to
     /// fit the picture into whatever height this returns -- rather than the band ballooning to
     /// swallow the page.
     ///

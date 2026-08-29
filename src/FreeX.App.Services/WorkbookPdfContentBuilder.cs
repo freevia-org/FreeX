@@ -1907,8 +1907,8 @@ public static class WorkbookPdfContentBuilder
     /// <see cref="PageGeometryRules.ResolveHeaderFooterBandHeight"/>
     /// (R168-shared-headerfooter-band-cap-1), and the picture-fitting clamp in
     /// <see cref="RenderHeaderFooterSection"/> calls the same
-    /// <see cref="PageGeometryRules.ResolveUniformScale"/> the shared planner's
-    /// <c>ResolvePictureBounds</c> calls. Round 167 declared this file's own 0.25 constant instead,
+    /// <see cref="PageGeometryRules.ResolveContainScale"/> the shared planner's
+    /// <c>ResolvePictureBounds</c> calls (R168-shared-picture-contain-scale-1). Round 167 declared this file's own 0.25 constant instead,
     /// on the mistaken premise that the two could not share a definition across the
     /// FreeX.App.Services -&gt; FreeX.App.Presentation reference direction -- this file already
     /// referenced <c>PageGeometryRules</c> for its fit-to-N-pages scaling, so the shared home was
@@ -2036,17 +2036,22 @@ public static class WorkbookPdfContentBuilder
             // that serves the WPF print/preview/PDF paths) but never touched here, because this
             // Skia/Avalonia PDF path builds its own geometry rather than calling that planner (see
             // this type's doc comment and the "why not share" note on
-            // MaxHeaderFooterBandHeightFraction below). Reuses the same
-            // PageGeometryRules.ResolveUniformScale rule this file already applies to page-level
-            // fit-to-N-pages scaling (see uniformFitScale above) so a picture that needs to shrink
-            // is scaled uniformly on both axes, and a picture that already fits both axes is left at
-            // its original size (scale 1.0), matching prior behavior for that common case.
+            // MaxHeaderFooterBandHeightFraction below). Reuses
+            // PageGeometryRules.ResolveContainScale -- the shrink-only form of the same uniform-scale
+            // rule this file already applies to page-level fit-to-N-pages scaling (see uniformFitScale
+            // above) -- so a picture that needs to shrink is scaled uniformly on both axes, and a
+            // picture that already fits both axes is left at its original size (scale 1.0), matching
+            // prior behavior for that common case. R168-shared-picture-contain-scale-1: round 167
+            // shared only the innermost ResolveUniformScale step, leaving this file and the WPF-shared
+            // planner's ResolvePictureBounds each spelling out their own identical
+            // Math.Min(1, available / content) clamp pair around it; the whole contain rule is now one
+            // call on both sides, which is what would have caught the original squash bug here a round
+            // earlier.
             const double ptPerPx = 72.0 / 96.0;
             var rawWidth = Math.Max(1.0, picture.Width * ptPerPx);
             var rawHeight = Math.Max(1.0, picture.Height * ptPerPx);
-            var widthScale = Math.Min(1.0, sectionWidth / rawWidth);
-            var heightScale = Math.Min(1.0, bandHeightPt / rawHeight);
-            var pictureScale = PageGeometryRules.ResolveUniformScale(widthScale, heightScale);
+            var pictureScale = PageGeometryRules.ResolveContainScale(
+                rawWidth, rawHeight, sectionWidth, bandHeightPt);
             var imageWidth = rawWidth * pictureScale;
             var imageHeight = rawHeight * pictureScale;
             var imageX = align switch

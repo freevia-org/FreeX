@@ -90,4 +90,90 @@ public sealed class R101_PageGeometryRulesTests
         result.Should().Be(0.25);
         result.Should().NotBe(0.5 * 0.25, "the uniform scale is the MIN of the two axis scales, never their product");
     }
+
+    // ---- ResolveContainScale (shrink-only uniform picture fit) ---------------------------------
+
+    [Fact]
+    public void ResolveContainScale_ContentOverflowsWidthMoreThanHeight_ShrinksBothByTheWidthRatio()
+    {
+        // 800x400 into 100x100: width overflows 8x but height only 4x, so the width ratio (0.125)
+        // must drive BOTH axes. The independent-per-axis clamp this rule replaced produced 100x100 --
+        // a square, destroying the 2:1 source aspect ratio.
+        PageGeometryRules.ResolveContainScale(
+            contentWidth: 800, contentHeight: 400, availableWidth: 100, availableHeight: 100)
+            .Should().Be(0.125);
+    }
+
+    [Fact]
+    public void ResolveContainScale_ContentOverflowsHeightMoreThanWidth_ShrinksBothByTheHeightRatio()
+    {
+        // Symmetric half: the height axis binds. Both halves must hold -- the header/footer picture
+        // bug this rule fixed showed up on the height axis (a tall, narrow picture in a short band).
+        PageGeometryRules.ResolveContainScale(
+            contentWidth: 400, contentHeight: 800, availableWidth: 100, availableHeight: 100)
+            .Should().Be(0.125);
+    }
+
+    [Fact]
+    public void ResolveContainScale_ContentAlreadyFitsBothAxes_IsNeverEnlarged()
+    {
+        // Shrink-only: content smaller than the box stays at its authored size. Dropping the
+        // Math.Min(1, ...) clamp would blow a small logo up to fill its header/footer section.
+        PageGeometryRules.ResolveContainScale(
+            contentWidth: 40, contentHeight: 20, availableWidth: 100, availableHeight: 100)
+            .Should().Be(1.0);
+    }
+
+    // ---- ResolveHeaderFooterBandHeight (grow-to-picture, capped at a fraction of the page) ------
+
+    [Fact]
+    public void ResolveHeaderFooterBandHeight_PictureTallerThanText_GrowsToThePicture()
+    {
+        // The band grows past its text-derived height to fit a configured picture -- the app's
+        // deliberate SizeHeaderFooterBandsToContent departure from Excel.
+        PageGeometryRules.ResolveHeaderFooterBandHeight(
+            baseHeight: 18, tallestPictureHeight: 48, pageHeight: 1056)
+            .Should().Be(48);
+    }
+
+    [Fact]
+    public void ResolveHeaderFooterBandHeight_TextTallerThanPicture_KeepsTheTextHeight()
+    {
+        // Symmetric half: a multi-line text band that already exceeds its picture is not shrunk to it.
+        PageGeometryRules.ResolveHeaderFooterBandHeight(
+            baseHeight: 54, tallestPictureHeight: 20, pageHeight: 1056)
+            .Should().Be(54);
+    }
+
+    [Fact]
+    public void ResolveHeaderFooterBandHeight_OversizedPicture_IsCappedAtAQuarterOfThePage()
+    {
+        // The bound itself, pinned at the single shared source: a huge picture must not let one band
+        // swallow the page. 792pt Letter portrait * 0.25 = 198pt -- the same number the R167
+        // Avalonia PDF export test derives independently at its own call site.
+        PageGeometryRules.ResolveHeaderFooterBandHeight(
+            baseHeight: 12, tallestPictureHeight: 3000, pageHeight: 792)
+            .Should().Be(198);
+
+        PageGeometryRules.MaxHeaderFooterBandHeightFraction.Should().Be(0.25);
+    }
+
+    [Fact]
+    public void ResolveHeaderFooterBandHeight_NoPageContext_IsUncapped()
+    {
+        // PrintRenderer.CalculateHeaderFooterLineHeight has no page geometry and passes infinity to
+        // opt out of the cap; that must be an exact no-op rather than a degenerate clamp.
+        PageGeometryRules.ResolveHeaderFooterBandHeight(
+            baseHeight: 18, tallestPictureHeight: 3000, pageHeight: double.PositiveInfinity)
+            .Should().Be(3000);
+    }
+
+    [Fact]
+    public void ResolveHeaderFooterBandHeight_DegeneratePageHeight_StillLeavesAVisibleBand()
+    {
+        // The cap's own floor: a zero/near-zero page height must not collapse the band to nothing.
+        PageGeometryRules.ResolveHeaderFooterBandHeight(
+            baseHeight: 18, tallestPictureHeight: 0, pageHeight: 0)
+            .Should().Be(1.0);
+    }
 }
