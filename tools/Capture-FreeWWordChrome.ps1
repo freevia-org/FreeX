@@ -123,7 +123,6 @@ $word = $null
 $document = $null
 $wordProcessId = 0
 try {
-    Clear-CurrentCapture
     $logicalWidths = @(Resolve-WidthSpecs $Widths)
     $screenDpi = [ScreenshotWin32]::GetScreenDpi()
     $scale = $screenDpi / 96.0
@@ -167,6 +166,11 @@ try {
             throw "The installed Word profile does not expose required mapped tab '$tabName'."
         }
     }
+
+    # Preserve the last complete reference set until the native window and its
+    # entire mapped tab surface have passed foreground and UIA preflight.
+    # A blocked desktop session must not erase usable evidence.
+    Clear-CurrentCapture
 
     $captures = @()
     foreach ($logicalWidth in $logicalWidths) {
@@ -240,8 +244,14 @@ try {
     Write-Host "Captured $($captures.Count)/$expectedCaptureCount Word native ribbon states in $resolvedOutputDirectory"
 }
 catch {
-    Clear-CurrentCapture
-    Write-BlockerManifest $_.Exception.Message
+    $manifestPath = Join-Path $resolvedOutputDirectory "manifest.json"
+    if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+        Write-Warning "Word chrome capture was blocked; retained the previous complete reference set. $($_.Exception.Message)"
+    }
+    else {
+        Clear-CurrentCapture
+        Write-BlockerManifest $_.Exception.Message
+    }
     throw
 }
 finally {
