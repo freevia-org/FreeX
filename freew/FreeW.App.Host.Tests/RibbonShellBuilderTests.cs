@@ -157,6 +157,30 @@ public sealed class RibbonShellBuilderTests
         compactFontName!.Width.Should().Be(98, "the compact Font presentation reduces the full 140-DIP font-name field");
     }
 
+    [StaFact]
+    public void Design_compact_presentation_keeps_document_formatting_and_page_background_direct()
+    {
+        var design = FreeW.Ribbon.Definitions.FreeWRibbon
+            .Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf)
+            .FindTab("design")!;
+        var content = RibbonWpfRenderer.BuildTabContent(design, new Button());
+        var panel = FindLogicalChild<RibbonAdaptivePanel>(content)!;
+
+        content.Measure(new Size(750, 180));
+        content.Arrange(new Rect(0, 0, 750, 180));
+        content.UpdateLayout();
+
+        var documentFormatting = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Document Formatting");
+        var pageBackground = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Page Background");
+
+        documentFormatting.LayoutState.Should().Be(RibbonAdaptiveGroupState.SmallWithLabels);
+        pageBackground.Collapsed.Should().BeFalse("Page Background stays directly reachable beside compact Document Formatting");
+    }
+
     private sealed class CaptureValueCommand(Action<string?> capture) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => capture(context.SelectedValue);

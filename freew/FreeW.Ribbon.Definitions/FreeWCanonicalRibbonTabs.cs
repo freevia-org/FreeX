@@ -256,6 +256,12 @@ internal static partial class FreeWCanonicalRibbonTabs
                 "design.formatting",
                 tab => tab.Group("themes", "Document Formatting", "T", 100, group =>
                     {
+                        // At Word's narrow ribbon width, keep Document Formatting as its compact
+                        // menu strip rather than collapsing the entire group into one flyout.
+                        group.Sizing(RibbonGroupSizing.OfficeAdaptive with
+                        {
+                            Hints = new RibbonWidthHints(760, 438, 438, 64),
+                        });
                         group.ComboBox("freew.theme", "Themes", control => control with
                         {
                             Items = DocumentTheme.Catalog.Select(theme => theme.Name).ToArray(),
@@ -307,6 +313,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("page-background", FreeWRibbonText.PageBackgroundGroup.Label,
                         FreeWRibbonText.PageBackgroundGroup.KeyTip, 90, group =>
                     {
+                        group.Sizing(RibbonGroupSizing.OfficeAdaptive);
                         group.Medium("freew.watermark", FreeWRibbonText.WatermarkCommand.Label,
                             RibbonCommandIconKind.Watermark);
                         group.Medium("freew.page-color", FreeWRibbonText.PageColorCommand.Label,
