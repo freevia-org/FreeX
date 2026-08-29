@@ -46,6 +46,21 @@ public sealed class Wave197RibbonNumberFormatPhysicalSourceTests
         avalonia.Should().Contain("combo.DropDownClosed +=");
         avalonia.Should().Contain("ScheduleWorksheetFocusAfterRibbonComboClosed(combo.IsKeyboardFocusWithin)");
         avalonia.Should().Contain("internal bool ScheduleWorksheetFocusAfterRibbonComboClosed");
+        var helperStart = avalonia.IndexOf(
+            "internal bool ScheduleWorksheetFocusAfterRibbonComboClosed",
+            StringComparison.Ordinal);
+        var helperEnd = avalonia.IndexOf(
+            "private static IEnumerable<Control> EnumerateRibbonControls",
+            helperStart,
+            StringComparison.Ordinal);
+        helperStart.Should().BeGreaterThanOrEqualTo(0);
+        helperEnd.Should().BeGreaterThan(helperStart);
+        avalonia.Substring(helperStart, helperEnd - helperStart)
+            .Should()
+            .NotContain("Dispatcher.UIThread.Post");
+        avalonia.Substring(helperStart, helperEnd - helperStart)
+            .Should()
+            .Contain("FocusShellRegion(ShellFocusTarget.Worksheet);");
         avalonia.Should().Contain("DispatcherPriority.Input");
         avalonia.Should().Contain("_session.SetSelectedRangeNumberFormat(numberFormat)");
         host.Should().Contain("Register(registry, \"Number Format\", new ValueRibbonCommand(setNumberFormat))");

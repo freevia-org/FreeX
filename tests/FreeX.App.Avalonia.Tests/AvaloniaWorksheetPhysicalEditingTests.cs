@@ -202,13 +202,10 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 await DrainInputAsync();
 
                 window.ScheduleWorksheetFocusAfterRibbonComboClosed(false).Should().BeFalse();
-                await DrainInputAsync();
                 formulaBox.IsFocused.Should().BeTrue(
                     "a dismissed combo must not steal focus after the user moved elsewhere");
 
                 window.ScheduleWorksheetFocusAfterRibbonComboClosed(true).Should().BeTrue();
-                await DrainInputAsync();
-
                 window.SheetGridHostForTest.IsKeyboardFocusWithin.Should().BeTrue(
                     "a combo that still owns focus after dismissal must return key input to the worksheet");
             }

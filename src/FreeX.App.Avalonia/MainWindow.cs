@@ -1661,17 +1661,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     /// <summary>
     /// Applies the post-dismissal focus policy for an editable worksheet ribbon combo. The event
-    /// handler supplies the combo's focus state captured after popup dismissal; keeping the policy
-    /// here makes it deterministic to verify without depending on Avalonia popup or OS focus timing.
+    /// handler supplies the combo's focus state immediately before this synchronous restore;
+    /// keeping the policy here makes it deterministic to verify without depending on Avalonia
+    /// popup or OS focus timing.
     /// </summary>
     internal bool ScheduleWorksheetFocusAfterRibbonComboClosed(bool comboOwnsKeyboardFocus)
     {
         if (!comboOwnsKeyboardFocus)
             return false;
 
-        Dispatcher.UIThread.Post(
-            () => FocusShellRegion(ShellFocusTarget.Worksheet),
-            DispatcherPriority.Input);
+        FocusShellRegion(ShellFocusTarget.Worksheet);
         return true;
     }
 
