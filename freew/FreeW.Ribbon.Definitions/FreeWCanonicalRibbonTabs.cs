@@ -24,7 +24,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     {
                         // Word retains the Page Setup commands as a compact two-row block at narrow
                         // widths instead of spilling them into a generic group flyout.
-                        group.Sizing(RibbonGroupSizing.Default with { MaximumRowsPerColumn = 2 });
+                        group.Sizing(RibbonGroupSizing.OfficeIconAdaptive with { MaximumRowsPerColumn = 2 });
                         group.Large("freew.margins", "Margins", RibbonCommandIconKind.Margins, "M", menu: menu =>
                         {
                             menu.Item("freew.margins", "Normal / Narrow (toggle)", "N");
@@ -99,6 +99,9 @@ internal static partial class FreeWCanonicalRibbonTabs
                 "layout.paragraph",
                 tab => tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, "A", 95, group =>
                     {
+                        // Keep the compact, direct Paragraph block alongside Page Setup at Word's
+                        // narrow layout width; Preview, Arrange, and Data yield space first.
+                        group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                         group.Icon("freew.indent-decrease", "Decrease Indent", RibbonCommandIconKind.IndentDecrease);
                         group.Icon("freew.indent-increase", "Increase Indent", RibbonCommandIconKind.IndentIncrease);
                         group.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", control => control with
