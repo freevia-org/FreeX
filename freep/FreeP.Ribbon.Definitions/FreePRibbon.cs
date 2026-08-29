@@ -589,6 +589,14 @@ public static class FreePRibbon
 
     private static void AddInsertGroups(RibbonTabBuilder tab)
     {
+        // PowerPoint keeps New Slide at the leading edge of Insert as well as Home. Reuse the
+        // existing backed command so this is a discoverability improvement, not a second route.
+        tab.Group("slides", FreePRibbonText.SlidesGroupLabel, FreePRibbonText.SlidesGroupKeyTip, 110, group =>
+        {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+            group.Large("freep.new-slide", FreePRibbonText.NewSlideLabel, RibbonCommandIconKind.Insert,
+                FreePRibbonText.NewSlideKeyTip);
+        });
         tab.Group("text", FreePRibbonText.TextGroupLabel, FreePRibbonText.TextGroupKeyTip, 100, group =>
         {
             group.Large("freep.text-box", FreePRibbonText.TextBoxLabel, RibbonCommandIconKind.TextBox, FreePRibbonText.TextBoxKeyTip);
