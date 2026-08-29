@@ -530,7 +530,7 @@ public static class WorkbookPdfContentBuilder
         var headerMaxLines = ResolveMaxSectionLines(header);
         var headerBandHeightPt = GrowHeaderFooterBandHeightForPictures(
             Math.Max(headerFooterLineHeightPt * headerMaxLines, mT - headerEdgePt), header, headerPictures, pageH);
-        RenderHeaderFooterBand(ops, header, headerPictures, pageW, mL, mR, headerY, headerBandHeightPt, 8,
+        RenderHeaderFooterBand(ops, header, headerPictures, pageW, pageH, mL, mR, headerY, headerMaxLines, headerBandHeightPt, 8,
             headerFooterFontScale, workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, HeaderTextColor,
             lineIndex => headerY + ((headerMaxLines - 1 - lineIndex) * headerFooterLineHeightPt), measurer);
 
@@ -547,7 +547,7 @@ public static class WorkbookPdfContentBuilder
         var footerMaxLines = ResolveMaxSectionLines(footer);
         var footerBandHeightPt = GrowHeaderFooterBandHeightForPictures(
             Math.Max(headerFooterLineHeightPt * footerMaxLines, mB - footerEdgePt), footer, footerPictures, pageH);
-        RenderHeaderFooterBand(ops, footer, footerPictures, pageW, mL, mR, footerY, footerBandHeightPt, 8,
+        RenderHeaderFooterBand(ops, footer, footerPictures, pageW, pageH, mL, mR, footerY, footerMaxLines, footerBandHeightPt, 8,
             headerFooterFontScale, workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, FooterTextColor,
             lineIndex => footerY - (lineIndex * headerFooterLineHeightPt), measurer);
 
@@ -1935,9 +1935,11 @@ public static class WorkbookPdfContentBuilder
         WorksheetHeaderFooter band,
         WorksheetHeaderFooterPictureSet pictures,
         double pageW,
+        double pageH,
         double mL,
         double mR,
         double baselineY,
+        int bandLineCount,
         double bandHeightPt,
         double fontSize,
         double headerFooterFontScale,
@@ -1953,19 +1955,31 @@ public static class WorkbookPdfContentBuilder
         var now = DateTime.Now;
         var sectionWidth = Math.Max(1, (pageW - mL - mR) / 3.0);
 
+        // R168-services-avalonia-headerfooter-picture-band-centre-1: a section's picture is centred on
+        // the band's own vertical middle, NOT on the single baselineY this method is handed. That
+        // baseline is the band's outermost line -- the LAST line for a header (whose lines stack
+        // upward from it) and the FIRST for a footer -- so with more than one line the picture used to
+        // sit a whole line below (header) or above (footer) the text it belongs beside, hanging out of
+        // its own band and into the grid. The midpoint of the outermost and innermost line baselines
+        // is the band's middle, and collapses to baselineY itself for an ordinary one-line band, so
+        // this is a no-op for every single-line header/footer. The WPF-shared planner already centres
+        // a picture within the band rect it resolves (ResolvePictureBounds); this is the same rule in
+        // this path's own baseline-anchored geometry.
+        var pictureAnchorY = (lineBaselineY(0) + lineBaselineY(Math.Max(0, bandLineCount - 1))) / 2.0;
+
         RenderHeaderFooterSection(
             ops, band.Left, pictures.Left, HeaderFooterSectionAlign.Left,
-            mL, mL + sectionWidth, baselineY, bandHeightPt, fontSize, headerFooterFontScale,
+            mL, mL + sectionWidth, pageH, baselineY, pictureAnchorY, bandHeightPt, fontSize, headerFooterFontScale,
             workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY, textMeasurer);
 
         RenderHeaderFooterSection(
             ops, band.Center, pictures.Center, HeaderFooterSectionAlign.Center,
-            mL + sectionWidth, mL + (2 * sectionWidth), baselineY, bandHeightPt, fontSize, headerFooterFontScale,
+            mL + sectionWidth, mL + (2 * sectionWidth), pageH, baselineY, pictureAnchorY, bandHeightPt, fontSize, headerFooterFontScale,
             workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY, textMeasurer);
 
         RenderHeaderFooterSection(
             ops, band.Right, pictures.Right, HeaderFooterSectionAlign.Right,
-            pageW - mR - sectionWidth, pageW - mR, baselineY, bandHeightPt, fontSize, headerFooterFontScale,
+            pageW - mR - sectionWidth, pageW - mR, pageH, baselineY, pictureAnchorY, bandHeightPt, fontSize, headerFooterFontScale,
             workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY, textMeasurer);
     }
 
@@ -1998,7 +2012,9 @@ public static class WorkbookPdfContentBuilder
         HeaderFooterSectionAlign align,
         double sectionLeft,
         double sectionRight,
+        double pageHeightPt,
         double baselineY,
+        double pictureAnchorY,
         double bandHeightPt,
         double fontSize,
         double headerFooterFontScale,
@@ -2064,7 +2080,23 @@ public static class WorkbookPdfContentBuilder
             // scaled font size (matching the text drawn at this baseline below) purely to anchor the
             // picture's own position -- the picture's imageWidth/imageHeight above are never scaled by
             // headerFooterFontScale, only their vertical placement follows the text baseline.
-            var imageY = baselineY - (imageHeight / 2.0) + ((fontSize * headerFooterFontScale) / 2.0);
+            //
+            // R168-services-avalonia-headerfooter-picture-page-1: then hold the picture on the page.
+            // A header/footer baseline sits only a few points inside its page edge, so centring a
+            // picture on it puts half the picture past that edge -- invisible to the reader, silently
+            // clipped by the PDF viewer. That was harmless while the band was a line of text tall,
+            // but round 167 let the band grow to fit a picture (up to a quarter of the page), which
+            // made "half the picture" up to an eighth of the page: a tall header picture ran off the
+            // top and a tall footer picture off the bottom. The picture can never be taller than the
+            // page (bandHeightPt is itself capped at a quarter of it), so clamping the anchor always
+            // has room to seat it whole. This mirrors the WPF-shared planner's BuildBand, whose
+            // header band has always been pinned inside the top edge and whose footer band got the
+            // same page clamp this round (R168-presentation-headerfooter-footer-band-page-1): an
+            // oversized band sits flush against its page edge and overlaps the grid instead.
+            var imageY = Math.Clamp(
+                pictureAnchorY - (imageHeight / 2.0) + ((fontSize * headerFooterFontScale) / 2.0),
+                0,
+                Math.Max(0, pageHeightPt - imageHeight));
             ops.Add(new PdfImage(imageX, imageY, imageWidth, imageHeight, picture.ImageBytes, picture.ContentType));
 
             const double gap = 4.0;
@@ -2201,9 +2233,14 @@ public static class WorkbookPdfContentBuilder
         return result;
     }
 
+    // R168-shared-headerfooter-picture-token-1: delegates to the single escape-aware implementation
+    // that lives beside the tokenizer this file already uses for header/footer text
+    // (PagePrintTextPlanner.TokenizeSectionText / CountSectionLines), instead of the Contains("&G")
+    // substring test this file and the WPF-shared planner each carried their own copy of -- which
+    // mistook an escaped literal ampersand followed by a G ("R&&G Ltd") for a picture token and grew
+    // the band, inset the text, and drew a picture for a section that renders none.
     private static bool HasHeaderFooterPictureToken(string text) =>
-        text.Contains("&[Picture]", StringComparison.OrdinalIgnoreCase) ||
-        text.Contains("&G", StringComparison.OrdinalIgnoreCase);
+        PagePrintTextPlanner.HasPictureToken(text);
 
     /// <summary>
     /// Expands placeholder tokens (&amp;P/&amp;N/&amp;D/&amp;T/&amp;F/&amp;Z/&amp;A and their

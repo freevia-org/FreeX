@@ -215,10 +215,19 @@ public static class HeaderFooterEditorPlanner
     public static WorksheetHeaderFooter ApplyCenterPreset(WorksheetHeaderFooter value, string preset) =>
         value with { Center = preset };
 
+    /// <summary>
+    /// R168-shared-headerfooter-picture-token-1: the third copy of the picture-token test, now
+    /// delegating to <see cref="PagePrintTextPlanner.HasPictureToken"/> along with the two renderers'
+    /// copies. This one decides whether an edited section still shows its picture -- see
+    /// <see cref="PrunePicturesWithoutTokens"/> -- so leaving it as the old
+    /// <c>Contains("&amp;G")</c> substring test would now disagree with what the renderers draw:
+    /// a section reading <c>"R&amp;&amp;G Ltd"</c> (an escaped literal ampersand, which renders as
+    /// "R&amp;G Ltd" and shows no picture) would keep an invisible picture attached to it forever,
+    /// saved into the file, drawn by nothing. Excel's own <c>&amp;&amp;</c> escape is already honoured
+    /// on the file-format side by <c>XlsxWorksheetPageSetupMapper.ReplaceHeaderFooterTokens</c>.
+    /// </summary>
     public static bool ContainsPictureToken(string? text) =>
-        !string.IsNullOrEmpty(text) &&
-        (text.Contains(PictureToken, StringComparison.OrdinalIgnoreCase) ||
-         text.Contains(LegacyPictureToken, StringComparison.OrdinalIgnoreCase));
+        PagePrintTextPlanner.HasPictureToken(text);
 
     public static WorksheetHeaderFooterPictureSet PrunePicturesWithoutTokens(
         WorksheetHeaderFooter text,

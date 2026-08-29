@@ -543,10 +543,21 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
             baseLineHeight,
             sizeToContent,
             pageHeight);
+        // R168-presentation-headerfooter-footer-band-page-1: the footer takes the LOWER of its two
+        // anchors so it never overlaps the grid's own bottom edge -- but that anchor sits only one
+        // bottom margin above the page's edge, so a band grown to fit a picture (up to the 25% cap
+        // ResolveLineHeight applies) started there and ran straight off the bottom of the paper,
+        // taking its picture with it. Hold the band on the page, which for an oversized band means
+        // sitting flush against the bottom edge and overlapping the grid upward -- the mirror image
+        // of the header branch below, which has always been pinned 4 units inside the top edge and
+        // overlaps the grid downward. An ordinary text-sized footer band is nowhere near the edge, so
+        // this clamp never moves it.
         var y = isFooter
-            ? Math.Max(
-                Math.Max(4, pageHeight - bandMargin - lineHeight),
-                pageHeight - PageGeometryRules.ResolveBodyEdge(marginBottom, bandMargin))
+            ? Math.Min(
+                Math.Max(
+                    Math.Max(4, pageHeight - bandMargin - lineHeight),
+                    pageHeight - PageGeometryRules.ResolveBodyEdge(marginBottom, bandMargin)),
+                Math.Max(0, pageHeight - lineHeight))
             : Math.Max(4, bandMargin - lineHeight);
         var leftInset = alignWithMargins ? marginLeft : UnalignedMargin;
         var rightInset = alignWithMargins ? marginRight : UnalignedMargin;
@@ -659,6 +670,24 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
         return new LayoutRect(left, section.Top + (section.Height - height) / 2, width, height);
     }
 
+    /// <summary>
+    /// R168-presentation-headerfooter-text-inset-1: reserves the space a left/right-aligned
+    /// header/footer picture actually occupies so the section's text draws beside it rather than
+    /// underneath it -- derived from <see cref="ResolvePictureBounds"/>'s own rect, the single place
+    /// that decides where and how big the picture is drawn.
+    ///
+    /// This used to reserve the picture's RAW authored width (clamped to the section) instead, which
+    /// diverged from what is drawn in two ways once rounds 166/167 landed. A picture that must shrink
+    /// to fit its section is drawn at a uniformly SCALED width (see
+    /// <see cref="PageGeometryRules.ResolveContainScale"/>), so a tall, narrow picture reserved many
+    /// times the width it actually occupies and shoved the text far to the right of -- or clean out
+    /// of -- its own section. And even for a picture that needs no scaling, measuring the inset from
+    /// the section's edge ignored the 2-unit inset <see cref="ResolvePictureBounds"/> gives a
+    /// left/right-aligned picture, so the visible gap came out at half the intended
+    /// <c>gap</c>. The Avalonia/Skia PDF export path
+    /// (<c>WorkbookPdfContentBuilder.RenderHeaderFooterSection</c>) already reserved its drawn image
+    /// width; only this WPF-side path used the raw one.
+    /// </summary>
     public static LayoutRect ResolveTextBounds(
         LayoutRect section,
         WorksheetHeaderFooterPicture? picture,
@@ -667,27 +696,33 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
         if (picture is null)
             return section;
 
-        var pictureWidth = Math.Min(Math.Max(1, picture.Width), section.Width);
         const double gap = 4;
+        var pictureBounds = ResolvePictureBounds(picture, section, alignment);
         return alignment switch
         {
-            PageTextAlignment.Left => new LayoutRect(
-                section.Left + pictureWidth + gap,
-                section.Top,
-                Math.Max(1, section.Width - pictureWidth - gap),
-                section.Height),
-            PageTextAlignment.Right => new LayoutRect(
+            PageTextAlignment.Left => FromEdges(
+                Math.Min(pictureBounds.Right + gap, section.Right),
+                section.Right),
+            PageTextAlignment.Right => FromEdges(
                 section.Left,
-                section.Top,
-                Math.Max(1, section.Width - pictureWidth - gap),
-                section.Height),
+                Math.Max(pictureBounds.Left - gap, section.Left)),
             _ => section,
         };
+
+        LayoutRect FromEdges(double left, double right) =>
+            new(left, section.Top, Math.Max(1, right - left), section.Height);
     }
 
+    /// <summary>
+    /// R168-shared-headerfooter-picture-token-1: delegates to
+    /// <see cref="PagePrintTextPlanner.HasPictureToken"/>, the single escape-aware implementation
+    /// that lives beside the tokenizer whose rules it has to agree with. This used to be its own
+    /// <c>Contains("&amp;G")</c> substring test (duplicated verbatim in the Avalonia/Skia PDF
+    /// builder), which mistook an escaped literal ampersand followed by a G -- <c>"R&amp;&amp;G"</c>
+    /// -- for a picture token.
+    /// </summary>
     public static bool HasPictureToken(string text) =>
-        text.Contains("&[Picture]", StringComparison.OrdinalIgnoreCase) ||
-        text.Contains("&G", StringComparison.OrdinalIgnoreCase);
+        PagePrintTextPlanner.HasPictureToken(text);
 }
 
 public static class WorksheetPrintHyperlinkPlanner

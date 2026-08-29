@@ -49,9 +49,15 @@ public sealed partial class PrintRendererPageSetupTests
         PrintRenderer.CalculateHeaderFooterPictureRect(picture, section, TextAlignment.Left)
             .Should()
             .Be(new Rect(26, 10, 96, 42));
+        // R168-presentation-headerfooter-text-inset-1: the text rect is measured from where the
+        // picture is actually DRAWN (x=26 above, 2 inside the section's own left edge) plus the 4-unit
+        // gap, so it starts at 126 -- not from the section's edge plus the picture's raw width, which
+        // put it at 124 and left a visible gap of only 2. See
+        // R168_HeaderFooterPictureTextInsetAndBandPlacementTests for the shrunk-picture half of the
+        // same defect, where the raw-width formula was off by far more than 2.
         PrintRenderer.CalculateHeaderFooterTextRect(section, picture, TextAlignment.Left)
             .Should()
-            .Be(new Rect(124, 10, 100, 42));
+            .Be(new Rect(126, 10, 98, 42));
     }
 
     [Fact]
