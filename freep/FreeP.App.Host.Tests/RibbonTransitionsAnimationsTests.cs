@@ -142,16 +142,18 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
-    public void SlideShowGroup_ContainsFromBeginningAndFromCurrent()
+    public void SlideShow_groups_follow_the_native_start_setup_and_rehearse_hierarchy()
     {
         var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "slide-show");
-        var group = tab.Groups.Single(g => g.Id == "slide-show");
-        Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.from-beginning");
-        Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.from-current-slide");
-        Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.hide-slide");
-        Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.custom-shows");
-        Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.setup");
+        Assert.Equal(["slide-show-start", "slide-show-setup", "slide-show-rehearse"], tab.Groups.Select(group => group.Id));
+        Assert.Contains(tab.Groups[0].Controls, c => c.CommandId.Value == "freep.slideshow.from-beginning");
+        Assert.Contains(tab.Groups[0].Controls, c => c.CommandId.Value == "freep.slideshow.from-current-slide");
+        Assert.Contains(tab.Groups[0].Controls, c => c.CommandId.Value == "freep.slideshow.custom-shows");
+        Assert.Contains(tab.Groups[1].Controls, c => c.CommandId.Value == "freep.slideshow.hide-slide");
+        Assert.Contains(tab.Groups[1].Controls, c => c.CommandId.Value == "freep.slideshow.setup");
+        Assert.Contains(tab.Groups[2].Controls, c => c.CommandId.Value == "freep.slideshow.rehearse-timings");
+        Assert.Contains(tab.Groups[2].Controls, c => c.CommandId.Value == "freep.slideshow.record-timings");
     }
 
     // ── Transition commands ────────────────────────────────────────────────────────

@@ -362,34 +362,42 @@ public static class FreePRibbon
         group.Medium("freep.replace", FreePRibbonText.ReplaceLabel, RibbonCommandIconKind.Refresh, FreePRibbonText.ReplaceKeyTip);
     }
 
-    private static void AddSlideShowControls(RibbonGroupBuilder group, FreePRibbonProfile profile)
+    private static void AddSlideShowStartControls(RibbonGroupBuilder group, FreePRibbonProfile profile)
     {
         group.Large("freep.slideshow.from-beginning", FreePRibbonText.SlideShowFromBeginningLabel,
             RibbonCommandIconKind.Next, FreePRibbonText.SlideShowFromBeginningKeyTip);
         group.Large("freep.slideshow.from-current-slide", FreePRibbonText.SlideShowFromCurrentSlideLabel,
             profile.SlideShowFromCurrentSlideIcon, FreePRibbonText.SlideShowFromCurrentSlideKeyTip);
-        group.Medium("freep.slideshow.hide-slide", FreePRibbonText.SlideShowHideSlideLabel,
-            RibbonCommandIconKind.View, FreePRibbonText.SlideShowHideSlideKeyTip);
-        group.Medium("freep.slideshow.rehearse-timings", FreePRibbonText.SlideShowRehearseTimingsLabel,
-            RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRehearseTimingsKeyTip);
-        group.Medium("freep.slideshow.record-timings", FreePRibbonText.SlideShowRecordTimingsLabel,
-            RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRecordTimingsKeyTip);
-        group.Medium("freep.slideshow.setup", FreePRibbonText.SlideShowSetupLabel,
-            RibbonCommandIconKind.More, FreePRibbonText.SlideShowSetupKeyTip);
         group.Medium("freep.slideshow.custom-shows", FreePRibbonText.SlideShowCustomShowsLabel,
             RibbonCommandIconKind.List, FreePRibbonText.SlideShowCustomShowsKeyTip);
     }
 
     private static void AddSlideShowGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
     {
-        // These controls were previously reachable only through a low-priority Transitions group.
-        // PowerPoint gives the presentation route its own normal tab, so keep the complete supported
-        // slide-show surface together and allow the standard Office adaptation at narrow widths.
-        tab.Group("slide-show", FreePRibbonText.SlideShowGroupLabel,
+        // Mirror PowerPoint's task hierarchy while keeping each backed command directly reachable.
+        tab.Group("slide-show-start", FreePRibbonText.SlideShowStartGroupLabel,
             profile.SlideShowGroupKeyTip(), 100, group =>
             {
                 group.Sizing(RibbonGroupSizing.OfficeAdaptive);
-                AddSlideShowControls(group, profile);
+                AddSlideShowStartControls(group, profile);
+            });
+        tab.Group("slide-show-setup", FreePRibbonText.SlideShowSetUpGroupLabel,
+            FreePRibbonText.SlideShowSetUpGroupKeyTip, 90, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Medium("freep.slideshow.hide-slide", FreePRibbonText.SlideShowHideSlideLabel,
+                    RibbonCommandIconKind.View, FreePRibbonText.SlideShowHideSlideKeyTip);
+                group.Medium("freep.slideshow.setup", FreePRibbonText.SlideShowSetupLabel,
+                    RibbonCommandIconKind.More, FreePRibbonText.SlideShowSetupKeyTip);
+            });
+        tab.Group("slide-show-rehearse", FreePRibbonText.SlideShowRehearseGroupLabel,
+            FreePRibbonText.SlideShowRehearseGroupKeyTip, 80, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Medium("freep.slideshow.rehearse-timings", FreePRibbonText.SlideShowRehearseTimingsLabel,
+                    RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRehearseTimingsKeyTip);
+                group.Medium("freep.slideshow.record-timings", FreePRibbonText.SlideShowRecordTimingsLabel,
+                    RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRecordTimingsKeyTip);
             });
     }
 
