@@ -856,6 +856,18 @@
   <data name="Ribbon_Group_Illustrations_KeyTip" xml:space="preserve">
     <value>I</value>
   </data>
+  <data name="Ribbon_Group_Media_Label" xml:space="preserve">
+    <value>Media</value>
+  </data>
+  <data name="Ribbon_Group_Media_KeyTip" xml:space="preserve">
+    <value>M</value>
+  </data>
+  <data name="Ribbon_Group_ShapesEffects_Label" xml:space="preserve">
+    <value>Shapes &amp; Effects</value>
+  </data>
+  <data name="Ribbon_Group_ShapesEffects_KeyTip" xml:space="preserve">
+    <value>E</value>
+  </data>
   <data name="Ribbon_Command_Picture_Label" xml:space="preserve">
     <value>Picture</value>
   </data>

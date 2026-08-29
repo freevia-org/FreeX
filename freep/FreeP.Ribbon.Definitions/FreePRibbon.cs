@@ -744,9 +744,19 @@ public static class FreePRibbon
         });
         tab.Group("illustrations", FreePRibbonText.IllustrationsGroupLabel, FreePRibbonText.IllustrationsGroupKeyTip, 90, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Large("freep.picture", FreePRibbonText.PictureLabel, RibbonCommandIconKind.Picture, FreePRibbonText.PictureKeyTip);
+        });
+        tab.Group("media", FreePRibbonText.MediaGroupLabel, FreePRibbonText.MediaGroupKeyTip, 88, group =>
+        {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Medium("freep.video", FreePRibbonText.VideoLabel, RibbonCommandIconKind.Picture, FreePRibbonText.VideoKeyTip);
             group.Medium("freep.audio", FreePRibbonText.AudioLabel, RibbonCommandIconKind.Picture, FreePRibbonText.AudioKeyTip);
+        });
+        tab.Group("shapes-effects", FreePRibbonText.ShapesEffectsGroupLabel,
+            FreePRibbonText.ShapesEffectsGroupKeyTip, 65, group =>
+        {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Medium(PictureCropAuthoringPlanner.InsetCommandId, FreePRibbonText.PictureCropInsetCommand.Label,
                 RibbonCommandIconKind.Picture, FreePRibbonText.PictureCropInsetCommand.KeyTip);
             group.Medium(PictureCropAuthoringPlanner.ResetCommandId, FreePRibbonText.PictureCropResetCommand.Label,

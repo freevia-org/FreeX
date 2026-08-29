@@ -310,6 +310,10 @@ internal static class FreePRibbonText
 
     public static string IllustrationsGroupLabel => Get("Ribbon_Group_Illustrations_Label");
     public static string IllustrationsGroupKeyTip => Get("Ribbon_Group_Illustrations_KeyTip");
+    public static string MediaGroupLabel => Get("Ribbon_Group_Media_Label");
+    public static string MediaGroupKeyTip => Get("Ribbon_Group_Media_KeyTip");
+    public static string ShapesEffectsGroupLabel => Get("Ribbon_Group_ShapesEffects_Label");
+    public static string ShapesEffectsGroupKeyTip => Get("Ribbon_Group_ShapesEffects_KeyTip");
     public static string PictureLabel => Get("Ribbon_Command_Picture_Label");
     public static string PictureKeyTip => Get("Ribbon_Command_Picture_KeyTip");
     public static RibbonText PictureCropInsetCommand { get; } = new("Ribbon_Command_PictureCropInset_Label", "Ribbon_Command_PictureCropInset_KeyTip");

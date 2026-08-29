@@ -214,6 +214,31 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Insert_keeps_picture_direct_and_moves_media_and_effects_to_separate_groups()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var insert = definition.FindTab("insert")!;
+            var illustrations = insert.FindGroup("illustrations")!;
+            illustrations.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+            illustrations.Controls.Select(control => control.CommandId.Value).Should().Equal("freep.picture");
+
+            var media = insert.FindGroup("media")!;
+            media.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+            media.Controls.Select(control => control.CommandId.Value).Should().Equal("freep.video", "freep.audio");
+
+            var shapesEffects = insert.FindGroup("shapes-effects")!;
+            shapesEffects.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+            shapesEffects.Controls.Select(control => control.CommandId.Value)
+                .Should().Contain(PictureCropAuthoringPlanner.InsetCommandId, ShapeEffectAuthoringPlanner.NoneCommandId);
+        }
+    }
+
+    [Fact]
     public void Animation_effects_group_uses_icon_adaptive_sizing_in_both_profiles()
     {
         foreach (var definition in new[]
