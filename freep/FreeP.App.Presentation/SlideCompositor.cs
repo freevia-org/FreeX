@@ -367,7 +367,11 @@ public static class SlideCompositor
     /// after authoring, including every group this app itself writes (PptxPackageWriter always
     /// emits chOff==off, chExt==ext).
     /// </summary>
-    private static SlideShape TransformGroupChild(SlideShape group, SlideShape child)
+    // r169: internal so ShapeHitTester applies the SAME transform the renderer does. Round 168
+    // fixed rendering for a rotated group and left hit-testing on the child's authored bounds, so a
+    // child drew in one place and clicked in another. Render and hit-test are two readers of one
+    // transform; they must not each own a copy.
+    internal static SlideShape TransformGroupChild(SlideShape group, SlideShape child)
     {
         long chOffX = group.ChildOffsetXEmu ?? group.OffsetXEmu;
         long chOffY = group.ChildOffsetYEmu ?? group.OffsetYEmu;
