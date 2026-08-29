@@ -26,6 +26,12 @@ public sealed class RibbonGroupHost : ContentControl
     /// can identify the host without reaching into its private group model.</summary>
     public string GroupName => _group.Header;
 
+    /// <summary>
+    /// Raised after the host swaps between its full, compact, or collapsed presentation.
+    /// App-specific gallery surfaces use this to populate each newly materialized compact tree.
+    /// </summary>
+    public event EventHandler? PresentationChanged;
+
     /// <summary>The full (expanded) group grid this host renders. Always the same instance regardless
     /// of whether the host is currently showing a compact or collapsed presentation, so discovery can
     /// find the group's authored full surface even while responsive layout is active.</summary>
@@ -101,6 +107,7 @@ public sealed class RibbonGroupHost : ContentControl
             Content = value == RibbonAdaptiveGroupState.Collapsed
                 ? (_collapsedButton ??= BuildCollapsedButton())
                 : GetPresentation(value);
+            PresentationChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 
 namespace FreeW.App.Host.Tests;
@@ -45,6 +46,19 @@ public sealed class ThemeGalleryTests
         Captions(formatting).Should().Contain([
             "Style Sets",
             "Office", "Simple", "Elegant", "Formal", "Lines (Simple)", "Minimalist", "Shadow", "Shaded"]);
+        Descendants<Button>(formatting)
+            .Select(AutomationProperties.GetName)
+            .Should().Contain(["Themes", "More Style Sets", "Colors", "Fonts", "Paragraph Spacing", "Effects"]);
+    }
+
+    [StaFact]
+    public void Compact_document_formatting_keeps_preview_cards_and_all_catalog_routes()
+    {
+        var formatting = ThemeGallery.BuildDocumentFormatting(
+            new DocumentView(),
+            RibbonAdaptiveGroupState.SmallWithLabels);
+
+        Captions(formatting).Should().Contain(["Style Sets", "Office", "Simple"]);
         Descendants<Button>(formatting)
             .Select(AutomationProperties.GetName)
             .Should().Contain(["Themes", "More Style Sets", "Colors", "Fonts", "Paragraph Spacing", "Effects"]);

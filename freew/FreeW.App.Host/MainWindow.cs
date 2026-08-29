@@ -3649,7 +3649,7 @@ public sealed partial class MainWindow : Window
             if (tab.Id == "design")
                 // Replace the rendered Document Formatting controls with the live-preview Word-style
                 // gallery/menu strip so backed commands do not appear twice beside their custom previews.
-                InjectGallery(content, "themes", () => ThemeGallery.BuildDocumentFormatting(_editor), removeKind: RemoveKind.All);
+                InjectGallery(content, "themes", state => ThemeGallery.BuildDocumentFormatting(_editor, state), removeKind: RemoveKind.All);
             if (tab.Id == "table-design")
                 // The gallery owns its dedicated Table Styles lane; Shading and Borders remain in
                 // the neighboring Table Style group instead of being removed with the placeholder.
@@ -3701,6 +3701,19 @@ public sealed partial class MainWindow : Window
         Func<FrameworkElement> createGallery,
         RemoveKind removeKind,
         Func<FrameworkElement>? extra = null)
+        => InjectGallery(
+            content,
+            groupId,
+            _ => createGallery(),
+            removeKind,
+            extra is null ? null : _ => extra());
+
+    private static void InjectGallery(
+        DependencyObject content,
+        string groupId,
+        Func<RibbonAdaptiveGroupState, FrameworkElement> createGallery,
+        RemoveKind removeKind,
+        Func<RibbonAdaptiveGroupState, FrameworkElement>? extra = null)
     {
         var groupHost = FindGroupHost(content, groupId);
         if (groupHost is null)
@@ -3709,7 +3722,7 @@ public sealed partial class MainWindow : Window
         // Compact group presentations are built lazily by RibbonGroupHost. A FrameworkElement can only
         // have one WPF parent, so each rebuilt presentation must receive its own gallery instance.
         var injectedLanes = new HashSet<Panel>();
-        void InjectInto(FrameworkElement presentation)
+        void InjectInto(FrameworkElement presentation, RibbonAdaptiveGroupState state)
         {
             if (presentation is not Grid grid)
                 return;
@@ -3735,17 +3748,17 @@ public sealed partial class MainWindow : Window
             }
 
             var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 2, 2, 0) };
-            host.Children.Add(createGallery());
+            host.Children.Add(createGallery(state));
             if (extra is not null)
-                host.Children.Add(extra());
+                host.Children.Add(extra(state));
             lane.Children.Insert(0, host);
         }
 
-        InjectInto(groupHost.GroupContent);
-        groupHost.LayoutUpdated += (_, _) =>
+        InjectInto(groupHost.GroupContent, groupHost.LayoutState);
+        groupHost.PresentationChanged += (_, _) =>
         {
             if (groupHost.Content is FrameworkElement presentation)
-                InjectInto(presentation);
+                InjectInto(presentation, groupHost.LayoutState);
         };
     }
 

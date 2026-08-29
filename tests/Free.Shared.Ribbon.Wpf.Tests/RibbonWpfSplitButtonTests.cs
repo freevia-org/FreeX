@@ -113,6 +113,29 @@ public sealed class RibbonWpfSplitButtonTests
     }
 
     [Fact]
+    public void GroupHost_RaisesPresentationChangedWhenMaterializingCompactContent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("paste", new RecordingCommand());
+            var root = BuildRibbon(registry);
+            var group = Descendants(root).OfType<RibbonGroupHost>().Single();
+            var notifications = 0;
+
+            group.PresentationChanged += (_, _) => notifications++;
+            group.LayoutState = RibbonAdaptiveGroupState.SmallWithLabels;
+
+            notifications.Should().Be(1);
+            group.Content.Should().NotBeSameAs(group.GroupContent,
+                "the compact presentation is a newly materialized visual tree");
+            group.LayoutState = RibbonAdaptiveGroupState.SmallWithLabels;
+            notifications.Should().Be(1, "reassigning the active presentation does not rebuild its visual tree");
+            root.Should().NotBeNull();
+        });
+    }
+
+    [Fact]
     public void CollapsedGroup_UsesFixedSingleLineEllipsisCaption()
     {
         StaTestRunner.Run(() =>

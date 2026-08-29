@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation;
 using FreeW.App.Presentation.ContextMenus;
@@ -20,8 +21,11 @@ namespace FreeW.App.Host;
 /// </summary>
 internal static class ThemeGallery
 {
-    public static FrameworkElement BuildDocumentFormatting(DocumentView editor)
+    public static FrameworkElement BuildDocumentFormatting(
+        DocumentView editor,
+        RibbonAdaptiveGroupState presentation = RibbonAdaptiveGroupState.Full)
     {
+        var compact = presentation is RibbonAdaptiveGroupState.SmallWithLabels or RibbonAdaptiveGroupState.IconOnly;
         var host = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
         // Word keeps the small theme chooser separate from the primary Document
         // Formatting gallery. Style-set previews carry the visual weight of the
@@ -33,33 +37,56 @@ internal static class ThemeGallery
             theme => theme.Name,
             editor.PreviewTheme,
             editor.EndThemePreview,
-            editor.ApplyTheme));
-        host.Children.Add(BuildVisibleStyleSetGallery(editor));
+            editor.ApplyTheme,
+            compact: compact));
+        host.Children.Add(BuildVisibleStyleSetGallery(editor, compact ? 2 : 8, compact));
         host.Children.Add(BuildCatalogMenu(
             FreeWUiTextCatalog.Colors,
             DocumentTheme.Catalog,
             theme => theme.Name,
             editor.PreviewThemeColors,
             editor.EndThemePreview,
-            editor.ApplyThemeColors));
+            editor.ApplyThemeColors,
+            compact: compact));
         host.Children.Add(BuildCatalogMenu(
             FreeWUiTextCatalog.Fonts,
             DocumentFontSet.Catalog,
             fontSet => fontSet.Name,
             editor.PreviewFontSet,
             editor.EndFontSetPreview,
-            editor.ApplyFontSet));
-        host.Children.Add(BuildParagraphSpacingMenu(editor));
-        host.Children.Add(BuildEffectsMenu(editor));
+            editor.ApplyFontSet,
+            compact: compact));
+        host.Children.Add(compact
+            ? BuildCatalogMenu(
+                FreeWUiTextCatalog.ParagraphSpacing,
+                DocumentParagraphSpacingSet.Catalog,
+                spacingSet => spacingSet.Name,
+                editor.PreviewParagraphSpacingSet,
+                editor.EndParagraphSpacingSetPreview,
+                editor.ApplyParagraphSpacingSet,
+                compact: true)
+            : BuildParagraphSpacingMenu(editor));
+        host.Children.Add(compact
+            ? BuildCatalogMenu(
+                FreeWUiTextCatalog.Effects,
+                DocumentEffectSet.Catalog,
+                effectSet => effectSet.Name,
+                editor.PreviewEffectSet,
+                editor.EndEffectSetPreview,
+                editor.ApplyEffectSet,
+                compact: true)
+            : BuildEffectsMenu(editor));
         return host;
     }
 
-    private static FrameworkElement BuildVisibleStyleSetGallery(DocumentView editor)
+    private static FrameworkElement BuildVisibleStyleSetGallery(
+        DocumentView editor,
+        int visibleStyleCount,
+        bool compact)
     {
         // At the 1280px Office reference width Word presents eight style-set
         // cards before its More button; keep that density while preserving a
         // compact overflow for the remaining catalog.
-        const int visibleStyleCount = 8;
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var styleSet in DocumentStyleSet.Catalog.Take(visibleStyleCount))
             strip.Children.Add(BuildStyleSetSwatch(editor, styleSet));
@@ -70,7 +97,8 @@ internal static class ThemeGallery
             editor.PreviewStyleSet,
             editor.EndStyleSetPreview,
             editor.ApplyStyleSet,
-            automationName: UiText.Get("Design_StyleSets_MoreToolTip")));
+            automationName: UiText.Get("Design_StyleSets_MoreToolTip"),
+            compact: compact));
         return WithLabel(FreeWUiTextCatalog.StyleSets, strip);
     }
 
@@ -84,17 +112,18 @@ internal static class ThemeGallery
         Action<T> preview,
         Action endPreview,
         Action<T> apply,
-        string? automationName = null)
+        string? automationName = null,
+        bool compact = false)
     {
         var button = new Button
         {
             Content = new TextBlock
             {
-                Text = label + "\n▾",
-                FontSize = 10,
+                Text = (compact ? CompactCatalogLabel(label) : label) + "\n▾",
+                FontSize = compact ? 9 : 10,
                 TextAlignment = System.Windows.TextAlignment.Center,
             },
-            Width = 66,
+            Width = compact ? 44 : 66,
             Height = 50,
             Margin = new Thickness(2, 17, 2, 3),
             Background = Brushes.Transparent,
@@ -127,6 +156,13 @@ internal static class ThemeGallery
         };
         return button;
     }
+
+    private static string CompactCatalogLabel(string label) => label switch
+    {
+        var value when value == FreeWUiTextCatalog.ParagraphSpacing => "Spacing",
+        var value when value == FreeWUiTextCatalog.Effects => "Fx",
+        _ => label,
+    };
 
     /// <summary>Build the Themes gallery: a labelled horizontal strip of theme thumbnail swatches.</summary>
     public static FrameworkElement BuildThemes(DocumentView editor)
