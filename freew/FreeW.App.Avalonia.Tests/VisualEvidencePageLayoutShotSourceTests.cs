@@ -514,8 +514,12 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
             @"Rect SurfaceRectFor\(\s*double x,\s*double y,\s*double width,\s*double height,\s*int startCol,\s*int span,\s*int rowIndex,\s*int endRowIndex\)");
         source.Should().MatchRegex(
             @"var rect = SurfaceRectFor\(\s*cellX,\s*rowPageSpaceY,\s*cellWidth,\s*mergedSpanHeight,\s*startCol,\s*span,\s*r,\s*mergedEndRow\);");
-        source.Should().Contain("var contentTopY = rect.Top + pad + vAlignOffset;");
-        source.Should().Contain("var tx = rect.Left + pad + markerInset;");
+        // AV-TBL-MARGINS: the uniform `pad` constant was replaced by real per-cell top/left margins
+        // (cell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default), but the content
+        // origin still derives from the cell-spacing-aware `rect` from SurfaceRectFor -- that is what
+        // this test actually guards, so the pinned literals follow the rename.
+        source.Should().Contain("var contentTopY = rect.Top + topPad + vAlignOffset;");
+        source.Should().Contain("var tx = rect.Left + leftPad + markerInset;");
     }
 
     [Fact]

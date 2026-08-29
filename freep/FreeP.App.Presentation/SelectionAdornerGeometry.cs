@@ -274,7 +274,7 @@ public static class SelectionAdornerGeometry
             var cropPlan = PictureCropAuthoringPlanner.Build(shape, bounds);
             return cropPlan.CanEdit
                 ? cropPlan.Handles
-                    .Select(handle => ProjectHandle(handle.Name, handle.PositionDip, bounds, shape.RotationDeg, transform))
+                    .Select(handle => ProjectHandle(handle.Name, handle.PositionDip, bounds, shape.RotationDeg, shape.FlipH, shape.FlipV, transform))
                     .ToArray()
                 : Array.Empty<SelectionAdornerGeometryHandlePlan>();
         }
@@ -282,29 +282,46 @@ public static class SelectionAdornerGeometry
         var adjustmentPlan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
         return adjustmentPlan.CanEdit
             ? adjustmentPlan.Handles
-                .Select(handle => ProjectHandle(handle.Name, handle.PositionDip, bounds, shape.RotationDeg, transform))
+                .Select(handle => ProjectHandle(handle.Name, handle.PositionDip, bounds, shape.RotationDeg, shape.FlipH, shape.FlipV, transform))
                 .ToArray()
             : Array.Empty<SelectionAdornerGeometryHandlePlan>();
     }
 
     /// <summary>
-    /// Projects one un-rotated local-frame handle position into screen space, rotating it
-    /// about the shape's un-rotated bounds center first so it lands on the same rotated edge
-    /// the compositor actually paints (matching SlideCanvasGeometryPlanner.OrientedBoundsToScreen's
-    /// corner rotation for the selection outline of the same shape).
+    /// Projects one un-rotated, un-mirrored local-frame handle position into screen space,
+    /// mirroring it about the shape's un-rotated bounds center on FlipH/FlipV and then rotating
+    /// it by rotationDeg, so it lands on the same rotated-and-mirrored edge the compositor
+    /// actually paints (matching ShapeTransformPlanner.TransformPoint's flip-then-rotate order,
+    /// and SlideCanvasGeometryPlanner.OrientedBoundsToScreen's corner rotation for the selection
+    /// outline of the same shape).
     /// </summary>
     private static SelectionAdornerGeometryHandlePlan ProjectHandle(
         string name,
         LayoutPoint positionDip,
         LayoutRect boundsDip,
         double rotationDeg,
+        bool flipH,
+        bool flipV,
         SlideTransformCore transform)
     {
-        var rotatedDip = RotateAroundCenter(positionDip, boundsDip.Center, rotationDeg);
+        var mirroredDip = MirrorAroundCenter(positionDip, boundsDip.Center, flipH, flipV);
+        var rotatedDip = RotateAroundCenter(mirroredDip, boundsDip.Center, rotationDeg);
         var screenPosition = transform.SlideToScreen(rotatedDip.X, rotatedDip.Y);
         return new SelectionAdornerGeometryHandlePlan(
             name,
             new CanvasGesturePoint(screenPosition.X, screenPosition.Y));
+    }
+
+    private static LayoutPoint MirrorAroundCenter(LayoutPoint point, LayoutPoint center, bool flipH, bool flipV)
+    {
+        if (!flipH && !flipV)
+            return point;
+
+        double x = point.X - center.X;
+        double y = point.Y - center.Y;
+        if (flipH) x = -x;
+        if (flipV) y = -y;
+        return new LayoutPoint(center.X + x, center.Y + y);
     }
 
     private static LayoutPoint RotateAroundCenter(LayoutPoint point, LayoutPoint center, double rotationDeg)

@@ -21,7 +21,15 @@ public static class BackstageRecentFileListPlanner
         var eligibleEntries = new List<RecentFileEntry>();
         foreach (var entry in entries)
         {
-            if (pathExists(entry.Path))
+            // Pinned entries are exempt from the existence filter: a pinned file that gets
+            // moved/deleted must still surface here (both shells' Backstage Home/Pinned lists,
+            // and the search filter below) so its rendered row stays reachable for Unpin/Remove.
+            // RecentFilesStore.LimitForPersistence never evicts pinned entries on its own (see
+            // RecentFilesStore.cs), so without this exemption a dead pinned entry would be
+            // filtered out of every returned list here -- and therefore never rendered, never
+            // reachable by a context menu, and never removable -- while being retained in
+            // recent.json forever.
+            if (entry.IsPinned || pathExists(entry.Path))
             {
                 eligibleEntries.Add(entry);
             }

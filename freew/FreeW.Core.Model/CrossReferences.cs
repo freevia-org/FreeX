@@ -675,8 +675,8 @@ public static class CrossReferences
             return cached;
 
         var number = noteMarker.Footnote
-            ? NoteDisplayNumber(doc.Footnotes.Keys, noteMarker.Id, doc.FootnoteNumbering, cached)
-            : NoteDisplayNumber(doc.Endnotes.Keys, noteMarker.Id, doc.EndnoteNumbering, cached);
+            ? NoteDisplayNumber(doc, footnote: true, noteMarker.Id, doc.FootnoteNumbering, cached)
+            : NoteDisplayNumber(doc, footnote: false, noteMarker.Id, doc.EndnoteNumbering, cached);
         return field.InsertAs == CrossRefInsertAs.AboveBelow
             ? number + " " + AboveBelow(
                 noteMarker.BlockIndex,
@@ -696,8 +696,8 @@ public static class CrossReferences
             return cached;
 
         return type == CrossRefType.Footnote
-            ? NoteDisplayNumber(doc.Footnotes.Keys, id, doc.FootnoteNumbering, cached)
-            : NoteDisplayNumber(doc.Endnotes.Keys, id, doc.EndnoteNumbering, cached);
+            ? NoteDisplayNumber(doc, footnote: true, id, doc.FootnoteNumbering, cached)
+            : NoteDisplayNumber(doc, footnote: false, id, doc.EndnoteNumbering, cached);
     }
 
     private static NoteMarker? FindNoteMarker(TextDocument doc, int id, bool footnote)
@@ -953,18 +953,92 @@ public static class CrossReferences
         return offsets;
     }
 
+    // Mirrors DocumentNoteRegionPlanner.ComputeSequenceById -- the single authoritative sequence
+    // calculator every renderer (WPF note region/body mark, Avalonia PrintLayout, accessibility tree)
+    // uses -- so a cross-reference/NOTEREF number agrees with the number actually printed next to the
+    // note. Ordering by internal id (allocated by insertion order via NextFootnoteId()/NextEndnoteId())
+    // drifts from reading order as soon as a note is inserted earlier in the text after a later one; this
+    // orders by each note's reference-run position instead, same as the planner. EachPage restart is not
+    // handled here (this call site has no page-layout information to scope by) and falls back to
+    // continuous numbering, the same approximation the planner itself uses for its own no-layout callers
+    // (the accessibility tree, and the in-body mark before layout can place it).
     private static string NoteDisplayNumber(
-        IEnumerable<int> ids, int targetId, NoteNumberingOptions options, string cached)
+        TextDocument doc, bool footnote, int targetId, NoteNumberingOptions options, string cached)
     {
-        var sequence = Math.Max(1, options.StartAt);
-        foreach (var id in ids.OrderBy(k => k))
+        var ids = footnote
+            ? doc.Footnotes.Keys.ToList()
+            : doc.Endnotes.Keys.ToList();
+        var locationById = ResolveNoteReferenceLocations(doc, footnote, ids);
+        var orderedIds = ids
+            .OrderBy(id => locationById.TryGetValue(id, out var location) ? location.Order : int.MaxValue)
+            .ThenBy(id => id)
+            .ToList();
+
+        var startAt = Math.Max(1, options.StartAt);
+
+        if (options.NumberRestart == NoteNumberRestart.EachSection)
         {
-            if (id == targetId)
-                return NoteNumberFormatter.Format(sequence, options.NumberFormat);
-            sequence++;
+            var nextInSection = new Dictionary<int, int>();
+            foreach (var id in orderedIds)
+            {
+                var section = locationById.TryGetValue(id, out var location) ? location.SectionIndex : 0;
+                var sequence = nextInSection.TryGetValue(section, out var next) ? next : startAt;
+                nextInSection[section] = sequence + 1;
+                if (id == targetId)
+                    return NoteNumberFormatter.Format(sequence, options.NumberFormat);
+            }
+
+            return cached;
         }
 
-        return cached;
+        var index = orderedIds.IndexOf(targetId);
+        return index < 0 ? cached : NoteNumberFormatter.Format(startAt + index, options.NumberFormat);
+    }
+
+    private readonly record struct NoteReferenceLocation(int SectionIndex, int Order);
+
+    // Locates each id's reference run in reading order by walking doc.Blocks (recursing through table
+    // rows/nested tables via ParagraphsIn, same as FindNoteMarker). Unlike
+    // DocumentNoteRegionPlanner.ResolveReferenceLocationsById this does not additionally scan
+    // headers/footers or text-box shapes -- this file's own marker lookup (FindNoteMarker) never has
+    // either, so an id with a mark only in one of those places is simply left unlocated here (falls back
+    // to sorting after every located id, same as the planner does for any id it fails to locate).
+    private static IReadOnlyDictionary<int, NoteReferenceLocation> ResolveNoteReferenceLocations(
+        TextDocument doc, bool footnote, IReadOnlyCollection<int> ids)
+    {
+        var result = new Dictionary<int, NoteReferenceLocation>();
+        var remaining = new HashSet<int>(ids);
+        var sectionIndex = 0;
+        var order = 0;
+
+        void ScanParagraph(Paragraph paragraph, int forSectionIndex)
+        {
+            foreach (var run in paragraph.Runs)
+            {
+                var id = footnote ? run.FootnoteId : run.EndnoteId;
+                if (id is { } noteId && remaining.Remove(noteId))
+                    result[noteId] = new NoteReferenceLocation(forSectionIndex, order++);
+            }
+        }
+
+        foreach (var block in doc.Blocks)
+        {
+            if (remaining.Count == 0)
+                break;
+
+            if (block is Paragraph paragraph)
+            {
+                ScanParagraph(paragraph, sectionIndex);
+                if (paragraph.SectionBreak is not null)
+                    sectionIndex++;
+                continue;
+            }
+
+            foreach (var rowParagraph in ParagraphsIn(block))
+                ScanParagraph(rowParagraph, sectionIndex);
+        }
+
+        return result;
     }
 
     private static string NonEmptyOrCached(string value, string cached) =>

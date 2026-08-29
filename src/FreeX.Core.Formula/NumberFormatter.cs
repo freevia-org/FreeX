@@ -436,27 +436,68 @@ public static partial class NumberFormatter
         return new FormatResult(text, section.ColorHex);
     }
 
-    // True when a [condition]-selected section's own (directive-stripped) text starts with a
-    // literal sign indicator -- '-' or '(' -- once any leading retained bracket directives
-    // (e.g. "[$-409]", "[DBNum1]", still present in ParsedSection.Format) are skipped. This is
-    // the same "author writes the sign" idiom SelectPositionalSection's second/negative section
-    // already relies on positionally; here it must be detected by content since [condition]
-    // sections aren't tied to sign position.
+    // True when a [condition]-selected section's own (directive-stripped) text supplies a
+    // literal sign indicator -- '-' or '(' -- of its own before any numeric placeholder, once
+    // any leading retained bracket directives (e.g. "[$-409]", "[DBNum1]", still present in
+    // ParsedSection.Format), quoted literal text (e.g. "Owed "), escaped literal characters,
+    // and whitespace are skipped. A bare literal character ends the scan: the sign must come
+    // BEFORE the literal text, not inside it.
+    // (r168)
+    // This is the same "author writes the sign" idiom SelectPositionalSection's second/negative
+    // section already relies on positionally; here it must be detected by content since
+    // [condition] sections aren't tied to sign position. A leading literal prefix -- quoted
+    // text or a bare symbol -- must not defeat this detection: it is emitted verbatim before
+    // the sign either way, so the real question is still just "which character appears first,
+    // the sign or a numeric placeholder".
     private static bool SectionHasLeadingLiteralSign(string format)
     {
         var index = 0;
-        while (index < format.Length && format[index] == '[')
+        while (index < format.Length)
         {
-            var close = format.IndexOf(']', index + 1);
-            if (close < 0)
-                break;
-            index = close + 1;
+            var c = format[index];
+
+            if (c == '[')
+            {
+                var close = format.IndexOf(']', index + 1);
+                if (close < 0)
+                    break;
+                index = close + 1;
+                continue;
+            }
+
+            if (c == '"')
+            {
+                var close = format.IndexOf('"', index + 1);
+                if (close < 0)
+                    break;
+                index = close + 1;
+                continue;
+            }
+
+            if (c == '\\' && index + 1 < format.Length)
+            {
+                index += 2;
+                continue;
+            }
+
+            if (c == '-' || c == '(')
+                return true;
+
+            // r168 remediation: a bare SYMBOL prefix is skipped -- an unquoted currency mark such
+            // as $ or a space legitimately precedes the author's sign, as in "[<0]$(0.00)".
+            // A bare LETTER ends the scan, because it starts literal words, and a word can contain
+            // a hyphen: skipping onward through "Ref-No 0.00" read that hyphen as an
+            // author-written sign, suppressed the real minus, and rendered a negative value
+            // identically to a positive one. Losing the sign silently is worse than the doubled
+            // sign this helper exists to prevent. Date placeholders (y/m/d/h/s) are letters too,
+            // so the same rule stops a format like "[<0]yyyy-mm-dd" misreading its separator.
+            if (char.IsLetter(c))
+                return false;
+
+            index++;
         }
 
-        while (index < format.Length && char.IsWhiteSpace(format[index]))
-            index++;
-
-        return index < format.Length && (format[index] == '-' || format[index] == '(');
+        return false;
     }
 
     private static int FindParsedSectionIndex(

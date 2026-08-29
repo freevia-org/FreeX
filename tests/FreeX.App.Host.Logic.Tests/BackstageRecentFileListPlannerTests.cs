@@ -96,7 +96,38 @@ public sealed class BackstageRecentFileListPlannerTests
     }
 
     [Fact]
-    public void Build_RemovesMissingFilesBeforeSplittingRecentAndPinnedItems()
+    public void Build_RemovesMissingUnpinnedFilesButKeepsMissingRecentFilteredOut()
+    {
+        // Sibling/no-regression test: an unpinned entry whose file has moved/been deleted must
+        // still be excluded from every returned list -- only the pinned exemption below changes.
+        var entries = new[]
+        {
+            new RecentFileEntry { Path = @"C:\Work\ExistingPinned.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = true },
+            new RecentFileEntry { Path = @"C:\Work\MissingRecent.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = false },
+            new RecentFileEntry { Path = @"C:\Work\ExistingRecent.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = false }
+        };
+
+        var plan = BackstageRecentFileListPlanner.Build(
+            entries,
+            filter: null,
+            pathExists: path => !path.Contains("Missing", StringComparison.OrdinalIgnoreCase));
+
+        plan.AllItems.Select(item => item.FileName).Should().NotContain("MissingRecent.xlsx");
+        plan.RecentItems.Select(item => item.FileName).Should().Equal("ExistingRecent.xlsx");
+    }
+
+    // --- R168 shared-recent-and-mru F1 (MED, shared/Free.Shared.Shell/BackstageRecentFileListPlanner.cs):
+    // Build's existence filter used to discard a pinned entry whose file had moved/been deleted
+    // before a RecentFileViewModel was ever created for it. Since RecentFilesStore.LimitForPersistence
+    // never evicts pinned entries on its own, the dead pinned entry was retained in recent.json
+    // forever while being permanently invisible on every surface (Backstage Home/Pinned in both
+    // shells, the search filter, and Open-Recent) -- with no row ever rendered, there was no
+    // Unpin/Remove context menu that could ever reach it again. Fixed by exempting pinned entries
+    // from the existence filter, so a missing-but-pinned entry keeps surfacing (and stays
+    // searchable) until the user explicitly unpins or removes it. ---
+
+    [Fact]
+    public void Build_KeepsMissingPinnedFileReachableForUnpinOrRemove()
     {
         var entries = new[]
         {
@@ -111,9 +142,22 @@ public sealed class BackstageRecentFileListPlannerTests
             filter: null,
             pathExists: path => !path.Contains("Missing", StringComparison.OrdinalIgnoreCase));
 
-        plan.AllItems.Select(item => item.FileName).Should().Equal("ExistingRecent.xlsx", "ExistingPinned.xlsx");
-        plan.PinnedItems.Select(item => item.FileName).Should().Equal("ExistingPinned.xlsx");
-        plan.RecentItems.Select(item => item.FileName).Should().Equal("ExistingRecent.xlsx");
+        // The missing-but-pinned entry must still produce a RecentFileViewModel -- that view model
+        // is exactly what the WPF SsPinnedList / Avalonia Home-pane rows are bound to, and what
+        // Pin/Unpin/Remove read their DataContext from (MainWindow.Backstage.cs, GetContextMenuViewModel).
+        plan.AllItems.Select(item => item.FileName).Should().Contain("MissingPinned.xlsx");
+        plan.PinnedItems.Select(item => item.FileName).Should().Contain("MissingPinned.xlsx");
+
+        // It must also still be reachable via the search box the finding says it must survive.
+        var searched = BackstageRecentFileListPlanner.Build(
+            entries,
+            filter: "MissingPinned",
+            pathExists: path => !path.Contains("Missing", StringComparison.OrdinalIgnoreCase));
+        searched.PinnedItems.Select(item => item.FileName).Should().Equal("MissingPinned.xlsx");
+
+        // A missing entry that is NOT pinned must remain excluded -- the exemption is pin-scoped.
+        plan.AllItems.Select(item => item.FileName).Should().NotContain("MissingRecent.xlsx");
+        plan.RecentItems.Should().NotContain(item => item.FileName == "MissingRecent.xlsx");
     }
 
     [Fact]

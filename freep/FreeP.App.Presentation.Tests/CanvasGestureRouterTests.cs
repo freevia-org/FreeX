@@ -50,6 +50,98 @@ public sealed class CanvasGestureRouterTests
         editor.CanUndo.Should().BeTrue();
     }
 
+    // F1 (round 168): the adjust-handle drag committed value must be computed in the shape's
+    // un-rotated local frame (matching ShapeHitTester.GetShapeBoundsDip's AABB), not the raw
+    // slide-space pointer. Bounds/pointer numbers mirror
+    // ShapeGeometryAdjustmentPlannerTests.BuildMutationPlan_RoundedRectangle_MapsTopEdgePointerToAdjustment
+    // (Bounds (10,20,200,100), local pointer (40, Bounds.Top) => adjustment 30000): the drag's
+    // final screen point is that local pointer pre-rotated +90 degrees about the shape's centre
+    // (110,70), so a correct un-rotation recovers the same 30000, while feeding the raw point
+    // straight into the planner (the pre-fix bug) clamps to the 50000 maximum instead.
+    [Fact]
+    public void GeometryAdjustmentDrag_OnRotatedShape_CommitsValueInShapesUnrotatedLocalFrame()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+            OffsetXEmu = 10 * EmusPerDip,
+            OffsetYEmu = 20 * EmusPerDip,
+            ExtentCxEmu = 200 * EmusPerDip,
+            ExtentCyEmu = 100 * EmusPerDip,
+            RotationDeg = 90,
+        };
+        slide.Shapes.Add(shape);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(shape.Id);
+        var router = new CanvasGestureRouter(editor);
+
+        var press = router.HandlePointerPressed(Request(
+            screen: new CanvasGesturePoint(0, 0),
+            slide: new CanvasGesturePoint(0, 0),
+            geometryHandle: "adj",
+            hasSingleSelectionFrame: true));
+        press.Handled.Should().BeTrue();
+        router.Kind.Should().Be(CanvasGestureKind.GeometryAdjustment);
+
+        // Slide-space point (160,0) is local point (40,20) [top edge, 30 DIP right of Left]
+        // rotated +90 degrees about the shape's centre (110,70).
+        var dragTarget = new CanvasGesturePoint(160, 0);
+        router.PreviewPointer(dragTarget, SlideTransformCore.Identity, CanvasGestureModifiers.None);
+        router.CompletePointer(dragTarget, SlideTransformCore.Identity, CanvasGestureModifiers.None)
+            .Should().BeTrue();
+
+        shape.PresetGeometryAdjustments.Should().ContainKey("adj");
+        shape.PresetGeometryAdjustments["adj"].Should().BeApproximately(30000, 0.01,
+            "the pointer must be un-rotated into the shape's local frame before being measured " +
+            "against its un-rotated bounds");
+        router.IsActive.Should().BeFalse();
+    }
+
+    // Sibling no-regression guard: an un-rotated shape has no rotation to undo, so the commit
+    // path must keep using the raw slide-space pointer unchanged.
+    [Fact]
+    public void GeometryAdjustmentDrag_OnUnrotatedShape_StillCommitsRawPointerValue()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+            OffsetXEmu = 10 * EmusPerDip,
+            OffsetYEmu = 20 * EmusPerDip,
+            ExtentCxEmu = 200 * EmusPerDip,
+            ExtentCyEmu = 100 * EmusPerDip,
+            RotationDeg = 0,
+        };
+        slide.Shapes.Add(shape);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(shape.Id);
+        var router = new CanvasGestureRouter(editor);
+
+        var press = router.HandlePointerPressed(Request(
+            screen: new CanvasGesturePoint(0, 0),
+            slide: new CanvasGesturePoint(0, 0),
+            geometryHandle: "adj",
+            hasSingleSelectionFrame: true));
+        press.Handled.Should().BeTrue();
+
+        var dragTarget = new CanvasGesturePoint(40, 20);
+        router.PreviewPointer(dragTarget, SlideTransformCore.Identity, CanvasGestureModifiers.None);
+        router.CompletePointer(dragTarget, SlideTransformCore.Identity, CanvasGestureModifiers.None)
+            .Should().BeTrue();
+
+        shape.PresetGeometryAdjustments.Should().ContainKey("adj");
+        shape.PresetGeometryAdjustments["adj"].Should().BeApproximately(30000, 0.01);
+    }
+
     [Theory]
     [InlineData(CanvasGestureModifiers.Control)]
     [InlineData(CanvasGestureModifiers.Shift)]

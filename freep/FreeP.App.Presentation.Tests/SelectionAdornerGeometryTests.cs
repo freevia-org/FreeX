@@ -183,6 +183,53 @@ public sealed class SelectionAdornerGeometryTests
     }
 
     [Fact]
+    public void BuildProjection_MirrorsPresetGeometryHandlesForFlippedShape()
+    {
+        // Regression for freep-shape-geometry F2: preset-geometry edit handles must mirror
+        // about the shape's bounds center on FlipH/FlipV (matching
+        // ShapeTransformPlanner.TransformPoint, which negates the local x/y before rotating)
+        // before landing at their un-rotated position. Without this, a flipped Rounded
+        // Rectangle's corner-radius handle renders on the un-mirrored (invisible) corner.
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+            OffsetXEmu = ToEmu(10),
+            OffsetYEmu = ToEmu(20),
+            ExtentCxEmu = ToEmu(200),
+            ExtentCyEmu = ToEmu(100),
+            FlipH = true,
+        };
+        slide.Shapes.Add(shape);
+
+        var bounds = new LayoutRect(10, 20, 200, 100);
+        var unmirrored = ShapeGeometryAdjustmentPlanner.Build(shape, bounds)
+            .Handles.Should().ContainSingle().Subject;
+        var center = bounds.Center;
+
+        // Sanity: the corner-radius handle is not exactly at the bounds center, so a bug that
+        // forgets to mirror it is guaranteed to disagree with the mirrored expectation below.
+        unmirrored.PositionDip.X.Should().NotBe(center.X);
+
+        double expectedX = 2 * center.X - unmirrored.PositionDip.X;
+        double expectedY = unmirrored.PositionDip.Y;
+
+        var projection = SelectionAdornerGeometry.BuildProjection(
+            slide,
+            presentation,
+            [7],
+            SlideTransformCore.Identity,
+            editPointsEnabled: true);
+
+        projection.GeometryHandles.Should().Equal(
+            new SelectionAdornerGeometryHandlePlan("adj", new CanvasGesturePoint(expectedX, expectedY)));
+    }
+
+    [Fact]
     public void BuildProjection_PreservesRotatedFramesAndMissingSelectionFallback()
     {
         var presentation = Presentation.CreateEmpty();

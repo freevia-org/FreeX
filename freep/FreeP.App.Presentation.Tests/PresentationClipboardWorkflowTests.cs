@@ -162,6 +162,31 @@ public sealed class PresentationClipboardWorkflowTests
     /// as column delimiters and restructured what the user pasted. Tabs alone do not mean tabular;
     /// only a payload that would otherwise be swallowed by its own image flavour needs that branch.
     /// </summary>
+    /// <summary>
+    /// r168. The r167 gate required an image flavour alongside the tabular text, on the premise that
+    /// a FreeX range copy always carries one. It does not: FreeX omits the rendered bitmap once the
+    /// range exceeds 2000 cells, so an ordinary data-table copy arrived as text alone and pasted as a
+    /// flat tab-riddled box -- the exact defect the branch exists to prevent. The gate now asks about
+    /// the text's shape rather than the payload's packaging.
+    /// </summary>
+    [Fact]
+    public void ApplyPaste_TabularTextWithNoImage_StillCreatesATable()
+    {
+        var (editor, slide) = CreateEditor();
+        var content = new PresentationClipboardContent(Text: "Region\tQ1\tQ2\nNorth\t10\t20\nSouth\t30\t40");
+
+        PresentationClipboardWorkflow.ApplyPaste(
+            PresentationClipboardWorkflow.PreparePaste(editor),
+            content,
+            ownCopyIsCurrent: false);
+
+        var pasted = slide.Shapes[^1];
+        pasted.Kind.Should().Be(SlideShapeKind.Table,
+            "a large range copy carries no bitmap, and it is still a table");
+        pasted.Table!.Rows.Should().HaveCount(3);
+        pasted.Table.Rows[0].Cells.Should().HaveCount(3);
+    }
+
     [Fact]
     public void ApplyPaste_TabIndentedTextWithNoImage_StaysATextBox()
     {

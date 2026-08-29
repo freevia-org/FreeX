@@ -9661,7 +9661,14 @@ public sealed partial class DocumentView : Control
             _ => tableIndentDip
         };
 
-        const double pad = 5;
+        // AV-TBL-MARGINS: resolve Word's real per-cell padding (w:tcMar, falling back to the table's
+        // w:tblCellMar default, then Word's own default of 0pt top/bottom and 5.4pt left/right) instead
+        // of a uniform constant for every cell -- mirrors the WPF host's identical
+        // `modelCell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default` resolution.
+        TableCellMargins ResolveCellMargins(TableCell cell) =>
+            cell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default;
+        var defaultCellMargins = table.DefaultCellMargins ?? TableCellMargins.Default;
+        var defaultVerticalPad = (defaultCellMargins.TopPt + defaultCellMargins.BottomPt) * PxPerPoint;
         // Word preserves the nominal table grid and treats tblCellSpacing as a gap around each
         // physical cell surface. Keep row measurement and pagination on the nominal grid; only
         // the painted cell and its content origin consume this surface reservation.
@@ -9747,7 +9754,7 @@ public sealed partial class DocumentView : Control
         for (var pr = 0; pr < table.Rows.Count; pr++)
         {
             var prRow = table.Rows[pr];
-            var prRowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
+            var prRowHeight = Build("Ag", RunFormatting.Default).Height + defaultVerticalPad;
             foreach (var projected in TableGridProjection.ProjectRow(prRow))
             {
                 var cell = projected.Cell;
@@ -9766,7 +9773,10 @@ public sealed partial class DocumentView : Control
                 if (EffectiveFillFor(pr, cellIndex).EffectiveBold)
                     prFmt = prFmt with { Bold = true };
 
-                var prInnerW = Math.Max(10, prCellWidth - 2 * pad);
+                var prMargins = ResolveCellMargins(cell);
+                var prHorizontalPad = (prMargins.LeftPt + prMargins.RightPt) * PxPerPoint;
+                var prVerticalPad = (prMargins.TopPt + prMargins.BottomPt) * PxPerPoint;
+                var prInnerW = Math.Max(10, prCellWidth - prHorizontalPad);
                 var prParagraphs = cell.Paragraphs.Count > 0
                     ? cell.Paragraphs
                     : [new Paragraph()];
@@ -9775,7 +9785,7 @@ public sealed partial class DocumentView : Control
                     var spacing = CellParagraphSpacing(paragraph);
                     return WrapCellLines(blockIndex, paragraph, prFmt, prInnerW).Sum(line => line.Height)
                         + spacing.Before + spacing.After;
-                }) + 2 * pad;
+                }) + prVerticalPad;
                 if (prCellHeight > prRowHeight)
                     prRowHeight = prCellHeight;
             }
@@ -9831,7 +9841,7 @@ public sealed partial class DocumentView : Control
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
             // BE2: CellParas holds wrapped lines per-paragraph (outer list = para, inner = wrapped lines).
             var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<CellWrappedLine>> CellParas, List<(double Before, double After)> ParagraphSpacings, List<double> MarkerInsets, RunFormatting Fmt)>();
-            var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
+            var rowHeight = Build("Ag", RunFormatting.Default).Height + defaultVerticalPad;
             foreach (var projected in TableGridProjection.ProjectRow(row))
             {
                 var cell = projected.Cell;
@@ -9853,7 +9863,10 @@ public sealed partial class DocumentView : Control
 
                 // BE2: wrap each cell paragraph independently so multi-paragraph cells render on
                 // separate visual lines instead of collapsing onto one line via a '\n' glyph.
-                var innerW = Math.Max(10, cellWidth - 2 * pad);
+                var cellMargins = ResolveCellMargins(cell);
+                var horizontalPad = (cellMargins.LeftPt + cellMargins.RightPt) * PxPerPoint;
+                var verticalPad = (cellMargins.TopPt + cellMargins.BottomPt) * PxPerPoint;
+                var innerW = Math.Max(10, cellWidth - horizontalPad);
                 var cellParagraphs = cell.Paragraphs.Count > 0
                     ? cell.Paragraphs
                     : [new Paragraph()];
@@ -9867,7 +9880,7 @@ public sealed partial class DocumentView : Control
                 var lines = cellParas.SelectMany(pl => pl).ToList(); // flattened for height calc
                 var cellHeight = lines.Sum(l => l.Height)
                     + paragraphSpacings.Sum(spacing => spacing.Before + spacing.After)
-                    + 2 * pad;
+                    + verticalPad;
                 if (cellHeight > rowHeight)
                     rowHeight = cellHeight;
 
@@ -9920,6 +9933,16 @@ public sealed partial class DocumentView : Control
                 _rects.Add((rect, fill, borders, cellBorderPlan.HasVisibleEdges ? cellBorderPlan : null));
                 _cellHits.Add((rect, blockIndex, r, startCol));
 
+                // AV-TBL-MARGINS: this cell's real authored/default padding (see ResolveCellMargins
+                // above) drives both the vertical-alignment free-space math and the content origin.
+                var paintMargins = ResolveCellMargins(cellModel);
+                var topPad = paintMargins.TopPt * PxPerPoint;
+                var leftPad = paintMargins.LeftPt * PxPerPoint;
+                // ResolveContentOffset's freeSpace = regionHeight - 2*verticalPad - contentHeight only
+                // depends on the top+bottom SUM, so the average of (possibly asymmetric) top/bottom pads
+                // is an exact stand-in: 2 * ((top + bottom) / 2) == top + bottom.
+                var verticalPadForOffset = (paintMargins.TopPt + paintMargins.BottomPt) * PxPerPoint / 2;
+
                 // AV-TBL5-VRENDER: per-cell vertical alignment offset within the row.
                 // cellAvailableHeight = row interior height (row height minus top+bottom padding).
                 // contentHeight = sum of this cell's laid-out line heights.
@@ -9930,7 +9953,8 @@ public sealed partial class DocumentView : Control
                 // row. Sum the pre-computed heights of every row this cell spans (this row plus each
                 // consecutive VerticalMerge.Continue cell below it at the same grid column) and use
                 // that as the available height instead of the single rowHeight. A non-merged cell
-                // (span 1) is unaffected — cellAvailableHeight still reduces to rowHeight - 2*pad.
+                // (span 1) is unaffected — cellAvailableHeight still reduces to rowHeight minus the
+                // cell's top+bottom margin.
                 //
                 // Paginated cells (content split across pages): ReserveContentY treats the row as a
                 // unit so the whole row lands on one page; no per-page split of a single row occurs,
@@ -9945,8 +9969,8 @@ public sealed partial class DocumentView : Control
                     cellModel.VerticalAlignment,
                     mergedSpanHeight,
                     contentHeight,
-                    pad);
-                var contentTopY = rect.Top + pad + vAlignOffset;
+                    verticalPadForOffset);
+                var contentTopY = rect.Top + topPad + vAlignOffset;
 
                 var ty = contentTopY;
                 // BE2+BE1: iterate paragraphs independently — each paragraph's wrapped lines render
@@ -9965,13 +9989,13 @@ public sealed partial class DocumentView : Control
                     {
                         // Markers are visual chrome, so they reserve the first-line leading space but
                         // are not added to editable table-cell character offsets.
-                        _markers.Add((rect.Left + pad, ty, preservedMarker.Text, fmt));
+                        _markers.Add((rect.Left + leftPad, ty, preservedMarker.Text, fmt));
                     }
 
                     foreach (var line in paraLines)
                     {
                         var lineHeight = line.Height;
-                        var tx = rect.Left + pad + markerInset;
+                        var tx = rect.Left + leftPad + markerInset;
                         foreach (var item in line.Items)
                         {
                             if (item.EmbeddedObject is { } embeddedObject)
@@ -10031,7 +10055,7 @@ public sealed partial class DocumentView : Control
 
                     // BE1: sentinel at end of this paragraph (at the end of its last visual line).
                     CellWrappedLine? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
-                    var sentinelX = rect.Left + pad + markerInset
+                    var sentinelX = rect.Left + leftPad + markerInset
                         + (lastParaLine.HasValue ? lastParaLine.Value.Items.Sum(item => item.Width) : 0);
                     var sentinelY = lastParaLine.HasValue
                         ? ty - paragraphSpacing.After - lastParaLine.Value.Height
@@ -21508,7 +21532,7 @@ public sealed partial class DocumentView : Control
 
     public void SetAlignment(TextAlignment alignment)
     {
-        if (CurrentParagraph() is not { } paragraph)
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
         _editingSession.FormatParagraphs(
             [_caret.Block],

@@ -2178,12 +2178,19 @@ public sealed partial class DocumentView : RichTextBox
     /// <summary>
     /// Insert a page-number field run in a new paragraph after the caret's block, routing through the
     /// undo/redo bus. Used by Insert &gt; Header &amp; Footer &gt; Page Number &gt; Current Position.
+    /// The initial cached text is resolved against the section the caret is actually in (via
+    /// <see cref="CurrentSectionPageSettings"/>), not always <see cref="TextDocument.Page"/> (the
+    /// document's final section) -- so an earlier section's own format/start-at (e.g. LowerRoman
+    /// restarting at 1 for front matter) is what a field inserted there shows, matching what
+    /// <see cref="ApplyPageSettings"/>/<see cref="CurrentSectionPageSettings"/> already treat as that
+    /// section's real settings.
     /// </summary>
     public void InsertPageNumberAtCaret()
     {
         CommitToModel();
         var para = new FreeW.Core.Model.Paragraph();
-        para.Runs.Add(new FreeW.Core.Model.Run(ResolvePageNumberFieldText(_model))
+        para.Runs.Add(new FreeW.Core.Model.Run(
+            DocumentFieldDisplayPlanner.ResolveFirstPageNumberText(_model, CurrentSectionPageSettings()))
         {
             FieldKind = RunFieldKind.PageNumber
         });
@@ -11302,7 +11309,7 @@ public sealed partial class DocumentView : RichTextBox
 
         if (run.ComplexField is not null)
         {
-            var complexRun = BuildComplexFieldRun(run, document);
+            var complexRun = BuildComplexFieldRun(run, document, sourceBlockIndex: sourceBlockIndex ?? -1);
             Inline complexInline = run.HyperlinkUrl is { Length: > 0 } cfUrl
                 ? BuildHyperlink(complexRun, cfUrl, run.HyperlinkTooltip)
                 : run.HyperlinkAnchor is { Length: > 0 } cfAnchor
@@ -11316,7 +11323,7 @@ public sealed partial class DocumentView : RichTextBox
             // A field run can also carry a hyperlink (e.g. a PAGE/DATE field placed inside a link). Wrap
             // the resolved field run in the same Hyperlink chrome ordinary runs get so its link survives
             // the next CommitToModel (ReadInline's FieldMarker case carries the url/anchor back).
-            var fieldRun = BuildFieldRun(run, document);
+            var fieldRun = BuildFieldRun(run, document, sourceBlockIndex: sourceBlockIndex ?? -1);
             Inline fieldInline = run.HyperlinkUrl is { Length: > 0 } fieldUrl
                 ? BuildHyperlink(fieldRun, fieldUrl, run.HyperlinkTooltip)
                 : run.HyperlinkAnchor is { Length: > 0 } fieldAnchor
@@ -12769,7 +12776,8 @@ public sealed partial class DocumentView : RichTextBox
         ModelRun run,
         TextDocument document,
         TextDocument? evaluationDocument = null,
-        string? evaluationFileName = null)
+        string? evaluationFileName = null,
+        int sourceBlockIndex = -1)
     {
         var fieldDocument = evaluationDocument ?? _renderFieldEvaluationDocument ?? document;
         var fieldFileName = evaluationDocument is not null
@@ -12782,11 +12790,16 @@ public sealed partial class DocumentView : RichTextBox
         // Field-code display (Shift+F9/Alt+F9) takes priority over both -- matching how
         // ComplexFieldDisplayPlanner.Build checks ShowCode before anything else -- so the code is shown
         // even for a locked field, exactly like Word.
+        // sourceBlockIndex is only meaningful when fieldDocument is the same document it was resolved
+        // against (the plain body-editor case, where evaluationDocument/_renderFieldEvaluationDocument
+        // are both null -- e.g. a header/footer sub-editor's wrapper document has its own, unrelated
+        // block indices, but it never reaches here with a real sourceBlockIndex anyway since callers only
+        // pass one for body-editor renders).
         var display = run.FieldCodeVisible
             ? DocumentFieldDisplayPlanner.ResolveCode(run.FieldKind)
             : run.FieldLocked
                 ? run.Text
-                : ResolveFieldText(run.FieldKind, run.Text, fieldDocument, fieldFileName);
+                : ResolveFieldText(run.FieldKind, run.Text, fieldDocument, fieldFileName, sourceBlockIndex);
         var fmt = run.Formatting ?? document.DefaultRun;
         var wpf = new WpfRun(display)
         {
@@ -12810,23 +12823,38 @@ public sealed partial class DocumentView : RichTextBox
 
     /// <summary>
     /// Supplies the WPF renderer's current file and paged-edit context to the shared field planner.
+    /// <paramref name="sourceBlockIndex"/> (when known) is the model block index the field run's
+    /// paragraph lives at; outside a header/footer render (where <see cref="_renderHfPageNumber"/> is
+    /// already set to the real per-page number) it is used to resolve a body PAGE field's fallback
+    /// display text against the section that block is ACTUALLY in -- via
+    /// <see cref="PageSettingsSectionResolver"/> -- instead of always <see cref="TextDocument.Page"/>
+    /// (the document's final section). A negative/absent index preserves the previous
+    /// document.Page-only fallback (matches <see cref="PageSettingsSectionResolver.Resolve"/>'s own
+    /// negative-index contract).
     /// </summary>
-    private static string ResolveFieldText(RunFieldKind kind, string cached, TextDocument document, string? fileName)
+    private static string ResolveFieldText(
+        RunFieldKind kind,
+        string cached,
+        TextDocument document,
+        string? fileName,
+        int sourceBlockIndex = -1)
     {
         var pageNumberText = _renderHfPageNumber > 0
             ? _renderHfPageNumberText
                 ?? _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : null;
         int? pageCount = _renderHfPageCount > 0 ? _renderHfPageCount : null;
+        var pageNumberSection = pageNumberText is null && kind == RunFieldKind.PageNumber
+            ? PageSettingsSectionResolver.Resolve(
+                document,
+                PageSettingsSectionResolver.ResolveSectionIndex(document, sourceBlockIndex))
+            : null;
         return DocumentFieldDisplayPlanner.Resolve(
             kind,
             cached,
             document,
-            new DocumentFieldDisplayContext(DateTime.Now, fileName, pageNumberText, pageCount));
+            new DocumentFieldDisplayContext(DateTime.Now, fileName, pageNumberText, pageCount, pageNumberSection));
     }
-
-    private static string ResolvePageNumberFieldText(TextDocument document) =>
-        DocumentFieldDisplayPlanner.ResolveFirstPageNumberText(document);
 
     /// <summary>
     /// Carried on a field WPF run's Tag so CommitToModel can round-trip the field kind and its cached
@@ -12918,7 +12946,8 @@ public sealed partial class DocumentView : RichTextBox
         ModelRun run,
         TextDocument document,
         TextDocument? evaluationDocument = null,
-        string? evaluationFileName = null)
+        string? evaluationFileName = null,
+        int sourceBlockIndex = -1)
     {
         var field = run.ComplexField!;
         var fieldDocument = evaluationDocument ?? _renderFieldEvaluationDocument ?? document;
@@ -12927,7 +12956,7 @@ public sealed partial class DocumentView : RichTextBox
             : _renderFieldEvaluationFileName ?? _renderFileName;
         var displayPlan = ComplexFieldDisplayPlanner.Build(
             field,
-            ResolveComplexFieldText(run, fieldDocument, fieldFileName),
+            ResolveComplexFieldText(run, fieldDocument, fieldFileName, sourceBlockIndex),
             document);
         var display = displayPlan.Text;
         var fmt = run.Formatting ?? document.DefaultRun;
@@ -12949,7 +12978,11 @@ public sealed partial class DocumentView : RichTextBox
         return wpf;
     }
 
-    private static string ResolveComplexFieldText(ModelRun run, TextDocument document, string? fileName)
+    // r168: sourceBlockIndex threads the caret block through so a PAGE field resolves against the
+    // section it actually sits in. Without it this path kept the -1 default, which means the
+    // document's FINAL section -- the very defect the simple-field path was fixed for, still live in
+    // the complex-field representation that Insert > Quick Parts > Field produces.
+    private static string ResolveComplexFieldText(ModelRun run, TextDocument document, string? fileName, int sourceBlockIndex = -1)
     {
         var field = run.ComplexField!;
         // A locked field (Ctrl+F11) must not recompute on render, matching the F9 update path
@@ -12963,7 +12996,8 @@ public sealed partial class DocumentView : RichTextBox
             ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword),
             run.Text,
             document,
-            fileName);
+            fileName,
+            sourceBlockIndex);
         fallback = ComplexFieldDisplayPlanner.ResolvePageSectionField(
             field,
             fallback,

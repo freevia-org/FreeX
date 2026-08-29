@@ -8,7 +8,8 @@ public readonly record struct DocumentFieldDisplayContext(
     DateTime EvaluatedAt,
     string? FileName = null,
     string? PageNumberText = null,
-    int? PageCount = null);
+    int? PageCount = null,
+    PageSettings? PageNumberSection = null);
 
 /// <summary>
 /// Resolves the live display text for simple document fields. Renderers provide pagination and file
@@ -35,7 +36,7 @@ public static class DocumentFieldDisplayPlanner
             RunFieldKind.Keywords => document.Properties.Keywords,
             RunFieldKind.DocComments => document.Properties.Comments,
             RunFieldKind.PageNumber => string.IsNullOrEmpty(context.PageNumberText)
-                ? ResolveFirstPageNumberText(document)
+                ? ResolveFirstPageNumberText(document, context.PageNumberSection ?? document.Page)
                 : context.PageNumberText,
             RunFieldKind.NumPages when context.PageCount is > 0 =>
                 context.PageCount.Value.ToString(CultureInfo.InvariantCulture),
@@ -58,11 +59,28 @@ public static class DocumentFieldDisplayPlanner
     public static string ResolveFirstPageNumberText(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
+        return ResolveFirstPageNumberText(document, document.Page);
+    }
 
-        var firstValue = Math.Max(1, document.Page.PageNumberStartAt ?? 1);
+    /// <summary>
+    /// Overload that resolves against a specific section's <see cref="PageSettings"/> (see
+    /// <see cref="FreeW.Core.Model.PageSettingsSectionResolver"/>) rather than always
+    /// <see cref="TextDocument.Page"/> (the document's final section). A PAGE field inserted at
+    /// "Current Position" in an earlier section's body text must use THAT section's format/start-at,
+    /// not the final section's -- passing <paramref name="section"/> explicitly is how a caller (e.g.
+    /// the caret's actual section, resolved from its block index) gets that right. Callers that have no
+    /// section context keep using the single-argument overload above, which preserves the historical
+    /// (single-section-equivalent) document.Page behavior.
+    /// </summary>
+    public static string ResolveFirstPageNumberText(TextDocument document, PageSettings section)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(section);
+
+        var firstValue = Math.Max(1, section.PageNumberStartAt ?? 1);
         return PageNumberFormatDialogPlanner.FormatPageNumber(
             firstValue,
-            document.Page.PageNumberFormat);
+            section.PageNumberFormat);
     }
 
     /// <summary>
