@@ -44,26 +44,30 @@ public sealed class Wave197BaselineAlignmentEvidenceTests
         target.GetProperty("pairDeltaPercentagePoints").GetDouble().Should().Be(0.0298);
 
         var integrity = root.GetProperty("imageIntegrity");
-        integrity.GetProperty("status").GetString().Should().Be("tracked-byte-hashes-verified");
+        integrity.GetProperty("status").GetString().Should().Be("incomplete-missing-tracked-images");
         integrity.GetProperty("claimBoundary").GetString()
-            .Should().Be("SHA-256 values verify the current tracked image bytes only; they do not prove generation from a source revision.");
+            .Should().Contain("no current byte-integrity or source-generation claim is made");
     }
 
     [Fact]
-    public void EvidenceImages_MatchTheirRecordedHashes()
+    public void EvidenceManifest_ExplicitlyRecordsEveryMissingCandidateImage()
     {
         using var images = JsonDocument.Parse(File.ReadAllText(EvidenceFile("images.json")));
         using var metrics = JsonDocument.Parse(File.ReadAllText(EvidenceFile("metrics.json")));
         var integrity = metrics.RootElement.GetProperty("imageIntegrity");
+        var missingImages = integrity.GetProperty("missingImages")
+            .EnumerateArray()
+            .Select(item => item.GetString())
+            .ToArray();
+        missingImages.Should().BeEquivalentTo(
+            images.RootElement.EnumerateObject().Select(image => image.Name));
 
         foreach (var image in images.RootElement.EnumerateObject())
         {
             var imagePath = EvidenceFile(image.Name);
-            File.Exists(imagePath).Should().BeTrue($"the recorded evidence image must exist: {image.Name}");
-
-            using var stream = File.OpenRead(imagePath);
-            var actualHash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
-            actualHash.Should().Be(image.Value.GetString(), $"the images.json hash must match {image.Name}");
+            File.Exists(imagePath).Should().BeFalse(
+                $"the evidence contract must not claim verification for the known-missing image {image.Name}");
+            image.Value.GetString().Should().MatchRegex("^[0-9a-f]{64}$");
 
             var metricProperty = image.Name switch
             {
@@ -74,7 +78,7 @@ public sealed class Wave197BaselineAlignmentEvidenceTests
                 _ => null
             };
             metricProperty.Should().NotBeNull($"the metrics must bind the recorded image {image.Name}");
-            integrity.GetProperty(metricProperty!).GetString().Should().Be(actualHash);
+            integrity.GetProperty(metricProperty!).GetString().Should().Be(image.Value.GetString());
         }
 
         AssertFileHash(

@@ -305,7 +305,11 @@ public sealed class CrossAppParityDashboardTests
         freePWave197.GetProperty("focusedSourceTestsPassed").GetInt32().Should().Be(4);
         freePWave197.GetProperty("focusedSourceTestsTotal").GetInt32().Should().Be(4);
         freePWave197.GetProperty("productionCandidateRetained").GetBoolean().Should().BeFalse();
-        freePWave197.GetProperty("trackedImageBytesAndHashes").GetString().Should().Contain("verified").And.Contain("generation linkage is explicitly unproven");
+        freePWave197.GetProperty("trackedImageBytesAndHashes").GetString().Should()
+            .Contain("Leading-candidate").And
+            .Contain("verified").And
+            .Contain("four missing untracked candidate images").And
+            .Contain("no current byte-integrity claim");
         freePWave197.GetProperty("residualBoundary").GetString().Should().Contain("unresolved text-raster residual").And.Contain("not a fallback-font diagnosis");
         var freePWave198 = freeP.GetProperty("renderedEvidence").GetProperty("wave198");
         freePWave198.GetProperty("status").GetString().Should().Be("candidate-refuted");

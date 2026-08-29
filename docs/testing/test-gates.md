@@ -51,9 +51,10 @@ platforms run concurrently. A gate can declare `partitions` and `partitionProjec
 isolated test assembly dominates the critical path. The runner deterministically balances source
 files by declared test-method count, combines the generated partition with the project's existing
 VSTest exclusions, and runs every non-partitioned sibling only in partition one. The FreeX Avalonia
-commit gate uses two processes per OS for its 2,000+ test assembly without increasing the overall
-test-job count because the former neutral jobs were folded into existing Linux lanes. The seven WPF
-host batches are separate release gates so each receives
+commit gate uses two processes per OS for its 2,000+ test assembly; folding the former neutral jobs
+into existing Linux lanes makes that expansion job-count neutral. FreeP adds one purposeful Windows
+job to separate its independent WPF and Avalonia stacks, replacing the former nine-minute serial
+critical path. The seven WPF host batches are separate release gates so each receives
 an isolated Windows runner and no single batch determines a 25-minute serial critical path. A
 project may belong to one gate only.
 
@@ -65,8 +66,9 @@ legacy bounded project retry with `-RetryFailedProjectCount 1` when diagnosing a
 A gate may declare `buildProjects` for shipping assemblies that its tests inspect but do not
 reference in their normal configuration. `Invoke-TestGate.ps1` builds each declared prerequisite
 once before the gate's tests (unless `-NoBuild` is used because an earlier workflow build already
-produced it). The FreeW and FreeP Windows desktop gates use this contract for both their WPF and
-Avalonia shipping hosts, keeping commit and release execution consistent.
+produced it). The FreeW Windows desktop gate and the isolated FreeP WPF/Avalonia desktop gates use
+this contract for their shipping hosts. FreeP's two independent UI stacks run concurrently rather
+than serializing more than 4,000 tests and both application builds on one critical-path runner.
 
 CI selects one manifest entry with `-GateId` on each hosted runner. The established `FreeX commit
 gate` required-check name is retained for branch-protection compatibility, but its aggregate now

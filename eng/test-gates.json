@@ -172,16 +172,27 @@
       }
     },
     {
-      "id": "freep-desktop",
+      "id": "freep-wpf-desktop",
       "app": "FreeP",
       "gate": "commit",
       "platforms": ["windows"],
       "buildProjects": [
-        "freep/FreeP.App.Host/FreeP.App.Host.csproj",
+        "freep/FreeP.App.Host/FreeP.App.Host.csproj"
+      ],
+      "projects": [
+        "freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj"
+      ]
+    },
+    {
+      "id": "freep-avalonia-desktop",
+      "app": "FreeP",
+      "gate": "commit",
+      "requiresFullHistory": true,
+      "platforms": ["windows"],
+      "buildProjects": [
         "freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj"
       ],
       "projects": [
-        "freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj",
         "freep/FreeP.App.Avalonia.Tests/FreeP.App.Avalonia.Tests.csproj",
         "freep/FreeP.App.Rendering.Avalonia.Tests/FreeP.App.Rendering.Avalonia.Tests.csproj"
       ]

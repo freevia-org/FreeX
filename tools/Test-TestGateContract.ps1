@@ -113,8 +113,8 @@ foreach ($gate in @($manifest.gates)) {
 foreach ($required in @(
     @{ Gate = "freew-desktop"; Project = "freew/FreeW.App.Host/FreeW.App.Host.csproj" },
     @{ Gate = "freew-desktop"; Project = "freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj" },
-    @{ Gate = "freep-desktop"; Project = "freep/FreeP.App.Host/FreeP.App.Host.csproj" },
-    @{ Gate = "freep-desktop"; Project = "freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj" }
+    @{ Gate = "freep-wpf-desktop"; Project = "freep/FreeP.App.Host/FreeP.App.Host.csproj" },
+    @{ Gate = "freep-avalonia-desktop"; Project = "freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj" }
 )) {
     if (-not $gateById.ContainsKey($required.Gate) -or
         @($gateById[$required.Gate].buildProjects) -notcontains $required.Project) {
