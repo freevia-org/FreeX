@@ -2644,7 +2644,7 @@ public sealed partial class MainWindow : Window,
             AvaloniaRibbonRenderer.TryInjectGroupContent(
                 _ribbonControl,
                 "animation-effects",
-                () => PresentationAnimationGallery.Build(animationsTab, registry, _ribbonStateStore));
+                state => PresentationAnimationGallery.Build(animationsTab, registry, _ribbonStateStore, state));
         }
 
         return new Border

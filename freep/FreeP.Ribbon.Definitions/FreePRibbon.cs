@@ -1360,9 +1360,9 @@ public static class FreePRibbon
     {
         tab.Group("animation-effects", FreePRibbonText.AnimationEffectsGroup.Label, FreePRibbonText.AnimationEffectsGroup.KeyTip, 100, group =>
         {
-            // WPF replaces this full catalog with an Office-style preview gallery; keep the shared
-            // group in its authored full form so the host customization is not replaced by an
-            // icon-only adaptive presentation on its first layout pass.
+            // Keep the familiar effects directly reachable at narrow widths. Hosts replace the
+            // authored catalog with a compact preview strip when this group enters SmallWithLabels.
+            group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
             group.Medium("freep.anim.entrance.appear", FreePRibbonText.AnimationEntranceAppearCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEntranceAppearCommand.KeyTip);
             group.Medium("freep.anim.entrance.fade", FreePRibbonText.AnimationEntranceFadeCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationEntranceFadeCommand.KeyTip);
             group.Medium("freep.anim.entrance.fly-in", FreePRibbonText.AnimationEntranceFlyInCommand.Label, RibbonCommandIconKind.ArrowUp, FreePRibbonText.AnimationEntranceFlyInCommand.KeyTip);

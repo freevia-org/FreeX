@@ -4312,7 +4312,10 @@ public sealed partial class MainWindow : Window,
                         FreeP.Ribbon.Definitions.FreePRibbon.TransitionGalleryGroupId,
                         state => PresentationTransitionGallery.Build(registry, state));
                 else if (tab.Id == FreeP.Ribbon.Definitions.FreePRibbon.AnimationsTabId)
-                    InjectRibbonGallery(content, "animation-effects", _ => PresentationAnimationGallery.Build(tab, registry, stateStore));
+                    InjectRibbonGallery(
+                        content,
+                        "animation-effects",
+                        groupState => PresentationAnimationGallery.Build(tab, registry, stateStore, groupState));
             },
         });
 

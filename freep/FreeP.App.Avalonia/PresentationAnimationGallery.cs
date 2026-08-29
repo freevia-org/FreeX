@@ -19,7 +19,11 @@ internal static class PresentationAnimationGallery
         "freep.anim.entrance.fly-in", "freep.anim.entrance.wipe", "freep.anim.entrance.zoom",
     ];
 
-    public static Control Build(RibbonTab tab, IRibbonCommandRegistry registry, IRibbonStateStore stateStore)
+    public static Control Build(
+        RibbonTab tab,
+        IRibbonCommandRegistry registry,
+        IRibbonStateStore stateStore,
+        RibbonAdaptiveGroupState state = RibbonAdaptiveGroupState.Full)
     {
         var controls = tab.FindGroup("animation-effects")?.Controls
             .Where(control => !string.IsNullOrEmpty(control.CommandId.Value))
@@ -30,7 +34,10 @@ internal static class PresentationAnimationGallery
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2, 1, 2, 0),
         };
-        foreach (var commandId in FavoriteCommandIds)
+        var favoriteCommandIds = state == RibbonAdaptiveGroupState.SmallWithLabels
+            ? FavoriteCommandIds.Take(3)
+            : FavoriteCommandIds.AsEnumerable();
+        foreach (var commandId in favoriteCommandIds)
         {
             var control = controls.FirstOrDefault(candidate => candidate.CommandId.Value == commandId);
             if (control is not null)
