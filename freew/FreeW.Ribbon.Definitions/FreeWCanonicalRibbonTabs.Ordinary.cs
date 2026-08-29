@@ -134,7 +134,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.Icon("freew.clear-formatting", clearAllFormattingCommand.Label, RibbonCommandIconKind.Clear);
                         // Font dialog-launcher: opens the two-tab Font dialog (Font + Advanced tab with
                         // character spacing, kerning, position, ligatures, stylistic sets, number form/spacing).
-                        g.Icon("freew.font-dialog", fontDialogCommand.Label, RibbonCommandIconKind.Font);
+                        g.DialogLauncher("freew.font-dialog", fontDialogCommand.Label, "Open Font settings.");
                     }),
                 tab => tab.Group("font", FreeWRibbonText.FontGroup.Label, FreeWRibbonText.FontGroup.KeyTip, 90, g =>
                     {
@@ -169,7 +169,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.Button("freew.clear-formatting", FreeWRibbonText.ClearFormattingCompactCommand.Label);
                         g.Dropdown("freew.font-color", FreeWRibbonText.FontColorDropdownCommand.Label, BuildFontColorMenu());
                         g.Button("freew.change-case", FreeWRibbonText.ChangeCaseCompactCommand.Label);
-                        g.Button("freew.font-dialog", FreeWRibbonText.FontDialogCommand.Label);
+                        g.DialogLauncher("freew.font-dialog", FreeWRibbonText.FontDialogCommand.Label, "Open Font settings.");
                     }));
 
             topology.Section(
@@ -210,7 +210,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.Icon("freew.borders-shading", "Borders and Shading…", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
                         g.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
                         g.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
-                        g.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
+                        g.DialogLauncher("freew.paragraph-dialog", "Paragraph Settings", "Open Paragraph settings.");
                         g.Icon("freew.tabs-dialog", "Tabs", RibbonCommandIconKind.Ruler);
                         g.Icon("freew.keep-with-next", "Keep with Next", RibbonCommandIconKind.TextFunction);
                         g.Icon("freew.keep-lines", "Keep Lines Together", RibbonCommandIconKind.TextFunction);
@@ -301,7 +301,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                             PreferredLayout = RibbonCommandLayoutKind.Small,
                             Icon = new RibbonCommandIcon(RibbonCommandIconKind.FormattingMarks)
                         });
-                        g.Button("freew.paragraph-dialog", "Paragraph…");
+                        g.DialogLauncher("freew.paragraph-dialog", "Paragraph Settings", "Open Paragraph settings.");
                     }));
 
             topology.Section(

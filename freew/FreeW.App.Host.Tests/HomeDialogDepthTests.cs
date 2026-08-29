@@ -283,7 +283,11 @@ public sealed class HomeDialogDepthTests
             .SelectMany(MenuIds)
             .ToHashSet();
 
-        var allIds = topLevelIds.Union(menuIds);
+        var launcherIds = homeTab.Groups
+            .Where(group => group.Launcher is not null)
+            .Select(group => group.Launcher!.CommandId.Value)
+            .ToHashSet();
+        var allIds = topLevelIds.Union(menuIds).Union(launcherIds);
 
         allIds.Should().Contain("freew.font-dialog",    "Font dialog-launcher must be in Home > Font");
         allIds.Should().Contain("freew.paste-special",  "Paste Special must be in Home > Clipboard");
