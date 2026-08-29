@@ -366,7 +366,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // moved/deleted recent entry gets dropped like WPF's backstage and this app's own native
     // Open-Recent menu already do, without a synchronous File.Exists blocking the UI thread if a
     // recent entry points at an unreachable UNC/network path.
-    private readonly RecentFilePathExistenceCache _recentFilePathExistenceCache = new();
+    // onProbed rebuilds the live Home pane once a background probe resolves a path this window
+    // rendered optimistically, mirroring the WPF host's onProbed wiring (MainWindow.xaml.cs's
+    // `new RecentFilePathExistenceCache(onProbed: _ => Dispatcher.BeginInvoke(...))`) so a
+    // UNC/network recent entry that turns out to be unreachable is dropped from view without
+    // waiting for the user to leave and re-enter the Home pane.
+    private readonly RecentFilePathExistenceCache _recentFilePathExistenceCache;
+
+    // Only rebuilds when Backstage is actually open on the Home pane: TryActivateBackstagePane
+    // would otherwise yank the user back to Home if a probe resolves while they're looking at a
+    // different pane (Info/Print/etc.), which the finding this fixes does not ask for.
+    private void RefreshLiveBackstageHomePaneIfShowing()
+    {
+        if (_backstageOverlay is { IsOpen: true } overlay &&
+            string.Equals(
+                overlay.CurrentEntryId,
+                FreeXBackstageFramePlanner.GetPaneStableId(FreeXBackstagePaneId.Home),
+                StringComparison.Ordinal))
+        {
+            TryActivateBackstagePane(FreeXBackstagePaneId.Home);
+        }
+    }
+
     private readonly ContentControl _sheetGridHost = new();
     // The active cell's Border from the most recent BuildSheetGrid pass. Cells are plain Borders
     // rebuilt on every RefreshShell (see CreateInteractiveCellBorder), so this is refreshed each
@@ -913,6 +934,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _platformClipboard = platformClipboard ?? new AvaloniaPlatformClipboard(
             () => TopLevel.GetTopLevel(this)?.Clipboard,
             new AvaloniaPlatformClipboardOptions(FallBackToText: true));
+        _recentFilePathExistenceCache = new RecentFilePathExistenceCache(onProbed: _ =>
+            Dispatcher.UIThread.Post(RefreshLiveBackstageHomePaneIfShowing));
         // The headless --parity-capture and --parity-grid modes both render against the fixed parity demo
         // workbook (the same content the WPF host adopts) so the startup grid reflects only rendering
         // differences, not the built-in macOS-preview demo.  --parity-grid then swaps the session to the

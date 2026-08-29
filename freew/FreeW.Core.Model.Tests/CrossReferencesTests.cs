@@ -801,6 +801,11 @@ public class CrossReferencesTests
     public void ResolveField_BookmarkedNoteRef_UsesMarkerAndSupportsAboveBelow()
     {
         var doc = new TextDocument();
+        // Footnote 10's own reference mark comes first in reading order, same as its id order, so this
+        // test's expected numbers hold under both id-order and reading-order sequencing -- it is not
+        // exercising the id-vs-reading-order divergence itself (see
+        // NoteDisplayNumber_OrdersByReadingOrderNotId for that).
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FootnoteReference(10) } });
         var paragraph = new Paragraph();
         paragraph.Runs.Add(new Run("Text"));
         paragraph.Runs.Add(Run.FootnoteReference(20));
@@ -818,14 +823,58 @@ public class CrossReferencesTests
                 doc,
                 new CrossReferenceField(CrossRefFieldKind.NoteRef, "_RefNote", CrossRefInsertAs.Text, true),
                 "stale",
-                sourceBlockIndex: 1)
+                sourceBlockIndex: 2)
             .Should().Be("2");
         CrossReferences.ResolveField(
                 doc,
                 new CrossReferenceField(CrossRefFieldKind.NoteRef, "_RefNote", CrossRefInsertAs.AboveBelow, false),
                 "stale",
-                sourceBlockIndex: 1)
+                sourceBlockIndex: 2)
             .Should().Be("2 above");
+    }
+
+    [Fact]
+    public void ResolveField_NoteRef_OrdersByReadingOrderNotId()
+    {
+        // Reproduces the F1 gesture: a footnote inserted near the end of the document gets id 1
+        // (NextFootnoteId() = max(existing)+1), then a second footnote inserted EARLIER in the text
+        // gets id 2 -- so id order (1, 2) now disagrees with reading order (2 appears first, 1 second).
+        // The number shown next to each note in the pane/body is reading-order based (this is what
+        // DocumentNoteRegionPlanner.ComputeSequenceById computes), so a cross-reference to id 1 (the
+        // note that is physically SECOND in the text) must resolve to "2", not "1".
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("early "), Run.FootnoteReference(2) } });
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("late "), Run.FootnoteReference(1) } });
+        doc.Footnotes[1] = new Footnote(1, "inserted first, appears second");
+        doc.Footnotes[2] = new Footnote(2, "inserted second, appears first");
+
+        var field = new CrossReferenceField(CrossRefFieldKind.NoteRef, "1", CrossRefInsertAs.Text, false);
+
+        CrossReferences.ResolveField(doc, field, "stale", sourceBlockIndex: 0)
+            .Should().Be("2");
+    }
+
+    [Fact]
+    public void ResolveField_NoteRef_RestartEachSectionRenumbersPerSection()
+    {
+        // Sibling of the reading-order fix: NoteNumberRestart.EachSection must also be honored here,
+        // matching DocumentNoteRegionPlanner.ComputeSequenceById's EachSection branch, instead of
+        // numbering the whole document as one continuous series.
+        var doc = new TextDocument();
+        doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.FootnoteReference(1) },
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+        });
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FootnoteReference(2) } });
+        doc.Footnotes[1] = new Footnote(1, "section one");
+        doc.Footnotes[2] = new Footnote(2, "section two");
+
+        var field = new CrossReferenceField(CrossRefFieldKind.NoteRef, "2", CrossRefInsertAs.Text, false);
+
+        CrossReferences.ResolveField(doc, field, "stale", sourceBlockIndex: 1)
+            .Should().Be("1");
     }
 
     [Fact]

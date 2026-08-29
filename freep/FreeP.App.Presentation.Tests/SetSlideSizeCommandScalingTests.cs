@@ -148,4 +148,240 @@ public sealed class SetSlideSizeCommandScalingTests
         shape.ExtentCxEmu.Should().Be(200_000L);
         shape.ExtentCyEmu.Should().Be(100_000L);
     }
+
+    // ── Round 168, finding freep-slide-size F1 ─────────────────────────────────────────────
+    // A slide's placeholder shape very commonly has NO explicit xfrm of its own (Offset/Extent
+    // left at 0) and inherits its position/size from the slide layout (or master) instead --
+    // exactly what EditingSession.InsertSlide -> Slide.Title produces. That inherited geometry
+    // must be rescaled too, or PlaceholderResolver.ResolveAnchor keeps handing back the OLD
+    // canvas's absolute EMU coordinates after the slide size changes.
+
+    private static SlideLayout MakeLayoutWithTitlePlaceholder(long offX, long offY, long extCx, long extCy, string masterId)
+    {
+        var layout = new SlideLayout { Id = "layout1", MasterId = masterId };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Id = 100,
+            Kind = SlideShapeKind.AutoShape,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            OffsetXEmu = offX,
+            OffsetYEmu = offY,
+            ExtentCxEmu = extCx,
+            ExtentCyEmu = extCy,
+        });
+        return layout;
+    }
+
+    private static SlideShape MakeInheritedTitleShape(uint id) => new()
+    {
+        Id = id,
+        Name = $"S{id}",
+        Kind = SlideShapeKind.AutoShape,
+        Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+        // Deliberately no Offset/Extent -- mirrors Slide.cs's Title setter, which leaves these
+        // at their default 0 so the shape inherits geometry from the layout placeholder.
+    };
+
+    [Fact]
+    public void Apply_LayoutInheritedTitlePlaceholder_ScalesLayoutGeometrySoResolvedAnchorFitsNewCanvas()
+    {
+        var p = MakePresentation(); // 16:9: 12,192,000 x 6,858,000
+        var layout = MakeLayoutWithTitlePlaceholder(
+            offX: 838_200L, offY: 365_125L, extCx: 10_515_600L, extCy: 1_325_245L, masterId: "master1");
+        p.Layouts.Add(layout);
+
+        var master = new SlideMaster { Id = "master1" };
+        p.Masters.Add(master);
+
+        var slide = p.Slides[0];
+        slide.LayoutId = layout.Id;
+        var titleShape = MakeInheritedTitleShape(200);
+        slide.Shapes.Add(titleShape);
+
+        // Sanity: the layout placeholder fits inside the old 16:9 canvas.
+        (layout.Placeholders[0].OffsetXEmu + layout.Placeholders[0].ExtentCxEmu)
+            .Should().BeLessThanOrEqualTo(p.SlideSizeCxEmu);
+
+        // Ribbon's "Standard (4:3)" preset.
+        new SetSlideSizeCommand(9_144_000L, 6_858_000L).Apply(p);
+
+        p.SlideSizeCxEmu.Should().Be(9_144_000L);
+
+        // The regression: before the fix, layout.Placeholders[0] kept its original 16:9-canvas
+        // absolute EMU coordinates, so the resolved anchor (what SlideCompositor actually draws)
+        // overflowed the new, narrower canvas.
+        var resolved = FreeP.App.Compositor.PlaceholderResolver.ResolveAnchor(titleShape, slide, p);
+        (resolved.OffsetXEmu + resolved.ExtentCxEmu).Should().BeLessThanOrEqualTo(p.SlideSizeCxEmu,
+            "the layout-inherited title placeholder fit the old canvas, so Ensure-Fit must rescale " +
+            "the layout geometry it resolves through so it still fits the new one");
+
+        // And the layout's own stored geometry was in fact scaled (not just left alone).
+        layout.Placeholders[0].ExtentCxEmu.Should().Be((long)Math.Round(10_515_600L * 0.75));
+    }
+
+    [Fact]
+    public void Apply_MasterInheritedPlaceholder_ScalesMasterGeometryToo()
+    {
+        var p = MakePresentation();
+        var master = new SlideMaster { Id = "master1" };
+        master.Placeholders.Add(new SlideShape
+        {
+            Id = 300,
+            Kind = SlideShapeKind.AutoShape,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            OffsetXEmu = 838_200L,
+            OffsetYEmu = 365_125L,
+            ExtentCxEmu = 10_515_600L,
+            ExtentCyEmu = 1_325_245L,
+        });
+        p.Masters.Add(master);
+
+        // A layout with no placeholders of its own -- resolution must fall through to the master.
+        var layout = new SlideLayout { Id = "layout1", MasterId = "master1" };
+        p.Layouts.Add(layout);
+
+        var slide = p.Slides[0];
+        slide.LayoutId = layout.Id;
+        var titleShape = MakeInheritedTitleShape(301);
+        slide.Shapes.Add(titleShape);
+
+        new SetSlideSizeCommand(9_144_000L, 6_858_000L).Apply(p);
+
+        master.Placeholders[0].ExtentCxEmu.Should().Be((long)Math.Round(10_515_600L * 0.75));
+
+        var resolved = FreeP.App.Compositor.PlaceholderResolver.ResolveAnchor(titleShape, slide, p);
+        (resolved.OffsetXEmu + resolved.ExtentCxEmu).Should().BeLessThanOrEqualTo(p.SlideSizeCxEmu);
+    }
+
+    [Fact]
+    public void Revert_LayoutAndMasterPlaceholderGeometry_RestoredExactly()
+    {
+        var p = MakePresentation();
+        var layout = MakeLayoutWithTitlePlaceholder(
+            offX: 838_200L, offY: 365_125L, extCx: 10_515_600L, extCy: 1_325_245L, masterId: "master1");
+        p.Layouts.Add(layout);
+        var master = new SlideMaster { Id = "master1" };
+        master.Placeholders.Add(new SlideShape
+        {
+            Id = 400,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 1_000_000L,
+            OffsetYEmu = 2_000_000L,
+            ExtentCxEmu = 3_000_000L,
+            ExtentCyEmu = 4_000_000L,
+        });
+        p.Masters.Add(master);
+
+        var cmd = new SetSlideSizeCommand(9_144_000L, 6_858_000L);
+        cmd.Apply(p);
+        layout.Placeholders[0].ExtentCxEmu.Should().NotBe(10_515_600L); // sanity: it moved
+
+        cmd.Revert(p);
+
+        layout.Placeholders[0].OffsetXEmu.Should().Be(838_200L);
+        layout.Placeholders[0].ExtentCxEmu.Should().Be(10_515_600L);
+        master.Placeholders[0].OffsetXEmu.Should().Be(1_000_000L);
+        master.Placeholders[0].ExtentCxEmu.Should().Be(3_000_000L);
+    }
+
+    // ── Round 168, finding freep-slide-size F2 ─────────────────────────────────────────────
+    // SlideCompositor.ComposeTable derives the table's actually-drawn width/height purely from
+    // TableShape.ColumnWidthsEmu / TableRow.HeightEmu, ignoring the shape's own ExtentCx/CyEmu.
+    // Ensure-Fit rescaling the shape's outer frame alone therefore has no visible effect -- the
+    // table keeps its original footprint at the new (rescaled) origin.
+
+    private static SlideShape MakeTableShape(uint id, long offX, long offY, long extCx, long extCy,
+        params long[] colWidths)
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.AddRange(colWidths);
+        table.Rows.Add(new TableRow { HeightEmu = extCy });
+
+        return new SlideShape
+        {
+            Id = id,
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = offX,
+            OffsetYEmu = offY,
+            ExtentCxEmu = extCx,
+            ExtentCyEmu = extCy,
+            Table = table,
+        };
+    }
+
+    [Fact]
+    public void Apply_TableShape_ScalesColumnWidthsAndRowHeightsWithTheSlide()
+    {
+        var p = MakePresentation(); // 12,192,000 x 6,858,000
+        var tableShape = MakeTableShape(500,
+            offX: 500_000L, offY: 500_000L, extCx: 10_000_000L, extCy: 1_000_000L,
+            colWidths: new long[] { 5_000_000L, 5_000_000L });
+        p.Slides[0].Shapes.Add(tableShape);
+
+        // A 0.5x binding scale on X (matches the F2 evidence repro).
+        new SetSlideSizeCommand(6_096_000L, 6_858_000L).Apply(p);
+
+        var table = tableShape.Table!;
+        table.ColumnWidthsEmu.Sum().Should().Be(5_000_000L,
+            "the table's own column widths must shrink with the slide, since SlideCompositor.ComposeTable " +
+            "derives the drawn table width from ColumnWidthsEmu rather than the shape's ExtentCxEmu");
+        table.Rows[0].HeightEmu.Should().Be(500_000L);
+
+        // The table's actually-drawn right edge (origin + summed column widths) must fit the new canvas.
+        (tableShape.OffsetXEmu + table.ColumnWidthsEmu.Sum()).Should().BeLessThanOrEqualTo(p.SlideSizeCxEmu);
+    }
+
+    [Fact]
+    public void Revert_TableShape_RestoresOriginalColumnWidthsAndRowHeights()
+    {
+        var p = MakePresentation();
+        var tableShape = MakeTableShape(501,
+            offX: 500_000L, offY: 500_000L, extCx: 10_000_000L, extCy: 1_000_000L,
+            colWidths: new long[] { 4_000_000L, 6_000_000L });
+        p.Slides[0].Shapes.Add(tableShape);
+
+        var cmd = new SetSlideSizeCommand(6_096_000L, 6_858_000L);
+        cmd.Apply(p);
+        cmd.Revert(p);
+
+        var table = tableShape.Table!;
+        table.ColumnWidthsEmu.Should().Equal(4_000_000L, 6_000_000L);
+        table.Rows[0].HeightEmu.Should().Be(1_000_000L);
+    }
+
+    // ── Sibling / no-regression: a shape with its OWN explicit geometry (the pre-existing,
+    // already-correct path) must keep working exactly as before these two fixes. ──────────────
+
+    [Fact]
+    public void Apply_ShapeWithOwnExplicitGeometry_StillScaledDirectlyNotThroughPlaceholderPath()
+    {
+        var p = MakePresentation();
+        var layout = MakeLayoutWithTitlePlaceholder(
+            offX: 100_000L, offY: 100_000L, extCx: 200_000L, extCy: 300_000L, masterId: "master1");
+        p.Layouts.Add(layout);
+        p.Masters.Add(new SlideMaster { Id = "master1" });
+
+        var slide = p.Slides[0];
+        slide.LayoutId = layout.Id;
+
+        // This placeholder shape carries its OWN explicit geometry (non-zero extent) -- the
+        // pre-existing, already-correct path that must be untouched by the F1 fix.
+        var ownGeometryShape = new SlideShape
+        {
+            Id = 600,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            OffsetXEmu = 11_000_000L,
+            OffsetYEmu = 1_000_000L,
+            ExtentCxEmu = 1_000_000L,
+            ExtentCyEmu = 500_000L,
+        };
+        slide.Shapes.Add(ownGeometryShape);
+
+        new SetSlideSizeCommand(9_144_000L, 6_858_000L).Apply(p);
+
+        // Resolved anchor must come from the shape's own (scaled) geometry, not the layout's.
+        var resolved = FreeP.App.Compositor.PlaceholderResolver.ResolveAnchor(ownGeometryShape, slide, p);
+        resolved.OffsetXEmu.Should().Be((long)Math.Round(11_000_000L * 0.75));
+        resolved.ExtentCxEmu.Should().Be((long)Math.Round(1_000_000L * 0.75));
+    }
 }

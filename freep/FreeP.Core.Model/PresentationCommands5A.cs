@@ -206,6 +206,10 @@ public sealed class SetSlideSizeCommand : IPresentationCommand
     private List<(SlideShape Shape, long OldOffX, long OldOffY, long OldExtCx, long OldExtCy,
         long? OldChOffX, long? OldChOffY, long? OldChExtCx, long? OldChExtCy)>? _scaled;
 
+    // Per-table snapshot of column widths / row heights, captured alongside the shape's own
+    // Offset/Extent in _scaled whenever a scaled shape carries a Table (see ScaleShapeTree).
+    private List<(TableShape Table, List<long> OldColumnWidthsEmu, List<long> OldRowHeightsEmu)>? _scaledTables;
+
     public SetSlideSizeCommand(long cxEmu, long cyEmu)
     {
         _newCx = cxEmu;
@@ -225,9 +229,24 @@ public sealed class SetSlideSizeCommand : IPresentationCommand
             if (scale > 0 && scale != 1.0)
             {
                 _scaled = new List<(SlideShape, long, long, long, long, long?, long?, long?, long?)>();
+                _scaledTables = new List<(TableShape, List<long>, List<long>)>();
+
                 foreach (var slide in p.Slides)
                     foreach (var shape in slide.Shapes)
-                        ScaleShapeTree(shape, scale, _scaled);
+                        ScaleShapeTree(shape, scale, _scaled, _scaledTables);
+
+                // Placeholder shapes very commonly omit their own xfrm and inherit position/size
+                // from the slide layout (or, failing that, the slide master) -- see
+                // PlaceholderResolver.ResolveAnchor. That inherited geometry must scale with the
+                // canvas too, or every placeholder using it (title/body boxes on ordinary slides)
+                // keeps its old absolute EMU coordinates and overflows the new, narrower canvas.
+                foreach (var layout in p.Layouts)
+                    foreach (var placeholder in layout.Placeholders)
+                        ScaleShapeTree(placeholder, scale, _scaled, _scaledTables);
+
+                foreach (var master in p.Masters)
+                    foreach (var placeholder in master.Placeholders)
+                        ScaleShapeTree(placeholder, scale, _scaled, _scaledTables);
             }
         }
 
@@ -255,6 +274,19 @@ public sealed class SetSlideSizeCommand : IPresentationCommand
             }
             _scaled = null;
         }
+
+        if (_scaledTables is not null)
+        {
+            foreach (var t in _scaledTables)
+            {
+                t.Table.ColumnWidthsEmu.Clear();
+                t.Table.ColumnWidthsEmu.AddRange(t.OldColumnWidthsEmu);
+
+                for (int i = 0; i < t.Table.Rows.Count && i < t.OldRowHeightsEmu.Count; i++)
+                    t.Table.Rows[i].HeightEmu = t.OldRowHeightsEmu[i];
+            }
+            _scaledTables = null;
+        }
     }
 
     /// <summary>
@@ -271,7 +303,8 @@ public sealed class SetSlideSizeCommand : IPresentationCommand
         SlideShape shape,
         double scale,
         List<(SlideShape Shape, long OldOffX, long OldOffY, long OldExtCx, long OldExtCy,
-            long? OldChOffX, long? OldChOffY, long? OldChExtCx, long? OldChExtCy)> saved)
+            long? OldChOffX, long? OldChOffY, long? OldChExtCx, long? OldChExtCy)> saved,
+        List<(TableShape Table, List<long> OldColumnWidthsEmu, List<long> OldRowHeightsEmu)> savedTables)
     {
         saved.Add((shape, shape.OffsetXEmu, shape.OffsetYEmu, shape.ExtentCxEmu, shape.ExtentCyEmu,
             shape.ChildOffsetXEmu, shape.ChildOffsetYEmu, shape.ChildExtentCxEmu, shape.ChildExtentCyEmu));
@@ -286,8 +319,25 @@ public sealed class SetSlideSizeCommand : IPresentationCommand
         if (shape.ChildExtentCxEmu is { } chExtCx) shape.ChildExtentCxEmu = (long)Math.Round(chExtCx * scale);
         if (shape.ChildExtentCyEmu is { } chExtCy) shape.ChildExtentCyEmu = (long)Math.Round(chExtCy * scale);
 
+        // SlideCompositor.ComposeTable ignores the shape's own ExtentCx/CyEmu for layout purposes
+        // and instead derives the table's actual drawn width/height purely from
+        // TableShape.ColumnWidthsEmu and TableRow.HeightEmu -- so a table's outer frame scaling
+        // above (which only moves/resizes ops.DrawOp.Shape's bounding box) has no effect on how
+        // the table itself renders/exports unless these are scaled too.
+        if (shape.Table is { } table)
+        {
+            savedTables.Add((table, new List<long>(table.ColumnWidthsEmu),
+                table.Rows.Select(r => r.HeightEmu).ToList()));
+
+            for (int i = 0; i < table.ColumnWidthsEmu.Count; i++)
+                table.ColumnWidthsEmu[i] = (long)Math.Round(table.ColumnWidthsEmu[i] * scale);
+
+            foreach (var row in table.Rows)
+                row.HeightEmu = (long)Math.Round(row.HeightEmu * scale);
+        }
+
         foreach (var child in shape.Children)
-            ScaleShapeTree(child, scale, saved);
+            ScaleShapeTree(child, scale, saved, savedTables);
     }
 }
 

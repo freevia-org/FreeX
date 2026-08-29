@@ -381,6 +381,63 @@ public sealed class DocumentViewProtectionTests
         formOnlyPolicy.Should().BeTrue();
     }
 
+    // sweep106/shared-command-enablement F1: SetAlignment used to mutate the caret paragraph's
+    // alignment with no IsEditable/IsEditingLocked check at all, unlike every sibling paragraph
+    // command (SetSpaceBefore, SetIndents, IncreaseIndent, DecreaseIndent) a few lines above it in
+    // DocumentView.cs -- so Restrict Editing (Comments Only here) silently failed to block it while
+    // correctly blocking ToggleBold in the identical protected paragraph.
+    [Fact]
+    public async Task CommentsOnly_blocks_alignment_but_still_blocks_bold_in_the_same_paragraph()
+    {
+        var alignmentBeforeProtection = TextAlignment.Left;
+        var alignmentAfterBlockedSetAlignment = TextAlignment.Left;
+        var boldAfterBlockedToggle = true;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = BuildView("Hello");
+            alignmentBeforeProtection = ((Paragraph)view.Document.Blocks[0]).Formatting.Alignment;
+            view.SetSelectionRangePublic(0, 0, 0, 5);
+
+            view.SetProtection(ProtectionMode.CommentsOnly);
+
+            view.SetAlignment(TextAlignment.Center);
+            alignmentAfterBlockedSetAlignment = ((Paragraph)view.Document.Blocks[0]).Formatting.Alignment;
+
+            view.ToggleBold();
+            boldAfterBlockedToggle = ((Paragraph)view.Document.Blocks[0]).Runs.Count > 0
+                && ((Paragraph)view.Document.Blocks[0]).Runs[0].Formatting.Bold;
+        });
+
+        if (!ran)
+            return;
+
+        alignmentBeforeProtection.Should().Be(TextAlignment.Left);
+        alignmentAfterBlockedSetAlignment.Should().Be(TextAlignment.Left,
+            "Comments Only protection must block SetAlignment exactly like every other paragraph command");
+        boldAfterBlockedToggle.Should().BeFalse("ToggleBold was already correctly blocked -- confirms the same protection is active");
+    }
+
+    // Sibling no-regression: an UNPROTECTED document must still let SetAlignment mutate the model,
+    // so the new IsEditable guard does not silently disable ordinary alignment editing.
+    [Fact]
+    public async Task Unprotected_document_still_allows_SetAlignment()
+    {
+        var alignmentAfterSet = TextAlignment.Left;
+
+        var ran = await OnUiThread(() =>
+        {
+            var view = BuildView("Hello");
+            view.SetAlignment(TextAlignment.Center);
+            alignmentAfterSet = ((Paragraph)view.Document.Blocks[0]).Formatting.Alignment;
+        });
+
+        if (!ran)
+            return;
+
+        alignmentAfterSet.Should().Be(TextAlignment.Center);
+    }
+
     private static DocumentView BuildView(string firstParagraphText)
     {
         var doc = TextDocument.CreateEmpty();

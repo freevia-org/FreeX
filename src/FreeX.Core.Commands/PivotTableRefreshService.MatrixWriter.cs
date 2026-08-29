@@ -172,20 +172,27 @@ public static partial class PivotTableRefreshService
     private static IReadOnlyList<IReadOnlyList<ScalarValue>> RowsForSlot(
         ColumnSlot slot,
         PivotColumnRowMap rowsByColumnKey,
-        IReadOnlyList<PivotFieldModel> columnFields)
+        IReadOnlyList<PivotFieldModel> columnFields,
+        IReadOnlyList<PivotKey> visibleColumnKeys)
     {
         if (slot is ColumnSlot.Leaf leaf)
             return RowsForColumnKey(rowsByColumnKey, leaf.Key);
 
         if (slot is ColumnSlot.Subtotal sub)
         {
-            // Collect all rows whose column key starts with the subtotal prefix.
+            // Collect all rows whose column key starts with the subtotal prefix AND whose
+            // full column key is still visible (i.e. survived any Label/Value filter on a
+            // nested column field). Without the visibility check, a subtotal/grand-total slot
+            // would keep summing rows that belong to an inner column item the filter just
+            // hid, even though that item no longer appears anywhere on the sheet.
             var prefixLen = sub.PrefixKey.Values.Count;
+            var visibleKeySet = new HashSet<PivotKey>(visibleColumnKeys);
             var result = new List<IReadOnlyList<ScalarValue>>();
             foreach (var (key, rows) in rowsByColumnKey.RowsByKey)
             {
                 if (key.Values.Count >= prefixLen &&
-                    new PivotKey(key.Values.Take(prefixLen).ToArray()).Equals(sub.PrefixKey))
+                    new PivotKey(key.Values.Take(prefixLen).ToArray()).Equals(sub.PrefixKey) &&
+                    visibleKeySet.Contains(key))
                 {
                     result.AddRange(rows);
                 }
@@ -472,6 +479,35 @@ public static partial class PivotTableRefreshService
             {
                 SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(string.Join(" ", rowGroup.Key.Values)));
             }
+            else if (pivotTable.ReportLayout == PivotReportLayout.Outline && rowFields.Count > 1)
+            {
+                // Excel's Outline form gives every outer row field its own header row, in that
+                // field's own column, with only the innermost field sharing the data row --
+                // unlike Tabular form, where every row field's value sits on the same row as
+                // the data. Emit a header row for each level (outermost first) whose value
+                // changed since the previous row group, then the leaf level on the data row.
+                var leafIndex = rowGroup.Key.Values.Count - 1;
+                var firstChangedLevel = 0;
+                if (previousRowKey is not null)
+                {
+                    firstChangedLevel = leafIndex; // default: only the leaf item changed
+                    for (var level = 0; level < leafIndex; level++)
+                    {
+                        if (previousRowKey.Values.Count <= level ||
+                            !string.Equals(rowGroup.Key.Values[level], previousRowKey.Values[level], StringComparison.CurrentCultureIgnoreCase))
+                        {
+                            firstChangedLevel = level;
+                            break;
+                        }
+                    }
+                }
+                for (var level = firstChangedLevel; level < leafIndex; level++)
+                {
+                    SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col + (uint)level), new TextValue(rowGroup.Key.Values[level]));
+                    outputRow++;
+                }
+                SetPivotCell(sheet, new CellAddress(sheet.Id, outputRow, start.Col + (uint)leafIndex), new TextValue(rowGroup.Key.Values[leafIndex]));
+            }
             else
             {
                 for (var index = 0; index < rowGroup.Key.Values.Count; index++)
@@ -521,7 +557,7 @@ public static partial class PivotTableRefreshService
                 }
 
                 // Rows in this row group that fall under this slot.
-                var columnRows = RowsForSlot(slot, rowGroupRowsByColumnKey, columnFields);
+                var columnRows = RowsForSlot(slot, rowGroupRowsByColumnKey, columnFields, columnKeys);
                 // Column-total rows across all row groups for this slot.
                 var columnTotalRows = ColumnTotalRowsForSlot(slot, visibleRowsByColumnKey, columnFields);
 
@@ -530,7 +566,7 @@ public static partial class PivotTableRefreshService
                 if (slot is ColumnSlot.Leaf leaf)
                     parentRowRows = RowsForColumnKey(parentRowPrefixRowsByColumnKey, leaf.Key);
                 else
-                    parentRowRows = RowsForSlot(slot, BuildColumnRowsByKey(parentRowPrefixRows, columnFields), columnFields);
+                    parentRowRows = RowsForSlot(slot, BuildColumnRowsByKey(parentRowPrefixRows, columnFields), columnFields, columnKeys);
 
                 // Parent column denominator: rows in this row group matching parent column prefix.
                 // For a Subtotal slot the parent column is one level up from the prefix.
@@ -578,8 +614,7 @@ public static partial class PivotTableRefreshService
             outputRow++;
             if (pivotTable.BlankLineAfterItems &&
                 !writeBottomSubtotals &&
-                rowFields.Count > 1 &&
-                IsEndOfOuterItem(rowGroups, rowGroup, rowFields.Count))
+                (rowFields.Count == 1 || IsEndOfOuterItem(rowGroups, rowGroup, rowFields.Count)))
             {
                 outputRow++;
             }
@@ -650,7 +685,7 @@ public static partial class PivotTableRefreshService
                 }
 
                 // Use rows from ALL retained rows (not filtered by row group) for the grand-total row.
-                var columnRows = RowsForSlot(slot, rowsByColumnKey, columnFields);
+                var columnRows = RowsForSlot(slot, rowsByColumnKey, columnFields, columnKeys);
                 foreach (var dataField in pivotTable.DataFields)
                 {
                     SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
@@ -765,7 +800,7 @@ public static partial class PivotTableRefreshService
                 continue;
             }
 
-            var subtotalColumnRows = RowsForSlot(slot, subtotalRowsByColumnKey, columnFields);
+            var subtotalColumnRows = RowsForSlot(slot, subtotalRowsByColumnKey, columnFields, leafColumnKeys);
             var columnTotalRows = ColumnTotalRowsForSlot(slot, visibleRowsByColumnKey, columnFields);
 
             // Parent row denominator restricted to this slot
@@ -775,7 +810,7 @@ public static partial class PivotTableRefreshService
                 if (slot is ColumnSlot.Leaf leafSlot)
                     parentRowColRows = RowsForColumnKey(parentRowPrefixRowsByColumnKey, leafSlot.Key);
                 else
-                    parentRowColRows = RowsForSlot(slot, parentRowPrefixRowsByColumnKey, columnFields);
+                    parentRowColRows = RowsForSlot(slot, parentRowPrefixRowsByColumnKey, columnFields, leafColumnKeys);
             }
 
             // Parent column denominator: subtotal rows restricted to parent column prefix.
