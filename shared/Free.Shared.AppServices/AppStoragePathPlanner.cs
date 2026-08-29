@@ -47,7 +47,11 @@ public static class AppStoragePathPlanner
         }
         catch
         {
-            return $"%LOCALAPPDATA%\\{ProductDirectoryName}";
+            // r169 follow-up: every sister app resolves its data directory through
+            // PlatformApplicationDataPathProvider.Instance (SpecialFolder.ApplicationData), so when
+            // the provider fails the honest placeholder is %APPDATA%. This said %LOCALAPPDATA%,
+            // which no app has stored options under.
+            return $"%APPDATA%\\{ProductDirectoryName}";
         }
     }
 
@@ -82,7 +86,8 @@ public static class AppStoragePathPlanner
         }
         catch
         {
-            return $"%LOCALAPPDATA%\\{ProductDirectoryName}";
+            // See the sibling fallback above: %APPDATA% is where these apps actually store data.
+            return $"%APPDATA%\\{ProductDirectoryName}";
         }
     }
 

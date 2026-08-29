@@ -59,7 +59,7 @@ public sealed class AppStoragePathPlannerTests
         var path = AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(
             new ThrowingApplicationDataPathProvider());
 
-        path.Should().Be(@"%LOCALAPPDATA%\FreeX");
+        path.Should().Be(@"%APPDATA%\FreeX");
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public sealed class AppStoragePathPlannerTests
     {
         var path = AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(new ThrowingApplicationDataPathProvider());
 
-        path.Should().Be(@"%LOCALAPPDATA%\FreeX");
+        path.Should().Be(@"%APPDATA%\FreeX");
     }
 
     [Fact]

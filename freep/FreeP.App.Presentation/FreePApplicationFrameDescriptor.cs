@@ -17,4 +17,15 @@ public static class FreePApplicationFrameDescriptor
 
     public static string ResolveDataFolderLabel(IApplicationDataPathProvider pathProvider) =>
         Descriptor.ResolveDataFolderLabel(pathProvider);
+
+    // r169 follow-up: the store-path overloads FreeW already exposed. FreeP's shells were calling the
+    // parameterless one, which defaults to %LOCALAPPDATA% while FreeP's options live under %APPDATA%,
+    // so the status bar and backstage named a folder the app never writes to.
+    public static string ResolveDataFolderLabel(string optionsStorePath) =>
+        Descriptor.ResolveDataFolderLabel(optionsStorePath);
+
+    public static string ResolveDataFolderLabel(
+        string optionsStorePath,
+        IApplicationDataPathProvider fallbackPathProvider) =>
+        Descriptor.ResolveDataFolderLabel(optionsStorePath, fallbackPathProvider);
 }

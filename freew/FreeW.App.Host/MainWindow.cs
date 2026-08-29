@@ -742,7 +742,10 @@ public sealed partial class MainWindow : Window
             GetFileFormats: () => _file.SaveFormats,
             GetPageSettings: () => CurrentBackstageDocument().Page,
             GetCurrentOptions: () => _options,
-            GetDataFolder: FreeWApplicationFrameDescriptor.ResolveDataFolderLabel,
+            // r169 follow-up: derive the folder from the live store, as FreeW.App.Avalonia does. The
+            // parameterless overload defaults to %LOCALAPPDATA%, but FreeW's options live under
+            // %APPDATA%, so backstage showed a folder this app never writes to.
+            GetDataFolder: () => FreeWApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath),
             GetDocument: CurrentBackstageDocument,
             GetIsDirty: () => _file.IsDirty,
             NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
@@ -1271,7 +1274,7 @@ public sealed partial class MainWindow : Window
         dataFolderPanel.Children.Add(SisterAppStatusBarChrome.CreateSeparator());
         _dataFolderText = SisterAppStatusBarChrome.CreateInfoText();
         _dataFolderText.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(
-            FreeWApplicationFrameDescriptor.ResolveDataFolderLabel());
+            FreeWApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath));
         _dataFolderText.ToolTip = _dataFolderText.Text;
         dataFolderPanel.Children.Add(_dataFolderText);
         _dataFolderItem = dataFolderPanel;
