@@ -36,6 +36,18 @@ public sealed class DialogCaptureAdapterParitySourceTests
         program.Should().Contain("FreeWDialogPopulationKind.ManualHyphenation");
     }
 
+    [Fact]
+    public void Wpf_static_prompt_capture_retries_until_visible_and_has_a_bounded_escape()
+    {
+        var program = ReadWorkspaceSource("freew", "tools", "FreeW.DialogVisualHarness.Wpf", "Program.cs");
+
+        program.Should().Contain("var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);");
+        program.Should().Contain("var timer = new System.Windows.Threading.DispatcherTimer(");
+        program.Should().Contain("timer.Tick += (_, _) => PollForDialog();");
+        program.Should().Contain("if (DateTime.UtcNow < deadline)");
+        program.Should().Contain("foreach (var window in Application.Current.Windows.OfType<Window>().Where(window => window != owner).ToArray())");
+    }
+
     private static string ReadWorkspaceSource(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");

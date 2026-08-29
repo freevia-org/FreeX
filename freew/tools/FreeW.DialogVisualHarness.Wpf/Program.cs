@@ -125,28 +125,65 @@ static bool TryCaptureStaticPrompt(Scenario scenario, string output, Window owne
     var frame = new System.Windows.Threading.DispatcherFrame();
     var captured = false;
     Capture? result = null;
+    var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+    var timer = new System.Windows.Threading.DispatcherTimer(
+        System.Windows.Threading.DispatcherPriority.Background,
+        owner.Dispatcher)
+    {
+        Interval = TimeSpan.FromMilliseconds(50),
+    };
+
+    void PollForDialog()
+    {
+        var dialog = Application.Current.Windows
+            .OfType<Window>()
+            .FirstOrDefault(window => window != owner && window.IsVisible);
+        if (dialog is null)
+        {
+            if (DateTime.UtcNow < deadline)
+                return;
+
+            // A failed static prompt must not strand the harness inside a nested WPF modal loop.
+            timer.Stop();
+            foreach (var window in Application.Current.Windows.OfType<Window>().Where(window => window != owner).ToArray())
+                window.Close();
+            frame.Continue = false;
+            return;
+        }
+
+        try
+        {
+            dialog.UpdateLayout();
+            if (scenario.RouteId == "multilevel-list" ||
+                FreeWDialogEvidenceCatalog.GetRequired(scenario.RouteId).Fixture is
+                FreeWDialogFixtureKind.DefaultRunFormatting or
+                FreeWDialogFixtureKind.DefaultParagraphFormatting or
+                FreeWDialogFixtureKind.StyleCatalog)
+            {
+                Populate(dialog, scenario);
+                dialog.UpdateLayout();
+            }
+            captured = CaptureRenderedWindow(scenario, output, dialog, out result);
+        }
+        finally
+        {
+            timer.Stop();
+            dialog.Close();
+            frame.Continue = false;
+        }
+    }
+
+    timer.Tick += (_, _) => PollForDialog();
+    timer.Start();
     owner.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
     {
         try { WpfDialogRouteFactory.InvokeStaticPrompt(scenario.RouteId, scenario.State, owner); }
         catch (Exception ex) { Console.Error.WriteLine($"wpf {scenario.Id}: {ex}"); }
-        finally { frame.Continue = false; }
-    }));
-    owner.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
-    {
-        var dialog = Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window != owner && window.IsVisible);
-        if (dialog is null) return;
-        dialog.UpdateLayout();
-        if (scenario.RouteId == "multilevel-list" ||
-            FreeWDialogEvidenceCatalog.GetRequired(scenario.RouteId).Fixture is
-            FreeWDialogFixtureKind.DefaultRunFormatting or
-            FreeWDialogFixtureKind.DefaultParagraphFormatting or
-            FreeWDialogFixtureKind.StyleCatalog)
+        finally
         {
-            Populate(dialog, scenario);
-            dialog.UpdateLayout();
+            timer.Stop();
+            frame.Continue = false;
         }
-        captured = CaptureRenderedWindow(scenario, output, dialog, out result);
-        dialog.Close();
     }));
     System.Windows.Threading.Dispatcher.PushFrame(frame);
     capture = result!;
