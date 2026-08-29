@@ -295,6 +295,9 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("group: app-tester-release-${{ inputs.release_version }}");
         workflow.Should().Contain("Full app releases must be dispatched from refs/heads/main.");
         workflow.Should().Contain("Later main commits do not invalidate this run.");
+        workflow.Should().Contain("name: Validate version and reject conflicting immutable tags");
+        workflow.Should().Contain("release_version must be a filesystem-safe semantic version such as 0.8.182.");
+        workflow.Should().Contain("choose a new version before running full release tests");
         workflow.Should().NotContain("codex/full-release-");
         workflow.Should().Contain("name: Verify immutable release candidate");
         workflow.Should().Contain("actions: read");
@@ -337,7 +340,8 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("sha256sum -c {{APP}}-v{{VERSION}}-linux-<architecture>.zip.sha256");
         workflow.Should().Contain("shasum -a 256 -c {{APP}}-v{{VERSION}}-osx-<architecture>.zip.sha256");
         workflow.Should().Contain("Replace(\"{{SHA}}\", $env:GITHUB_SHA)");
-        workflow.Should().Contain("$notes | gh release edit $tag --title $title --notes-file -");
+        workflow.Should().Contain("$notes | gh release edit $tag --title $title --notes-file - \"--prerelease=$prerelease\"");
+        Regex.Matches(workflow, "gh release edit .*--prerelease=").Count.Should().Be(2);
         workflow.Should().Contain("$notes | gh release create $tag @assets --target $env:GITHUB_SHA --title $title --notes-file - @releaseArgs");
         workflow.Should().NotContain("## Assets");
 
