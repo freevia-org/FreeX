@@ -997,9 +997,19 @@ public static class FreePRibbon
         tab.Group("customize", FreePRibbonText.CustomizeGroup.Label, FreePRibbonText.CustomizeGroup.KeyTip, 100, group =>
         {
             group.Sizing(RibbonGroupSizing.OfficeAdaptive);
-            group.Large("freep.slide-size-16x9", FreePRibbonText.SlideSizeWidescreenCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeWidescreenCommand.KeyTip);
-            group.Large("freep.slide-size-4x3", FreePRibbonText.SlideSizeStandardCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeStandardCommand.KeyTip);
-            group.Medium("freep.slide-size-custom", FreePRibbonText.SlideSizeCustomCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeCustomCommand.KeyTip);
+            // PowerPoint keeps Slide Size as one compact menu at narrow widths. The existing
+            // commands remain individually reachable inside that menu rather than consuming
+            // three wide tiles before the background options can adapt.
+            group.Dropdown(
+                "freep.slide-size-custom",
+                FreePRibbonText.SlideSizeCustomCommand.Label,
+                BuildSlideSizeMenu(),
+                dropdown => dropdown with
+                {
+                    PreferredLayout = RibbonCommandLayoutKind.Medium,
+                    Icon = new RibbonCommandIcon(RibbonCommandIconKind.Page),
+                    KeyTip = FreePRibbonText.SlideSizeCustomCommand.KeyTip,
+                });
             group.Medium("freep.background-white", FreePRibbonText.BackgroundWhiteCommand.Label, RibbonCommandIconKind.Fill, FreePRibbonText.BackgroundWhiteCommand.KeyTip);
             group.Medium("freep.background-black", FreePRibbonText.BackgroundBlackCommand.Label, RibbonCommandIconKind.Fill, FreePRibbonText.BackgroundBlackCommand.KeyTip);
             group.Medium("freep.background-blue", FreePRibbonText.BackgroundBlueCommand.Label, RibbonCommandIconKind.Fill, FreePRibbonText.BackgroundBlueCommand.KeyTip);
@@ -1015,6 +1025,15 @@ public static class FreePRibbon
             new RibbonMenuItem(FreePRibbonText.ThemeFacetCommand.Label, new RibbonCommandId("freep.theme-colors.facet"), KeyTip: FreePRibbonText.ThemeFacetCommand.KeyTip),
             new RibbonMenuItem(FreePRibbonText.ThemeIonCommand.Label, new RibbonCommandId("freep.theme-colors.ion"), KeyTip: FreePRibbonText.ThemeIonCommand.KeyTip),
             new RibbonMenuItem(FreePRibbonText.ThemeSliceCommand.Label, new RibbonCommandId("freep.theme-colors.slice"), KeyTip: FreePRibbonText.ThemeSliceCommand.KeyTip),
+        ]);
+
+    private static RibbonMenu BuildSlideSizeMenu() =>
+        new(
+        [
+            new RibbonMenuItem(FreePRibbonText.SlideSizeWidescreenCommand.Label, new RibbonCommandId("freep.slide-size-16x9"), KeyTip: FreePRibbonText.SlideSizeWidescreenCommand.KeyTip),
+            new RibbonMenuItem(FreePRibbonText.SlideSizeStandardCommand.Label, new RibbonCommandId("freep.slide-size-4x3"), KeyTip: FreePRibbonText.SlideSizeStandardCommand.KeyTip),
+            RibbonMenuItem.Separator(),
+            new RibbonMenuItem(FreePRibbonText.SlideSizeCustomCommand.Label, new RibbonCommandId("freep.slide-size-custom"), KeyTip: FreePRibbonText.SlideSizeCustomCommand.KeyTip),
         ]);
 
     // PowerPoint exposes these editing controls only while a SmartArt graphic is selected.

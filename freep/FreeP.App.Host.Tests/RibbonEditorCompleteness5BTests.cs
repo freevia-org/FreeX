@@ -336,14 +336,17 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
-    public void CustomizeGroup_ContainsSlideSizeIds()
+    public void CustomizeGroup_ContainsCompactSlideSizeMenu()
     {
         var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "design");
         var group = tab.Groups.Single(g => g.Id == "customize");
-        var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
-        Assert.Contains("freep.slide-size-16x9", ids);
-        Assert.Contains("freep.slide-size-4x3",  ids);
+        var slideSize = Assert.IsType<RibbonDropdown>(group.Controls.First(control =>
+            control.CommandId.Value == "freep.slide-size-custom"));
+        slideSize.Menu.Items.Where(item => item.Kind != RibbonMenuItemKind.Separator).Select(item => item.CommandId!.Value).Should().Equal(
+            "freep.slide-size-16x9",
+            "freep.slide-size-4x3",
+            "freep.slide-size-custom");
     }
 
     // ── Ribbon definition: Insert tab additions ──────────────────────────────────

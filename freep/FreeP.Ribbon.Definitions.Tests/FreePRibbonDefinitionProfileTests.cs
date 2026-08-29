@@ -627,10 +627,10 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(avalonia, "freep.theme.ion").KeyTip!,
                 RequiredControl(avalonia, "freep.theme.slice").Label,
                 RequiredControl(avalonia, "freep.theme.slice").KeyTip!,
-                RequiredControl(avalonia, "freep.slide-size-16x9").Label,
-                RequiredControl(avalonia, "freep.slide-size-16x9").KeyTip!,
-                RequiredControl(avalonia, "freep.slide-size-4x3").Label,
-                RequiredControl(avalonia, "freep.slide-size-4x3").KeyTip!,
+                RequiredMenuItem(avalonia, "freep.slide-size-16x9").Header,
+                RequiredMenuItem(avalonia, "freep.slide-size-16x9").KeyTip!,
+                RequiredMenuItem(avalonia, "freep.slide-size-4x3").Header,
+                RequiredMenuItem(avalonia, "freep.slide-size-4x3").KeyTip!,
                 RequiredControl(avalonia, "freep.slide-size-custom").Label,
                 RequiredControl(avalonia, "freep.slide-size-custom").KeyTip!,
             };
@@ -1781,6 +1781,49 @@ public sealed class FreePRibbonDefinitionProfileTests
         }
 
         throw new InvalidOperationException($"Could not find ribbon control '{commandId}'.");
+    }
+
+    private static RibbonMenuItem RequiredMenuItem(RibbonDefinition definition, string commandId)
+    {
+        foreach (var tab in definition.Tabs)
+        {
+            foreach (var group in tab.Groups)
+            {
+                foreach (var control in group.Controls)
+                {
+                    var menu = control switch
+                    {
+                        RibbonSplitButton splitButton => splitButton.Menu,
+                        RibbonDropdown dropdown => dropdown.Menu,
+                        _ => null,
+                    };
+
+                    if (menu is null)
+                        continue;
+
+                    var item = FindMenuItem(menu.Items, commandId);
+                    if (item is not null)
+                        return item;
+                }
+            }
+        }
+
+        throw new InvalidOperationException($"Could not find ribbon menu item '{commandId}'.");
+    }
+
+    private static RibbonMenuItem? FindMenuItem(IEnumerable<RibbonMenuItem> items, string commandId)
+    {
+        foreach (var item in items)
+        {
+            if (string.Equals(item.CommandId?.Value, commandId, StringComparison.Ordinal))
+                return item;
+
+            var child = FindMenuItem(item.Children, commandId);
+            if (child is not null)
+                return child;
+        }
+
+        return null;
     }
 
     private static RibbonComboBox RequiredCombo(RibbonDefinition definition, string commandId) =>
