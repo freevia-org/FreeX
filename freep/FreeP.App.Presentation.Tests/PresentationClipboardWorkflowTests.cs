@@ -125,6 +125,84 @@ public sealed class PresentationClipboardWorkflowTests
         ExtractText(slide.Shapes[^1]).Should().Be("Formatted Word text");
     }
 
+    /// <summary>
+    /// freep-tables F1: FreeX's Ctrl+C on a cell range places TSV Text plus a rendered bitmap on
+    /// the OS clipboard, but never RTF or a XamlPackage. Before the fix, Decide checked hasImage
+    /// before any text-based signal, so this exact combination collapsed to a flat, non-editable
+    /// picture of the cells and silently discarded the tabular data. It must now paste as a real
+    /// editable table, the same as the RichText/XamlPackage-alongside-image cases already do.
+    /// </summary>
+    [Fact]
+    public void ApplyPaste_TabularTextAlongsideImage_CreatesTableNotPicture()
+    {
+        var (editor, slide) = CreateEditor();
+        var content = new PresentationClipboardContent(
+            PngBytes: [10, 20, 30],
+            Text: "Header1\tHeader2\nA\tB");
+
+        var source = PresentationClipboardWorkflow.ApplyPaste(
+            PresentationClipboardWorkflow.PreparePaste(editor),
+            content,
+            ownCopyIsCurrent: false);
+
+        source.Should().Be(PresentationClipboardPasteSource.Text,
+            "F1: tab-delimited text must win over an image flavor riding alongside it");
+        slide.Shapes.Should().HaveCount(3);
+        var pasted = slide.Shapes[^1];
+        pasted.Kind.Should().Be(SlideShapeKind.Table,
+            "F1: a tab-delimited paste must become a real editable table, not a flat picture");
+        pasted.Table.Should().NotBeNull();
+        pasted.Table!.Rows.Should().HaveCount(2);
+        pasted.Table.Rows[0].Cells.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// r167 remediation. The F1 fix let ANY tab-containing text become a table, so pasting
+    /// tab-indented code or a single "Name{tab}Value" line onto a slide silently consumed the tabs
+    /// as column delimiters and restructured what the user pasted. Tabs alone do not mean tabular;
+    /// only a payload that would otherwise be swallowed by its own image flavour needs that branch.
+    /// </summary>
+    [Fact]
+    public void ApplyPaste_TabIndentedTextWithNoImage_StaysATextBox()
+    {
+        var (editor, slide) = CreateEditor();
+        var snippet = "\tif (x)\n\treturn 1;";
+        var content = new PresentationClipboardContent(Text: snippet);
+
+        PresentationClipboardWorkflow.ApplyPaste(
+            PresentationClipboardWorkflow.PreparePaste(editor),
+            content,
+            ownCopyIsCurrent: false);
+
+        var pasted = slide.Shapes[^1];
+        pasted.Kind.Should().NotBe(SlideShapeKind.Table,
+            "tab-indented prose or code pasted on its own is text, not a table");
+    }
+
+    /// <summary>
+    /// Sibling no-regression for F1: plain, non-tabular text alongside an image must keep losing
+    /// to the image exactly as before (see SharedPlanner_ImageAndText_ImageWins in
+    /// OsClipboardServiceTests and ApplyPaste_MalformedNativeSelectionFallsBackToImage above) --
+    /// the new tabular-text tier must not widen to swallow ordinary text/image combinations.
+    /// </summary>
+    [Fact]
+    public void ApplyPaste_PlainTextAlongsideImage_StillPastesImage()
+    {
+        var (editor, slide) = CreateEditor();
+        var content = new PresentationClipboardContent(
+            PngBytes: [10, 20, 30],
+            Text: "just a caption, no tabs");
+
+        var source = PresentationClipboardWorkflow.ApplyPaste(
+            PresentationClipboardWorkflow.PreparePaste(editor),
+            content,
+            ownCopyIsCurrent: false);
+
+        source.Should().Be(PresentationClipboardPasteSource.Image,
+            "non-tabular text must not preempt the image, unchanged from prior behavior");
+        slide.Shapes[^1].Kind.Should().Be(SlideShapeKind.Picture);
+    }
+
     [Fact]
     public void ApplyPaste_PreferInternalIgnoresAvailableSystemImage()
     {

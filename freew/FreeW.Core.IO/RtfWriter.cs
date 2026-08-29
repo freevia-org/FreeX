@@ -62,6 +62,20 @@ public static class RtfWriter
         // \uc1: every \uN Unicode escape is followed by exactly one ASCII fallback byte.
         sb.Append(@"\uc1");
 
+        // Section column count/spacing (round 167, F2): only emitted when the document is actually
+        // multi-column, so a single-column document's RTF bytes are unchanged. Without this, a \column
+        // break run (below) still round-trips, but the reader has nothing to restore
+        // PageSettings.ColumnCount from and defaults it back to 1 -- so on reload the break run lands in a
+        // single-column section and silently becomes a page break instead of a column break (WPF's
+        // Block.BreakColumnBefore falls back to a page break when ColumnCount==1). Multi-section documents
+        // (Paragraph.SectionBreak) aren't modelled by this writer at all yet -- this covers only
+        // document.Page, the same single implicit section the rest of RtfWriter already assumes.
+        if (document.Page.ColumnCount > 1)
+        {
+            sb.Append(@"\cols").Append(document.Page.ColumnCount.ToString(CultureInfo.InvariantCulture));
+            AppendTwipControl(sb, @"\colsx", document.Page.ColumnSpacingPt);
+        }
+
         foreach (var block in document.Blocks)
             WriteBlock(sb, block, fonts, colors, listTable);
 

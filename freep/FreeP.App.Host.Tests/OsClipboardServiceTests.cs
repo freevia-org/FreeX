@@ -314,6 +314,52 @@ public sealed class OsClipboardServiceTests
             "F2: XAML package must win over an image flavor riding alongside it");
     }
 
+    /// <summary>
+    /// freep-tables F1: FreeX's Ctrl+C on a cell range places TSV Text alongside a rendered
+    /// bitmap on the OS clipboard, but no RTF or XamlPackage. Before the fix, Decide checked
+    /// hasImage before any text-based signal, so this combination always resolved to Image and
+    /// the paste silently discarded the tabular data as a flat picture. Tab-delimited text must
+    /// now win over an accompanying image, the same way RichText/XamlPackage already do.
+    /// </summary>
+    [Fact]
+    public void SharedPlanner_ImageAndTabularText_TabularTextWins()
+    {
+        var action = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: false,
+            hasImage: true,
+            hasText: true,
+            internalHasData: false,
+            ownCopyIsCurrent: false,
+            hasRichText: false,
+            hasXamlPackage: false,
+            hasTabularText: true);
+
+        action.Should().Be(PresentationClipboardPasteSource.Text,
+            "F1: tab-delimited text (FreeX's cell-range copy) must win over an image flavor riding alongside it");
+    }
+
+    /// <summary>
+    /// Sibling no-regression for F1: ordinary image+text combinations, where the text is not
+    /// tab-delimited, must keep resolving to Image exactly as SharedPlanner_ImageAndText_ImageWins
+    /// already asserts -- the new hasTabularText tier defaults to false and must not change this.
+    /// </summary>
+    [Fact]
+    public void SharedPlanner_ImageAndPlainText_ImageStillWinsWhenNotTabular()
+    {
+        var action = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: false,
+            hasImage: true,
+            hasText: true,
+            internalHasData: false,
+            ownCopyIsCurrent: false,
+            hasRichText: false,
+            hasXamlPackage: false,
+            hasTabularText: false);
+
+        action.Should().Be(PresentationClipboardPasteSource.Image,
+            "non-tabular text must not preempt the image, unchanged from prior behavior");
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     //  Copy payload builder (with fake renderer, no real clipboard)
     // ════════════════════════════════════════════════════════════════════════════════

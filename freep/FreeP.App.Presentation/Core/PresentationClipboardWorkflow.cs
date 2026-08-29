@@ -318,8 +318,28 @@ public static class PresentationClipboardWorkflow
                 break;
             }
             case PresentationClipboardPasteSource.Text:
+            {
+                // freep-tables F1: a tab-delimited text payload that arrives ALONGSIDE an image --
+                // which is what FreeX puts on the clipboard for a cell-range copy -- is table data,
+                // not prose, and without this the image flavour won and the range pasted as a flat
+                // picture. Try the same ClipboardTablePlanner pipeline InsertTableFromClipboard uses
+                // for rich payloads before falling back to a plain text box.
+                //
+                // r167 remediation: this deliberately requires the image. Tabs alone do not mean a
+                // table -- pasting tab-indented code or a single "Name<tab>Value" line onto a slide
+                // is ordinary text, and treating it as tabular consumed the leading tab as a column
+                // delimiter and silently restructured what the user pasted. Only a payload that would
+                // otherwise be swallowed by its own image flavour needs this branch.
+                if (content.HasTabularText
+                    && content.HasImage
+                    && editor.InsertTableFromClipboard(BuildPlainTextBody(content.Text!)) is not null)
+                {
+                    break;
+                }
+
                 editor.InsertTextBox(content.Text!);
                 break;
+            }
             case PresentationClipboardPasteSource.Internal:
                 editor.Paste();
                 break;
@@ -339,7 +359,24 @@ public static class PresentationClipboardWorkflow
             internalHasData,
             ownCopyIsCurrent,
             content.HasRichText,
-            content.HasXamlPackage);
+            content.HasXamlPackage,
+            content.HasTabularText);
+
+    // freep-tables F1: projects a standalone tab-delimited text payload into the same
+    // one-paragraph-per-line, tabs-embedded-in-run-text shape that ClipboardTablePlanner
+    // already parses out of rich clipboard payloads (see ClipboardTablePlanner.SplitCells).
+    private static TextBody BuildPlainTextBody(string text)
+    {
+        var body = new TextBody();
+        foreach (var line in text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = line });
+            body.Paragraphs.Add(paragraph);
+        }
+
+        return body;
+    }
 
     private static void ApplyRichPayload(
         EditingSession editor,
