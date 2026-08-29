@@ -735,6 +735,26 @@ public class BackstageViewTests : IDisposable
     }
 
     [Fact]
+    public async Task PrintPreviewDialog_contains_primary_action_exception_and_keeps_preview_usable()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var dialog = new PrintPreviewDialog(
+                TextDocument.CreateEmpty(),
+                "Test.docx",
+                createPdf: () => throw new IOException("destination disappeared"),
+                directPrintCapability: BackstageDirectPrintCapability.Deferred());
+
+            await dialog.ExecutePrimaryActionAsync();
+
+            var status = FindControl<TextBlock>(dialog, "PrintPreviewActionStatus");
+            status.IsVisible.Should().BeTrue();
+            status.Text.Should().Contain("destination disappeared");
+            FindControl<Button>(dialog, "PrintPreviewPrintButton").IsEnabled.Should().BeTrue();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Export_pane_uses_direct_label_buttons_with_sibling_descriptions()
     {
         await Session.Dispatch(() =>

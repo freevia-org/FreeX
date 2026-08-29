@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation;
+using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia;
@@ -146,8 +147,23 @@ internal sealed partial class ThesaurusPane : Border
 
     private async Task<bool> CopyAsync(ThesaurusPaneActionIntent intent)
     {
-        if (_copyText is not null)
-            return await _copyText(intent.Text);
-        return false;
+        if (_copyText is null)
+            return false;
+
+        try
+        {
+            var copied = await _copyText(intent.Text);
+            if (!copied)
+                _status.Text = FreeWClipboardApplicationWorkflow.ClipboardFailureMessage;
+            return copied;
+        }
+        catch (Exception ex)
+        {
+            // Copy is invoked by an async-void Avalonia click handler. Clipboard implementations can
+            // throw when the OS clipboard/portal disappears; contain that routine platform failure so
+            // it cannot escape through the dispatcher and terminate the app.
+            _status.Text = $"{FreeWClipboardApplicationWorkflow.ClipboardFailureMessage} {ex.Message}";
+            return false;
+        }
     }
 }

@@ -11370,15 +11370,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     private async void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
     {
-        if (!Enum.TryParse<WorksheetContextMenuAction>(commandId.Value, out var action))
-            return;
+        try
+        {
+            if (!Enum.TryParse<WorksheetContextMenuAction>(commandId.Value, out var action))
+                return;
 
-        if (!WorkbookApplicationCommandRouter.TryRouteWorksheetContextMenu(action.ToString(), out var route))
-            return;
+            if (!WorkbookApplicationCommandRouter.TryRouteWorksheetContextMenu(action.ToString(), out var route))
+                return;
 
-        await WorkbookApplicationCommands.TryExecuteAsync(
-            route,
-            targetAddress: _session.ActiveCell);
+            await WorkbookApplicationCommands.TryExecuteAsync(
+                route,
+                targetAddress: _session.ActiveCell);
+        }
+        catch (Exception ex)
+        {
+            // ContextMenuRenderer requires an Action callback, so this dispatch remains async void.
+            // Never let a command callback fault escape to Avalonia's dispatcher and terminate the app.
+            RefreshShell(UiText.Format("InsertLoc_CommandFailed", ex.Message));
+        }
     }
 
     private static Border CreateCellBorder(

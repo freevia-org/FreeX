@@ -273,7 +273,7 @@ public sealed class PresentationSlidePaneSession
     public SlidePaneSelectionActionPlan BuildKeyboardAction(SlidePaneKeyboardIntentKind intent)
     {
         var active = Selection.ActiveSlideIndex;
-        var count = _getEditor().Presentation.Slides.Count;
+        var selected = Selection.SelectedSlideIndices;
         return intent switch
         {
             SlidePaneKeyboardIntentKind.InsertAfterCurrentSlide =>
@@ -283,9 +283,15 @@ public sealed class PresentationSlidePaneSession
             SlidePaneKeyboardIntentKind.DeleteCurrentSlide =>
                 BuildAction(SlidePaneActionKind.DeleteSlide, active),
             SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier =>
-                BuildAction(SlidePaneActionKind.MoveSlide, active, Selection.SelectedSlideIndices.Min() - 1),
+                BuildAction(
+                    SlidePaneActionKind.MoveSlide,
+                    active,
+                    selected.Count > 0 ? selected.Min() - 1 : -1),
             SlidePaneKeyboardIntentKind.MoveCurrentSlideLater =>
-                BuildAction(SlidePaneActionKind.MoveSlide, active, Selection.SelectedSlideIndices.Max() + 2),
+                BuildAction(
+                    SlidePaneActionKind.MoveSlide,
+                    active,
+                    selected.Count > 0 ? selected.Max() + 2 : -1),
             _ => new(SlidePaneActionKind.MoveSlide, [], active, false),
         };
     }

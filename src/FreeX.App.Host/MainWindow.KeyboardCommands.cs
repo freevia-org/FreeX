@@ -66,7 +66,18 @@ public partial class MainWindow
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.WorkbookStatistics, WorkbookShortcutRoute.WorkbookStatistics);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewNote, ReviewNewCommentBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewThreadedCommentBtn_Click);
-        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveAs, async (_, _) => await SaveWorkbookWithDialogAsync());
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveAs, async (_, _) =>
+        {
+            try
+            {
+                await SaveWorkbookWithDialogAsync();
+            }
+            catch (Exception ex)
+            {
+                // KeyboardCommandDispatcher stores Action callbacks, so this lambda is async void.
+                ReportAsyncCommandFailure(KeyboardCommandShortcut.SaveAs.ToString(), ex);
+            }
+        });
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHelp, HelpOnlineBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ShowKeyTips, (_, _) => EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CycleShellFocus, (_, _) => CycleShellFocus(reverse: Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Shift));
@@ -131,9 +142,20 @@ public partial class MainWindow
             throw new InvalidOperationException($"No application command route is registered for {shortcutRoute}.");
 
         _keyboardCommandDispatcher.Register(shortcut, async (sender, args) =>
-            await WorkbookApplicationCommands.TryExecuteAsync(
-                route,
-                nativeSource: sender,
-                nativeEventArgs: args));
+        {
+            try
+            {
+                await WorkbookApplicationCommands.TryExecuteAsync(
+                    route,
+                    nativeSource: sender,
+                    nativeEventArgs: args);
+            }
+            catch (Exception ex)
+            {
+                // KeyboardCommandDispatcher stores Action callbacks, so this lambda is async void.
+                // Contain faults after the await instead of rethrowing them through WPF's dispatcher.
+                ReportAsyncCommandFailure(shortcut.ToString(), ex);
+            }
+        });
     }
 }

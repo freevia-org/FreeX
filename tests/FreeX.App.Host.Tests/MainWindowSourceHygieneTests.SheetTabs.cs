@@ -67,6 +67,19 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorksheetContextMenu_ContainsAsyncCommandFailures()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var dispatch = ExtractMethodSource(
+            source,
+            "private async void ExecuteWorksheetContextMenuAction(");
+
+        dispatch.Should().Contain("catch (Exception ex)");
+        dispatch.Should().Contain("ReportAsyncCommandFailure(action.ToString(), ex);");
+        source.Should().Contain("private void ExecuteWorksheetContextMenuActionCore(");
+    }
+
+    [Fact]
     public void SelectionAndGridInteractionController_LivesOutsideMainWindowCodeBehind()
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");

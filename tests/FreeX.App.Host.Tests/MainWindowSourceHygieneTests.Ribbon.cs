@@ -7,6 +7,35 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowSourceHygieneTests
 {
     [Fact]
+    public void QuickAccessToolbar_ContainsAsyncCommandFailures()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
+        var dispatch = ExtractMethodSource(
+            source,
+            "private async void ExecuteQuickAccessToolbarCommand(");
+
+        dispatch.Should().Contain("catch (Exception ex)");
+        dispatch.Should().Contain("ReportAsyncCommandFailure(commandId, ex);");
+    }
+
+    [Fact]
+    public void PortableKeyboardCommands_ContainAsyncCommandFailures()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
+        var registration = ExtractMethodSource(
+            source,
+            "private void RegisterPortableKeyboardCommand(");
+
+        registration.Should().Contain("catch (Exception ex)");
+        registration.Should().Contain("ReportAsyncCommandFailure(shortcut.ToString(), ex);");
+
+        var allRegistrations = ExtractMethodSource(
+            source,
+            "private void RegisterKeyboardCommandShortcuts()");
+        allRegistrations.Should().Contain("ReportAsyncCommandFailure(KeyboardCommandShortcut.SaveAs.ToString(), ex);");
+    }
+
+    [Fact]
     public void RibbonAttachedProperties_AreOwnedBySharedWpf()
     {
         var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");

@@ -385,22 +385,23 @@ public sealed class RibbonAdaptivePanel : Panel
                     continue;
                 }
 
-                var previousState = host.LayoutState;
                 var previousWidth = GetChildLayoutWidth(host);
-                host.LayoutState = expandedState;
-                host.LayoutWidth = host.MeasureWidth(expandedState, infinite, fitAvailable);
-                host.Measure(new Size(host.LayoutWidth, availableSize.Height));
-
-                var expandedWidth = GetChildLayoutWidth(host);
+                // Probe the detached presentation before changing Content/Width on the live host.
+                // Temporarily assigning LayoutState here used to replace the visual tree twice on
+                // every narrow-width measure pass when the candidate did not fit. Those mutations
+                // invalidate layout from inside MeasureOverride and can make WPF's render queue spin
+                // until it throws "cross-dependent views". Commit the state only after the measured
+                // candidate is known to fit.
+                var expandedWidth = host.MeasureWidth(expandedState, infinite, fitAvailable);
                 if (width + expandedWidth - previousWidth <= fitAvailable)
                 {
+                    host.LayoutState = expandedState;
+                    host.LayoutWidth = expandedWidth;
+                    host.Measure(new Size(expandedWidth, availableSize.Height));
                     width += expandedWidth - previousWidth;
                     continue;
                 }
 
-                host.LayoutState = previousState;
-                host.Measure(new Size(previousWidth, availableSize.Height));
-                host.LayoutWidth = previousWidth;
                 break;
             }
         }

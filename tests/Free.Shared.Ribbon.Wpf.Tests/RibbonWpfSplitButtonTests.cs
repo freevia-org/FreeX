@@ -136,6 +136,30 @@ public sealed class RibbonWpfSplitButtonTests
     }
 
     [Fact]
+    public void AdaptivePanel_DoesNotChurnPresentationWhileProbingExpansionAtNarrowWidth()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("paste", new RecordingCommand());
+            var root = BuildRibbon(registry);
+            var group = Descendants(root).OfType<RibbonGroupHost>().Single();
+            var notifications = 0;
+            group.PresentationChanged += (_, _) => notifications++;
+
+            Layout(root, 60, 130);
+            var notificationsAfterFirstLayout = notifications;
+            group.LayoutState.Should().Be(RibbonAdaptiveGroupState.Collapsed);
+
+            Descendants(root).OfType<RibbonAdaptivePanel>().Single().InvalidateMeasure();
+            Layout(root, 60, 130);
+
+            notifications.Should().Be(notificationsAfterFirstLayout,
+                "measuring whether an expanded presentation fits must not mutate the live visual tree");
+        });
+    }
+
+    [Fact]
     public void CollapsedGroup_UsesFixedSingleLineEllipsisCaption()
     {
         StaTestRunner.Run(() =>

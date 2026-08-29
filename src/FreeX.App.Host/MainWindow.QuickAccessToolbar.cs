@@ -473,13 +473,22 @@ public partial class MainWindow
 
     private async void ExecuteQuickAccessToolbarCommand(string commandId, object sender, RoutedEventArgs args)
     {
-        if (!WorkbookApplicationCommandRouter.TryRouteQuickAccess(commandId, out var route))
-            return;
+        try
+        {
+            if (!WorkbookApplicationCommandRouter.TryRouteQuickAccess(commandId, out var route))
+                return;
 
-        await WorkbookApplicationCommands.TryExecuteAsync(
-            route,
-            nativeSource: sender,
-            nativeEventArgs: args);
+            await WorkbookApplicationCommands.TryExecuteAsync(
+                route,
+                nativeSource: sender,
+                nativeEventArgs: args);
+        }
+        catch (Exception ex)
+        {
+            // ButtonBase.Click requires a void callback. A fault after the await would otherwise be
+            // rethrown through WPF's dispatcher and terminate the process.
+            ReportAsyncCommandFailure(commandId, ex);
+        }
     }
 
     // The QAT runs a ribbon toggle command without the toggle's own Click: flip the command's checked

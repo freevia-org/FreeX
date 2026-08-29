@@ -169,6 +169,7 @@
   <data name="ImageCrop_Instruction" xml:space="preserve"><value>Saisissez le pourcentage de largeur/hauteur à rogner sur chaque bord (0-99).</value></data>
   <data name="Operation_InsertIcon" xml:space="preserve"><value>Insérer une icône</value></data>
   <data name="Operation_PrintPreview" xml:space="preserve"><value>Aperçu avant impression</value></data>
+  <data name="PrintPreview_ActionFailed_Status_Format" xml:space="preserve"><value>L’action de l’aperçu avant impression a échoué : {0}</value></data>
   <data name="Operation_Editor" xml:space="preserve"><value>Éditeur</value></data>
   <data name="Proofing_SpellCheckOn_Status" xml:space="preserve"><value>La vérification orthographique est activée.</value></data>
   <data name="Proofing_SpellCheckOff_Status" xml:space="preserve"><value>La vérification orthographique est désactivée.</value></data>

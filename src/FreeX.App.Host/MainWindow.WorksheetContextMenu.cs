@@ -173,12 +173,26 @@ public partial class MainWindow
 
     private async void ExecuteWorksheetContextMenuAction(WorksheetContextMenuAction action, CellAddress address)
     {
-        if (WorkbookApplicationCommandRouter.TryRouteWorksheetContextMenu(action.ToString(), out var route))
+        try
         {
-            await WorkbookApplicationCommands.TryExecuteAsync(route, targetAddress: address);
-            return;
-        }
+            if (WorkbookApplicationCommandRouter.TryRouteWorksheetContextMenu(action.ToString(), out var route))
+            {
+                await WorkbookApplicationCommands.TryExecuteAsync(route, targetAddress: address);
+                return;
+            }
 
+            ExecuteWorksheetContextMenuActionCore(action, address);
+        }
+        catch (Exception ex)
+        {
+            // Context-menu clicks are void event callbacks. Contain both asynchronous route faults and
+            // synchronous drawing-command faults instead of handing them to WPF's fatal dispatcher path.
+            ReportAsyncCommandFailure(action.ToString(), ex);
+        }
+    }
+
+    private void ExecuteWorksheetContextMenuActionCore(WorksheetContextMenuAction action, CellAddress address)
+    {
         switch (action)
         {
             case WorksheetContextMenuAction.DeleteObject:
