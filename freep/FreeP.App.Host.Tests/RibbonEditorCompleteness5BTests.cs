@@ -323,9 +323,10 @@ public class RibbonEditorCompleteness5BTests
     public void ThemeColorsGroup_ExposesBackedColorSetCommands()
     {
         var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
-        var group = def.Tabs.Single(t => t.Id == "design").Groups.Single(g => g.Id == "colors");
+        var group = def.Tabs.Single(t => t.Id == "design").Groups.Single(g => g.Id == "customize");
 
-        var colors = Assert.IsType<RibbonDropdown>(group.Controls.Single());
+        var colors = Assert.IsType<RibbonDropdown>(group.Controls.Single(control =>
+            control.CommandId.Value == "freep.theme-colors.office"));
         colors.CommandId.Value.Should().Be("freep.theme-colors.office");
         colors.Menu.Items.Select(item => item.CommandId!.Value).Should().Equal(
             "freep.theme-colors.office",
@@ -336,11 +337,11 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
-    public void CustomizeGroup_ContainsCompactSlideSizeMenu()
+    public void SlidesGroup_ContainsCompactSlideSizeMenu()
     {
         var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "design");
-        var group = tab.Groups.Single(g => g.Id == "customize");
+        var group = tab.Groups.Single(g => g.Id == "slides");
         var slideSize = Assert.IsType<RibbonDropdown>(group.Controls.First(control =>
             control.CommandId.Value == "freep.slide-size-custom"));
         slideSize.Menu.Items.Where(item => item.Kind != RibbonMenuItemKind.Separator).Select(item => item.CommandId!.Value).Should().Equal(

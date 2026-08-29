@@ -980,7 +980,7 @@ public static class FreePRibbon
         // Native PowerPoint exposes the current theme's palette independently of its typography.
         // Keep that distinction in FreeP as a real color-scheme operation instead of a visual-only
         // replica: scheme-color content retargets while the selected theme's fonts and format data stay intact.
-        tab.Group("colors", FreePRibbonText.ThemeColorsGroup.Label, FreePRibbonText.ThemeColorsGroup.KeyTip, 95, group =>
+        tab.Group("customize", FreePRibbonText.CustomizeGroup.Label, FreePRibbonText.CustomizeGroup.KeyTip, 95, group =>
         {
             group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Dropdown(
@@ -994,7 +994,7 @@ public static class FreePRibbon
                     KeyTip = FreePRibbonText.ThemeColorsCommand.KeyTip,
                 });
         });
-        tab.Group("customize", FreePRibbonText.CustomizeGroup.Label, FreePRibbonText.CustomizeGroup.KeyTip, 100, group =>
+        tab.Group("slides", FreePRibbonText.SlidesGroupLabel, FreePRibbonText.SlidesGroupKeyTip, 100, group =>
         {
             group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             // PowerPoint keeps Slide Size as one compact menu at narrow widths. The existing

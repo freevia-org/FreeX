@@ -35,13 +35,13 @@ public sealed class FreePRibbonDefinitionProfileTests
             definition.FindTab("smartart-design")!.Context!.ActivationKey.Should().Be("smartart");
 
             definition.FindTab("design")!.Groups.Select(group => group.Id)
-                .Should().Equal("themes", "colors", "customize");
+                .Should().Equal("themes", "customize", "slides");
             definition.FindTab("design")!.FindGroup("themes")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive with
             {
                 Hints = new RibbonWidthHints(470, 130, 130, 64),
             });
-            definition.FindTab("design")!.FindGroup("colors")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
             definition.FindTab("design")!.FindGroup("customize")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+            definition.FindTab("design")!.FindGroup("slides")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
             definition.FindTab("review")!.Groups.Select(group => group.Id)
                 .Should().Equal("comments", "accessibility", "proofing");
             definition.FindTab("smartart-design")!.Groups.Select(group => group.Id)
@@ -617,6 +617,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredGroup(avalonia, "design", "themes").KeyTip!,
                 RequiredGroup(avalonia, "design", "customize").Header,
                 RequiredGroup(avalonia, "design", "customize").KeyTip!,
+                RequiredGroup(avalonia, "design", "slides").Header,
+                RequiredGroup(avalonia, "design", "slides").KeyTip!,
                 RequiredControl(avalonia, "freep.theme.office").Label,
                 RequiredControl(avalonia, "freep.theme.office").KeyTip!,
                 RequiredControl(avalonia, "freep.theme.berlin").Label,
