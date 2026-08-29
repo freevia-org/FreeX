@@ -198,6 +198,18 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_home_keeps_editing_commands_compact_and_directly_discoverable()
+    {
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+        var editing = RequiredGroup(avalonia, "home", "editing");
+
+        editing.Controls.Select(control => control.CommandId.Value)
+            .Should().Equal("freew.undo", "freew.redo", "freew.find", "freew.replace", "freew.select");
+        editing.Controls.Should().OnlyContain(control =>
+            control.PreferredLayout == RibbonCommandLayoutKind.Small && control.Icon != null);
+    }
+
+    [Fact]
     public void Avalonia_review_collapsed_groups_keep_their_wpf_representative_icons()
     {
         var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);

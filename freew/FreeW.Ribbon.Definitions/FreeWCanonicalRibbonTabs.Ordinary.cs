@@ -368,11 +368,31 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("editing", "Editing", null, 70, g =>
                     {
-                        g.Button("freew.undo", "Undo");
-                        g.Button("freew.redo", "Redo");
-                        g.Button("freew.find", "Find");
-                        g.Button("freew.replace", "Replace");
-                        g.Button("freew.select", "Select");
+                        g.Button("freew.undo", "Undo", b => b with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Small,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Undo)
+                        });
+                        g.Button("freew.redo", "Redo", b => b with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Small,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Redo)
+                        });
+                        g.Button("freew.find", "Find", b => b with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Small,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Search)
+                        });
+                        g.Button("freew.replace", "Replace", b => b with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Small,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Search)
+                        });
+                        g.Button("freew.select", "Select", b => b with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Small,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Search)
+                        });
                     }));
 
             topology.Build();
