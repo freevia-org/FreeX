@@ -16,7 +16,7 @@ public sealed class Wave197Deck17LeadingResidualEvidenceTests
         var root = document.RootElement;
 
         root.GetProperty("schema").GetString()
-            .Should().Be("freep.parity.wave197.deck17-leading-residual.v1");
+            .Should().Be("freep.parity.wave197.deck17-leading-residual.v2");
         root.GetProperty("status").GetString()
             .Should().Be("candidate-refuted");
 
@@ -43,14 +43,26 @@ public sealed class Wave197Deck17LeadingResidualEvidenceTests
     }
 
     [Fact]
-    public void SourceAndRetainedImageReferences_MatchTrackedFiles()
+    public void RecordedSourceAndRetainedImageIntegrity_MatchTrackedFiles()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(EvidenceFile("metrics.json")));
         var root = document.RootElement;
         var workspaceRoot = WorkspaceRoot();
 
-        var sourceRevision = root.GetProperty("sourceRevision").GetString();
+        var provenance = root.GetProperty("sourceProvenance");
+        var sourceRevision = provenance.GetProperty("sourceRevision").GetString();
         sourceRevision.Should().NotBeNullOrWhiteSpace();
+        provenance.GetProperty("sourceRevisionRole").GetString().Should().Be("recorded-source-commit");
+        provenance.GetProperty("generationLinkage").GetString()
+            .Should().Be("not-independently-proven");
+        provenance.GetProperty("generationLinkageBasis").GetString()
+            .Should().Be("No verifiable renderer/config/source-tree hashes or deterministic regeneration evidence is recorded.");
+
+        var integrity = root.GetProperty("imageIntegrity");
+        integrity.GetProperty("status").GetString().Should().Be("tracked-byte-hashes-verified");
+        integrity.GetProperty("claimBoundary").GetString()
+            .Should().Be("SHA-256 values verify the current tracked image bytes only; they do not prove generation from sourceRevision.");
+        var trackedImages = integrity.GetProperty("trackedImages");
         using (var process = Process.Start(new ProcessStartInfo
         {
             FileName = "git",
@@ -87,11 +99,12 @@ public sealed class Wave197Deck17LeadingResidualEvidenceTests
             if (!string.Equals(Path.GetExtension(filePath), ".png", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var expectedHash = string.Equals(relativePath, officeReference, StringComparison.Ordinal)
-                ? officeReferenceHash
-                : ReadImageManifestHash(filePath);
-
+            var expectedHash = trackedImages.GetProperty(relativePath).GetString();
             expectedHash.Should().NotBeNullOrWhiteSpace($"a tracked image hash must exist for {relativePath}");
+            var manifestHash = ReadImageManifestHash(filePath);
+            if (manifestHash is not null)
+                manifestHash.Should().Be(expectedHash, $"the adjacent image manifest must match {relativePath}");
+
             using var stream = File.OpenRead(filePath);
             Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant()
                 .Should().Be(expectedHash, $"the tracked image hash must match {relativePath}");

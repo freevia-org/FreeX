@@ -15,8 +15,14 @@ public sealed class Wave197BaselineAlignmentEvidenceTests
         var root = document.RootElement;
 
         root.GetProperty("schema").GetString()
-            .Should().Be("freep.parity.wave197.deck17-baseline-alignment.v1");
+            .Should().Be("freep.parity.wave197.deck17-baseline-alignment.v2");
         root.GetProperty("status").GetString().Should().Be("candidate-refuted");
+
+        var provenance = root.GetProperty("sourceProvenance");
+        provenance.GetProperty("sourceRevision").ValueKind.Should().Be(JsonValueKind.Null);
+        provenance.GetProperty("sourceRevisionRole").GetString().Should().Be("not-recorded");
+        provenance.GetProperty("generationLinkage").GetString()
+            .Should().Be("not-independently-proven");
 
         var candidate = root.GetProperty("candidate");
         candidate.GetProperty("acceptedBaselinePixelAlignment").GetString()
@@ -36,6 +42,11 @@ public sealed class Wave197BaselineAlignmentEvidenceTests
         target.GetProperty("deltaPercentagePoints").GetDouble().Should().Be(0.0296);
         target.GetProperty("candidateWpfAvalonia").GetDouble().Should().Be(2.9053);
         target.GetProperty("pairDeltaPercentagePoints").GetDouble().Should().Be(0.0298);
+
+        var integrity = root.GetProperty("imageIntegrity");
+        integrity.GetProperty("status").GetString().Should().Be("tracked-byte-hashes-verified");
+        integrity.GetProperty("claimBoundary").GetString()
+            .Should().Be("SHA-256 values verify the current tracked image bytes only; they do not prove generation from a source revision.");
     }
 
     [Fact]
