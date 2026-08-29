@@ -120,7 +120,7 @@ public sealed class Wave199Deck17AptosResourceRasterEvidenceTests
 
     private static string EvidenceFile(string fileName)
     {
-        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        return Path.Combine(root, EvidenceDirectory.Replace('/', Path.DirectorySeparatorChar), fileName);
+        return TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+            EvidenceDirectory.Split('/').Append(fileName).ToArray());
     }
 }
