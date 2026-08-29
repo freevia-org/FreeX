@@ -15,7 +15,8 @@ public sealed class ConflictMarkersPreflightTests
         script.Should().Contain("[string[]]$SearchRoots = @()");
         script.Should().Contain("git -C $resolvedProjectRoot ls-files");
         script.Should().Contain("if ($SearchRoots.Count -eq 0)");
-        script.Should().Contain("Get-Item -LiteralPath $resolvedTrackedPath -Force");
+        script.Should().Contain("git -C $resolvedProjectRoot grep -n -I -E");
+        script.Should().Contain("if ($gitGrepExitCode -gt 1)");
         script.Should().Contain("Get-ChildItem -LiteralPath $rootItem.FullName -File -Recurse -Force");
         script.Should().Contain("\".slnx\"");
         script.Should().Contain("Test-ToolExcludedPath");
@@ -24,7 +25,7 @@ public sealed class ConflictMarkersPreflightTests
         toolSupport.Should().Contain("if ($segments -contains $directoryName)");
         script.Should().Contain("$conflictMarkerPattern = '^(<<<<<<<|=======|>>>>>>>)($|[ <].*)'");
         script.Should().Contain("Git conflict marker validation failed");
-        script.Should().Contain("Validated $($candidateFiles.Count) text file(s) for Git conflict markers.");
+        script.Should().Contain("Validated $($trackedPaths.Count) text file(s) for Git conflict markers.");
     }
 
     [Fact]

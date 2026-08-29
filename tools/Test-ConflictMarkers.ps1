@@ -49,23 +49,35 @@ if ($normalizedExtensions.Count -eq 0) {
 
 $candidateFiles = New-Object System.Collections.Generic.List[System.IO.FileInfo]
 $seenCandidatePaths = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
+$conflictMarkerPattern = '^(<<<<<<<|=======|>>>>>>>)($|[ <].*)'
 
 if ($SearchRoots.Count -eq 0) {
-    $trackedPaths = @(git -C $resolvedProjectRoot ls-files)
+    $pathSpecs = @($normalizedExtensions | Sort-Object | ForEach-Object { "*$_" })
+    $trackedPaths = @(& git -C $resolvedProjectRoot ls-files -- $pathSpecs)
     if ($LASTEXITCODE -ne 0) {
         throw "git ls-files failed for project root: $resolvedProjectRoot"
     }
 
-    foreach ($trackedPath in $trackedPaths) {
-        if ([string]::IsNullOrWhiteSpace($trackedPath)) {
-            continue
-        }
-
-        $resolvedTrackedPath = Join-Path $resolvedProjectRoot ($trackedPath.Replace("/", [System.IO.Path]::DirectorySeparatorChar))
-        if (Test-Path -LiteralPath $resolvedTrackedPath -PathType Leaf) {
-            Add-CandidateFile -Files $candidateFiles -SeenPaths $seenCandidatePaths -File (Get-Item -LiteralPath $resolvedTrackedPath -Force) -Extensions $normalizedExtensions
-        }
+    if ($trackedPaths.Count -eq 0) {
+        throw "No text files were found for Git conflict marker validation."
     }
+
+    # Let Git scan its tracked-file index in one native process. Reading and matching more than
+    # 14,000 files individually through PowerShell added roughly a minute to every preflight.
+    $failedMatches = @(& git -C $resolvedProjectRoot grep -n -I -E -- $conflictMarkerPattern -- $pathSpecs 2>&1)
+    $gitGrepExitCode = $LASTEXITCODE
+    if ($gitGrepExitCode -gt 1) {
+        throw "git grep failed while validating conflict markers (exit code $gitGrepExitCode): $($failedMatches -join [Environment]::NewLine)"
+    }
+    if ($gitGrepExitCode -eq 0) {
+        foreach ($match in $failedMatches) {
+            Write-Error "$match contains a Git conflict marker." -ErrorAction Continue
+        }
+        throw "Git conflict marker validation failed for $($failedMatches.Count) marker(s)."
+    }
+
+    Write-Host "Validated $($trackedPaths.Count) text file(s) for Git conflict markers."
+    exit 0
 } else {
     foreach ($searchRoot in $SearchRoots) {
         $resolvedSearchRoot = Resolve-ToolRepoPath -Path $searchRoot -RepoRoot $repoRoot
@@ -99,7 +111,6 @@ if ($candidateFiles.Count -eq 0) {
     throw "No text files were found for Git conflict marker validation."
 }
 
-$conflictMarkerPattern = '^(<<<<<<<|=======|>>>>>>>)($|[ <].*)'
 $failedMatches = New-Object System.Collections.Generic.List[string]
 foreach ($candidateFile in $candidateFiles) {
     $lineNumber = 0

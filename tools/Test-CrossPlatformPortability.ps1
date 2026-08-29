@@ -5,10 +5,19 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $errors = [System.Collections.Generic.List[string]]::new()
+$phaseTimer = [System.Diagnostics.Stopwatch]::StartNew()
+$lastPhaseElapsed = [TimeSpan]::Zero
 . (Join-Path $PSScriptRoot 'ToolScriptSupport.ps1')
 
 function Add-PortabilityError([string]$Message) {
     $errors.Add($Message)
+}
+
+function Write-PortabilityPhase([string]$Name) {
+    $elapsed = $phaseTimer.Elapsed
+    $duration = $elapsed - $lastPhaseElapsed
+    Write-Host ("Portability phase '{0}': {1:N2}s" -f $Name, $duration.TotalSeconds)
+    $script:lastPhaseElapsed = $elapsed
 }
 
 $trackedPaths = @(& git -C $repoRoot ls-files)
@@ -16,27 +25,46 @@ if ($LASTEXITCODE -ne 0) {
     throw "Could not enumerate tracked files for the portability audit."
 }
 
-foreach ($group in @($trackedPaths | Group-Object { $_.ToLowerInvariant() } | Where-Object Count -gt 1)) {
-    Add-PortabilityError "Case-insensitive tracked-path collision: $($group.Group -join '; ')"
-}
-foreach ($group in @($trackedPaths | Group-Object { $_.Normalize([Text.NormalizationForm]::FormC).ToLowerInvariant() } | Where-Object Count -gt 1)) {
-    Add-PortabilityError "Unicode/case-normalized tracked-path collision: $($group.Group -join '; ')"
-}
-foreach ($group in @($trackedPaths | Group-Object { $_.Normalize([Text.NormalizationForm]::FormD).ToLowerInvariant() } | Where-Object Count -gt 1)) {
-    Add-PortabilityError "macOS Unicode/case-normalized tracked-path collision: $($group.Group -join '; ')"
-}
-
 $trackedPathSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-$trackedPathByCaseFold = @{}
+$trackedPathByCaseFold = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::Ordinal)
+$trackedPathByFormC = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::Ordinal)
+$trackedPathByFormD = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::Ordinal)
 $trackedDirectorySet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-$trackedDirectoryByCaseFold = @{}
+$trackedDirectoryByCaseFold = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::Ordinal)
 foreach ($trackedPath in $trackedPaths) {
     [void]$trackedPathSet.Add($trackedPath)
-    $trackedPathByCaseFold[$trackedPath.ToLowerInvariant()] = $trackedPath
-    $segments = $trackedPath -split '/'
-    for ($segmentIndex = 1; $segmentIndex -lt $segments.Length; $segmentIndex++) {
-        $directory = ($segments[0..($segmentIndex - 1)] -join '/')
-        [void]$trackedDirectorySet.Add($directory)
+
+    $foldedPath = $trackedPath.ToLowerInvariant()
+    if ($trackedPathByCaseFold.ContainsKey($foldedPath)) {
+        Add-PortabilityError "Case-insensitive tracked-path collision: $($trackedPathByCaseFold[$foldedPath]); $trackedPath"
+    }
+    else {
+        $trackedPathByCaseFold.Add($foldedPath, $trackedPath)
+    }
+
+    $formCPath = $trackedPath.Normalize([Text.NormalizationForm]::FormC).ToLowerInvariant()
+    if ($trackedPathByFormC.ContainsKey($formCPath)) {
+        Add-PortabilityError "Unicode/case-normalized tracked-path collision: $($trackedPathByFormC[$formCPath]); $trackedPath"
+    }
+    else {
+        $trackedPathByFormC.Add($formCPath, $trackedPath)
+    }
+
+    $formDPath = $trackedPath.Normalize([Text.NormalizationForm]::FormD).ToLowerInvariant()
+    if ($trackedPathByFormD.ContainsKey($formDPath)) {
+        Add-PortabilityError "macOS Unicode/case-normalized tracked-path collision: $($trackedPathByFormD[$formDPath]); $trackedPath"
+    }
+    else {
+        $trackedPathByFormD.Add($formDPath, $trackedPath)
+    }
+
+    $slashIndex = $trackedPath.IndexOf('/')
+    while ($slashIndex -ge 0) {
+        $directory = $trackedPath.Substring(0, $slashIndex)
+        if (-not $trackedDirectorySet.Add($directory)) {
+            $slashIndex = $trackedPath.IndexOf('/', $slashIndex + 1)
+            continue
+        }
         $foldedDirectory = $directory.ToLowerInvariant()
         if ($trackedDirectoryByCaseFold.ContainsKey($foldedDirectory) -and
             $trackedDirectoryByCaseFold[$foldedDirectory] -cne $directory) {
@@ -45,8 +73,10 @@ foreach ($trackedPath in $trackedPaths) {
         else {
             $trackedDirectoryByCaseFold[$foldedDirectory] = $directory
         }
+        $slashIndex = $trackedPath.IndexOf('/', $slashIndex + 1)
     }
 }
+Write-PortabilityPhase 'tracked path index'
 
 function Test-StaticRepositoryPathCase {
     param(
@@ -143,6 +173,7 @@ foreach ($relativePath in $portableTextPaths) {
         Add-PortabilityError "$relativePath contains a UTF-8 BOM; executable shebangs and cross-platform tools require BOM-free UTF-8."
     }
 }
+Write-PortabilityPhase 'tracked path and text hygiene'
 
 $shellScripts = @($trackedPaths | Where-Object { $_.EndsWith('.sh', [System.StringComparison]::OrdinalIgnoreCase) })
 foreach ($relativePath in $shellScripts) {
@@ -184,6 +215,7 @@ if ($nodeScripts.Count -gt 0) {
         }
     }
 }
+Write-PortabilityPhase 'shell/python/node syntax'
 
 $powerShellScripts = @($trackedPaths | Where-Object {
     $_.EndsWith('.ps1', [System.StringComparison]::OrdinalIgnoreCase) -or
@@ -202,6 +234,7 @@ foreach ($relativePath in $powerShellScripts) {
         Add-PortabilityError "$relativePath has a PowerShell parse error: $($parseError.Message)"
     }
 }
+Write-PortabilityPhase 'PowerShell parse'
 
 # A path can work on Windows and fail only after checkout on a case-sensitive file system.
 # Check every static repository path mentioned by PowerShell, but report only proven case
@@ -228,6 +261,7 @@ foreach ($relativePath in $plainScriptPaths) {
         Test-StaticRepositoryPathCase -SourcePath $relativePath -Candidate $match.Groups['path'].Value
     }
 }
+Write-PortabilityPhase 'static repository path case'
 
 $windowsOnlyPowerShellScripts = @(
     'tools/Capture-FreePPowerPointChrome.ps1',
@@ -335,6 +369,7 @@ foreach ($relativePath in $powerShellScripts) {
         Add-PortabilityError "$relativePath bypasses the shared canonical-path resolver in ToolScriptSupport.ps1."
     }
 }
+Write-PortabilityPhase 'PowerShell portability rules'
 
 $toolScripts = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'tools') -Recurse -File -Filter '*.ps1')
 foreach ($script in $toolScripts) {
@@ -361,29 +396,46 @@ $managedPathFixtureExceptions = @(
     'freew/FreeW.App.Presentation.Tests/VisualEvidenceRunnerScriptTests.cs',
     'tests/FreeX.App.Host.Tests/ScreenshotHarnessScriptTests.cs'
 )
-foreach ($relativePath in $managedSourceFiles) {
-    $source = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+$managedPathSpecs = @('*.cs', '*.csx', '*.fs', '*.fsx', '*.vb')
+$managedSourceCandidateSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+foreach ($needle in @('\\', 'Environment.NewLine')) {
+    $matches = @(& git -C $repoRoot grep -l -F $needle -- $managedPathSpecs)
+    $gitGrepExitCode = $LASTEXITCODE
+    if ($gitGrepExitCode -gt 1) {
+        throw "git grep failed while selecting managed portability candidates for '$needle' (exit code $gitGrepExitCode)."
+    }
+    foreach ($match in $matches) {
+        [void]$managedSourceCandidateSet.Add($match)
+    }
+}
+$managedSourceCandidates = @($managedSourceCandidateSet | Sort-Object)
+$managedRepositoryPathPattern = [regex]::new(
+    '(?i)(?:docs|freep|freew|shared|tests|tools)(?:\\\\[A-Za-z0-9_.()$%*? -]+)+',
+    [Text.RegularExpressions.RegexOptions]::Compiled)
+$managedMsBuildPathLinePattern = [regex]::new(
+    '(?im)^(?=[^\r\n]*[A-Za-z0-9_.$)%*]\\\\[A-Za-z0-9_.$(%*?])(?=[^\r\n]*(?:\.(?:csproj|props|targets)|MSBuildThisFileDirectory|%\(RecursiveDir\)|(?:Include|Remove|Update|Link|Project)=))[^\r\n]*',
+    [Text.RegularExpressions.RegexOptions]::Compiled)
+foreach ($relativePath in $managedSourceCandidates) {
+    $source = [IO.File]::ReadAllText((Join-Path $repoRoot $relativePath))
     if ($source -match '\.Split\s*\(\s*Environment\.NewLine\b') {
         Add-PortabilityError "$relativePath splits text on Environment.NewLine; normalize external/file text with ReplaceLineEndings before splitting so LF checkouts work on Windows."
     }
     if ($relativePath -notin $managedPathFixtureExceptions) {
-        $lineNumber = 0
-        foreach ($line in $source -split "`n") {
-            $lineNumber++
-            foreach ($match in [regex]::Matches($line, '(?i)(?:docs|freep|freew|shared|tests|tools)(?:\\\\[A-Za-z0-9_.()$%*? -]+)+')) {
-                $candidate = $match.Value.Replace('\\', '/')
-                $separatorCount = ([regex]::Matches($candidate, '/')).Count
-                if ($separatorCount -ge 2 -or $candidate -match '(?i)\.(?:cs|csproj|fs|fsproj|vb|vbproj|ps1|psm1|psd1|sh|py|js|json|xml|xaml|axaml|svg|png|ico|icns|md|txt|props|targets|slnx)$') {
-                    Add-PortabilityError "$relativePath asserts or embeds a Windows-separated repository path '$candidate' at line $lineNumber; use '/'."
-                }
+        foreach ($match in $managedRepositoryPathPattern.Matches($source)) {
+            $candidate = $match.Value.Replace('\\', '/')
+            $separatorCount = ([regex]::Matches($candidate, '/')).Count
+            if ($separatorCount -ge 2 -or $candidate -match '(?i)\.(?:cs|csproj|fs|fsproj|vb|vbproj|ps1|psm1|psd1|sh|py|js|json|xml|xaml|axaml|svg|png|ico|icns|md|txt|props|targets|slnx)$') {
+                $lineNumber = ([regex]::Matches($source.Substring(0, $match.Index), "`n")).Count + 1
+                Add-PortabilityError "$relativePath asserts or embeds a Windows-separated repository path '$candidate' at line $lineNumber; use '/'."
             }
-            if ($line -match '[A-Za-z0-9_.$)%*]\\\\[A-Za-z0-9_.$(%*?]' -and
-                $line -match '(?i)\.(?:csproj|props|targets)|MSBuildThisFileDirectory|%\(RecursiveDir\)|(?:Include|Remove|Update|Link|Project)=') {
-                Add-PortabilityError "$relativePath asserts or embeds a Windows-separated MSBuild path at line $lineNumber; use '/'."
-            }
+        }
+        foreach ($match in $managedMsBuildPathLinePattern.Matches($source)) {
+            $lineNumber = ([regex]::Matches($source.Substring(0, $match.Index), "`n")).Count + 1
+            Add-PortabilityError "$relativePath asserts or embeds a Windows-separated MSBuild path at line $lineNumber; use '/'."
         }
     }
 }
+Write-PortabilityPhase 'managed source paths'
 
 $msbuildFiles = @($trackedPaths | Where-Object { $_ -match '(?i)\.(?:csproj|props|targets|slnx)$' })
 $msbuildPathAttributeNames = @('Include', 'Exclude', 'Update', 'Remove', 'Link', 'Project', 'Path')
@@ -430,6 +482,7 @@ foreach ($relativePath in $msbuildFiles) {
         }
     }
 }
+Write-PortabilityPhase 'MSBuild paths and references'
 
 $shellIndexEntries = @(& git -C $repoRoot ls-files --stage -- '*.sh')
 foreach ($entry in $shellIndexEntries) {
@@ -514,6 +567,7 @@ foreach ($relativePath in $portableShellScripts) {
         }
     }
 }
+Write-PortabilityPhase 'Git index and shell portability'
 
 $appReleaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/app-tester-release.yml') -Raw
 foreach ($windowsOnlyToken in @('powershell.exe', 'cmd.exe')) {
@@ -525,5 +579,7 @@ foreach ($windowsOnlyToken in @('powershell.exe', 'cmd.exe')) {
 if ($errors.Count -gt 0) {
     throw "Cross-platform portability validation failed:`n - $($errors -join "`n - ")"
 }
+
+Write-PortabilityPhase 'release workflow guard'
 
 Write-Host "Cross-platform portability checks passed for $($trackedPaths.Count) tracked paths, $($portableTextPaths.Count) LF/BOM-normalized scripts/workflows, $($msbuildFiles.Count) MSBuild/solution files, all $($powerShellScripts.Count) PowerShell scripts ($($portablePowerShellScripts.Count) portable, $($windowsOnlyPowerShellScripts.Count) explicitly Windows-only), all $($shellScripts.Count) executable shell scripts ($($portableShellScripts.Count) Linux/macOS shared), $($pythonScripts.Count) Python scripts, and $($nodeScripts.Count) Node scripts."

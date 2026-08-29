@@ -22,6 +22,7 @@ $allowedGates = @("commit", "release")
 $allowedPlatforms = @("windows", "linux", "macos")
 $seenGateIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $coveredProjects = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$coveredProjectPlatforms = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $staticPreflightOwners = [System.Collections.Generic.List[string]]::new()
 $platformPreflightOwners = @{
     windows = [System.Collections.Generic.List[string]]::new()
@@ -50,6 +51,12 @@ foreach ($gate in @($manifest.gates)) {
             }
             foreach ($projectPath in @($platformProperty.Value)) {
                 $platformProjects.Add($projectPath)
+                if ($projectPath -is [string] -and -not [string]::IsNullOrWhiteSpace($projectPath)) {
+                    $projectPlatform = "$($platformProperty.Name)|$($projectPath.Replace('\', '/'))"
+                    if (-not $coveredProjectPlatforms.Add($projectPlatform)) {
+                        $errors.Add("Test project '$projectPath' is assigned to more than one '$($platformProperty.Name)' gate.")
+                    }
+                }
             }
         }
     }
@@ -125,6 +132,17 @@ foreach ($gate in @($manifest.gates)) {
 
     $projectsInGate = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $allGateProjects = @($gate.projects) + @($platformProjects)
+    foreach ($projectPath in @($gate.projects)) {
+        if ($projectPath -isnot [string] -or [string]::IsNullOrWhiteSpace($projectPath)) {
+            continue
+        }
+        foreach ($platform in @($gate.platforms)) {
+            $projectPlatform = "$platform|$($projectPath.Replace('\', '/'))"
+            if (-not $coveredProjectPlatforms.Add($projectPlatform)) {
+                $errors.Add("Test project '$projectPath' is assigned to more than one '$platform' gate.")
+            }
+        }
+    }
     foreach ($projectPath in $allGateProjects) {
         if ($projectPath -isnot [string] -or [string]::IsNullOrWhiteSpace($projectPath)) {
             $errors.Add("Gate '$($gate.id)' contains an invalid test project path.")

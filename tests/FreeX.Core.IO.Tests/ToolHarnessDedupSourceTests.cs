@@ -266,6 +266,8 @@ public sealed class ToolHarnessDedupSourceTests
         support.Should().Contain("<Project Sdk=\"Microsoft.NET.Sdk\">");
         support.Should().Contain("<ProjectReference Include=\"$($Options.Reference)\" />");
         support.Should().Contain("<NuGetAudit>false</NuGetAudit>");
+        support.Should().Contain("$buildArguments = @(");
+        support.Should().Contain("retrying once with isolated build servers and serialized compilation");
         support.Should().Contain("\"--no-incremental\"");
         support.Should().Contain("Test-ToolGeneratedFileContentMatches");
         support.Should().Contain("-NormalizeNewlines");
