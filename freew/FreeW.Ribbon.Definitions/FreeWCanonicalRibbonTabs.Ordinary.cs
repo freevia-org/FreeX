@@ -509,6 +509,19 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }));
 
             topology.Section(
+                "insert.comments",
+                tab => tab.Group("comments", "Comments", "C", 68, g =>
+                    {
+                        // Word exposes the existing New Comment action directly on Insert as well
+                        // as in Review. Keep that primary entry point at the narrow reference width.
+                        g.Large("freew.new-comment", "Comment", RibbonCommandIconKind.Comment);
+                    }),
+                tab => tab.Group("comments", "Comments", null, 94, g =>
+                    {
+                        g.Button("freew.new-comment", "Comment", b => Icon(b, RibbonCommandIconKind.Comment));
+                    }));
+
+            topology.Section(
                 "insert.header-footer",
                 tab => tab.Group("header-footer", "Header & Footer", "H", 60, g =>
                     {

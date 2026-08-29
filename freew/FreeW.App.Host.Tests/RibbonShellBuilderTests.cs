@@ -184,6 +184,28 @@ public sealed class RibbonShellBuilderTests
     }
 
     [StaFact]
+    public void Insert_CommentStaysDirectAt750Dips()
+    {
+        var insert = FreeW.Ribbon.Definitions.FreeWRibbon
+            .Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf)
+            .FindTab("insert")!;
+        var content = RibbonWpfRenderer.BuildTabContent(insert, new Button());
+        var panel = FindLogicalChild<RibbonAdaptivePanel>(content)!;
+
+        content.Measure(new Size(750, 180));
+        content.Arrange(new Rect(0, 0, 750, 180));
+        content.UpdateLayout();
+
+        var comments = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Comments");
+
+        comments.Collapsed.Should().BeFalse(
+            "Word keeps the Insert Comment action directly reachable at the narrow reference width");
+        FindLogicalChild<Button>(Assert.IsAssignableFrom<DependencyObject>(comments.Content)).Should().NotBeNull();
+    }
+
+    [StaFact]
     public void Design_compact_presentation_keeps_document_formatting_and_page_background_direct()
     {
         var design = FreeW.Ribbon.Definitions.FreeWRibbon
