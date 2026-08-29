@@ -206,6 +206,22 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Transition_gallery_supports_a_compact_presentation_in_both_profiles()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            RequiredGroup(definition, "transitions", "transition-gallery")
+                .Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+            RequiredGroup(definition, "transitions", "transition-timing")
+                .Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+        }
+    }
+
+    [Fact]
     public void Arrange_change_shape_menu_exposes_all_modeled_common_presets()
     {
         foreach (var definition in new[]

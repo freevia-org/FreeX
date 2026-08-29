@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using Free.Shared.Ribbon;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host.Tests;
@@ -23,5 +24,20 @@ public sealed class PresentationTransitionGalleryTests
         editor.CurrentSlideTransition!.Kind.Should().Be(TransitionKind.Fade);
         buttons.Select(AutomationProperties.GetName)
             .Should().Contain(["None", "Fade", "Push", "Wipe", "Split", "Reveal", "Cut", "Random Bars"]);
+    }
+
+    [StaFact]
+    public void Transition_preview_gallery_keeps_first_three_effects_directly_selectable_when_compact()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var registry = FreePRibbonTestRegistry.Compose(editor);
+
+        var gallery = PresentationTransitionGallery
+            .Build(registry, RibbonAdaptiveGroupState.SmallWithLabels)
+            .Should().BeOfType<StackPanel>().Subject;
+
+        gallery.Children.OfType<Button>().Select(AutomationProperties.GetName)
+            .Should().Equal("None", "Fade", "Push");
     }
 }

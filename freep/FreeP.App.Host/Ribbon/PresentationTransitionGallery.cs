@@ -25,7 +25,9 @@ internal static class PresentationTransitionGallery
         ("freep.transition.random-bars", "Ribbon_Command_TransitionRandomBars_Label", TransitionPreview.RandomBars),
     ];
 
-    public static FrameworkElement Build(IRibbonCommandRegistry registry)
+    public static FrameworkElement Build(
+        IRibbonCommandRegistry registry,
+        RibbonAdaptiveGroupState state = RibbonAdaptiveGroupState.Full)
     {
         var strip = new StackPanel
         {
@@ -34,7 +36,13 @@ internal static class PresentationTransitionGallery
             Margin = new Thickness(2, 1, 2, 0),
         };
 
-        foreach (var entry in Entries)
+        // At narrow widths PowerPoint retains a small, directly selectable transition strip rather
+        // than replacing the entire gallery with overflow. The adjacent More group still exposes
+        // the full catalog.
+        var visibleEntries = state == RibbonAdaptiveGroupState.SmallWithLabels
+            ? Entries.Take(3)
+            : Entries.AsEnumerable();
+        foreach (var entry in visibleEntries)
             strip.Children.Add(BuildButton(entry, registry));
 
         return strip;

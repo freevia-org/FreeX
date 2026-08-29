@@ -1289,6 +1289,7 @@ public static class FreePRibbon
         // panel reclaim this broad gallery before it collapses the concise timing surface.
         tab.Group("transition-gallery", FreePRibbonText.TransitionGalleryGroup.Label, FreePRibbonText.TransitionGalleryGroup.KeyTip, 85, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
             group.Medium("freep.transition.none", FreePRibbonText.TransitionNoneCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.TransitionNoneCommand.KeyTip);
             group.Medium("freep.transition.fade", FreePRibbonText.TransitionFadeCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.TransitionFadeCommand.KeyTip);
             group.Medium("freep.transition.push", FreePRibbonText.TransitionPushCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.TransitionPushCommand.KeyTip);
@@ -1327,6 +1328,7 @@ public static class FreePRibbon
         });
         tab.Group("transition-timing", FreePRibbonText.TransitionTimingGroup.Label, FreePRibbonText.TransitionTimingGroup.KeyTip, 100, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
             group.ComboBox("freep.transition.duration", FreePRibbonText.TransitionDurationCommand.Label, control => control with
             {
                 Choices = FreePRibbonDefinitionData.TransitionDurationChoices,
