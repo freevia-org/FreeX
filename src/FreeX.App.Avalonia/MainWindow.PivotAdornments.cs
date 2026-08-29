@@ -49,7 +49,7 @@ public sealed partial class MainWindow
     /// pivot header dropdown target. Mirrors <see cref="DecorateAutoFilterHeaderCell"/> but for pivot
     /// field-header cells (Row Labels, Column Labels, Page field dropdowns).
     /// </summary>
-    private Border DecoratePivotHeaderCell(Border cellBorder, CellAddress address)
+    private Border DecoratePivotHeaderCell(Border cellBorder, CellAddress address, double zoomFactor)
     {
         if (!_pivotHeaderDropdownTargets.TryGetValue((address.Row, address.Col), out var menuTarget))
             return cellBorder;
@@ -59,18 +59,24 @@ public sealed partial class MainWindow
         var content = cellBorder.Child;
         cellBorder.Child = null;
 
-        // Downward-triangle glyph — same geometry as the AutoFilter chevron.
+        // Downward-triangle glyph — same geometry as the AutoFilter chevron. WPF draws this whole
+        // button (box + glyph) inside a single logical coordinate space that is then scaled as a
+        // unit by the SheetGrid's zoom RenderTransform; Avalonia has no such global transform, so
+        // every coordinate here must be multiplied by zoomFactor explicitly to stay proportional
+        // to the (already zoom-scaled) header cell it sits in -- mirrors DecorateAutoFilterHeaderCell.
         // Active: funnel icon (blue); inactive: simple filled triangle (dark grey).
         var chevronPath = isActive
             ? new AvaloniaPath
             {
-                Data = Geometry.Parse("M3,2 L12,2 L8.5,6 L8.5,12 L6.5,12 L6.5,6 Z"),
+                Data = Geometry.Parse(FormattableString.Invariant(
+                    $"M{3 * zoomFactor},{2 * zoomFactor} L{12 * zoomFactor},{2 * zoomFactor} L{8.5 * zoomFactor},{6 * zoomFactor} L{8.5 * zoomFactor},{12 * zoomFactor} L{6.5 * zoomFactor},{12 * zoomFactor} L{6.5 * zoomFactor},{6 * zoomFactor} Z")),
                 Fill = PivotActiveDropdownGlyphBrush,
                 Stretch = Stretch.None,
             }
             : new AvaloniaPath
             {
-                Data = Geometry.Parse("M4.5,6.5 L10.5,6.5 L7.5,10.5 Z"),
+                Data = Geometry.Parse(FormattableString.Invariant(
+                    $"M{4.5 * zoomFactor},{6.5 * zoomFactor} L{10.5 * zoomFactor},{6.5 * zoomFactor} L{7.5 * zoomFactor},{10.5 * zoomFactor} Z")),
                 Fill = PivotDropdownGlyphBrush,
                 Stretch = Stretch.None,
             };
@@ -82,14 +88,14 @@ public sealed partial class MainWindow
         // but in --parity-grid headless captures only the intrinsic layout/render pipeline runs).
         var buttonBorder = new Border
         {
-            Width = 15,
-            MinWidth = 15,
+            Width = 15 * zoomFactor,
+            MinWidth = 15 * zoomFactor,
             Background = PivotDropdownButtonBg,
             BorderBrush = PivotDropdownButtonBorder,
             BorderThickness = new Thickness(1),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 2, 0),
+            Margin = new Thickness(0, 0, 2 * zoomFactor, 0),
             Child = chevronPath,
             Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand),
         };

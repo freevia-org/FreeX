@@ -251,7 +251,16 @@ public sealed class XlsxFileAdapterFormatTests
 
         XlsxPackageTestHelper.PatchPackageXml(package, "[Content_Types].xml", document =>
         {
+            // shared-document-properties F2: the single-cell workbook this fixture starts from now
+            // gets its own docProps/core.xml (and Override) from the initial Save() above, so this
+            // must replace that Override rather than append a second one for the same PartName --
+            // duplicate Overrides for one part is a malformed package (duplicate-key parse failure
+            // on reload).
             XNamespace contentTypesNs = document.Root!.Name.Namespace;
+            document.Root
+                .Elements(contentTypesNs + "Override")
+                .Where(element => element.Attribute("PartName")?.Value == "/docProps/core.xml")
+                .Remove();
             document.Root.Add(new XElement(
                 contentTypesNs + "Override",
                 new XAttribute("PartName", "/docProps/core.xml"),

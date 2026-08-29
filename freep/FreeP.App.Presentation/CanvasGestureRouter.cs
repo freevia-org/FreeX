@@ -240,6 +240,7 @@ public sealed class CanvasGestureRouter
 {
     private readonly ICanvasGestureEditingSession _editor;
     private readonly CanvasGestureSession _session = new();
+    private bool _marqueeAdditive;
 
     public CanvasGestureRouter(ICanvasGestureEditingSession editor)
     {
@@ -407,7 +408,9 @@ public sealed class CanvasGestureRouter
             return CanvasGesturePressPlan.HandledOnly;
         }
 
-        _editor.ClearSelection();
+        _marqueeAdditive = HasAdditiveSelectionModifier(request.Modifiers);
+        if (!_marqueeAdditive)
+            _editor.ClearSelection();
         _session.BeginMarquee(request.ScreenPoint, request.SlidePoint);
         return GestureBeginPlan(began: true);
     }
@@ -773,7 +776,8 @@ public sealed class CanvasGestureRouter
         if (ids.Count == 0)
             return;
 
-        _editor.ClearSelection();
+        if (!_marqueeAdditive)
+            _editor.ClearSelection();
         foreach (var id in ids)
             _editor.Select(id, addToSelection: true);
     }

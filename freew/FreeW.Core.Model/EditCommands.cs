@@ -3712,7 +3712,8 @@ public sealed class SetFloatingPositionCommand(
 
 /// <summary>
 /// Set the size (widthPt, heightPt) on ANY floating object (Image, Shape, Chart, SmartArt,
-/// WordArt, DrawingGroup) identified by (paragraphIndex, runIndex). Snaps the prior size for undo.
+/// WordArt, DrawingGroup, EmbeddedObject) identified by (paragraphIndex, runIndex). Snaps the
+/// prior size for undo.
 /// </summary>
 public sealed class SetFloatingSizeCommand(
     int paragraphIndex, int runIndex,
@@ -3753,6 +3754,8 @@ public sealed class SetFloatingSizeCommand(
             { prevW = sa.WidthPt; prevH = sa.HeightPt; sa.WidthPt = w; sa.HeightPt = h; return true; }
         if (run.DrawingGroup is { } grp)
             { prevW = grp.WidthPt; prevH = grp.HeightPt; grp.WidthPt = w; grp.HeightPt = h; return true; }
+        if (run.EmbeddedObject is { } embedded)
+            { prevW = embedded.WidthPt; prevH = embedded.HeightPt; embedded.WidthPt = w; embedded.HeightPt = h; return true; }
         return false;
     }
 }

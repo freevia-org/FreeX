@@ -105,4 +105,74 @@ public sealed class DrawingMlColorSubstrateTests
         DrawingMlColorTransform.ApplyLuminance(new DrawingMlRgbColor(64, 64, 64), 0.5, 0.25)
             .Should().Be(new DrawingMlRgbColor(96, 96, 96));
     }
+
+    // Expected values below are derived independently from the DrawingML/ECMA-376 §20.1.2.3.25
+    // (hueMod) / §20.1.2.3.32 (satMod) transform formulas -- h' = clamp(h * hueMod, 0, 1),
+    // s' = clamp(s * satMod, 0, 1) applied in HSL space -- computed with a standalone reference
+    // RGB<->HLS implementation (the same textbook algorithm as Python's colorsys module), NOT by
+    // reading back whatever FreeX's own writer currently emits. Round 170 finding shared-theme-colors F1.
+    [Fact]
+    public void ColorTransform_AppliesSaturationModifier()
+    {
+        // (200,50,50) has HLS ~ (h=0, l=0.4902, s=0.6). satMod=0.5 halves the saturation.
+        DrawingMlColorTransform.ApplySaturation(new DrawingMlRgbColor(200, 50, 50), 0.5)
+            .Should().Be(new DrawingMlRgbColor(162, 88, 88));
+
+        // satMod=0.0 desaturates fully to a mid-gray at the same luminance.
+        DrawingMlColorTransform.ApplySaturation(new DrawingMlRgbColor(200, 50, 50), 0.0)
+            .Should().Be(new DrawingMlRgbColor(125, 125, 125));
+
+        // satMod=1.0 (100%) is documented as a no-op and must return the identical color.
+        DrawingMlColorTransform.ApplySaturation(new DrawingMlRgbColor(120, 80, 200), 1.0)
+            .Should().Be(new DrawingMlRgbColor(120, 80, 200));
+    }
+
+    [Fact]
+    public void ColorTransform_AppliesHueModifier()
+    {
+        // (50,50,200) is blue (h=2/3). hueMod=0.5 halves the hue angle, rotating it to green (h=1/3).
+        DrawingMlColorTransform.ApplyHue(new DrawingMlRgbColor(50, 50, 200), 0.5)
+            .Should().Be(new DrawingMlRgbColor(50, 200, 50));
+
+        // hueMod=0.0 collapses the hue angle to 0 (red), independent of the original hue.
+        DrawingMlColorTransform.ApplyHue(new DrawingMlRgbColor(50, 50, 200), 0.0)
+            .Should().Be(new DrawingMlRgbColor(200, 50, 50));
+
+        // hueMod=1.0 (100%) is documented as a no-op and must return the identical color.
+        DrawingMlColorTransform.ApplyHue(new DrawingMlRgbColor(120, 80, 200), 1.0)
+            .Should().Be(new DrawingMlRgbColor(120, 80, 200));
+    }
+
+    [Fact]
+    public void ColorTransform_Apply_CombinesSatModAndHueModWithLumTintShade()
+    {
+        // (30,120,200) with satMod=0.6 and hueMod=0.8 (lumMod/lumOff/tint/shade left neutral).
+        DrawingMlColorTransform.Apply(
+                new DrawingMlRgbColor(30, 120, 200),
+                satMod: 0.6,
+                hueMod: 0.8)
+            .Should().Be(new DrawingMlRgbColor(64, 166, 143));
+    }
+
+    [Fact]
+    public void ColorTransform_Apply_WithNeutralSatModAndHueMod_MatchesPreExistingLumTintShadeBehavior()
+    {
+        // Sibling no-regression case: callers that only pass lumMod/lumOff/tint/shade (the pre-fix
+        // parameter set) must see byte-identical output now that satMod/hueMod default to 1.0 (no-op).
+        DrawingMlColorTransform.Apply(
+                new DrawingMlRgbColor(101, 151, 201),
+                lumMod: 1.0,
+                lumOff: 0.0,
+                tint: 0.5,
+                shade: 1.0)
+            .Should().Be(DrawingMlColorTransform.ApplyTint(new DrawingMlRgbColor(101, 151, 201), 0.5));
+
+        DrawingMlColorTransform.Apply(
+                new DrawingMlRgbColor(64, 64, 64),
+                lumMod: 0.5,
+                lumOff: 0.25,
+                tint: 1.0,
+                shade: 1.0)
+            .Should().Be(new DrawingMlRgbColor(96, 96, 96));
+    }
 }

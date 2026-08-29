@@ -431,6 +431,56 @@ public sealed class DocumentObjectEditingCoordinatorTests
         shape.Placement.Wrapping.Should().Be(ImageWrapping.Inline);
     }
 
+    [Fact]
+    public void EmbeddedObjectSize_CanBeResizedAndUndone()
+    {
+        var embedded = EmbeddedObject.Create(
+            new byte[] { 1, 2, 3 },
+            "Excel.Sheet.12",
+            widthPt: 96,
+            heightPt: 96);
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEmbeddedObject(embedded));
+        var session = SessionWith(paragraph);
+        var target = new DocumentObjectTarget(0, 0);
+
+        var result = session.Objects.SetSize(target, 200, 150);
+
+        result.Applied.Should().BeTrue();
+        result.Kind.Should().Be(DocumentObjectKind.EmbeddedObject);
+        (embedded.WidthPt, embedded.HeightPt).Should().Be((200, 150));
+
+        session.Commands.Undo().Should().BeTrue();
+        (embedded.WidthPt, embedded.HeightPt).Should().Be((96, 96));
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void EmbeddedObjectWrapPositionAndRotation_StayUnsupportedWithoutPollutingUndo()
+    {
+        // Sibling no-regression check: EmbeddedObject now resolves (so it can be resized), but it
+        // carries no FloatingPlacement/RotationAngle, so wrap/position/rotation must keep declining
+        // rather than pushing an inert no-op onto the undo stack (those commands don't override
+        // IDocumentCommand.HasEffect, so a "successful" no-op Apply would otherwise still be undoable).
+        var embedded = EmbeddedObject.Create(
+            new byte[] { 1, 2, 3 },
+            "Excel.Sheet.12",
+            widthPt: 96,
+            heightPt: 96);
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEmbeddedObject(embedded));
+        var session = SessionWith(paragraph);
+        var target = new DocumentObjectTarget(0, 0);
+
+        session.Objects.SetWrap(target, ImageWrapping.Square).Applied.Should().BeFalse();
+        session.Objects
+            .SetPosition(target, 10, 20, HorizontalAnchor.Column, VerticalAnchor.Paragraph)
+            .Applied.Should().BeFalse();
+        session.Objects.SetRotation(target, 90, flipH: true, flipV: false).Applied.Should().BeFalse();
+
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
     private static DocumentEditingSession SessionWith(Paragraph paragraph)
     {
         var document = new TextDocument();

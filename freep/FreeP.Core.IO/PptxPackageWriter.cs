@@ -961,12 +961,16 @@ public static class PptxPackageWriter
                 slideRels.Add(transSoundPart.Value.relId, AudioRelType,
                     $"../media/{transSoundPart.Value.partPath.Split('/').Last()}");
 
-            // Write notes slide and add rel when the slide has speaker notes
-            if (slide.Notes is not null)
+            // Write notes slide and add rel when the slide has speaker notes OR notes-page
+            // content FreeP doesn't model (freep-notes-master F1) -- a source file's notes page
+            // can carry only extra shapes (no body text) and that must still round-trip.
+            if (slide.Notes is not null || !string.IsNullOrEmpty(slide.NotesExtraShapesXml))
             {
                 var notesPath = $"ppt/notesSlides/notesSlide{si + 1}.xml";
                 var notesRelId = $"rIdNotes{si + 1}";
-                WriteEntry(archive, notesPath, BuildNotesSlideXml(slide.Notes, slidePath));
+                WriteEntry(archive, notesPath, BuildNotesSlideXml(
+                    slide.Notes, slidePath, slide.NotesBodyGeometryOverride, slide.NotesSlideImageGeometryOverride,
+                    slide.NotesExtraShapesXml));
 
                 // notesSlide rels: -> slide + notesMaster
                 var notesRels = new OpcRelationshipDocument();
@@ -1673,9 +1677,24 @@ public static class PptxPackageWriter
     /// <summary>
     /// Builds a minimal but spec-valid ppt/notesSlides/notesSlideN.xml containing the notes
     /// text in the body placeholder (p:ph type="body" idx="1") and a slide-image placeholder
-    /// (p:ph type="sldImg" idx="0") required by the schema.
+    /// (p:ph type="sldImg" idx="0") required by the schema. When <paramref name="bodyOverride"/>
+    /// or <paramref name="slideImageOverride"/> is non-null (round-tripped from the source
+    /// file's own notesSlideN.xml), the corresponding placeholder's spPr carries its
+    /// <c>a:xfrm</c> verbatim instead of the empty <c>&lt;p:spPr/&gt;</c> that means "inherit
+    /// from the notes master" -- otherwise a deliberately repositioned/resized/rotated notes
+    /// placeholder would snap back to the master's default layout on every save.
+    /// <paramref name="extraShapesXml"/> (round-tripped from the source file, see
+    /// <see cref="Slide.NotesExtraShapesXml"/>) re-emits any other notes-page shape verbatim
+    /// after the two placeholders -- extra text boxes, pictures, drawn shapes, or
+    /// standard-but-unmodeled placeholders -- so it survives a save instead of being discarded
+    /// (freep-notes-master F1).
     /// </summary>
-    private static XDocument BuildNotesSlideXml(TextBody notes, string _slidePath)
+    private static XDocument BuildNotesSlideXml(
+        TextBody? notes,
+        string _slidePath,
+        NotesPlaceholderGeometryOverride? bodyOverride = null,
+        NotesPlaceholderGeometryOverride? slideImageOverride = null,
+        string? extraShapesXml = null)
     {
         // Slide-image placeholder (required by the notes slide schema)
         var slideImgSp = new XElement(P + "sp",
@@ -1683,16 +1702,16 @@ public static class PptxPackageWriter
                 new XElement(P + "cNvPr", new XAttribute("id", "2"), new XAttribute("name", "Slide Image Placeholder 1")),
                 new XElement(P + "cNvSpPr", new XElement(A + "spLocks", new XAttribute("noGrp", "1"), new XAttribute("noRot", "1"), new XAttribute("noChangeAspect", "1"))),
                 new XElement(P + "nvPr", new XElement(P + "ph", new XAttribute("type", "sldImg")))),
-            new XElement(P + "spPr"));
+            BuildNotesPlaceholderSpPrEl(slideImageOverride));
 
         // Body placeholder (carries the notes text)
-        var notesTxBody = BuildNotesTxBodyEl(notes);
+        var notesTxBody = BuildNotesTxBodyEl(notes ?? new TextBody());
         var notesBodySp = new XElement(P + "sp",
             new XElement(P + "nvSpPr",
                 new XElement(P + "cNvPr", new XAttribute("id", "3"), new XAttribute("name", "Content Placeholder 2")),
                 new XElement(P + "cNvSpPr", new XElement(A + "spLocks", new XAttribute("noGrp", "1"))),
                 new XElement(P + "nvPr", new XElement(P + "ph", new XAttribute("type", "body"), new XAttribute("idx", "1")))),
-            new XElement(P + "spPr"),
+            BuildNotesPlaceholderSpPrEl(bodyOverride),
             notesTxBody);
 
         return new XDocument(
@@ -1704,9 +1723,57 @@ public static class PptxPackageWriter
                     new XElement(P + "spTree",
                         GrpSpHeader(),
                         slideImgSp,
-                        notesBodySp)),
+                        notesBodySp,
+                        ParseNotesExtraShapesXml(extraShapesXml))),
                 new XElement(P + "clrMapOvr",
                     new XElement(A + "masterClrMapping"))));
+    }
+
+    /// <summary>
+    /// Parses <see cref="Slide.NotesExtraShapesXml"/> back into the shape elements it holds
+    /// (each wrapped, on capture, in a single throwaway root -- see
+    /// <c>PptxPackageReader.ReadNotesSlide</c>). Returns no elements when null/blank or when the
+    /// stored payload is malformed, so a corrupt round-trip value degrades to "no extra shapes"
+    /// rather than failing the whole save.
+    /// </summary>
+    private static IEnumerable<XElement> ParseNotesExtraShapesXml(string? extraShapesXml)
+    {
+        if (string.IsNullOrWhiteSpace(extraShapesXml))
+            yield break;
+
+        XElement wrapper;
+        try
+        {
+            wrapper = XElement.Parse(extraShapesXml, LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException)
+        {
+            yield break;
+        }
+
+        foreach (var el in wrapper.Elements())
+            yield return el;
+    }
+
+    /// <summary>
+    /// Builds the <c>p:spPr</c> for a notes-slide placeholder. Emits <c>&lt;a:xfrm&gt;</c>
+    /// with the override's position/size/rotation when <paramref name="geometryOverride"/> is
+    /// non-null; otherwise emits the empty <c>&lt;p:spPr/&gt;</c> that means "inherit geometry
+    /// from the notes master's matching placeholder" (the pre-existing, still-correct default
+    /// for a placeholder the source file never repositioned).
+    /// </summary>
+    private static XElement BuildNotesPlaceholderSpPrEl(NotesPlaceholderGeometryOverride? geometryOverride)
+    {
+        if (geometryOverride is not { } o)
+            return new XElement(P + "spPr");
+
+        var xfrm = new XElement(A + "xfrm");
+        if (o.RotationDeg != 0)
+            xfrm.Add(new XAttribute("rot", (long)Math.Round(o.RotationDeg * 60000)));
+        xfrm.Add(new XElement(A + "off", new XAttribute("x", o.OffsetXEmu), new XAttribute("y", o.OffsetYEmu)));
+        xfrm.Add(new XElement(A + "ext", new XAttribute("cx", o.ExtentCxEmu), new XAttribute("cy", o.ExtentCyEmu)));
+
+        return new XElement(P + "spPr", xfrm);
     }
 
     private static XElement BuildDefaultTextStyleEl()

@@ -108,6 +108,13 @@ public partial class MainWindow
         var cell = sheet?.GetCell(addr);
         var text = FormatFormulaBarText(SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, cell, addr), addr);
         _formulaEditCell = addr;
+        // freex-cell-editing-modes-F2: remembers what this edit's target address displayed at
+        // the moment editing began, so a sibling "New Window" view's RefreshFromSharedWorkbook
+        // (MainWindow.MultiWindow.cs) can tell, once notified of a cross-window change, whether
+        // that address still holds the same content -- and only then reconcile (cancel) this
+        // still-open edit instead of leaving it to silently commit onto whatever a structural
+        // shift moved in underneath it.
+        _pendingEditBaselineText = text;
         _formulaRangeEditingSession.SetPointMode(false);
         _formulaEditEnteredViaEditKey = true;
         ClearFormulaReferenceEntrySpan();
@@ -241,28 +248,177 @@ public partial class MainWindow
         _inlineEditor.CaretIndex = ResolveInlineEditorCaretIndex(clickX, layout.TextOverlayRect.Left - 4);
         _inlineEditor.SelectionLength = 0;
         SetFormulaEditStatusBarMode(pointMode: false);
+    }
 
-        static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
+    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
+    {
+        foreach (var metric in metrics)
         {
-            foreach (var metric in metrics)
-            {
-                if (metric.Row == row)
-                    return metric;
-            }
-
-            return null;
+            if (metric.Row == row)
+                return metric;
         }
 
-        static ColMetric? FindColMetric(IReadOnlyList<ColMetric> metrics, uint col)
+        return null;
+    }
+
+    private static ColMetric? FindColMetric(IReadOnlyList<ColMetric> metrics, uint col)
+    {
+        foreach (var metric in metrics)
         {
-            foreach (var metric in metrics)
+            if (metric.Col == col)
+                return metric;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// r170: set while the edited cell's anchor is scrolled out of view mid-formula.
+    /// The edit is SUSPENDED, not ended: the formula bar carries the text (and keeps point mode
+    /// alive, since GetFormulaRangeEntryEditor falls back to it), and the in-cell editor comes back
+    /// when the anchor scrolls back into view.
+    /// </summary>
+    private bool _inlineEditorAnchorOffscreen;
+
+    /// <summary>
+    /// R-freex-cell-editing-modes-F1: <c>UpdateViewport</c> (MainWindow.Viewport.cs) rebuilds
+    /// <c>SheetGrid.Viewport</c>'s row/col metrics on every scroll (mouse wheel, scrollbar drag),
+    /// but the in-cell editor's on-screen position was previously only ever computed once, at
+    /// edit-start time in <see cref="ShowInlineEditor"/>. Without this, scrolling while an in-cell
+    /// edit is open left the floating edit box glued to its original screen pixel position while
+    /// the grid content scrolled underneath it. Mirrors the analogous
+    /// <see cref="RefreshTextBoxInlineEditorPosition"/> (MainWindow.TextBoxInlineEditing.cs), which
+    /// solves the identical problem for the shape/textbox inline editor: re-derive the editor's
+    /// Canvas position from the current viewport on every <c>UpdateViewport</c> pass, and commit +
+    /// hide it if its anchor cell has scrolled out of the renderable viewport entirely (there is no
+    /// sane on-screen position to draw it at in that case) -- EXCEPT while a formula is being entered,
+    /// where scrolling the anchor away is part of pointing at a distant cell and the edit is
+    /// suspended instead (see <see cref="SuspendInlineEditorForOffscreenAnchor"/>).
+    /// </summary>
+    private void RefreshInlineEditorPosition()
+    {
+        if (_inlineEditor is null || _formulaEditCell is not { } addr)
+            return;
+        if (_inlineEditor.IsVisible != true && !_inlineEditorAnchorOffscreen)
+            return;
+
+        var vp = SheetGrid.Viewport;
+        var rowMetric = vp is null ? null : FindRowMetric(vp.RowMetrics, addr.Row);
+        var colMetric = vp is null ? null : FindColMetric(vp.ColMetrics, addr.Col);
+        if (rowMetric == null || colMetric == null)
+        {
+            // r170: scrolling the anchor off-screen is part of the "type '=', scroll, click a
+            // distant cell" gesture, so while a FORMULA is being entered the edit must survive it.
+            // Committing there ends the formula mid-entry -- the opposite of what the gesture asked
+            // for -- and the click that follows then overwrites a cell instead of adding a
+            // reference. Suspend the in-cell overlay and let the formula bar carry the edit.
+            if (IsFormulaReferenceHighlightActive(_inlineEditor))
             {
-                if (metric.Col == col)
-                    return metric;
+                SuspendInlineEditorForOffscreenAnchor();
+                return;
             }
 
-            return null;
+            // Mirrors CommitInlineEditorLostFocusIfNeeded's commit sequence -- the edited cell is no
+            // longer on screen at all, so commit the in-progress edit instead of leaving the editor
+            // floating over unrelated content with no valid anchor to reposition to.
+            _inlineEditorAnchorOffscreen = false;
+            FormulaBar.Text = _inlineEditor.Text;
+            HideInlineEditor(commit: true);
+            CommitEdit();
+            return;
         }
+
+        if (_inlineEditorAnchorOffscreen)
+            RestoreInlineEditorAfterOffscreenAnchor();
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+
+        // Cell metrics are in unzoomed coordinates; the EditOverlay is not transformed, so scale.
+        double zoom = _zoomLevel;
+        double cx = (colMetric.LeftOffset + SheetGrid.ActualRowHeaderWidth) * zoom;
+        double cy = (rowMetric.TopOffset  + FreeX.App.UI.GridView.ColHeaderHeight) * zoom;
+        double cellW = colMetric.Width  * zoom;
+        double cellH = rowMetric.Height * zoom;
+
+        // R75-render-merged-cells-4-2: mirror ShowInlineEditor -- widen the editor box to span the
+        // full merged rectangle when addr is a merge anchor.
+        if (sheet is { MergedRegions.Count: > 0 } && sheet.GetMergeRegion(addr) is { } merge && merge.Start == addr)
+        {
+            for (uint c2 = merge.Start.Col + 1; c2 <= merge.End.Col; c2++)
+                if (FindColMetric(vp!.ColMetrics, c2) is { } extraCol)
+                    cellW += extraCol.Width * zoom;
+            for (uint r2 = merge.Start.Row + 1; r2 <= merge.End.Row; r2++)
+                if (FindRowMetric(vp!.RowMetrics, r2) is { } extraRow)
+                    cellH += extraRow.Height * zoom;
+        }
+
+        _inlineEditorSingleLineHeight = cellH;
+        var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH, lineCount: CountInlineEditorLines(_inlineEditor.Text));
+
+        _inlineEditorChromeBaseRect = layout.EditorRect;
+        ApplyInlineEditorChromeFrame(FormulaInlineEditorOverflow.None);
+
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.TextOverlayRect.Left - 4);
+        System.Windows.Controls.Canvas.SetTop(_inlineEditor, layout.EditorRect.Top);
+        _inlineEditor.Width  = layout.TextOverlayRect.Width + 8;
+        _inlineEditor.Height = layout.EditorRect.Height;
+        if (_inlineFormulaReferenceOverlay is not null)
+        {
+            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Left);
+            System.Windows.Controls.Canvas.SetTop(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Top);
+            _inlineFormulaReferenceOverlay.Width = layout.TextOverlayRect.Width;
+            _inlineFormulaReferenceOverlay.Height = layout.TextOverlayRect.Height;
+        }
+
+        // Re-run the same overflow-dependent passes ShowInlineEditor runs after positioning (text
+        // surface width/overflow depends on the freshly-scaled chrome rect computed above).
+        RefreshInlineEditorTextSurface();
+        RefreshInlineEditorChromeBorder();
+    }
+
+    /// <summary>
+    /// Hides the in-cell editor without ending the edit: <c>_formulaEditCell</c> and the text stay
+    /// live, and the formula bar becomes the editing surface (which is also what keeps point mode
+    /// active, because <c>GetFormulaRangeEntryEditor</c> falls back to it when the inline editor is
+    /// not visible). See <see cref="_inlineEditorAnchorOffscreen"/>.
+    /// </summary>
+    private void SuspendInlineEditorForOffscreenAnchor()
+    {
+        if (_inlineEditor is null)
+            return;
+
+        _inlineEditorAnchorOffscreen = true;
+        FormulaBar.Text = _inlineEditor.Text;
+        _inlineEditor.Visibility = Visibility.Collapsed;
+        if (_inlineEditorChrome is not null)
+            _inlineEditorChrome.Visibility = Visibility.Collapsed;
+        _inlineEditorChromeBaseRect = null;
+        FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
+    }
+
+    /// <summary>
+    /// Inverse of <see cref="SuspendInlineEditorForOffscreenAnchor"/>: the anchor scrolled back into
+    /// view, so the in-cell editor takes the text the formula bar accumulated while suspended (any
+    /// references the user pointed at) and becomes visible again. The caller repositions it.
+    /// </summary>
+    private void RestoreInlineEditorAfterOffscreenAnchor()
+    {
+        _inlineEditorAnchorOffscreen = false;
+        if (_inlineEditor is null)
+            return;
+
+        if (!string.Equals(_inlineEditor.Text, FormulaBar.Text, StringComparison.Ordinal))
+        {
+            _inlineEditor.Text = FormulaBar.Text;
+            _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
+            _inlineEditor.SelectionLength = 0;
+        }
+
+        _inlineEditor.Visibility = Visibility.Visible;
+        if (_inlineEditorChrome is not null)
+            _inlineEditorChrome.Visibility = Visibility.Visible;
+        EditOverlay.IsHitTestVisible = true;
+        SheetGrid.EditingCell = _formulaEditCell;
     }
 
     /// <summary>

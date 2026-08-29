@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Xml.Linq;
 
+using Free.Shared.Opc;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -156,6 +157,46 @@ public sealed partial class XlsxFileAdapter
         XlsxExternalLinkSchemaNormalizer.NormalizePackage(generatedArchive);
         XlsxWorksheetSingleXmlCellMapper.NormalizePackage(generatedArchive);
         return sourceParts;
+    }
+
+    // shared-document-properties F2 / R170-io-fresh-workbook-coreprops-1: a brand-new,
+    // never-loaded-from-.xlsx workbook has no SourcePackages entry at all, so
+    // XlsxFileAdapter.SavePostProcessing.cs's own !hasSourcePackage branch returns long before
+    // ever calling PreserveSourcePackageParts above (whose own "no source package" early return,
+    // a few lines up, is therefore unreachable in production -- pure defense-in-depth). ClosedXML's
+    // SaveAs never writes docProps/core.xml for a workbook with no ClosedXML-native core properties
+    // set (it unconditionally writes docProps/app.xml but never core.xml on its own), so a
+    // FreeX-native workbook's first save -- and every later save of that SAME never-loaded
+    // workbook, since none of them populate SourcePackages either -- produced a package with no
+    // docProps/core.xml part at all: no dcterms:created, no dcterms:modified, ever, for the life of
+    // that file (a later app-layer reload of the saved file captures this same core.xml-less
+    // package as its new source snapshot, so the gap does not self-heal on a subsequent save
+    // either). Called from that !hasSourcePackage branch, before it normalizes the document
+    // properties package graph, so the root-relationship-adding logic already in
+    // XlsxDocumentPropertiesPreserver.NormalizePackageGraph picks up the newly-created part and
+    // wires _rels/.rels for it automatically. Created and Modified are both stamped to the same
+    // save instant, matching Excel's own behavior of setting them equal on a document's first
+    // save; dc:creator/dc:title are intentionally left unset here (FreeX has no equivalent of a
+    // configured "current user" or document title to draw from at this layer), matching a genuine
+    // new Excel workbook's own blank Title until the user sets one. The explicit
+    // [Content_Types].xml Override is required because this package's Default Extension="xml" rule
+    // maps to the WORKBOOK's own content type (spreadsheetml.sheet.main+xml), not a generic XML
+    // type, so an unregistered docProps/core.xml would silently inherit the wrong content type.
+    internal static void CreateCorePropertiesForFreshWorkbook(Stream packageStream, DateTimeOffset saveTimestamp)
+    {
+        packageStream.Position = 0;
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        if (archive.GetEntry(OpcPackageProperties.CorePropertiesZipEntry) is not null)
+            return;
+
+        OpcDocumentProperties.WriteCoreProperties(
+            archive,
+            new CoreDocumentProperties(Created: saveTimestamp, Modified: saveTimestamp),
+            includeDcmiTypeNamespace: true);
+        XlsxPackageXmlEditor.EnsureSpecificContentType(
+            archive,
+            OpcPackageProperties.CorePropertiesPartName,
+            OpcPackageProperties.CorePropertiesContentType);
     }
 
     private struct SourcePackagePartSummary

@@ -37,7 +37,7 @@ public sealed partial class MainWindow
     /// cell (the active AutoFilter range's header row). The button opens the column's filter flyout. Cells
     /// that are not filter headers are returned unchanged.
     /// </summary>
-    private Border DecorateAutoFilterHeaderCell(Border cellBorder, CellAddress address)
+    private Border DecorateAutoFilterHeaderCell(Border cellBorder, CellAddress address, double zoomFactor)
     {
         if (!AutoFilterHeaderButtonPlanner.IsFilterButtonCell(_session.ActiveSheet, address.Row, address.Col))
             return cellBorder;
@@ -52,26 +52,33 @@ public sealed partial class MainWindow
 
         // Build a crisp drawn chevron button matching WPF's drawn geometry + gradient background.
         // Triangle points mirror WPF DrawAutoFilterGlyph: (cx-3,cy-2)-(cx+3,cy-2)-(cx,cy+2).
+        // WPF draws this whole button (box + glyph) inside a single logical coordinate space that
+        // is then scaled as a unit by the SheetGrid's zoom RenderTransform (see
+        // MainWindow.ViewCommands.cs); Avalonia has no such global transform, so every coordinate
+        // here must be multiplied by zoomFactor explicitly to stay proportional to the (already
+        // zoom-scaled) header cell it sits in.
         var chevronPath = isActive
             ? new AvaloniaPath
             {
                 // Active: funnel/filter icon (wide-top narrowing to a bar, matching WPF).
-                Data = Geometry.Parse("M3,2 L12,2 L8.5,6 L8.5,12 L6.5,12 L6.5,6 Z"),
+                Data = Geometry.Parse(FormattableString.Invariant(
+                    $"M{3 * zoomFactor},{2 * zoomFactor} L{12 * zoomFactor},{2 * zoomFactor} L{8.5 * zoomFactor},{6 * zoomFactor} L{8.5 * zoomFactor},{12 * zoomFactor} L{6.5 * zoomFactor},{12 * zoomFactor} L{6.5 * zoomFactor},{6 * zoomFactor} Z")),
                 Fill = ActiveAutoFilterGlyphBrush,
                 Stretch = Stretch.None,
             }
             : new AvaloniaPath
             {
                 // Inactive: simple filled downward triangle, centered in 15×15 at (7.5, 8.5).
-                Data = Geometry.Parse("M4.5,6.5 L10.5,6.5 L7.5,10.5 Z"),
+                Data = Geometry.Parse(FormattableString.Invariant(
+                    $"M{4.5 * zoomFactor},{6.5 * zoomFactor} L{10.5 * zoomFactor},{6.5 * zoomFactor} L{7.5 * zoomFactor},{10.5 * zoomFactor} Z")),
                 Fill = AutoFilterGlyphBrush,
                 Stretch = Stretch.None,
             };
 
         var buttonBorder = new Border
         {
-            Width = 15,
-            MinWidth = 15,
+            Width = 15 * zoomFactor,
+            MinWidth = 15 * zoomFactor,
             Background = new LinearGradientBrush
             {
                 StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
@@ -86,7 +93,7 @@ public sealed partial class MainWindow
             BorderThickness = new Thickness(1),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 2, 0),
+            Margin = new Thickness(0, 0, 2 * zoomFactor, 0),
             Child = chevronPath,
             Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand),
         };

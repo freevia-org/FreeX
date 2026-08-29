@@ -421,6 +421,19 @@ public sealed class WorksheetSortConditionModel
     public string? IconSet { get; set; }
     public string? IconId { get; set; }
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// R170-freex-autofilter-sort-F2: the actual fill/font colour a Sort On: Cell Colour/Font
+    /// Colour level was sorted against, set by <c>SortCommand.BuildSortState</c> when the level
+    /// resolved a specific target colour. This exists purely so a save-time allocator
+    /// (<c>XlsxSortStateColorDxfWriter</c> in FreeX.Core.IO) can turn it into a workbook-level
+    /// &lt;dxfs&gt; entry and stamp the resulting index onto <see cref="DxfId"/> -- mirroring
+    /// <c>WorksheetAutoFilterColorFilterModel.Color</c>, which exists for the identical reason on
+    /// AutoFilter's "Filter by Colour". Deliberately NOT itself round-tripped to/from XML (a file
+    /// read from disk already carries a concrete <see cref="DxfId"/>, so there is nothing to
+    /// backfill this from on read).
+    /// </summary>
+    public CellColor? TargetColor { get; set; }
 }
 
 public sealed class WorksheetAdditionalViewsModel

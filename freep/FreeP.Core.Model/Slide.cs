@@ -346,6 +346,15 @@ public sealed class MediaCaptionTrackInfo
 }
 
 /// <summary>
+/// A per-slide position/size/rotation override for one of the two notes-slide placeholders
+/// (notes-body or slide-image), read verbatim from that placeholder's <c>p:spPr/a:xfrm</c> in
+/// <c>ppt/notesSlides/notesSlideN.xml</c>. See <see cref="Slide.NotesBodyGeometryOverride"/>
+/// and <see cref="Slide.NotesSlideImageGeometryOverride"/>.
+/// </summary>
+public readonly record struct NotesPlaceholderGeometryOverride(
+    long OffsetXEmu, long OffsetYEmu, long ExtentCxEmu, long ExtentCyEmu, double RotationDeg);
+
+/// <summary>
 /// Visibility flags for footer/date/slide-number placeholders.
 /// Corresponds to <c>p:hf</c> in slide/layout/master XML.
 /// </summary>
@@ -820,6 +829,34 @@ public sealed class Slide
     /// Corresponds to the body placeholder (p:ph type="body") in the ppt/notesSlides/notesSlideN.xml part.
     /// </summary>
     public TextBody? Notes { get; set; }
+
+    /// <summary>
+    /// Per-slide position/size/rotation override for the notes-body placeholder (p:ph
+    /// type="body"), read from this slide's own ppt/notesSlides/notesSlideN.xml
+    /// (p:sp/p:spPr/a:xfrm). Null when that file carries no override (an empty or absent
+    /// &lt;p:spPr&gt;) for the body placeholder, meaning the notes master's placeholder
+    /// geometry applies.
+    /// </summary>
+    public NotesPlaceholderGeometryOverride? NotesBodyGeometryOverride { get; set; }
+
+    /// <summary>
+    /// Per-slide position/size/rotation override for the notes slide-image placeholder
+    /// (p:ph type="sldImg"), read from this slide's own notesSlideN.xml. Null when that file
+    /// carries no override for the slide-image placeholder, meaning the notes master's
+    /// placeholder geometry applies. See <see cref="NotesBodyGeometryOverride"/>.
+    /// </summary>
+    public NotesPlaceholderGeometryOverride? NotesSlideImageGeometryOverride { get; set; }
+
+    /// <summary>
+    /// Raw OOXML for any notes-page shapes beyond the two placeholders FreeP models
+    /// (<see cref="Notes"/> for the body placeholder, plus the always-present slide-image
+    /// placeholder) -- extra text boxes, pictures, drawn shapes, or standard-but-unmodeled
+    /// placeholders (footer/date/slide-number) that a real PowerPoint notes page can carry.
+    /// Concatenated verbatim <c>p:sp</c>/<c>p:pic</c>/... XML fragments (wrapped in a single
+    /// throwaway root element), preserved so a save does not silently discard that content.
+    /// Null when the notes slide has no such extra shapes.
+    /// </summary>
+    public string? NotesExtraShapesXml { get; set; }
 
     // ── Header/footer visibility ──────────────────────────────────────────────────────
 

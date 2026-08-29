@@ -110,6 +110,46 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
     }
 
     [Fact]
+    public async Task EmbeddedObjectImport_LabelsTheObjectWithTheSourceFileName()
+    {
+        // Non-image bytes: the object gets no visual thumbnail, but it must still carry an Icon
+        // whose AltText is the picked file's name, so EmbeddedObjectVisualPlanner's accessible-name
+        // fallback (Icon.AltText, proven by EmbeddedObjectVisualPlannerTests) announces the actual
+        // file instead of the bare "Package" ProgID.
+        var ports = new FakePorts("Quarterly Report.pdf", [1, 2, 3, 4]);
+
+        var result = await ports.CreateWorkflow([]).ImportAsync(
+            FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest());
+
+        result.Status.Should().Be(FreeWDocumentFragmentImportStatus.Succeeded);
+        var embedded = result.Insertion!.EmbeddedObject!;
+        embedded.ProgId.Should().Be(OlePackagePayloadBuilder.ProgId);
+        embedded.Icon.Should().NotBeNull();
+        embedded.Icon!.AltText.Should().Be("Quarterly Report.pdf");
+        embedded.Icon.Bytes.Should().BeEmpty("non-image bytes must not be mislabelled as a thumbnail");
+    }
+
+    [Fact]
+    public async Task EmbeddedObjectImport_UsesTheSourceBytesAsAThumbnailWhenTheyAreARecognisedImage()
+    {
+        // Sibling case: when the picked file's own bytes are a recognised raster image, they become
+        // the object's on-page icon (a real thumbnail, not just a name) while ProgID/payload are
+        // unchanged from the generic-file case above.
+        byte[] pngBytes = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 9, 9, 9];
+        var ports = new FakePorts("photo.png", pngBytes);
+
+        var result = await ports.CreateWorkflow([]).ImportAsync(
+            FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest());
+
+        var embedded = result.Insertion!.EmbeddedObject!;
+        embedded.ProgId.Should().Be(OlePackagePayloadBuilder.ProgId);
+        embedded.Icon.Should().NotBeNull();
+        embedded.Icon!.AltText.Should().Be("photo.png");
+        embedded.Icon.Bytes.Should().Equal(pngBytes);
+        embedded.Icon.Format.Should().Be(ImageFormat.Png);
+    }
+
+    [Fact]
     public async Task CancellationAndNotApplied_AreTypedAndDoNotBecomeFailures()
     {
         var cancelledPorts = new FakePorts("fragment.docx", [1])

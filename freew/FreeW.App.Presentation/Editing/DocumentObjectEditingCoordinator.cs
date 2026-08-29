@@ -12,7 +12,8 @@ public enum DocumentObjectKind
     Chart,
     SmartArt,
     WordArt,
-    DrawingGroup
+    DrawingGroup,
+    EmbeddedObject
 }
 
 /// <summary>
@@ -514,8 +515,15 @@ public sealed class DocumentObjectEditingCoordinator
         DocumentObjectTarget target,
         ImageWrapping wrapping)
     {
-        if (target.IsNested || !TryResolve(target, out _, out var kind))
+        if (target.IsNested
+            || !TryResolve(target, out _, out var kind)
+            || kind is DocumentObjectKind.EmbeddedObject)
+        {
+            // An embedded/linked OLE object has no FloatingPlacement to carry a wrap mode --
+            // SetFloatingWrapCommand would apply as a genuine no-op but still push an inert
+            // entry onto the undo stack (it doesn't override IDocumentCommand.HasEffect).
             return DocumentObjectEditResult.NoChange(target);
+        }
 
         return Execute(
             target,
@@ -530,8 +538,14 @@ public sealed class DocumentObjectEditingCoordinator
         HorizontalAnchor horizontalAnchor,
         VerticalAnchor verticalAnchor)
     {
-        if (target.IsNested || !TryResolve(target, out var modelObject, out var kind))
+        if (target.IsNested
+            || !TryResolve(target, out var modelObject, out var kind)
+            || kind is DocumentObjectKind.EmbeddedObject)
+        {
+            // Same rationale as SetWrap above: no FloatingPlacement backs an embedded object, so
+            // SetFloatingPositionCommand would silently no-op while still landing on the undo stack.
             return DocumentObjectEditResult.NoChange(target);
+        }
 
         IDocumentCommand command = modelObject is InlineImage
             ? new SetImagePositionCommand(
@@ -696,8 +710,13 @@ public sealed class DocumentObjectEditingCoordinator
         bool flipH,
         bool flipV)
     {
-        if (!TryResolve(target, out _, out var kind))
+        if (!TryResolve(target, out _, out var kind) || kind is DocumentObjectKind.EmbeddedObject)
+        {
+            // EmbeddedObject carries no RotationAngle/FlipH/FlipV (real Word doesn't let you
+            // rotate an OLE object either) -- SetFloatingRotationCommand would silently no-op
+            // while still landing on the undo stack, since it doesn't override HasEffect.
             return DocumentObjectEditResult.NoChange(target);
+        }
 
         IDocumentCommand command = target.IsNested
             ? new SetDrawingGroupChildRotationCommand(
@@ -1120,6 +1139,8 @@ public sealed class DocumentObjectEditingCoordinator
             (modelObject, kind) = (wordArt, DocumentObjectKind.WordArt);
         else if (run.DrawingGroup is { } group)
             (modelObject, kind) = (group, DocumentObjectKind.DrawingGroup);
+        else if (run.EmbeddedObject is { } embeddedObject)
+            (modelObject, kind) = (embeddedObject, DocumentObjectKind.EmbeddedObject);
         else
             return false;
 

@@ -114,8 +114,10 @@ internal static class PrintLayout
     /// same single-font approximation <c>HeaderFooterPaginator.BuildLineNumbers</c> already uses for margin
     /// line numbers, and paragraphs are walked in document order, resetting the running offset whenever
     /// <see cref="DynamicDocumentPaginator.GetPageNumber"/> reports the paragraph landed on a new page --
-    /// the same real-page-assignment technique the footnote-by-page resolver above already relies on. Table
-    /// blocks are attributed to the page they start on as one unit rather than measuring individual cells.
+    /// the same real-page-assignment technique the footnote-by-page resolver above already relies on. A
+    /// table block's own height is estimated cell-by-cell (each cell's paragraphs measured at that cell's
+    /// allocated column width) rather than by row count alone, so a table with wrapped multi-line cell
+    /// content does not throw off every block that follows it on the same page.
     /// </para>
     /// </summary>
     internal static IReadOnlyDictionary<int, List<(double Top, double Bottom)>> ResolveChangeBarBands(
@@ -175,28 +177,92 @@ internal static class PrintLayout
         switch (block)
         {
             case FreeW.Core.Model.Paragraph paragraph:
-                var text = string.Concat(paragraph.Runs.Select(run => run.Text));
-                if (string.IsNullOrEmpty(text))
-                    return lineHeightDip;
-                var formatted = new FormattedText(
-                    text,
-                    System.Globalization.CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    typeface,
-                    fontSize,
-                    Brushes.Black,
-                    1.0)
-                {
-                    MaxTextWidth = contentWidthDip
-                };
-                return Math.Max(lineHeightDip, formatted.Height);
+                return EstimateChangeBarParagraphHeightDip(paragraph, contentWidthDip, typeface, fontSize, lineHeightDip);
 
             case FreeW.Core.Model.Table table:
-                return Math.Max(lineHeightDip, table.Rows.Count * lineHeightDip * 1.5);
+                return EstimateChangeBarTableHeightDip(table, contentWidthDip, typeface, fontSize, lineHeightDip);
 
             default:
                 return lineHeightDip;
         }
+    }
+
+    private static double EstimateChangeBarParagraphHeightDip(
+        FreeW.Core.Model.Paragraph paragraph, double widthDip, Typeface typeface, double fontSize, double lineHeightDip)
+    {
+        var text = string.Concat(paragraph.Runs.Select(run => run.Text));
+        if (string.IsNullOrEmpty(text))
+            return lineHeightDip;
+        var formatted = new FormattedText(
+            text,
+            System.Globalization.CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            fontSize,
+            Brushes.Black,
+            1.0)
+        {
+            MaxTextWidth = Math.Max(1, widthDip)
+        };
+        return Math.Max(lineHeightDip, formatted.Height);
+    }
+
+    /// <summary>
+    /// Estimates a table block's total height by summing each row's height, where a row's height is the
+    /// tallest of its cells' own wrapped-paragraph content -- unlike the flat "row count" guess this
+    /// replaced, this actually accounts for a cell whose text needs more than one line, which is the case
+    /// that made <see cref="ResolveChangeBarBands"/> misplace every change-bar band that follows a table
+    /// with substantial cell content (freew-print-layout F1). Column widths are allocated with the same
+    /// <see cref="TableColumnLayoutPlanner"/> the live editor's own table layout uses, so a cell's assumed
+    /// wrap width matches what actually renders.
+    /// </summary>
+    private static double EstimateChangeBarTableHeightDip(
+        FreeW.Core.Model.Table table, double availableWidthDip, Typeface typeface, double fontSize, double lineHeightDip)
+    {
+        if (table.Rows.Count == 0)
+            return lineHeightDip;
+
+        var columnCount = Math.Max(1, TableGridProjection.TableWidth(table));
+        var tableWidthDip = TableColumnLayoutPlanner.ResolveTableWidthDip(table);
+        if (tableWidthDip <= 0)
+            tableWidthDip = availableWidthDip;
+        var columnWidthsDip = TableColumnLayoutPlanner.AllocateColumnWidths(
+            table, columnCount, Math.Min(availableWidthDip, tableWidthDip));
+
+        var total = 0.0;
+        foreach (var row in table.Rows)
+        {
+            var rowHeightDip = lineHeightDip;
+            foreach (var projected in TableGridProjection.ProjectRow(row))
+            {
+                var span = TableGridProjection.SpanWithinWidth(projected, columnWidthsDip.Length);
+                var cellWidthDip = Enumerable.Range(projected.StartColumn, Math.Max(0, span))
+                    .Where(column => column >= 0 && column < columnWidthsDip.Length)
+                    .Sum(column => columnWidthsDip[column]);
+                if (cellWidthDip <= 0)
+                    cellWidthDip = availableWidthDip;
+
+                // r170: wrap at the cell's CONTENT width and add its vertical padding, reading both
+                // rules from DocumentViewLayoutPlanner rather than re-deriving them here. Ignoring
+                // the cell margins cost roughly 1.3-1.6 DIP per row against the layout the page
+                // actually renders, which compounds to about a third of a page over a hundred-row
+                // table and pushed every following change bar off its paragraph.
+                var contentWidthDip = DocumentViewLayoutPlanner.ResolveTableCellContentWidthDip(
+                    table, projected.Cell, cellWidthDip);
+                var cellTextHeightDip = projected.Cell.Paragraphs.Sum(cellParagraph =>
+                    EstimateChangeBarParagraphHeightDip(cellParagraph, contentWidthDip, typeface, fontSize, lineHeightDip));
+                var cellHeightDip = DocumentViewLayoutPlanner.AddTableCellVerticalPaddingDip(
+                    table, projected.Cell, cellTextHeightDip);
+                cellHeightDip += projected.Cell.NestedTables.Sum(nested =>
+                    EstimateChangeBarTableHeightDip(nested, Math.Max(12, contentWidthDip), typeface, fontSize, lineHeightDip));
+                if (cellHeightDip > rowHeightDip)
+                    rowHeightDip = cellHeightDip;
+            }
+
+            total += DocumentViewLayoutPlanner.ApplyTableRowHeightFloorDip(rowHeightDip);
+        }
+
+        return Math.Max(lineHeightDip, total);
     }
 
     /// <summary>

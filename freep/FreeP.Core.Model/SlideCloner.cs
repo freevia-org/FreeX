@@ -50,6 +50,9 @@ public static class SlideCloner
                 : new Dictionary<string, string>(slide.ColorMapOverride, StringComparer.OrdinalIgnoreCase),
             Background = slide.Background,           // ShapeFill is immutable — share reference
             Notes      = TextBodyModelCloner.CloneTextBody(slide.Notes),
+            NotesBodyGeometryOverride = slide.NotesBodyGeometryOverride,             // value type
+            NotesSlideImageGeometryOverride = slide.NotesSlideImageGeometryOverride, // value type
+            NotesExtraShapesXml = slide.NotesExtraShapesXml,                         // immutable string
             HfVisibility = slide.HfVisibility is null ? null : new HfFlags
             {
                 ShowFooter   = slide.HfVisibility.ShowFooter,

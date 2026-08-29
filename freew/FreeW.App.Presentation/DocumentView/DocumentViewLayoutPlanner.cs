@@ -2837,7 +2837,7 @@ public static class DocumentViewLayoutPlanner
             })
             .DefaultIfEmpty(DefaultTableRowHeightDip)
             .Max();
-        return Math.Max(MinimumTableRowHeightDip, maxContentHeight);
+        return ApplyTableRowHeightFloorDip(maxContentHeight);
     }
 
     /// <summary>
@@ -2852,20 +2852,57 @@ public static class DocumentViewLayoutPlanner
         TableCell cell,
         double cellWidthDip)
     {
-        var margins = cell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default;
-        var horizontalPaddingDip = PageLayout.PointsToDip(
-            Math.Max(0, margins.LeftPt) + Math.Max(0, margins.RightPt));
-        var contentWidthDip = Math.Max(12, cellWidthDip - horizontalPaddingDip);
+        var contentWidthDip = ResolveTableCellContentWidthDip(table, cell, cellWidthDip);
         var lines = Math.Max(1, cell.Paragraphs.Sum(paragraph =>
             EstimateParagraphLineCount(paragraph, contentWidthDip, ResolveEffectiveFontSizePt(paragraph))));
-        var verticalPaddingDip = PageLayout.PointsToDip(
-            Math.Max(0, margins.TopPt) + Math.Max(0, margins.BottomPt));
-        var textHeightDip = lines * EstimatedTableLineHeightDip
-            + Math.Max(EstimatedTableVerticalPaddingDip, verticalPaddingDip);
+        var textHeightDip = AddTableCellVerticalPaddingDip(
+            table, cell, lines * EstimatedTableLineHeightDip);
         var nestedTablesHeightDip = cell.NestedTables.Sum(nested =>
             EstimateTableHeightDip(nested, Math.Max(12, contentWidthDip)));
         return textHeightDip + nestedTablesHeightDip;
     }
+
+    /// <summary>
+    /// r170: a table cell's usable text width -- its allocated width less the authored (or table
+    /// default) left/right cell margins. Public because the print preview's change-bar band
+    /// estimator (PrintPreviewWindow.cs) must wrap cell text at the SAME width this planner does;
+    /// it previously wrapped at the full column width and so under-estimated every row.
+    /// </summary>
+    public static double ResolveTableCellContentWidthDip(Table table, TableCell cell, double cellWidthDip)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(cell);
+
+        var margins = cell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default;
+        var horizontalPaddingDip = PageLayout.PointsToDip(
+            Math.Max(0, margins.LeftPt) + Math.Max(0, margins.RightPt));
+        return Math.Max(12, cellWidthDip - horizontalPaddingDip);
+    }
+
+    /// <summary>
+    /// r170: adds the cell's vertical padding (authored top/bottom margins, never less than the
+    /// default gutter) to a cell text height. Companion to
+    /// <see cref="ResolveTableCellContentWidthDip"/>; see that summary for why it is public.
+    /// Omitting it cost roughly 1.3-1.6 DIP per row, which compounds to about 140 DIP -- a third of
+    /// a page -- over a hundred-row table, and moved every change bar after it.
+    /// </summary>
+    public static double AddTableCellVerticalPaddingDip(Table table, TableCell cell, double textHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(cell);
+
+        var margins = cell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default;
+        var verticalPaddingDip = PageLayout.PointsToDip(
+            Math.Max(0, margins.TopPt) + Math.Max(0, margins.BottomPt));
+        return textHeightDip + Math.Max(EstimatedTableVerticalPaddingDip, verticalPaddingDip);
+    }
+
+    /// <summary>
+    /// r170: the minimum height a table row is estimated at, shared with the print preview for the
+    /// same reason as the two helpers above.
+    /// </summary>
+    public static double ApplyTableRowHeightFloorDip(double rowHeightDip) =>
+        Math.Max(MinimumTableRowHeightDip, rowHeightDip);
 
     private static double EstimateTableHeightDip(Table table, double availableWidthDip)
     {

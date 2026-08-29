@@ -1342,7 +1342,7 @@ public static class PptxPackageReader
         if (notesTarget is not null)
         {
             var notesPath = ResolveRelativeZipPath(GetDirectoryName(slidePath), notesTarget);
-            slide.Notes = ReadNotesSlide(archive, notesPath, scheme);
+            ReadNotesSlide(slide, archive, notesPath, scheme);
         }
 
         // p:hf — header/footer visibility flags
@@ -1374,19 +1374,30 @@ public static class PptxPackageReader
     // ── Notes slide ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Reads the body placeholder txBody from a ppt/notesSlides/notesSlideN.xml part.
-    /// Returns null when the part is missing or contains no body placeholder.
-    /// Tolerates slides with no notes by returning null without throwing.
+    /// Reads the body placeholder txBody, both placeholders' position/size/rotation overrides,
+    /// and any other notes-page shape FreeP does not model, from a
+    /// ppt/notesSlides/notesSlideN.xml part, setting <see cref="Slide.Notes"/>,
+    /// <see cref="Slide.NotesBodyGeometryOverride"/>, <see cref="Slide.NotesSlideImageGeometryOverride"/>
+    /// and <see cref="Slide.NotesExtraShapesXml"/> on <paramref name="slide"/>.
+    /// Leaves all four untouched when the part is missing or contains no shapes.
+    /// Tolerates slides with no notes without throwing.
     /// </summary>
-    private static TextBody? ReadNotesSlide(ZipArchive archive, string notesPath, PresentationColorScheme scheme)
+    private static void ReadNotesSlide(Slide slide, ZipArchive archive, string notesPath, PresentationColorScheme scheme)
     {
         var xml = OpcXml.TryLoadXml(archive, notesPath);
-        if (xml?.Root is null) return null;
+        if (xml?.Root is null) return;
 
         // p:notes/p:cSld/p:spTree contains shape elements.
         // The body placeholder (p:ph type="body") holds the notes text.
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
-        if (spTree is null) return null;
+        if (spTree is null) return;
+
+        // The two placeholder elements FreeP models (rebuilt on write from the fields above).
+        // Everything else in spTree is preserved verbatim below (freep-notes-master F1) instead
+        // of being silently discarded, matching the first-one-wins behavior this loop already
+        // had for each placeholder before extra-shape tracking was added.
+        XElement? sldImgPlaceholderEl = null;
+        XElement? bodyPlaceholderEl = null;
 
         foreach (var spEl in spTree.Elements(P + "sp"))
         {
@@ -1394,28 +1405,99 @@ public static class PptxPackageReader
             if (ph is null) continue;
 
             var phType = ph.Attribute("type")?.Value;
+
+            if (phType == "sldImg")
+            {
+                // The explicit slide-image placeholder form (what PowerPoint itself always
+                // writes). Carries no text -- only its geometry override matters.
+                if (sldImgPlaceholderEl is null)
+                {
+                    sldImgPlaceholderEl = spEl;
+                    slide.NotesSlideImageGeometryOverride = ReadNotesPlaceholderGeometryOverride(spEl.Element(P + "spPr"));
+                }
+                continue;
+            }
+
             // body placeholder: type="body" or omitted (idx defaults to body placeholder when idx > 0 is absent)
             // We match explicitly on "body" or absent-type with idx != 0 (slide-image is usually idx=0).
             if (phType is null or "body")
             {
                 // Skip the slide-image placeholder (idx="0" without type or type="sldImg").
                 var idxStr = ph.Attribute("idx")?.Value;
-                if (string.IsNullOrEmpty(idxStr) && phType is null) continue; // slide-image: no type, no idx or idx=0
+                if (string.IsNullOrEmpty(idxStr) && phType is null)
+                {
+                    // slide-image: no type, no idx or idx=0 (legacy/malformed form) -- still
+                    // capture its geometry override.
+                    if (sldImgPlaceholderEl is null)
+                    {
+                        sldImgPlaceholderEl = spEl;
+                        slide.NotesSlideImageGeometryOverride = ReadNotesPlaceholderGeometryOverride(spEl.Element(P + "spPr"));
+                    }
+                    continue;
+                }
 
-                var txBody = spEl.Element(P + "txBody");
-                if (txBody is null) continue;
+                if (bodyPlaceholderEl is null)
+                {
+                    bodyPlaceholderEl = spEl;
 
-                var body = ReadTxBody(txBody, scheme);
-                // Only treat as notes if there is actual text (ignore fully empty bodies).
-                if (body.Paragraphs.Count == 0 ||
-                    body.Paragraphs.All(para => para.Runs.Count == 0 || para.Runs.All(r => string.IsNullOrEmpty(r.Text))))
-                    return null;
+                    // Capture the body placeholder's geometry override regardless of whether it
+                    // turns out to carry real text below.
+                    slide.NotesBodyGeometryOverride = ReadNotesPlaceholderGeometryOverride(spEl.Element(P + "spPr"));
 
-                return body;
+                    var txBody = spEl.Element(P + "txBody");
+                    if (txBody is not null)
+                    {
+                        var body = ReadTxBody(txBody, scheme);
+                        // Only treat as notes if there is actual text (ignore fully empty bodies).
+                        if (body.Paragraphs.Count > 0 &&
+                            body.Paragraphs.Any(para => para.Runs.Count > 0 && para.Runs.Any(r => !string.IsNullOrEmpty(r.Text))))
+                        {
+                            slide.Notes = body;
+                        }
+                    }
+                }
+                continue;
             }
         }
 
-        return null;
+        // Anything in spTree besides the group-shape header and the two placeholders above is
+        // content FreeP does not model on the notes page -- extra text boxes, pictures, drawn
+        // shapes, or standard-but-unmodeled placeholders (footer/date/slide-number). Preserve it
+        // verbatim so a save doesn't silently delete it (freep-notes-master F1).
+        var extraShapes = spTree.Elements()
+            .Where(el => el.Name.LocalName is not ("nvGrpSpPr" or "grpSpPr"))
+            .Where(el => !ReferenceEquals(el, sldImgPlaceholderEl) && !ReferenceEquals(el, bodyPlaceholderEl))
+            .ToList();
+
+        slide.NotesExtraShapesXml = extraShapes.Count > 0
+            ? new XElement("notesExtraShapes", extraShapes).ToString(SaveOptions.DisableFormatting)
+            : null;
+    }
+
+    /// <summary>
+    /// Reads a per-slide notes placeholder's position/size/rotation override from its
+    /// <c>p:spPr/a:xfrm</c>. Returns null when <paramref name="spPr"/> is absent or carries no
+    /// <c>a:xfrm</c> (the common case -- no override, inherit the notes master's placeholder
+    /// geometry for this placeholder).
+    /// </summary>
+    private static NotesPlaceholderGeometryOverride? ReadNotesPlaceholderGeometryOverride(XElement? spPr)
+    {
+        var xfrm = spPr?.Element(A + "xfrm");
+        if (xfrm is null) return null;
+
+        var off = xfrm.Element(A + "off");
+        var ext = xfrm.Element(A + "ext");
+
+        double rotationDeg = 0;
+        if (long.TryParse(xfrm.Attribute("rot")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotRaw))
+            rotationDeg = rotRaw / 60000.0;
+
+        return new NotesPlaceholderGeometryOverride(
+            ParseLong(off?.Attribute("x")?.Value),
+            ParseLong(off?.Attribute("y")?.Value),
+            ParseLong(ext?.Attribute("cx")?.Value),
+            ParseLong(ext?.Attribute("cy")?.Value),
+            rotationDeg);
     }
 
     /// <summary>

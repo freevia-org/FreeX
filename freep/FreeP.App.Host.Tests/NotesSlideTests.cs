@@ -1,6 +1,8 @@
 using System.IO;
+using System.IO.Compression;
 using System.Reflection;
 using System.Windows;
+using System.Xml.Linq;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
@@ -249,6 +251,147 @@ public sealed class NotesSlideTests : IDisposable
         reNotes!.Paragraphs.Should().HaveCount(2);
         reNotes.Paragraphs[0].Runs[0].Text.Should().Be("First point.");
         reNotes.Paragraphs[1].Runs[0].Text.Should().Be("Second point.");
+    }
+
+    /// <summary>
+    /// Simulates a foreign PowerPoint file: injects a third shape (a plain text box) into a
+    /// notes slide part alongside the two standard placeholders FreeP itself writes, exactly
+    /// like the manual notesSlide1.xml patch described in freep-notes-master F1's evidence.
+    /// </summary>
+    private static void InjectExtraNotesShape(string pptxPath, int slideNumber)
+    {
+        using var archive = ZipFile.Open(pptxPath, ZipArchiveMode.Update);
+        var entryPath = $"ppt/notesSlides/notesSlide{slideNumber}.xml";
+        var entry = archive.GetEntry(entryPath);
+        entry.Should().NotBeNull($"{entryPath} must already exist in a presentation with notes");
+
+        XDocument doc;
+        using (var readStream = entry!.Open())
+            doc = XDocument.Load(readStream);
+
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var spTree = doc.Root!.Element(p + "cSld")!.Element(p + "spTree")!;
+        spTree.Add(new XElement(p + "sp",
+            new XElement(p + "nvSpPr",
+                new XElement(p + "cNvPr", new XAttribute("id", "4"), new XAttribute("name", "TextBox 5")),
+                new XElement(p + "cNvSpPr", new XElement(a + "spLocks", new XAttribute("noGrp", "1"))),
+                new XElement(p + "nvPr")),
+            new XElement(p + "spPr"),
+            new XElement(p + "txBody",
+                new XElement(a + "bodyPr"),
+                new XElement(a + "lstStyle"),
+                new XElement(a + "p",
+                    new XElement(a + "r",
+                        new XElement(a + "rPr", new XAttribute("lang", "en-US")),
+                        new XElement(a + "t", "CONFIDENTIAL - internal review only"))))));
+
+        entry.Delete();
+        var newEntry = archive.CreateEntry(entryPath);
+        using var writeStream = newEntry.Open();
+        doc.Save(writeStream);
+    }
+
+    [Fact]
+    public void RoundTrip_NotesPageExtraShape_SurvivesForeignFileThenSave()
+    {
+        // freep-notes-master F1: opening a foreign .pptx whose notes page carries a shape
+        // beyond the two placeholders FreeP models (an extra text box, picture, or drawn
+        // shape), then saving once in FreeP, must not silently delete that shape from the file.
+        var pres = MakePresWithNotes("Speaker note: introduce the review workflow.");
+        var path = WriteToPptx(pres);
+
+        InjectExtraNotesShape(path, slideNumber: 1);
+
+        var opened = PptxPackageReader.Read(path);
+        var openedSlide = opened.Slides[0];
+        openedSlide.Notes.Should().NotBeNull("the original notes text must still be read");
+        openedSlide.NotesExtraShapesXml.Should().NotBeNullOrWhiteSpace(
+            "the extra notes-page shape from the foreign file must be captured, not silently discarded");
+        openedSlide.NotesExtraShapesXml.Should().Contain("CONFIDENTIAL - internal review only");
+
+        // The destructive step the finding describes: save once through FreeP's writer.
+        var resavedPath = WriteToPptx(opened);
+        var reloaded = PptxPackageReader.Read(resavedPath);
+        var reloadedSlide = reloaded.Slides[0];
+
+        reloadedSlide.Notes.Should().NotBeNull("the notes text must still round-trip through the save");
+        reloadedSlide.NotesExtraShapesXml.Should().NotBeNullOrWhiteSpace(
+            "the extra shape must survive a FreeP save, not be permanently destroyed");
+        reloadedSlide.NotesExtraShapesXml.Should().Contain("CONFIDENTIAL - internal review only");
+    }
+
+    [Fact]
+    public void RoundTrip_NotesWithoutExtraShapes_NotesExtraShapesXmlStaysNull()
+    {
+        // Sibling/no-regression case for freep-notes-master F1: an ordinary notes page (just
+        // the two placeholders FreeP already models) must not spuriously grow an "extra
+        // shapes" payload -- e.g. from misclassifying the placeholders it just emitted.
+        var pres = MakePresWithNotes("Nothing unusual about this notes page.");
+
+        var path     = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var slide = reloaded.Slides[0];
+        slide.Notes.Should().NotBeNull();
+        slide.NotesExtraShapesXml.Should().BeNull(
+            "a notes page with only the two standard placeholders must not carry any extra-shape payload");
+    }
+
+    [Fact]
+    public void RoundTrip_NotesPlaceholderGeometryOverride_Preserved()
+    {
+        // freep-notes-master F2: a user dragged/resized/rotated both the notes-body and
+        // slide-image placeholders away from the notes master's default rectangle in
+        // PowerPoint (e.g. to make room for a pasted screenshot). Those per-slide overrides
+        // must survive read + write, not silently snap back to the master's default layout.
+        var pres  = new Presentation();
+        var slide = new Slide();
+        var notes = new TextBody();
+        var para  = new Paragraph();
+        para.Runs.Add(new Run { Text = "Make room for the screenshot." });
+        notes.Paragraphs.Add(para);
+        slide.Notes = notes;
+
+        slide.NotesBodyGeometryOverride = new NotesPlaceholderGeometryOverride(
+            OffsetXEmu: 1234567, OffsetYEmu: 7654321, ExtentCxEmu: 3000000, ExtentCyEmu: 1500000, RotationDeg: 20.0);
+        slide.NotesSlideImageGeometryOverride = new NotesPlaceholderGeometryOverride(
+            OffsetXEmu: 999999, OffsetYEmu: 888888, ExtentCxEmu: 4000000, ExtentCyEmu: 2000000, RotationDeg: 0);
+
+        pres.Slides.Add(slide);
+
+        var path     = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var reSlide = reloaded.Slides[0];
+        reSlide.NotesBodyGeometryOverride.Should().Be(
+            slide.NotesBodyGeometryOverride,
+            "the notes-body placeholder's position/size/rotation override must round-trip through write+read");
+        reSlide.NotesSlideImageGeometryOverride.Should().Be(
+            slide.NotesSlideImageGeometryOverride,
+            "the slide-image placeholder's position/size/rotation override must round-trip the same way");
+    }
+
+    [Fact]
+    public void RoundTrip_NotesWithoutGeometryOverride_PlaceholdersStillInheritFromMaster()
+    {
+        // Sibling/no-regression case: a slide with notes but NO per-slide placeholder override
+        // (the ordinary case) must still round-trip with both overrides null -- i.e. the writer
+        // still emits the empty <p:spPr/> that means "inherit from the notes master" when the
+        // source slide never carried an override, exactly as before this fix.
+        const string notesText = "Nothing special about this notes page's layout.";
+        var pres = MakePresWithNotes(notesText);
+
+        var path     = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var slide = reloaded.Slides[0];
+        slide.Notes.Should().NotBeNull();
+        slide.NotesBodyGeometryOverride.Should().BeNull(
+            "a notes slide that never carried an xfrm override must keep inheriting the master's placeholder geometry");
+        slide.NotesSlideImageGeometryOverride.Should().BeNull(
+            "the slide-image placeholder likewise has no override on this slide");
     }
 
     // ── EditingSession notes command ──────────────────────────────────────────────

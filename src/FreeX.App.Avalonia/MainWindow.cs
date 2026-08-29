@@ -9138,7 +9138,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 zoomFactor,
                 cellHeight);
         }
-        return DecoratePivotHeaderCell(DecorateAutoFilterHeaderCell(border, address), address);
+        return DecoratePivotHeaderCell(DecorateAutoFilterHeaderCell(border, address, zoomFactor), address, zoomFactor);
     }
 
     private bool IsCellDoubleClick(CellAddress address, int frameworkClickCount)

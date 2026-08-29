@@ -32,7 +32,11 @@ public sealed class FreeWFileDialogSourceTests
         pictureWorkflow.Should().Contain("InsertPicturePickerTitle");
         fragmentWorkflow.Should().Contain("\"Insert Object\"");
         fragmentWorkflow.Should().Contain("OlePackagePayloadBuilder.Create(");
-        fragmentWorkflow.Should().Contain("EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId)");
+        // r170: pinned without the closing paren so the contract survives an added argument. What
+        // this assertion is for is that the embedded object is built from the OLE package payload
+        // and its ProgId; the argument COUNT is not the contract, and pinning it made a legitimate
+        // fix (passing the icon through) look like a regression.
+        fragmentWorkflow.Should().Contain("EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId");
         combined.Should().NotContain("SampleEmbeddedObject");
         combined.Should().Contain("FreeWExportWorkflow.CreatePlan(");
         outputWorkflow.Should().Contain("FreeWFileTextResources.ExportPdfPickerTitle");

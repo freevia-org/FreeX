@@ -7,9 +7,13 @@ public static class DrawingMlColorTransform
         double lumMod = 1.0,
         double lumOff = 0.0,
         double tint = 1.0,
-        double shade = 1.0)
+        double shade = 1.0,
+        double satMod = 1.0,
+        double hueMod = 1.0)
     {
         var resolved = ApplyLuminance(baseColor, lumMod, lumOff);
+        resolved = ApplySaturation(resolved, satMod);
+        resolved = ApplyHue(resolved, hueMod);
         resolved = ApplyTint(resolved, tint);
         return ApplyShade(resolved, shade);
     }
@@ -21,6 +25,38 @@ public static class DrawingMlColorTransform
 
         RgbToHls(baseColor, out var h, out var l, out var s);
         l = Math.Clamp(l * lumMod + lumOff, 0.0, 1.0);
+        return HlsToRgb(h, l, s);
+    }
+
+    /// <summary>
+    /// Applies the DrawingML &lt;a:satMod&gt; scheme-color modifier: the HSL saturation channel is
+    /// multiplied by <paramref name="satModFraction"/> and clamped to [0,1] (ECMA-376 §20.1.2.3.32;
+    /// ordinal formula mirrors the reference OOXML consumer's saturation-modulate transform:
+    /// s' = clamp(s * satMod, 0, 1)). A value of 1.0 (100%) is a no-op.
+    /// </summary>
+    public static DrawingMlRgbColor ApplySaturation(DrawingMlRgbColor baseColor, double satModFraction)
+    {
+        if (satModFraction == 1.0)
+            return baseColor;
+
+        RgbToHls(baseColor, out var h, out var l, out var s);
+        s = Math.Clamp(s * satModFraction, 0.0, 1.0);
+        return HlsToRgb(h, l, s);
+    }
+
+    /// <summary>
+    /// Applies the DrawingML &lt;a:hueMod&gt; scheme-color modifier: the normalized hue channel
+    /// (fraction of 360 degrees) is multiplied by <paramref name="hueModFraction"/> and clamped to
+    /// [0,1] (ECMA-376 §20.1.2.3.25; mirrors the reference OOXML consumer's hue-modulate transform:
+    /// h' = clamp(h * hueMod, 0, 1), clamped rather than wrapped). A value of 1.0 (100%) is a no-op.
+    /// </summary>
+    public static DrawingMlRgbColor ApplyHue(DrawingMlRgbColor baseColor, double hueModFraction)
+    {
+        if (hueModFraction == 1.0)
+            return baseColor;
+
+        RgbToHls(baseColor, out var h, out var l, out var s);
+        h = Math.Clamp(h * hueModFraction, 0.0, 1.0);
         return HlsToRgb(h, l, s);
     }
 

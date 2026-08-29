@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using Free.Shared.AppServices;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -233,6 +234,64 @@ public partial class MainWindow
     /// </summary>
     public void RefreshTitleBar() => UpdateTitleBar();
 
+    /// <summary>
+    /// Baseline Formula Bar display text for this window's OWN currently-open in-cell/Formula Bar
+    /// edit (<see cref="_formulaEditCell"/>), captured the moment that edit began -- see the two
+    /// capture sites, <c>ShowInlineEditor</c> (MainWindow.Editing.cs) and
+    /// <c>CaptureFormulaEditCell</c> (MainWindow.FormulaReferenceEditing.cs), and cleared alongside
+    /// <c>_formulaEditCell</c> in <c>ClearFormulaRangeEntryState</c>. Compared against the SAME
+    /// address's CURRENT content in <see cref="ReconcilePendingEditWithSharedWorkbookChange"/> so a
+    /// cross-window notification can tell whether anything actually landed on this edit's target
+    /// address since it opened (freex-cell-editing-modes-F2).
+    /// </summary>
+    private string? _pendingEditBaselineText;
+
+    /// <summary>
+    /// Reconciles this window's own open in-cell/Formula Bar edit (if any) against whatever the
+    /// notifying window's command just changed in the shared workbook, before the rest of
+    /// <see cref="RefreshFromSharedWorkbook"/> re-renders from it (freex-cell-editing-modes-F2).
+    /// A sibling "New Window" view's structural command (Insert/Delete Rows/Columns/Cells) shifts
+    /// every address at/below the target, but never touches THIS window's <c>_formulaEditCell</c>/
+    /// <c>_inlineEditor</c> -- so without this check, this window's later CommitEdit()
+    /// (MainWindow.Editing.cs) still writes to the stale pre-shift address, silently clobbering
+    /// whatever content the shift just moved there. Re-deriving the edit's target address's CURRENT
+    /// display text and comparing it against the baseline snapshot taken when the edit began (see
+    /// <see cref="_pendingEditBaselineText"/>) distinguishes that hazard from the ordinary,
+    /// deliberately-supported case of two sibling windows independently editing DIFFERENT cells
+    /// while unrelated commands commit elsewhere (Excel "New Window" independence) -- an unrelated
+    /// change leaves this address's content, and therefore the comparison, untouched, so the open
+    /// edit is left completely alone exactly as before. Only when the target address's content no
+    /// longer matches the baseline -- whether because a shift moved different content underneath it,
+    /// or another window edited this exact address directly -- does committing this edit risk
+    /// overwriting content the user editing here never saw, so the edit is cancelled (mirroring the
+    /// existing Escape-key cancel path in FormulaBar_KeyDown) rather than silently applied to the
+    /// wrong content.
+    /// </summary>
+    private void ReconcilePendingEditWithSharedWorkbookChange()
+    {
+        if (_formulaEditCell is not { } addr)
+            return;
+
+        // A formula-reference point-mode entry (typing "=" then clicking cells to build a
+        // reference) is deliberately left running by every other "commit or leave alone" gate in
+        // this codebase (TryCommitPendingSpellCheckEdit, the Escape-key handler) -- reconciling
+        // out from under it here would corrupt the reference being built.
+        var liveEditor = _inlineEditor?.IsVisible == true ? _inlineEditor : FormulaBar;
+        if (IsFormulaRangeEntryActive(liveEditor))
+            return;
+
+        var sheet = _workbook.GetSheet(addr.Sheet);
+        var currentDisplayText = FormatFormulaBarText(
+            SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(addr), addr),
+            addr);
+        if (currentDisplayText == _pendingEditBaselineText)
+            return;
+
+        FormulaBar.Text = currentDisplayText;
+        HideInlineEditor(commit: false);
+        ClearFormulaRangeEntryState();
+    }
+
     /// <summary>Re-reads the shared workbook into this window's viewport/status after an edit elsewhere.</summary>
     public void RefreshFromSharedWorkbook()
     {
@@ -248,6 +307,8 @@ public partial class MainWindow
         _documentContext.SetCurrentWorkbook(_workbook);
         if (_workbook.GetSheet(_currentSheetId) is null && _workbook.Sheets.Count > 0)
             _currentSheetId = _workbook.Sheets[0].Id;
+
+        ReconcilePendingEditWithSharedWorkbookChange();
 
         InvalidateNavigationCaches();
         RefreshSheetTabs();

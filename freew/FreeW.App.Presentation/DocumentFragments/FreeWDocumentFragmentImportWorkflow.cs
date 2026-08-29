@@ -376,13 +376,27 @@ public sealed class FreeWDocumentFragmentImportWorkflow
         return FreeWDocumentFragmentInsertionRequest.ForDocument(document);
     }
 
+    /// <summary>Word-typical on-page icon size (points) for a FreeW-authored Package object's presentation.</summary>
+    private const double ObjectIconSizePt = 96;
+
     private async Task<FreeWDocumentFragmentInsertionRequest> BuildObjectInsertionAsync(
         FreeWDocumentFragmentImportSelection selection,
         CancellationToken cancellationToken)
     {
         var bytes = await _reader.ReadBytesAsync(selection, cancellationToken);
         var payload = OlePackagePayloadBuilder.Create(selection.Name, selection.LocalPath, bytes);
+
+        // A FreeW-authored object always carries an on-page icon (see EmbeddedObject.cs's design
+        // comment): when the picked file's own bytes are a recognised raster image, they become a
+        // real thumbnail; otherwise the icon carries no raster but still names the source file, so
+        // EmbeddedObjectVisualPlanner's AltText fallback announces "budget.xlsx" instead of the bare
+        // ProgID to screen readers (proven by EmbeddedObjectVisualPlannerTests).
+        var icon = InlineImage.HasRecognisedSignature(bytes)
+            ? new InlineImage(bytes, ObjectIconSizePt, ObjectIconSizePt, InlineImage.DetectFormat(bytes))
+            : new InlineImage([], ObjectIconSizePt, ObjectIconSizePt);
+        icon.AltText = selection.Name;
+
         return FreeWDocumentFragmentInsertionRequest.ForEmbeddedObject(
-            EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId));
+            EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId, icon));
     }
 }

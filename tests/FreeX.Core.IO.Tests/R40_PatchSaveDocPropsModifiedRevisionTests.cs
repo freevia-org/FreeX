@@ -136,15 +136,24 @@ public sealed class R40_PatchSaveDocPropsModifiedRevisionTests
             using (var writer = new StreamWriter(entry.Open(), System.Text.Encoding.UTF8))
                 writer.Write(coreXml);
 
-            // A brand-new FreeX-authored workbook has no docProps/core.xml part at all (see the
-            // sibling missing-part test below), so this fixture must register the part exactly
-            // as a real Excel-authored file would: a [Content_Types].xml Override and a root
-            // _rels/.rels relationship, or ClosedXML's own re-load of this fixture will reject it.
+            // This fixture must register the part exactly as a real Excel-authored file would: a
+            // [Content_Types].xml Override and a root _rels/.rels relationship, or ClosedXML's own
+            // re-load of this fixture will reject it. shared-document-properties F2: a brand-new
+            // FreeX-authored workbook now DOES get its own docProps/core.xml (with its own Override
+            // and relationship) on the initial Save() a few lines up, so both additions below must
+            // replace any pre-existing entry for this part rather than blindly appending -- a second
+            // Override for the same PartName is a malformed package (duplicate-key parse failure on
+            // reload), which is exactly what surfaced here once the initial Save() stopped leaving
+            // this part out.
             XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
             var contentTypesEntry = archive.GetEntry("[Content_Types].xml")!;
             XDocument contentTypesXml;
             using (var s = contentTypesEntry.Open())
                 contentTypesXml = XDocument.Load(s);
+            contentTypesXml.Root!
+                .Elements(contentTypeNs + "Override")
+                .Where(e => e.Attribute("PartName")?.Value == "/docProps/core.xml")
+                .Remove();
             contentTypesXml.Root!.Add(new XElement(
                 contentTypeNs + "Override",
                 new XAttribute("PartName", "/docProps/core.xml"),
@@ -159,6 +168,10 @@ public sealed class R40_PatchSaveDocPropsModifiedRevisionTests
             XDocument relsXml;
             using (var s = relsEntry.Open())
                 relsXml = XDocument.Load(s);
+            relsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .Where(e => e.Attribute("Target")?.Value?.TrimStart('/') == "docProps/core.xml")
+                .Remove();
             relsXml.Root!.Add(new XElement(
                 packageRelNs + "Relationship",
                 new XAttribute("Id", "rIdFreeXCoreProperties"),

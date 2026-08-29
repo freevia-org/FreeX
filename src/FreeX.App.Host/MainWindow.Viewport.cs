@@ -758,6 +758,10 @@ public partial class MainWindow
         RefreshViewportPivotFieldListPane(sheet);
         RefreshViewportSlicerTimelinePane();
         RefreshTextBoxInlineEditorPosition();
+        // freex-cell-editing-modes-F1: keep the in-cell editor's floating Canvas position glued to
+        // its cell across scrolls, the same way RefreshTextBoxInlineEditorPosition just above does
+        // for the shape/textbox inline editor.
+        RefreshInlineEditorPosition();
         UpdateChartsheetPresentation(sheet);
     }
 

@@ -402,6 +402,15 @@ public sealed partial class XlsxFileAdapter
                 XlsxExternalLinkAuthoringWriter.Save(packageStream, workbook);
             }
             NormalizeStylesheetForSchema();
+            // shared-document-properties F2: this brand-new workbook has no source package for
+            // XlsxDocumentPropertiesPreserver.Preserve (inside PreserveSourcePackageParts,
+            // unreachable on this path) to carry a docProps/core.xml part forward from, and
+            // ClosedXML's own SaveAs never writes one on its own -- so without this call the
+            // package would carry no dcterms:created/dcterms:modified for the life of the file.
+            // Must run before NormalizeDocumentPropertiesPackageGraph so its root-relationship
+            // wiring sees the newly-created part and adds the _rels/.rels relationship for it.
+            packageStream.Position = 0;
+            CreateCorePropertiesForFreshWorkbook(packageStream, DateTimeOffset.UtcNow);
             NormalizeDocumentPropertiesPackageGraph();
             NormalizeWorkbookForSchema();
             return;

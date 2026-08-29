@@ -1,4 +1,5 @@
 using System.IO;
+using System.Xml.Linq;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -69,6 +70,16 @@ internal static class XlsxWorksheetPostProcessingMetadataBatchWriter
     private static void SaveWorksheetElementMetadata(XlsxWorksheetXmlEditSession session, Workbook workbook)
     {
         XlsxWorksheetSmartTagMapper.Save(session, workbook);
+
+        // R170-freex-autofilter-sort-F2: allocate any missing colour-sort dxfs before writing
+        // sortState XML, so the sortCondition can reference the freshly allocated dxfId -- same
+        // ordering SaveAutoFilters uses for XlsxAutoFilterColorFilterDxfWriter above.
+        if (XlsxSortStateColorDxfWriter.HasUnallocatedSortColors(workbook))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XlsxSortStateColorDxfWriter.Save(session.Archive, workbook, workbookNs);
+        }
+
         XlsxWorksheetSortStateMapper.Save(session, workbook);
         XlsxWorksheetAdditionalViewMapper.Save(session, workbook);
         XlsxWorksheetDataConsolidationMapper.Save(session, workbook);

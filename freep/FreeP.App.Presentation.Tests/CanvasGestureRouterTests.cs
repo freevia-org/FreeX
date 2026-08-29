@@ -208,6 +208,94 @@ public sealed class CanvasGestureRouterTests
         editor.SelectedShapeIds.Should().Equal(shape.Id);
     }
 
+    // F2 (round 170): holding Shift/Ctrl/Meta while drag-marqueeing must ADD the newly-enclosed
+    // shapes to the pre-existing selection, not discard it. Pre-select shape B (off to the side),
+    // then Shift+drag a marquee around disjoint shape A only; B must still be selected afterward.
+    [Theory]
+    [InlineData(CanvasGestureModifiers.Shift)]
+    [InlineData(CanvasGestureModifiers.Control)]
+    [InlineData(CanvasGestureModifiers.Meta)]
+    public void AdditiveMarquee_PreservesPriorSelectionAndAddsNewHits(
+        CanvasGestureModifiers modifier)
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var a = Shape(1, 10, 20, 100, 50);
+        var b = Shape(2, 500, 20, 100, 50);
+        slide.Shapes.Add(a);
+        slide.Shapes.Add(b);
+        var editor = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        editor.Select(b.Id);
+        var router = new CanvasGestureRouter(editor);
+
+        // Press on empty canvas, away from both shapes, then marquee only around shape A.
+        var press = router.HandlePointerPressed(Request(
+            screen: new CanvasGesturePoint(-10, -10),
+            slide: new CanvasGesturePoint(-10, -10),
+            modifiers: modifier));
+        press.CapturePointer.Should().BeTrue();
+        router.Kind.Should().Be(CanvasGestureKind.Marquee);
+
+        // The pre-existing selection must survive through the drag while the modifier is held.
+        editor.SelectedShapeIds.Should().Equal(b.Id);
+
+        router.PreviewPointer(
+            new CanvasGesturePoint(200, 200),
+            SlideTransformCore.Identity,
+            modifier);
+
+        router.CompletePointer(
+            new CanvasGesturePoint(200, 200),
+            SlideTransformCore.Identity,
+            modifier).Should().BeTrue();
+
+        editor.SelectedShapeIds.Should().Contain(a.Id)
+            .And.Contain(b.Id, "the additive modifier must keep the pre-existing selection instead of discarding it");
+    }
+
+    // Sibling no-regression guard: an UNMODIFIED marquee drag must keep replacing the selection,
+    // matching EmptyPress_MarqueeUsesSharedDragThresholdAndSelectionCommit above.
+    [Fact]
+    public void NonAdditiveMarquee_StillReplacesPriorSelection()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var a = Shape(1, 10, 20, 100, 50);
+        var b = Shape(2, 500, 20, 100, 50);
+        slide.Shapes.Add(a);
+        slide.Shapes.Add(b);
+        var editor = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        editor.Select(b.Id);
+        var router = new CanvasGestureRouter(editor);
+
+        var press = router.HandlePointerPressed(Request(
+            screen: new CanvasGesturePoint(-10, -10),
+            slide: new CanvasGesturePoint(-10, -10)));
+        press.CapturePointer.Should().BeTrue();
+        router.Kind.Should().Be(CanvasGestureKind.Marquee);
+
+        // Unmodified press clears immediately, same as before this fix.
+        editor.SelectedShapeIds.Should().BeEmpty();
+
+        router.PreviewPointer(
+            new CanvasGesturePoint(200, 200),
+            SlideTransformCore.Identity,
+            CanvasGestureModifiers.None);
+
+        router.CompletePointer(
+            new CanvasGesturePoint(200, 200),
+            SlideTransformCore.Identity,
+            CanvasGestureModifiers.None).Should().BeTrue();
+
+        editor.SelectedShapeIds.Should().Equal(a.Id);
+    }
+
     [Fact]
     public void PreviewProjector_OwnsScreenBoundsGuidesRotationAndGeometryProjection()
     {

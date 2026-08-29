@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml.Linq;
+using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -805,7 +806,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             CaseSensitive = _options.CaseSensitive ? true : null
         };
 
-        foreach (var (index, ascending, sortOn, _, customOrder, _) in keys)
+        foreach (var (index, ascending, sortOn, targetColor, customOrder, targetIcon) in keys)
         {
             // Top-to-bottom: each key is a column, and its condition ref spans the full sorted
             // row range within that single column. Left-to-right: each key is a row, and its
@@ -821,11 +822,17 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             // R34-commands-sort-custom-deep-3: a custom-list ("First key sort order") key must
             // round-trip its list through the persisted customList attribute, or reopening the
             // saved file shows "Normal" instead of the custom order that was actually applied.
-            // Note: TargetColor/TargetIcon (cellColor/fontColor/icon sorts) have no corresponding
-            // fix here — a real dxfId must reference an entry in the workbook's <dxfs>
-            // differential-format list, and Workbook/Sheet have no such registry to allocate one
-            // from; stamping an arbitrary dxfId would point Excel at an unrelated (or
-            // out-of-range) format, which is worse than omitting the attribute.
+            //
+            // R170-freex-autofilter-sort-F2: a chosen target colour (Sort On: Cell/Font Colour)
+            // used to have no corresponding fix here at all -- a real dxfId must reference an
+            // entry in the workbook's <dxfs> differential-format list, which nothing allocated
+            // into. XlsxSortStateColorDxfWriter (FreeX.Core.IO) now allocates one at save time,
+            // the same way XlsxAutoFilterColorFilterDxfWriter (R89) already does for AutoFilter's
+            // "Filter by Colour" -- TargetColor is carried on the model purely to feed that
+            // allocator; it is never itself written to XML. An icon sort needs no such
+            // allocation at all: iconSet/iconId alone fully identify the chosen icon in the
+            // <sortCondition> schema, so those are set directly here whenever a target icon was
+            // chosen.
             model.Conditions.Add(new WorksheetSortConditionModel
             {
                 Reference = conditionRange.ToString(),
@@ -837,7 +844,12 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     SortOn.CellIcon => "icon",
                     _ => null
                 },
-                CustomList = customOrder is not null ? string.Join(",", customOrder.Tokens) : null
+                CustomList = customOrder is not null ? string.Join(",", customOrder.Tokens) : null,
+                TargetColor = sortOn is SortOn.CellColor or SortOn.FontColor ? targetColor : null,
+                IconSet = sortOn == SortOn.CellIcon ? targetIcon?.IconSet : null,
+                IconId = sortOn == SortOn.CellIcon && targetIcon is not null
+                    ? targetIcon.IconId.ToString(CultureInfo.InvariantCulture)
+                    : null
             });
         }
 
@@ -1618,6 +1630,58 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         };
     }
 
+    // R170-freex-autofilter-sort-F1: a small bounded cache of one ConditionalFormatEvaluationSession
+    // per (sheet, ContentVersion, ConditionalFormats.Version), mirroring
+    // ViewportService.BuildConditionalFormatContext's own cache shape/size so building the full CF
+    // evaluation context (ColorScale/Top10/AboveAverage/Duplicate aggregates over every ranged
+    // rule) happens once per sort/filter/AutoFilter-dropdown operation rather than once per cell.
+    // Static because GetEffectiveColor is called from several files (FilterCommand,
+    // AutoFilterDropdownMenuPlanner, SortCommand itself) with no shared per-operation instance to
+    // hang a cache on. Bounded the same way the per-instance cache is, so a stale evicted entry's
+    // Workbook/Sheet reference is not held forever.
+    private const int MaxCachedCfSessions = 8;
+    private static readonly Dictionary<CfSessionCacheKey, ConditionalFormatEvaluationSession> CfSessionCache = new();
+    private static readonly Queue<CfSessionCacheKey> CfSessionCacheOrder = new();
+
+    private readonly record struct CfSessionCacheKey(Workbook Workbook, SheetId SheetId, int ContentVersion, int CfRuleVersion);
+
+    // r170 remediation: this cache is static, so every open document and window shares it, and it
+    // was mutated with no synchronisation. A 16-thread probe corrupted it in a few thousand
+    // iterations -- InvalidOperationException from the dictionary, IndexOutOfRangeException and
+    // ArgumentException from the queue's growth. It is reachable from Sort, Filter by Colour and the
+    // AutoFilter swatch scan, and an existing test class already drives the same path inside an
+    // assembly that runs collections in parallel, so this was a live crash, not a theoretical one.
+    //
+    // The lock deliberately does NOT cover building the session: that walks the occupied-cell map
+    // and is the expensive part. Build outside, then re-check under the lock, so a race costs one
+    // duplicate build rather than a corrupted cache.
+    private static readonly object CfSessionCacheGate = new();
+
+    private static ConditionalFormatEvaluationSession GetCfEvaluationSession(Workbook workbook, Sheet sheet)
+    {
+        var key = new CfSessionCacheKey(workbook, sheet.Id, sheet.ContentVersion, sheet.ConditionalFormats.Version);
+        lock (CfSessionCacheGate)
+        {
+            if (CfSessionCache.TryGetValue(key, out var cached))
+                return cached;
+        }
+
+        var session = new ConditionalFormatEvaluationSession(sheet, workbook, sheet.GetOccupiedCellMap());
+
+        lock (CfSessionCacheGate)
+        {
+            if (CfSessionCache.TryGetValue(key, out var raced))
+                return raced;
+
+            while (CfSessionCache.Count >= MaxCachedCfSessions && CfSessionCacheOrder.TryDequeue(out var stale))
+                CfSessionCache.Remove(stale);
+
+            CfSessionCache[key] = session;
+            CfSessionCacheOrder.Enqueue(key);
+            return session;
+        }
+    }
+
     /// <summary>
     /// R39-commands-sort-custom-2-2 / filter-by-color-cf: resolves the color Excel would actually
     /// show for a cell when sorting/filtering by Cell Color or Font Color — the cell's static
@@ -1628,14 +1692,18 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     /// AutoFilterDropdownMenuPlanner's color-options list, so a CF-red cell is treated as red by
     /// both the offered color swatches and the actual match — never as "no fill".
     /// <para>
-    /// This intentionally only evaluates CF rule shapes that can be judged purely from the cell's
-    /// own value (literal CellValue comparisons, Blanks/NoBlanks/Errors/NoErrors, and the simple
-    /// text-match rules) — rule types that need cross-cell aggregation or arbitrary formula
-    /// evaluation (AboveAverage, Top10, Duplicate/UniqueValues, ColorScale, DataBar, IconSet,
-    /// Formula) are left unresolved here and fall through to the cell's static style. A full
-    /// formula/aggregate CF evaluator already exists for viewport rendering in
-    /// FreeX.Core.Calc.ViewportConditionalFormatEvaluator, but that project is not referenced by
-    /// FreeX.Core.Commands, so reusing it here is out of scope for this fix.
+    /// R170-freex-autofilter-sort-F1: this used to hand-evaluate only the CF rule shapes judgeable
+    /// purely from the cell's own value (CellValue, Blanks/Errors, simple text-match), leaving
+    /// ColorScale/DataBar/Top10/AboveAverage/Duplicate-Unique/Formula unresolved — so a column
+    /// visibly painted by e.g. a 3-color Color Scale reported every cell as having no CF color,
+    /// disagreeing with what <see cref="FreeX.Core.Calc.ViewportConditionalFormatEvaluator"/>
+    /// paints on screen for the exact same cell. FreeX.Core.Commands already references
+    /// FreeX.Core.Calc (see the project file — a prior version of this comment claiming otherwise
+    /// was stale) and <see cref="FreeX.Core.Commands.AccessibilityCheckerService"/> already
+    /// resolves effective cell style through the public
+    /// <see cref="FreeX.Core.Calc.ConditionalFormatEvaluationSession"/> wrapper around that same
+    /// evaluator, so this now delegates to it for every rule kind instead of adding a sixth
+    /// hand-rolled rule kind to a second, drift-prone copy.
     /// </para>
     /// </summary>
     public static CellColor? GetEffectiveColor(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell, bool wantFill, ScalarValue? effectiveValue = null)
@@ -1645,9 +1713,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         // object, e.g. an empty formatted cell) entry recorded against this address, then Default.
         var styleId = cell?.StyleId ?? sheet.GetStyleOnly(address.Row, address.Col) ?? StyleId.Default;
         var style = workbook.GetStyle(styleId);
-        CellColor? effective = wantFill ? style.FillColor : style.FontColor;
         if (sheet.ConditionalFormats.Count == 0)
-            return effective;
+            return wantFill ? style.FillColor : style.FontColor;
 
         // R149-remediation-sort-color-icon-spill: callers that already resolved the LIVE value for
         // this address (e.g. a dynamic-array spill member, which has no stored Cell of its own —
@@ -1658,48 +1725,20 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         // previous cell?.Value ?? BlankValue.Instance behavior unchanged.
         var value = effectiveValue ?? cell?.Value ?? BlankValue.Instance;
 
-        foreach (var rule in sheet.ConditionalFormats.OrderBy(r => r.Priority))
-        {
-            var applies = false;
-            foreach (var range in rule.AllRanges)
-            {
-                if (range.Contains(address))
-                {
-                    applies = true;
-                    break;
-                }
-            }
-            if (!applies)
-                continue;
+        // R170-freex-autofilter-sort-F1: reuse one session per (sheet, ContentVersion,
+        // ConditionalFormats.Version) — see GetCfEvaluationSession — instead of rebuilding the
+        // full evaluation context (which recomputes ColorScale/Top10/AboveAverage/Duplicate
+        // aggregates over every ranged rule) on every single cell, which would turn an O(n log n)
+        // sort or an O(n) AutoFilter color scan into an O(n^2) rebuild.
+        var session = GetCfEvaluationSession(workbook, sheet);
+        var merged = session.EvaluateEffectiveStyle(address, value, style);
 
-            if (!TryEvaluateSimpleConditionalFormatRule(rule, value, out var matches) || !matches)
-                continue;
-
-            // FontColor is a non-nullable CellStyle member defaulting to Black, so a plain
-            // (non-dxf) FontColor value can't by itself distinguish "this rule sets font color to
-            // black" from "this rule doesn't override font color". ViewportConditionalFormatEvaluator
-            // resolves that ambiguity via the tri-state CellStyle.DxfFontColor field, which the xlsx
-            // dxf reader populates with the rule's actual explicit color (including an explicit
-            // black) — mirror that same resolution here (ViewportConditionalFormatEvaluator.
-            // EffectiveFontColor) so Sort/Filter On Font Color agrees with what the grid renders:
-            // DxfFontColor wins when present (even black), otherwise fall back to the legacy
-            // "non-black plain FontColor means explicitly set" heuristic for CF styles built
-            // without going through the dxf reader (tests, UI/paste-built rules).
-            CellColor? ruleColor = wantFill
-                ? rule.FormatIfTrue?.FillColor
-                : rule.FormatIfTrue is { } fmt
-                    ? fmt.DxfFontColor ?? (fmt.FontColor != CellColor.Black ? fmt.FontColor : null)
-                    : null;
-            if (ruleColor is not null)
-            {
-                effective = ruleColor;
-                break; // highest-precedence (lowest Priority number) matching rule wins for this aspect
-            }
-            if (rule.StopIfTrue)
-                break;
-        }
-
-        return effective;
+        // FontColor is a non-nullable CellStyle member defaulting to Black, so a font-color result
+        // is never actually null — matching the pre-existing contract of this method (only the
+        // fill-color side can report "no color" here). MergeStyles already resolves the
+        // DxfFontColor tri-state (an explicit black CF override vs. no override) the same way
+        // ViewportConditionalFormatEvaluator does for on-screen rendering.
+        return wantFill ? merged.FillColor : merged.FontColor;
     }
 
     /// <summary>

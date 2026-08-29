@@ -28,12 +28,22 @@ public partial class MainWindow
     private void CaptureFormulaEditCell()
     {
         if (_formulaEditCell is null && SheetGrid.SelectedRange?.Start is { } activeCell)
+        {
             _formulaEditCell = activeCell;
+            // freex-cell-editing-modes-F2: mirrors the baseline capture in ShowInlineEditor
+            // (MainWindow.Editing.cs) for the other way an edit can start -- clicking straight
+            // into the Formula Bar without going through the inline editor.
+            var sheet = _workbook.GetSheet(activeCell.Sheet);
+            _pendingEditBaselineText = FormatFormulaBarText(
+                SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(activeCell), activeCell),
+                activeCell);
+        }
     }
 
     private void ClearFormulaRangeEntryState()
     {
         _formulaEditCell = null;
+        _pendingEditBaselineText = null;
         FormulaReferenceEditingController.Reset(
             _formulaRangeEditingSession,
             HideFormulaFunctionAutocomplete,
