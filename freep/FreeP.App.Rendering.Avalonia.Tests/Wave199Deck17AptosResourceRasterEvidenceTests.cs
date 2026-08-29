@@ -121,13 +121,33 @@ public sealed class Wave199Deck17AptosResourceRasterEvidenceTests
         using var metrics = JsonDocument.Parse(File.ReadAllText(EvidenceFile("metrics.json")));
         var trackedImages = metrics.RootElement.GetProperty("imageIntegrity")
             .GetProperty("trackedImages");
+        var candidateImages = metrics.RootElement.GetProperty("candidateMeasurements")
+            .EnumerateArray()
+            .SelectMany(candidate => candidate.GetProperty("images").EnumerateObject())
+            .Select(image => image.Value.GetString())
+            .Where(imageName => imageName is not null)
+            .Select(imageName => imageName!)
+            .ToArray();
+        var indexedImages = images.RootElement.EnumerateObject()
+            .Select(image => image.Name)
+            .ToArray();
+        var metricHashes = trackedImages.EnumerateObject()
+            .Select(image => image.Name)
+            .ToArray();
 
-        images.RootElement.EnumerateObject().Should().HaveCount(12);
-        foreach (var image in images.RootElement.EnumerateObject())
+        candidateImages.Should().HaveCount(12);
+        candidateImages.Should().OnlyHaveUniqueItems();
+        candidateImages.Should().BeEquivalentTo(indexedImages);
+        candidateImages.Should().BeEquivalentTo(metricHashes);
+
+        foreach (var imageName in candidateImages)
         {
-            var imagePath = EvidenceFile(image.Name);
-            AssertFileHash(imagePath, image.Value.GetString());
-            trackedImages.GetProperty(image.Name).GetString().Should().Be(image.Value.GetString());
+            images.RootElement.TryGetProperty(imageName, out var indexedHash).Should().BeTrue(
+                $"candidate image {imageName} must be indexed by images.json");
+            trackedImages.TryGetProperty(imageName, out var metricHash).Should().BeTrue(
+                $"candidate image {imageName} must be hash-bound by metrics.json");
+            metricHash.GetString().Should().Be(indexedHash.GetString());
+            AssertFileHash(EvidenceFile(imageName), indexedHash.GetString());
         }
     }
 
