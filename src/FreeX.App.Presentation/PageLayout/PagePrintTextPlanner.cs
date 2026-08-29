@@ -363,6 +363,60 @@ public static class PagePrintTextPlanner
     /// re-tokenizing. Always returns at least 1 (an empty/whitespace-only section still occupies one
     /// printed line, matching Excel and the fixed single-line band height this replaces).
     /// </summary>
+    /// <summary>
+    /// R168-shared-headerfooter-picture-token-1: reports whether a raw header/footer section string
+    /// contains a picture token (<c>&amp;G</c> or <c>&amp;[Picture]</c>), scanning it the same way
+    /// <see cref="TokenizeSectionText"/> does rather than with a plain substring search.
+    ///
+    /// Both renderers previously asked <c>text.Contains("&amp;G")</c> -- in two separate copies, one
+    /// in the WPF-shared geometry planner and one in the Avalonia/Skia PDF builder -- which cannot
+    /// see Excel's escape rules and so reported a picture for any section whose text merely contained
+    /// an escaped literal ampersand followed by a G: <c>"R&amp;&amp;G Ltd"</c> renders as "R&amp;G
+    /// Ltd" with no picture at all, yet both paths grew the band for a picture, reserved a text inset
+    /// for it, and drew whatever picture happened to be attached to that section. This walks the
+    /// string honouring the same three escapes the tokenizer honours -- a doubled <c>&amp;&amp;</c>
+    /// is a literal ampersand, a <c>&amp;[name]</c> token is matched whole, and a
+    /// <c>&amp;"font"</c> code's quoted body is skipped -- so the answer always agrees with what the
+    /// tokenizer actually renders. Living here, next to that tokenizer, also collapses the two copies
+    /// into one.
+    /// </summary>
+    public static bool HasPictureToken(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return false;
+
+        var span = text.AsSpan();
+        for (var i = 0; i < span.Length; i++)
+        {
+            if (span[i] != '&' || i + 1 >= span.Length)
+                continue;
+
+            var next = span[i + 1];
+            if (next == '&')
+            {
+                i++;                                    // escaped literal '&' -- consume both
+                continue;
+            }
+
+            if (next is 'G' or 'g')
+                return true;
+
+            if (next is '[' or '"')
+            {
+                var close = span[(i + 2)..].IndexOf(next == '[' ? ']' : '"');
+                if (close < 0)
+                    continue;                           // malformed -- the tokenizer emits a literal '&'
+
+                if (next == '[' && span.Slice(i + 2, close).Equals("Picture", StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                i += 2 + close;                         // land on the closing bracket/quote; the loop steps past it
+            }
+        }
+
+        return false;
+    }
+
     public static int CountSectionLines(string? text)
     {
         if (string.IsNullOrEmpty(text))
