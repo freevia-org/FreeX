@@ -2628,12 +2628,13 @@ public sealed partial class MainWindow : Window,
             afterExecute: null,
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
             onFileTabSelected: ShowBackstage,
-            stateStore: _ribbonStateStore);
+            stateStore: _ribbonStateStore,
+            options: new AvaloniaRibbonRendererOptions(EnableIntermediateGroupPresentations: true));
 
         AvaloniaRibbonRenderer.TryInjectGroupContent(
             _ribbonControl,
             FreeP.Ribbon.Definitions.FreePRibbon.ThemesGroupId,
-            () => PresentationThemeGallery.Build(registry));
+            state => PresentationThemeGallery.Build(registry, state, () => Editor.Presentation.Theme.Name));
         AvaloniaRibbonRenderer.TryInjectGroupContent(
             _ribbonControl,
             "transition-gallery",
@@ -2643,7 +2644,7 @@ public sealed partial class MainWindow : Window,
             AvaloniaRibbonRenderer.TryInjectGroupContent(
                 _ribbonControl,
                 "animation-effects",
-                () => PresentationAnimationGallery.Build(animationsTab, registry, _ribbonStateStore));
+                state => PresentationAnimationGallery.Build(animationsTab, registry, _ribbonStateStore, state));
         }
 
         return new Border

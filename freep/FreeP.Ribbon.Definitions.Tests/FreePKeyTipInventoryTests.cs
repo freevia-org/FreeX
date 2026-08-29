@@ -100,7 +100,16 @@ public sealed class FreePKeyTipInventoryTests
             .SelectMany(tab => tab.Groups)
             .SelectMany(group => group.Controls)
             .Where(control => !string.IsNullOrWhiteSpace(control.CommandId.Value))
-            .ToDictionary(control => control.CommandId.Value, control => control.KeyTip, StringComparer.Ordinal);
+            .GroupBy(control => control.CommandId.Value, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group =>
+                {
+                    group.Select(control => control.KeyTip).Distinct().Should().ContainSingle(
+                        $"repeated command {group.Key} must retain one KeyTip across ribbon placements");
+                    return group.First().KeyTip;
+                },
+                StringComparer.Ordinal);
 
     private static void AssertMenuKeyTips(RibbonControl control, string scope)
     {

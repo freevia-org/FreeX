@@ -1194,6 +1194,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Insert Sheet"] = AddNewSheet,
                     ["Delete Cells"] = () => RunGuarded(ShowDeleteCellsDialogAsync),
                     ["Format Cells"] = () => RunGuarded(() => ShowFormatCellsDialogAsync()),
+                    ["Format Cells Number"] = () => RunGuarded(() => ShowFormatCellsDialogAsync(initialTabIndex: 0)),
+                    ["Format Cells Alignment"] = () => RunGuarded(() => ShowFormatCellsDialogAsync(initialTabIndex: 1)),
+                    ["Format Cells Font"] = () => RunGuarded(() => ShowFormatCellsDialogAsync(initialTabIndex: 2)),
                     // Home ▸ Cells ▸ Format ▸ Row Height / Column Width / AutoFit (ids from HomeRibbonMenus.Format)
                     // → shared Set{Row,Column} commands + AutoFitSizingService on the current selection.
                     ["Row Height"] = () => RunGuarded(ShowRowHeightDialogAsync),

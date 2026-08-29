@@ -134,15 +134,37 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
-    public void Avalonia_home_font_and_paragraph_support_compact_icon_presentations()
+    public void Home_font_and_paragraph_support_compact_icon_presentations_on_both_renderers()
     {
         var wpf = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf);
         var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
 
         RequiredGroup(avalonia, "home", "font").Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
         RequiredGroup(avalonia, "home", "paragraph").Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
-        RequiredGroup(wpf, "home", "font").Sizing.Should().Be(RibbonGroupSizing.Default);
-        RequiredGroup(wpf, "home", "paragraph").Sizing.Should().Be(RibbonGroupSizing.Default);
+        RequiredGroup(wpf, "home", "font").Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+        RequiredGroup(wpf, "home", "paragraph").Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+    }
+
+    [Fact]
+    public void Layout_keeps_page_setup_and_paragraph_directly_reachable_before_preview_or_data()
+    {
+        var wpf = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf);
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+
+        var wpfPageSetup = RequiredGroup(wpf, "layout", "page-setup");
+        var wpfParagraph = RequiredGroup(wpf, "layout", "paragraph");
+        var avaloniaParagraph = RequiredGroup(avalonia, "layout", "paragraph");
+
+        wpfPageSetup.Sizing.MaximumRowsPerColumn.Should().Be(2);
+        wpfPageSetup.Launcher!.CommandId.Value.Should().Be("freew.page-setup");
+        wpfPageSetup.Controls.Should().NotContain(control => control.CommandId.Value == "freew.page-setup");
+        wpfParagraph.Launcher!.CommandId.Value.Should().Be("freew.paragraph-dialog");
+        avaloniaParagraph.Launcher!.CommandId.Value.Should().Be("freew.paragraph-dialog");
+
+        wpfParagraph.Priority.Should().BeGreaterThan(RequiredGroup(wpf, "layout", "preview").Priority);
+        wpfParagraph.Priority.Should().BeGreaterThan(RequiredGroup(wpf, "layout", "data").Priority);
+        avaloniaParagraph.Priority.Should().BeGreaterThan(RequiredGroup(avalonia, "layout", "preview").Priority);
+        avaloniaParagraph.Priority.Should().BeGreaterThan(RequiredGroup(avalonia, "layout", "data").Priority);
     }
 
     [Fact]
@@ -2130,6 +2152,19 @@ public sealed class FreeWRibbonDefinitionProfileTests
         {
             foreach (var group in tab.Groups)
             {
+                if (group.Launcher is { } launcher)
+                {
+                    AddInventoryLocation(locations, launcher.CommandId.Value, new InventoryLocation(
+                        profile,
+                        tab.Id,
+                        tab.Header,
+                        group.Id,
+                        group.Header,
+                        launcher.TooltipTitle,
+                        nameof(RibbonGroupLauncher),
+                        "DialogLauncher"));
+                }
+
                 foreach (var control in group.Controls)
                     AddInventoryControl(locations, tab, group, control, profile);
             }

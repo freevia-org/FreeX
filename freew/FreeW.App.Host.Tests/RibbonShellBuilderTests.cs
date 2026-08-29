@@ -129,6 +129,58 @@ public sealed class RibbonShellBuilderTests
             .HaveCount(3, "the WPF Font group keeps its command set expanded across compact rows before adaptive collapse");
     }
 
+    [StaFact]
+    public void HomeFont_CompactPresentationShrinksEditableFieldsAndKeepsPasteReachable()
+    {
+        var home = FreeW.Ribbon.Definitions.FreeWRibbon
+            .Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf)
+            .FindTab("home")!;
+        var content = RibbonWpfRenderer.BuildTabContent(home, new Button());
+        var panel = FindLogicalChild<RibbonAdaptivePanel>(content)!;
+
+        content.Measure(new Size(750, 180));
+        content.Arrange(new Rect(0, 0, 750, 180));
+        content.UpdateLayout();
+
+        var clipboard = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Clipboard");
+        var font = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Font");
+
+        clipboard.Collapsed.Should().BeFalse("Paste remains a primary Home command at the narrow evidence width");
+        font.LayoutState.Should().Be(RibbonAdaptiveGroupState.SmallWithLabels);
+
+        var compactFontName = FindLogicalChild<ComboBox>(Assert.IsAssignableFrom<DependencyObject>(font.Content));
+        compactFontName.Should().NotBeNull();
+        compactFontName!.Width.Should().Be(98, "the compact Font presentation reduces the full 140-DIP font-name field");
+    }
+
+    [StaFact]
+    public void Design_compact_presentation_keeps_document_formatting_and_page_background_direct()
+    {
+        var design = FreeW.Ribbon.Definitions.FreeWRibbon
+            .Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf)
+            .FindTab("design")!;
+        var content = RibbonWpfRenderer.BuildTabContent(design, new Button());
+        var panel = FindLogicalChild<RibbonAdaptivePanel>(content)!;
+
+        content.Measure(new Size(750, 180));
+        content.Arrange(new Rect(0, 0, 750, 180));
+        content.UpdateLayout();
+
+        var documentFormatting = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Document Formatting");
+        var pageBackground = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Page Background");
+
+        documentFormatting.LayoutState.Should().Be(RibbonAdaptiveGroupState.SmallWithLabels);
+        pageBackground.Collapsed.Should().BeFalse("Page Background stays directly reachable beside compact Document Formatting");
+    }
+
     private sealed class CaptureValueCommand(Action<string?> capture) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => capture(context.SelectedValue);

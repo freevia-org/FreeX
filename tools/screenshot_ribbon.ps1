@@ -605,6 +605,13 @@ function Screenshot-Tab($tabName, $widthSpec) {
     $wrect = New-Object ScreenshotWin32+RECT
     [ScreenshotWin32]::GetWindowRect($hwnd, [ref]$wrect) | Out-Null
     $w = $wrect.Right - $wrect.Left
+    # A prior capture can leave the physical pointer over a ribbon command in this newly launched
+    # window, which makes the evidence depend on capture order rather than the selected tab.
+    # Park it on the non-interactive title bar before taking the top-band frame.
+    [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new(
+        [int]($wrect.Left + ($w / 2)),
+        [int]($wrect.Top + 18))
+    Start-Sleep -Milliseconds 80
     Assert-ForegroundWindowOwnership $proc.Id $expectedTitle "screen capture" $script:ForegroundWindowOwnershipFailureAction
 
     $safe = $tabName -replace '[^a-zA-Z0-9_]','_'

@@ -334,6 +334,21 @@
   <data name="Ribbon_Group_SlideShow_Label" xml:space="preserve">
     <value>Slide Show</value>
   </data>
+  <data name="Ribbon_Group_SlideShowStart_Label" xml:space="preserve">
+    <value>Start Slide Show</value>
+  </data>
+  <data name="Ribbon_Group_SlideShowSetUp_Label" xml:space="preserve">
+    <value>Set Up</value>
+  </data>
+  <data name="Ribbon_Group_SlideShowRehearse_Label" xml:space="preserve">
+    <value>Rehearse</value>
+  </data>
+  <data name="Ribbon_Group_SlideShowSetUp_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
+  <data name="Ribbon_Group_SlideShowRehearse_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
   <data name="Ribbon_Tab_SlideShow_KeyTip" xml:space="preserve">
     <value>S</value>
   </data>
@@ -840,6 +855,18 @@
   </data>
   <data name="Ribbon_Group_Illustrations_KeyTip" xml:space="preserve">
     <value>I</value>
+  </data>
+  <data name="Ribbon_Group_Media_Label" xml:space="preserve">
+    <value>Media</value>
+  </data>
+  <data name="Ribbon_Group_Media_KeyTip" xml:space="preserve">
+    <value>M</value>
+  </data>
+  <data name="Ribbon_Group_ShapesEffects_Label" xml:space="preserve">
+    <value>Shapes &amp; Effects</value>
+  </data>
+  <data name="Ribbon_Group_ShapesEffects_KeyTip" xml:space="preserve">
+    <value>E</value>
   </data>
   <data name="Ribbon_Command_Picture_Label" xml:space="preserve">
     <value>Picture</value>

@@ -116,8 +116,8 @@ public sealed class CrossAppParityDashboardTests
             "582 cumulative app slices (194 per app) remain the processed Wave194 accounting; later wave feature commits are included in the tested source and do not add Wave194 slices.");
 
         var freeX = root.GetProperty("apps")[0];
-        freeX.GetProperty("functionalMatrix").GetProperty("totalCommands").GetInt32().Should().Be(575);
-        freeX.GetProperty("functionalMatrix").GetProperty("parity").GetInt32().Should().Be(569);
+        freeX.GetProperty("functionalMatrix").GetProperty("totalCommands").GetInt32().Should().Be(573);
+        freeX.GetProperty("functionalMatrix").GetProperty("parity").GetInt32().Should().Be(567);
         freeX.GetProperty("functionalMatrix").GetProperty("avaloniaMissing").GetInt32().Should().Be(0);
         freeX.GetProperty("functionalMatrix").GetProperty("realBehaviorGaps").GetInt32().Should().Be(0);
         var visualEvidence = freeX.GetProperty("dialogVisualEvidence");

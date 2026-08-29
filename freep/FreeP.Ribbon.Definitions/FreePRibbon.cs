@@ -362,34 +362,42 @@ public static class FreePRibbon
         group.Medium("freep.replace", FreePRibbonText.ReplaceLabel, RibbonCommandIconKind.Refresh, FreePRibbonText.ReplaceKeyTip);
     }
 
-    private static void AddSlideShowControls(RibbonGroupBuilder group, FreePRibbonProfile profile)
+    private static void AddSlideShowStartControls(RibbonGroupBuilder group, FreePRibbonProfile profile)
     {
         group.Large("freep.slideshow.from-beginning", FreePRibbonText.SlideShowFromBeginningLabel,
             RibbonCommandIconKind.Next, FreePRibbonText.SlideShowFromBeginningKeyTip);
         group.Large("freep.slideshow.from-current-slide", FreePRibbonText.SlideShowFromCurrentSlideLabel,
             profile.SlideShowFromCurrentSlideIcon, FreePRibbonText.SlideShowFromCurrentSlideKeyTip);
-        group.Medium("freep.slideshow.hide-slide", FreePRibbonText.SlideShowHideSlideLabel,
-            RibbonCommandIconKind.View, FreePRibbonText.SlideShowHideSlideKeyTip);
-        group.Medium("freep.slideshow.rehearse-timings", FreePRibbonText.SlideShowRehearseTimingsLabel,
-            RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRehearseTimingsKeyTip);
-        group.Medium("freep.slideshow.record-timings", FreePRibbonText.SlideShowRecordTimingsLabel,
-            RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRecordTimingsKeyTip);
-        group.Medium("freep.slideshow.setup", FreePRibbonText.SlideShowSetupLabel,
-            RibbonCommandIconKind.More, FreePRibbonText.SlideShowSetupKeyTip);
         group.Medium("freep.slideshow.custom-shows", FreePRibbonText.SlideShowCustomShowsLabel,
             RibbonCommandIconKind.List, FreePRibbonText.SlideShowCustomShowsKeyTip);
     }
 
     private static void AddSlideShowGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
     {
-        // These controls were previously reachable only through a low-priority Transitions group.
-        // PowerPoint gives the presentation route its own normal tab, so keep the complete supported
-        // slide-show surface together and allow the standard Office adaptation at narrow widths.
-        tab.Group("slide-show", FreePRibbonText.SlideShowGroupLabel,
+        // Mirror PowerPoint's task hierarchy while keeping each backed command directly reachable.
+        tab.Group("slide-show-start", FreePRibbonText.SlideShowStartGroupLabel,
             profile.SlideShowGroupKeyTip(), 100, group =>
             {
                 group.Sizing(RibbonGroupSizing.OfficeAdaptive);
-                AddSlideShowControls(group, profile);
+                AddSlideShowStartControls(group, profile);
+            });
+        tab.Group("slide-show-setup", FreePRibbonText.SlideShowSetUpGroupLabel,
+            FreePRibbonText.SlideShowSetUpGroupKeyTip, 90, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Medium("freep.slideshow.hide-slide", FreePRibbonText.SlideShowHideSlideLabel,
+                    RibbonCommandIconKind.View, FreePRibbonText.SlideShowHideSlideKeyTip);
+                group.Medium("freep.slideshow.setup", FreePRibbonText.SlideShowSetupLabel,
+                    RibbonCommandIconKind.More, FreePRibbonText.SlideShowSetupKeyTip);
+            });
+        tab.Group("slide-show-rehearse", FreePRibbonText.SlideShowRehearseGroupLabel,
+            FreePRibbonText.SlideShowRehearseGroupKeyTip, 80, group =>
+            {
+                group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+                group.Medium("freep.slideshow.rehearse-timings", FreePRibbonText.SlideShowRehearseTimingsLabel,
+                    RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRehearseTimingsKeyTip);
+                group.Medium("freep.slideshow.record-timings", FreePRibbonText.SlideShowRecordTimingsLabel,
+                    RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRecordTimingsKeyTip);
             });
     }
 
@@ -589,6 +597,14 @@ public static class FreePRibbon
 
     private static void AddInsertGroups(RibbonTabBuilder tab)
     {
+        // PowerPoint exposes this backed action at the leading edge of both Home and Insert.
+        // It is one command route rendered twice, not a duplicate action implementation.
+        tab.Group("slides", FreePRibbonText.SlidesGroupLabel, FreePRibbonText.SlidesGroupKeyTip, 110, group =>
+        {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+            group.Large("freep.new-slide", FreePRibbonText.NewSlideLabel, RibbonCommandIconKind.Insert,
+                FreePRibbonText.NewSlideKeyTip);
+        });
         tab.Group("text", FreePRibbonText.TextGroupLabel, FreePRibbonText.TextGroupKeyTip, 100, group =>
         {
             group.Large("freep.text-box", FreePRibbonText.TextBoxLabel, RibbonCommandIconKind.TextBox, FreePRibbonText.TextBoxKeyTip);
@@ -728,9 +744,19 @@ public static class FreePRibbon
         });
         tab.Group("illustrations", FreePRibbonText.IllustrationsGroupLabel, FreePRibbonText.IllustrationsGroupKeyTip, 90, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Large("freep.picture", FreePRibbonText.PictureLabel, RibbonCommandIconKind.Picture, FreePRibbonText.PictureKeyTip);
+        });
+        tab.Group("media", FreePRibbonText.MediaGroupLabel, FreePRibbonText.MediaGroupKeyTip, 88, group =>
+        {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Medium("freep.video", FreePRibbonText.VideoLabel, RibbonCommandIconKind.Picture, FreePRibbonText.VideoKeyTip);
             group.Medium("freep.audio", FreePRibbonText.AudioLabel, RibbonCommandIconKind.Picture, FreePRibbonText.AudioKeyTip);
+        });
+        tab.Group("shapes-effects", FreePRibbonText.ShapesEffectsGroupLabel,
+            FreePRibbonText.ShapesEffectsGroupKeyTip, 65, group =>
+        {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Medium(PictureCropAuthoringPlanner.InsetCommandId, FreePRibbonText.PictureCropInsetCommand.Label,
                 RibbonCommandIconKind.Picture, FreePRibbonText.PictureCropInsetCommand.KeyTip);
             group.Medium(PictureCropAuthoringPlanner.ResetCommandId, FreePRibbonText.PictureCropResetCommand.Label,
@@ -926,16 +952,24 @@ public static class FreePRibbon
 
     private static void AddDesignGroups(RibbonTabBuilder tab)
     {
-        tab.Group("themes", FreePRibbonText.ThemesGroup.Label, FreePRibbonText.ThemesGroup.KeyTip, 100, group =>
+        tab.Group("themes", FreePRibbonText.ThemesGroup.Label, FreePRibbonText.ThemesGroup.KeyTip, 90, group =>
         {
+            // Native theme thumbnails are substantially wider than the semantic buttons they replace.
+            // Reserve their real full/compact footprints so both renderers select the compact preview
+            // surface before collapsing the adjacent Customize commands.
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive with
+            {
+                Hints = new RibbonWidthHints(470, 130, 130, 64),
+            });
             group.Large("freep.theme.office", FreePRibbonText.ThemeOfficeCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeOfficeCommand.KeyTip);
             group.Medium("freep.theme.berlin", FreePRibbonText.ThemeBerlinCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeBerlinCommand.KeyTip);
             group.Medium("freep.theme.facet", FreePRibbonText.ThemeFacetCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeFacetCommand.KeyTip);
             group.Medium("freep.theme.ion", FreePRibbonText.ThemeIonCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeIonCommand.KeyTip);
             group.Medium("freep.theme.slice", FreePRibbonText.ThemeSliceCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeSliceCommand.KeyTip);
         });
-        tab.Group("customize", FreePRibbonText.CustomizeGroup.Label, FreePRibbonText.CustomizeGroup.KeyTip, 90, group =>
+        tab.Group("customize", FreePRibbonText.CustomizeGroup.Label, FreePRibbonText.CustomizeGroup.KeyTip, 100, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Large("freep.slide-size-16x9", FreePRibbonText.SlideSizeWidescreenCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeWidescreenCommand.KeyTip);
             group.Large("freep.slide-size-4x3", FreePRibbonText.SlideSizeStandardCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeStandardCommand.KeyTip);
             group.Medium("freep.slide-size-custom", FreePRibbonText.SlideSizeCustomCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeCustomCommand.KeyTip);
@@ -1281,6 +1315,7 @@ public static class FreePRibbon
         // panel reclaim this broad gallery before it collapses the concise timing surface.
         tab.Group("transition-gallery", FreePRibbonText.TransitionGalleryGroup.Label, FreePRibbonText.TransitionGalleryGroup.KeyTip, 85, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
             group.Medium("freep.transition.none", FreePRibbonText.TransitionNoneCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.TransitionNoneCommand.KeyTip);
             group.Medium("freep.transition.fade", FreePRibbonText.TransitionFadeCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.TransitionFadeCommand.KeyTip);
             group.Medium("freep.transition.push", FreePRibbonText.TransitionPushCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.TransitionPushCommand.KeyTip);
@@ -1319,6 +1354,7 @@ public static class FreePRibbon
         });
         tab.Group("transition-timing", FreePRibbonText.TransitionTimingGroup.Label, FreePRibbonText.TransitionTimingGroup.KeyTip, 100, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
             group.ComboBox("freep.transition.duration", FreePRibbonText.TransitionDurationCommand.Label, control => control with
             {
                 Choices = FreePRibbonDefinitionData.TransitionDurationChoices,
@@ -1350,9 +1386,9 @@ public static class FreePRibbon
     {
         tab.Group("animation-effects", FreePRibbonText.AnimationEffectsGroup.Label, FreePRibbonText.AnimationEffectsGroup.KeyTip, 100, group =>
         {
-            // WPF replaces this full catalog with an Office-style preview gallery; keep the shared
-            // group in its authored full form so the host customization is not replaced by an
-            // icon-only adaptive presentation on its first layout pass.
+            // Keep the familiar effects directly reachable at narrow widths. Hosts replace the
+            // authored catalog with a compact preview strip when this group enters SmallWithLabels.
+            group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
             group.Medium("freep.anim.entrance.appear", FreePRibbonText.AnimationEntranceAppearCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEntranceAppearCommand.KeyTip);
             group.Medium("freep.anim.entrance.fade", FreePRibbonText.AnimationEntranceFadeCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationEntranceFadeCommand.KeyTip);
             group.Medium("freep.anim.entrance.fly-in", FreePRibbonText.AnimationEntranceFlyInCommand.Label, RibbonCommandIconKind.ArrowUp, FreePRibbonText.AnimationEntranceFlyInCommand.KeyTip);
@@ -1445,6 +1481,7 @@ public static class FreePRibbon
         tab.Group("presentation-views", FreePRibbonText.ViewPresentationViewsGroup.Label,
             FreePRibbonText.ViewPresentationViewsGroup.KeyTip, 110, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Large(PresentationViewModePlanner.NormalCommandId,
                 FreePRibbonText.ViewNormalCommand.Label, RibbonCommandIconKind.View,
                 FreePRibbonText.ViewNormalCommand.KeyTip);
@@ -1467,6 +1504,7 @@ public static class FreePRibbon
         tab.Group("color-grayscale", FreePRibbonText.ViewColorGrayscaleGroup.Label,
             FreePRibbonText.ViewColorGrayscaleGroup.KeyTip, 70, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Medium(PresentationViewColorModePlanner.ColorCommandId,
                 FreePRibbonText.ViewColorCommand.Label, RibbonCommandIconKind.Color,
                 FreePRibbonText.ViewColorCommand.KeyTip);
@@ -1479,6 +1517,7 @@ public static class FreePRibbon
         });
         tab.Group("show", FreePRibbonText.ViewShowGroup.Label, FreePRibbonText.ViewShowGroup.KeyTip, 100, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.MediumToggle(PresentationViewShowPlanner.RulerCommandId, FreePRibbonText.ViewRulerCommand.Label,
                 RibbonCommandIconKind.Ruler, FreePRibbonText.ViewRulerCommand.KeyTip);
             group.MediumToggle("freep.view.show.gridlines", FreePRibbonText.ViewGridlinesCommand.Label,
@@ -1492,6 +1531,7 @@ public static class FreePRibbon
         });
         tab.Group("zoom", FreePRibbonText.ViewZoomGroup.Label, FreePRibbonText.ViewZoomGroup.KeyTip, 90, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Large("freep.view.zoom", FreePRibbonText.ViewZoomCommand.Label, RibbonCommandIconKind.Zoom,
                 FreePRibbonText.ViewZoomCommand.KeyTip);
             group.Medium("freep.view.fit-to-window", FreePRibbonText.ViewFitToWindowCommand.Label,
@@ -1499,6 +1539,7 @@ public static class FreePRibbon
         });
         tab.Group("window", FreePRibbonText.ViewWindowGroup.Label, FreePRibbonText.ViewWindowGroup.KeyTip, 65, group =>
         {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
             group.Medium("freep.view.new-window", FreePRibbonText.ViewNewWindowCommand.Label,
                 RibbonCommandIconKind.Window, FreePRibbonText.ViewNewWindowCommand.KeyTip);
             group.Medium("freep.view.arrange-all", FreePRibbonText.ViewArrangeAllCommand.Label,

@@ -36,6 +36,11 @@ public sealed class FreePRibbonDefinitionProfileTests
 
             definition.FindTab("design")!.Groups.Select(group => group.Id)
                 .Should().Equal("themes", "customize");
+            definition.FindTab("design")!.FindGroup("themes")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive with
+            {
+                Hints = new RibbonWidthHints(470, 130, 130, 64),
+            });
+            definition.FindTab("design")!.FindGroup("customize")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
             definition.FindTab("review")!.Groups.Select(group => group.Id)
                 .Should().Equal("comments", "accessibility", "proofing");
             definition.FindTab("smartart-design")!.Groups.Select(group => group.Id)
@@ -143,7 +148,7 @@ public sealed class FreePRibbonDefinitionProfileTests
     {
         var expectedGroupIds = new[]
         {
-            "slides", "clipboard", "font", "paragraph", "arrange", "edit", "editing",
+            "clipboard", "slides", "font", "paragraph", "arrange", "edit", "editing",
         };
 
         foreach (var definition in new[]
@@ -155,6 +160,26 @@ public sealed class FreePRibbonDefinitionProfileTests
             var home = definition.FindTab("home")!;
             home.Groups.Select(group => group.Id).Should().Equal(expectedGroupIds);
             home.Groups.Should().OnlyContain(group => group.Sizing == RibbonGroupSizing.OfficeAdaptive);
+        }
+    }
+
+    [Fact]
+    public void View_groups_keep_labeled_compact_presentations_in_both_profiles()
+    {
+        var expectedGroupIds = new[]
+        {
+            "presentation-views", "color-grayscale", "show", "zoom", "window",
+        };
+
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var view = definition.FindTab("view")!;
+            view.Groups.Select(group => group.Id).Should().Equal(expectedGroupIds);
+            view.Groups.Should().OnlyContain(group => group.Sizing == RibbonGroupSizing.OfficeAdaptive);
         }
     }
 
@@ -173,6 +198,47 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Insert_leads_with_the_backed_new_slide_command()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var slides = definition.FindTab("insert")!.Groups.First();
+            slides.Id.Should().Be("slides");
+            slides.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+            slides.Controls.Select(control => control.CommandId.Value).Should().Equal("freep.new-slide");
+        }
+    }
+
+    [Fact]
+    public void Insert_keeps_picture_direct_and_moves_media_and_effects_to_separate_groups()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            var insert = definition.FindTab("insert")!;
+            var illustrations = insert.FindGroup("illustrations")!;
+            illustrations.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+            illustrations.Controls.Select(control => control.CommandId.Value).Should().Equal("freep.picture");
+
+            var media = insert.FindGroup("media")!;
+            media.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+            media.Controls.Select(control => control.CommandId.Value).Should().Equal("freep.video", "freep.audio");
+
+            var shapesEffects = insert.FindGroup("shapes-effects")!;
+            shapesEffects.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
+            shapesEffects.Controls.Select(control => control.CommandId.Value)
+                .Should().Contain(PictureCropAuthoringPlanner.InsetCommandId, ShapeEffectAuthoringPlanner.NoneCommandId);
+        }
+    }
+
+    [Fact]
     public void Animation_effects_group_uses_icon_adaptive_sizing_in_both_profiles()
     {
         foreach (var definition in new[]
@@ -182,7 +248,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                  })
         {
             RequiredGroup(definition, "animations", "animation-effects")
-                .Sizing.Should().Be(RibbonGroupSizing.Default);
+                .Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
         }
     }
 
@@ -197,6 +263,22 @@ public sealed class FreePRibbonDefinitionProfileTests
         {
             RequiredGroup(definition, "transitions", "transition-timing").Priority
                 .Should().BeGreaterThan(RequiredGroup(definition, "transitions", "transition-gallery").Priority);
+        }
+    }
+
+    [Fact]
+    public void Transition_gallery_supports_a_compact_presentation_in_both_profiles()
+    {
+        foreach (var definition in new[]
+                 {
+                     FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                     FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                 })
+        {
+            RequiredGroup(definition, "transitions", "transition-gallery")
+                .Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
+            RequiredGroup(definition, "transitions", "transition-timing")
+                .Sizing.Should().Be(RibbonGroupSizing.OfficeIconAdaptive);
         }
     }
 
@@ -399,7 +481,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(wpf, "freep.find").KeyTip!,
                 RequiredControl(wpf, "freep.replace").Label,
                 RequiredControl(wpf, "freep.replace").KeyTip!,
-                RequiredGroup(wpf, "slide-show", "slide-show").Header,
+                RequiredGroup(wpf, "slide-show", "slide-show-start").Header,
                 RequiredControl(wpf, "freep.slideshow.from-beginning").Label,
                 RequiredControl(wpf, "freep.slideshow.from-current-slide").Label,
                 RequiredControl(wpf, "freep.slideshow.hide-slide").Label,
@@ -504,7 +586,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(avalonia, "freep.find").KeyTip!,
                 RequiredControl(avalonia, "freep.replace").Label,
                 RequiredControl(avalonia, "freep.replace").KeyTip!,
-                RequiredGroup(avalonia, "slide-show", "slide-show").Header,
+                RequiredGroup(avalonia, "slide-show", "slide-show-start").Header,
                 RequiredControl(avalonia, "freep.slideshow.from-beginning").Label,
                 RequiredControl(avalonia, "freep.slideshow.from-current-slide").Label,
                 RequiredControl(avalonia, "freep.slideshow.hide-slide").Label,

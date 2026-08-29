@@ -100,6 +100,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 "home.font",
                 tab => tab.Group("font", fontGroup.Label, fontGroup.KeyTip, 90, g =>
                     {
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                         // Row 1: the font name + size combos. Row 2+: compact icon-only buttons, exactly like Word.
                         g.ComboBox("freew.font-family", fontFamilyCommand.Label, c => c with
                         {
@@ -175,6 +176,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 "home.paragraph",
                 tab => tab.Group("paragraph", paragraphGroup.Label, paragraphGroup.KeyTip, 80, g =>
                     {
+                        g.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                         // Row 1: list + indent + spacing. Row 2: alignment + shading/borders. Compact icon-only, Word-style.
                         g.Icon("freew.bullets", bulletsCommand.Label, RibbonCommandIconKind.Bullets, dropdown: true);
                         g.Icon("freew.numbering", numberingCommand.Label, RibbonCommandIconKind.NumberedList, dropdown: true);

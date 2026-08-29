@@ -13,7 +13,8 @@ public sealed record RibbonGroupSizing(
     bool EnableCompactPresentation = false,
     bool CompactControlsAsIcons = false,
     double? CompactPresentationMaximumWidth = null,
-    double? CompactPresentationMinimumWidth = null)
+    double? CompactPresentationMinimumWidth = null,
+    int? MaximumRowsPerColumn = null)
 {
     /// <summary>Opt-in Office-style command compaction before a group becomes overflow-only.</summary>
     public static readonly RibbonGroupSizing OfficeAdaptive = new(new[]

@@ -145,6 +145,11 @@ internal static class FreePRibbonText
     public static string ReplaceKeyTip => Get("Ribbon_Command_Replace_KeyTip");
 
     public static string SlideShowGroupLabel => Get("Ribbon_Group_SlideShow_Label");
+    public static string SlideShowStartGroupLabel => Get("Ribbon_Group_SlideShowStart_Label");
+    public static string SlideShowSetUpGroupLabel => Get("Ribbon_Group_SlideShowSetUp_Label");
+    public static string SlideShowRehearseGroupLabel => Get("Ribbon_Group_SlideShowRehearse_Label");
+    public static string SlideShowSetUpGroupKeyTip => Get("Ribbon_Group_SlideShowSetUp_KeyTip");
+    public static string SlideShowRehearseGroupKeyTip => Get("Ribbon_Group_SlideShowRehearse_KeyTip");
     public static string SlideShowGroupWpfKeyTip => Get("Ribbon_Group_SlideShow_WpfKeyTip");
     public static string SlideShowGroupAvaloniaKeyTip => Get("Ribbon_Group_SlideShow_AvaloniaKeyTip");
     public static RibbonText SlideShowTab { get; } = new("Ribbon_Group_SlideShow_Label", "Ribbon_Tab_SlideShow_KeyTip");
@@ -305,6 +310,10 @@ internal static class FreePRibbonText
 
     public static string IllustrationsGroupLabel => Get("Ribbon_Group_Illustrations_Label");
     public static string IllustrationsGroupKeyTip => Get("Ribbon_Group_Illustrations_KeyTip");
+    public static string MediaGroupLabel => Get("Ribbon_Group_Media_Label");
+    public static string MediaGroupKeyTip => Get("Ribbon_Group_Media_KeyTip");
+    public static string ShapesEffectsGroupLabel => Get("Ribbon_Group_ShapesEffects_Label");
+    public static string ShapesEffectsGroupKeyTip => Get("Ribbon_Group_ShapesEffects_KeyTip");
     public static string PictureLabel => Get("Ribbon_Command_Picture_Label");
     public static string PictureKeyTip => Get("Ribbon_Command_Picture_KeyTip");
     public static RibbonText PictureCropInsetCommand { get; } = new("Ribbon_Command_PictureCropInset_Label", "Ribbon_Command_PictureCropInset_KeyTip");

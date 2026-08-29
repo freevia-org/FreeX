@@ -21,7 +21,6 @@ public sealed class AvaloniaHostStateStoreWiringSourceTests
 
         Assert.Contains("private readonly RibbonStateStore _ribbonStateStore = new();", freeP);
         Assert.Contains("stateStore: _ribbonStateStore", freeP);
-        Assert.Contains("_ribbonStateStore);", freeP);
     }
 
     private static string RepoFile(string relativePath) =>

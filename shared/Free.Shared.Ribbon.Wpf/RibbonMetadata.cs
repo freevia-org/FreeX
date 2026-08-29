@@ -200,6 +200,9 @@ public static class RibbonMetadata
     public static bool IsCollapsedGroupButton(DependencyObject element) =>
         GetRole(element) == RibbonMetadataRole.CollapsedGroupButton;
 
+    public static bool IsGroupDialogLauncher(DependencyObject element) =>
+        GetRole(element) == RibbonMetadataRole.GroupDialogLauncher;
+
     public static bool IsCommandSpacer(DependencyObject element) =>
         GetRole(element) == RibbonMetadataRole.CommandSpacer;
 
@@ -268,7 +271,8 @@ public enum RibbonMetadataRole
     CollapsedChevron,
     CommandSpacer,
     RibbonGroup,
-    DropdownChevron
+    DropdownChevron,
+    GroupDialogLauncher
 }
 
 public enum RibbonCommandContentLayout

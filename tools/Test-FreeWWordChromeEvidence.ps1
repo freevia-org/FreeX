@@ -27,6 +27,16 @@ foreach ($requiredText in @(
         throw "FreeW Word chrome capture script is missing required guard or provenance '$requiredText'."
     }
 }
+$setupGuardOffset = $captureSource.IndexOf(
+    'Set-WordForegroundWindow $windowHandle $wordProcessId $expectedTitle "Word chrome capture setup"',
+    [StringComparison]::Ordinal)
+$clearCaptureCall = [regex]::Match($captureSource, '(?m)^\s*Clear-CurrentCapture\s*$')
+if ($setupGuardOffset -lt 0 -or -not $clearCaptureCall.Success -or $clearCaptureCall.Index -le $setupGuardOffset) {
+    throw "FreeW Word chrome capture must preserve existing evidence until foreground setup passes."
+}
+if ($captureSource.IndexOf("retained the previous complete reference set", [StringComparison]::Ordinal) -lt 0) {
+    throw "FreeW Word chrome capture must retain a complete prior reference set when foreground preflight is blocked."
+}
 
 $manifestPath = Join-Path $resolvedRoot "manifest.json"
 $blockerPath = Join-Path $resolvedRoot "blocker-manifest.json"

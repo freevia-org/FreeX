@@ -48,8 +48,8 @@ internal sealed record FreePRibbonProfile(
     internal static FreePRibbonProfile Wpf { get; } = new(
         HomeGroups:
         [
-            FreePRibbonHomeGroupId.Slides,
             FreePRibbonHomeGroupId.Clipboard,
+            FreePRibbonHomeGroupId.Slides,
             FreePRibbonHomeGroupId.Font,
             FreePRibbonHomeGroupId.Paragraph,
             FreePRibbonHomeGroupId.Arrange,
@@ -58,8 +58,8 @@ internal sealed record FreePRibbonProfile(
         ],
         HomeGroupPriorities: new Dictionary<FreePRibbonHomeGroupId, int>
         {
-            [FreePRibbonHomeGroupId.Slides] = 100,
-            [FreePRibbonHomeGroupId.Clipboard] = 90,
+            [FreePRibbonHomeGroupId.Clipboard] = 100,
+            [FreePRibbonHomeGroupId.Slides] = 90,
             [FreePRibbonHomeGroupId.Font] = 80,
             [FreePRibbonHomeGroupId.Paragraph] = 78,
             [FreePRibbonHomeGroupId.Arrange] = 70,
@@ -74,8 +74,8 @@ internal sealed record FreePRibbonProfile(
     internal static FreePRibbonProfile Avalonia { get; } = new(
         HomeGroups:
         [
-            FreePRibbonHomeGroupId.Slides,
             FreePRibbonHomeGroupId.Clipboard,
+            FreePRibbonHomeGroupId.Slides,
             FreePRibbonHomeGroupId.Font,
             FreePRibbonHomeGroupId.Paragraph,
             FreePRibbonHomeGroupId.Arrange,
@@ -84,8 +84,8 @@ internal sealed record FreePRibbonProfile(
         ],
         HomeGroupPriorities: new Dictionary<FreePRibbonHomeGroupId, int>
         {
-            [FreePRibbonHomeGroupId.Slides] = 100,
-            [FreePRibbonHomeGroupId.Clipboard] = 90,
+            [FreePRibbonHomeGroupId.Clipboard] = 100,
+            [FreePRibbonHomeGroupId.Slides] = 90,
             [FreePRibbonHomeGroupId.Font] = 80,
             [FreePRibbonHomeGroupId.Paragraph] = 78,
             [FreePRibbonHomeGroupId.Arrange] = 70,
