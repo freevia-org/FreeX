@@ -5852,6 +5852,104 @@ PY
     dismiss_overlays
 }
 
+probe_ribbon_home_font_family_combo() {
+    local artifacts="ribbon-home-font-family-combo-before.png;ribbon-home-font-family-combo-keytips.png;ribbon-home-font-family-combo-open.png;ribbon-home-font-family-combo-after.png;ribbon-home-font-family-combo-focus-reselect.png;ribbon-home-font-family-combo-postcondition.txt"
+    local package_signature="" style_id="" font_id="" font_name="" font_family=false save_clean=false worksheet_focus=false focus_clipboard=""
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "ribbon-home-font-family-combo-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path"
+        record "ribbon-home-font-family-combo-physical" "failed" "ribbon-home-font-family-combo-postcondition.txt" "The Home ribbon Font Family probe requires an XLSX fixture so the persisted font record can be checked." "$artifacts"
+        return
+    fi
+
+    if ! select_cell 0 0 A1; then
+        write_artifact "ribbon-home-font-family-combo-postcondition.txt" "selected=false\ncell=A1"
+        record "ribbon-home-font-family-combo-physical" "failed" "ribbon-home-font-family-combo-postcondition.txt" "Could not select the deterministic A1 target before opening the Home Font combo." "$artifacts"
+        return
+    fi
+
+    capture "ribbon-home-font-family-combo-before.png"
+    enter_keytip_mode
+    capture "ribbon-home-font-family-combo-keytips.png"
+    keytip_key h
+    # Home has no terminal key tip for the editable Font combo. Click the real rendered combo,
+    # then click its Arial item; these are calibrated against the production 1280x820 shell.
+    xdotool_mousemove_sync 323 96 click 1
+    sleep "$settle_seconds"
+    capture "ribbon-home-font-family-combo-open.png"
+    xdotool_mousemove_sync 280 149 click 1
+    sleep "$settle_seconds"
+    capture "ribbon-home-font-family-combo-after.png"
+
+    # Re-select the worksheet target through the production grid after the combo closes, then prove
+    # worksheet keyboard routing with Right followed by Ctrl+C. This is intentionally a physical
+    # reselect check; it does not claim automatic focus restoration from the dismissed combo.
+    send_key Escape || true
+    if select_cell 0 0 A1; then
+        capture "ribbon-home-font-family-combo-focus-reselect.png"
+    fi
+    set_clipboard_sentinel || true
+    send_key Right
+    send_key ctrl+c
+    focus_clipboard="$(wait_for_non_sentinel_clipboard || true)"
+    stop_clipboard_sentinel
+    if [[ "$focus_clipboard" == "Unchanged" ]]; then
+        worksheet_focus=true
+    fi
+
+    select_cell 0 0 A1 || true
+    send_key ctrl+s
+    if wait_for_document_clean; then
+        save_clean=true
+    else
+        send_shifted_function_key F12
+        wait_for_document_clean && save_clean=true
+    fi
+
+    package_signature="$(python3 - "$document_path" <<'PY'
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+path = sys.argv[1]
+ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+with zipfile.ZipFile(path) as package:
+    sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+    styles = ET.fromstring(package.read("xl/styles.xml"))
+    cell = next((node for node in sheet.findall(".//m:c", ns) if node.attrib.get("r") == "A1"), None)
+    style_id = int(cell.attrib.get("s", "0")) if cell is not None else 0
+    xfs = styles.find("m:cellXfs", ns)
+    fonts = styles.find("m:fonts", ns)
+    font_id = int(xfs[style_id].attrib.get("fontId", "0")) if xfs is not None and style_id < len(xfs) else 0
+    name = ""
+    if fonts is not None and font_id < len(fonts):
+        name_node = fonts[font_id].find("m:name", ns)
+        name = name_node.attrib.get("val", "") if name_node is not None else ""
+    print(f"style-id={style_id}|font-id={font_id}|font-name={name}|font-family={'true' if name.lower() == 'arial' else 'false'}")
+PY
+)"
+    style_id="${package_signature#style-id=}"
+    style_id="${style_id%%|*}"
+    font_id="${package_signature#*font-id=}"
+    font_id="${font_id%%|*}"
+    font_name="${package_signature#*font-name=}"
+    font_name="${font_name%%|*}"
+    font_family="${package_signature##*font-family=}"
+    write_artifact "ribbon-home-font-family-combo-postcondition.txt" \
+        "selector=ribbon-font-family\ndocument-path=$document_path\ncell=A1\nkeytip-sequence=Alt,H\ncombo-open-coordinate=323,96\nselected-item-coordinate=280,149\nselected-font=Arial\nautomatic-focus-after-combo=false\nautomatic-focus-status=unresolved-observed\nworksheet-focus-after-reselect=$worksheet_focus\nfocus-reselect-coordinate=29,236\nfocus-clipboard=$focus_clipboard\nsave-clean=$save_clean\npackage-signature=$package_signature"
+
+    if $save_clean && [[ "$font_family" == true ]] && $worksheet_focus; then
+        record "ribbon-home-font-family-combo-physical" "passed" \
+            "ribbon-home-font-family-combo-before.png; ribbon-home-font-family-combo-keytips.png; ribbon-home-font-family-combo-open.png; ribbon-home-font-family-combo-after.png; ribbon-home-font-family-combo-focus-reselect.png; cell=A1; font-id=$font_id; font-name=$font_name; automatic-focus-after-combo=false; worksheet-focus-after-reselect=true; save-clean=true" \
+            "The production Home Font combo selected Arial for A1; a physical worksheet reselect restored the keyboard route, and the saved XLSX package contains the Arial font record for the target cell." "$artifacts"
+    else
+        record "ribbon-home-font-family-combo-physical" "failed" \
+            "ribbon-home-font-family-combo-before.png; ribbon-home-font-family-combo-keytips.png; ribbon-home-font-family-combo-open.png; ribbon-home-font-family-combo-after.png; ribbon-home-font-family-combo-focus-reselect.png; cell=A1; font-id=$font_id; font-name=$font_name; worksheet-focus-after-reselect=$worksheet_focus; save-clean=$save_clean" \
+            "The production Home Font combo did not complete the clean-save, worksheet-reselect keyboard, and Arial-package postconditions." "$artifacts"
+    fi
+    dismiss_overlays
+}
+
 probe_backstage_print_shortcut() {
     local id="backstage-print-ctrl-shift-f12-cancel"
     local before_count="" open_count="" cancel_count=""
@@ -5938,6 +6036,20 @@ if [[ "$probe_selector" == "ribbon-number-format" ]]; then
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" \
             "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused ribbon-number-format probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "ribbon-font-family" ]]; then
+    # Focused Wave198 lane: select a real Home Font combo item, verify worksheet keyboard focus, and inspect the saved XLSX.
+    probe_ribbon_home_font_family_combo
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" \
+            "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused ribbon-font-family probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
