@@ -99,6 +99,34 @@ $wave196AcceptanceRefreshAllowedPaths = @(
     "docs/parity/avalonia-parity-wave196-cross-app-integration-20260829.md"
 )
 $wave196FullReleaseBuildElapsed = "00:10:12.82"
+$wave197FreeXEvidenceNotePath = "docs/parity/freex-wave197-ribbon-number-format/README.md"
+$wave197FreeXSourceTestPath = "tests/FreeX.App.Avalonia.Tests/Wave197RibbonNumberFormatPhysicalSourceTests.cs"
+$wave197FreeWEvidenceNotePath = "freew/docs/parity/avalonia-parity-wave197-freew-legal-notices-template-candidates-20260829.md"
+$wave197FreeWSourceTestPath = "freew/FreeW.App.Avalonia.Tests/Wave197LegalNoticesEvidenceTests.cs"
+$wave197FreeWRawEvidencePath = "freew/docs/parity/evidence/wave197-freew-legal-notices-raw-evidence.json"
+$wave197FreeWChecksumsPath = "freew/docs/parity/evidence/SHA256SUMS.txt"
+$wave197FreePLeadingEvidenceNotePath = "docs/parity/freep-wave197-deck17-leading-residual-20260829.md"
+$wave197FreePLeadingMetricsPath = "docs/parity/evidence/freep-wave197-deck17-leading-residual-20260829/metrics.json"
+$wave197FreePBaselineEvidenceNotePath = "docs/parity/freep-wave197-deck17-baseline-alignment-20260829.md"
+$wave197FreePBaselineMetricsPath = "docs/parity/evidence/freep-wave197-deck17-baseline-alignment-20260829/metrics.json"
+$wave197FreePBaselineImagesPath = "docs/parity/evidence/freep-wave197-deck17-baseline-alignment-20260829/images.json"
+$wave197FreePSourceTestPaths = @(
+    "freep/FreeP.App.Rendering.Avalonia.Tests/Wave197Deck17LeadingResidualEvidenceTests.cs",
+    "freep/FreeP.App.Rendering.Avalonia.Tests/Wave197BaselineAlignmentEvidenceTests.cs"
+)
+$wave197IntegrationNotePath = "docs/parity/avalonia-parity-wave197-cross-app-integration-20260829.md"
+$wave197TestedSourceCommit = "a6b1f27e02d15a7495644db64c9bda3a839f126a"
+$wave197AcceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
+$wave197AcceptanceRefreshAllowedPaths = @(
+    "tools/Generate-CrossAppParityDashboard.ps1",
+    "tools/Test-CrossAppParityDashboard.ps1",
+    "tests/FreeX.App.Host.Tests/CrossAppParityDashboardTests.cs",
+    "docs/parity/avalonia-wpf-cross-app-dashboard.json",
+    "docs/parity/avalonia-wpf-cross-app-dashboard.md",
+    $wave197IntegrationNotePath
+)
+$wave197FullReleaseBuildMsBuildElapsed = "00:07:04.93"
+$wave197FullReleaseBuildWrapperElapsed = "00:07:05.2629619"
 
 function Get-JsonPropertyValue {
     param(
@@ -335,6 +363,7 @@ try {
     $freeXWave194Manifest = Read-ToolJson -Path "docs/parity/evidence/wave194-freex-autofilter-mixed-type-20260823/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Wave194 FreeX evidence manifest is missing"
     $freeXWave195Manifest = Read-ToolJson -Path "docs/parity/evidence/wave195-freex-autofilter-criteria-workflows-20260828/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Wave195 FreeX physical evidence manifest is missing"
     $freeXWave196EvidenceNote = Get-Content -LiteralPath (Join-Path $repoRoot $wave196FreeXEvidenceNotePath) -Raw
+    $freeXWave197EvidenceNote = Get-Content -LiteralPath (Join-Path $repoRoot $wave197FreeXEvidenceNotePath) -Raw
     $wave193PhysicalRun = $freeXWave193Manifest.physicalRun
     $wave193ExpectedArtifactCount = 18
     $wave193PopupOpenChangeThreshold = 300
@@ -380,6 +409,8 @@ try {
     $freeWVisualComparison = Read-ToolJson -Path "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
     $freeWWave195EvidenceNote = Get-Content -LiteralPath (Join-Path $repoRoot "freew/docs/parity/avalonia-parity-wave195-freew-legal-notices-20260828.md") -Raw
     $freeWWave196EvidenceNote = Get-Content -LiteralPath (Join-Path $repoRoot $wave196FreeWEvidenceNotePath) -Raw
+    $freeWWave197EvidenceNote = Get-Content -LiteralPath (Join-Path $repoRoot $wave197FreeWEvidenceNotePath) -Raw
+    $freeWWave197RawEvidence = Read-ToolJson -Path $wave197FreeWRawEvidencePath -RepoRoot $repoRoot -MissingMessage "Required Wave197 FreeW raw evidence is missing"
     $freeWFontProvenance = Read-ToolJson -Path "docs/parity/freew-dialog-harness/freew_font_visual_provenance.json" -RepoRoot $repoRoot -MissingMessage "Required FreeW Font provenance is missing"
     if ($null -eq $freeWVisualComparison.scope -or [string]$freeWVisualComparison.scope.kind -ne "canonical-inputs-only") {
         throw "FreeW visual comparison must declare canonical-inputs-only scope before the cross-app dashboard can be generated."
@@ -401,6 +432,9 @@ try {
     $freePWave194Topology = Read-ToolJson -Path "docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json" -RepoRoot $repoRoot -MissingMessage "Required Wave194 FreeP topology evidence is missing"
     $freePWave196Metrics = Read-ToolJson -Path $wave196FreePMetricsPath -RepoRoot $repoRoot -MissingMessage "Required Wave196 FreeP metrics are missing"
     $freePWave196Images = Read-ToolJson -Path $wave196FreePImagesPath -RepoRoot $repoRoot -MissingMessage "Required Wave196 FreeP image hashes are missing"
+    $freePWave197LeadingMetrics = Read-ToolJson -Path $wave197FreePLeadingMetricsPath -RepoRoot $repoRoot -MissingMessage "Required Wave197 FreeP leading metrics are missing"
+    $freePWave197BaselineMetrics = Read-ToolJson -Path $wave197FreePBaselineMetricsPath -RepoRoot $repoRoot -MissingMessage "Required Wave197 FreeP baseline metrics are missing"
+    $freePWave197BaselineImages = Read-ToolJson -Path $wave197FreePBaselineImagesPath -RepoRoot $repoRoot -MissingMessage "Required Wave197 FreeP baseline image hashes are missing"
 
     $wave196RequiredEvidencePaths = @(
         $wave196FreeXEvidenceNotePath,
@@ -429,6 +463,44 @@ try {
         [string]$freePWave196Metrics.target.slide -ne "slide-02" -or
         [string]$freePWave196Metrics.acceptedCorrection.textHintingModeAfter -ne "Light") {
         throw "Wave196 FreeP metrics do not describe the committed deck17 light-hinting evidence."
+    }
+    $wave197RequiredEvidencePaths = @(
+        $wave197FreeXEvidenceNotePath,
+        $wave197FreeXSourceTestPath,
+        $wave197FreeWEvidenceNotePath,
+        $wave197FreeWSourceTestPath,
+        $wave197FreeWRawEvidencePath,
+        $wave197FreeWChecksumsPath,
+        $wave197FreePLeadingEvidenceNotePath,
+        $wave197FreePLeadingMetricsPath,
+        $wave197FreePBaselineEvidenceNotePath,
+        $wave197FreePBaselineMetricsPath,
+        $wave197FreePBaselineImagesPath,
+        $wave197IntegrationNotePath
+    ) + $wave197FreePSourceTestPaths
+    foreach ($evidencePath in $wave197RequiredEvidencePaths) {
+        if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $evidencePath) -PathType Leaf)) {
+            throw "Required committed Wave197 evidence path is missing: $evidencePath"
+        }
+    }
+    if ($freeXWave197EvidenceNote -notmatch "style-id=1\|numFmtId=2\|number-format=true" -or
+        $freeXWave197EvidenceNote -notmatch "save-clean=true") {
+        throw "Wave197 FreeX evidence note does not contain the committed number-format package facts."
+    }
+    if ($freeWWave197EvidenceNote -notmatch "no candidate accepted" -or
+        $freeWWave197EvidenceNote -notmatch "regressed all" -or
+        $freeWWave197EvidenceNote -notmatch "two target rows regressed") {
+        throw "Wave197 FreeW evidence note does not retain both rejected candidate outcomes."
+    }
+    if (@($freeWWave197RawEvidence.extraction.scenarioIds).Count -ne 6 -or
+        @($freeWWave197RawEvidence.extraction.scenarioIds | Sort-Object -Unique).Count -ne 6) {
+        throw "Wave197 FreeW raw evidence must contain exactly six unique scenarios."
+    }
+    if ([string]$freePWave197LeadingMetrics.status -ne "candidate-refuted" -or
+        [string]$freePWave197BaselineMetrics.status -ne "candidate-refuted" -or
+        [string]$freePWave197LeadingMetrics.sourceProvenance.generationLinkage -ne "not-independently-proven" -or
+        [string]$freePWave197BaselineMetrics.imageIntegrity.status -ne "tracked-byte-hashes-verified") {
+        throw "Wave197 FreeP evidence does not retain the rejected-candidate and image-provenance boundaries."
     }
     $freePPowerPointChrome = Read-ToolJson -Path "docs/parity/freep-powerpoint-chrome-2026-08-16/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint chrome capture manifest is missing"
     $freePResponsiveChrome = Read-ToolJson -Path "docs/parity/freep-responsive-chrome-2026-08-16/manifest.json" -RepoRoot $repoRoot -MissingMessage "Required FreeP responsive chrome capture manifest is missing"
@@ -681,6 +753,24 @@ try {
                 saveClean = $true
                 claimBoundary = "Committed FreeX production Linux/X11 and source-test evidence for one ribbon-formatting workflow; accepted local integration gates do not establish complete FreeX or visual parity."
             }
+            wave197 = [ordered]@{
+                status = "evidence-recorded"
+                validationMode = "physical-only"
+                evidencePath = $wave197FreeXEvidenceNotePath
+                sourceTestPath = $wave197FreeXSourceTestPath
+                physicalPassed = 1
+                physicalTotal = 1
+                focusedSourceTestsPassed = 16
+                focusedSourceTestsTotal = 16
+                productionDockerX11Report = "20260829T013532Z"
+                productionDockerX11ProvenanceCommit = "9c1fd10cb61dc5bf324502ba68fc47d939436624"
+                persistedStyle = "style-id=1|numFmtId=2|number-format=true"
+                saveClean = $true
+                ordinaryBubbleKeyRouting = "retained"
+                deferredComboDismissFocusRestore = "one deferred combo-dismiss callback rechecks focus immediately and synchronously restores worksheet focus"
+                testedSourceBoundary = "The later exact tested head differs only by the FreeW evidence/test commit a6b1f27e02; FreeX production source remains represented by provenance commit 9c1fd10cb61dc5bf324502ba68fc47d939436624."
+                claimBoundary = "Committed FreeX production Linux/X11 and source-test evidence for one Home ribbon number-format persistence workflow; accepted local integration gates do not establish complete FreeX or visual parity."
+            }
             limitations = @(
                 "The 2026-08-16 interactive run captured 36 foreground ribbon states for each of Excel, WPF, and Avalonia, including Draw at all four widths, plus six guarded Excel popup/dialog surfaces. The 27 fixed-viewport triage rows average 13.937% RGB delta for WPF and 15.639% for Avalonia versus Excel; nine maximized rows are coverage-only, not an acceptance threshold.",
                 "The ribbon harness creates a blank workbook before tab discovery so the enabled Draw tab is materialized; the current manifest records no unavailable-tab skips.",
@@ -731,7 +821,7 @@ try {
             -DialogRoutes $freeXDialogRoutes `
             -DialogVisualEvidence $freeXDialogVisualEvidence
     }
-    $freeX.nextSlice = "$($freeX.nextSlice) Production Linux evidence now covers Name Box (1/1 visual, 8/8 interaction), AutoFilter apply/change/clear recalculation (1/1), sort/save/reopen persistence (1/1), text-criteria save/reopen persistence (2/2), numeric Greater Than/Equals persistence (2/2), date criteria (2/2), fill-color save/reopen (1/1), font-color save/reopen (1/1), No Fill save/reopen persistence ($($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillPassed)/$($freeX.renderedEvidence.physicalEvidence.linuxAutoFilterNoFillTotal)), and mixed-type value persistence ($($freeX.renderedEvidence.physicalEvidence.wave194.physicalPassed)/$($freeX.renderedEvidence.physicalEvidence.wave194.physicalTotal)). Wave194 retains $(@($freeXWave194Manifest.files).Count)/20 artifacts and one authoritative geometry contract. Wave195 adds $wave195SessionCount/$wave195SessionCount passing production Linux sessions for multi-column and color criteria change/clear persistence, with $wave195ReloadWitnessCount/$wave195SessionCount reload witnesses; continue with broader physical coverage beyond these completed workflows."
+    $freeX.nextSlice = "$($freeX.nextSlice) Wave197 records one production Docker/X11 Home ribbon number-format persistence probe with 16/16 focused tests; ordinary bubble key routing remains retained and combo dismissal restores worksheet focus synchronously. Continue with broader physical coverage beyond this completed workflow."
 
     $freeWComparisonRows = @($freeWVisualComparison.rows)
     $freeWPairedComparisonRows = @($freeWComparisonRows | Where-Object { $_.captureStatus -eq "captured/captured" })
@@ -837,6 +927,22 @@ try {
             consecutiveBreakCoverage = $true
             claimBoundary = "Committed FreeW Avalonia source-test and exact-oracle evidence for trailing inline flow-break caret placement; accepted local integration gates do not establish complete FreeW or visual parity."
         }
+        wave197 = [ordered]@{
+            status = "candidate-refuted"
+            evidencePath = $wave197FreeWEvidenceNotePath
+            sourceTestPath = $wave197FreeWSourceTestPath
+            rawEvidencePath = $wave197FreeWRawEvidencePath
+            checksumsPath = $wave197FreeWChecksumsPath
+            scenarioCount = 6
+            uniqueScenarioCount = 6
+            focusedSourceTestsPassed = 20
+            focusedSourceTestsTotal = 20
+            validation = "Clean-checkout tracked raw evidence and checksums; exact unique six-scenario validation passed."
+            surfaceMarginCandidate = "Rejected: the one-pixel selected-tab surface margin regressed all six rows."
+            lineBoxCandidate = "Rejected: 16px line-box improved two long rows and regressed two long rows; short controls were unchanged."
+            productionCandidateRetained = $false
+            claimBoundary = "Committed FreeW evidence-only candidate review for the Legal Notices tab-template family; no production candidate is retained, and accepted local integration gates do not establish complete FreeW or visual parity."
+        }
         routeCoverage = [ordered]@{
             inventoryScenarioCount = @($freeWRouteInventory.scenarios).Count
             inventoryRouteCount = Get-UniqueValueCount @($freeWRouteInventory.scenarios | ForEach-Object { $_.routeId })
@@ -925,7 +1031,7 @@ try {
             classifiedRows = $true
         }
         renderedEvidence = $freeWRenderedEvidence
-        nextSlice = "Wave196 records two trailing inline flow-break caret regressions in Avalonia, including consecutive breaks; local gates are accepted. The canonical FreeW catalog remains $($freeWWave195Metrics.catalogRowCount) rows: $($freeWWave195Metrics.passCount) pass, $($freeWWave195Metrics.genuineVisualMismatchCount) genuine visual mismatches, and $($freeWWave195Metrics.avaloniaExtensionCount) Avalonia extensions. Continue with the remaining native checkbox/glyph raster tail, tab-template edges, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
+        nextSlice = "Wave197 records rejected Legal Notices template candidates: the surface-margin candidate regressed all six rows and the 16px line-box candidate improved two long rows but regressed two. The canonical FreeW catalog remains $($freeWWave195Metrics.catalogRowCount) rows: $($freeWWave195Metrics.passCount) pass, $($freeWWave195Metrics.genuineVisualMismatchCount) genuine visual mismatches, and $($freeWWave195Metrics.avaloniaExtensionCount) Avalonia extensions. No production candidate is retained; continue with the remaining native checkbox/glyph raster tail, tab-template edges, or the next classified pagination, drawing/object, chart, table, or WordArt residual."
     }
 
     $freePExternalPowerPointResidual = Get-ResidualById -Residuals $freePRenderParity.Residuals -Id "external-powerpoint-baseline"
@@ -1135,6 +1241,24 @@ try {
             imageHashCount = @($freePWave196Images.PSObject.Properties).Count
             claimBoundary = "Committed FreeP deck17 slide02 renderer evidence for a scoped Aptos fallback hinting correction; accepted local integration gates do not establish complete FreeP or visual parity."
         }
+        wave197 = [ordered]@{
+            status = "candidate-refuted"
+            leadingEvidencePath = $wave197FreePLeadingEvidenceNotePath
+            leadingMetricsPath = $wave197FreePLeadingMetricsPath
+            baselineAlignmentEvidencePath = $wave197FreePBaselineEvidenceNotePath
+            baselineAlignmentMetricsPath = $wave197FreePBaselineMetricsPath
+            baselineAlignmentImageManifestPath = $wave197FreePBaselineImagesPath
+            sourceTestPaths = $wave197FreePSourceTestPaths
+            focusedSourceTestsPassed = 4
+            focusedSourceTestsTotal = 4
+            productionCandidateRetained = $false
+            leadingCandidate = "Rejected: scaled leading preserved all 16 body ink-band starts but would accumulate 30.24 DIP of final baseline drift."
+            baselineAlignmentCandidate = "Rejected: target worsened from 2.4820% to 2.5116% Avalonia/Office and from 2.8755% to 2.9053% WPF/Avalonia; the slide01 control remained byte-identical."
+            trackedImageBytesAndHashes = "Verified from tracked image bytes and recorded hashes; the recorded source commit is verified, but image-generation linkage is explicitly unproven."
+            recordedSourceCommit = [string]$freePWave197LeadingMetrics.sourceProvenance.sourceRevision
+            residualBoundary = "The remaining evidence is an unresolved text-raster residual, not a fallback-font diagnosis."
+            claimBoundary = "Committed FreeP rejection evidence for leading and baseline-alignment candidates; no production candidate is retained, tracked image bytes/hashes and source-commit metadata are verified, and image-generation linkage is not independently proven."
+        }
         physicalEvidence = [ordered]@{
             status = "available-app-and-native-office-chrome"
             captureMode = "visible app-owned render targets with scenario-isolated processes plus guarded native PowerPoint ribbon capture"
@@ -1175,7 +1299,7 @@ try {
         claimBoundary = "Route/scenario coverage, committed PNG manifests, and local WPF/Avalonia comparison results only; no PowerPoint visual-parity claim is made."
     }
 
-    $freePNextSlice = "Wave196 records a scoped deck17 slide02 Aptos fallback hinting correction: Avalonia/Office changes from $($freePWave196Metrics.measurements.slide02Target.before.avaloniaOffice)% to $($freePWave196Metrics.measurements.slide02Target.after.avaloniaOffice)% and WPF/Avalonia from $($freePWave196Metrics.measurements.slide02Target.before.wpfAvalonia)% to $($freePWave196Metrics.measurements.slide02Target.after.wpfAvalonia)%; local gates are accepted. The native Office residual remains unresolved; continue renderer-level evidence against the existing corpus rather than introducing fixture-specific correction."
+    $freePNextSlice = "Wave197 rejects leading and baseline-alignment candidates for the deck17 slide02 residual; no production candidate is retained. Tracked image bytes/hashes and recorded source-commit metadata are verified, but image-generation linkage is explicitly unproven. The remaining residual is unresolved text-raster evidence, not a fallback-font diagnosis; continue renderer-level evidence against the existing corpus rather than introducing fixture-specific correction."
 
     $freeP = [ordered]@{
         app = "FreeP"
@@ -1261,16 +1385,40 @@ try {
         portabilityCorrection = "Committed portability correction is included in the generator and focused dashboard test; it normalizes repository paths to forward slashes."
         historicalWave195Acceptance = $wave195IntegrationGateEvidence
     }
+    $wave197IntegrationGateEvidence = [ordered]@{
+        status = "accepted-local-gates"
+        acceptanceStatus = "accepted-local-gates"
+        testedSourceCommit = $wave197TestedSourceCommit
+        acceptanceRefreshNote = $wave197AcceptanceRefreshNote
+        pendingIntegrationGates = @()
+        acceptedLocalGates = @("repository-preflight", "full-release-build")
+        acceptanceRefreshAllowedPaths = $wave197AcceptanceRefreshAllowedPaths
+        sliceAccounting = "Wave 197 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 591 app slices (197 per app)."
+        currentEvidence = "Wave197 evidence is recorded from committed app-specific notes, source tests, tracked FreeW raw evidence/checksums, and tracked FreeP image/hash evidence; local repository preflight and full Release build acceptance is recorded separately below."
+        localGatePolicy = "Per AGENTS.md, repository preflight and the full Release build are the local branch gates. The manifest-driven integration suite and UI/render/release-only gates are delegated to GitHub after main is pushed."
+        delegatedGitHubGates = @("manifest-driven-integration-suite", "ui-render-release-workflow")
+        delegatedGitHubGateStatus = "not-run-locally"
+        gateBoundary = "Wave197 local acceptance records only the exact tested source commit ${wave197TestedSourceCommit} and the six allowlisted acceptance/report paths; delegated GitHub gates are not claimed as locally run and full Avalonia/WPF parity is not claimed."
+        repositoryPreflight = "Passed at tested source commit ${wave197TestedSourceCommit}: tools/Test-RepositoryPreflight.ps1 repository preflight passed in Mode All with exit code 0."
+        fullReleaseBuildMsBuildElapsed = $wave197FullReleaseBuildMsBuildElapsed
+        fullReleaseBuildWrapperElapsed = $wave197FullReleaseBuildWrapperElapsed
+        fullReleaseBuild = "Passed at tested source commit ${wave197TestedSourceCommit}: dotnet build FreeX.slnx --configuration Release passed with 0 warnings and 0 errors; MSBuild 00:07:04.93; wrapper 00:07:05.2629619."
+        focusedTests = "Passed at tested source commit ${wave197TestedSourceCommit}: FreeX 16/16; FreeW 20/20; FreeP 4/4."
+        independentReviewStatus = "passed"
+        independentReview = "Passed: final independent review found no P1/P2 findings after all remediation. This acceptance refresh preserves the exact tested-source boundary and does not claim any delegated GitHub gate or full parity."
+        portabilityCorrection = "Committed portability correction remains included in the generator and focused dashboard test; it normalizes repository paths to forward slashes."
+        historicalWave196Acceptance = $wave196IntegrationGateEvidence
+    }
 
     $dashboard = [ordered]@{
         schema = "freex.parity.cross-app-dashboard.v3"
-        wave = 196
-        cumulativeAppSlices = 588
+        wave = 197
+        cumulativeAppSlices = 591
         cumulativeAppSlicesStatus = "accepted-local-gates"
         integrationGateStatus = "accepted-local-gates"
-        pendingIntegrationGates = $wave196IntegrationGateEvidence.pendingIntegrationGates
-        integrationGateEvidence = $wave196IntegrationGateEvidence
-        scopeBoundary = "Wave196 is three app slices, cumulative 588 (196 per app). Functional/source parity evidence is represented by generated command/profile routing, route coverage, committed source tests, focused evidence, and artifact coverage. Visual parity remains a separate claim: FreeW retains 141 genuine visual mismatches and 70 Avalonia extensions; FreeP retains an unresolved native Office deck17 slide02 residual; Wave196 evidence is bounded to the named workflows and renderer correction. These metrics do not prove complete visual parity, workflow completeness, or pixel-level equivalence, and the overall 100% parity goal remains incomplete."
+        pendingIntegrationGates = $wave197IntegrationGateEvidence.pendingIntegrationGates
+        integrationGateEvidence = $wave197IntegrationGateEvidence
+        scopeBoundary = "Wave197 is three app slices, cumulative 591 (197 per app). Functional/source parity evidence is represented by generated command/profile routing, route coverage, committed source tests, focused evidence, and artifact coverage. Visual parity remains a separate claim: FreeW retains 141 genuine visual mismatches and 70 Avalonia extensions; FreeP retains an unresolved text-raster residual and no accepted production candidate. Wave197 evidence is bounded to the named workflows and rejected candidates. These metrics do not prove complete visual parity, workflow completeness, or pixel-level equivalence, and the overall 100% parity goal remains incomplete."
         sources = @(
             "docs/parity/command-inventory.json",
             "docs/parity/functional-parity.json",
@@ -1363,7 +1511,19 @@ try {
             $wave196FreePMetricsPath,
             $wave196FreePImagesPath,
             $wave196IntegrationNotePath
-        ) + $wave196FreePSourceTestPaths + $wave196PortabilityCorrectionPaths
+            $wave197FreeXEvidenceNotePath,
+            $wave197FreeXSourceTestPath,
+            $wave197FreeWEvidenceNotePath,
+            $wave197FreeWSourceTestPath,
+            $wave197FreeWRawEvidencePath,
+            $wave197FreeWChecksumsPath,
+            $wave197FreePLeadingEvidenceNotePath,
+            $wave197FreePLeadingMetricsPath,
+            $wave197FreePBaselineEvidenceNotePath,
+            $wave197FreePBaselineMetricsPath,
+            $wave197FreePBaselineImagesPath,
+            $wave197IntegrationNotePath
+        ) + $wave196FreePSourceTestPaths + $wave196PortabilityCorrectionPaths + $wave197FreePSourceTestPaths
         apps = @($freeX, $freeW, $freeP)
     }
 
@@ -1375,7 +1535,8 @@ try {
             "| $(ConvertTo-ToolMarkdownCell $candidate.id) | $($candidate.triageScore) | $($candidate.logicalDimensionMatch) | $(ConvertTo-ToolMarkdownCell $(if ([string]::IsNullOrWhiteSpace([string]$candidate.dimensionMismatchBucket)) { "none" } else { $candidate.dimensionMismatchBucket })) | $(ConvertTo-ToolMarkdownCell $candidate.reviewStatus) |"
         }
     )
-    $wave195History = $dashboard.integrationGateEvidence.historicalWave195Acceptance
+    $wave196History = $dashboard.integrationGateEvidence.historicalWave196Acceptance
+    $wave195History = $wave196History.historicalWave195Acceptance
     $wave194History = $wave195History.historicalWave194Acceptance
 
     $md = @(
@@ -1385,15 +1546,15 @@ try {
         "",
         "> Generated counts prove command/profile routing, route and artifact coverage, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates, physical/no-COM limitations, and authoritative Microsoft Office baseline availability remain explicitly separate from coverage metrics.",
         "",
-        "> Wave196 records three app slices and cumulative **$($dashboard.cumulativeAppSlices)** app slices (196 per app). Wave196 local integration gates are **accepted** at tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``. This is an acceptance-only refresh over six allowlisted report/tooling paths; delegated GitHub gates remain not-run-locally and no full-parity claim is recorded. Wave195 remains historical acceptance context with its supplied accepted local gates and exact tested source boundary. Wave194 remains historical acceptance context: its supplied Release, default-lane, and repository gates passed against tested source commit ``$($wave194History.testedSourceCommit)``; independent review passed with no findings at integration head ``$wave194ReviewedIntegrationHead``.",
+        "> Wave197 records three app slices and cumulative **$($dashboard.cumulativeAppSlices)** app slices (197 per app). Wave197 local integration gates are **accepted** at tested source commit ``$($dashboard.integrationGateEvidence.testedSourceCommit)``. This is an acceptance-only refresh over six allowlisted report/tooling paths; delegated GitHub gates remain not-run-locally and no full-parity claim is recorded. Wave196 remains historical acceptance context with its supplied accepted local gates and exact tested source boundary. Wave195 remains historical acceptance context with its supplied accepted local gates and exact tested source boundary. Wave194 remains historical acceptance context: its supplied Release, default-lane, and repository gates passed against tested source commit ``$($wave194History.testedSourceCommit)``; independent review passed with no findings at integration head ``$wave194ReviewedIntegrationHead``.",
         "",
         "## Summary",
         "",
         "| App | Primary evidence | Current generated state | Next slice |",
         "|---|---|---|---|",
-        "| FreeX | Functional matrix, classifier, dialog inventory, dialog visual evidence, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) command inventory parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.functionalMatrix.pseudoCommandGalleryItems) catalog-backed pseudo-gallery rows ($($freeX.functionalMatrix.conditionalFormatPopupGalleryRows) conditional-format, $($freeX.functionalMatrix.fontBorderPopupGalleryRows) font/border, $($freeX.functionalMatrix.accountingSymbolPopupGalleryRows) accounting-symbol); $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia; $($freeX.dialogVisualEvidence.pairedCapturedSurfaceIds) paired screenshot surface ids, $($freeX.dialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only ids, $($freeX.dialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair) WPF-only ids; $($freeX.dialogVisualEvidence.pairedDimensionMismatches) scale-aware dimension mismatches; $($freeX.dialogVisualEvidence.visualReviewCandidateCount) unresolved high-delta visual review candidates at triage score >= $($freeX.dialogVisualEvidence.visualReviewTriageThreshold) (highest $($freeX.dialogVisualEvidence.highestTriageScore)); $($freeX.dialogVisualEvidence.pairedRawPixelDimensionMismatches) raw PNG pixel dimension mismatches, of which $($freeX.dialogVisualEvidence.pairedCaptureScaleNormalizedDimensionMatches) normalize by capture DPI; Wave196 ribbon-formatting evidence 1/1 physical probe and 22/22 focused source tests. These are coverage/triage metrics, not a visual-parity claim. | $($freeX.nextSlice) |",
-        "| FreeW | Generated command inventory plus dialog rendered evidence | $($freeW.commandInventory.totalCommands) commands; $($freeW.commandInventory.bothProfiles) shared-profile; $($freeW.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeW.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeW.commandInventory.profileShapeOnly) profile-shape-only; $($freeW.commandInventory.commandIdAliases) command-id aliases; $($freeW.commandInventory.platformOnly) platform-only; $($freeW.commandInventory.deferred) deferred; $($freeW.renderedEvidence.artifactCoverage.evidenceRowCount) rendered comparison rows; Wave195 Legal Notices aggregate $($freeW.renderedEvidence.wave195.legalNoticesChangedPixels) changed pixels (delta $($freeW.renderedEvidence.wave195.legalNoticesAggregateDelta), $($freeW.renderedEvidence.wave195.legalNoticesBaselineChangedPixels) to $($freeW.renderedEvidence.wave195.legalNoticesChangedPixels)); $($freeW.renderedEvidence.wave195.genuineVisualMismatchCount) genuine visual mismatches and $($freeW.renderedEvidence.wave195.avaloniaExtensionCount) Avalonia extensions; Wave196 trailing flow-break caret source evidence retained. | $($freeW.nextSlice) |",
-        "| FreeP | Generated command inventory plus dialog/whole-window rendered evidence | $($freeP.commandInventory.totalCommands) commands; $($freeP.commandInventory.bothProfiles) shared-profile; $($freeP.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeP.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeP.commandInventory.platformOnly) platform-only; $($freeP.commandInventory.workflowEvidenceRows) workflow evidence rows; $($freeP.renderedEvidence.wave195.combinedRenderedEvidencePassCount)/$($freeP.renderedEvidence.wave195.combinedRenderedEvidenceCount) combined rendered evidence pass; whole-window $($freeP.renderedEvidence.wave195.wholeWindowPassCount)/$($freeP.renderedEvidence.wave195.wholeWindowScenarioCount) pass; Wave196 deck17 light-hinting evidence recorded. | $($freeP.nextSlice) |",
+        "| FreeX | Functional matrix, classifier, dialog inventory, dialog visual evidence, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) command inventory parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.functionalMatrix.pseudoCommandGalleryItems) catalog-backed pseudo-gallery rows ($($freeX.functionalMatrix.conditionalFormatPopupGalleryRows) conditional-format, $($freeX.functionalMatrix.fontBorderPopupGalleryRows) font/border, $($freeX.functionalMatrix.accountingSymbolPopupGalleryRows) accounting-symbol); $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia; $($freeX.dialogVisualEvidence.pairedCapturedSurfaceIds) paired screenshot surface ids, $($freeX.dialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only ids, $($freeX.dialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair) WPF-only ids; $($freeX.dialogVisualEvidence.pairedDimensionMismatches) scale-aware dimension mismatches; $($freeX.dialogVisualEvidence.visualReviewCandidateCount) unresolved high-delta visual review candidates at triage score >= $($freeX.dialogVisualEvidence.visualReviewTriageThreshold) (highest $($freeX.dialogVisualEvidence.highestTriageScore)); $($freeX.dialogVisualEvidence.pairedRawPixelDimensionMismatches) raw PNG pixel dimension mismatches, of which $($freeX.dialogVisualEvidence.pairedCaptureScaleNormalizedDimensionMatches) normalize by capture DPI; Wave197 number-format evidence 1/1 physical probe and 16/16 focused source tests. These are coverage/triage metrics, not a visual-parity claim. | $($freeX.nextSlice) |",
+        "| FreeW | Generated command inventory plus dialog rendered evidence | $($freeW.commandInventory.totalCommands) commands; $($freeW.commandInventory.bothProfiles) shared-profile; $($freeW.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeW.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeW.commandInventory.profileShapeOnly) profile-shape-only; $($freeW.commandInventory.commandIdAliases) command-id aliases; $($freeW.commandInventory.platformOnly) platform-only; $($freeW.commandInventory.deferred) deferred; $($freeW.renderedEvidence.artifactCoverage.evidenceRowCount) rendered comparison rows; Wave195 Legal Notices aggregate $($freeW.renderedEvidence.wave195.legalNoticesChangedPixels) changed pixels (delta $($freeW.renderedEvidence.wave195.legalNoticesAggregateDelta), $($freeW.renderedEvidence.wave195.legalNoticesBaselineChangedPixels) to $($freeW.renderedEvidence.wave195.legalNoticesChangedPixels)); $($freeW.renderedEvidence.wave195.genuineVisualMismatchCount) genuine visual mismatches and $($freeW.renderedEvidence.wave195.avaloniaExtensionCount) Avalonia extensions; Wave197 Legal Notices candidate review retained with 20/20 focused tests and no production candidate. | $($freeW.nextSlice) |",
+        "| FreeP | Generated command inventory plus dialog/whole-window rendered evidence | $($freeP.commandInventory.totalCommands) commands; $($freeP.commandInventory.bothProfiles) shared-profile; $($freeP.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeP.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeP.commandInventory.platformOnly) platform-only; $($freeP.commandInventory.workflowEvidenceRows) workflow evidence rows; $($freeP.renderedEvidence.wave195.combinedRenderedEvidencePassCount)/$($freeP.renderedEvidence.wave195.combinedRenderedEvidenceCount) combined rendered evidence pass; whole-window $($freeP.renderedEvidence.wave195.wholeWindowPassCount)/$($freeP.renderedEvidence.wave195.wholeWindowScenarioCount) pass; Wave197 leading and baseline-alignment candidates rejected with 4/4 focused tests. | $($freeP.nextSlice) |",
         "",
         "## Rendered Evidence Summary",
         "",
@@ -1408,6 +1569,9 @@ try {
         "FreeX Wave196 evidence: **$($freeX.renderedEvidence.physicalEvidence.wave196.physicalPassed)/$($freeX.renderedEvidence.physicalEvidence.wave196.physicalTotal)** production Docker/X11 ribbon-formatting probe and **$($freeX.renderedEvidence.physicalEvidence.wave196.focusedSourceTestsPassed)/$($freeX.renderedEvidence.physicalEvidence.wave196.focusedSourceTestsTotal)** focused source tests recorded; persisted package fact $($freeX.renderedEvidence.physicalEvidence.wave196.persistedStyle), save-clean $($freeX.renderedEvidence.physicalEvidence.wave196.saveClean). This is bounded evidence, not a local integration acceptance or full-parity claim.",
         "FreeW Wave196 evidence: the committed trailing inline flow-break caret oracle and **$($freeW.renderedEvidence.wave196.focusedSourceTestsPassed)/$($freeW.renderedEvidence.wave196.focusedSourceTestsTotal)** source regressions cover post-page/post-column caret placement, including consecutive-break coverage; this remains focused source evidence, not a complete visual-parity claim.",
         "FreeP Wave196 evidence: committed deck17 slide02 light-hinting metrics move Avalonia/Office from $($freeP.renderedEvidence.wave196.avaloniaOfficeBefore)% to $($freeP.renderedEvidence.wave196.avaloniaOfficeAfter)% and WPF/Avalonia from $($freeP.renderedEvidence.wave196.wpfAvaloniaBefore)% to $($freeP.renderedEvidence.wave196.wpfAvaloniaAfter)%; $($freeP.renderedEvidence.wave196.imageHashCount) image hashes are retained. This is a scoped renderer measurement, not a complete visual-parity claim.",
+        "FreeX Wave197 evidence: **$($freeX.renderedEvidence.physicalEvidence.wave197.physicalPassed)/$($freeX.renderedEvidence.physicalEvidence.wave197.physicalTotal)** production Docker/X11 number-format probe and **$($freeX.renderedEvidence.physicalEvidence.wave197.focusedSourceTestsPassed)/$($freeX.renderedEvidence.physicalEvidence.wave197.focusedSourceTestsTotal)** focused source tests recorded; report $($freeX.renderedEvidence.physicalEvidence.wave197.productionDockerX11Report), $($freeX.renderedEvidence.physicalEvidence.wave197.persistedStyle), save-clean $($freeX.renderedEvidence.physicalEvidence.wave197.saveClean). Ordinary bubble key routing remains retained and deferred combo dismissal synchronously restores worksheet focus. The later tested head differs only by the FreeW evidence/test commit; this is bounded evidence, not a full-parity claim.",
+        "FreeW Wave197 evidence: **$($freeW.renderedEvidence.wave197.focusedSourceTestsPassed)/$($freeW.renderedEvidence.wave197.focusedSourceTestsTotal)** focused tests cover exactly **$($freeW.renderedEvidence.wave197.uniqueScenarioCount)** unique Legal Notices scenarios; the surface-margin candidate regressed all six rows and the 16px line-box candidate improved two long rows but regressed two. No production candidate is retained.",
+        "FreeP Wave197 evidence: leading and baseline-alignment candidates are rejected with **$($freeP.renderedEvidence.wave197.focusedSourceTestsPassed)/$($freeP.renderedEvidence.wave197.focusedSourceTestsTotal)** focused tests. Tracked image bytes/hashes and the recorded source commit are verified, but image-generation linkage is explicitly unproven; the residual remains unresolved text-raster evidence, not a fallback-font diagnosis.",
         "",
         "| App | Route coverage | Artifact coverage | Paired WPF/Avalonia evidence | Physical/no-COM limitation | Authoritative Microsoft Office baseline |",
         "|---|---|---|---|---|---|",
@@ -1417,11 +1581,12 @@ try {
         "",
         "## Integration Gates",
         "",
-        "Wave196 local integration gates are **accepted**. It records three app slices and cumulative 588 app slices (196 per app). Per AGENTS.md, repository preflight and the full Release build are the local branch gates; the manifest-driven integration suite and UI/render/release-only gates are delegated to GitHub and are not claimed as locally run. $($dashboard.integrationGateEvidence.gateBoundary)",
+        "Wave197 local integration gates are **accepted**. It records three app slices and cumulative 591 app slices (197 per app). Per AGENTS.md, repository preflight and the full Release build are the local branch gates; the manifest-driven integration suite and UI/render/release-only gates are delegated to GitHub and are not claimed as locally run. $($dashboard.integrationGateEvidence.gateBoundary)",
         "",
         "- Historical Wave194 acceptance: $($wave194History.acceptanceRefreshNote) $($wave194History.fullReleaseBuild) $($wave194History.defaultNonUiTestLane)",
         "- Historical Wave195 acceptance: $($wave195History.currentEvidence) $($wave195History.gateBoundary)",
-        "- Wave196 evidence: $($dashboard.integrationGateEvidence.currentEvidence)",
+        "- Historical Wave196 acceptance: $($wave196History.currentEvidence) $($wave196History.gateBoundary)",
+        "- Wave197 evidence: $($dashboard.integrationGateEvidence.currentEvidence)",
         "- Slice accounting: $($dashboard.integrationGateEvidence.sliceAccounting)",
         "- Pending local gates: $(if (@($dashboard.integrationGateEvidence.pendingIntegrationGates).Count -eq 0) { 'none; repository preflight and full Release build passed' } else { $dashboard.integrationGateEvidence.pendingIntegrationGates -join ', ' })",
         "- Delegated GitHub gates: $($dashboard.integrationGateEvidence.delegatedGitHubGates -join ', ') ($($dashboard.integrationGateEvidence.delegatedGitHubGateStatus))",
@@ -1525,7 +1690,19 @@ try {
         '- `docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/images.json`',
         '- `docs/parity/freep-wave194-deck17-slide02-topology-20260823.md`',
             '- `docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json`',
-            '- `docs/parity/avalonia-parity-wave195-cross-app-integration-20260828.md`'
+            '- `docs/parity/avalonia-parity-wave195-cross-app-integration-20260828.md`',
+            '- `docs/parity/freex-wave197-ribbon-number-format/README.md`',
+            '- `tests/FreeX.App.Avalonia.Tests/Wave197RibbonNumberFormatPhysicalSourceTests.cs`',
+            '- `freew/docs/parity/avalonia-parity-wave197-freew-legal-notices-template-candidates-20260829.md`',
+            '- `freew/FreeW.App.Avalonia.Tests/Wave197LegalNoticesEvidenceTests.cs`',
+            '- `freew/docs/parity/evidence/wave197-freew-legal-notices-raw-evidence.json`',
+            '- `freew/docs/parity/evidence/SHA256SUMS.txt`',
+            '- `docs/parity/freep-wave197-deck17-leading-residual-20260829.md`',
+            '- `docs/parity/evidence/freep-wave197-deck17-leading-residual-20260829/metrics.json`',
+            '- `docs/parity/freep-wave197-deck17-baseline-alignment-20260829.md`',
+            '- `docs/parity/evidence/freep-wave197-deck17-baseline-alignment-20260829/metrics.json`',
+            '- `docs/parity/evidence/freep-wave197-deck17-baseline-alignment-20260829/images.json`',
+            '- `docs/parity/avalonia-parity-wave197-cross-app-integration-20260829.md`'
     ) -join "`n"
     Set-Content -LiteralPath $tempMarkdownPath -Value ($md + "`n") -NoNewline -Encoding UTF8
 

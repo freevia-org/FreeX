@@ -15,13 +15,14 @@ $acceptanceRefreshTestedSourceCommit = "f7cbd8cbe3f1ac5fbaf14da1c2cacc1a3fb7bf3f
 $acceptanceRefreshReviewedIntegrationHead = "2ee42a45efd651ad9ad1c015403d788570ae02d9"
 $acceptanceRefreshNote = "This dashboard/report is an acceptance-only documentation/tooling refresh; it does not alter the tested source commit."
 $acceptanceRefreshWave196TestedSourceCommit = "100f4aea399e3bc9d194c15cf962ded7d0cf3772"
+$acceptanceRefreshWave197TestedSourceCommit = "a6b1f27e02d15a7495644db64c9bda3a839f126a"
 $acceptanceRefreshAllowedPaths = @(
     "tools/Generate-CrossAppParityDashboard.ps1",
     "tools/Test-CrossAppParityDashboard.ps1",
     "tests/FreeX.App.Host.Tests/CrossAppParityDashboardTests.cs",
     "docs/parity/avalonia-wpf-cross-app-dashboard.json",
     "docs/parity/avalonia-wpf-cross-app-dashboard.md",
-    "docs/parity/avalonia-parity-wave196-cross-app-integration-20260829.md"
+    "docs/parity/avalonia-parity-wave197-cross-app-integration-20260829.md"
 )
 
 function Normalize-GitPath {
@@ -83,8 +84,8 @@ function Invoke-RealAcceptanceRefreshBoundary {
     if ([string]::IsNullOrWhiteSpace($TestedSourceCommit)) {
         throw "-AcceptanceRefresh requires -TestedSourceCommit; the parent must supply the exact tested source head."
     }
-    if ($TestedSourceCommit -ne $acceptanceRefreshWave196TestedSourceCommit) {
-        throw "-AcceptanceRefresh requires the exact Wave196 tested source commit '$acceptanceRefreshWave196TestedSourceCommit'; received '$TestedSourceCommit'."
+    if ($TestedSourceCommit -ne $acceptanceRefreshWave197TestedSourceCommit) {
+        throw "-AcceptanceRefresh requires the exact Wave197 tested source commit '$acceptanceRefreshWave197TestedSourceCommit'; received '$TestedSourceCommit'."
     }
 
     $changedPaths = @(Test-AcceptanceRefreshGitBoundary `
@@ -261,26 +262,33 @@ $resolvedDashboardPath = Resolve-ToolRepoPath -Path $DashboardPath -RepoRoot $re
 $dashboard = Read-ToolJson -Path $DashboardPath -RepoRoot $repoRoot -MissingMessage "Required generated cross-app dashboard is missing"
 
 Assert-DashboardCondition ($dashboard.schema -eq "freex.parity.cross-app-dashboard.v3") "Cross-app dashboard schema must be v3."
-Assert-DashboardCondition ($dashboard.wave -eq 196) "Cross-app dashboard must describe Wave196."
-Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 588) "Wave196 cumulative app-slice count must be 588."
-Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "accepted-local-gates") "Wave196 app-slice count must record accepted local gates."
-Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "accepted-local-gates") "Wave196 integration status must record accepted local gates."
-Assert-DashboardCondition (@($dashboard.pendingIntegrationGates).Count -eq 0) "Wave196 must have zero pending local gates."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.status -eq "accepted-local-gates") "Wave196 integration evidence must record accepted local gates."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.acceptanceStatus -eq "accepted-local-gates") "Wave196 acceptance status must record accepted local gates."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.testedSourceCommit -eq "100f4aea399e3bc9d194c15cf962ded7d0cf3772") "Wave196 must record the exact tested source SHA."
-Assert-DashboardCondition (@($dashboard.integrationGateEvidence.pendingIntegrationGates).Count -eq 0) "Wave196 integration evidence must have zero pending local gates."
-Assert-DashboardCondition (@($dashboard.integrationGateEvidence.acceptedLocalGates) -contains "repository-preflight") "Wave196 must record accepted repository preflight."
-Assert-DashboardCondition (@($dashboard.integrationGateEvidence.acceptedLocalGates) -contains "full-release-build") "Wave196 must record accepted Release build."
-Assert-DashboardCondition (@($dashboard.integrationGateEvidence.acceptanceRefreshAllowedPaths).Count -eq 6) "Wave196 acceptance refresh must allow exactly six paths."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sliceAccounting -eq "Wave 196 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 588 app slices (196 per app).") "Wave196 slice accounting must be exact."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.gateBoundary -match "100f4aea399e3bc9d194c15cf962ded7d0cf3772.*six allowlisted") "Wave196 gate boundary must retain the exact tested-source and six-path boundary."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.gateBoundary -match "full Avalonia/WPF parity is not claimed") "Wave196 gate boundary must retain the no-full-parity claim."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.localGatePolicy -match "repository preflight and the full Release build.*delegated to GitHub") "Wave196 gate policy must match AGENTS.md."
-Assert-DashboardCondition (@($dashboard.integrationGateEvidence.delegatedGitHubGates).Count -eq 2) "Wave196 delegated GitHub gates must remain explicit."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.delegatedGitHubGateStatus -eq "not-run-locally") "Wave196 must not claim delegated GitHub gates ran locally."
-Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.focusedTests -match "FreeX.*22/22.*FreeW.*2/2.*FreeP.*10/10.*resolved model 1/1") "Wave196 focused/evidence facts must remain recorded."
-$historicalWave195 = $dashboard.integrationGateEvidence.historicalWave195Acceptance
+Assert-DashboardCondition ($dashboard.wave -eq 197) "Cross-app dashboard must describe Wave197."
+Assert-DashboardCondition ($dashboard.cumulativeAppSlices -eq 591) "Wave197 cumulative app-slice count must be 591."
+Assert-DashboardCondition ([string]$dashboard.cumulativeAppSlicesStatus -eq "accepted-local-gates") "Wave197 app-slice count must record accepted local gates."
+Assert-DashboardCondition ([string]$dashboard.integrationGateStatus -eq "accepted-local-gates") "Wave197 integration status must record accepted local gates."
+Assert-DashboardCondition (@($dashboard.pendingIntegrationGates).Count -eq 0) "Wave197 must have zero pending local gates."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.status -eq "accepted-local-gates") "Wave197 integration evidence must record accepted local gates."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.acceptanceStatus -eq "accepted-local-gates") "Wave197 acceptance status must record accepted local gates."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.testedSourceCommit -eq $acceptanceRefreshWave197TestedSourceCommit) "Wave197 must record the exact tested source SHA."
+Assert-DashboardCondition (@($dashboard.integrationGateEvidence.pendingIntegrationGates).Count -eq 0) "Wave197 integration evidence must have zero pending local gates."
+Assert-DashboardCondition (@($dashboard.integrationGateEvidence.acceptedLocalGates) -contains "repository-preflight") "Wave197 must record accepted repository preflight."
+Assert-DashboardCondition (@($dashboard.integrationGateEvidence.acceptedLocalGates) -contains "full-release-build") "Wave197 must record accepted Release build."
+Assert-DashboardCondition (@($dashboard.integrationGateEvidence.acceptanceRefreshAllowedPaths).Count -eq 6) "Wave197 acceptance refresh must allow exactly six paths."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.sliceAccounting -eq "Wave 197 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 591 app slices (197 per app).") "Wave197 slice accounting must be exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.gateBoundary -match "a6b1f27e02d15a7495644db64c9bda3a839f126a.*six allowlisted") "Wave197 gate boundary must retain the exact tested-source and six-path boundary."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.gateBoundary -match "full Avalonia/WPF parity is not claimed") "Wave197 gate boundary must retain the no-full-parity claim."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.localGatePolicy -match "repository preflight and the full Release build.*delegated to GitHub") "Wave197 gate policy must match AGENTS.md."
+Assert-DashboardCondition (@($dashboard.integrationGateEvidence.delegatedGitHubGates).Count -eq 2) "Wave197 delegated GitHub gates must remain explicit."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.delegatedGitHubGateStatus -eq "not-run-locally") "Wave197 must not claim delegated GitHub gates ran locally."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.focusedTests -match "FreeX 16/16.*FreeW 20/20.*FreeP 4/4") "Wave197 focused/evidence facts must remain recorded."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.fullReleaseBuild -match "MSBuild 00:07:04.93; wrapper 00:07:05.2629619") "Wave197 Release-build timings must remain exact."
+Assert-DashboardCondition ([string]$dashboard.integrationGateEvidence.independentReview -match "no P1/P2 findings after all remediation") "Wave197 final independent review must remain clear."
+$historicalWave196 = $dashboard.integrationGateEvidence.historicalWave196Acceptance
+Assert-DashboardCondition ($null -ne $historicalWave196) "Wave196 acceptance history must remain available."
+Assert-DashboardCondition ([string]$historicalWave196.testedSourceCommit -eq $acceptanceRefreshWave196TestedSourceCommit) "Wave196 historical acceptance must retain its exact tested source commit."
+Assert-DashboardCondition ([string]$historicalWave196.sliceAccounting -eq "Wave 196 is three app slices, one each for FreeX, FreeW, and FreeP; cumulative accounting is 588 app slices (196 per app).") "Wave196 historical slice accounting must remain exact."
+Assert-DashboardCondition ([string]$historicalWave196.focusedTests -match "FreeX focused 22/22.*FreeW focused 2/2.*FreeP renderer/evidence 10/10 and resolved model 1/1") "Wave196 historical focused/evidence facts must remain recorded."
+$historicalWave195 = $historicalWave196.historicalWave195Acceptance
 Assert-DashboardCondition ($null -ne $historicalWave195) "Wave195 acceptance history must remain available."
 Assert-DashboardCondition ([string]$historicalWave195.status -eq "accepted-local-gates") "Wave195 historical status must remain accepted."
 Assert-DashboardCondition ([string]$historicalWave195.testedSourceCommit -eq "feff4d47c02d57112c6cb191bcc85e1d60ea4e06") "Wave195 historical acceptance must retain its exact tested source commit."
@@ -361,7 +369,19 @@ $requiredSources = @(
     "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/references.json",
     "docs/parity/evidence/avalonia-parity-wave193-freep-evidence-20260823/images.json",
     "docs/parity/freep-wave194-deck17-slide02-topology-20260823.md",
-    "docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json"
+    "docs/parity/evidence/freep-wave194-deck17-slide02-topology-20260823/topology.json",
+    "docs/parity/freex-wave197-ribbon-number-format/README.md",
+    "tests/FreeX.App.Avalonia.Tests/Wave197RibbonNumberFormatPhysicalSourceTests.cs",
+    "freew/docs/parity/avalonia-parity-wave197-freew-legal-notices-template-candidates-20260829.md",
+    "freew/FreeW.App.Avalonia.Tests/Wave197LegalNoticesEvidenceTests.cs",
+    "freew/docs/parity/evidence/wave197-freew-legal-notices-raw-evidence.json",
+    "freew/docs/parity/evidence/SHA256SUMS.txt",
+    "docs/parity/freep-wave197-deck17-leading-residual-20260829.md",
+    "docs/parity/evidence/freep-wave197-deck17-leading-residual-20260829/metrics.json",
+    "docs/parity/freep-wave197-deck17-baseline-alignment-20260829.md",
+    "docs/parity/evidence/freep-wave197-deck17-baseline-alignment-20260829/metrics.json",
+    "docs/parity/evidence/freep-wave197-deck17-baseline-alignment-20260829/images.json",
+    "docs/parity/avalonia-parity-wave197-cross-app-integration-20260829.md"
 )
 foreach ($source in $requiredSources) {
     Assert-DashboardCondition (@($dashboard.sources) -contains $source) "Cross-app dashboard is missing authoritative source '$source'."
@@ -456,6 +476,12 @@ Assert-DashboardCondition ([string]$freeXWave196.status -eq "evidence-recorded")
 Assert-DashboardCondition ($freeXWave196.physicalPassed -eq 1 -and $freeXWave196.physicalTotal -eq 1) "FreeX Wave196 production probe must be 1/1."
 Assert-DashboardCondition ($freeXWave196.focusedSourceTestsPassed -eq 22 -and $freeXWave196.focusedSourceTestsTotal -eq 22) "FreeX Wave196 focused source tests must be 22/22."
 Assert-DashboardCondition ([string]$freeXWave196.persistedStyle -eq "style-id=1|font-id=1|bold=true" -and $freeXWave196.saveClean -eq $true) "FreeX Wave196 saved Bold evidence must remain exact."
+$freeXWave197 = $freeX.renderedEvidence.physicalEvidence.wave197
+Assert-DashboardCondition ([string]$freeXWave197.status -eq "evidence-recorded") "FreeX Wave197 evidence must be recorded without acceptance."
+Assert-DashboardCondition ($freeXWave197.physicalPassed -eq 1 -and $freeXWave197.physicalTotal -eq 1) "FreeX Wave197 production probe must be 1/1."
+Assert-DashboardCondition ($freeXWave197.focusedSourceTestsPassed -eq 16 -and $freeXWave197.focusedSourceTestsTotal -eq 16) "FreeX Wave197 focused source tests must be 16/16."
+Assert-DashboardCondition ([string]$freeXWave197.productionDockerX11Report -eq "20260829T013532Z" -and [string]$freeXWave197.persistedStyle -eq "style-id=1|numFmtId=2|number-format=true" -and $freeXWave197.saveClean -eq $true) "FreeX Wave197 number-format package evidence must remain exact."
+Assert-DashboardCondition ([string]$freeXWave197.ordinaryBubbleKeyRouting -eq "retained" -and [string]$freeXWave197.deferredComboDismissFocusRestore -match "rechecks focus immediately and synchronously restores worksheet focus") "FreeX Wave197 focus-routing boundary must remain explicit."
 
 $freeP = $apps["FreeP"]
 $freePLanes = @($freeP.renderedEvidence.routeCoverage.laneEntries)
@@ -496,6 +522,13 @@ Assert-DashboardCondition ([string]$freeWWave196.status -eq "evidence-recorded")
 Assert-DashboardCondition (@($freeWWave196.scenarios) -contains "ConsecutiveTrailingInlineFlowBreaks_PlaceCaretAtTheFinalPostBreakBoundary") "FreeW Wave196 must include consecutive-break coverage."
 Assert-DashboardCondition ($freeWWave196.focusedSourceTestsPassed -eq 2 -and $freeWWave196.focusedSourceTestsTotal -eq 2) "FreeW Wave196 focused source tests must be 2/2."
 Assert-DashboardCondition ($freeWWave196.consecutiveBreakCoverage -eq $true) "FreeW Wave196 consecutive-break coverage must remain explicit."
+$freeWWave197 = $freeW.renderedEvidence.wave197
+Assert-DashboardCondition ([string]$freeWWave197.status -eq "candidate-refuted") "FreeW Wave197 candidate review must be recorded as rejected."
+Assert-DashboardCondition ($freeWWave197.scenarioCount -eq 6 -and $freeWWave197.uniqueScenarioCount -eq 6) "FreeW Wave197 must retain exactly six unique scenarios."
+Assert-DashboardCondition ($freeWWave197.focusedSourceTestsPassed -eq 20 -and $freeWWave197.focusedSourceTestsTotal -eq 20) "FreeW Wave197 focused tests must be 20/20."
+Assert-DashboardCondition ([string]$freeWWave197.surfaceMarginCandidate -match "regressed all six") "FreeW Wave197 surface-margin candidate must remain rejected."
+Assert-DashboardCondition ([string]$freeWWave197.lineBoxCandidate -match "improved two long rows and regressed two") "FreeW Wave197 line-box candidate disposition must remain exact."
+Assert-DashboardCondition ($freeWWave197.productionCandidateRetained -eq $false) "FreeW Wave197 must retain no production candidate."
 Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.status -eq "no-runtime-change-retained") "FreeP Wave193 must retain the no-runtime-change result."
 Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.retainedRowCount -eq 53) "FreeP Wave193 retained row count must remain 53."
 Assert-DashboardCondition ($freeP.renderedEvidence.wave193Integrity.retainedOfficeReferenceCount -eq 53) "FreeP Wave193 retained Office reference count must remain 53."
@@ -523,5 +556,11 @@ Assert-DashboardCondition ([string]$freePWave196.status -eq "evidence-recorded")
 Assert-DashboardCondition ([string]$freePWave196.target -eq "17-bullets-autofit / slide-02") "FreeP Wave196 target must remain deck17 slide02."
 Assert-DashboardCondition ([string]$freePWave196.textHintingModeAfter -eq "Light") "FreeP Wave196 must retain the Light hinting correction."
 Assert-DashboardCondition ($freePWave196.controlUnchanged -eq $true -and $freePWave196.imageHashCount -eq 4) "FreeP Wave196 control and image-hash evidence must remain explicit."
+$freePWave197 = $freeP.renderedEvidence.wave197
+Assert-DashboardCondition ([string]$freePWave197.status -eq "candidate-refuted") "FreeP Wave197 candidate review must be recorded as rejected."
+Assert-DashboardCondition ($freePWave197.focusedSourceTestsPassed -eq 4 -and $freePWave197.focusedSourceTestsTotal -eq 4) "FreeP Wave197 focused tests must be 4/4."
+Assert-DashboardCondition ($freePWave197.productionCandidateRetained -eq $false) "FreeP Wave197 must retain no production candidate."
+Assert-DashboardCondition ([string]$freePWave197.trackedImageBytesAndHashes -match "verified.*generation linkage is explicitly unproven") "FreeP Wave197 image provenance boundary must remain explicit."
+Assert-DashboardCondition ([string]$freePWave197.residualBoundary -match "unresolved text-raster residual.*not a fallback-font diagnosis") "FreeP Wave197 residual boundary must remain explicit."
 
 Write-Host "Cross-app parity dashboard schema and evidence aggregation guards passed."
