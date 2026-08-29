@@ -27,12 +27,10 @@ public sealed class CrossPlatformPortabilityPreflightTests
         toolScriptSupport.Should().Contain("ResolveLinkTarget($true)");
 
         var ciWorkflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "ci.yml");
-        ciWorkflow.Should().Contain("Repository preflight (static)");
-        ciWorkflow.Should().Contain("Repository preflight (${{ matrix.platform }} behavior)");
+        ciWorkflow.Should().Contain("if: matrix.runStaticPreflight");
+        ciWorkflow.Should().Contain("if: matrix.runPlatformPreflight");
         ciWorkflow.Should().Contain("Test-RepositoryPreflight.ps1 -Mode Static");
         ciWorkflow.Should().Contain("Test-RepositoryPreflight.ps1 -Mode Platform");
-        ciWorkflow.Should().Contain("platform: linux");
-        ciWorkflow.Should().Contain("platform: macos");
         ciWorkflow.Should().Contain("pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1");
 
         var linuxPackagingTests = WorkspaceFileLocator.ReadAllText("tools", "Test-LinuxPackagingScripts.ps1");

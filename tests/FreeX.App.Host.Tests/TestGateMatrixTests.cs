@@ -113,6 +113,10 @@ public sealed class TestGateMatrixTests
         avalonia.GetProperty("partitions").GetInt32().Should().Be(2);
         avalonia.GetProperty("partitionProjects").EnumerateArray().Select(value => value.GetString())
             .Should().Equal("tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj");
+
+        var partitioner = WorkspaceFileLocator.ReadAllText("tools", "Get-TestProjectPartitionFilter.ps1");
+        partitioner.Should().Contain("$inlineDataAttributePattern");
+        partitioner.Should().Contain("[Math]::Max($theoryCount, $inlineDataCount)");
     }
 
     [Fact]

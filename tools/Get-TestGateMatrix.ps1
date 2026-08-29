@@ -44,6 +44,16 @@ $entries = @(
                 throw "Gate '$($testGate.id)' uses unsupported platform '$platform'."
             }
 
+            $preflightModes = @()
+            if ($testGate.PSObject.Properties.Name -contains 'preflightModes') {
+                $platformPreflightProperty = $testGate.preflightModes.PSObject.Properties |
+                    Where-Object Name -EQ ([string]$platform) |
+                    Select-Object -First 1
+                if ($null -ne $platformPreflightProperty) {
+                    $preflightModes = @($platformPreflightProperty.Value)
+                }
+            }
+
             for ($partitionIndex = 0; $partitionIndex -lt $partitionCount; $partitionIndex++) {
                 $displayGateId = if ($partitionCount -eq 1) {
                     [string]$testGate.id
@@ -60,6 +70,8 @@ $entries = @(
                     platform = [string]$platform
                     runner = $runnerByPlatform[[string]$platform]
                     fetchDepth = if ($requiresFullHistory) { 0 } else { 1 }
+                    runStaticPreflight = $preflightModes -contains 'static'
+                    runPlatformPreflight = $preflightModes -contains 'platform'
                     partitionIndex = $partitionIndex
                     partitionCount = $partitionCount
                 }
