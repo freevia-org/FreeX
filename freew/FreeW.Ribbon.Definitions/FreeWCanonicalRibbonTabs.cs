@@ -76,6 +76,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("page-setup", "Page Setup", null, 100, group =>
                     {
+                        // At narrow widths Word keeps Page Setup and Paragraph directly reachable.
+                        // Prefer the existing icon-based compact presentation to collapsing Paragraph
+                        // while this broad group is still visible at full command widths.
+                        group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                         group.Dropdown("freew.margins", "Margins", BuildAvaloniaMarginsMenu(), control => control with
                         {
                             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Margins),
@@ -135,6 +139,9 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, null, 95, group =>
                     {
+                        // Pair with Page Setup's compact form so both primary Layout groups remain
+                        // actionable before lower-priority Preview, Arrange, and Data groups overflow.
+                        group.Sizing(RibbonGroupSizing.OfficeIconAdaptive);
                         group.Button("freew.indent-decrease", "Decrease Indent", control => control with
                         {
                             Icon = new RibbonCommandIcon(RibbonCommandIconKind.IndentDecrease),

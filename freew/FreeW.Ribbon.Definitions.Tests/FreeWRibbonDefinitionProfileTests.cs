@@ -175,8 +175,10 @@ public sealed class FreeWRibbonDefinitionProfileTests
         wpfPageSetup.Sizing.MaximumRowsPerColumn.Should().Be(2);
         wpfPageSetup.Launcher!.CommandId.Value.Should().Be("freew.page-setup");
         wpfPageSetup.Controls.Should().NotContain(control => control.CommandId.Value == "freew.page-setup");
+        RequiredGroup(avalonia, "layout", "page-setup").Sizing.CompactControlsAsIcons.Should().BeTrue();
         wpfParagraph.Launcher!.CommandId.Value.Should().Be("freew.paragraph-dialog");
         avaloniaParagraph.Launcher!.CommandId.Value.Should().Be("freew.paragraph-dialog");
+        avaloniaParagraph.Sizing.CompactControlsAsIcons.Should().BeTrue();
 
         wpfParagraph.Priority.Should().BeGreaterThan(RequiredGroup(wpf, "layout", "preview").Priority);
         wpfParagraph.Priority.Should().BeGreaterThan(RequiredGroup(wpf, "layout", "data").Priority);
