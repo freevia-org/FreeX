@@ -1,9 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 
@@ -128,4 +130,9 @@ public sealed partial class MainWindow
     // AutosaveAdapterWindowIsolationTests' OfferRecoveryAsync tests for the same pattern).
     internal bool StartupOpenFailedForTests => _startupOpenFailed;
     internal Task ShowStartupOpenFailureForTests() => ShowStartupOpenFailureIfAnyAsync();
+
+    // r169-shared-settings-migration: lets RecoveredWindowOptionsStorePathTests assert that the window
+    // CreateRecoveredSnapshotWindow builds reads/writes the canonical product settings.json rather than
+    // a %LOCALAPPDATA% copy of its own.
+    internal IApplicationOptionsStore<FreeWOptions> OptionsStoreForTests => _optionsStore;
 }
