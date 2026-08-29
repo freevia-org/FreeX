@@ -69,7 +69,7 @@ public sealed class R168_DifQuotedContentPerformanceTests
         return elapsed[samples / 2];
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Load_UnterminatedQuoteInDataSection_ScalesLinearlyNotQuadratically()
     {
         // Warm up the JIT / assembly load so the timed runs measure the algorithm, not startup cost.
@@ -102,7 +102,7 @@ public sealed class R168_DifQuotedContentPerformanceTests
             "the 40,000-line corrupted input must complete promptly rather than exhibit quadratic growth");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Load_ManyLineUnterminatedQuote_CompletesQuickly()
     {
         // A file large enough that the old O(n^2) string-concat/full-rescan implementation would take
