@@ -28,8 +28,10 @@ public sealed class Wave198RibbonFontFamilyPhysicalSourceTests
         probe.Should().Contain("font-name");
         probe.Should().Contain("name.lower() == 'arial'");
         probe.Should().Contain("save-clean=$save_clean");
-        probe.Should().Contain("automatic-focus-after-combo=not-measured");
-        probe.Should().Contain("automatic-focus-status=unresolved-not-measured");
+        probe.Should().Contain("ribbon-home-font-family-combo-focus-auto.png");
+        probe.Should().Contain("automatic-focus-after-combo=$automatic_focus");
+        probe.Should().Contain("automatic-focus-status=$automatic_focus_status");
+        probe.Should().Contain("automatic-focus-clipboard=$automatic_focus_clipboard");
         probe.Should().Contain("worksheet-focus-after-reselect=$worksheet_focus");
         fixture.Should().Contain("Wave198 Font Family Target");
         fixture.Should().Contain("<name val=\"Calibri\"/>");

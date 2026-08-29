@@ -5853,8 +5853,10 @@ PY
 }
 
 probe_ribbon_home_font_family_combo() {
-    local artifacts="ribbon-home-font-family-combo-before.png;ribbon-home-font-family-combo-keytips.png;ribbon-home-font-family-combo-open.png;ribbon-home-font-family-combo-after.png;ribbon-home-font-family-combo-focus-reselect.png;ribbon-home-font-family-combo-postcondition.txt"
-    local package_signature="" style_id="" font_id="" font_name="" font_family=false save_clean=false worksheet_focus=false focus_clipboard=""
+    local artifacts="ribbon-home-font-family-combo-before.png;ribbon-home-font-family-combo-keytips.png;ribbon-home-font-family-combo-open.png;ribbon-home-font-family-combo-after.png;ribbon-home-font-family-combo-focus-auto.png;ribbon-home-font-family-combo-focus-reselect.png;ribbon-home-font-family-combo-postcondition.txt"
+    local package_signature="" style_id="" font_id="" font_name="" font_family=false save_clean=false
+    local automatic_focus=false automatic_focus_clipboard="" automatic_focus_status="not-measured"
+    local worksheet_focus=false focus_clipboard=""
 
     if [[ "${document_path,,}" != *.xlsx ]]; then
         write_artifact "ribbon-home-font-family-combo-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path"
@@ -5881,10 +5883,25 @@ probe_ribbon_home_font_family_combo() {
     sleep "$settle_seconds"
     capture "ribbon-home-font-family-combo-after.png"
 
-    # Re-select the worksheet target through the production grid after the combo closes, then prove
-    # worksheet keyboard routing with Right followed by Ctrl+C. This is intentionally a physical
-    # reselect check; it does not claim automatic focus restoration from the dismissed combo.
-    send_key Escape || true
+    # Measure the actual post-combo focus before any worksheet pointer input. Right must move the
+    # active cell from A1 to B1 and Ctrl+C must copy B1's sentinel value; no explicit reselect or
+    # Escape is allowed before this check. This is the same observable keyboard route a WPF user
+    # gets after a ribbon combo selection.
+    set_clipboard_sentinel || true
+    send_key Right
+    send_key ctrl+c
+    automatic_focus_clipboard="$(wait_for_non_sentinel_clipboard || true)"
+    stop_clipboard_sentinel
+    if [[ "$automatic_focus_clipboard" == "Unchanged" ]]; then
+        automatic_focus=true
+        automatic_focus_status="passed"
+    else
+        automatic_focus_status="failed"
+    fi
+    capture "ribbon-home-font-family-combo-focus-auto.png"
+
+    # Keep the explicit worksheet reselect as a separate diagnostic and preserve the existing
+    # save/package proof even when automatic focus is the unresolved portion of this slice.
     if select_cell 0 0 A1; then
         capture "ribbon-home-font-family-combo-focus-reselect.png"
     fi
@@ -5936,16 +5953,16 @@ PY
     font_name="${font_name%%|*}"
     font_family="${package_signature##*font-family=}"
     write_artifact "ribbon-home-font-family-combo-postcondition.txt" \
-        "selector=ribbon-font-family\ndocument-path=$document_path\ncell=A1\nkeytip-sequence=Alt,H\ncombo-open-coordinate=323,96\nselected-item-coordinate=280,149\nselected-font=Arial\nautomatic-focus-after-combo=not-measured\nautomatic-focus-status=unresolved-not-measured\nworksheet-focus-after-reselect=$worksheet_focus\nfocus-reselect-coordinate=29,236\nfocus-clipboard=$focus_clipboard\nsave-clean=$save_clean\npackage-signature=$package_signature"
+        "selector=ribbon-font-family\ndocument-path=$document_path\ncell=A1\nkeytip-sequence=Alt,H\ncombo-open-coordinate=323,96\nselected-item-coordinate=280,149\nselected-font=Arial\nautomatic-focus-after-combo=$automatic_focus\nautomatic-focus-status=$automatic_focus_status\nautomatic-focus-clipboard=$automatic_focus_clipboard\nworksheet-focus-after-reselect=$worksheet_focus\nfocus-reselect-coordinate=29,236\nfocus-clipboard=$focus_clipboard\nsave-clean=$save_clean\npackage-signature=$package_signature"
 
-    if $save_clean && [[ "$font_family" == true ]] && $worksheet_focus; then
+    if $save_clean && [[ "$font_family" == true ]] && $automatic_focus && $worksheet_focus; then
         record "ribbon-home-font-family-combo-physical" "passed" \
-            "ribbon-home-font-family-combo-before.png; ribbon-home-font-family-combo-keytips.png; ribbon-home-font-family-combo-open.png; ribbon-home-font-family-combo-after.png; ribbon-home-font-family-combo-focus-reselect.png; cell=A1; font-id=$font_id; font-name=$font_name; automatic-focus-after-combo=not-measured; worksheet-focus-after-reselect=true; save-clean=true" \
-            "The production Home Font combo selected Arial for A1; a physical worksheet reselect restored the keyboard route, and the saved XLSX package contains the Arial font record for the target cell." "$artifacts"
+            "ribbon-home-font-family-combo-before.png; ribbon-home-font-family-combo-keytips.png; ribbon-home-font-family-combo-open.png; ribbon-home-font-family-combo-after.png; ribbon-home-font-family-combo-focus-auto.png; ribbon-home-font-family-combo-focus-reselect.png; cell=A1; font-id=$font_id; font-name=$font_name; automatic-focus-after-combo=true; worksheet-focus-after-reselect=true; save-clean=true" \
+            "The production Home Font combo selected Arial for A1, retained worksheet keyboard focus without a reselect, and the saved XLSX package contains the Arial font record for the target cell." "$artifacts"
     else
         record "ribbon-home-font-family-combo-physical" "failed" \
-            "ribbon-home-font-family-combo-before.png; ribbon-home-font-family-combo-keytips.png; ribbon-home-font-family-combo-open.png; ribbon-home-font-family-combo-after.png; ribbon-home-font-family-combo-focus-reselect.png; cell=A1; font-id=$font_id; font-name=$font_name; worksheet-focus-after-reselect=$worksheet_focus; save-clean=$save_clean" \
-            "The production Home Font combo did not complete the clean-save, worksheet-reselect keyboard, and Arial-package postconditions." "$artifacts"
+            "ribbon-home-font-family-combo-before.png; ribbon-home-font-family-combo-keytips.png; ribbon-home-font-family-combo-open.png; ribbon-home-font-family-combo-after.png; ribbon-home-font-family-combo-focus-auto.png; ribbon-home-font-family-combo-focus-reselect.png; cell=A1; font-id=$font_id; font-name=$font_name; automatic-focus-after-combo=$automatic_focus; automatic-focus-status=$automatic_focus_status; automatic-focus-clipboard=$automatic_focus_clipboard; worksheet-focus-after-reselect=$worksheet_focus; save-clean=$save_clean" \
+            "The production Home Font combo did not complete the automatic post-combo worksheet focus, clean-save, worksheet-reselect keyboard, and Arial-package postconditions." "$artifacts"
     fi
     dismiss_overlays
 }
