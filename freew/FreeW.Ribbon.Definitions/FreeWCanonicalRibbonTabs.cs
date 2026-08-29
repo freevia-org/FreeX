@@ -401,7 +401,9 @@ internal static partial class FreeWCanonicalRibbonTabs
 
             topology.Section(
                 "view.show",
-                tab => tab.Group("show", "Show", "S", 90, group =>
+                // Word folds these secondary view aids into one affordance at the 900- and
+                // 750-DIP reference widths, keeping the Window commands directly available.
+                tab => tab.Group("show", "Show", "S", 75, group =>
                     {
                         group.MediumToggle("freew.ruler", "Ruler", RibbonCommandIconKind.Ruler);
                         group.MediumToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
@@ -446,10 +448,16 @@ internal static partial class FreeWCanonicalRibbonTabs
             topology.Section(
                 "view.window",
                 // At Word's 900-DIP View ribbon width, keep the Window command stack direct while
-                // Zoom yields its secondary presets first. The 750-DIP lane still overflows both
-                // groups naturally once their compact forms no longer fit.
+                // Zoom yields its secondary presets first. At 750 DIPs Word folds this entire
+                // stack into Window after the Show group has compacted.
                 tab => tab.Group("window", "Window", "N", 85, group =>
                     {
+                        group.Sizing(RibbonGroupSizing.Default with
+                        {
+                            // Reserve Word's two-column Window stack while it is direct. This keeps
+                            // 900 DIPs direct but makes the existing collapsed flyout win at 750.
+                            Hints = new RibbonWidthHints(300, 300, 300, 64),
+                        });
                         group.MediumToggle("freew.split-window", "Split", RibbonCommandIconKind.Scale);
                         group.Medium("freew.new-window", "New Window", RibbonCommandIconKind.Page);
                         group.Medium("freew.arrange-all", "Arrange All", RibbonCommandIconKind.Grid);

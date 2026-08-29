@@ -206,6 +206,26 @@ public sealed class RibbonShellBuilderTests
     }
 
     [StaFact]
+    public void View_CompactPresentationFoldsWindowCommandsAt750Dips()
+    {
+        var view = FreeW.Ribbon.Definitions.FreeWRibbon
+            .Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf)
+            .FindTab("view")!;
+        var content = RibbonWpfRenderer.BuildTabContent(view, new Button());
+        var panel = FindLogicalChild<RibbonAdaptivePanel>(content)!;
+
+        content.Measure(new Size(750, 180));
+        content.Arrange(new Rect(0, 0, 750, 180));
+        content.UpdateLayout();
+
+        panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Window")
+            .Collapsed.Should().BeTrue(
+                "Word folds the Window command stack into one flyout at the 750-DIP View ribbon reference width");
+    }
+
+    [StaFact]
     public void Insert_CommentStaysDirectAt750Dips()
     {
         var insert = FreeW.Ribbon.Definitions.FreeWRibbon
