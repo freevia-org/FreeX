@@ -183,6 +183,8 @@ public sealed class Wave199StyleDialogEvidenceTests
                 actual.GetProperty("p95AbsoluteChannelDelta").GetDouble(), 1e-12);
             recomputed.P95AbsoluteChannelDelta.Should().BeApproximately(
                 recorded.GetProperty("p95ChannelDelta").GetDouble(), 1e-12);
+            recomputed.LuminanceSimilarity.Should().Be(actual.GetProperty("luminanceSimilarity").GetDouble());
+            recomputed.PerceptualHashDistance.Should().Be(actual.GetProperty("perceptualHashDistance").GetInt32());
             Bounds(row.GetProperty("wpfContent")).Should().Be(recorded.GetProperty("wpfBounds").GetString());
             Bounds(row.GetProperty("avaloniaContent")).Should().Be(recorded.GetProperty("avaloniaBounds").GetString());
             var heatmapPath = ResolveInside(Path.GetDirectoryName(comparisonPath)!, row.GetProperty("heatmapPath").GetString()!);
@@ -196,6 +198,8 @@ public sealed class Wave199StyleDialogEvidenceTests
         var count = Math.Min(wpf.Width * wpf.Height, avalonia.Width * avalonia.Height);
         long changed = 0;
         double total = 0;
+        double luminanceSquaredDelta = 0;
+        double luminancePixelCount = 0;
         var deltas = new List<double>(count);
         for (var i = 0; i < count; i++)
         {
@@ -209,16 +213,61 @@ public sealed class Wave199StyleDialogEvidenceTests
             deltas.Add(delta);
             if (delta > 8)
                 changed++;
+            var wpfLuminance = (
+                wpfPixel.Red * 0.2126 +
+                wpfPixel.Green * 0.7152 +
+                wpfPixel.Blue * 0.0722) / 255;
+            var avaloniaLuminance = (
+                avaloniaPixel.Red * 0.2126 +
+                avaloniaPixel.Green * 0.7152 +
+                avaloniaPixel.Blue * 0.0722) / 255;
+            luminanceSquaredDelta += (wpfLuminance - avaloniaLuminance) *
+                                       (wpfLuminance - avaloniaLuminance);
+            luminancePixelCount += 1;
         }
 
         deltas.Sort();
         var p95Index = (int)Math.Min(deltas.Count - 1, deltas.Count * .95);
+        var perceptualHashDistance = AverageHashDistance(wpf, avalonia);
         return new IndependentMetrics(
             count,
             changed,
             count == 0 ? 1 : (double)changed / count,
             count == 0 ? 0 : total / count,
-            count == 0 ? 0 : deltas[p95Index]);
+            count == 0 ? 0 : deltas[p95Index],
+            1 - Math.Sqrt(luminanceSquaredDelta / Math.Max(1, luminancePixelCount)),
+            perceptualHashDistance);
+    }
+
+    private static int AverageHashDistance(SKBitmap wpf, SKBitmap avalonia)
+    {
+        var wpfHash = AverageHash(wpf);
+        var avaloniaHash = AverageHash(avalonia);
+        var distance = 0;
+        for (var index = 0; index < wpfHash.Length; index++)
+        {
+            if (wpfHash[index] != avaloniaHash[index])
+                distance++;
+        }
+
+        return distance;
+    }
+
+    private static bool[] AverageHash(SKBitmap bitmap)
+    {
+        var luminances = new double[64];
+        for (var y = 0; y < 8; y++)
+        {
+            for (var x = 0; x < 8; x++)
+            {
+                var pixel = bitmap.GetPixel(x * bitmap.Width / 8, y * bitmap.Height / 8);
+                luminances[y * 8 + x] =
+                    pixel.Red * .2126 + pixel.Green * .7152 + pixel.Blue * .0722;
+            }
+        }
+
+        var average = luminances.Average();
+        return luminances.Select(luminance => luminance >= average).ToArray();
     }
 
     private static SKBitmap DecodeAndScale(CapturePixels capture)
@@ -316,5 +365,7 @@ public sealed class Wave199StyleDialogEvidenceTests
         long ChangedPixels,
         double ChangedRatio,
         double MeanAbsoluteChannelDelta,
-        double P95AbsoluteChannelDelta);
+        double P95AbsoluteChannelDelta,
+        double LuminanceSimilarity,
+        int PerceptualHashDistance);
 }
