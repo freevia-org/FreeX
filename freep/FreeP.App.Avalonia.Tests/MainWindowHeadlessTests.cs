@@ -845,11 +845,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var design = definition.Tabs.Single(t => t.Id == "design");
-        var commandIds = design.Groups
-            .SelectMany(group => group.Controls)
-            .Where(control => !string.IsNullOrEmpty(control.CommandId.Value))
-            .Select(control => control.CommandId.Value)
-            .ToArray();
+        var commandIds = EnumerateRibbonCommandIds(design).ToArray();
 
         commandIds.Should().Contain(PresentationDesignCommandPlanner.BuiltInPlans.Select(plan => plan.CommandId));
     }
@@ -3185,11 +3181,13 @@ public sealed class MainWindowHeadlessTests : IDisposable
     public async Task Ribbon_design_commands_route_through_shared_planner()
     {
         var foundTheme = false;
+        var foundThemeColors = false;
         var foundSlideSize = false;
         var foundCustom = false;
         PresentationDesignCommandPlan? customPlan = null;
         SlideSizeDialogInitialState? customInitialState = null;
         string? themeName = null;
+        SrgbColor? themeAccent = null;
         long slideWidth = 0;
         long slideHeight = 0;
 
@@ -3198,14 +3196,17 @@ public sealed class MainWindowHeadlessTests : IDisposable
             var window = new MainWindow(Array.Empty<string>());
             var registry = window.BuildCommandRegistry();
             foundTheme = registry.TryGet("freep.theme.berlin", out var theme);
+            foundThemeColors = registry.TryGet("freep.theme-colors.ion", out var themeColors);
             foundSlideSize = registry.TryGet("freep.slide-size-4x3", out var slideSize);
             foundCustom = registry.TryGet("freep.slide-size-custom", out var customSlideSize);
 
             theme!.Execute(RibbonCommandContext.Empty);
+            themeColors!.Execute(RibbonCommandContext.Empty);
             slideSize!.Execute(RibbonCommandContext.Empty);
             customSlideSize!.Execute(RibbonCommandContext.Empty);
 
             themeName = window.Editor.Presentation.Theme.Name;
+            themeAccent = window.Editor.Presentation.Theme.ColorScheme[ThemeColorSlot.Accent1];
             slideWidth = window.Editor.Presentation.SlideSizeCxEmu;
             slideHeight = window.Editor.Presentation.SlideSizeCyEmu;
             customPlan = window.LastCustomSlideSizeRequestPlan;
@@ -3215,9 +3216,11 @@ public sealed class MainWindowHeadlessTests : IDisposable
 
         if (!ran) return;
         foundTheme.Should().BeTrue("theme commands must be registered through the Avalonia registry");
+        foundThemeColors.Should().BeTrue("theme color commands must be registered through the Avalonia registry");
         foundSlideSize.Should().BeTrue("slide-size commands must be registered through the Avalonia registry");
         foundCustom.Should().BeTrue("custom slide-size should be exposed as a planner callback intent");
-        themeName.Should().Be("Berlin");
+        themeName.Should().Be("Berlin (Ion colors)");
+        themeAccent.Should().Be(BuiltInThemes.GetById(BuiltInThemes.Id.Ion)!.ColorScheme[ThemeColorSlot.Accent1]);
         slideWidth.Should().Be(PresentationDesignCommandPlanner.SlideSizeStandard4x3CxEmu);
         slideHeight.Should().Be(PresentationDesignCommandPlanner.SlideSizeStandardCyEmu);
         customPlan.Should().NotBeNull();

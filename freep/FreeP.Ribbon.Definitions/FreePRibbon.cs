@@ -977,6 +977,23 @@ public static class FreePRibbon
             group.Medium("freep.theme.ion", FreePRibbonText.ThemeIonCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeIonCommand.KeyTip);
             group.Medium("freep.theme.slice", FreePRibbonText.ThemeSliceCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeSliceCommand.KeyTip);
         });
+        // Native PowerPoint exposes the current theme's palette independently of its typography.
+        // Keep that distinction in FreeP as a real color-scheme operation instead of a visual-only
+        // replica: scheme-color content retargets while the selected theme's fonts and format data stay intact.
+        tab.Group("colors", FreePRibbonText.ThemeColorsGroup.Label, FreePRibbonText.ThemeColorsGroup.KeyTip, 95, group =>
+        {
+            group.Sizing(RibbonGroupSizing.OfficeAdaptive);
+            group.Dropdown(
+                "freep.theme-colors.office",
+                FreePRibbonText.ThemeColorsCommand.Label,
+                BuildThemeColorMenu(),
+                dropdown => dropdown with
+                {
+                    PreferredLayout = RibbonCommandLayoutKind.Medium,
+                    Icon = new RibbonCommandIcon(RibbonCommandIconKind.Color),
+                    KeyTip = FreePRibbonText.ThemeColorsCommand.KeyTip,
+                });
+        });
         tab.Group("customize", FreePRibbonText.CustomizeGroup.Label, FreePRibbonText.CustomizeGroup.KeyTip, 100, group =>
         {
             group.Sizing(RibbonGroupSizing.OfficeAdaptive);
@@ -989,6 +1006,16 @@ public static class FreePRibbon
             group.Medium("freep.background-reset", FreePRibbonText.BackgroundResetCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.BackgroundResetCommand.KeyTip);
         });
     }
+
+    private static RibbonMenu BuildThemeColorMenu() =>
+        new(
+        [
+            new RibbonMenuItem(FreePRibbonText.ThemeOfficeCommand.Label, new RibbonCommandId("freep.theme-colors.office"), KeyTip: FreePRibbonText.ThemeOfficeCommand.KeyTip),
+            new RibbonMenuItem(FreePRibbonText.ThemeBerlinCommand.Label, new RibbonCommandId("freep.theme-colors.berlin"), KeyTip: FreePRibbonText.ThemeBerlinCommand.KeyTip),
+            new RibbonMenuItem(FreePRibbonText.ThemeFacetCommand.Label, new RibbonCommandId("freep.theme-colors.facet"), KeyTip: FreePRibbonText.ThemeFacetCommand.KeyTip),
+            new RibbonMenuItem(FreePRibbonText.ThemeIonCommand.Label, new RibbonCommandId("freep.theme-colors.ion"), KeyTip: FreePRibbonText.ThemeIonCommand.KeyTip),
+            new RibbonMenuItem(FreePRibbonText.ThemeSliceCommand.Label, new RibbonCommandId("freep.theme-colors.slice"), KeyTip: FreePRibbonText.ThemeSliceCommand.KeyTip),
+        ]);
 
     // PowerPoint exposes these editing controls only while a SmartArt graphic is selected.
     // Keeping them out of the blank Design tab makes the normal presentation surface match the

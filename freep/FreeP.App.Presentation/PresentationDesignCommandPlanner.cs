@@ -7,6 +7,7 @@ namespace FreeP.App.Compositor;
 public enum PresentationDesignCommandIntentKind
 {
     SetTheme,
+    SetThemeColors,
     SetSlideSize,
     SetSlideBackground,
     RequestCustomSlideSize,
@@ -17,6 +18,7 @@ public sealed record PresentationDesignCommandPlan(
     string CommandId,
     PresentationDesignCommandIntentKind Intent,
     string? ThemeId = null,
+    string? ThemeColorSetId = null,
     long? SlideSizeCxEmu = null,
     long? SlideSizeCyEmu = null,
     int? BackgroundRgb = null);
@@ -181,6 +183,26 @@ public static class PresentationDesignCommandPlanner
                 PresentationDesignCommandIntentKind.SetTheme,
                 ThemeId: BuiltInThemes.Id.Slice),
             new PresentationDesignCommandPlan(
+                "freep.theme-colors.office",
+                PresentationDesignCommandIntentKind.SetThemeColors,
+                ThemeColorSetId: BuiltInThemes.Id.Office),
+            new PresentationDesignCommandPlan(
+                "freep.theme-colors.berlin",
+                PresentationDesignCommandIntentKind.SetThemeColors,
+                ThemeColorSetId: BuiltInThemes.Id.Berlin),
+            new PresentationDesignCommandPlan(
+                "freep.theme-colors.facet",
+                PresentationDesignCommandIntentKind.SetThemeColors,
+                ThemeColorSetId: BuiltInThemes.Id.Facet),
+            new PresentationDesignCommandPlan(
+                "freep.theme-colors.ion",
+                PresentationDesignCommandIntentKind.SetThemeColors,
+                ThemeColorSetId: BuiltInThemes.Id.Ion),
+            new PresentationDesignCommandPlan(
+                "freep.theme-colors.slice",
+                PresentationDesignCommandIntentKind.SetThemeColors,
+                ThemeColorSetId: BuiltInThemes.Id.Slice),
+            new PresentationDesignCommandPlan(
                 "freep.slide-size-16x9",
                 PresentationDesignCommandIntentKind.SetSlideSize,
                 SlideSizeCxEmu: SlideSizeWidescreen16x9CxEmu,
@@ -317,6 +339,16 @@ public static class PresentationDesignCommandPlanner
                 editor.SetTheme(plan.ThemeId);
                 return true;
 
+            case PresentationDesignCommandIntentKind.SetThemeColors:
+                if (string.IsNullOrWhiteSpace(plan.ThemeColorSetId) ||
+                    BuiltInThemes.GetById(plan.ThemeColorSetId) is not { } colorSource)
+                {
+                    return false;
+                }
+
+                editor.SetTheme(CreateThemeWithColorSet(editor.Presentation.Theme, colorSource));
+                return true;
+
             case PresentationDesignCommandIntentKind.SetSlideSize:
                 if (plan.SlideSizeCxEmu is not { } cxEmu ||
                     plan.SlideSizeCyEmu is not { } cyEmu ||
@@ -348,6 +380,36 @@ public static class PresentationDesignCommandPlanner
             default:
                 return false;
         }
+    }
+
+    private static PresentationTheme CreateThemeWithColorSet(
+        PresentationTheme source,
+        PresentationTheme colorSource)
+    {
+        var colors = new PresentationColorScheme();
+        foreach (var slot in Enum.GetValues<ThemeColorSlot>())
+        {
+            colors[slot] = colorSource.ColorScheme[slot];
+        }
+
+        return new PresentationTheme
+        {
+            // A color-set selection deliberately retains the chosen theme's typography and
+            // native format data. Only scheme-color references are retargeted, matching the
+            // Design > Colors affordance rather than replacing the entire theme.
+            Name = $"{source.Name} ({colorSource.Name} colors)",
+            ColorScheme = colors,
+            FontScheme = new PresentationFontScheme
+            {
+                MajorLatinFont = source.FontScheme.MajorLatinFont,
+                MinorLatinFont = source.FontScheme.MinorLatinFont,
+            },
+            NativeFontSchemeXml = source.NativeFontSchemeXml,
+            FillStyles = source.FillStyles,
+            LineStyles = source.LineStyles,
+            BackgroundFillStyles = source.BackgroundFillStyles,
+            EffectStyles = source.EffectStyles,
+        };
     }
 
     private static string BuildLayoutDisplayName(SlideLayout layout)

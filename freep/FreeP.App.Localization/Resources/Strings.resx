@@ -1513,6 +1513,18 @@
   <data name="Ribbon_Group_Themes_KeyTip" xml:space="preserve">
     <value>T</value>
   </data>
+  <data name="Ribbon_Group_ThemeColors_Label" xml:space="preserve">
+    <value>Colors</value>
+  </data>
+  <data name="Ribbon_Group_ThemeColors_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Command_ThemeColors_Label" xml:space="preserve">
+    <value>Colors</value>
+  </data>
+  <data name="Ribbon_Command_ThemeColors_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
   <data name="Ribbon_Command_ThemeOffice_Label" xml:space="preserve">
     <value>Office</value>
   </data>

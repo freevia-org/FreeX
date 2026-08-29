@@ -30,6 +30,24 @@ public sealed class PresentationDesignCommandPlannerTests
     }
 
     [Theory]
+    [InlineData("freep.theme-colors.office", "Office")]
+    [InlineData("freep.theme-colors.berlin", "Berlin")]
+    [InlineData("freep.theme-colors.facet", "Facet")]
+    [InlineData("freep.theme-colors.ion", "Ion")]
+    [InlineData("freep.theme-colors.slice", "Slice")]
+    public void TryPlan_MapsThemeColorCommandsToColorSetIntents(
+        string commandId,
+        string expectedColorSetId)
+    {
+        PresentationDesignCommandPlanner.TryPlan(commandId, out var plan).Should().BeTrue();
+
+        plan.CommandId.Should().Be(commandId);
+        plan.Intent.Should().Be(PresentationDesignCommandIntentKind.SetThemeColors);
+        plan.ThemeColorSetId.Should().Be(expectedColorSetId);
+        plan.ThemeId.Should().BeNull();
+    }
+
+    [Theory]
     [InlineData("freep.slide-size-16x9", 12192000L, 6858000L)]
     [InlineData("freep.slide-size-4x3", 9144000L, 6858000L)]
     public void TryPlan_MapsSlideSizeCommandIdsToSizeIntents(
@@ -558,6 +576,30 @@ public sealed class PresentationDesignCommandPlannerTests
         PresentationDesignCommandPlanner.TryApply(editor, plan).Should().BeTrue();
 
         presentation.Theme.Name.Should().Be("Ion");
+    }
+
+    [Fact]
+    public void TryApply_SetThemeColors_RetainsTypographyAndSupportsUndo()
+    {
+        var editor = MakeSession(out var presentation);
+        presentation.Theme.Name = "Custom deck theme";
+        presentation.Theme.FontScheme.MajorLatinFont = "Aptos Display";
+        presentation.Theme.FontScheme.MinorLatinFont = "Aptos";
+        var originalAccent = presentation.Theme.ColorScheme[ThemeColorSlot.Accent1];
+        PresentationDesignCommandPlanner.TryPlan("freep.theme-colors.berlin", out var plan)
+            .Should()
+            .BeTrue();
+
+        PresentationDesignCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+        presentation.Theme.Name.Should().Be("Custom deck theme (Berlin colors)");
+        presentation.Theme.FontScheme.MajorLatinFont.Should().Be("Aptos Display");
+        presentation.Theme.FontScheme.MinorLatinFont.Should().Be("Aptos");
+        presentation.Theme.ColorScheme[ThemeColorSlot.Accent1]
+            .Should().Be(BuiltInThemes.GetById(BuiltInThemes.Id.Berlin)!.ColorScheme[ThemeColorSlot.Accent1]);
+
+        editor.Undo();
+        presentation.Theme.Name.Should().Be("Custom deck theme");
+        presentation.Theme.ColorScheme[ThemeColorSlot.Accent1].Should().Be(originalAccent);
     }
 
     [Fact]

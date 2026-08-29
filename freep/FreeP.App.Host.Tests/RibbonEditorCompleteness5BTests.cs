@@ -320,6 +320,22 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void ThemeColorsGroup_ExposesBackedColorSetCommands()
+    {
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
+        var group = def.Tabs.Single(t => t.Id == "design").Groups.Single(g => g.Id == "colors");
+
+        var colors = Assert.IsType<RibbonDropdown>(group.Controls.Single());
+        colors.CommandId.Value.Should().Be("freep.theme-colors.office");
+        colors.Menu.Items.Select(item => item.CommandId!.Value).Should().Equal(
+            "freep.theme-colors.office",
+            "freep.theme-colors.berlin",
+            "freep.theme-colors.facet",
+            "freep.theme-colors.ion",
+            "freep.theme-colors.slice");
+    }
+
+    [Fact]
     public void CustomizeGroup_ContainsSlideSizeIds()
     {
         var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
@@ -704,6 +720,21 @@ public class RibbonEditorCompleteness5BTests
         var reg = MakeRegistry(ed);
         Exec(reg, "freep.theme.berlin");
         Assert.Equal("Berlin", pres.Theme.Name);
+    }
+
+    [Fact]
+    public void Cmd_ThemeColorsBerlin_RetainsCurrentThemeFonts()
+    {
+        var (ed, pres) = MakeSession();
+        pres.Theme.FontScheme.MajorLatinFont = "Aptos Display";
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.theme-colors.berlin");
+
+        Assert.Equal("Aptos Display", pres.Theme.FontScheme.MajorLatinFont);
+        Assert.Equal(
+            BuiltInThemes.GetById(BuiltInThemes.Id.Berlin)!.ColorScheme[ThemeColorSlot.Accent1],
+            pres.Theme.ColorScheme[ThemeColorSlot.Accent1]);
     }
 
     [Fact]

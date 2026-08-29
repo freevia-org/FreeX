@@ -476,6 +476,8 @@ internal static class FreePRibbonText
 
     public static RibbonText DesignTab { get; } = new("Ribbon_Tab_Design_Label", "Ribbon_Tab_Design_KeyTip");
     public static RibbonText ThemesGroup { get; } = new("Common_Themes", "Ribbon_Group_Themes_KeyTip");
+    public static RibbonText ThemeColorsGroup { get; } = new("Ribbon_Group_ThemeColors_Label", "Ribbon_Group_ThemeColors_KeyTip");
+    public static RibbonText ThemeColorsCommand { get; } = new("Ribbon_Command_ThemeColors_Label", "Ribbon_Command_ThemeColors_KeyTip");
     public static RibbonText ThemeOfficeCommand { get; } = new("Ribbon_Command_ThemeOffice_Label", "Ribbon_Command_ThemeOffice_KeyTip");
     public static RibbonText ThemeBerlinCommand { get; } = new("Ribbon_Command_ThemeBerlin_Label", "Ribbon_Command_ThemeBerlin_KeyTip");
     public static RibbonText ThemeFacetCommand { get; } = new("Ribbon_Command_ThemeFacet_Label", "Ribbon_Command_ThemeFacet_KeyTip");
