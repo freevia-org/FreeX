@@ -255,7 +255,7 @@ public sealed class FreeWRibbonParityTests
         insert.Should().NotBeNull();
         insert!.Groups.Select(group => group.Id)
             .Should()
-            .Equal("pages", "tables", "illustrations", "links", "header-footer", "text", "symbols");
+            .Equal("pages", "tables", "illustrations", "links", "comments", "header-footer", "text", "symbols");
 
         CommandIds(insert.FindGroup("illustrations")!)
             .Should()
@@ -1119,7 +1119,8 @@ public sealed class FreeWRibbonParityTests
                 "freew.space-after-toggle",
                 "freew.space-before",
                 "freew.space-after",
-                "freew.paragraph-dialog",
+                // freew.paragraph-dialog moved to this group's DialogLauncher, which RibbonGroup keeps
+                // outside Controls by design, so it is asserted separately below.
                 "freew.tabs-dialog");
         Labels(paragraph!)
             .Should()
@@ -1133,8 +1134,13 @@ public sealed class FreeWRibbonParityTests
                 "Add Space After Paragraph",
                 "Spacing Before",
                 "Spacing After",
-                "Paragraph Settings",
                 "Tabs");
+
+        paragraph!.Launcher.Should().NotBeNull("Word opens the Paragraph dialog from the group launcher");
+        paragraph.Launcher!.CommandId.Value.Should().Be("freew.paragraph-dialog");
+        registry.TryGet(paragraph.Launcher.CommandId.Value, out _)
+            .Should()
+            .BeTrue("the Layout > Paragraph launcher must execute");
 
         foreach (var commandId in CommandIds(paragraph!))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Layout > Paragraph");
