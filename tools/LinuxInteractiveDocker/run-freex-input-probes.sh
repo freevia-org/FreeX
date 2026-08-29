@@ -5777,6 +5777,81 @@ PY
     dismiss_overlays
 }
 
+probe_ribbon_home_number_format_keytip() {
+    local artifacts="ribbon-home-number-format-keytip-before.png;ribbon-home-number-format-keytip-keytips.png;ribbon-home-number-format-keytip-after.png;ribbon-home-number-format-keytip-postcondition.txt"
+    local package_signature="" style_id="" num_fmt_id="" number_format="false" save_clean=false
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "ribbon-home-number-format-keytip-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path"
+        record "ribbon-home-number-format-keytip-physical" "failed" "ribbon-home-number-format-keytip-postcondition.txt" "The Home ribbon Number Format probe requires an XLSX fixture so the persisted style can be checked." "$artifacts"
+        return
+    fi
+
+    if ! select_cell 0 0 A1; then
+        write_artifact "ribbon-home-number-format-keytip-postcondition.txt" "selected=false\ncell=A1"
+        record "ribbon-home-number-format-keytip-physical" "failed" "ribbon-home-number-format-keytip-postcondition.txt" "Could not select the deterministic A1 target before entering Home key-tip mode." "$artifacts"
+        return
+    fi
+
+    capture "ribbon-home-number-format-keytip-before.png"
+    enter_keytip_mode
+    capture "ribbon-home-number-format-keytip-keytips.png"
+    keytip_key h
+    keytip_key n
+    # Alt,H,N focuses and opens the production Number Format combo. Click the first
+    # non-default gallery entry (Number / 0.00) in the rendered popup; this keeps the
+    # selection on the Avalonia popup surface before saving through the production shortcut.
+    xdotool_mousemove_sync 840 149 click 1
+    sleep "$settle_seconds"
+    capture "ribbon-home-number-format-keytip-after.png"
+    # The editable Avalonia combo can still own focus for one dispatch turn after the
+    # popup click. Give the production Ctrl+S route first chance to complete, then retain
+    # the existing Shift+F12 route as a bounded fallback.
+    send_key ctrl+s
+    if wait_for_document_clean; then
+        save_clean=true
+    else
+        send_shifted_function_key F12
+        wait_for_document_clean && save_clean=true
+    fi
+
+    package_signature="$(python3 - "$document_path" <<'PY'
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+path = sys.argv[1]
+ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+with zipfile.ZipFile(path) as package:
+    sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+    styles = ET.fromstring(package.read("xl/styles.xml"))
+    cell = next((node for node in sheet.findall(".//m:c", ns) if node.attrib.get("r") == "A1"), None)
+    style_id = int(cell.attrib.get("s", "0")) if cell is not None else 0
+    xfs = styles.find("m:cellXfs", ns)
+    num_fmt_id = int(xfs[style_id].attrib.get("numFmtId", "0")) if xfs is not None and style_id < len(xfs) else 0
+    print(f"style-id={style_id}|numFmtId={num_fmt_id}|number-format={'true' if num_fmt_id == 2 else 'false'}")
+PY
+)"
+    style_id="${package_signature#style-id=}"
+    style_id="${style_id%%|*}"
+    num_fmt_id="${package_signature#*numFmtId=}"
+    num_fmt_id="${num_fmt_id%%|*}"
+    number_format="${package_signature##*number-format=}"
+    write_artifact "ribbon-home-number-format-keytip-postcondition.txt" \
+        "selector=ribbon-number-format\ndocument-path=$document_path\ncell=A1\nkeytip-sequence=Alt,H,N,click:Number\nsave-sequence=Ctrl+S,Shift+F12-fallback\nselected-format=Number (0.00)\nsave-clean=$save_clean\npackage-signature=$package_signature"
+
+    if $save_clean && [[ "$number_format" == "true" ]]; then
+        record "ribbon-home-number-format-keytip-physical" "passed" \
+            "ribbon-home-number-format-keytip-before.png; ribbon-home-number-format-keytip-keytips.png; ribbon-home-number-format-keytip-after.png; cell=A1; style-id=$style_id; numFmtId=$num_fmt_id; number-format=0.00" \
+            "The production Home ribbon key-tip sequence selected Number (0.00) on A1 and the reopened saved XLSX package contains the corresponding built-in number format." "$artifacts"
+    else
+        record "ribbon-home-number-format-keytip-physical" "failed" \
+            "ribbon-home-number-format-keytip-before.png; ribbon-home-number-format-keytip-keytips.png; ribbon-home-number-format-keytip-after.png; cell=A1; style-id=$style_id; numFmtId=$num_fmt_id; number-format=$number_format" \
+            "The production Home ribbon key-tip sequence did not produce a clean save with Number (0.00) persisted for A1." "$artifacts"
+    fi
+    dismiss_overlays
+}
+
 probe_backstage_print_shortcut() {
     local id="backstage-print-ctrl-shift-f12-cancel"
     local before_count="" open_count="" cancel_count=""
@@ -5849,6 +5924,20 @@ if [[ "$probe_selector" == "ribbon-formatting" ]]; then
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" \
             "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused ribbon-formatting probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "ribbon-number-format" ]]; then
+    # Focused Wave197 lane: select a non-default Home Number Format entry and inspect the saved XLSX.
+    probe_ribbon_home_number_format_keytip
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" \
+            "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused ribbon-number-format probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
