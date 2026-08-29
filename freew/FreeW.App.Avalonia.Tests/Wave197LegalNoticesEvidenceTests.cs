@@ -10,6 +10,7 @@ public sealed class Wave197LegalNoticesEvidenceTests
     private const string BundleFile = "wave197-freew-legal-notices-template-candidates.json";
     private const string RawEvidenceFile = "wave197-freew-legal-notices-raw-evidence.json";
     private const string SourceFile = "shared/Free.Shared.Shell.Avalonia/AvaloniaLegalNoticesDialog.cs";
+    private const string SourceHashAlgorithm = "sha256-normalized-lf-utf8-source-text";
 
     private static readonly string[] ScenarioIds =
     new[]
@@ -133,8 +134,24 @@ public sealed class Wave197LegalNoticesEvidenceTests
         inventory.GetProperty("rawEvidenceId").GetString().Should().Be("inventory");
         rawInventory.GetProperty("evidence").GetProperty("scenarios").EnumerateArray()
             .Should().HaveCount(ScenarioIds.Length * 2);
-        rawInventory.GetProperty("evidence").GetProperty("scenarios").EnumerateArray()
-            .Should().OnlyContain(scenario => scenario.GetProperty("routeId").GetString() == "legal-notices");
+        var rawInventoryScenarioIds = rawInventory.GetProperty("evidence").GetProperty("scenarios")
+            .EnumerateArray()
+            .Select(scenario =>
+            {
+                scenario.GetProperty("routeId").GetString().Should().Be("legal-notices");
+                return scenario.GetProperty("id").GetString()!;
+            })
+            .ToArray();
+        rawInventoryScenarioIds.Should().OnlyHaveUniqueItems();
+        foreach (var host in new[] { "avalonia", "wpf" })
+        {
+            var hostScenarioIds = rawInventoryScenarioIds
+                .Where(id => id.StartsWith(host + ".", StringComparison.Ordinal))
+                .Select(id => id[(host.Length + 1)..])
+                .ToArray();
+            hostScenarioIds.Should().OnlyHaveUniqueItems();
+            hostScenarioIds.Should().BeEquivalentTo(ScenarioIds);
+        }
 
         var manifests = provenance.GetProperty("captureManifests").EnumerateArray().ToArray();
         manifests.Should().HaveCount(4);
@@ -152,10 +169,15 @@ public sealed class Wave197LegalNoticesEvidenceTests
             var evidence = rawManifest.GetProperty("evidence");
             evidence.GetProperty("schema").GetString().Should().Be(manifest.GetProperty("schema").GetString());
             evidence.GetProperty("schemaVersion").GetInt32().Should().Be(manifest.GetProperty("schemaVersion").GetInt32());
-            evidence.GetProperty("host").GetString().Should().Be(manifest.GetProperty("host").GetString());
+            var host = manifest.GetProperty("host").GetString()!;
+            evidence.GetProperty("host").GetString().Should().Be(host);
             var captures = evidence.GetProperty("captures").EnumerateArray().ToArray();
             captures.Should().HaveCount(ScenarioIds.Length);
+            var captureScenarioIds = captures.Select(capture => capture.GetProperty("scenarioId").GetString()!).ToArray();
+            captureScenarioIds.Should().OnlyHaveUniqueItems();
+            captureScenarioIds.Should().BeEquivalentTo(ScenarioIds.Select(scenarioId => host + "." + scenarioId));
             captures.Should().OnlyContain(capture =>
+                capture.GetProperty("host").GetString() == host &&
                 capture.GetProperty("routeId").GetString() == "legal-notices" &&
                 capture.GetProperty("status").GetString() == "captured" &&
                 capture.GetProperty("logicalWidth").GetInt32() == 620 &&
@@ -192,10 +214,14 @@ public sealed class Wave197LegalNoticesEvidenceTests
         var root = FindRepositoryRoot();
         var sourcePath = Path.Combine(root, SourceFile.Replace('/', Path.DirectorySeparatorChar));
         var source = File.ReadAllText(sourcePath);
-        var restoredHash = Sha256(sourcePath);
+        bundle.RootElement.GetProperty("sourceHashAlgorithm").GetString().Should().Be(SourceHashAlgorithm);
+        var restoredHash = Sha256NormalizedUtf8Text(source);
+        Sha256NormalizedUtf8Text(source).Should().Be(
+            Sha256NormalizedUtf8Text(source.Replace("\r\n", "\n", StringComparison.Ordinal)));
         foreach (var mutation in sourceMutations)
         {
             mutation.GetProperty("sourceFile").GetString().Should().Be(SourceFile);
+            mutation.GetProperty("sha256Of").GetString().Should().Be(SourceHashAlgorithm);
             mutation.GetProperty("baselineSha256").GetString().Should().Be(restoredHash);
             mutation.GetProperty("restoredSha256").GetString().Should().Be(restoredHash);
             var baselineValue = mutation.GetProperty("baselineValue").GetString()!;
@@ -203,7 +229,7 @@ public sealed class Wave197LegalNoticesEvidenceTests
             source.Should().Contain(baselineValue);
             source.Should().NotContain(candidateValue);
             mutation.GetProperty("candidateSha256").GetString()
-                .Should().Be(Sha256Text(source.Replace(baselineValue, candidateValue, StringComparison.Ordinal)));
+                .Should().Be(Sha256NormalizedUtf8Text(source.Replace(baselineValue, candidateValue, StringComparison.Ordinal)));
         }
     }
 
@@ -254,6 +280,9 @@ public sealed class Wave197LegalNoticesEvidenceTests
 
     private static string Sha256Text(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
+    private static string Sha256NormalizedUtf8Text(string value) =>
+        Sha256Text(value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal));
 
     private static bool HasLength64(string? value) => value?.Length == 64;
 
