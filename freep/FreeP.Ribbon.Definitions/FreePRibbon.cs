@@ -970,6 +970,14 @@ public static class FreePRibbon
             group.Sizing(RibbonGroupSizing.OfficeAdaptive with
             {
                 Hints = new RibbonWidthHints(470, 130, 130, 64),
+                // PowerPoint replaces the wide theme gallery with one titled gallery button at
+                // compact widths. Skipping the per-command intermediate presentation keeps that
+                // affordance recognizable instead of rendering a generic command overflow.
+                SupportedVariants = new[]
+                {
+                    RibbonAdaptiveGroupState.Full,
+                    RibbonAdaptiveGroupState.Collapsed
+                }
             });
             group.Large("freep.theme.office", FreePRibbonText.ThemeOfficeCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeOfficeCommand.KeyTip);
             group.Medium("freep.theme.berlin", FreePRibbonText.ThemeBerlinCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeBerlinCommand.KeyTip);

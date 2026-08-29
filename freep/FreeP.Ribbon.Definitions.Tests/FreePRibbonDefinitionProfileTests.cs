@@ -36,10 +36,12 @@ public sealed class FreePRibbonDefinitionProfileTests
 
             definition.FindTab("design")!.Groups.Select(group => group.Id)
                 .Should().Equal("themes", "customize", "slides");
-            definition.FindTab("design")!.FindGroup("themes")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive with
-            {
-                Hints = new RibbonWidthHints(470, 130, 130, 64),
-            });
+            var themeSizing = definition.FindTab("design")!.FindGroup("themes")!.Sizing;
+            themeSizing.Hints.Should().Be(new RibbonWidthHints(470, 130, 130, 64));
+            themeSizing.EnableCompactPresentation.Should().BeTrue();
+            themeSizing.SupportedVariants.Should().Equal(
+                RibbonAdaptiveGroupState.Full,
+                RibbonAdaptiveGroupState.Collapsed);
             definition.FindTab("design")!.FindGroup("customize")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
             definition.FindTab("design")!.FindGroup("slides")!.Sizing.Should().Be(RibbonGroupSizing.OfficeAdaptive);
             definition.FindTab("review")!.Groups.Select(group => group.Id)
