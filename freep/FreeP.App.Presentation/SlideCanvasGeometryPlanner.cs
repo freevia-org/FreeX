@@ -154,6 +154,11 @@ public static class SlideCanvasGeometryPlanner
         ArgumentNullException.ThrowIfNull(slide);
         ArgumentNullException.ThrowIfNull(presentation);
 
+        // r170: resolve the shape as it is PLACED, so a rotated group's child gets its outline and
+        // its drag/resize start bounds where it actually renders. Doing it here means every consumer
+        // of this function is corrected at once, rather than one reader per round.
+        shape = ShapeHitTester.ResolvePlacedShape(slide, shape);
+
         var bounds = ShapeHitTester.GetShapeBoundsDip(shape, slide, presentation);
         return OrientedBoundsToScreen(
             bounds.Left,

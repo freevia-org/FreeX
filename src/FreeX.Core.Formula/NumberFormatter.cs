@@ -475,8 +475,14 @@ public static partial class NumberFormatter
                 // which meant an author who QUOTES the sign -- [<0]"-"0.00, a common way to write a
                 // literal character -- was never seen to have written one, and .NET prepended a
                 // second minus. The quoted content still counts when it IS the sign.
-                var quoted = format[(index + 1)..close];
-                if (quoted.Contains('-') || quoted.Contains('('))
+                // r170: the question is whether the quoted text IS the sign, not whether it CONTAINS
+                // one. Round 168 fixed exactly this for unquoted text -- a bare letter ends the scan
+                // so "Ref-No 0.00" is not misread -- and round 169 reintroduced it for quoted text,
+                // so a quoted label like "Ref-No " or "Total(est)" counted as an author-written sign
+                // and the real minus vanished: a negative rendered identically to a positive, which
+                // is worse than the doubled sign this helper exists to prevent.
+                var quoted = format[(index + 1)..close].Trim();
+                if (quoted is "-" or "(")
                     return true;
 
                 index = close + 1;

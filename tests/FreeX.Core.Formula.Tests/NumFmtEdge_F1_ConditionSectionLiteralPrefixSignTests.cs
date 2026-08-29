@@ -38,6 +38,24 @@ public sealed class NumFmtEdge_F1_ConditionSectionLiteralPrefixSignTests
     /// practice, so this is the same doubled sign the helper exists to prevent, reached by a
     /// different route.
     /// </summary>
+    /// <summary>
+    /// r170. The r169 quoted-sign rule asked whether the quoted text CONTAINS a sign rather than
+    /// whether it IS one -- the same mistake r168 fixed for unquoted text, reintroduced for quoted
+    /// text. A quoted label that merely contains a hyphen or paren counted as an author-written
+    /// sign, so the real minus vanished and a negative rendered identically to a positive. In a
+    /// debit column that reads as a credit.
+    /// </summary>
+    [Theory]
+    [InlineData("[<0]\"Ref-No \"0.00;[>=0]\"Ref-No \"0.00")]
+    [InlineData("[<0]\"Total(est)\"0.00;[>=0]\"Total(est)\"0.00")]
+    public void ConditionedNegativeSection_QuotedLabelContainingASignCharacter_StillShowsTheMinus(string format)
+    {
+        NumberFormatter.FormatWithColor(new NumberValue(-5), format).Text
+            .Should().NotBe(
+                NumberFormatter.FormatWithColor(new NumberValue(5), format).Text,
+                "a quoted label is text, not the author writing the sign");
+    }
+
     [Fact]
     public void ConditionedNegativeSection_QuotedSignCharacter_IsNotDoubled()
     {

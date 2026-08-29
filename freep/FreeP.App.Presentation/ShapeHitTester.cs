@@ -26,6 +26,42 @@ public static class ShapeHitTester
         return TryFindShapePath(slide.Shapes, shapeId, path) ? path.ToArray() : null;
     }
 
+    /// <summary>
+    /// Returns <paramref name="shape"/> as it is actually placed on the slide -- with every
+    /// enclosing group's transform composed in, the same way <see cref="SlideCompositor"/> composes
+    /// it for rendering. For a top-level shape this is the shape itself.
+    /// <para>
+    /// r170: round 169 shared the group transform with hit-testing and stopped there, so a rotated
+    /// group's child was clickable where it renders but its SELECTION OUTLINE and drag/resize start
+    /// bounds still came from the authored position -- the frame appeared away from the shape. Every
+    /// consumer of a shape's on-screen geometry needs the placed form, not just the two that have
+    /// been fixed one at a time.
+    /// </para>
+    /// </summary>
+    public static SlideShape ResolvePlacedShape(Slide slide, SlideShape shape)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+        ArgumentNullException.ThrowIfNull(shape);
+
+        var path = FindShapePath(slide, shape.Id);
+        if (path is null || path.Count < 2)
+            return shape;
+
+        IReadOnlyList<SlideShape> level = slide.Shapes;
+        SlideShape placed = level[path[0]];
+        for (var i = 1; i < path.Count; i++)
+        {
+            var raw = level[path[i - 1]];
+            level = raw.Children;
+            if (path[i] < 0 || path[i] >= level.Count)
+                return shape;
+
+            placed = SlideCompositor.TransformGroupChild(placed, level[path[i]]);
+        }
+
+        return placed;
+    }
+
     /// <summary>Resolves a previously captured slide/group child path.</summary>
     public static SlideShape? ResolveShapePath(Slide slide, IReadOnlyList<int> path)
     {

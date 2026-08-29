@@ -223,4 +223,73 @@ public sealed class SlideCompositorGroupRotationTests
 
         ShapeHitTester.HitTest(slide, presentation, 20, 20).Should().Be(601);
     }
+
+    /// <summary>
+    /// r170. Round 169 shared the group transform with hit-testing, so clicking a rotated group's
+    /// child selects the child -- but the selection OUTLINE (and the bounds that seed a drag or
+    /// resize) still came from the child's authored position, so the frame appeared away from the
+    /// shape. Two readers of one transform, one updated. The placed form is now resolved inside
+    /// ShapeVisualBoundsToScreen, so every consumer of it agrees with the renderer.
+    /// </summary>
+    [Fact]
+    public void SelectionBounds_ForARotatedGroupChild_MatchWhereItRenders()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+
+        var child = new SlideShape
+        {
+            Id = 701,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 10 * EmuPerPx,
+            OffsetYEmu = 10 * EmuPerPx,
+            ExtentCxEmu = 20 * EmuPerPx,
+            ExtentCyEmu = 20 * EmuPerPx,
+        };
+        var group = new SlideShape
+        {
+            Id = 700,
+            Kind = SlideShapeKind.Group,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 200 * EmuPerPx,
+            ExtentCyEmu = 100 * EmuPerPx,
+            RotationDeg = 90,
+        };
+        group.Children.Add(child);
+        slide.Shapes.Add(group);
+
+        var composed = SlideCompositor.Compose(presentation, slide, 0)
+            .OfType<DrawOp.Shape>().Single(op => op.ShapeId == 701);
+
+        var placed = ShapeHitTester.ResolvePlacedShape(slide, child);
+        var bounds = ShapeHitTester.GetShapeBoundsDip(placed, slide, presentation);
+
+        bounds.Left.Should().BeApproximately(composed.BoundsDip.X, 0.5,
+            "the selection outline must sit where the shape renders");
+        bounds.Top.Should().BeApproximately(composed.BoundsDip.Y, 0.5);
+        placed.RotationDeg.Should().BeApproximately(composed.RotationDeg, 0.001);
+    }
+
+    /// <summary>Sibling: a top-level shape resolves to itself, so the ordinary case is untouched.</summary>
+    [Fact]
+    public void SelectionBounds_ForATopLevelShape_AreUnchanged()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        var shape = new SlideShape
+        {
+            Id = 800,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 40 * EmuPerPx,
+            OffsetYEmu = 50 * EmuPerPx,
+            ExtentCxEmu = 20 * EmuPerPx,
+            ExtentCyEmu = 20 * EmuPerPx,
+        };
+        slide.Shapes.Add(shape);
+
+        ShapeHitTester.ResolvePlacedShape(slide, shape).Should().BeSameAs(shape);
+    }
 }
