@@ -1,29 +1,25 @@
 using System.Linq;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
 
 /// <summary>
-/// Round 167 (meta F3): <c>ToggleFieldCodeAtCaret</c> (Shift+F9) is the third member of the same family as
-/// round 165's <c>SetFieldLockAtCaret</c> fix and round 166's <c>UnlinkFieldAtCaret</c> fix --
-/// <c>SelectedOrCurrentComplexFields</c> only ever returns a run with <c>ComplexField: not null</c>, so a
-/// simple field (Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt; Date/etc.)
-/// falls through untouched under Shift+F9. Unlike Lock and Unlink, this one does NOT get a
-/// simple-field fallback that mutates the run: a <see cref="RunFieldKind"/> run carries no wrapper object
-/// and no ShowCode-equivalent flag to hold a code/result display mode, so there is nothing to toggle
-/// without adding a new, presentation-only model flag purely to make the command apply -- which
-/// <see cref="FreeW.App.Presentation.Editing.DocumentReferenceEditingCoordinator.ToggleFieldCodes"/>
-/// (Alt+F9, the document-wide sibling) already declines to do, for the identical reason, for the identical
-/// run shape. The decision here matches that: Shift+F9 deliberately stays a no-op on a simple field. This
-/// test locks that decision down explicitly (previously it held only by accident, as a side effect of
-/// <c>SelectedOrCurrentComplexFields</c>'s type filter, with nothing naming or guarding the outcome) and
-/// pins it as the same outcome the WPF host must produce for the same input.
+/// Round 167 correction (meta F1): the original round-167 wave wrongly recorded Shift+F9 as a deliberate
+/// no-op for a simple <see cref="RunFieldKind"/> field, on the reasoning that a <see cref="RunFieldKind"/>
+/// run carries no wrapper object and no ShowCode-equivalent flag to hold a code/result display mode. That
+/// is wrong: real Word toggles field-code display for a simple field exactly like a complex one -- a PAGE
+/// field shows <c>{ PAGE }</c>, a DATE field shows <c>{ DATE }</c> -- and the keyword each maps to was
+/// already documented on <see cref="RunFieldKind"/> itself. The flag now lives directly on
+/// <see cref="Run.FieldCodeVisible"/>, mirroring how <see cref="Run.FieldLocked"/> already carries the
+/// Ctrl+F11 lock for the identical run shape (round 165's fix, the sibling this one now matches instead of
+/// deliberately diverging from).
 /// </summary>
 public sealed class R167_ToggleFieldCodeSiblingTests
 {
     [Fact]
-    public void ToggleFieldCodeAtCaret_OnASimpleRunFieldKindField_RemainsANoOp()
+    public void ToggleFieldCodeAtCaret_OnASimpleRunFieldKindField_TogglesCodeDisplayAndBack()
     {
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
@@ -33,7 +29,8 @@ public sealed class R167_ToggleFieldCodeSiblingTests
 
         // Mirrors Insert > Quick Parts > Date (FreeWAvaloniaRibbonCommands wires the Date ribbon button to
         // exactly this call) -- a RunFieldKind field with no ComplexField wrapper, the exact shape
-        // SelectedOrCurrentComplexFields cannot see.
+        // SelectedOrCurrentComplexFields cannot see, so ToggleFieldCodeAtCaret must fall back to
+        // ToggleSimpleFieldCodeAtCaret for it.
         view.InsertField(RunFieldKind.Date);
         var run = ((Paragraph)view.Document.Blocks[0]).Runs.Single();
         run.FieldKind.Should().Be(RunFieldKind.Date);
@@ -41,20 +38,25 @@ public sealed class R167_ToggleFieldCodeSiblingTests
         var lockedBefore = run.FieldLocked;
 
         view.MoveCaretToBlockForTest(0, 1);
-        var canUndoBeforeToggle = view.CanUndo;
 
         view.ToggleFieldCodeAtCaret();
 
-        var runAfter = ((Paragraph)view.Document.Blocks[0]).Runs.Single();
-        runAfter.FieldKind.Should().Be(
-            RunFieldKind.Date,
-            "Shift+F9 has no code/result display mode to toggle for a RunFieldKind field -- it must leave " +
-            "the field exactly as it was, not silently corrupt or unlink it");
-        runAfter.Text.Should().Be(textBefore);
-        runAfter.FieldLocked.Should().Be(lockedBefore);
-        view.CanUndo.Should().Be(
-            canUndoBeforeToggle,
-            "a deliberate no-op must not push an undo entry out of nothing");
+        var runAfterFirstToggle = ((Paragraph)view.Document.Blocks[0]).Runs.Single();
+        runAfterFirstToggle.FieldKind.Should().Be(RunFieldKind.Date);
+        runAfterFirstToggle.FieldCodeVisible.Should().BeTrue(
+            "Shift+F9 must show a simple field's code just like a complex field's");
+        // The displayed text this drives: DocumentFieldDisplayPlanner.ResolveCode is exactly what
+        // ResolveSimpleFieldDisplayText (the DisplayCells/WrapCellLines render path) returns while
+        // FieldCodeVisible is set.
+        DocumentFieldDisplayPlanner.ResolveCode(runAfterFirstToggle.FieldKind).Should().Be("{ DATE }");
+
+        view.MoveCaretToBlockForTest(0, 1);
+        view.ToggleFieldCodeAtCaret();
+
+        var runAfterSecondToggle = ((Paragraph)view.Document.Blocks[0]).Runs.Single();
+        runAfterSecondToggle.FieldCodeVisible.Should().BeFalse("toggling again must restore the result view");
+        runAfterSecondToggle.Text.Should().Be(textBefore, "unrelated to display mode, the cached result must be untouched");
+        runAfterSecondToggle.FieldLocked.Should().Be(lockedBefore);
     }
 
     /// <summary>Sibling no-regression: toggling a ComplexField at the caret still works exactly as before
@@ -125,5 +127,37 @@ public sealed class R167_ToggleFieldCodeSiblingTests
 
         var complexRunAfter = runs.Single(r => r.ComplexField is not null);
         complexRunAfter.ComplexField!.ShowCode.Should().Be(showCodeBefore);
+        var simpleRunAfter = runs.Single(r => r.FieldKind == RunFieldKind.Date);
+        simpleRunAfter.FieldCodeVisible.Should().BeTrue(
+            "the simple field beside the untouched complex field must be the one that toggled");
+    }
+
+    /// <summary>
+    /// Document-wide surface (Alt+F9, <see cref="DocumentView.ToggleFieldCodes"/>): a ribbon-inserted
+    /// (Insert &gt; Header &amp; Footer &gt; Page Number) PAGE field toggles its code display and back,
+    /// matching the WPF host's identical fix.
+    /// </summary>
+    [Fact]
+    public void ToggleFieldCodes_RibbonInsertedPageNumberField_TogglesCodeDisplayAndBack()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph());
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.InsertField(RunFieldKind.PageNumber);
+        var textBefore = ((Paragraph)view.Document.Blocks[0]).Runs.Single().Text;
+
+        view.ToggleFieldCodes();
+
+        var runAfterFirstToggle = ((Paragraph)view.Document.Blocks[0]).Runs.Single();
+        runAfterFirstToggle.FieldCodeVisible.Should().BeTrue();
+        DocumentFieldDisplayPlanner.ResolveCode(runAfterFirstToggle.FieldKind).Should().Be("{ PAGE }");
+
+        view.ToggleFieldCodes();
+
+        var runAfterSecondToggle = ((Paragraph)view.Document.Blocks[0]).Runs.Single();
+        runAfterSecondToggle.FieldCodeVisible.Should().BeFalse();
+        runAfterSecondToggle.Text.Should().Be(textBefore);
     }
 }

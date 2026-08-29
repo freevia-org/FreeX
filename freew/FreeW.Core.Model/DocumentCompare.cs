@@ -180,8 +180,44 @@ public static class DocumentCompare
         // If original defines a style revised no longer has (renamed/removed), the deleted paragraph would
         // otherwise reference an id missing from result's style catalog. Backfill only the ids revised
         // doesn't already define, so revised's own style wins on any id both documents share.
+        //
+        // Word never allows two styles to share a display name in styles.xml (see
+        // StyleManager.FindStyleIdByName's remarks): original and revised can each have independently
+        // defined a custom style under a different id but the same Name (two documents that both created a
+        // custom style called e.g. "Emphasis"). Backfilling original's copy verbatim under its own id would
+        // then give styles.xml two <w:style> elements sharing one <w:name>. Unlike DocumentMerge's
+        // TransferStyles (which remaps every copied paragraph's StyleId and can safely redirect references
+        // onto an existing same-named definition), the whole-paragraph deletions below copy original's
+        // paragraphs — and their StyleId — through untouched, so dropping the entry instead would leave
+        // those paragraphs pointing at an id result.Styles no longer defines, silently losing their
+        // formatting. Give the backfilled style a disambiguated name instead — the same " 2", " 3", …
+        // convention StyleManager.CreateStyle uses for a user-authored collision — so the id keeps
+        // resolving to a real, distinctly named style. This is the same StyleManager.FindStyleIdByName
+        // lookup TransferStyles uses for the identical rule.
         foreach (var (id, style) in original.Styles)
-            result.Styles.TryAdd(id, style);
+        {
+            if (result.Styles.ContainsKey(id))
+                continue;
+
+            var name = StyleManager.FindStyleIdByName(result, style.Name) is not null
+                ? StyleManager.MakeNameUnique(result, style.Name)
+                : style.Name;
+            result.Styles.Add(id, name == style.Name ? style : new DocumentStyle
+            {
+                Id = style.Id,
+                Name = name,
+                Type = style.Type,
+                BasedOnStyleId = style.BasedOnStyleId,
+                NextStyleId = style.NextStyleId,
+                LinkedStyleId = style.LinkedStyleId,
+                OutlineLevel = style.OutlineLevel,
+                Run = style.Run,
+                Paragraph = style.Paragraph,
+                TableBorders = style.TableBorders,
+                PreservedTableStyleXml = style.PreservedTableStyleXml,
+                PreservedNumbering = style.PreservedNumbering,
+            });
+        }
 
         var originalParagraphs = original.Blocks.OfType<Paragraph>().ToList();
         var revisedBlocks = revised.Blocks;

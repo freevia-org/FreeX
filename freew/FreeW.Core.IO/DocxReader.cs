@@ -2445,6 +2445,19 @@ public static class DocxReader
         };
         foreach (var style in nested.Styles.Values)
         {
+            // r167: this is the third hand-written "merge another document's style catalog into this
+            // one" in FreeW, after DocumentMerge and DocumentCompare. All three disambiguated only by
+            // ID. A nested style whose display NAME already belongs to a differently-id'd style in the
+            // host produced two w:style elements sharing one w:name -- invalid OOXML that Word
+            // collapses unpredictably on reload. Reuse the host's own style when the name is taken, so
+            // the altChunk content adopts it rather than importing a same-named shadow copy.
+            if (StyleManager.FindStyleIdByName(target, style.Name) is { } existingId
+                && !string.Equals(existingId, styleMap[style.Id], StringComparison.Ordinal))
+            {
+                styleMap[style.Id] = existingId;
+                continue;
+            }
+
             var id = styleMap[style.Id];
             var (effectiveRun, effectiveParagraph) = ResolveNestedStyle(nested, style.Id);
             target.Styles[id] = new DocumentStyle

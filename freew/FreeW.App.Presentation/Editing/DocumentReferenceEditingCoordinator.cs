@@ -134,33 +134,47 @@ public sealed class DocumentReferenceEditingCoordinator
     }
 
     /// <summary>
-    /// Alt+F9: toggles field-code display for every <see cref="ComplexField"/> in the document (Word's
-    /// document-wide surface, matching the per-selection <see cref="ToggleComplexFieldCodes"/>). This
-    /// deliberately excludes <see cref="RunFieldKind"/> simple fields (PAGE/DATE/TIME/AUTHOR/FILENAME/
-    /// NUMPAGES/document-property fields from Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt;
-    /// Quick Parts &gt; Date, etc.) -- unlike <see cref="Run.FieldLocked"/>, which mirrors
-    /// <see cref="ComplexField.IsLocked"/> as a plain boolean with no display consequence, a "code" view
-    /// for a <see cref="RunFieldKind"/> run has nowhere to live: the run carries no wrapper object and no
-    /// ShowCode-equivalent flag, and no renderer in either shell knows how to paint one as
-    /// <c>{ PAGE }</c>-style text -- <see cref="DocumentFieldDisplayPlanner.Resolve"/> only ever resolves
-    /// the live *result*. So there is no field-code state to toggle for these runs; the filter below is a
-    /// deliberate scope boundary, not an oversight, and the caret-scoped Shift+F9 (both shells'
-    /// ToggleFieldCodeAtCaret) draws the same line for the same reason.
+    /// Alt+F9: toggles field-code display for every field in the document -- both <see cref="ComplexField"/>
+    /// fields (matching the per-selection <see cref="ToggleComplexFieldCodes"/>) and <see cref="RunFieldKind"/>
+    /// simple fields (PAGE/DATE/TIME/AUTHOR/FILENAME/NUMPAGES/document-property fields from Insert &gt;
+    /// Header &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt; Date, etc.) -- matching real Word,
+    /// which shows <c>{ PAGE }</c>/<c>{ DATE }</c> for a simple field exactly like it shows <c>{ INSTR }</c>
+    /// for a complex one.
+    /// <para>
+    /// Unlike <see cref="ComplexField.ShowCode"/>, a <see cref="RunFieldKind"/> run has no wrapper object to
+    /// carry this state, so it lives directly on <see cref="Run.FieldCodeVisible"/> -- mirroring how
+    /// <see cref="Run.FieldLocked"/> already carries <see cref="ComplexField.IsLocked"/>'s Ctrl+F11
+    /// counterpart the same way. <see cref="DocumentFieldDisplayPlanner.ResolveCode"/> renders the code text
+    /// (e.g. <c>{ PAGE }</c>) a renderer shows when the flag is set, mirroring
+    /// <see cref="ComplexFieldDisplayPlanner.Build"/>'s brace format for the complex-field form.
+    /// </para>
+    /// <para>
+    /// Word's Alt+F9 flips every field in the document -- both kinds -- to one shared state, so the majority
+    /// vote below is taken across the combined set rather than per kind: a document with, say, three complex
+    /// fields already showing codes and one simple field still showing its result switches all four to
+    /// showing codes together, not the simple field alone.
+    /// </para>
     /// </summary>
     public DocumentFieldCodeToggleResult ToggleFieldCodes()
     {
-        var fields = DocumentFieldStories.Enumerate(_session.Document)
+        var runs = DocumentFieldStories.Enumerate(_session.Document)
             .SelectMany(item => item.Paragraph.Runs)
-            .Where(run => run.ComplexField is not null)
             .ToArray();
-        if (fields.Length == 0)
+        var complexFieldRuns = runs.Where(run => run.ComplexField is not null).ToArray();
+        var simpleFieldRuns = runs.Where(run => run.FieldKind != RunFieldKind.None).ToArray();
+        var totalCount = complexFieldRuns.Length + simpleFieldRuns.Length;
+        if (totalCount == 0)
             return new DocumentFieldCodeToggleResult(false, false, 0);
 
-        var showCodes = fields.Count(run => run.ComplexField!.ShowCode) * 2 <= fields.Length;
-        foreach (var run in fields)
+        var showingCount = complexFieldRuns.Count(run => run.ComplexField!.ShowCode)
+            + simpleFieldRuns.Count(run => run.FieldCodeVisible);
+        var showCodes = showingCount * 2 <= totalCount;
+        foreach (var run in complexFieldRuns)
             run.ComplexField = run.ComplexField! with { ShowCode = showCodes };
+        foreach (var run in simpleFieldRuns)
+            run.FieldCodeVisible = showCodes;
 
-        return new DocumentFieldCodeToggleResult(true, showCodes, fields.Length);
+        return new DocumentFieldCodeToggleResult(true, showCodes, totalCount);
     }
 
     public DocumentComplexFieldEditResult ToggleComplexFieldCodes(

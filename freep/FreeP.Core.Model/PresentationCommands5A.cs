@@ -101,10 +101,10 @@ public sealed class SetThemeCommand : IPresentationCommand
     private readonly PresentationTheme _newTheme;
     private PresentationTheme?         _oldTheme;
 
-    // Masters whose ThemePartPath we cleared on Apply, paired with the path to restore on
-    // Revert. Only populated the first time Apply runs (Redo must not re-capture already-null
-    // values as the "old" state).
-    private List<(SlideMaster Master, string? OldThemePartPath)>? _clearedThemePartPaths;
+    // Per-master state cleared on Apply, paired with the values to restore on Revert. Only
+    // populated the first time Apply runs (Redo must not re-capture already-cleared values as
+    // the "old" state).
+    private List<(SlideMaster Master, PresentationTheme? OldMasterTheme, string? OldThemePartPath)>? _clearedMasterState;
 
     public SetThemeCommand(PresentationTheme newTheme) => _newTheme = newTheme;
 
@@ -115,26 +115,36 @@ public sealed class SetThemeCommand : IPresentationCommand
         _oldTheme = p.Theme;
         p.Theme   = _newTheme;
 
-        // A master with Theme == null resolves its effective theme as
-        // (master.Theme ?? presentation.Theme) both for rendering (SlideCompositor) and for
-        // saving (PptxPackageWriter) — UNLESS the master also carries a ThemePartPath, in which
-        // case the writer's corrupted-theme-preservation guard re-emits the ORIGINAL theme part
-        // bytes verbatim instead of the resolved theme, to protect a damaged-but-untouched theme
-        // part across saves. That guard must not survive the user explicitly picking a new theme
-        // here, or the save would silently discard the pick and revert to the stale/damaged
-        // bytes. Clear ThemePartPath on every master that is currently falling back to
-        // Presentation.Theme so the preservation guard no longer matches this master and the
-        // newly chosen theme is what actually gets written. Capture the previous paths so Revert
-        // (undo) can restore preservation if the corrupted theme was never otherwise touched.
-        // First Apply: capture+clear. Later Apply calls are redos after an intervening Revert
-        // restored the paths — re-clear the SAME captured masters rather than recapturing (which
-        // would just re-read the already-restored old values, but skip any master whose
-        // ThemePartPath a since-undone/redone earlier command already nulled out).
-        if (_clearedThemePartPaths is null)
-            _clearedThemePartPaths = CaptureAndClearFallbackThemePartPaths(p);
+        // Both rendering (SlideCompositor) and saving (PptxPackageWriter) resolve a master's
+        // effective theme as (master.Theme ?? presentation.Theme). A master read from a real
+        // .pptx has its own Theme populated per-master (PptxPackageReader), so merely swapping
+        // Presentation.Theme above has no visible or saved effect for any deck that has ever
+        // been opened from disk -- master.Theme keeps shadowing the new pick. This is a single,
+        // deck-wide "apply this theme" entry point (there is no per-master theme picker), so
+        // every master must fall through to the newly chosen Presentation.Theme: null out
+        // master.Theme unconditionally.
+        //
+        // Separately, a master that has no parsed Theme but DOES carry a ThemePartPath is the
+        // corrupted-but-preserved-theme-part case: the writer's preservation guard re-emits the
+        // ORIGINAL theme part bytes verbatim instead of the resolved theme, to protect a
+        // damaged-but-untouched theme part across saves. That guard must not survive the user
+        // explicitly picking a new theme here either, or the save would silently discard the
+        // pick and keep the stale/damaged bytes. Clear ThemePartPath too.
+        //
+        // Capture the previous values so Revert (undo) can restore both the per-master theme and
+        // preservation if this command is undone. First Apply: capture+clear. Later Apply calls
+        // are redos after an intervening Revert restored the values — re-clear the SAME captured
+        // masters rather than recapturing (which would just re-read the already-restored old
+        // values, but skip any master whose state a since-undone/redone earlier command already
+        // cleared).
+        if (_clearedMasterState is null)
+            _clearedMasterState = CaptureAndClearMasterThemes(p);
         else
-            foreach (var (master, _) in _clearedThemePartPaths)
+            foreach (var (master, _, _) in _clearedMasterState)
+            {
+                master.Theme         = null;
                 master.ThemePartPath = null;
+            }
     }
 
     public void Revert(Presentation p)
@@ -142,21 +152,25 @@ public sealed class SetThemeCommand : IPresentationCommand
         if (_oldTheme is not null)
             p.Theme = _oldTheme;
 
-        if (_clearedThemePartPaths is not null)
+        if (_clearedMasterState is not null)
         {
-            foreach (var (master, oldPath) in _clearedThemePartPaths)
+            foreach (var (master, oldTheme, oldPath) in _clearedMasterState)
+            {
+                master.Theme         = oldTheme;
                 master.ThemePartPath = oldPath;
+            }
         }
     }
 
-    private static List<(SlideMaster Master, string? OldThemePartPath)> CaptureAndClearFallbackThemePartPaths(Presentation p)
+    private static List<(SlideMaster Master, PresentationTheme? OldMasterTheme, string? OldThemePartPath)> CaptureAndClearMasterThemes(Presentation p)
     {
-        var cleared = new List<(SlideMaster, string?)>();
+        var cleared = new List<(SlideMaster, PresentationTheme?, string?)>();
         foreach (var master in p.Masters)
         {
-            if (master.Theme is null && master.ThemePartPath is not null)
+            if (master.Theme is not null || master.ThemePartPath is not null)
             {
-                cleared.Add((master, master.ThemePartPath));
+                cleared.Add((master, master.Theme, master.ThemePartPath));
+                master.Theme         = null;
                 master.ThemePartPath = null;
             }
         }

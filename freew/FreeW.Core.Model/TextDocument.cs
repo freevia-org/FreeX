@@ -887,6 +887,18 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public bool FieldLocked { get; set; }
 
     /// <summary>
+    /// Whether the editor displays this <see cref="RunFieldKind"/> field's code (e.g. <c>{ PAGE }</c>)
+    /// instead of its resolved result (Shift+F9 / Alt+F9). Mirrors <see cref="ComplexField.ShowCode"/>
+    /// for the simple-field form: like <see cref="FieldLocked"/>, <see cref="RunFieldKind"/> has no
+    /// wrapper object of its own to carry the flag, so it lives directly on the run, meaningful only
+    /// while <see cref="FieldKind"/> is not <see cref="RunFieldKind.None"/>. Presentation state only,
+    /// like <see cref="ComplexField.ShowCode"/> — the run's <see cref="Text"/> keeps holding the
+    /// cached/last-computed result regardless of which view is showing. Ignored (and always false) for
+    /// an ordinary text run.
+    /// </summary>
+    public bool FieldCodeVisible { get; set; }
+
+    /// <summary>
     /// When non-null, this run is a table-cell formula field (Word's Table &gt; Data &gt; Formula) — e.g.
     /// <c>=SUM(ABOVE)</c> with an optional number format. It serialises as a <c>w:fldSimple</c> whose
     /// <c>w:instr</c> is <c> =SUM(ABOVE) \# "#,##0.00" </c> wrapping a cached result run; the run's

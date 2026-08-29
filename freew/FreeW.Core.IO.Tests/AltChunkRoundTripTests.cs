@@ -116,6 +116,46 @@ public class AltChunkRoundTripTests
         reopened.Blocks[1].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Materialized RTF");
     }
 
+    /// <summary>
+    /// r167. CopyNestedStyles disambiguated only by style ID, so a nested style whose display NAME
+    /// already belonged to a differently-id'd host style was imported as a same-named shadow copy --
+    /// two w:style elements sharing one w:name, which is invalid OOXML that Word collapses
+    /// unpredictably on reload. The test above covers the same-id/different-name case, which the id
+    /// prefixing already handled; this is the different-id/same-name case, which it did not.
+    /// It is the third hand-written style merge in FreeW found with this defect, after DocumentMerge
+    /// and DocumentCompare.
+    /// </summary>
+    [Fact]
+    public void NestedWordPackageAltChunk_ReusesAHostStyleWhoseNameTheNestedStyleShares()
+    {
+        var nested = new TextDocument();
+        nested.Styles["NestedEmphId"] = new DocumentStyle
+        {
+            Id = "NestedEmphId",
+            Name = "MyEmphasis",
+            Run = new RunFormatting { Italic = true }
+        };
+        nested.Blocks.Add(new Paragraph("Nested emphasised") { StyleId = "NestedEmphId" });
+
+        var sourceBytes = AuthorPackageWithAltChunk(
+            chunkPartName: "afchunk.docx",
+            chunkContentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+            includeChunkLocalImage: false,
+            chunkBytes: WriteDocument(nested),
+            documentStyles: """
+                <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:docDefaults><w:pPrDefault><w:pPr><w:spacing w:after="160"/></w:pPr></w:pPrDefault></w:docDefaults>
+                  <w:style w:type="paragraph" w:styleId="OuterEmphId"><w:name w:val="MyEmphasis"/><w:rPr><w:b/></w:rPr></w:style>
+                </w:styles>
+                """);
+
+        var document = ReadDocument(sourceBytes);
+
+        document.Styles.Values
+            .Count(style => string.Equals(style.Name, "MyEmphasis", StringComparison.OrdinalIgnoreCase))
+            .Should().Be(1, "two styles sharing a display name is invalid OOXML");
+    }
+
     [Fact]
     public void NestedWordPackageAltChunk_MaterializesEditableBlocksAndCarriesConflictingStyles()
     {

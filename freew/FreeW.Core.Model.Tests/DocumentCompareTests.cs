@@ -839,6 +839,66 @@ public class DocumentCompareTests
         result.Styles["Quote"].Name.Should().Be("Revised Quote Name");
     }
 
+    [Fact]
+    public void Compare_BackfilledOriginalStyle_DisambiguatesNameCollidingWithDifferentRevisedStyleId()
+    {
+        // Round 167: original and revised each independently defined a custom style called "Emphasis"
+        // under DIFFERENT ids -- exactly what happens when two documents both created a same-named custom
+        // style. Before the fix, the plain `original.Styles.TryAdd(id, style)` backfill added original's
+        // copy verbatim under its own id, giving the result two DocumentStyle entries sharing the Name
+        // "Emphasis" -- the same invalid-OOXML condition DocumentMerge's TransferStyles already guarded
+        // for its own (Insert Text from File) merge.
+        var original = DocWith("Doomed paragraph", "Tail");
+        original.Styles["OrigStyleId"] = new DocumentStyle
+        {
+            Id = "OrigStyleId", Name = "Emphasis", Run = new RunFormatting { Bold = true }
+        };
+        original.Paragraphs.First().StyleId = "OrigStyleId";
+
+        var revised = DocWith("Tail");
+        revised.Styles["RevStyleId"] = new DocumentStyle
+        {
+            Id = "RevStyleId", Name = "Emphasis", Run = new RunFormatting { Italic = true }
+        };
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Styles.Values.Select(style => style.Name)
+            .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .Should().OnlyContain(group => group.Count() == 1, "no two styles may share a display name");
+
+        // Revised's own "Emphasis" is untouched.
+        result.Styles["RevStyleId"].Name.Should().Be("Emphasis");
+        result.Styles["RevStyleId"].Run.Italic.Should().BeTrue();
+
+        // The backfilled original style keeps resolving under its own id -- so the deleted paragraph that
+        // still references it isn't left pointing at nothing -- but under a disambiguated name.
+        var deletedParagraph = result.Paragraphs.Single(paragraph =>
+            paragraph.Runs.Any(run => run.Revision == RevisionKind.Deleted));
+        deletedParagraph.StyleId.Should().Be("OrigStyleId");
+        result.Styles.Should().ContainKey("OrigStyleId");
+        result.Styles["OrigStyleId"].Name.Should().NotBe("Emphasis");
+        result.Styles["OrigStyleId"].Run.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Compare_BackfilledOriginalStyle_NoNameCollision_KeepsOriginalNameUnchanged()
+    {
+        // Sibling no-regression: when original's only-in-original style's Name does NOT collide with
+        // anything already in revised's catalog, the new disambiguation must not fire -- this is the
+        // existing Compare_WholeParagraphDeletion_CarriesOriginalOnlyStyleIntoResultCatalog scenario and
+        // its backfilled style's Name must stay exactly as authored.
+        var original = DocWith("Doomed paragraph", "Tail");
+        original.Styles["Quote"] = new DocumentStyle { Id = "Quote", Name = "Quote" };
+        original.Paragraphs.First().StyleId = "Quote";
+
+        var revised = DocWith("Tail");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Styles["Quote"].Name.Should().Be("Quote");
+    }
+
     // -----------------------------------------------------------------------
     // Word-level diff must not drop inline objects sharing an edited paragraph (r141 HIGH:
     // freew-compare-word-diff-drops-inline-objects)

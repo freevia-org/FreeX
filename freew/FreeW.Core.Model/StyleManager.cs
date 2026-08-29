@@ -75,7 +75,7 @@ public static class StyleManager
             throw new ArgumentException("Style name must be non-empty.", nameof(name));
 
         var id = GenerateUniqueId(doc, trimmed);
-        var uniqueName = GenerateUniqueName(doc, trimmed);
+        var uniqueName = MakeNameUnique(doc, trimmed);
         var basedOn = basedOnId is { Length: > 0 } && doc.Styles.ContainsKey(basedOnId) ? basedOnId : null;
         // A next-style may point at an existing style or at the new style itself (Word allows a style to
         // chain to itself, e.g. a body style whose follow-on is the same style). Anything else is dropped.
@@ -240,13 +240,20 @@ public static class StyleManager
         }
     }
 
-    // Disambiguate the display name against every existing style's Name (case-insensitively — Word treats
-    // style names as case-insensitively unique), appending " 2", " 3", … until unique. Word itself uses this
-    // same "<name> N" convention (e.g. pasting a style from another document that already has "Heading 1
-    // Char" produces "Heading 1 Char 2"), so this mirrors real Word behaviour rather than inventing a
-    // FreeW-only convention.
-    private static string GenerateUniqueName(TextDocument doc, string name)
+    /// <summary>
+    /// Disambiguate <paramref name="name"/> against every existing style's Name in <paramref name="doc"/>
+    /// (case-insensitively — Word treats style names as case-insensitively unique), appending " 2", " 3", …
+    /// until unique. Word itself uses this same "&lt;name&gt; N" convention (e.g. pasting a style from
+    /// another document that already has "Heading 1 Char" produces "Heading 1 Char 2"), so this mirrors real
+    /// Word behaviour rather than inventing a FreeW-only convention. Public because <see cref="DocumentCompare"/>'s
+    /// style union reuses this exact convention: when both sides of a comparison independently defined a
+    /// custom style under the same Name but different ids, the losing side's copy is disambiguated with this
+    /// rather than dropped or added verbatim (which would give styles.xml two <c>&lt;w:style&gt;</c> elements
+    /// sharing one <c>&lt;w:name&gt;</c>).
+    /// </summary>
+    public static string MakeNameUnique(TextDocument doc, string name)
     {
+        ArgumentNullException.ThrowIfNull(doc);
         if (!NameInUse(doc, name))
             return name;
 
@@ -256,6 +263,25 @@ public static class StyleManager
             if (!NameInUse(doc, candidate))
                 return candidate;
         }
+    }
+
+    /// <summary>
+    /// Finds the id of the style in <paramref name="doc"/> whose display <see cref="DocumentStyle.Name"/>
+    /// matches <paramref name="name"/> under Word's case-insensitive name comparison (the same comparison
+    /// <see cref="NameInUse"/> and <see cref="MakeNameUnique"/> use), or null when no style currently carries
+    /// that name. Word never allows two styles to share a display name in styles.xml (see
+    /// <see cref="CreateStyle"/>'s remarks), so this is the one shared lookup every catalog-merging call site
+    /// (<see cref="DocumentMerge"/>'s TransferStyles, <see cref="DocumentCompare"/>'s style union) consults
+    /// before adding a style under a possibly-new id, so a name collision under a genuinely new id is caught
+    /// the same way a same-id collision already was.
+    /// </summary>
+    public static string? FindStyleIdByName(TextDocument doc, string name)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        foreach (var style in doc.Styles.Values)
+            if (string.Equals(style.Name, name, StringComparison.OrdinalIgnoreCase))
+                return style.Id;
+        return null;
     }
 
     // True when re-pointing styleId's based-on to candidateBasedOnId would introduce a cycle at any depth:
@@ -279,13 +305,5 @@ public static class StyleManager
         return false;
     }
 
-    private static bool NameInUse(TextDocument doc, string name)
-    {
-        foreach (var style in doc.Styles.Values)
-        {
-            if (string.Equals(style.Name, name, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        return false;
-    }
+    private static bool NameInUse(TextDocument doc, string name) => FindStyleIdByName(doc, name) is not null;
 }

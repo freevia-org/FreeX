@@ -88,6 +88,7 @@ public partial class MainWindow
         InvalidateNavigationCaches();
         UpdateTitleBar();
         ApplyAdoptedWorksheetSelection();
+        ApplyAdoptedReadOnlySession();
         RefreshSheetTabs();
         UpdateViewport();
         // Do NOT call MarkWorkbookSaved here.  WorkbookDocumentState is now a shared
@@ -172,6 +173,48 @@ public partial class MainWindow
             _currentSheetId,
             Math.Clamp(activeRow, 1u, CellAddress.MaxRow),
             Math.Clamp(activeCol, 1u, CellAddress.MaxCol)));
+    }
+
+    /// <summary>
+    /// Propagates the originating window's Read-Only-Recommended / write-reservation-password
+    /// decision (<see cref="WorkbookReadOnlySession.IsReadOnly"/>) into this newly-adopted
+    /// secondary window. Without this, the sibling's own per-window
+    /// <c>_workbookReadOnlySession</c> (see MainWindow.xaml.cs) defaults to <c>IsReadOnly=false</c>
+    /// even though the shared workbook was opened read-only/protected by
+    /// <c>ApplyWorkbookReadOnlyOpenPolicy</c> (MainWindow.Backstage.cs) in the
+    /// originating window -- so <c>ResolveExistingSaveTarget()</c>, which consults only THIS
+    /// window's session, would resolve the real on-disk path and let a direct Ctrl+S here silently
+    /// overwrite a protected file with none of the Save-As-forcing protection the originating
+    /// window enforces (round-167 protection bypass). Prefers <see cref="_newWindowSourceHint"/>
+    /// (the window that actually invoked View &gt; New Window); falls back to scanning the registry
+    /// for any other window over the same document -- mirroring <see cref="ResolveAdoptedSheetId"/>'s
+    /// fallback -- since the hint can be stale (the invoking window already closed, or moved to a
+    /// different document) before this window finishes loading. Only ever raises this window's own
+    /// session to read-only: a freshly-constructed <see cref="WorkbookReadOnlySession"/> already
+    /// defaults to <c>IsReadOnly=false</c>, so there is nothing to propagate when every sibling is
+    /// editable.
+    /// </summary>
+    private void ApplyAdoptedReadOnlySession()
+    {
+        if (_newWindowSourceHint is { } source && source.DocumentId == _workbook.Id)
+        {
+            if (source._workbookReadOnlySession.IsReadOnly)
+                _workbookReadOnlySession.ApplyPromptDecision(openReadOnly: true);
+            return;
+        }
+
+        if (_windowRegistry is not null)
+        {
+            foreach (var win in _windowRegistry.Windows)
+            {
+                if (win is MainWindow mw && !ReferenceEquals(mw, this) && mw.DocumentId == _workbook.Id &&
+                    mw._workbookReadOnlySession.IsReadOnly)
+                {
+                    _workbookReadOnlySession.ApplyPromptDecision(openReadOnly: true);
+                    return;
+                }
+            }
+        }
     }
 
     // ── IWorkbookWindow (driven by WorkbookWindowRegistry) ────────────────────

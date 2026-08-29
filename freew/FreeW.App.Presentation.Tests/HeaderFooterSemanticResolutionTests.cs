@@ -49,6 +49,27 @@ public sealed class HeaderFooterSemanticResolutionTests
             .Should().BeNull();
     }
 
+    /// <summary>
+    /// r167. Toggling field codes flipped Run.FieldCodeVisible, but this planner -- which paints the
+    /// Avalonia header/footer band -- resolved the live value regardless, so Shift+F9 on a page number
+    /// inserted through Insert &gt; Header &amp; Footer &gt; Page Number changed nothing on screen. That is the
+    /// exact gesture the finding named, and the model flag alone was not the feature.
+    /// </summary>
+    [Fact]
+    public void ResolveFieldText_ShowsTheFieldCodeForASimpleFieldWhoseCodeIsVisible()
+    {
+        var document = new TextDocument();
+        var context = new HeaderFooterFieldResolutionContext(document, PageNumberText: "7", PageCount: 9, SectionOrdinal: 1, SectionPageCount: 9);
+
+        var showing = new Run("7") { FieldKind = RunFieldKind.PageNumber, FieldCodeVisible = true };
+        HeaderFooterVisualPlanner.ResolveFieldText(showing, context)
+            .Should().Be(DocumentFieldDisplayPlanner.ResolveCode(RunFieldKind.PageNumber));
+
+        // Sibling/no-regression: with the code hidden the field still resolves to its live value.
+        var hidden = new Run("7") { FieldKind = RunFieldKind.PageNumber };
+        HeaderFooterVisualPlanner.ResolveFieldText(hidden, context).Should().Be("7");
+    }
+
     // Regression for freew-avalonia-fields F1: a locked header/footer field (Ctrl+F11) must stay frozen
     // at its cached text instead of recomputing to the live value on every re-render. Covers both lock
     // forms -- the simple RunFieldKind.FieldLocked flag and the ComplexField.IsLocked wrapper -- matching

@@ -701,9 +701,85 @@ public sealed class DocumentViewLayoutPlannerTests
 
         var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, page);
 
-        // The 72pt authored grid leaves only 80dip for text after the 6pt side margins. The
-        // renderer-neutral plan must therefore reserve two text lines, matching both hosts' table
-        // wrapping, rather than the old fixed 48-character estimate.
+        // The 72pt authored grid leaves only 80dip for text after the 6pt side margins. The cell sets
+        // no explicit run font size, so the estimate assumes FreeW's own 11pt document default (not a
+        // smaller size), which wraps "North account group" (19 chars) into three lines at ~8.56dip/char
+        // -> 3 * 18dip + 8dip padding = 62dip. The renderer-neutral plan must reserve width-driven text
+        // lines, matching both hosts' table wrapping, rather than the old fixed 48-character estimate.
+        pagination.Rows.Single().EstimatedHeightDip.Should().Be(62);
+    }
+
+    [Fact]
+    public void BuildTablePaginationPlan_DefaultFontSizeTable_WrapsAtElevenPointCharacterWidthNotNine()
+    {
+        // freew-table-layout F1: the estimate used to assume every table cell is set in 9pt (~7dip per
+        // character) no matter what. FreeW's own document default is 11pt (TextDocument.DefaultRun), so
+        // an untouched default-styled cell needs a wider assumed character (~8.56dip). The 200pt column
+        // leaves 252.267dip of content width after Word's default 5.4pt-per-side cell margins, wrapping
+        // this 33-character sentence into two lines (charsPerLine = floor(252.267/8.556) = 29) instead of
+        // the old estimate's one line (floor(252.267/7.0) = 36). Two such rows (44dip each = 88dip) then
+        // overflow a 70dip page body that the old, narrower-character estimate (one line -> 26dip each =
+        // 52dip) would have wrongly judged as fitting on a single page -- exactly the page-break-placement
+        // drift the finding describes.
+        var page = new PageSettings
+        {
+            WidthPt = 612,
+            HeightPt = 52.5, // 52.5pt * 96/72 = 70dip of content height with zero top/bottom margin.
+            MarginLeftPt = 36,
+            MarginRightPt = 36,
+            MarginTopPt = 0,
+            MarginBottomPt = 0,
+        };
+
+        var table = new Table();
+        table.ColumnWidthsPt.Add(200); // 200pt * 96/72 = 266.667dip, default 5.4pt-per-side cell margins.
+        table.Rows.Add(new TableRow { Cells = { new TableCell("Quarterly totals for each region.") } });
+        table.Rows.Add(new TableRow { Cells = { new TableCell("Quarterly totals for each region.") } });
+
+        var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, page);
+
+        pagination.Rows[0].EstimatedHeightDip.Should().Be(44,
+            "at the 11pt default, 33 characters need two wrapped lines in the 252.267dip content width");
+        pagination.EstimatedPageCount.Should().Be(2,
+            "two 44dip rows (88dip) cannot both fit the 70dip page body, so the second row must move to page 2");
+        pagination.Rows[1].AssignedPageNumber.Should().Be(2);
+    }
+
+    [Fact]
+    public void BuildTablePaginationPlan_ExplicitLargerRunFontSize_WidensCharacterWidthFurther()
+    {
+        // Sibling no-regression / extension: a cell whose run carries an explicit, larger FontSizePt
+        // (e.g. a styled header cell) must widen the assumed character further still, not fall back to
+        // the 11pt default -- otherwise the "diverges further" half of the finding stays unfixed. Same
+        // 33-character sentence and 252.267dip content width as above; at an explicit 16pt (~12.44dip/
+        // char, charsPerLine = floor(252.267/12.444) = 20) it also wraps to two lines, proving the run's
+        // own size -- not just the 11pt fallback -- drives the estimate.
+        var page = new PageSettings
+        {
+            WidthPt = 612,
+            HeightPt = 792,
+            MarginLeftPt = 72,
+            MarginRightPt = 72,
+            MarginTopPt = 72,
+            MarginBottomPt = 72,
+        };
+
+        var table = new Table();
+        table.ColumnWidthsPt.Add(200);
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Quarterly totals for each region.")
+        {
+            Formatting = RunFormatting.Default with { FontSizePt = 16 }
+        });
+        var cell = new TableCell();
+        cell.Paragraphs.Add(paragraph);
+        table.Rows.Add(new TableRow { Cells = { cell } });
+
+        var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, page);
+
+        // 16pt -> charWidthDip = 16 * 7/9 = 12.444, charsPerLine = floor(252.267/12.444) = 20,
+        // wrappedLines = ceil(33/20) = 2 -> 2 * 18 + 8 = 44dip: same line count as the 11pt default case
+        // above, but driven by the run's own explicit size rather than the fallback constant.
         pagination.Rows.Single().EstimatedHeightDip.Should().Be(44);
     }
 

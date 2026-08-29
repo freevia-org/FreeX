@@ -232,29 +232,27 @@ public static class DocumentMerge
         var reusedTargetStyleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var sourceId in styleIds)
         {
-            if (usedIds.Add(sourceId))
+            // Word never allows two styles to share a display name in styles.xml (see
+            // StyleManager.FindStyleIdByName's remarks): whenever the target already carries a style under
+            // this exact Name — whether that style happens to sit under sourceId itself (the common case
+            // for a built-in like Heading1, seeded identically into every document by BuiltInStyles) or
+            // under a completely different id (two documents that each independently created a custom
+            // style with the same name) — treat it as the same style and reuse the target's own definition
+            // rather than importing a shadow copy under sourceId or a synthesized id. Importing the shadow
+            // copy would give styles.xml two <w:style> elements sharing one <w:name>, invalid OOXML that
+            // real Word collapses unpredictably on reload. This also matches Word's own paste behaviour:
+            // pasting content whose style name already exists in the destination reuses the destination's
+            // definition. This single name-first lookup is the one rule DocumentCompare's style union
+            // applies too, via the same StyleManager.FindStyleIdByName call.
+            if (StyleManager.FindStyleIdByName(target, sourceStyles[sourceId].Name) is { } existingTargetId)
             {
-                styleNames[sourceId] = sourceId;
-                continue;
-            }
-
-            // The target already defines this id. When its existing style already carries the same
-            // display name (the common case for a built-in like Heading1, seeded identically into every
-            // document by BuiltInStyles), treat it as the same style and reuse the target's own
-            // definition rather than importing a shadow copy under a synthesized id — that would give
-            // styles.xml two <w:style> elements sharing one <w:name>, which is invalid OOXML that real
-            // Word collapses unpredictably on reload (see StyleManager.GenerateUniqueName's remarks on
-            // Word's name-uniqueness rule). This also matches Word's own paste behaviour: pasting content
-            // whose style name already exists in the destination reuses the destination's definition.
-            if (target.Styles.TryGetValue(sourceId, out var existingTargetStyle)
-                && string.Equals(existingTargetStyle.Name, sourceStyles[sourceId].Name, StringComparison.OrdinalIgnoreCase))
-            {
-                styleNames[sourceId] = sourceId;
+                styleNames[sourceId] = existingTargetId;
                 reusedTargetStyleIds.Add(sourceId);
+                usedIds.Add(existingTargetId);
                 continue;
             }
 
-            styleNames[sourceId] = AllocateStyleId(sourceId, usedIds);
+            styleNames[sourceId] = usedIds.Add(sourceId) ? sourceId : AllocateStyleId(sourceId, usedIds);
         }
 
         foreach (var sourceId in styleIds)

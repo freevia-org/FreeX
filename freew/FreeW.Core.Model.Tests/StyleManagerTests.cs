@@ -582,4 +582,17 @@ public class StyleManagerTests
 
         style.Name.Should().Be("Totally Unique Name");
     }
+
+    [Fact]
+    public void FindStyleIdByName_ReturnsMatchingStyleId_RegardlessOfCase_AndNullWhenAbsent()
+    {
+        // Round 167: this is the shared lookup DocumentMerge.TransferStyles and DocumentCompare's style
+        // union both now consult before adding a style under a possibly-new id, so a name collision under a
+        // NEW id is caught the same way a same-id collision already was.
+        var doc = TextDocument.CreateEmpty();
+        doc.Styles["CustomId"] = new DocumentStyle { Id = "CustomId", Name = "My Style" };
+
+        StyleManager.FindStyleIdByName(doc, "my style").Should().Be("CustomId"); // case-insensitive
+        StyleManager.FindStyleIdByName(doc, "Nonexistent Name").Should().BeNull();
+    }
 }

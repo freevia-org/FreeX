@@ -50,6 +50,17 @@ public static class WorkbookPdfContentBuilder
     private const double HeadingGutterHeightPx = 20.0;
     private const double HeadingFontSize = 9.0;
 
+    // R167-services-avalonia-headerfooter-picture-band-1: mirrors
+    // WorksheetPrintHeaderFooterGeometryPlanner.MaxBandHeightFraction (R167-presentation-headerfooter-
+    // band-bound-1) -- the largest fraction of the page a single header OR footer band may grow to
+    // once a configured picture is taller than the text-only band. Kept as an independent constant
+    // here rather than a shared one because this Skia/Avalonia PDF path cannot call the WPF-side
+    // planner directly (see the "why not share the planner" note on GrowHeaderFooterBandHeightForPictures
+    // below); the value must stay equal to that planner's constant by inspection, which is why both
+    // carry the identical rationale comment and this file's R92/R87/new picture-aspect tests assert
+    // the same 25%-of-page bound this constant encodes.
+    private const double MaxHeaderFooterBandHeightFraction = 0.25;
+
     // R96-render-cf-databar-iconset-1 / R96-render-sparkline-pdf-1: fixed 96dpi(px)->72dpi(pt)
     // conversion for the "device pixels at 100% zoom" constants the portable conditional-format
     // (ConditionalDataBarLayoutPlanner/ConditionalIconCellLayoutPlanner) and sparkline
@@ -519,7 +530,8 @@ public static class WorkbookPdfContentBuilder
         var headerFooterLineHeightPt = HeaderFooterLineHeightPt * headerFooterFontScale;
 
         var headerMaxLines = ResolveMaxSectionLines(header);
-        var headerBandHeightPt = Math.Max(headerFooterLineHeightPt * headerMaxLines, mT - headerEdgePt);
+        var headerBandHeightPt = GrowHeaderFooterBandHeightForPictures(
+            Math.Max(headerFooterLineHeightPt * headerMaxLines, mT - headerEdgePt), header, headerPictures, pageH);
         RenderHeaderFooterBand(ops, header, headerPictures, pageW, mL, mR, headerY, headerBandHeightPt, 8,
             headerFooterFontScale, workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, HeaderTextColor,
             lineIndex => headerY + ((headerMaxLines - 1 - lineIndex) * headerFooterLineHeightPt), measurer);
@@ -535,7 +547,8 @@ public static class WorkbookPdfContentBuilder
         // below the grid); later lines extend downward (smaller Y, away from the grid, toward the
         // page's bottom edge).
         var footerMaxLines = ResolveMaxSectionLines(footer);
-        var footerBandHeightPt = Math.Max(headerFooterLineHeightPt * footerMaxLines, mB - footerEdgePt);
+        var footerBandHeightPt = GrowHeaderFooterBandHeightForPictures(
+            Math.Max(headerFooterLineHeightPt * footerMaxLines, mB - footerEdgePt), footer, footerPictures, pageH);
         RenderHeaderFooterBand(ops, footer, footerPictures, pageW, mL, mR, footerY, footerBandHeightPt, 8,
             headerFooterFontScale, workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, FooterTextColor,
             lineIndex => footerY - (lineIndex * headerFooterLineHeightPt), measurer);
@@ -1869,6 +1882,54 @@ public static class WorkbookPdfContentBuilder
             PagePrintTextPlanner.CountSectionLines(section.Left),
             Math.Max(PagePrintTextPlanner.CountSectionLines(section.Center), PagePrintTextPlanner.CountSectionLines(section.Right))));
 
+    /// <summary>
+    /// R167-services-avalonia-headerfooter-picture-band-1: grows a text-derived header/footer band
+    /// height to fit a configured <c>&amp;G</c> picture that is taller than the text alone would
+    /// need, mirroring <see cref="WorksheetPrintHeaderFooterGeometryPlanner.ResolveLineHeight"/>'s
+    /// picture-growth half (the WPF-shared planner that already does this for print/preview/WPF PDF
+    /// export). Bounded to <see cref="MaxHeaderFooterBandHeightFraction"/> of the page height, for
+    /// the identical reason that planner's own <c>MaxBandHeightFraction</c> bound exists: an
+    /// oversized picture must shrink to fit the band rather than the band ballooning to swallow the
+    /// page (see <see cref="RenderHeaderFooterSection"/>'s uniform-scale picture clamp immediately
+    /// below, which fits the picture into whatever band height this method returns).
+    ///
+    /// <b>Why this doesn't just call the shared planner:</b> <see
+    /// cref="WorksheetPrintHeaderFooterGeometryPlanner"/> lives in FreeX.App.Presentation and is
+    /// built around <c>LayoutRect</c>/<c>WorksheetPrintHeaderFooterBandGeometry</c> -- a full page
+    /// geometry model (band position AND size, section rects for all three columns, alignment-aware
+    /// picture/text placement) driven by WPF-only inputs this builder doesn't have in the same shape
+    /// here (<c>alignWithMargins</c>, <c>bandMargin</c>, a single fixed <c>baseLineHeight</c> rather
+    /// than this per-scale-ratio <c>headerFooterLineHeightPt</c>). Adopting it wholesale would mean
+    /// re-deriving this method's every geometry input (headerY/footerY, contentTop/contentBottom,
+    /// sectionWidth) to match the planner's shape instead of this file's already-established
+    /// page-setup math, which is a bigger, riskier change than this finding's gesture calls for.
+    /// What CAN and should be shared -- and now is -- is the arithmetic RULE, not the geometry
+    /// model: both this method and <c>ResolveLineHeight</c>/<c>BuildBand</c> apply the identical
+    /// "grow to the tallest picture, then cap at 25% of the page" rule, and the picture-fitting clamp
+    /// in <see cref="RenderHeaderFooterSection"/> calls the same <see
+    /// cref="PageGeometryRules.ResolveUniformScale"/> the shared planner's <c>ResolvePictureBounds</c>
+    /// calls. <see cref="MaxHeaderFooterBandHeightFraction"/> is intentionally declared next to <see
+    /// cref="WorksheetPrintHeaderFooterGeometryPlanner.MaxBandHeightFraction"/>'s value (0.25) rather
+    /// than referencing it, because the two constants cannot share a definition across the
+    /// FreeX.App.Services -&gt; FreeX.App.Presentation project-reference direction without an
+    /// unwanted new shared-constants module; keeping both in step is a code-review/source-contract-
+    /// test concern (this round adds tests asserting each side of the 25% bound independently) rather
+    /// than a runtime one.
+    /// </summary>
+    private static double GrowHeaderFooterBandHeightForPictures(
+        double baseHeightPt, WorksheetHeaderFooter band, WorksheetHeaderFooterPictureSet pictures, double pageHeightPt)
+    {
+        const double ptPerPx = 72.0 / 96.0;
+        var height = baseHeightPt;
+        if (HasHeaderFooterPictureToken(band.Left) && pictures.Left is { } left)
+            height = Math.Max(height, Math.Max(1.0, left.Height * ptPerPx));
+        if (HasHeaderFooterPictureToken(band.Center) && pictures.Center is { } center)
+            height = Math.Max(height, Math.Max(1.0, center.Height * ptPerPx));
+        if (HasHeaderFooterPictureToken(band.Right) && pictures.Right is { } right)
+            height = Math.Max(height, Math.Max(1.0, right.Height * ptPerPx));
+        return Math.Min(height, Math.Max(1.0, pageHeightPt * MaxHeaderFooterBandHeightFraction));
+    }
+
     private static void RenderHeaderFooterBand(
         List<PdfDrawOp> ops,
         WorksheetHeaderFooter band,
@@ -1964,9 +2025,30 @@ public static class WorkbookPdfContentBuilder
         // sections there also leave the text rect unshifted, so we mirror that too).
         if (picture is not null && HasHeaderFooterPictureToken(raw))
         {
+            // R167-services-avalonia-headerfooter-picture-aspect-1: fit the picture inside the
+            // section by shrinking it, never by squashing it. This used to clamp width and height
+            // with two independent Math.Min calls -- one against sectionWidth, the other against
+            // Math.Max(bandHeightPt, imageWidth) (a height bound that folded the WIDTH clamp's own
+            // result back in, compounding the distortion) -- so a picture whose aspect ratio was far
+            // from the section's came out squashed onto whichever axis it overflowed more, exactly
+            // the non-uniform-scale bug round 166/167 already removed from
+            // WorksheetPrintHeaderFooterGeometryPlanner.ResolvePictureBounds (the shared planner
+            // that serves the WPF print/preview/PDF paths) but never touched here, because this
+            // Skia/Avalonia PDF path builds its own geometry rather than calling that planner (see
+            // this type's doc comment and the "why not share" note on
+            // MaxHeaderFooterBandHeightFraction below). Reuses the same
+            // PageGeometryRules.ResolveUniformScale rule this file already applies to page-level
+            // fit-to-N-pages scaling (see uniformFitScale above) so a picture that needs to shrink
+            // is scaled uniformly on both axes, and a picture that already fits both axes is left at
+            // its original size (scale 1.0), matching prior behavior for that common case.
             const double ptPerPx = 72.0 / 96.0;
-            var imageWidth = Math.Min(Math.Max(1.0, picture.Width * ptPerPx), sectionWidth);
-            var imageHeight = Math.Min(Math.Max(1.0, picture.Height * ptPerPx), Math.Max(bandHeightPt, imageWidth));
+            var rawWidth = Math.Max(1.0, picture.Width * ptPerPx);
+            var rawHeight = Math.Max(1.0, picture.Height * ptPerPx);
+            var widthScale = Math.Min(1.0, sectionWidth / rawWidth);
+            var heightScale = Math.Min(1.0, bandHeightPt / rawHeight);
+            var pictureScale = PageGeometryRules.ResolveUniformScale(widthScale, heightScale);
+            var imageWidth = rawWidth * pictureScale;
+            var imageHeight = rawHeight * pictureScale;
             var imageX = align switch
             {
                 HeaderFooterSectionAlign.Center => sectionLeft + ((sectionWidth - imageWidth) / 2.0),

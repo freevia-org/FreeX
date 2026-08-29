@@ -10887,11 +10887,11 @@ public sealed partial class DocumentView : Control
             // A table cell paints through this wrap-measurement path, not DisplayCells -- so a simple
             // RunFieldKind field (DATE/PAGE/AUTHOR/...) inside a cell needs the same live-vs-locked
             // resolution DisplayCells applies for the body, or it stays frozen at its cached text there
-            // too. See ResolveSimpleField / DisplayCells for the identical body-level fix.
+            // too. See ResolveSimpleFieldDisplayText / DisplayCells for the identical body-level fix.
             var text = run.ComplexField is not null
                 ? BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text
                 : run.FieldKind != RunFieldKind.None
-                    ? ResolveSimpleField(run)
+                    ? ResolveSimpleFieldDisplayText(run)
                     : run.Text;
             for (var textIndex = 0; textIndex < text.Length; textIndex++)
             {
@@ -23363,29 +23363,45 @@ public sealed partial class DocumentView : Control
 
     /// <summary>
     /// Shift+F9: toggles field-code display for selected complex fields, or only the field containing the
-    /// active body or table-cell caret when the selection does not intersect a field. Deliberately does
-    /// nothing when the caret is instead on a simple <see cref="RunFieldKind"/> field (Insert &gt; Header
-    /// &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt; Date, Quick Parts &gt; Document
-    /// Property &gt; Author, etc.) -- unlike <see cref="SetFieldLockAtCaret"/> and
-    /// <see cref="UnlinkFieldAtCaret"/>, which both fall back to a simple-field form of their edit
-    /// (<see cref="SetSimpleFieldLockAtCaret"/> mutates <see cref="Run.FieldLocked"/> directly;
-    /// <see cref="UnlinkFieldAtCaret"/>'s fallback bakes <see cref="Run.Text"/>), there is no simple-field
-    /// analogue here to fall back to: a <see cref="RunFieldKind"/> run carries no wrapper object and no
-    /// ShowCode-equivalent flag to hold a code/result display mode, so there is nothing for Shift+F9 to
-    /// toggle. This mirrors <see cref="DocumentReferenceEditingCoordinator.ToggleFieldCodes"/> (Alt+F9),
-    /// which excludes these same runs from the document-wide toggle for the identical reason, and the WPF
-    /// host's <c>ToggleFieldCodeAtCaret</c>, which draws the same line the same way.
+    /// active body or table-cell caret when the selection does not intersect a field. Falls back to
+    /// <see cref="ToggleSimpleFieldCodeAtCaret"/> when the caret is on a simple <see cref="RunFieldKind"/>
+    /// field (Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt; Date, Quick
+    /// Parts &gt; Document Property &gt; Author, etc.) instead -- mirroring <see cref="SetFieldLockAtCaret"/>
+    /// and <see cref="UnlinkFieldAtCaret"/>, which both fall back to a simple-field form of their edit, and
+    /// matching real Word, which toggles field-code display for a simple field exactly like a complex one.
     /// </summary>
     public void ToggleFieldCodeAtCaret()
     {
         var fields = SelectedOrCurrentComplexFields();
-        if (fields.Count == 0)
+        if (fields.Count > 0)
+        {
+            var result = ReferenceEdits.ToggleComplexFieldCodes(
+                fields.Select(run => run.ComplexField!).ToArray());
+            if (!result.Applied)
+                return;
+            InvalidateLayoutAndVisual();
+            Focus();
+            return;
+        }
+
+        ToggleSimpleFieldCodeAtCaret();
+    }
+
+    /// <summary>
+    /// Shift+F9 for a simple <see cref="RunFieldKind"/> field (DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES/...
+    /// inserted via Insert &gt; Header &amp; Footer &gt; Page Number, Insert &gt; Quick Parts &gt; Date, or
+    /// Quick Parts &gt; Document Property &gt; Author/Title/etc.). Unlike <see cref="ComplexField"/>, a
+    /// simple field carries no wrapper object of its own to hold the code-display flag, so it lives
+    /// directly on <see cref="Run.FieldCodeVisible"/> and is mutated in place here -- the same way
+    /// <see cref="SetSimpleFieldLockAtCaret"/> mutates <see cref="Run.FieldLocked"/> in place.
+    /// </summary>
+    private void ToggleSimpleFieldCodeAtCaret()
+    {
+        var fieldRun = SimpleFieldRunAtCaret();
+        if (fieldRun is null)
             return;
 
-        var result = ReferenceEdits.ToggleComplexFieldCodes(
-            fields.Select(run => run.ComplexField!).ToArray());
-        if (!result.Applied)
-            return;
+        fieldRun.FieldCodeVisible = !fieldRun.FieldCodeVisible;
         InvalidateLayoutAndVisual();
         Focus();
     }
@@ -23440,7 +23456,7 @@ public sealed partial class DocumentView : Control
     /// <summary>
     /// The <see cref="RunFieldKind"/> run at the active shape, header/footer, table-cell, or body caret --
     /// the simple-field analogue of <see cref="ComplexFieldRunAtCaret"/>, used by
-    /// <see cref="SetSimpleFieldLockAtCaret"/>.
+    /// <see cref="SetSimpleFieldLockAtCaret"/> and <see cref="ToggleSimpleFieldCodeAtCaret"/>.
     /// </summary>
     private Run? SimpleFieldRunAtCaret()
     {
@@ -23521,7 +23537,7 @@ public sealed partial class DocumentView : Control
             var displayLength = run.ComplexField is not null
                 ? BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text.Length
                 : run.FieldKind != RunFieldKind.None
-                    ? ResolveSimpleField(run).Length
+                    ? ResolveSimpleFieldDisplayText(run).Length
                     : run.Text.Length;
             if (run.FieldKind != RunFieldKind.None
                 && offset >= displayOffset
@@ -23808,9 +23824,12 @@ public sealed partial class DocumentView : Control
         if (fieldRun is null)
             return;
 
+        // ResolveSimpleField (not ResolveSimpleFieldDisplayText) deliberately, so an unlink always bakes
+        // the field's result -- matching Word -- even while a code view is currently showing.
         fieldRun.Text = ResolveSimpleField(fieldRun);
         fieldRun.FieldKind = RunFieldKind.None;
         fieldRun.FieldLocked = false;
+        fieldRun.FieldCodeVisible = false;
         InvalidateLayoutAndVisual();
         Focus();
     }
@@ -23900,7 +23919,8 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>
-    /// Toggle complex field-code display across the document, matching Word's Alt+F9 surface.
+    /// Toggle field-code display across the document -- both complex and simple (<see cref="RunFieldKind"/>)
+    /// fields -- matching Word's Alt+F9 surface.
     /// </summary>
     public void ToggleFieldCodes()
     {
@@ -24012,15 +24032,31 @@ public sealed partial class DocumentView : Control
         DocumentFieldDisplayPlanner.ResolveFirstPageNumberText(_doc);
 
     /// <summary>
-    /// Resolves a body/table-cell <see cref="RunFieldKind"/> run's display text for <c>DisplayCells</c>:
-    /// its cached text, unchanged, when locked (<see cref="Run.FieldLocked"/> -- Ctrl+F11), otherwise the
-    /// live current value (matching WPF's BuildFieldRun and this file's own
-    /// <see cref="BuildBodyComplexFieldDisplayPlan"/> for the ComplexField form).
+    /// Resolves a body/table-cell <see cref="RunFieldKind"/> run's <em>result</em> text: its cached text,
+    /// unchanged, when locked (<see cref="Run.FieldLocked"/> -- Ctrl+F11), otherwise the live current value
+    /// (matching WPF's BuildFieldRun and this file's own <see cref="BuildBodyComplexFieldDisplayPlan"/> for
+    /// the ComplexField form). Never returns the field code -- <see cref="UnlinkSimpleFieldAtCaret"/> relies
+    /// on that to bake the correct static text even while <see cref="Run.FieldCodeVisible"/> is on;
+    /// <see cref="ResolveSimpleFieldDisplayText"/> is the render-facing wrapper that layers the code view
+    /// on top of this.
     /// </summary>
     private string ResolveSimpleField(Run run) =>
         run.FieldLocked
             ? run.Text
             : ResolveLiveField(run.FieldKind, run.Text, ResolvePageNumberFieldText(), pageCount: 1);
+
+    /// <summary>
+    /// Resolves a body/table-cell <see cref="RunFieldKind"/> run's <em>displayed</em> text for
+    /// <c>DisplayCells</c>/<c>WrapCellLines</c>: the field code (e.g. <c>{ PAGE }</c>) when
+    /// <see cref="Run.FieldCodeVisible"/> is set (Shift+F9/Alt+F9), matching how
+    /// <see cref="BuildBodyComplexFieldDisplayPlan"/> checks <see cref="ComplexField.ShowCode"/> before
+    /// anything else for the ComplexField form -- so the code is shown even for a locked field, exactly
+    /// like Word -- otherwise the live/cached result from <see cref="ResolveSimpleField"/>.
+    /// </summary>
+    private string ResolveSimpleFieldDisplayText(Run run) =>
+        run.FieldCodeVisible
+            ? DocumentFieldDisplayPlanner.ResolveCode(run.FieldKind)
+            : ResolveSimpleField(run);
 
     /// <summary>
     /// AV-INSERT2: Insert an inline equation at the caret (Word's Insert &gt; Equation). The equation is
@@ -26126,12 +26162,15 @@ public sealed partial class DocumentView : Control
             {
                 // A simple DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES/... field (Insert > Header & Footer >
                 // Page Number, Insert > Quick Parts > Date, Quick Parts > Document Property). Unlike
-                // run.ComplexField, this has no wrapper object -- the lock lives on run.FieldLocked, and
-                // ResolveSimpleField honors it exactly like BuildBodyComplexFieldDisplayPlan honors
-                // ComplexField.IsLocked above. Matches WPF's BuildFieldRun ("run.FieldLocked ? run.Text :
-                // ResolveFieldText(...)"): without this branch the field never re-resolved at all here,
-                // staying frozen at its cached insertion-time/imported text even when unlocked.
-                displayText = ResolveSimpleField(run);
+                // run.ComplexField, this has no wrapper object -- the lock lives on run.FieldLocked and the
+                // code/result display mode lives on run.FieldCodeVisible, and ResolveSimpleFieldDisplayText
+                // honors both exactly like BuildBodyComplexFieldDisplayPlan honors ComplexField.IsLocked/
+                // ShowCode above. Matches WPF's BuildFieldRun: without this branch the field never
+                // re-resolved at all here, staying frozen at its cached insertion-time/imported text even
+                // when unlocked.
+                displayText = ResolveSimpleFieldDisplayText(run);
+                if (run.FieldCodeVisible)
+                    displayFormatting = displayFormatting with { ColorHex = ComplexFieldDisplayPlanner.FieldCodeColorHex };
             }
             else if (run.FootnoteId is { } footnoteId)
             {
