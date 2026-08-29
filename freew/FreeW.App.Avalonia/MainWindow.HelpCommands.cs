@@ -25,8 +25,11 @@ public sealed partial class MainWindow
     {
         var diagnosticsDirectory = AppStoragePathPlanner.GetDiagnosticsDirectory(
             PlatformAppDiagnosticsPathProvider.Instance);
-        var optionsPath = AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(
-            PlatformApplicationDataPathProvider.LocalInstance);
+        // r169 follow-up: report the file this window ACTUALLY loads and saves. The old path-planner
+        // label named %LOCALAPPDATA%\FreeW\options.json -- wrong twice over, since FreeW keeps its
+        // options in settings.json under %APPDATA% (the planner resolves FreeX's file name). Support
+        // reports were pointing at a path no FreeW install has ever had.
+        var optionsPath = _optionsStore.StorePath;
         var diagnosticsText = FreeWProductInfo.CreateDiagnosticsText(
             typeof(MainWindow).Assembly,
             diagnosticsDirectory,

@@ -52,8 +52,14 @@ public sealed class SisterAppFrameHelperTests
         source.Should().Contain("Content = frame.Root;");
         source.Should().Contain("SisterAppStatusBarChrome.Build(");
         source.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
+        // r169 follow-up: the diagnostics options path is read off the live store rather than
+        // re-derived from a path planner. The NotContain below is the contract that actually
+        // matters here -- no hand-rolled "%LOCALAPPDATA%\{Product}" literal in shell source --
+        // and _optionsStore.StorePath satisfies it while also being correct, which
+        // GetOptionsFilePathLabelOrFallback(LocalInstance) was not: it named
+        // %LOCALAPPDATA%\FreeW\options.json, while FreeW stores settings.json under %APPDATA%.
         if (appFolder == "freew")
-            source.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(");
+            source.Should().Contain("var optionsPath = _optionsStore.StorePath;");
         AssertBefore(source, "_titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);", "SisterAppClientFrameBuilder.Build(");
         AssertBefore(source, "SisterAppClientFrameBuilder.Build(", "SisterAppWindowFrameBuilder.Build(");
         AssertBefore(source, "SisterAppWindowFrameBuilder.Build(", "Content = frame.Root;");
