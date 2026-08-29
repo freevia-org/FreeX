@@ -129,6 +129,9 @@
       "app": "FreeW",
       "gate": "commit",
       "platforms": ["windows", "linux", "macos"],
+      "preflightModes": {
+        "macos": ["platform"]
+      },
       "projects": [
         "freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj",
         "freew/FreeW.App.Presentation.Tests/FreeW.App.Presentation.Tests.csproj"
@@ -160,6 +163,10 @@
       "app": "FreeP",
       "gate": "commit",
       "platforms": ["windows", "linux", "macos"],
+      "preflightModes": {
+        "windows": ["platform"],
+        "linux": ["static", "platform"]
+      },
       "projects": [
         "freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj",
         "freep/FreeP.App.Recording.Tests/FreeP.App.Recording.Tests.csproj"
@@ -198,18 +205,26 @@
       ]
     },
     {
-      "id": "freex-render-evidence",
+      "id": "freex-render-evidence-a",
       "app": "FreeX",
       "gate": "release",
       "platforms": ["windows", "linux", "macos"],
       "projects": [
         "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.csproj",
-        "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch2.csproj",
         "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch3.csproj",
-        "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch4.csproj",
         "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch5.csproj",
-        "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch6.csproj",
         "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch7.csproj"
+      ]
+    },
+    {
+      "id": "freex-render-evidence-b",
+      "app": "FreeX",
+      "gate": "release",
+      "platforms": ["windows", "linux", "macos"],
+      "projects": [
+        "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch2.csproj",
+        "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch4.csproj",
+        "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch6.csproj"
       ]
     },
     {

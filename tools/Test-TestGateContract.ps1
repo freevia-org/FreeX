@@ -22,6 +22,12 @@ $allowedGates = @("commit", "release")
 $allowedPlatforms = @("windows", "linux", "macos")
 $seenGateIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $coveredProjects = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$staticPreflightOwners = [System.Collections.Generic.List[string]]::new()
+$platformPreflightOwners = @{
+    windows = [System.Collections.Generic.List[string]]::new()
+    linux = [System.Collections.Generic.List[string]]::new()
+    macos = [System.Collections.Generic.List[string]]::new()
+}
 
 foreach ($gate in @($manifest.gates)) {
     if ([string]::IsNullOrWhiteSpace($gate.id) -or -not $seenGateIds.Add($gate.id)) {
@@ -63,6 +69,39 @@ foreach ($gate in @($manifest.gates)) {
     if ($partitionCount -eq 1 -and $partitionProjects.Count -gt 0) {
         $errors.Add("Gate '$($gate.id)' names partitionProjects without declaring multiple partitions.")
     }
+    if ($gate.PSObject.Properties.Name -contains "preflightModes") {
+        if ($gate.gate -ne "commit") {
+            $errors.Add("Gate '$($gate.id)' assigns preflightModes outside the commit tier.")
+        }
+        if ($partitionCount -ne 1) {
+            $errors.Add("Gate '$($gate.id)' cannot assign preflightModes to a partitioned gate.")
+        }
+        foreach ($platformProperty in @($gate.preflightModes.PSObject.Properties)) {
+            $platform = [string]$platformProperty.Name
+            if ($allowedPlatforms -notcontains $platform -or @($gate.platforms) -notcontains $platform) {
+                $errors.Add("Gate '$($gate.id)' assigns preflightModes for unsupported or untargeted platform '$platform'.")
+                continue
+            }
+            $seenModes = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            foreach ($mode in @($platformProperty.Value)) {
+                if ($mode -notin @("static", "platform")) {
+                    $errors.Add("Gate '$($gate.id)' assigns unsupported preflight mode '$mode' on '$platform'.")
+                    continue
+                }
+                if (-not $seenModes.Add([string]$mode)) {
+                    $errors.Add("Gate '$($gate.id)' assigns preflight mode '$mode' more than once on '$platform'.")
+                    continue
+                }
+                $owner = "$($gate.id)/$platform"
+                if ($mode -eq "static") {
+                    $staticPreflightOwners.Add($owner)
+                }
+                else {
+                    $platformPreflightOwners[$platform].Add($owner)
+                }
+            }
+        }
+    }
 
     $buildProjectsInGate = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $buildProjects = if ($gate.PSObject.Properties.Name -contains "buildProjects") {
@@ -103,6 +142,16 @@ foreach ($gate in @($manifest.gates)) {
         if ($allGateProjects -notcontains $projectPath) {
             $errors.Add("Gate '$($gate.id)' partitions unassigned project '$projectPath'.")
         }
+    }
+}
+
+if ($staticPreflightOwners.Count -ne 1) {
+    $errors.Add("Commit gates must assign exactly one static preflight owner; found $($staticPreflightOwners.Count): $($staticPreflightOwners -join ', ').")
+}
+foreach ($platform in $allowedPlatforms) {
+    $owners = $platformPreflightOwners[$platform]
+    if ($owners.Count -ne 1) {
+        $errors.Add("Commit gates must assign exactly one '$platform' platform preflight owner; found $($owners.Count): $($owners -join ', ').")
     }
 }
 
@@ -159,6 +208,8 @@ Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-Platform "$
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-GateId "${{ matrix.gateId }}"'
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-PartitionIndex ${{ matrix.partitionIndex }}'
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-PartitionCount ${{ matrix.partitionCount }}'
+Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected 'if: matrix.runStaticPreflight'
+Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected 'if: matrix.runPlatformPreflight'
 Assert-WorkflowContains -Path ".github/workflows/freew-ci.yml" -Expected '-Gate commit -App FreeW -Platform ${{ matrix.platform }}'
 Assert-WorkflowContains -Path ".github/workflows/freep-ci.yml" -Expected '-Gate commit -App FreeP -Platform ${{ matrix.platform }}'
 Assert-WorkflowContains -Path ".github/workflows/tester-release.yml" -Expected '-Gate release -App FreeX -Platform windows'

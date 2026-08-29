@@ -57,6 +57,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       package_matrix: ${{ steps.select.outputs.package_matrix }}
+      suite_matrix: ${{ steps.select.outputs.suite_matrix }}
       publish_matrix: ${{ steps.select.outputs.publish_matrix }}
       release_matrix: ${{ steps.release_tests.outputs.matrix }}
     steps:
@@ -92,10 +93,21 @@ jobs:
           )
           $selectedLanes = @($lanes | Where-Object { $_.app -in $apps -and $_.platform -in $platforms })
           if ($selectedLanes.Count -eq 0) { throw "No release lanes were selected." }
+          $suiteLanes = @(
+            $lanes |
+              Where-Object { $_.platform -in $platforms } |
+              Group-Object runtime |
+              ForEach-Object {
+                $lane = $_.Group[0]
+                @{ platform = $lane.platform; runtime = $lane.runtime; runner = $lane.runner }
+              }
+          )
 
           $packageMatrix = @{ include = $selectedLanes } | ConvertTo-Json -Compress
+          $suiteMatrix = @{ include = $suiteLanes } | ConvertTo-Json -Compress
           $publishMatrix = @{ app = $apps } | ConvertTo-Json -Compress
           "package_matrix=$packageMatrix" >> $env:GITHUB_OUTPUT
+          "suite_matrix=$suiteMatrix" >> $env:GITHUB_OUTPUT
           "publish_matrix=$publishMatrix" >> $env:GITHUB_OUTPUT
 
       - name: Select full release-only test matrix
@@ -115,7 +127,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Validate latest release source
@@ -208,12 +220,15 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
+      # Fifteen release-test entries get runner priority; five speculative package jobs
+      # still overlap them without exceeding the observed 20-job account concurrency cap.
+      max-parallel: 5
       matrix: ${{ fromJSON(needs.prepare.outputs.package_matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Setup .NET
@@ -351,32 +366,14 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            runtime: win-x64
-            runner: windows-latest
-          - platform: linux
-            runtime: linux-x64
-            runner: ubuntu-latest
-          - platform: linux
-            runtime: linux-arm64
-            runner: ubuntu-24.04-arm
-          - platform: macos
-            runtime: osx-x64
-            runner: macos-15-intel
-          - platform: macos
-            runtime: osx-arm64
-            runner: macos-15
+      matrix: ${{ fromJSON(needs.prepare.outputs.suite_matrix) }}
     steps:
       - name: Checkout
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Download portable app packages
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: tester-*-${{ inputs.release_version }}-${{ matrix.runtime }}
@@ -384,20 +381,17 @@ jobs:
           merge-multiple: false
 
       - name: Setup .NET
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.400
 
       - name: Cache pinned SBOM tool
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: artifacts/sbom-tool
           key: sbom-tool-${{ runner.os }}-${{ runner.arch }}-4.1.5
 
       - name: Validate downloaded app packages
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
         shell: pwsh
         run: |
           foreach ($app in @("FreeX", "FreeW", "FreeP")) {
@@ -413,7 +407,7 @@ jobs:
           }
 
       - name: Locate Inno Setup
-        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform == 'windows'
+        if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           $compiler = @(
@@ -429,7 +423,6 @@ jobs:
           "INNO_SETUP_COMPILER=$compiler" >> $env:GITHUB_ENV
 
       - name: Build unsigned suite installer
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
         shell: pwsh
         run: |
           tools/packaging/New-AppInstallers.ps1 `
@@ -449,7 +442,6 @@ jobs:
             -InputRoot artifacts\suite
 
       - name: Generate suite SBOM and validate inventory
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
         shell: pwsh
         run: |
           $version = "${{ inputs.release_version }}"
@@ -483,7 +475,6 @@ jobs:
             -RequireSourceManifests
 
       - name: Install, transition, and uninstall suite package
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
         shell: pwsh
         run: |
           tools/Test-ReleaseInstallation.ps1 `
@@ -495,7 +486,6 @@ jobs:
             -InputRoot .
 
       - name: Upload suite installer
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: tester-FreeSuite-${{ inputs.release_version }}-${{ matrix.runtime }}
@@ -539,7 +529,7 @@ jobs:
       - name: Checkout immutable tag context
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Reject every conflicting release tag before the first publication
@@ -696,7 +686,7 @@ jobs:
       - name: Checkout release context
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Download suite packages
@@ -777,7 +767,7 @@ jobs:
       - name: Checkout tag verification context
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Verify tags, prerelease state, and complete remote assets

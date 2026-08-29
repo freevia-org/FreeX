@@ -56,17 +56,17 @@ public sealed class R168_DifQuotedContentPerformanceTests
         return stopwatch.Elapsed;
     }
 
-    /// <summary>Loads the same content <paramref name="samples"/> times and returns the fastest run, to
-    /// keep JIT warm-up / GC / scheduler noise from swamping a measurement that is otherwise dominated by
-    /// the algorithm under test — standard micro-benchmark practice (the minimum, not the mean, is the
-    /// closest a wall-clock sample gets to the true cost, since every source of noise only ever adds
-    /// time).</summary>
-    private static double MinLoadMs(string difText, int samples = 5)
+    /// <summary>Loads the same content <paramref name="samples"/> times and returns the median. These
+    /// fixed-path loads can complete in only a few milliseconds on hosted runners, where using the single
+    /// fastest small sample creates a fragile denominator. The median rejects isolated scheduler/GC noise
+    /// on either input while still exposing the old order-of-growth difference.</summary>
+    private static double MedianLoadMs(string difText, int samples = 7)
     {
-        var best = double.MaxValue;
+        var elapsed = new double[samples];
         for (var i = 0; i < samples; i++)
-            best = Math.Min(best, TimeLoad(difText).TotalMilliseconds);
-        return best;
+            elapsed[i] = TimeLoad(difText).TotalMilliseconds;
+        Array.Sort(elapsed);
+        return elapsed[samples / 2];
     }
 
     [Fact]
@@ -81,22 +81,25 @@ public sealed class R168_DifQuotedContentPerformanceTests
         var smallText = BuildFileWithUnterminatedQuote(small);
         var largeText = BuildFileWithUnterminatedQuote(large);
 
-        // Floor of 1ms guards only against a literal zero measurement (timer-resolution edge case); at
-        // these sizes the fixed implementation's real cost is comfortably tens of milliseconds, well
-        // above any such floor, so the floor cannot itself manufacture a passing ratio.
-        var smallMs = Math.Max(MinLoadMs(smallText), 1.0);
-        var largeMs = Math.Max(MinLoadMs(largeText), 1.0);
+        // Floor of 1ms guards only against a timer-resolution edge case. The median normally remains
+        // several milliseconds even on fast hosted hardware, so this floor cannot manufacture a pass.
+        var smallMs = Math.Max(MedianLoadMs(smallText), 1.0);
+        var largeMs = Math.Max(MedianLoadMs(largeText), 1.0);
         var ratio = largeMs / smallMs;
 
         _output.WriteLine(
-            $"small={small} lines -> {smallMs:F1}ms (min of 5); large={large} lines -> {largeMs:F1}ms (min of 5); ratio={ratio:F2}");
+            $"small={small} lines -> {smallMs:F1}ms (median of 7); large={large} lines -> {largeMs:F1}ms (median of 7); ratio={ratio:F2}");
 
         // A 4x increase in folded lines should cost ~4x the time (linear). The old string.Concat +
         // full-rescan-per-iteration implementation cost ~16x (quadratic) for a 4x size increase — this
         // reproduced directly in the finding (4,000 lines: 0.63s; 16,000 lines: 10.68s, a ~17x ratio for
-        // a 4x size increase). 8 sits comfortably between the linear (~4x) and quadratic (~16x) shapes.
-        ratio.Should().BeLessThan(8.0,
+        // a 4x size increase). 10 sits comfortably between the linear (~4x) and quadratic (~16x)
+        // shapes while allowing normal variation in millisecond-scale hosted measurements. The absolute
+        // guard independently rejects the old implementation even if ratio noise happens to be favorable.
+        ratio.Should().BeLessThan(10.0,
             "folding N lines into one unterminated quoted value should cost O(N), not O(N^2)");
+        largeMs.Should().BeLessThan(2_000,
+            "the 40,000-line corrupted input must complete promptly rather than exhibit quadratic growth");
     }
 
     [Fact]

@@ -28,16 +28,20 @@ if (-not (Test-Path -LiteralPath $projectFullPath -PathType Leaf)) {
 $projectDirectory = Split-Path -Parent $projectFullPath
 $namespacePattern = '(?m)^\s*namespace\s+([A-Za-z_][A-Za-z0-9_.]*)\s*[;{]'
 $classPattern = '(?m)^\s*(?:public|internal)?\s*(?:(?:sealed|static|partial|abstract)\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)'
-$testAttributePattern = '\[(?:Fact|Theory)(?:Attribute)?(?:\(|\])'
+$factAttributePattern = '\[Fact(?:Attribute)?(?:\(|\])'
+$theoryAttributePattern = '\[Theory(?:Attribute)?(?:\(|\])'
+$inlineDataAttributePattern = '\[InlineData(?:Attribute)?(?:\(|\])'
 $candidates = [System.Collections.Generic.List[object]]::new()
 
 foreach ($sourceFile in @(Get-ChildItem -LiteralPath $projectDirectory -Recurse -File -Filter '*.cs' |
     Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj)[\\/]' })) {
     $source = Get-Content -LiteralPath $sourceFile.FullName -Raw
-    $testAttributeMatches = [regex]::Matches($source, $testAttributePattern)
-    if ($testAttributeMatches.Count -eq 0) {
+    $factCount = [regex]::Matches($source, $factAttributePattern).Count
+    $theoryCount = [regex]::Matches($source, $theoryAttributePattern).Count
+    if ($factCount + $theoryCount -eq 0) {
         continue
     }
+    $inlineDataCount = [regex]::Matches($source, $inlineDataAttributePattern).Count
 
     $namespaceMatch = [regex]::Match($source, $namespacePattern)
     if (-not $namespaceMatch.Success) {
@@ -55,7 +59,10 @@ foreach ($sourceFile in @(Get-ChildItem -LiteralPath $projectDirectory -Recurse 
     $relativePath = $sourceFile.FullName.Substring($projectDirectory.Length + 1).Replace('\', '/')
     $candidates.Add([pscustomobject]@{
         Path = $relativePath
-        Weight = $testAttributeMatches.Count
+        # InlineData rows are independently discovered test cases. MemberData and other dynamic
+        # theories retain a minimum weight of one because their row count cannot be derived safely
+        # without executing user code during matrix generation.
+        Weight = $factCount + [Math]::Max($theoryCount, $inlineDataCount)
         ClassNames = $classNames
     })
 }
@@ -73,8 +80,9 @@ foreach ($candidate in $candidates) {
     }
 }
 
-# Largest-first bin packing keeps the partitions balanced by declared test-method count. The
-# path tie-breaker makes the result deterministic on Windows, Linux, and macOS.
+# Largest-first bin packing keeps the partitions balanced by statically discoverable test-case
+# count (facts plus inline theory rows). The path tie-breaker makes the result deterministic on
+# Windows, Linux, and macOS.
 $partitionWeights = [int[]]::new($PartitionCount)
 $partitionFiles = [object[]]::new($PartitionCount)
 for ($index = 0; $index -lt $PartitionCount; $index++) {
