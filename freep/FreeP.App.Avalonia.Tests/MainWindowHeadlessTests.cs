@@ -492,6 +492,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         string title = string.Empty;
         var hasIcon = false;
         var titleBarHeight = 0d;
+        var expectedDataFolder = string.Empty;
 
         var ran = await OnUiThread(() =>
         {
@@ -506,6 +507,11 @@ public sealed class MainWindowHeadlessTests : IDisposable
             title = window.Title ?? string.Empty;
             hasIcon = window.HasWindowIconForTests;
             titleBarHeight = window.TitleBarForTests.Height;
+            // r169 follow-up: the label follows the store this window actually uses, so derive the
+            // expectation the same way. The parameterless ResolveDataFolderLabel() this used to
+            // compare against defaults to %LOCALAPPDATA%, which FreeP does not write to.
+            expectedDataFolder = FreePApplicationFrameDescriptor.ResolveDataFolderLabel(
+                window.OptionsStoreForTests.StorePath);
         });
 
         if (!ran) return;
@@ -516,7 +522,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         title.Should().EndWith("FreeP");
         hasIcon.Should().BeTrue("Avalonia and WPF must load the same owned FreeP icon asset");
         statusText.Should().StartWith("Slide 1 / 1");
-        statusText.Should().EndWith(FreePApplicationFrameDescriptor.ResolveDataFolderLabel());
+        statusText.Should().EndWith(expectedDataFolder);
     }
 
     [Fact]
@@ -685,8 +691,10 @@ public sealed class MainWindowHeadlessTests : IDisposable
         mainWindow.Should().Contain("ThemeResources.Brush(\"TitleBarForeground\")");
         mainWindow.Should().NotContain("TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush");
         mainWindow.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
+        // r169 follow-up: the data-folder label is derived from the live options store rather than
+        // the LocalInstance default, so the status plan takes the store path.
         mainWindow.Should().Contain(
-            ".BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())");
+            ".BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath))");
         mainWindow.Should().Contain("chrome: ribbon,");
         mainWindow.Should().Contain("var body = BuildBody();");
         mainWindow.Should().Contain("workArea: body,");

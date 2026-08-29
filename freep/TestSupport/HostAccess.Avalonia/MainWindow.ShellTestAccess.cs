@@ -75,6 +75,11 @@ public sealed partial class MainWindow
 
     internal string StatusTextForTests => _statusText.Text ?? string.Empty;
 
+    // r169 follow-up: lets the status-bar test assert the data-folder label against the store this
+    // window actually uses, instead of re-deriving it from the LocalInstance default the label no
+    // longer follows.
+    internal IApplicationOptionsStore<FreePOptions> OptionsStoreForTests => _optionsStore;
+
     internal bool HasWindowIconForTests => Icon is not null;
 
     internal int OwnerFocusRestoreCountForTests => _ownerFocusRestoreCount;

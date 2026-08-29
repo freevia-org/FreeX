@@ -3522,7 +3522,7 @@ public sealed partial class MainWindow : Window,
         GetCurrentPath: () => _fileSession.CurrentPath,
         GetRecentEntries: () => _fileSession.RecentEntries,
         GetCurrentOptions: () => _options,
-        GetDataFolder: FreePApplicationFrameDescriptor.ResolveDataFolderLabel,
+        GetDataFolder: () => FreePApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath),
         OpenOptions: () => _ = OpenOptionsAsync(),
         New: FileNew,
         Open: () => _ = FileOpenAsync(),
@@ -7362,10 +7362,14 @@ public sealed partial class MainWindow : Window,
 
     // ── Status ─────────────────────────────────────────────────────────────────
 
+    // r169 follow-up: derive the folder from the live store, as FreeW.App.Avalonia does. The
+    // parameterless overload defaults to %LOCALAPPDATA%, but FreeP's options live under %APPDATA%
+    // (App.cs takes ApplicationOptionsStore.Create()'s default), so the status bar named a folder
+    // this app never writes to.
     private void UpdateStatus()
     {
         _statusText.Text = _workareaSession
-            .BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())
+            .BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath))
             .Text;
     }
 
