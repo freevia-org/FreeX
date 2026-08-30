@@ -35,7 +35,12 @@ public sealed class GroupedSheetRangePlannerConditionalFormatCloneTests
             DataBarBorderColor = new RgbColor(10, 20, 30),
             DataBarDirection = "rightToLeft",
             EqualAverage = true,
-            StdDevCount = 2
+            StdDevCount = 2,
+            NativeChildXmls =
+            [
+                """<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><ext><x14:id xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">{11111111-2222-3333-4444-555555555555}</x14:id></ext></extLst>""",
+                """<future xmlns="urn:future" value="kept" />"""
+            ]
         };
         source.IconOverrides.Add(new CfIconOverride("3Symbols", 1));
         source.IconOverrides.Add(new CfIconOverride("NoIcons", 0));
@@ -44,6 +49,10 @@ public sealed class GroupedSheetRangePlannerConditionalFormatCloneTests
 
         // The copy gets a FRESH id (fan-out to another sheet must not share the source's x14 CF id).
         clone.Id.Should().NotBe(ruleId);
+        clone.NativeChildXmls.Should().NotContain(xml => xml.Contains(
+            "11111111-2222-3333-4444-555555555555",
+            StringComparison.Ordinal));
+        clone.NativeChildXmls.Should().Contain(xml => xml.Contains("urn:future", StringComparison.Ordinal));
 
         // Icon overrides (previously dropped entirely).
         clone.IconOverrides.Should().HaveCount(2);
@@ -100,5 +109,66 @@ public sealed class GroupedSheetRangePlannerConditionalFormatCloneTests
         clone.FormatIfTrue.Should().Be(source.FormatIfTrue);
         clone.MinColorSource.Should().BeNull();
         clone.IconOverrides.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CloneConditionalFormatForSheet_PreserveIdentity_RemapsAllRangesWithoutStrippingX14Identity()
+    {
+        var sourceSheet = SheetId.New();
+        var targetSheet = SheetId.New();
+        var ruleId = Guid.NewGuid();
+        var nativeChildren = new[]
+        {
+            """<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><ext><x14:id xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}</x14:id></ext></extLst>"""
+        };
+        var source = new ConditionalFormat
+        {
+            Id = ruleId,
+            AppliesTo = new GridRange(
+                new CellAddress(sourceSheet, 2, 3),
+                new CellAddress(sourceSheet, 5, 4)),
+            AdditionalRanges =
+            [
+                new GridRange(
+                    new CellAddress(sourceSheet, 8, 1),
+                    new CellAddress(sourceSheet, 10, 2))
+            ],
+            RuleType = CfRuleType.IconSet,
+            NativeChildXmls = nativeChildren
+        };
+        source.IconOverrides.Add(new CfIconOverride("3Arrows", 1));
+
+        var clone = GroupedSheetRangePlanner.CloneConditionalFormatForSheet(
+            source,
+            targetSheet,
+            preserveIdentity: true);
+
+        clone.Id.Should().Be(ruleId);
+        clone.AppliesTo.Start.Sheet.Should().Be(targetSheet);
+        clone.AppliesTo.End.Sheet.Should().Be(targetSheet);
+        clone.AdditionalRanges.Should().ContainSingle();
+        clone.AdditionalRanges![0].Start.Sheet.Should().Be(targetSheet);
+        clone.AdditionalRanges[0].End.Sheet.Should().Be(targetSheet);
+        clone.AdditionalRanges.Should().NotBeSameAs(source.AdditionalRanges);
+        clone.IconOverrides.Should().Equal(source.IconOverrides);
+        clone.IconOverrides.Should().NotBeSameAs(source.IconOverrides);
+        clone.NativeChildXmls.Should().BeSameAs(nativeChildren);
+    }
+
+    [Fact]
+    public void ConditionalFormatCommandPlanner_DelegatesSheetCloneAndIdentityPolicyToGroupedPlanner()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var groupedSource = File.ReadAllText(Path.Combine(presentationRoot, "GroupedSheetRangePlanner.cs"));
+        var commandSource = File.ReadAllText(Path.Combine(
+            presentationRoot,
+            "ConditionalFormatting",
+            "ConditionalFormatCommandPlanner.cs"));
+
+        groupedSource.Should().Contain("bool preserveIdentity");
+        groupedSource.Should().Contain("preserveIdentity ? null : Guid.NewGuid()");
+        commandSource.Should().Contain("GroupedSheetRangePlanner.CloneConditionalFormatForSheet(");
+        commandSource.Should().Contain("preserveIdentity: preserveIdentity");
+        commandSource.Should().NotContain("private static ConditionalFormat CloneForSheet");
     }
 }
