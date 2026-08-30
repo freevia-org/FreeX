@@ -18,49 +18,8 @@ public static partial class BuiltInFunctions
     // RangeValue of matching shape.  Scalar-criteria paths are byte-identical to
     // the previous behaviour.
     //
-    // Only ONE criteria argument may be a range at a time (per Excel semantics).
-    // If multiple criteria args are RangeValues, only the first one encountered
-    // triggers the array expansion; the rest are treated as parallel-criteria
-    // ranges (normal behaviour) or produce #VALUE! if their shape differs.
-
-    /// <summary>
-    /// Returns (pairIndex, criteriaRangeArg) for the first criteria argument
-    /// (among the *IF(S) criteria slots) that is a RangeValue, or null if all
-    /// criteria are scalars.
-    /// <para>
-    /// For SUMIFS/COUNTIFS/AVERAGEIFS <paramref name="firstCriteriaArgIndex"/>
-    /// is the index of the first criteria-value slot (not the criteria-range
-    /// slot).  For SUMIF/COUNTIF/AVERAGEIF it is 1.
-    /// </para>
-    /// </summary>
-    private static (int argIndex, RangeValue criteriaArray)? FindArrayCriteriaArg(
-        IReadOnlyList<ScalarValue> args,
-        int firstCriteriaArgIndex,
-        int criteriaArgStep)  // 2 for *IFS (interleaved range,criteria), 1 for *IF
-    {
-        for (int i = firstCriteriaArgIndex; i < args.Count; i += criteriaArgStep)
-        {
-            if (args[i] is RangeValue rv)
-                return (i, rv);
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// Substitute <paramref name="replacement"/> at position
-    /// <paramref name="argIndex"/> in <paramref name="args"/> and return the new
-    /// list. All other elements are shared (no copy of their values).
-    /// </summary>
-    private static IReadOnlyList<ScalarValue> ReplaceArg(
-        IReadOnlyList<ScalarValue> args,
-        int argIndex,
-        ScalarValue replacement)
-    {
-        var copy = new ScalarValue[args.Count];
-        for (int i = 0; i < args.Count; i++)
-            copy[i] = i == argIndex ? replacement : args[i];
-        return copy;
-    }
+    // The *IF functions have one criteria slot. The *IFS functions may have several
+    // array criteria, which broadcast together into a single result matrix.
 
     // ── SUMIF ──────────────────────────────────────────────────────────────────
 
@@ -172,7 +131,7 @@ public static partial class BuiltInFunctions
         // array criteria broadcast together into one matrix. Criteria-value slots for SUMIFS are at
         // indices 2, 4, 6, … (step 2).
         var arrayCriteriaArgs = FindAllArrayCriteriaArgs(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
-        if (arrayCriteriaArgs.Count > 0)
+        if (arrayCriteriaArgs is { Count: > 0 })
             return ExpandConditionalArrayCriteriaMulti(args, arrayCriteriaArgs, ctx, Sumifs);
 
         int pairCount = (args.Count - 1) / 2;
@@ -202,7 +161,7 @@ public static partial class BuiltInFunctions
 
         // Array-criteria: criteria-value slots for COUNTIFS are at indices 1, 3, 5, … (step 2).
         var arrayCriteriaArgs = FindAllArrayCriteriaArgs(args, firstCriteriaArgIndex: 1, criteriaArgStep: 2);
-        if (arrayCriteriaArgs.Count > 0)
+        if (arrayCriteriaArgs is { Count: > 0 })
             return ExpandConditionalArrayCriteriaMulti(args, arrayCriteriaArgs, ctx, Countifs);
 
         int pairCount = args.Count / 2;
@@ -231,7 +190,7 @@ public static partial class BuiltInFunctions
 
         // Array-criteria: criteria-value slots for AVERAGEIFS are at indices 2, 4, 6, … (step 2).
         var arrayCriteriaArgs = FindAllArrayCriteriaArgs(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
-        if (arrayCriteriaArgs.Count > 0)
+        if (arrayCriteriaArgs is { Count: > 0 })
             return ExpandConditionalArrayCriteriaMulti(args, arrayCriteriaArgs, ctx, Averageifs2);
 
         int pairCount = (args.Count - 1) / 2;
@@ -287,7 +246,7 @@ public static partial class BuiltInFunctions
 
         // Array-criteria: criteria-value slots for MAXIFS are at indices 2, 4, 6, … (step 2).
         var arrayCriteriaArgs = FindAllArrayCriteriaArgs(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
-        if (arrayCriteriaArgs.Count > 0)
+        if (arrayCriteriaArgs is { Count: > 0 })
             return ExpandConditionalArrayCriteriaMulti(args, arrayCriteriaArgs, ctx, Maxifs);
 
         int pairCount = (args.Count - 1) / 2;
@@ -324,7 +283,7 @@ public static partial class BuiltInFunctions
 
         // Array-criteria: criteria-value slots for MINIFS are at indices 2, 4, 6, … (step 2).
         var arrayCriteriaArgs = FindAllArrayCriteriaArgs(args, firstCriteriaArgIndex: 2, criteriaArgStep: 2);
-        if (arrayCriteriaArgs.Count > 0)
+        if (arrayCriteriaArgs is { Count: > 0 })
             return ExpandConditionalArrayCriteriaMulti(args, arrayCriteriaArgs, ctx, Minifs);
 
         int pairCount = (args.Count - 1) / 2;
@@ -370,13 +329,13 @@ public static partial class BuiltInFunctions
         int rows = criteriaArray.RowCount;
         int cols = criteriaArray.ColCount;
         var resultCells = new ScalarValue[rows, cols];
+        var argumentBuffer = CopyArguments(args);
         for (int r = 0; r < rows; r++)
         {
             for (int c = 0; c < cols; c++)
             {
-                var scalarCriteria = criteriaArray.Cells[r, c];
-                var substitutedArgs = ReplaceArg(args, criteriaArgIndex, scalarCriteria);
-                resultCells[r, c] = scalarFunc(substitutedArgs, ctx);
+                argumentBuffer[criteriaArgIndex] = criteriaArray.Cells[r, c];
+                resultCells[r, c] = scalarFunc(argumentBuffer, ctx);
             }
         }
         return new RangeValue(resultCells);
@@ -387,16 +346,16 @@ public static partial class BuiltInFunctions
     /// by <paramref name="criteriaArgStep"/>) that holds a RangeValue. These array criteria broadcast
     /// together into a single result instead of nesting.
     /// </summary>
-    private static List<int> FindAllArrayCriteriaArgs(
+    private static List<int>? FindAllArrayCriteriaArgs(
         IReadOnlyList<ScalarValue> args,
         int firstCriteriaArgIndex,
         int criteriaArgStep)
     {
-        var indexes = new List<int>();
+        List<int>? indexes = null;
         for (int i = firstCriteriaArgIndex; i < args.Count; i += criteriaArgStep)
         {
             if (args[i] is RangeValue)
-                indexes.Add(i);
+                (indexes ??= new List<int>(1)).Add(i);
         }
         return indexes;
     }
@@ -424,22 +383,28 @@ public static partial class BuiltInFunctions
         }
 
         var resultCells = new ScalarValue[rows, cols];
-        var buffer = new ScalarValue[args.Count];
+        var argumentBuffer = CopyArguments(args);
         for (int r = 0; r < rows; r++)
         {
             for (int c = 0; c < cols; c++)
             {
-                for (int i = 0; i < args.Count; i++)
-                    buffer[i] = args[i];
                 foreach (var idx in criteriaArgIndexes)
                 {
                     var array = (RangeValue)args[idx];
-                    buffer[idx] = array.Cells[array.RowCount == 1 ? 0 : r, array.ColCount == 1 ? 0 : c];
+                    argumentBuffer[idx] = array.Cells[array.RowCount == 1 ? 0 : r, array.ColCount == 1 ? 0 : c];
                 }
-                resultCells[r, c] = scalarFunc(buffer.ToArray(), ctx);
+                resultCells[r, c] = scalarFunc(argumentBuffer, ctx);
             }
         }
         return new RangeValue(resultCells);
+    }
+
+    private static ScalarValue[] CopyArguments(IReadOnlyList<ScalarValue> args)
+    {
+        var copy = new ScalarValue[args.Count];
+        for (int i = 0; i < args.Count; i++)
+            copy[i] = args[i];
+        return copy;
     }
 
     private static bool CanBroadcastDimension(int a, int b) => a == b || a == 1 || b == 1;

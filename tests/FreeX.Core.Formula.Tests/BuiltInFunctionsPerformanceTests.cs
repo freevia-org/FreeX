@@ -43,6 +43,40 @@ public sealed class BuiltInFunctionsPerformanceTests
     }
 
     [Fact]
+    public void Countif_LargeArrayCriteriaReusesArgumentBuffer()
+    {
+        var source = new RangeValue(new ScalarValue[,]
+        {
+            { new NumberValue(1) },
+            { new NumberValue(2) },
+        }) { IsSheetReference = true };
+        var criteriaCells = new ScalarValue[5_000, 1];
+        for (var row = 0; row < criteriaCells.GetLength(0); row++)
+            criteriaCells[row, 0] = new NumberValue(row % 2 == 0 ? 1 : 2);
+        ScalarValue[] args = [source, new RangeValue(criteriaCells)];
+        var countif = BuiltInFunctions.Get("COUNTIF").Func;
+
+        countif(args, EmptyEvalContext.Instance).Should().BeOfType<RangeValue>();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        var scalarResult = countif(args, EmptyEvalContext.Instance);
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        var result = scalarResult.Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(5_000);
+        result.Cells[0, 0].Should().Be(new NumberValue(1));
+        result.Cells[1, 0].Should().Be(new NumberValue(1));
+        _output.WriteLine($"COUNTIF array criteria allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(
+            250_000,
+            "array-criteria expansion should reuse one argument buffer instead of copying the full argument list for every result cell");
+    }
+
+    [Fact]
     public void Rept_LargeResultPreallocatesOutputBuffer()
     {
         var evaluator = new FormulaEvaluator();
@@ -220,5 +254,26 @@ public sealed class BuiltInFunctionsPerformanceTests
         allocatedBytes.Should().BeLessThan(
             40_000,
             "IRR should collect direct value ranges without materializing RangeValue arrays");
+    }
+
+    private sealed class EmptyEvalContext : IEvalContext
+    {
+        public static readonly EmptyEvalContext Instance = new();
+
+        public Sheet? CurrentSheet => null;
+        public Workbook? CurrentWorkbook => null;
+        public ScalarValue GetCellValue(uint row, uint col) => BlankValue.Instance;
+        public ScalarValue GetCellValue(string sheetName, uint row, uint col) => BlankValue.Instance;
+        public IReadOnlyList<ScalarValue> GetRangeValues(uint startRow, uint startCol, uint endRow, uint endCol) => [];
+        public IReadOnlyList<ScalarValue> GetRangeValues(string sheetName, uint startRow, uint startCol, uint endRow, uint endCol) => [];
+        public GridRange? TryResolveNamedRange(string name) => null;
+        public string? TryGetSheetName(SheetId sheetId) => null;
+        public bool SheetExists(string sheetName) => false;
+        public bool IsRowHidden(uint row) => false;
+        public bool IsRowHidden(string sheetName, uint row) => false;
+        public bool IsRowFilterHidden(uint row) => false;
+        public bool IsRowFilterHidden(string sheetName, uint row) => false;
+        public Cell? TryGetCell(uint row, uint col) => null;
+        public Cell? TryGetCell(string sheetName, uint row, uint col) => null;
     }
 }
