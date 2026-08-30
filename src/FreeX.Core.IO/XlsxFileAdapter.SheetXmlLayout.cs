@@ -549,7 +549,7 @@ public sealed partial class XlsxFileAdapter
         {
             var reference = mergeCell.Attribute("ref")?.Value;
             if (string.IsNullOrWhiteSpace(reference) ||
-                !TryParseSqrefToken(reference, tempSheet, out var range) ||
+                !XlsxSqrefParser.TryParseCellRangeToken(reference, tempSheet, out var range) ||
                 range.CellCount <= 1)
             {
                 continue;
@@ -700,30 +700,6 @@ public sealed partial class XlsxFileAdapter
          root.Element(worksheetNs + "sheetProtection") is not null ||
          root.Element(worksheetNs + "hyperlinks") is not null ||
          root.Element(worksheetNs + "extLst") is not null);
-
-    private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range)
-    {
-        range = default;
-        var parts = token.Split(':');
-        if (parts.Length == 1)
-        {
-            if (!CellAddress.TryParse(parts[0], sheet, out var address))
-                return false;
-
-            range = new GridRange(address, address);
-            return true;
-        }
-
-        if (parts.Length == 2 &&
-            CellAddress.TryParse(parts[0], sheet, out var start) &&
-            CellAddress.TryParse(parts[1], sheet, out var end))
-        {
-            range = new GridRange(start, end);
-            return true;
-        }
-
-        return false;
-    }
 
     private static uint? ParsePaneSplit(string? value)
         => XlsxWorksheetXmlValueParser.ParsePaneSplit(value);
