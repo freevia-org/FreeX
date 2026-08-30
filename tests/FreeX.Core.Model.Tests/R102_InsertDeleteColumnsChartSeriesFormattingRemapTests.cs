@@ -370,4 +370,61 @@ public sealed class R102_InsertDeleteColumnsChartSeriesFormattingRemapTests
             because: "columns are the category axis here, not the series axis -- a column insert must never remap SeriesIndex for this chart");
         chart.RangeDataLabels.Should().ContainSingle().Which.SeriesIndex.Should().Be(2);
     }
+
+    [Fact]
+    public void SeriesInsert_UnaffectedCollectionsRetainTheirExactReferences()
+    {
+        var (sheet, _, chart) = CreateThreeSeriesChart();
+        var first = new ChartSeriesFormat(0, FillColor: CellColor.FromArgb(1, 2, 3));
+        var second = new ChartSeriesFormat(1, FillColor: CellColor.FromArgb(4, 5, 6));
+        chart.SeriesFormats.AddRange([first, second]);
+        var formats = chart.SeriesFormats;
+        var emptyIndexes = chart.ComboLineSeriesIndexes;
+
+        RowColumnShiftHelpers.RemapChartSeriesFormattingForColumnInsert(chart, sheet.Id, start: 4, count: 1);
+
+        chart.SeriesFormats.Should().BeSameAs(formats);
+        chart.SeriesFormats[0].Should().BeSameAs(first);
+        chart.SeriesFormats[1].Should().BeSameAs(second);
+        chart.ComboLineSeriesIndexes.Should().BeSameAs(emptyIndexes);
+    }
+
+    [Fact]
+    public void SeriesDelete_ChangedCollectionReplacesWithoutMutatingRetainedAlias()
+    {
+        var (sheet, _, chart) = CreateThreeSeriesChart();
+        var first = new ChartSeriesFormat(0, FillColor: CellColor.FromArgb(1, 2, 3));
+        var removed = new ChartSeriesFormat(1, FillColor: CellColor.FromArgb(4, 5, 6));
+        var shifted = new ChartSeriesFormat(2, FillColor: CellColor.FromArgb(7, 8, 9));
+        chart.SeriesFormats.AddRange([first, removed, shifted]);
+        var original = chart.SeriesFormats;
+
+        RowColumnShiftHelpers.RemapChartSeriesFormattingForColumnDelete(chart, sheet.Id, start: 3, count: 1);
+
+        chart.SeriesFormats.Should().NotBeSameAs(original);
+        chart.SeriesFormats.Select(format => format.SeriesIndex).Should().Equal(0, 1);
+        chart.SeriesFormats[0].Should().BeSameAs(first);
+        original.Select(format => format.SeriesIndex).Should().Equal(0, 1, 2);
+        original[2].Should().BeSameAs(shifted);
+    }
+
+    [Fact]
+    public void SeriesRemap_SharedCollectionDoesNotLeakIntoAnotherChart()
+    {
+        var (sheet, _, chart) = CreateThreeSeriesChart();
+        var shared = new List<ChartSeriesFormat>
+        {
+            new(0, FillColor: CellColor.FromArgb(1, 2, 3)),
+            new(2, FillColor: CellColor.FromArgb(4, 5, 6))
+        };
+        chart.SeriesFormats = shared;
+        var otherChart = new ChartModel { SeriesFormats = shared };
+
+        RowColumnShiftHelpers.RemapChartSeriesFormattingForColumnInsert(chart, sheet.Id, start: 3, count: 1);
+
+        chart.SeriesFormats.Should().NotBeSameAs(shared);
+        chart.SeriesFormats.Select(format => format.SeriesIndex).Should().Equal(0, 3);
+        otherChart.SeriesFormats.Should().BeSameAs(shared);
+        shared.Select(format => format.SeriesIndex).Should().Equal(0, 2);
+    }
 }
