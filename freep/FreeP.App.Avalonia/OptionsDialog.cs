@@ -110,7 +110,7 @@ internal sealed partial class OptionsDialog : FreePDialogWindow
             legalNotices,
             DialogChromeStyle,
             minWidth: OptionsDialogPlanner.ActionButtonWidth);
-        legalNotices.Click += async (_, _) => await new LegalNoticesDialog().ShowDialog(this);
+        legalNotices.Click += (_, _) => ShowLegalNoticesGuarded();
 
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
             [legalNotices, ok, cancel],
@@ -125,6 +125,19 @@ internal sealed partial class OptionsDialog : FreePDialogWindow
         root.Children.Add(_status);
         root.Children.Add(buttons);
         return root;
+    }
+
+    private async void ShowLegalNoticesGuarded()
+    {
+        try
+        {
+            await new LegalNoticesDialog().ShowDialog(this);
+        }
+        catch (Exception exception)
+        {
+            _status.Text = exception.Message;
+            _status.IsVisible = true;
+        }
     }
 
     private void Accept()

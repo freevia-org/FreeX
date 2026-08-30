@@ -918,23 +918,23 @@ public sealed partial class MainWindow : Window,
         RegisterStartupOpenedObservation();
         if (startupOpenResult is not null || additionalStartupEntries.Length > 0)
         {
-            Opened += async (_, _) =>
+            Opened += (_, _) => RunGuarded(async () =>
             {
                 if (startupOpenResult is not null)
                     await startupOpenSession.ReportFeedbackAsync(startupOpenResult);
                 await OpenAdditionalStartupPresentationsAsync(additionalStartupEntries);
-            };
+            }, "Open startup presentations");
         }
 
         // Start autosave once the window is shown; offer recovery on first open. Windows opened BY
         // the recovery loop pass suppressStartupRecoveryOffer:true so they do not re-prompt for the
         // very candidates the opening window is already working through.
-        Opened += async (_, _) =>
+        Opened += (_, _) => RunGuarded(async () =>
         {
             _autosave.Start();
             if (!suppressStartupRecoveryOffer)
                 await _autosave.OfferRecoveryAsync(this);
-        };
+        }, "Start recovery");
 
         if (_nativeOutputCapabilityDetector is not null)
             Opened += (_, _) => StartNativeOutputCapabilityDetection();
@@ -1369,8 +1369,9 @@ public sealed partial class MainWindow : Window,
             Margin = new Thickness(0, 16, 0, 0),
             IsEnabled = false,
         };
-        _printOptionsPaneExecuteButton.Click += async (_, _) =>
-            await ExecutePrintWorkflowAsync(_printOptionsPaneRequest);
+        _printOptionsPaneExecuteButton.Click += (_, _) => RunGuarded(
+            () => ExecutePrintWorkflowAsync(_printOptionsPaneRequest),
+            PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PrintSurfacePrintHeading));
 
         var content = new StackPanel
         {
@@ -1824,7 +1825,9 @@ public sealed partial class MainWindow : Window,
             Padding = new Thickness(10, 4),
         };
         _smartArtTextPaneAssistantButton.Click += (_, _) => ToggleSmartArtTextPaneAssistant();
-        _smartArtTextPanePictureButton.Click += async (_, _) => await ReplaceSmartArtTextPanePictureFromFileAsync();
+        _smartArtTextPanePictureButton.Click += (_, _) => RunGuarded(
+            ReplaceSmartArtTextPanePictureFromFileAsync,
+            "Replace SmartArt picture");
         _smartArtTextPaneClearPictureButton.Click += (_, _) => ClearSmartArtTextPanePicture();
         _smartArtTextPaneApplyButton.Click += (_, _) => ApplySmartArtTextPane();
         _smartArtTextPaneCloseButton.Click += (_, _) => HideSmartArtTextPane();
@@ -2688,22 +2691,22 @@ public sealed partial class MainWindow : Window,
             FileCommands = new FreePRibbonFileCommandEndpoints
             {
                 New = FileNew,
-                Open = () => _ = FileOpenAsync(),
-                Save = () => _ = FileSaveAsync(),
-                SaveAs = () => _ = FileSaveAsAsync(),
-                ExportPdf = () => _ = FileExportPdfAsync(),
-                ExportNotesPagePdf = () => _ = FileExportNotesPagePdfAsync(),
-                ExportImages = () => _ = FileExportImagesAsync(),
+                Open = () => RunGuarded(async () => await FileOpenAsync(), "Open"),
+                Save = () => RunGuarded(async () => await FileSaveAsync(), "Save"),
+                SaveAs = () => RunGuarded(async () => await FileSaveAsAsync(), "Save As"),
+                ExportPdf = () => RunGuarded(async () => await FileExportPdfAsync(), "Export PDF"),
+                ExportNotesPagePdf = () => RunGuarded(async () => await FileExportNotesPagePdfAsync(), "Export notes PDF"),
+                ExportImages = () => RunGuarded(async () => await FileExportImagesAsync(), "Export images"),
                 Print = () =>
                 {
                     RefreshHandoutLayoutPlan();
                     ShowPrintBackstage();
                 },
-                ExportVideo = () => _ = FileExportVideoAsync(),
+                ExportVideo = () => RunGuarded(async () => await FileExportVideoAsync(), "Export video"),
             },
             OleCommands = new FreePRibbonOleCommandEndpoints
             {
-                InsertEmbeddedObject = () => _ = InsertEmbeddedObjectFromFileAsync(),
+                InsertEmbeddedObject = () => RunGuarded(InsertEmbeddedObjectFromFileAsync, "Insert object"),
                 TryOpenInlineEmbeddedObject = () => _textEditor?.TryActivateInlineOleObject() == true,
                 TryOpenSelectedEmbeddedObject = ole =>
                 {
@@ -2713,12 +2716,14 @@ public sealed partial class MainWindow : Window,
             },
             SupportCommands = new FreePRibbonSupportCommandEndpoints
             {
-                OpenHelpOnline = () => _ = OpenSupportUriAsync(FreePProductInfo.HelpUrl, "FreeP Help"),
-                OpenFeedback = () => _ = OpenSupportUriAsync(
+                OpenHelpOnline = () => RunGuarded(
+                    () => OpenSupportUriAsync(FreePProductInfo.HelpUrl, "FreeP Help"),
+                    "FreeP Help"),
+                OpenFeedback = () => RunGuarded(() => OpenSupportUriAsync(
                     FreePProductInfo.CreateFeedbackUrl(typeof(MainWindow).Assembly),
-                    "FreeP Feedback"),
-                CopyDiagnostics = () => _ = CopySupportDiagnosticsAsync(),
-                TestCrashReporting = () => _ = ShowCrashAnalyticsTestResultAsync(),
+                    "FreeP Feedback"), "FreeP Feedback"),
+                CopyDiagnostics = () => RunGuarded(CopySupportDiagnosticsAsync, "Copy Diagnostics"),
+                TestCrashReporting = () => RunGuarded(ShowCrashAnalyticsTestResultAsync, "Test Crash Reporting"),
             },
         });
 
@@ -3513,7 +3518,7 @@ public sealed partial class MainWindow : Window,
 
 
 
-    private void FileNew() => _ = FileNewAsync();
+    private void FileNew() => RunGuarded(async () => await FileNewAsync(), "New");
 
 
     private async Task<bool> FileNewAsync() =>
@@ -3527,19 +3532,19 @@ public sealed partial class MainWindow : Window,
         GetRecentEntries: () => _fileSession.RecentEntries,
         GetCurrentOptions: () => _options,
         GetDataFolder: () => FreePApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath),
-        OpenOptions: () => _ = OpenOptionsAsync(),
+        OpenOptions: () => RunGuarded(OpenOptionsAsync, "Options"),
         New: FileNew,
-        Open: () => _ = FileOpenAsync(),
+        Open: () => RunGuarded(async () => await FileOpenAsync(), "Open"),
         OpenPath: OpenRecentPath,
-        RecoverUnsaved: () => _ = _autosave.RecoverUnsavedPresentationsAsync(this),
-        Save: () => _ = FileSaveAsync(),
-        SaveAs: () => _ = FileSaveAsAsync(),
-        ExportPdf: () => _ = FileExportPdfAsync(),
-        ExportNotesPagePdf: () => _ = FileExportNotesPagePdfAsync(),
-        ExportImages: () => _ = FileExportImagesAsync(),
+        RecoverUnsaved: () => RunGuarded(() => _autosave.RecoverUnsavedPresentationsAsync(this), "Recover unsaved presentations"),
+        Save: () => RunGuarded(async () => await FileSaveAsync(), "Save"),
+        SaveAs: () => RunGuarded(async () => await FileSaveAsAsync(), "Save As"),
+        ExportPdf: () => RunGuarded(async () => await FileExportPdfAsync(), "Export PDF"),
+        ExportNotesPagePdf: () => RunGuarded(async () => await FileExportNotesPagePdfAsync(), "Export notes PDF"),
+        ExportImages: () => RunGuarded(async () => await FileExportImagesAsync(), "Export images"),
         GetPrintPlan: RefreshPrintBackstagePlan,
         Print: request => _backstagePrintOperation = ExecutePrintWorkflowAsync(request),
-        ExportVideo: () => _ = FileExportVideoAsync(),
+        ExportVideo: () => RunGuarded(async () => await FileExportVideoAsync(), "Export video"),
         CanExportVideo: () => _fileSession.CanExportVideo)
     {
         Close = Close,
@@ -3573,7 +3578,8 @@ public sealed partial class MainWindow : Window,
         (target is { IsVisible: true, Focusable: true } ? target : _slideCanvas).Focus();
     }
 
-    private void OpenRecentPath(string path) => _ = OpenRecentPathAsync(path);
+    private void OpenRecentPath(string path) =>
+        RunGuarded(async () => await OpenRecentPathAsync(path), "Open recent presentation");
 
     private async Task<bool> OpenRecentPathAsync(string path) =>
         (await _fileSession.OpenRecentPathAsync(path)).Succeeded;
@@ -5166,7 +5172,9 @@ public sealed partial class MainWindow : Window,
                 controls.EditMotionPath.Descriptor.Label,
                 controls.EditMotionPath.IsEnabled,
                 controls.EditMotionPath.ToolTip,
-                () => _ = OpenMotionPathEditorAsync(item.Index))
+                () => RunGuarded(
+                    () => OpenMotionPathEditorAsync(item.Index),
+                    "Edit motion path"))
             : null;
         var actionPanel = new StackPanel
         {
@@ -6640,7 +6648,7 @@ public sealed partial class MainWindow : Window,
     }
 
 
-    private static void AddContextMenuEntries(
+    private void AddContextMenuEntries(
         ContextMenu menu,
         IReadOnlyList<FreePContextMenuEntryPlan> entries,
         Func<FreePContextMenuCommand, Task> execute)
@@ -6662,16 +6670,15 @@ public sealed partial class MainWindow : Window,
             };
             if (entry.IsCheckable)
                 item.ToggleType = MenuItemToggleType.CheckBox;
-            // This lambda is `async void`, so `execute` must never throw — callers pass the guarded
-            // ApplyContextMenuCommandGuardedAsync for exactly that reason.
-            item.Click += async (_, _) => await execute(entry.Command!.Value);
+            item.Click += (_, _) => RunGuarded(
+                () => execute(entry.Command!.Value),
+                UiText.Get("Shell_Command_SlidePane"));
             menu.Items.Add(item);
         }
     }
 
     /// <summary>
-    /// Guarded wrapper the slide-pane context menu is wired to. The menu item's Click handler is an
-    /// <c>async void</c> lambda, and the command path below genuinely throws: an
+    /// Guarded wrapper the slide-pane context menu is wired to. The command path below genuinely throws: an
     /// <see cref="ArgumentOutOfRangeException"/> for an unmapped command, and a <c>.Single()</c> over
     /// the planner's actions that fails when the requested kind is not present exactly once. Without
     /// this, right-clicking a slide or section in an edge-case state terminated the process.

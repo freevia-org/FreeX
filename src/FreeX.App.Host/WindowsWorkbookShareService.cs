@@ -49,28 +49,51 @@ public sealed class WindowsWorkbookShareService : IWorkbookShareService
         TypedEventHandler<DataTransferManager, DataRequestedEventArgs>? handler = null;
         handler = async (_, args) =>
         {
-            if (handler is not null)
-                manager.DataRequested -= handler;
-
-            var request = args.Request;
-            var deferral = request.GetDeferral();
             try
             {
-                var storageFile = await StorageFile.GetFileFromPathAsync(filePath);
-                request.Data.Properties.Title = string.IsNullOrWhiteSpace(workbookName)
-                    ? Path.GetFileName(filePath)
-                    : workbookName;
-                request.Data.Properties.Description = UiText.Get("WindowsShare_WorkbookDescription");
-                request.Data.SetStorageItems([storageFile]);
-                request.Data.RequestedOperation = DataPackageOperation.Copy;
+                if (handler is not null)
+                    manager.DataRequested -= handler;
+
+                var request = args.Request;
+                var deferral = request.GetDeferral();
+                try
+                {
+                    var storageFile = await StorageFile.GetFileFromPathAsync(filePath);
+                    request.Data.Properties.Title = string.IsNullOrWhiteSpace(workbookName)
+                        ? Path.GetFileName(filePath)
+                        : workbookName;
+                    request.Data.Properties.Description = UiText.Get("WindowsShare_WorkbookDescription");
+                    request.Data.SetStorageItems([storageFile]);
+                    request.Data.RequestedOperation = DataPackageOperation.Copy;
+                }
+                catch
+                {
+                    try
+                    {
+                        request.FailWithDisplayText(UiText.Get("WindowsShare_PrepareFailedMessage"));
+                    }
+                    catch
+                    {
+                        // The Windows share broker may already have closed the request. The event is
+                        // async void, so reporting failure must remain best-effort as well.
+                    }
+                }
+                finally
+                {
+                    try
+                    {
+                        deferral.Complete();
+                    }
+                    catch
+                    {
+                        // A dismissed or disconnected share broker can reject a late completion.
+                    }
+                }
             }
             catch
             {
-                request.FailWithDisplayText(UiText.Get("WindowsShare_PrepareFailedMessage"));
-            }
-            finally
-            {
-                deferral.Complete();
+                // DataRequested is a WinRT async-void boundary. Contain failures that occur before
+                // a deferral exists (including broker teardown and handler removal races).
             }
         };
         manager.DataRequested += handler;

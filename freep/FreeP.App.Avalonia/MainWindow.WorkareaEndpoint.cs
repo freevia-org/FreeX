@@ -49,9 +49,9 @@ public sealed partial class MainWindow
             NativeCommands = new PresentationWorkareaNativeCommandEndpoints
             {
                 NewPresentation = FileNew,
-                OpenPresentation = () => _ = FileOpenAsync(),
-                SavePresentation = () => _ = FileSaveAsync(),
-                SavePresentationAs = () => _ = FileSaveAsAsync(),
+                OpenPresentation = () => RunGuarded(async () => await FileOpenAsync(), "Open"),
+                SavePresentation = () => RunGuarded(async () => await FileSaveAsync(), "Save"),
+                SavePresentationAs = () => RunGuarded(async () => await FileSaveAsAsync(), "Save As"),
                 PrintPresentation = ShowPrintBackstage,
                 StartSlideShowFromBeginning = () => StartSlideShow(true),
                 StartSlideShowFromCurrentSlide = () => StartSlideShow(false),

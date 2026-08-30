@@ -864,9 +864,8 @@ public static class RibbonWpfRenderer
 
     /// <summary>
     /// Invokes a ribbon command from a WPF event handler, containing anything it throws.
-    /// The hosts' DispatcherUnhandledException handler records the fault but never sets
-    /// <c>Handled</c>, so without this an exception from any one of the several hundred registered
-    /// command delegates terminates the whole app rather than failing that single ribbon action.
+    /// Catching at this boundary records the command id and avoids unwinding the routed event.
+    /// The host dispatcher handler remains only a final safety net for unguarded UI callbacks.
     /// </summary>
     private static void ExecuteGuarded(IRibbonCommand command, RibbonCommandId commandId, RibbonCommandContext context)
     {

@@ -25,6 +25,41 @@ public sealed class R145_RibbonCommandHandlersUseRunGuardedTests
     private static readonly Regex BareFireAndForgetAsync =
         new(@"_\s*=\s*[A-Za-z_][A-Za-z0-9_]*Async\(", RegexOptions.Compiled);
 
+    private static readonly Regex DirectAsyncClickHandler =
+        new(@"\.Click\s*\+=\s*async\b", RegexOptions.Compiled);
+
+    [Fact]
+    public void AvaloniaClickHandlers_DoNotUseDirectAsyncVoidLambdas()
+    {
+        var sourceDirectory = Path.GetDirectoryName(
+            RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"))!;
+        var offenders = Directory
+            .EnumerateFiles(sourceDirectory, "*.cs", SearchOption.AllDirectories)
+            .SelectMany(path => File.ReadLines(path)
+                .Select((line, index) => new { Path = path, Line = line, Number = index + 1 }))
+            .Where(candidate => DirectAsyncClickHandler.IsMatch(candidate.Line))
+            .Select(candidate => $"{Path.GetFileName(candidate.Path)}:{candidate.Number}: {candidate.Line.Trim()}")
+            .ToList();
+
+        offenders.Should().BeEmpty(
+            "Avalonia Click delegates are void-returning, so direct async lambdas let faults escape " +
+            "to the dispatcher; route the Task through RunGuarded instead. Offenders:\n" +
+            string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void ClipboardToolbarHandlers_RouteThroughRunGuarded()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().MatchRegex(
+            @"private void CopyButton_Click\(object\? sender, RoutedEventArgs e\) =>\r?\n\s*RunGuarded\(CopySelectedRangeToClipboardAsync\);");
+        source.Should().MatchRegex(
+            @"private void PasteButton_Click\(object\? sender, RoutedEventArgs e\) =>\r?\n\s*RunGuarded\(PasteClipboardTextAsync\);");
+        source.Should().NotContain("private async void CopyButton_Click");
+        source.Should().NotContain("private async void PasteButton_Click");
+    }
+
     [Fact]
     public void MainWindow_RibbonAndMenuHandlers_DoNotBareFireAndForgetAsyncCalls()
     {

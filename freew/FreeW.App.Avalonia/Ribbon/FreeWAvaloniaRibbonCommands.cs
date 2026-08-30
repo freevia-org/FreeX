@@ -519,7 +519,7 @@ internal static class FreeWAvaloniaRibbonCommands
         FreeWRibbonHostExecutionPorts callbacks,
         bool footer) =>
         callbacks.AskHeaderFooterText is { } ask
-            ? new ActionRibbonCommand(() => _ = ApplyHeaderFooterTextAsync(editor, ask, footer))
+            ? new ActionRibbonCommand(() => _ = ApplyHeaderFooterTextGuardedAsync(editor, ask, footer))
             : new ActionRibbonCommand(footer ? editor.EnsureFooter : editor.EnsureHeader);
 
     private static async Task ApplyHeaderFooterTextAsync(
@@ -533,6 +533,24 @@ internal static class FreeWAvaloniaRibbonCommands
             return;
 
         editor.ApplyHeaderFooterText(footer, result);
+    }
+
+    private static async Task ApplyHeaderFooterTextGuardedAsync(
+        DocumentView editor,
+        Func<bool, string, Task<string?>> ask,
+        bool footer)
+    {
+        try
+        {
+            await ApplyHeaderFooterTextAsync(editor, ask, footer);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // The ribbon command port is synchronous; contain failures from its async host prompt.
+        }
     }
 
     private static void ExecutePageNumberFormat(

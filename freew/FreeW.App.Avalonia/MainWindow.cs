@@ -330,16 +330,16 @@ public sealed partial class MainWindow : Window
             policyText: FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get));
         _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
             NewDocument: NewDocument,
-            OpenDocument: () => _ = OpenAsync(),
-            SaveDocument: () => _ = SaveAsync(),
-            SaveDocumentAs: () => _ = SaveAsAsync(),
-            PrintDocument: () => _ = PrintAsync(),
+            OpenDocument: () => RunUiTask(OpenAsync),
+            SaveDocument: () => RunUiTask(SaveAsync),
+            SaveDocumentAs: () => RunUiTask(SaveAsAsync),
+            PrintDocument: () => RunUiTask(PrintAsync),
             Find: () => OpenFindReplaceDialog(FindReplaceOpenMode.Find),
             Replace: () => OpenFindReplaceDialog(FindReplaceOpenMode.Replace),
-            Cut: () => _ = CutAsync(),
-            Copy: () => _ = CopyAsync(),
-            Paste: () => _ = PasteAsync(),
-            PasteTextOnly: () => _ = PastePlainTextAsync(),
+            Cut: () => RunUiTask(CutAsync),
+            Copy: () => RunUiTask(() => CopyAsync()),
+            Paste: () => RunUiTask(PasteAsync),
+            PasteTextOnly: () => RunUiTask(PastePlainTextAsync),
             SelectAll: () => ResolveActiveDocumentEditor().SelectAll(),
             Undo: () => ResolveHistoryDocumentEditor().Undo(),
             Redo: () => ResolveHistoryDocumentEditor().Redo(),
@@ -504,14 +504,30 @@ public sealed partial class MainWindow : Window
         // candidates this window's call is already working through.
         Opened += async (_, _) =>
         {
-            _autosave.Start();
-            // r148-startup-fileopen: deferred to Opened (not shown synchronously in the constructor)
-            // for the same reason the recovery offer below is -- AvaloniaUserMessageDialog.ShowDialog
-            // needs an owner window that is already shown.
-            await ShowStartupOpenFailureIfAnyAsync();
-            if (!suppressStartupRecoveryOffer)
-                await _autosave.OfferRecoveryAsync(this);
-            await RefreshPrinterDiscoveryAsync();
+            try
+            {
+                _autosave.Start();
+                // r148-startup-fileopen: deferred to Opened (not shown synchronously in the constructor)
+                // for the same reason the recovery offer below is -- AvaloniaUserMessageDialog.ShowDialog
+                // needs an owner window that is already shown.
+                await ShowStartupOpenFailureIfAnyAsync();
+                if (!suppressStartupRecoveryOffer)
+                    await _autosave.OfferRecoveryAsync(this);
+                await RefreshPrinterDiscoveryAsync();
+            }
+            catch (OperationCanceledException)
+            {
+                // The owner can close while a startup/recovery dialog is active.
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // Opened is an async-void event boundary. Recovery/picker infrastructure is
+                // best-effort startup work and must not tear down an otherwise usable editor.
+                _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                    FileText,
+                    UiText.Get("Operation_Startup"),
+                    ex.Message);
+            }
         };
 
         // shared-startup-args F1: opens every startup file argument beyond the first (already opened
@@ -2075,16 +2091,16 @@ public sealed partial class MainWindow : Window
         var callbacks = new FreeWRibbonHostExecutionPorts(
             Open: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
             Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
-            ImportPdfText: () => _ = ImportPdfTextAsync(),
+            ImportPdfText: () => RunUiTask(ImportPdfTextAsync),
             Cut: () => _applicationCommands.Execute(FreeWKeyboardCommand.Cut),
             Copy: () => _applicationCommands.Execute(FreeWKeyboardCommand.Copy),
             Paste: () => _applicationCommands.Execute(FreeWKeyboardCommand.Paste),
             PastePlainText: () => _applicationCommands.Execute(FreeWKeyboardCommand.PasteTextOnly),
-            PasteMergeFormatting: () => _ = PasteMergeFormattingAsync(),
-            OpenPasteSpecial: () => _ = OpenPasteSpecialAsync(),
-            OpenNewStyleDialog: () => _ = StyleDialog.ShowNewAndApplyAsync(this, _editor),
-            OpenManageStylesDialog: () => _ = ManageStylesDialog.ShowAndApplyAsync(this, _editor),
-            Backstage: () => _ = ShowBackstageAsync(),
+            PasteMergeFormatting: () => RunUiTask(PasteMergeFormattingAsync),
+            OpenPasteSpecial: () => RunUiTask(OpenPasteSpecialAsync),
+            OpenNewStyleDialog: () => RunUiTask(() => StyleDialog.ShowNewAndApplyAsync(this, _editor)),
+            OpenManageStylesDialog: () => RunUiTask(() => ManageStylesDialog.ShowAndApplyAsync(this, _editor)),
+            Backstage: () => RunUiTask(ShowBackstageAsync),
             NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
             ToggleNavigationPane: ToggleNavigationPane,
             ToggleSelectionPane: ToggleSelectionPane,
@@ -2104,81 +2120,81 @@ public sealed partial class MainWindow : Window
             IsReviewingPaneVisible: () => _reviewingPane.IsVisible,
             SetOutlineView: ToggleOutlineView,
             IsOutlineViewActive: () => _outlineMode,
-            OpenFontDialog:      () => _ = OpenFontDialogAsync(),
-            OpenChangeCaseDialog: () => _ = OpenChangeCaseDialogAsync(),
-            OpenParagraphDialog: () => _ = OpenParagraphDialogAsync(),
-            OpenPageSetupDialog: () => _ = OpenPageSetupDialogAsync(),
-            OpenCustomMarginsDialog: () => _ = OpenPageSetupDialogAsync(PageSetupDialogTab.Margins),
-            OpenMorePaperSizesDialog: () => _ = OpenPageSetupDialogAsync(PageSetupDialogTab.Paper),
-            OpenColumnsDialog: () => _ = OpenColumnsDialogAsync(),
-            OpenCustomParagraphSpacingDialog: () => _ = OpenCustomParagraphSpacingDialogAsync(),
-            OpenDropCapOptionsDialog: () => _ = OpenDropCapOptionsDialogAsync(),
-            OpenHyphenationOptionsDialog: () => _ = OpenHyphenationOptionsDialogAsync(),
-            OpenManualHyphenationDialog: () => _ = OpenManualHyphenationDialogAsync(),
-            OpenLineNumberOptionsDialog: () => _ = OpenLineNumberOptionsDialogAsync(),
-            OpenPageNumberFormatDialog: () => _ = OpenPageNumberFormatDialogAsync(),
+            OpenFontDialog:      () => RunUiTask(OpenFontDialogAsync),
+            OpenChangeCaseDialog: () => RunUiTask(OpenChangeCaseDialogAsync),
+            OpenParagraphDialog: () => RunUiTask(OpenParagraphDialogAsync),
+            OpenPageSetupDialog: () => RunUiTask(() => OpenPageSetupDialogAsync()),
+            OpenCustomMarginsDialog: () => RunUiTask(() => OpenPageSetupDialogAsync(PageSetupDialogTab.Margins)),
+            OpenMorePaperSizesDialog: () => RunUiTask(() => OpenPageSetupDialogAsync(PageSetupDialogTab.Paper)),
+            OpenColumnsDialog: () => RunUiTask(OpenColumnsDialogAsync),
+            OpenCustomParagraphSpacingDialog: () => RunUiTask(OpenCustomParagraphSpacingDialogAsync),
+            OpenDropCapOptionsDialog: () => RunUiTask(OpenDropCapOptionsDialogAsync),
+            OpenHyphenationOptionsDialog: () => RunUiTask(OpenHyphenationOptionsDialogAsync),
+            OpenManualHyphenationDialog: () => RunUiTask(OpenManualHyphenationDialogAsync),
+            OpenLineNumberOptionsDialog: () => RunUiTask(OpenLineNumberOptionsDialogAsync),
+            OpenPageNumberFormatDialog: () => RunUiTask(OpenPageNumberFormatDialogAsync),
             AskHeaderFooterText: _askHeaderFooterText ??
                 ((footer, initial) => HeaderFooterTextDialog.ShowAsync(this, footer, initial)),
             ShowImageCropDialogAsync: ShowImageCropDialogAsync,
-            OpenImageSizeDialog: () => _ = OpenImageSizeDialogAsync(),
-            OpenImageAltTextDialog: () => _ = OpenImageAltTextDialogAsync(),
-            OpenImageBorderDialog: () => _ = OpenImageBorderDialogAsync(),
-            OpenImageAdjustDialog: () => _ = OpenImageAdjustDialogAsync(),
-            OpenImagePositionDialog: () => _ = OpenImagePositionDialogAsync(),
-            OpenShapePositionDialog: () => _ = OpenShapePositionDialogAsync(),
-            OpenShapeSizeDialog: () => _ = OpenShapeSizeDialogAsync(),
-            OpenShapeAltTextDialog: () => _ = OpenShapeAltTextDialogAsync(),
-            OpenInsertChartDialog: () => _ = OpenInsertChartDialogAsync(),
+            OpenImageSizeDialog: () => RunUiTask(OpenImageSizeDialogAsync),
+            OpenImageAltTextDialog: () => RunUiTask(OpenImageAltTextDialogAsync),
+            OpenImageBorderDialog: () => RunUiTask(OpenImageBorderDialogAsync),
+            OpenImageAdjustDialog: () => RunUiTask(OpenImageAdjustDialogAsync),
+            OpenImagePositionDialog: () => RunUiTask(OpenImagePositionDialogAsync),
+            OpenShapePositionDialog: () => RunUiTask(OpenShapePositionDialogAsync),
+            OpenShapeSizeDialog: () => RunUiTask(OpenShapeSizeDialogAsync),
+            OpenShapeAltTextDialog: () => RunUiTask(OpenShapeAltTextDialogAsync),
+            OpenInsertChartDialog: () => RunUiTask(OpenInsertChartDialogAsync),
             ShowChartDataDialogAsync: ShowChartDataDialogAsync,
             ShowChartTitleDialogAsync: ShowChartTitleDialogAsync,
             ShowChartAxisTitlesDialogAsync: ShowChartAxisTitlesDialogAsync,
             ShowChartSizeDialogAsync: ShowChartSizeDialogAsync,
-            OpenInsertSmartArtDialog: () => _ = OpenInsertSmartArtDialogAsync(),
-            OpenIconPickerDialog: () => _ = OpenIconPickerDialogAsync(),
-            OpenTextToTableDialog: () => _ = OpenTextToTableDialogAsync(),
+            OpenInsertSmartArtDialog: () => RunUiTask(OpenInsertSmartArtDialogAsync),
+            OpenIconPickerDialog: () => RunUiTask(OpenIconPickerDialogAsync),
+            OpenTextToTableDialog: () => RunUiTask(OpenTextToTableDialogAsync),
             ShowTableToTextDialogAsync: ShowTableToTextDialogAsync,
             ShowSmartArtEditDialogAsync: ShowSmartArtEditDialogAsync,
-            OpenDateTimeDialog: () => _ = OpenDateTimeDialogAsync(),
-            OpenMultilevelListDialog: () => _ = OpenMultilevelListDialogAsync(),
+            OpenDateTimeDialog: () => RunUiTask(OpenDateTimeDialogAsync),
+            OpenMultilevelListDialog: () => RunUiTask(OpenMultilevelListDialogAsync),
             ToggleOrientation:   ToggleOrientation,
             ApplyMarginPreset:   ApplyMarginPreset,
             ApplyPaperSize:      ApplyPaperSize,
-            InsertPicture:       () => _ = InsertPictureAsync(),
-            InsertObject:        () => _ = InsertEmbeddedObjectAsync(),
-            OpenSymbolPickerDialog: () => _ = OpenSymbolPickerAsync(),
-            CaptureScreenClip: () => _ = InsertScreenClipAsync(),
+            InsertPicture:       () => RunUiTask(InsertPictureAsync),
+            InsertObject:        () => RunUiTask(InsertEmbeddedObjectAsync),
+            OpenSymbolPickerDialog: () => RunUiTask(OpenSymbolPickerAsync),
+            CaptureScreenClip: () => RunUiTask(InsertScreenClipAsync),
             ShowTablePropertiesDialogAsync: ShowTablePropertiesDialogAsync,
             ShowTableFormulaDialogAsync: ShowTableFormulaDialogAsync,
-            OpenWordCountDialog: () => _ = OpenWordCountDialogAsync(),
-            OpenCaptionDialog: () => _ = OpenCaptionDialogAsync(),
-            OpenCaptionDialogForLabel: label => _ = OpenCaptionDialogAsync(label),
-            OpenCrossReferenceDialog: () => _ = OpenCrossReferenceDialogAsync(),
-            OpenCitationDialog: () => _ = OpenCitationDialogAsync(),
-            OpenManageSourcesDialog: () => _ = OpenManageSourcesDialogAsync(),
-            OpenMarkIndexEntryDialog: () => _ = OpenMarkIndexEntryDialogAsync(),
-            OpenInsertIndexDialog: () => _ = OpenInsertIndexDialogAsync(),
-            OpenUpdateIndexDialog: () => _ = OpenUpdateIndexDialogAsync(),
-            OpenMarkCitationDialog: () => _ = OpenMarkCitationDialogAsync(),
-            OpenFootnoteDialog: () => _ = OpenNoteDialogAsync(footnote: true),
-            OpenEndnoteDialog: () => _ = OpenNoteDialogAsync(footnote: false),
+            OpenWordCountDialog: () => RunUiTask(OpenWordCountDialogAsync),
+            OpenCaptionDialog: () => RunUiTask(() => OpenCaptionDialogAsync()),
+            OpenCaptionDialogForLabel: label => RunUiTask(() => OpenCaptionDialogAsync(label)),
+            OpenCrossReferenceDialog: () => RunUiTask(OpenCrossReferenceDialogAsync),
+            OpenCitationDialog: () => RunUiTask(OpenCitationDialogAsync),
+            OpenManageSourcesDialog: () => RunUiTask(OpenManageSourcesDialogAsync),
+            OpenMarkIndexEntryDialog: () => RunUiTask(OpenMarkIndexEntryDialogAsync),
+            OpenInsertIndexDialog: () => RunUiTask(OpenInsertIndexDialogAsync),
+            OpenUpdateIndexDialog: () => RunUiTask(OpenUpdateIndexDialogAsync),
+            OpenMarkCitationDialog: () => RunUiTask(OpenMarkCitationDialogAsync),
+            OpenFootnoteDialog: () => RunUiTask(() => OpenNoteDialogAsync(footnote: true)),
+            OpenEndnoteDialog: () => RunUiTask(() => OpenNoteDialogAsync(footnote: false)),
             ToggleNotesPane: _notesPane.Toggle,
             IsNotesPaneVisible: () => _notesPane.IsVisible,
-            OpenFootnoteEndnoteOptionsDialog: () => _ = OpenFootnoteEndnoteOptionsDialogAsync(),
-            ShowTableOfAuthoritiesDialog: () => _ = OpenTableOfAuthoritiesDialogAsync(),
+            OpenFootnoteEndnoteOptionsDialog: () => RunUiTask(OpenFootnoteEndnoteOptionsDialogAsync),
+            ShowTableOfAuthoritiesDialog: () => RunUiTask(OpenTableOfAuthoritiesDialogAsync),
             ApplyZoom: (absolute, delta) =>
             {
                 var newScale = absolute.HasValue ? absolute.Value : _zoomScale + delta;
                 ApplyZoom(newScale);
             },
-            OpenTabsDialog: () => _ = OpenTabsDialogAsync(),
-            OpenBordersAndShadingDialog: () => _ = OpenBordersAndShadingDialogAsync(),
-            OpenCharacterBorderDialog: () => _ = OpenCharacterBorderDialogAsync(),
-            OpenCharacterShadingDialog: () => _ = OpenCharacterShadingDialogAsync(),
-            OpenCellShadingDialog: () => _ = OpenCellShadingDialogAsync(),
-            OpenCellBordersDialog: () => _ = OpenCellBordersDialogAsync(),
-            OpenSortDialog: () => _ = OpenSortDialogAsync(),
-            OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
-            OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),
+            OpenTabsDialog: () => RunUiTask(OpenTabsDialogAsync),
+            OpenBordersAndShadingDialog: () => RunUiTask(OpenBordersAndShadingDialogAsync),
+            OpenCharacterBorderDialog: () => RunUiTask(OpenCharacterBorderDialogAsync),
+            OpenCharacterShadingDialog: () => RunUiTask(OpenCharacterShadingDialogAsync),
+            OpenCellShadingDialog: () => RunUiTask(OpenCellShadingDialogAsync),
+            OpenCellBordersDialog: () => RunUiTask(OpenCellBordersDialogAsync),
+            OpenSortDialog: () => RunUiTask(OpenSortDialogAsync),
+            OpenZoomDialog: () => RunUiTask(OpenZoomDialogAsync),
+            OpenPrintPreview: () => RunUiTask(OpenPrintPreviewAsync),
             NewWindow:       OpenNewWindow,
             ArrangeAll:      ArrangeAllWindows,
             SwitchWindows:   ShowDocumentWindowPicker,
@@ -2192,58 +2208,58 @@ public sealed partial class MainWindow : Window
             IsSideToSideActive: () => _viewSession.CurrentDepth.IsSideToSideActive,
             TogglePagedEditView: TogglePagedEditView,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
-            OpenHyperlinkDialog: () => _ = OpenHyperlinkDialogAsync(),
-            OpenEditHyperlinkDialog: () => _ = OpenEditHyperlinkDialogAsync(),
-            OpenHyperlinkTooltipDialog: () => _ = OpenHyperlinkTooltipDialogAsync(),
-            OpenBookmarkDialog:  () => _ = OpenBookmarkDialogAsync(),
-            OpenBookmarkManagerDialog: () => _ = OpenBookmarkManagerDialogAsync(),
-            OpenLinkBookmarkDialog: () => _ = OpenLinkBookmarkDialogAsync(),
-            OpenQuickPartDialog: () => _ = OpenQuickPartDialogAsync(),
-            SaveQuickPartSelection: () => _ = SaveQuickPartSelectionAsync(),
-            OpenBuildingBlocksOrganizer: () => _ = OpenBuildingBlocksOrganizerAsync(),
-            OpenFieldDialog: () => _ = OpenFieldDialogAsync(),
-            OpenDrawTableDialog: () => _ = OpenDrawTableDialogAsync(),
-            OpenSplitCellDialog: () => _ = OpenSplitCellDialogAsync(),
-            InsertTextFromFile:  () => _ = InsertTextFromFileAsync(),
+            OpenHyperlinkDialog: () => RunUiTask(OpenHyperlinkDialogAsync),
+            OpenEditHyperlinkDialog: () => RunUiTask(OpenEditHyperlinkDialogAsync),
+            OpenHyperlinkTooltipDialog: () => RunUiTask(OpenHyperlinkTooltipDialogAsync),
+            OpenBookmarkDialog:  () => RunUiTask(OpenBookmarkDialogAsync),
+            OpenBookmarkManagerDialog: () => RunUiTask(OpenBookmarkManagerDialogAsync),
+            OpenLinkBookmarkDialog: () => RunUiTask(OpenLinkBookmarkDialogAsync),
+            OpenQuickPartDialog: () => RunUiTask(OpenQuickPartDialogAsync),
+            SaveQuickPartSelection: () => RunUiTask(SaveQuickPartSelectionAsync),
+            OpenBuildingBlocksOrganizer: () => RunUiTask(OpenBuildingBlocksOrganizerAsync),
+            OpenFieldDialog: () => RunUiTask(OpenFieldDialogAsync),
+            OpenDrawTableDialog: () => RunUiTask(OpenDrawTableDialogAsync),
+            OpenSplitCellDialog: () => RunUiTask(OpenSplitCellDialogAsync),
+            InsertTextFromFile:  () => RunUiTask(InsertTextFromFileAsync),
             // AV-MAIL: surface mail-merge info messages in the status bar.
             ShowMailMergeInfo: msg => _status.Text = msg,
             OpenMailDraft: target => TryOpenExternalUri(target) == ExternalUriLaunchResult.Launched,
             // AV-DESIGN: Page Borders + Custom Watermark dialog launchers (optional callbacks).
-            OpenPageBordersDialog: () => _ = OpenPageBordersDialogAsync(),
-            OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync(),
-            OpenCustomizeThemeColorsDialog: () => _ = OpenCustomizeThemeColorsDialogAsync(),
-            OpenCustomizeThemeFontsDialog: () => _ = OpenCustomizeThemeFontsDialogAsync(),
-            OpenPageColorDialog: () => _ = OpenPageColorDialogAsync(),
+            OpenPageBordersDialog: () => RunUiTask(OpenPageBordersDialogAsync),
+            OpenWatermarkDialog:   () => RunUiTask(OpenWatermarkDialogAsync),
+            OpenCustomizeThemeColorsDialog: () => RunUiTask(OpenCustomizeThemeColorsDialogAsync),
+            OpenCustomizeThemeFontsDialog: () => RunUiTask(OpenCustomizeThemeFontsDialogAsync),
+            OpenPageColorDialog: () => RunUiTask(OpenPageColorDialogAsync),
             // AV-REVIEW: route ribbon safety/protect commands through the same Backstage flows.
             MarkAsFinal: ToggleMarkAsFinal,
-            RestrictEditing: () => _ = OpenRestrictEditingAsync(),
-            InspectDocument: () => _ = InspectDocumentAsync(),
-            CheckAccessibility: () => _ = CheckAccessibilityAsync(),
-            NewComment: () => _ = NewCommentAsync(),
-            ReplyComment: () => _ = ReplyToCommentAsync(),
-            ShowComments: rows => _ = ShowCommentsAsync(rows),
+            RestrictEditing: () => RunUiTask(OpenRestrictEditingAsync),
+            InspectDocument: () => RunUiTask(InspectDocumentAsync),
+            CheckAccessibility: () => RunUiTask(CheckAccessibilityAsync),
+            NewComment: () => RunUiTask(NewCommentAsync),
+            ReplyComment: () => RunUiTask(ReplyToCommentAsync),
+            ShowComments: rows => RunUiTask(() => ShowCommentsAsync(rows)),
             ToggleSpellcheck: ToggleSpellCheck,
             IsSpellcheckActive: () => _editor.SpellCheckEnabled,
             AddToDictionary: AddCurrentWordToDictionary,
             OpenThesaurus: ToggleThesaurusPane,
-            SetProofingLanguage: () => _ = OpenProofingLanguageDialogAsync(),
+            SetProofingLanguage: () => RunUiTask(OpenProofingLanguageDialogAsync),
             ToggleReadAloud: ToggleReadAloud,
             IsReadAloudActive: IsReadAloudActive,
-            CompareDocuments: () => _ = CompareDocumentsAsync(),
-            CombineDocuments: () => _ = CombineDocumentsAsync(),
-            OpenHelpOnline: () => _ = OpenExternalHelpLinkAsync(
+            CompareDocuments: () => RunUiTask(CompareDocumentsAsync),
+            CombineDocuments: () => RunUiTask(CombineDocumentsAsync),
+            OpenHelpOnline: () => RunUiTask(() => OpenExternalHelpLinkAsync(
                 FreeWProductInfo.HelpUrl,
-                FreeWApplicationFrameTextCatalog.HelpOnlineCommandName),
-            OpenFeedback: () => _ = OpenExternalHelpLinkAsync(
+                FreeWApplicationFrameTextCatalog.HelpOnlineCommandName)),
+            OpenFeedback: () => RunUiTask(() => OpenExternalHelpLinkAsync(
                 FreeWProductInfo.CreateFeedbackUrl(typeof(MainWindow).Assembly),
-                FreeWApplicationFrameTextCatalog.FeedbackCommandName),
-            CopyDiagnostics: () => _ = CopyDiagnosticsAsync(),
-            TestCrashReporting: () => _ = TestCrashReportingAsync(),
-            CheckForUpdates: () => _ = OpenExternalHelpLinkAsync(
+                FreeWApplicationFrameTextCatalog.FeedbackCommandName)),
+            CopyDiagnostics: () => RunUiTask(CopyDiagnosticsAsync),
+            TestCrashReporting: () => RunUiTask(TestCrashReportingAsync),
+            CheckForUpdates: () => RunUiTask(() => OpenExternalHelpLinkAsync(
                 FreeWProductInfo.LatestReleaseUrl,
-                FreeWApplicationFrameTextCatalog.CheckForUpdatesCommandName),
-            OpenAbout: () => _ = OpenAboutAsync(),
-            OpenLegalNotices: () => _ = OpenLegalNoticesAsync(),
+                FreeWApplicationFrameTextCatalog.CheckForUpdatesCommandName)),
+            OpenAbout: () => RunUiTask(OpenAboutAsync),
+            OpenLegalNotices: () => RunUiTask(OpenLegalNoticesAsync),
             ToggleReadMode: ToggleReadMode,
             IsReadModeActive: () => _editorInteraction.IsReadModeActive,
             ToggleFocusMode: ToggleFocusMode,
@@ -2259,35 +2275,35 @@ public sealed partial class MainWindow : Window
         _ribbonRegistry = registry;
         _mailMerge = mailMerge;
         registry.Register(new RibbonCommandId("freew.start-mail-merge"),
-            new ActionRibbonCommand(() => _ = OpenStartMailMergeAsync()));
+            new ActionRibbonCommand(() => RunUiTask(OpenStartMailMergeAsync)));
         registry.Register(new RibbonCommandId("freew.merge-envelopes"),
-            new ActionRibbonCommand(() => _ = OpenEnvelopeAsync()));
+            new ActionRibbonCommand(() => RunUiTask(OpenEnvelopeAsync)));
         registry.Register(new RibbonCommandId("freew.merge-labels"),
-            new ActionRibbonCommand(() => _ = OpenLabelsAsync()));
+            new ActionRibbonCommand(() => RunUiTask(OpenLabelsAsync)));
         registry.Register(new RibbonCommandId("freew.merge-data"),
-            new ActionRibbonCommand(() => _ = SelectRecipientsAsync()));
+            new ActionRibbonCommand(() => RunUiTask(SelectRecipientsAsync)));
         registry.Register(new RibbonCommandId("freew.merge-edit-recipients"),
-            new ActionRibbonCommand(() => _ = SelectRecipientsAsync()));
+            new ActionRibbonCommand(() => RunUiTask(SelectRecipientsAsync)));
         registry.Register(new RibbonCommandId("freew.select-recipients"),
-            new ActionRibbonCommand(() => _ = SelectRecipientsAsync()));
+            new ActionRibbonCommand(() => RunUiTask(SelectRecipientsAsync)));
         registry.Register(new RibbonCommandId("freew.merge-field"),
-            new ActionRibbonCommand(() => _ = InsertMergeFieldAsync()));
+            new ActionRibbonCommand(() => RunUiTask(InsertMergeFieldAsync)));
         registry.Register(new RibbonCommandId("freew.merge-match-fields"),
-            new ActionRibbonCommand(() => _ = OpenMatchFieldsAsync()));
+            new ActionRibbonCommand(() => RunUiTask(OpenMatchFieldsAsync)));
         registry.Register(new RibbonCommandId("freew.merge-filter-sort"),
-            new ActionRibbonCommand(() => _ = OpenFilterSortAsync()));
+            new ActionRibbonCommand(() => RunUiTask(OpenFilterSortAsync)));
         registry.Register(new RibbonCommandId("freew.merge-preview"),
-            new ActionRibbonCommand(() => _ = OpenPreviewNavigationAsync()));
+            new ActionRibbonCommand(() => RunUiTask(OpenPreviewNavigationAsync)));
         registry.Register(new RibbonCommandId("freew.merge-finish"),
-            new ActionRibbonCommand(() => _ = OpenFinishMergeAsync()));
+            new ActionRibbonCommand(() => RunUiTask(OpenFinishMergeAsync)));
         registry.Register(new RibbonCommandId("freew.finish-merge"),
-            new ActionRibbonCommand(() => _ = OpenFinishMergeAsync()));
+            new ActionRibbonCommand(() => RunUiTask(OpenFinishMergeAsync)));
         registry.Register(new RibbonCommandId("freew.merge-find-recipient"),
-            new ActionRibbonCommand(() => _ = OpenFindRecipientAsync()));
+            new ActionRibbonCommand(() => RunUiTask(OpenFindRecipientAsync)));
         registry.Register(new RibbonCommandId("freew.merge-check-errors"),
-            new ActionRibbonCommand(() => _ = OpenCheckForErrorsAsync()));
+            new ActionRibbonCommand(() => RunUiTask(OpenCheckForErrorsAsync)));
         registry.Register(new RibbonCommandId("freew.merge-email"),
-            new ActionRibbonCommand(() => _ = PlanEmailMergeAsync()));
+            new ActionRibbonCommand(() => RunUiTask(() => PlanEmailMergeAsync())));
         registry.Register(new RibbonCommandId("freew.merge-rule-if"),
             RuleCommand(MailMergeRuleKind.IfThenElse));
         registry.Register(new RibbonCommandId("freew.merge-rule-skip-record-if"),
@@ -2304,7 +2320,7 @@ public sealed partial class MainWindow : Window
             RuleCommand(MailMergeRuleKind.Ref));
 
         IRibbonCommand RuleCommand(MailMergeRuleKind kind) =>
-            new ActionRibbonCommand(() => _ = InsertMergeRuleAsync(kind));
+            new ActionRibbonCommand(() => RunUiTask(() => InsertMergeRuleAsync(kind)));
         // AV-PICTAB: merge the Table (caret-in-cell) and Floating (picture/drawing selected)
         // contextual triggers so both sets of contextual tabs can surface from one source.
         var contextSource = new CompositeRibbonContextSource(
@@ -2332,7 +2348,7 @@ public sealed partial class MainWindow : Window
                 _editor.Focus();
             },
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
-            onFileTabSelected: () => _ = ShowBackstageAsync(),
+            onFileTabSelected: () => RunUiTask(ShowBackstageAsync),
             // Keep command groups discoverable as the shell narrows: retain the renderer's
             // Full -> compact -> icon-only progression before a group becomes a flyout.
             options: new AvaloniaRibbonRendererOptions(
@@ -2950,7 +2966,7 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetName(percentage, FreeWUiTextCatalog.Zoom);
         ToolTip.SetTip(percentage, FreeWUiTextCatalog.Zoom);
-        percentage.Click += (_, _) => _ = OpenZoomDialogAsync();
+        percentage.Click += (_, _) => RunUiTask(OpenZoomDialogAsync);
         panel.Children.Add(percentage);
         return panel;
     }
@@ -3245,7 +3261,7 @@ public sealed partial class MainWindow : Window
 
         switch (e.Key)
         {
-            case Key.P when (e.KeyModifiers & KeyModifiers.Shift) != 0: _ = ExportPdfAsync(); e.Handled = true; break;
+            case Key.P when (e.KeyModifiers & KeyModifiers.Shift) != 0: RunUiTask(ExportPdfAsync); e.Handled = true; break;
             case Key.OemPlus or Key.Add: ApplyZoom(_zoomScale + 0.1); e.Handled = true; break;
             case Key.OemMinus or Key.Subtract: ApplyZoom(_zoomScale - 0.1); e.Handled = true; break;
             case Key.D0 or Key.NumPad0: ApplyZoom(1.0); e.Handled = true; break;
@@ -3379,7 +3395,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void NewDocument() => _ = NewDocumentAsync();
+    private void NewDocument() => RunUiTask(NewDocumentAsync);
 
     private Task<bool> NewDocumentAsync() => _fileCommands.NewAsync();
 
@@ -3442,6 +3458,35 @@ public sealed partial class MainWindow : Window
         if (result.Status is FreeWClipboardTransferStatus.Unsupported or FreeWClipboardTransferStatus.Failed)
             ApplyClipboardFeedback(result);
         return result;
+    }
+
+    // Ribbon, Backstage, keyboard, and pointer callbacks are synchronous contracts, while many of
+    // their operations show asynchronous native dialogs. Never discard those tasks directly: an
+    // unexpected picker/clipboard/dialog failure would otherwise become an unobserved fault with no
+    // user feedback. This observer itself never faults, so it is safe to fire from any UI callback.
+    private void RunUiTask(Func<Task> operation) => _ = ObserveUiTaskAsync(operation);
+
+    private void RunUiTask<T>(Func<Task<T>> operation) =>
+        RunUiTask(async () => { _ = await operation(); });
+
+    private async Task ObserveUiTaskAsync(Func<Task> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        try
+        {
+            await operation();
+        }
+        catch (OperationCanceledException)
+        {
+            // Closing a picker/dialog is a normal cancellation path.
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                UiText.Get("Operation_Editor"),
+                ex.Message);
+        }
     }
 
     // Guarded: this is an `async void` handler wired to the editor's right-click menu, and its
@@ -3687,7 +3732,7 @@ public sealed partial class MainWindow : Window
         // so this is necessarily fire-and-forget; ShowFileCommandErrorAsync still serializes behind
         // its own owner-window dialog machinery like every other Avalonia alert in this shell.
         if (feedback.ShouldShowError)
-            _ = _fileWorkflow.ShowFileCommandErrorAsync(feedback.ErrorSummary!, feedback.Exception!);
+            RunUiTask(() => _fileWorkflow.ShowFileCommandErrorAsync(feedback.ErrorSummary!, feedback.Exception!));
         return feedback.Succeeded;
     }
 
@@ -4495,39 +4540,39 @@ public sealed partial class MainWindow : Window
             GetIsDirty: () => _fileWorkflow.IsDirty,
 
             NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
-            OpenRecent: path => _ = OpenRecentPathAsync(path),
+            OpenRecent: path => RunUiTask(() => OpenRecentPathAsync(path)),
             OpenFolder: OpenFolderInShell,
             Browse: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
-            RecoverUnsaved: () => _ = _autosave.RecoverUnsavedDocumentsAsync(this),
-            ImportPdfText: () => _ = ImportPdfTextAsync(),
+            RecoverUnsaved: () => RunUiTask(() => _autosave.RecoverUnsavedDocumentsAsync(this)),
+            ImportPdfText: () => RunUiTask(ImportPdfTextAsync),
             Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
             SaveAs: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocumentAs),
             SaveAsFormat: (extension, filterIndex) =>
             {
                 _ = filterIndex;
-                _ = _fileCommands.SaveAsFormatAsync(extension);
+                RunUiTask(() => _fileCommands.SaveAsFormatAsync(extension));
             },
-            SaveCopy: () => _ = SaveCopyAsync(),
+            SaveCopy: () => RunUiTask(SaveCopyAsync),
             OpenContainingFolder: path =>
             {
                 var folder = System.IO.Path.GetDirectoryName(path);
                 if (!string.IsNullOrWhiteSpace(folder))
                     OpenFolderInShell(folder);
             },
-            ExportPdf: () => _ = ExportPdfAsync(),
-            ExportXps: () => _ = ExportXpsAsync(),
-            EditProperties: () => _ = OpenPropertiesAsync(),
+            ExportPdf: () => RunUiTask(ExportPdfAsync),
+            ExportXps: () => RunUiTask(ExportXpsAsync),
+            EditProperties: () => RunUiTask(OpenPropertiesAsync),
             MarkAsFinal: ToggleMarkAsFinal,
-            RestrictEditing: () => _ = OpenRestrictEditingAsync(),
-            InspectDocument: () => _ = InspectDocumentAsync(),
-            CheckAccessibility: () => _ = CheckAccessibilityAsync(),
-            OpenOptions: () => _ = OpenOptionsAsync(),
+            RestrictEditing: () => RunUiTask(OpenRestrictEditingAsync),
+            InspectDocument: () => RunUiTask(InspectDocumentAsync),
+            CheckAccessibility: () => RunUiTask(CheckAccessibilityAsync),
+            OpenOptions: () => RunUiTask(OpenOptionsAsync),
             CloseDocument: Close,
             DirectPrintCapability: DirectPrintCapability,
             Print: DirectPrintCapability.IsAvailable
                 ? () => _applicationCommands.Execute(FreeWKeyboardCommand.PrintDocument)
                 : null,
-            PrintPreview: () => _ = OpenPrintPreviewAsync());
+            PrintPreview: () => RunUiTask(OpenPrintPreviewAsync));
 
     private async Task SaveCopyAsync() => await _fileCommands.SaveCopyAsync();
 

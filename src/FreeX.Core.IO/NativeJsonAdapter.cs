@@ -148,7 +148,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             // picture it had before saving, instead of treating every column as unfiltered.
             foreach (var entry in (sDto.ActiveValueFilterColumns ?? []).OfType<UIntStringListDto>())
                 if (NativeJsonValueSanitizer.IsValidColumnIndex(entry.Index))
-                    sheet.ActiveValueFilterColumns[entry.Index] = [.. entry.Values];
+                    sheet.ActiveValueFilterColumns[entry.Index] = [.. (entry.Values ?? [])];
             foreach (var row in sDto.ValueFilterHiddenRows ?? [])
                 if (NativeJsonValueSanitizer.IsValidRowIndex(row))
                     sheet.ValueFilterHiddenRows.Add(row);
@@ -158,7 +158,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var entry in (sDto.ColumnFilterOwnedRows ?? []).OfType<UIntUintListDto>())
                 if (NativeJsonValueSanitizer.IsValidColumnIndex(entry.Index))
                     sheet.ColumnFilterOwnedRows[entry.Index] =
-                        [.. entry.Values.Where(NativeJsonValueSanitizer.IsValidRowIndex)];
+                        [.. (entry.Values ?? []).Where(NativeJsonValueSanitizer.IsValidRowIndex)];
             foreach (var column in sDto.HiddenCols ?? [])
                 if (NativeJsonValueSanitizer.IsValidColumnIndex(column))
                     sheet.HiddenCols.Add(column);

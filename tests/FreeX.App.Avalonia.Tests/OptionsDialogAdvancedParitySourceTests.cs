@@ -135,7 +135,7 @@ public sealed class OptionsDialogAdvancedParitySourceTests
 
         source.Should().Contain("var customizeRibbonImportExportButton = OptionsButton(OptionsText(\"Options_ImportExport\"), width: 130);");
         source.Should().Contain("AutomationProperties.SetAutomationId(customizeRibbonImportExportButton, \"RibbonImportExportButton\");");
-        source.Should().Contain("customizeRibbonImportExportButton.Click += async (_, _) =>");
+        source.Should().Contain("customizeRibbonImportExportButton.Click += (_, _) => RunGuarded");
         source.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(");
         source.Should().Contain("UiText.Get(\"DeferredCommand_RibbonCustomization_Body\")");
         source.Should().Contain("UiText.Get(\"DeferredCommand_RibbonCustomization_Title\")");
@@ -166,7 +166,7 @@ public sealed class OptionsDialogAdvancedParitySourceTests
         source.Should().Contain("var addInsGoButton = OptionsButton(");
         source.Should().Contain("OptionsDialogPlanner.AddInsGoButtonWidth");
         source.Should().Contain("AutomationProperties.SetAutomationId(addInsGoButton, \"AddInsGoButton\")");
-        source.Should().Contain("addInsGoButton.Click += async (_, _) =>");
+        source.Should().Contain("addInsGoButton.Click += (_, _) => RunGuarded");
         source.Should().Contain("UiText.Get(\"DeferredCommand_OfficeAddIns_Body\")");
         source.Should().Contain("UiText.Get(\"DeferredCommand_OfficeAddIns_Title\")");
         source.Should().Contain("addInsPanel.Spacing = 0;");

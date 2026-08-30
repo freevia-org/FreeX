@@ -146,7 +146,8 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void QuickAnalysisMenuItem_MouseLeave(");
 
         quickAnalysisSource.Should().Contain("private void ShowQuickAnalysisMenu(");
-        quickAnalysisSource.Should().Contain("private async void QuickAnalysisMenuItem_Click(");
+        quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_Click(");
+        quickAnalysisSource.Should().Contain("private async Task ExecuteQuickAnalysisAsync(");
         quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_MouseEnter(");
         quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_MouseLeave(");
     }
@@ -184,13 +185,15 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void DataTableBtn_Click(");
         dataSource.Should().NotContain("private void ScenariosBtn_Click(");
 
-        dataSource.Should().Contain("private async void GetDataBtn_Click(");
+        dataSource.Should().Contain("private void GetDataBtn_Click(");
+        dataSource.Should().Contain("private async Task GetDataAsync(");
         dataSource.Should().Contain("private void TextToColumnsBtn_Click(");
         dataSource.Should().Contain("private void AdvancedFilterBtn_Click(");
         dataSource.Should().Contain("private void DataTableBtn_Click(");
         // ScenariosBtn_Click became async in commit ca58f0ab81 (R35 backlog fix wave) so it could
         // await scenario-manager work; the pinned literal was never updated to match.
-        scenarioSource.Should().Contain("private async void ScenariosBtn_Click(");
+        scenarioSource.Should().Contain("private void ScenariosBtn_Click(");
+        scenarioSource.Should().Contain("private async Task ShowScenarioManagerAsync(");
     }
 
     [Fact]
@@ -687,7 +690,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         // File selection remains renderer-owned, while the chosen-path overload delegates to the
         // shared import workflow before applying the destination selection to the renderer.
-        ExtractMethodSource(dataSource, "private async void GetDataBtn_Click(")
+        ExtractMethodSource(dataSource, "private async Task GetDataAsync(")
             .Should()
             .Contain("await ImportDataFromFileAsync(result.FileName!, adapter, ext, format);");
         ExtractMethodSource(dataSource, "private async Task ImportDataFromFileAsync(")

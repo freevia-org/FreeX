@@ -993,7 +993,8 @@ public partial class MainWindow
     // its entries now invoke the underlying commands (RequestNewWorkbookAsync / OpenButton_Click / Close /
     // ShareWorkbookAsync) and pane shows (Show*View) directly. The Blank-workbook tile inside the Home pane
     // still uses this handler.
-    private async void SsBlankWorkbook_Click(object sender, RoutedEventArgs e) => await RequestNewWorkbookAsync();
+    private void SsBlankWorkbook_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("New Workbook", RequestNewWorkbookAsync);
 
     private void RibbonTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -1171,10 +1172,10 @@ public partial class MainWindow
         return true;
     }
 
-    private async void SsRecentItem_Click(object sender, RoutedEventArgs e)
+    private void SsRecentItem_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is RecentFileViewModel vm)
-            await OpenFileAsync(vm.Path);
+            RunGuardedUiCommand("Open Recent Workbook", () => OpenFileAsync(vm.Path));
     }
 
     private void SsPinItem_Click(object sender, RoutedEventArgs e)
@@ -1227,7 +1228,10 @@ public partial class MainWindow
 
     // ─────────────────────────────────────────────────────────────────────────
 
-    private async void OpenButton_Click(object sender, RoutedEventArgs e)
+    private void OpenButton_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Open Workbook", OpenFromBackstageAsync);
+
+    private async Task OpenFromBackstageAsync()
     {
         var plan = WorkbookFilePickerPlanner.BuildOpenDialogPlan(_fileAdapters);
         var result = WpfFileDialogService.ShowOpenDialog(
@@ -1241,7 +1245,10 @@ public partial class MainWindow
             await OpenFileAsync(result.FileName!);
     }
 
-    private async void SaveButton_Click(object sender, RoutedEventArgs e)
+    private void SaveButton_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Save Workbook", SaveFromBackstageAsync);
+
+    private async Task SaveFromBackstageAsync()
     {
         // P2b: Save resolves Save-vs-Save-As through the shared SaveResolvedAsync helper (which routes the
         // existing-path-vs-dialog DECISION through FileLifecyclePlanner.PlanSave), the same path the
@@ -1252,7 +1259,10 @@ public partial class MainWindow
             HideStartScreen();
     }
 
-    private async void SaveAsButton_Click(object sender, RoutedEventArgs e)
+    private void SaveAsButton_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Save Workbook As", SaveAsFromBackstageAsync);
+
+    private async Task SaveAsFromBackstageAsync()
     {
         if (await SaveWorkbookWithDialogAsync())
             HideStartScreen();

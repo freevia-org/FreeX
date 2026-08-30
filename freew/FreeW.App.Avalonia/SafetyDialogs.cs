@@ -172,8 +172,24 @@ internal sealed partial class RestrictEditingDialog : FreeWDialogWindow
 
     private async Task StopProtectionAsync()
     {
-        var outcome = await _session.StopAsync(async (title, prompt) =>
-            await _askPassword(this, title, prompt));
+        RestrictEditingDialogOutcome outcome;
+        try
+        {
+            outcome = await _session.StopAsync(async (title, prompt) =>
+                await _askPassword(this, title, prompt));
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            // This task is awaited by an async-void button handler. Native dialog/credential-provider
+            // failures must stay inside the dialog or Avalonia terminates the process.
+            ShowValidation(ex.Message);
+            return;
+        }
+
         if (outcome.Kind == RestrictEditingDialogOutcomeKind.Cancelled)
             return;
         if (!outcome.IsAccepted)

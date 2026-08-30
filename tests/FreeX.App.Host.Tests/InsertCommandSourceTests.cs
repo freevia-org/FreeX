@@ -78,6 +78,8 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("new SetHyperlinkCommand(");
         insertSource.Should().Contain("new HyperlinkMetadata(");
         insertSource.Should().Contain("dialog.Result.LinkType,");
+        insertSource.Should().Contain("RunGuardedUiCommand(\"Open Hyperlink Workbook\", () => OpenStartupFileAsync(openablePath));");
+        insertSource.Should().NotContain("_ = OpenStartupFileAsync(openablePath);");
         insertSource.Should().Contain("private void InsertCommentBtn_Click(object sender, RoutedEventArgs e) => ReviewNewThreadedCommentBtn_Click(sender, e);");
         insertSource.Should().Contain("new HeaderFooterDialog(sheet)");
         insertSource.Should().Contain("PageSetupCommandFactory.BuildHeaderFooterCommand(");

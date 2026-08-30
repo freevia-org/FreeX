@@ -45,6 +45,21 @@ public sealed class WatermarkOptionsDialogPolicySourceGuardTests
         source.Should().NotContain("$\"Could not read image file:");
     }
 
+    [Fact]
+    public void WatermarkOptionsDialog_GuardsNativePickerInsideAsyncClickBoundary()
+    {
+        var source = ReadHostSource("WatermarkOptionsDialog.cs");
+        var methodStart = source.IndexOf("private async Task BrowseForImageAsync()", StringComparison.Ordinal);
+        var tryIndex = source.IndexOf("try", methodStart, StringComparison.Ordinal);
+        var pickerIndex = source.IndexOf("WpfFileDialogService.ShowOpenDialog(", methodStart, StringComparison.Ordinal);
+        var catchIndex = source.IndexOf("catch (Exception ex)", methodStart, StringComparison.Ordinal);
+
+        methodStart.Should().BeGreaterThanOrEqualTo(0);
+        tryIndex.Should().BeGreaterThan(methodStart);
+        pickerIndex.Should().BeGreaterThan(tryIndex);
+        catchIndex.Should().BeGreaterThan(pickerIndex);
+    }
+
     private static string ReadHostSource(string fileName)
     {
         var path = Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Host", fileName);

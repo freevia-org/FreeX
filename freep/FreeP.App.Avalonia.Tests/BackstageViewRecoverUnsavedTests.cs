@@ -25,7 +25,7 @@ public sealed class BackstageViewRecoverUnsavedTests
     {
         var source = TestWorkspaceFileLocator.ReadAllText("freep", "FreeP.App.Avalonia", "MainWindow.cs");
 
-        source.Should().Contain("RecoverUnsaved: () => _ = _autosave.RecoverUnsavedPresentationsAsync(this),");
+        source.Should().Contain("RecoverUnsaved: () => RunGuarded(() => _autosave.RecoverUnsavedPresentationsAsync(this), \"Recover unsaved presentations\"),");
         source.Should().NotContain("RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),",
             "the manual command must no longer reuse the ungated startup offer");
     }

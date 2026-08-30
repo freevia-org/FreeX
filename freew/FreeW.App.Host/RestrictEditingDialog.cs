@@ -133,8 +133,24 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private async Task StopProtectionAsync()
     {
-        var outcome = await _session.StopAsync((title, prompt) =>
-            ValueTask.FromResult(PasswordPromptDialog.Ask(Owner, title, prompt)));
+        RestrictEditingDialogOutcome outcome;
+        try
+        {
+            outcome = await _session.StopAsync((title, prompt) =>
+                ValueTask.FromResult(PasswordPromptDialog.Ask(Owner, title, prompt)));
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            // StopProtectionAsync is awaited by a WPF async-void click handler. Contain failures from
+            // the native password prompt so they do not escape through Dispatcher and close the app.
+            DialogMessageHelper.ShowWarning(this, ex.Message, Title);
+            return;
+        }
+
         if (outcome.Kind == RestrictEditingDialogOutcomeKind.Cancelled)
             return;
         if (!outcome.IsAccepted)

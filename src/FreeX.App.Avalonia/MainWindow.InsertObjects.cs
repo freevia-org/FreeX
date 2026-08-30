@@ -338,7 +338,7 @@ public sealed partial class MainWindow
             IsCancel = true,
         };
         ApplyInsertObjectFixedButtonChrome(cancelButton, CreateTableDialogPlanner.ButtonWidth);
-        okButton.Click += async (_, _) =>
+        okButton.Click += (_, _) => RunGuarded(async () =>
         {
             if (!CreateTableDialogPlanner.TryParse(
                     _session.ActiveSheet.Id,
@@ -359,7 +359,7 @@ public sealed partial class MainWindow
 
             result = parsed;
             dialog.Close();
-        };
+        });
         cancelButton.Click += (_, _) => dialog.Close();
 
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
@@ -453,7 +453,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(cancel, "WfInsertObjectCancelButton");
 
-        browse.Click += async (_, _) =>
+        browse.Click += (_, _) => RunGuarded(async () =>
         {
             chosen = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
                 StorageProvider,
@@ -466,7 +466,7 @@ public sealed partial class MainWindow
                 pathBlock.Text = chosen.Name;
                 insert.IsEnabled = true;
             }
-        };
+        });
 
         var layout = new StackPanel { Margin = new Thickness(16), Spacing = 10, Width = 380 };
         layout.Children.Add(new TextBlock { Text = UiText.Get("WfInsertObject_Heading"), FontWeight = FontWeight.SemiBold });
@@ -491,13 +491,13 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "WfInsertObjectDialog");
 
-        insert.Click += async (_, _) =>
+        insert.Click += (_, _) => RunGuarded(async () =>
         {
             if (chosen is null)
                 return;
             if (await TryInsertObjectAsync(chosen, linkCheck.IsChecked == true))
                 dialog.Close();
-        };
+        });
         cancel.Click += (_, _) => dialog.Close();
 
         var buttons = new StackPanel

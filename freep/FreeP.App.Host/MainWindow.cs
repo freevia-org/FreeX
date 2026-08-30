@@ -1617,7 +1617,9 @@ public sealed partial class MainWindow : Window,
             Padding = new Thickness(10, 4, 10, 4),
         };
         _smartArtTextPaneAssistantButton.Click += (_, _) => ToggleSmartArtTextPaneAssistant();
-        _smartArtTextPanePictureButton.Click += async (_, _) => await ReplaceSmartArtTextPanePictureFromFileAsync();
+        _smartArtTextPanePictureButton.Click += (_, _) => RunGuarded(
+            ReplaceSmartArtTextPanePictureFromFileAsync,
+            "Replace SmartArt picture");
         _smartArtTextPaneClearPictureButton.Click += (_, _) => ClearSmartArtTextPanePicture();
         _smartArtTextPaneApplyButton.Click += (_, _) => ApplySmartArtTextPane();
         _smartArtTextPaneCloseButton.Click += (_, _) => HideSmartArtTextPane();
@@ -3767,12 +3769,16 @@ public sealed partial class MainWindow : Window,
 
     private void PickTransitionSound()
     {
-        _ = ImportPresentationAssetAsync(PresentationAssetImportKind.TransitionSound);
+        RunGuarded(
+            async () => await ImportPresentationAssetAsync(PresentationAssetImportKind.TransitionSound),
+            "Transition sound");
     }
 
     private void InsertEmbeddedObjectFromFile()
     {
-        _ = ImportPresentationAssetAsync(PresentationAssetImportKind.EmbeddedObject);
+        RunGuarded(
+            async () => await ImportPresentationAssetAsync(PresentationAssetImportKind.EmbeddedObject),
+            "Insert object");
     }
 
     private void ShowTablePicker(TableInsertionPickerPlan plan)
@@ -4098,7 +4104,10 @@ public sealed partial class MainWindow : Window,
         }
     }
 
-    internal async void OpenZoomCoverImagePicker()
+    internal void OpenZoomCoverImagePicker() =>
+        RunGuarded(OpenZoomCoverImagePickerCoreAsync, "Zoom cover image");
+
+    private async Task OpenZoomCoverImagePickerCoreAsync()
     {
         var request = _zoomAuthoringSession.BuildSelectedCoverTargetRequest();
         if (request is null)
@@ -4216,7 +4225,7 @@ public sealed partial class MainWindow : Window,
         ExportImages: () => FileExportImages(),
         GetPrintPlan: _fileSession.BuildPrintBackstagePlan,
         Print: request => FilePrint(request),
-        ExportVideo: () => _ = _fileSession.ExportVideoAsync(),
+        ExportVideo: () => RunGuarded(async () => await _fileSession.ExportVideoAsync(), "Export video"),
         CanExportVideo: () => _fileSession.CanExportVideo)
     {
         Close = Close,
