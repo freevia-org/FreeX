@@ -9,7 +9,8 @@ namespace FreeP.App.Compositor;
 public sealed record PresentationNotesPagePdfExportRequest(
     PresentationPrintRequest? PrintRequest = null,
     double? PageWidth = null,
-    double? PageHeight = null);
+    double? PageHeight = null,
+    PresentationNotesPageTextWidthMeasurer? MeasureRunWidth = null);
 
 public sealed record PresentationNotesPagePdfRenderPlan(
     PresentationPrintPlan PrintPlan,
@@ -19,6 +20,21 @@ public sealed record PresentationNotesPagePdfRenderPlan(
 
 /// <summary>Host-supplied writer for a laid-out vector PDF content document.</summary>
 public delegate byte[] PresentationPdfContentWriter(PdfContentDocument document);
+
+/// <summary>
+/// Host-supplied real text measurement for one styled notes run, following the same
+/// caller-supplies-the-platform-capability shape as
+/// <see cref="TextLayoutPlanner.PlanTabLeaderFill"/>'s <c>measureGlyphWidth</c> parameter and
+/// <see cref="TextNativeRenderSequence.RenderTabs{TArtifact}"/>'s <c>format</c> delegate. A host
+/// that can measure real glyphs (e.g. WPF <c>FormattedText.WidthIncludingTrailingWhitespace</c>
+/// or Avalonia's text layout) should supply this so mixed-formatting notes lines position their
+/// later runs where the actual glyphs end. When absent, the exporter falls back to real
+/// Helvetica AFM advance widths for the printable ASCII range -- see
+/// <see cref="PresentationNotesPagePdfExporter"/>'s built-in fallback -- because
+/// <see cref="Free.Shared.Pdf.PortablePdfWriter"/> always renders this text in one of the four
+/// standard Helvetica faces, so that fallback is real per-glyph metrics, not a re-tuned guess.
+/// </summary>
+public delegate double PresentationNotesPageTextWidthMeasurer(string text, PdfFontFace face, double fontSize);
 
 /// <summary>
 /// Shared notes-page PDF rendering for FreeP. Hosts stay responsible for native picker/print
@@ -104,7 +120,8 @@ public static class PresentationNotesPagePdfExporter
                 BuildNotesPages(
                     presentation,
                     emptyPlan,
-                    printPlan.Options.IncludeCommentsAndInkMarkup).ToArray(),
+                    printPlan.Options.IncludeCommentsAndInkMarkup,
+                    request.MeasureRunWidth).ToArray(),
                 PresentationShellTextCatalog.NotesPagePdfPlannedStatus);
         }
 
@@ -119,7 +136,8 @@ public static class PresentationNotesPagePdfExporter
             .SelectMany(plan => BuildNotesPages(
                 presentation,
                 plan,
-                printPlan.Options.IncludeCommentsAndInkMarkup))
+                printPlan.Options.IncludeCommentsAndInkMarkup,
+                request.MeasureRunWidth))
             .ToArray();
         return new PresentationNotesPagePdfRenderPlan(
             printPlan,
@@ -142,7 +160,8 @@ public static class PresentationNotesPagePdfExporter
     private static IEnumerable<PdfContentPage> BuildNotesPages(
         Presentation presentation,
         PresentationNotesPagePreviewPlan plan,
-        bool includeCommentsAndInkMarkup)
+        bool includeCommentsAndInkMarkup,
+        PresentationNotesPageTextWidthMeasurer? measureRunWidth)
     {
         foreach (var renderedPage in plan.RenderPages)
         {
@@ -204,7 +223,7 @@ public static class PresentationNotesPagePdfExporter
                 .Skip(renderedPage.FirstNoteLineIndex)
                 .Take(renderedPage.NoteLineCount)
                 .ToArray();
-            AppendNotesText(ops, textPlan, pageLines, styledPageLines, renderedPage.ShowsPlaceholder);
+            AppendNotesText(ops, textPlan, pageLines, styledPageLines, renderedPage.ShowsPlaceholder, measureRunWidth);
 
             yield return new PdfContentPage(plan.PageBounds.Width, plan.PageBounds.Height, ops);
         }
@@ -220,7 +239,8 @@ public static class PresentationNotesPagePdfExporter
         PresentationNotesPagePreviewPlan plan,
         IReadOnlyList<string> lines,
         IReadOnlyList<PresentationNotesPageNoteLine> styledLines,
-        bool showPlaceholder)
+        bool showPlaceholder,
+        PresentationNotesPageTextWidthMeasurer? measureRunWidth)
     {
         var top = plan.PageBounds.Height - plan.NotesBounds.Top - NotesInset - NotesFontSize;
         var bottom = plan.PageBounds.Height - plan.NotesBounds.Bottom + NotesInset;
@@ -247,7 +267,7 @@ public static class PresentationNotesPagePdfExporter
 
             var line = lines[index];
             if (index < styledLines.Count)
-                AppendStyledLine(ops, plan, y, styledLines[index]);
+                AppendStyledLine(ops, plan, y, styledLines[index], measureRunWidth);
             else
                 AppendPlainLine(ops, plan, y, line);
             y -= NotesLeading;
@@ -273,7 +293,8 @@ public static class PresentationNotesPagePdfExporter
         List<PdfDrawOp> ops,
         PresentationNotesPagePreviewPlan plan,
         double y,
-        PresentationNotesPageNoteLine line)
+        PresentationNotesPageNoteLine line,
+        PresentationNotesPageTextWidthMeasurer? measureRunWidth)
     {
         if (line.Runs.Count == 0)
         {
@@ -287,14 +308,16 @@ public static class PresentationNotesPagePdfExporter
             if (run.Text.Length == 0)
                 continue;
 
+            var face = ResolveNoteRunFace(run);
             ops.Add(new PdfText(
                 x,
                 y,
                 NotesFontSize,
-                ResolveNoteRunFace(run),
+                face,
                 ToPdfColor(run.Color, NotesText),
                 string.IsNullOrWhiteSpace(run.Text) ? " " : run.Text));
-            x += EstimateTextWidth(run.Text, NotesFontSize);
+            x += measureRunWidth?.Invoke(run.Text, face, NotesFontSize)
+                ?? MeasureHelveticaRunWidth(run.Text, face, NotesFontSize);
         }
     }
 
@@ -307,8 +330,101 @@ public static class PresentationNotesPagePdfExporter
             _ => PdfFontFace.Regular,
         };
 
-    private static double EstimateTextWidth(string text, double fontSize) =>
-        text.Length * fontSize * AverageGlyphWidthPerFontSize;
+    // Published Adobe standard-14-font AFM advance widths (in thousandths of an em) for
+    // Helvetica / Helvetica-Bold, indexed by (char - HelveticaTabledFirstChar), covering the
+    // printable WinAnsi/ASCII range 0x20-0x7E. Helvetica-Oblique and Helvetica-BoldOblique share
+    // their upright counterpart's widths (the AFM data defines no separate metrics for the
+    // oblique faces), so only two tables are needed to cover all four PdfFontFace values that
+    // PortablePdfWriter's Helvetica-only backend ever draws. This is the actual per-glyph metric
+    // of the font this exporter renders, not a re-tuned average -- it replaces the flat
+    // character-count estimate that caused runs after a bold/italic word to drift out of place.
+    private const char HelveticaTabledFirstChar = ' ';
+    private const char HelveticaTabledLastChar = '~';
+
+    private static readonly int[] HelveticaRegularAdvanceWidths1000 =
+    {
+        278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278,
+        556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556,
+        1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778,
+        667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556,
+        333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556,
+        556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584,
+    };
+
+    private static readonly int[] HelveticaBoldAdvanceWidths1000 =
+    {
+        278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278,
+        556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611,
+        975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778,
+        667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556,
+        333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611,
+        611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584,
+    };
+
+    /// <summary>
+    /// Real per-glyph Helvetica advance-width measurement used when no host measurer is supplied
+    /// (see <see cref="PresentationNotesPageTextWidthMeasurer"/>). Characters outside the tabled
+    /// printable-ASCII range fall back to the flat average, matching this exporter's prior
+    /// behaviour for that narrow slice of untabled input (e.g. accented or non-Latin notes text).
+    /// </summary>
+    /// <summary>
+    /// r173 remediation: the width the WORD-WRAP side must budget with, so wrapping and rendering
+    /// can never disagree. It takes the wider of the regular and bold advance for every character,
+    /// because the wrap planner concatenates a line's styled runs before breaking it and so does
+    /// not know which face each character will finally be drawn in.
+    ///
+    /// <para>Over-estimating here is the safe direction and is what the wrap planner has always
+    /// wanted (see its own comment): a line that measures a little narrow when rendered merely
+    /// wraps a word early, whereas a line that measures wider than budgeted runs off the page. The
+    /// flat 0.55-per-character average this replaces was NOT safe once the exporter began
+    /// positioning runs by real Helvetica metrics -- a bold capitalised run measures far wider than
+    /// the average, so a line the wrap planner believed fitted could be drawn clean off the sheet.
+    /// </para>
+    /// </summary>
+    internal static double MeasureWidestFaceRunWidth(string text, double fontSize)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 0;
+
+        double total = 0;
+        foreach (var ch in text)
+        {
+            if (ch is >= HelveticaTabledFirstChar and <= HelveticaTabledLastChar)
+            {
+                var index = ch - HelveticaTabledFirstChar;
+                var widest = Math.Max(
+                    HelveticaRegularAdvanceWidths1000[index],
+                    HelveticaBoldAdvanceWidths1000[index]);
+                total += widest * fontSize / 1000.0;
+            }
+            else
+            {
+                total += fontSize * AverageGlyphWidthPerFontSize;
+            }
+        }
+
+        return total;
+    }
+
+    private static double MeasureHelveticaRunWidth(string text, PdfFontFace face, double fontSize)
+    {
+        if (text.Length == 0)
+            return 0;
+
+        var widths = face is PdfFontFace.Bold or PdfFontFace.BoldItalic
+            ? HelveticaBoldAdvanceWidths1000
+            : HelveticaRegularAdvanceWidths1000;
+
+        double total = 0;
+        foreach (var ch in text)
+        {
+            total += ch is >= HelveticaTabledFirstChar and <= HelveticaTabledLastChar
+                ? widths[ch - HelveticaTabledFirstChar] * fontSize / 1000.0
+                : fontSize * AverageGlyphWidthPerFontSize;
+        }
+
+        return total;
+    }
 
     private static PdfColor ToPdfColor(SrgbColor? color, PdfColor fallback) =>
         color is { } value ? new PdfColor(value.R, value.G, value.B) : fallback;

@@ -157,77 +157,35 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         RewriteOperation pasteOp = _transpose
             ? new PasteTransposeOp(clipped.Start.Row, clipped.Start.Col, start.Row, start.Col)
             : new PasteOffsetOp(rowDelta, colDelta);
-        var clone = new ConditionalFormat
-        {
-            AppliesTo = new GridRange(start, end),
-            Priority = source.Priority,
-            RuleType = source.RuleType,
-            Operator = source.Operator,
-            Value1 = source.Value1,
-            Value2 = source.Value2,
-            FormatIfTrue = source.FormatIfTrue?.Clone(),
-            MinColor = source.MinColor,
-            MidColor = source.MidColor,
-            MaxColor = source.MaxColor,
-            MinColorSource = source.MinColorSource,
-            MidColorSource = source.MidColorSource,
-            MaxColorSource = source.MaxColorSource,
-            UseThreeColorScale = source.UseThreeColorScale,
-            MinThresholdType = source.MinThresholdType,
-            MinThresholdValue = RewriteThresholdValue(source.MinThresholdType, source.MinThresholdValue, hostSheetName, pasteOp),
-            MinThresholdGreaterThanOrEqual = source.MinThresholdGreaterThanOrEqual,
-            MidThresholdType = source.MidThresholdType,
-            MidThresholdValue = RewriteThresholdValue(source.MidThresholdType, source.MidThresholdValue, hostSheetName, pasteOp),
-            MidThresholdGreaterThanOrEqual = source.MidThresholdGreaterThanOrEqual,
-            MaxThresholdType = source.MaxThresholdType,
-            MaxThresholdValue = RewriteThresholdValue(source.MaxThresholdType, source.MaxThresholdValue, hostSheetName, pasteOp),
-            MaxThresholdGreaterThanOrEqual = source.MaxThresholdGreaterThanOrEqual,
-            DataBarColor = source.DataBarColor,
-            DataBarColorSource = source.DataBarColorSource,
-            DataBarMinThresholdType = source.DataBarMinThresholdType,
-            DataBarMinThresholdValue = RewriteThresholdValue(source.DataBarMinThresholdType, source.DataBarMinThresholdValue, hostSheetName, pasteOp),
-            DataBarMaxThresholdType = source.DataBarMaxThresholdType,
-            DataBarMaxThresholdValue = RewriteThresholdValue(source.DataBarMaxThresholdType, source.DataBarMaxThresholdValue, hostSheetName, pasteOp),
-            DataBarShowValue = source.DataBarShowValue,
-            DataBarMinLength = source.DataBarMinLength,
-            DataBarMaxLength = source.DataBarMaxLength,
-            DataBarGradient = source.DataBarGradient,
-            DataBarBorder = source.DataBarBorder,
-            DataBarBorderColor = source.DataBarBorderColor,
-            DataBarAxisPosition = source.DataBarAxisPosition,
-            DataBarAxisColor = source.DataBarAxisColor,
-            DataBarNegativeFillColor = source.DataBarNegativeFillColor,
-            DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
-            AboveAverage = source.AboveAverage,
-            EqualAverage = source.EqualAverage,
-            StdDevCount = source.StdDevCount,
-            FormulaText = RewriteFormulaText(source.FormulaText, hostSheetName, pasteOp),
-            IconSetStyle = source.IconSetStyle,
-            IconSetShowValue = source.IconSetShowValue,
-            IconSetReverse = source.IconSetReverse,
-            TopBottomRank = source.TopBottomRank,
-            TopBottomPercent = source.TopBottomPercent,
-            TextRuleText = source.TextRuleText,
-            DateOccurringPeriod = source.DateOccurringPeriod,
-            StopIfTrue = source.StopIfTrue,
-            NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(source.NativeChildXmls),
-            NativePayloadAttributes = source.NativePayloadAttributes,
-            NativePayloadChildXmls = source.NativePayloadChildXmls,
-            NativeContainerAttributes = source.NativeContainerAttributes,
-            NativeContainerChildXmls = source.NativeContainerChildXmls
-        };
+        var clone = source.Clone(Guid.NewGuid());
+        clone.AppliesTo = new GridRange(start, end);
+        clone.AdditionalRanges = null;
+        clone.MinThresholdValue = RewriteThresholdValue(
+            source.MinThresholdType, source.MinThresholdValue, hostSheetName, pasteOp);
+        clone.MidThresholdValue = RewriteThresholdValue(
+            source.MidThresholdType, source.MidThresholdValue, hostSheetName, pasteOp);
+        clone.MaxThresholdValue = RewriteThresholdValue(
+            source.MaxThresholdType, source.MaxThresholdValue, hostSheetName, pasteOp);
+        clone.DataBarMinThresholdValue = RewriteThresholdValue(
+            source.DataBarMinThresholdType, source.DataBarMinThresholdValue, hostSheetName, pasteOp);
+        clone.DataBarMaxThresholdValue = RewriteThresholdValue(
+            source.DataBarMaxThresholdType, source.DataBarMaxThresholdValue, hostSheetName, pasteOp);
+        clone.FormulaText = RewriteFormulaText(source.FormulaText, hostSheetName, pasteOp);
         // Mirrors RowColumnShiftHelpers.Rules.cs's iconSet-threshold loop: a Formula-type iconSet
         // cfvo threshold holds a relative cell reference just like the colorScale/dataBar thresholds
         // above and must be shifted by the same paste offset. Number/Percent/Percentile thresholds
         // hold literal values and are copied verbatim.
-        foreach (var threshold in source.IconSetThresholds)
+        for (var index = 0; index < clone.IconSetThresholds.Count; index++)
         {
-            clone.IconSetThresholds.Add(threshold.Type == CfThresholdType.Formula
-                ? threshold with { Value = RewriteThresholdValue(threshold.Type, threshold.Value, hostSheetName, pasteOp) }
-                : threshold);
+            var threshold = clone.IconSetThresholds[index];
+            if (threshold.Type == CfThresholdType.Formula)
+            {
+                clone.IconSetThresholds[index] = threshold with
+                {
+                    Value = RewriteThresholdValue(threshold.Type, threshold.Value, hostSheetName, pasteOp)
+                };
+            }
         }
-        clone.IconOverrides.AddRange(source.IconOverrides);
         return clone;
     }
 

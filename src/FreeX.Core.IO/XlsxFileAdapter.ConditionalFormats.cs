@@ -760,82 +760,27 @@ public sealed partial class XlsxFileAdapter
 
     private static ConditionalFormat RemapConditionalFormat(ConditionalFormat source, SheetId sheetId)
     {
-        IReadOnlyList<GridRange>? remappedAdditional = source.AdditionalRanges is null
-            ? null
-            : source.AdditionalRanges
-                .Select(r => new GridRange(
-                    new CellAddress(sheetId, r.Start.Row, r.Start.Col),
-                    new CellAddress(sheetId, r.End.Row, r.End.Col)))
-                .ToList();
-
-        var format = new ConditionalFormat
-        {
-            AppliesTo = new GridRange(
-                new CellAddress(sheetId, source.AppliesTo.Start.Row, source.AppliesTo.Start.Col),
-                new CellAddress(sheetId, source.AppliesTo.End.Row, source.AppliesTo.End.Col)),
-            AdditionalRanges = remappedAdditional,
-            Priority = source.Priority,
-            RuleType = source.RuleType,
-            Operator = source.Operator,
-            Value1 = source.Value1,
-            Value2 = source.Value2,
-            FormatIfTrue = source.FormatIfTrue?.Clone(),
-            MinColor = source.MinColor,
-            MidColor = source.MidColor,
-            MaxColor = source.MaxColor,
-            MinColorSource = source.MinColorSource,
-            MidColorSource = source.MidColorSource,
-            MaxColorSource = source.MaxColorSource,
-            UseThreeColorScale = source.UseThreeColorScale,
-            MinThresholdType = source.MinThresholdType,
-            MinThresholdValue = source.MinThresholdValue,
-            MinThresholdGreaterThanOrEqual = source.MinThresholdGreaterThanOrEqual,
-            MidThresholdType = source.MidThresholdType,
-            MidThresholdValue = source.MidThresholdValue,
-            MidThresholdGreaterThanOrEqual = source.MidThresholdGreaterThanOrEqual,
-            MaxThresholdType = source.MaxThresholdType,
-            MaxThresholdValue = source.MaxThresholdValue,
-            MaxThresholdGreaterThanOrEqual = source.MaxThresholdGreaterThanOrEqual,
-            DataBarColor = source.DataBarColor,
-            DataBarColorSource = source.DataBarColorSource,
-            DataBarMinThresholdType = source.DataBarMinThresholdType,
-            DataBarMinThresholdValue = source.DataBarMinThresholdValue,
-            DataBarMaxThresholdType = source.DataBarMaxThresholdType,
-            DataBarMaxThresholdValue = source.DataBarMaxThresholdValue,
-            DataBarShowValue = source.DataBarShowValue,
-            DataBarMinLength = source.DataBarMinLength,
-            DataBarMaxLength = source.DataBarMaxLength,
-            DataBarGradient  = source.DataBarGradient,
-            DataBarBorder = source.DataBarBorder,
-            DataBarBorderColor = source.DataBarBorderColor,
-            DataBarAxisPosition = source.DataBarAxisPosition,
-            DataBarAxisColor = source.DataBarAxisColor,
-            DataBarNegativeFillColor = source.DataBarNegativeFillColor,
-            DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
-            DataBarNegativeFillSameAsPositive = source.DataBarNegativeFillSameAsPositive,
-            DataBarNegativeBorderSameAsPositive = source.DataBarNegativeBorderSameAsPositive,
-            DataBarDirection = source.DataBarDirection,
-            AboveAverage = source.AboveAverage,
-            EqualAverage = source.EqualAverage,
-            StdDevCount = source.StdDevCount,
-            FormulaText = source.FormulaText,
-            IconSetStyle = source.IconSetStyle,
-            IconSetShowValue = source.IconSetShowValue,
-            IconSetReverse = source.IconSetReverse,
-            TopBottomRank = source.TopBottomRank,
-            TopBottomPercent = source.TopBottomPercent,
-            TextRuleText = source.TextRuleText,
-            DateOccurringPeriod = source.DateOccurringPeriod,
-            StopIfTrue = source.StopIfTrue,
-            NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = source.NativeChildXmls,
-            NativePayloadAttributes = source.NativePayloadAttributes,
-            NativePayloadChildXmls = source.NativePayloadChildXmls,
-            NativeContainerAttributes = source.NativeContainerAttributes,
-            NativeContainerChildXmls = source.NativeContainerChildXmls
-        };
-        format.IconSetThresholds.AddRange(source.IconSetThresholds);
-        format.IconOverrides.AddRange(source.IconOverrides);
+        var format = source.Clone();
+        format.AppliesTo = RemapRangeToSheet(source.AppliesTo, sheetId);
+        format.AdditionalRanges = RemapRangesToSheet(source.AdditionalRanges, sheetId);
         return format;
     }
+
+    private static IReadOnlyList<GridRange>? RemapRangesToSheet(
+        IReadOnlyList<GridRange>? ranges,
+        SheetId sheetId)
+    {
+        if (ranges is null)
+            return null;
+
+        var remapped = new List<GridRange>(ranges.Count);
+        for (var index = 0; index < ranges.Count; index++)
+            remapped.Add(RemapRangeToSheet(ranges[index], sheetId));
+        return remapped;
+    }
+
+    private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
+        new(
+            new CellAddress(sheetId, range.Start.Row, range.Start.Col),
+            new CellAddress(sheetId, range.End.Row, range.End.Col));
 }

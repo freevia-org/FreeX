@@ -25,11 +25,11 @@ internal static partial class RowColumnShiftHelpers
             sheet.FrozenCols,
             sheet.SplitRow,
             sheet.SplitColumn,
-            ClonePageBreaksMetadata(sheet.RowPageBreaksMetadata),
-            ClonePageBreaksMetadata(sheet.ColumnPageBreaksMetadata),
+            WorksheetMetadataCloner.ClonePageBreaks(sheet.RowPageBreaksMetadata),
+            WorksheetMetadataCloner.ClonePageBreaks(sheet.ColumnPageBreaksMetadata),
             CaptureList(workbook.WatchedCells),
-            CloneCellWatchesMetadata(sheet.CellWatchesMetadata),
-            CloneIgnoredErrorsMetadata(sheet.IgnoredErrorsMetadata),
+            WorksheetMetadataCloner.CloneCellWatches(sheet.CellWatchesMetadata),
+            WorksheetMetadataCloner.CloneIgnoredErrors(sheet.IgnoredErrorsMetadata),
             sheet.AutoFilter,
             sheet.SmartTags,
             sheet.DataConsolidation,
@@ -319,12 +319,12 @@ internal static partial class RowColumnShiftHelpers
         sheet.FrozenCols = snapshot.FrozenCols;
         sheet.SplitRow = snapshot.SplitRow;
         sheet.SplitColumn = snapshot.SplitColumn;
-        sheet.RowPageBreaksMetadata = ClonePageBreaksMetadata(snapshot.RowPageBreaksMetadata);
-        sheet.ColumnPageBreaksMetadata = ClonePageBreaksMetadata(snapshot.ColumnPageBreaksMetadata);
+        sheet.RowPageBreaksMetadata = WorksheetMetadataCloner.ClonePageBreaks(snapshot.RowPageBreaksMetadata);
+        sheet.ColumnPageBreaksMetadata = WorksheetMetadataCloner.ClonePageBreaks(snapshot.ColumnPageBreaksMetadata);
 
         RestoreWatchedCells(workbook, snapshot);
-        sheet.CellWatchesMetadata = CloneCellWatchesMetadata(snapshot.CellWatchesMetadata);
-        sheet.IgnoredErrorsMetadata = CloneIgnoredErrorsMetadata(snapshot.IgnoredErrorsMetadata);
+        sheet.CellWatchesMetadata = WorksheetMetadataCloner.CloneCellWatches(snapshot.CellWatchesMetadata);
+        sheet.IgnoredErrorsMetadata = WorksheetMetadataCloner.CloneIgnoredErrors(snapshot.IgnoredErrorsMetadata);
         sheet.AutoFilter = snapshot.AutoFilter;
         sheet.SmartTags = snapshot.SmartTags;
         sheet.DataConsolidation = snapshot.DataConsolidation;
@@ -793,10 +793,18 @@ internal static partial class RowColumnShiftHelpers
             return;
         }
 
-        // Consume the live list against the shifted side of each original->shifted pair, one live
-        // occurrence per pair, so duplicate addresses are handled correctly.
-        var unmatchedLive = new List<CellAddress>(workbook.WatchedCells);
+        // Count live occurrences once so reconciliation remains linear even for large Watch Windows.
+        // Each surviving original consumes at most one live occurrence of its shifted address.
+        var liveOccurrences = new Dictionary<CellAddress, WatchedCellOccurrenceCounts>(
+            workbook.WatchedCells.Count);
+        foreach (var address in workbook.WatchedCells)
+        {
+            liveOccurrences.TryGetValue(address, out var counts);
+            liveOccurrences[address] = counts with { Available = counts.Available + 1 };
+        }
+
         var restored = new List<CellAddress>(snapshot.WatchedCells.Count);
+        var consumedCount = 0;
         foreach (var (original, shifted) in pairs)
         {
             if (shifted is not { } survived)
@@ -807,21 +815,35 @@ internal static partial class RowColumnShiftHelpers
                 continue;
             }
 
-            var index = unmatchedLive.IndexOf(survived);
-            if (index < 0)
+            if (!liveOccurrences.TryGetValue(survived, out var counts) ||
+                counts.Consumed >= counts.Available)
                 continue; // user removed this watch after the command ran; don't resurrect it.
 
-            unmatchedLive.RemoveAt(index);
+            liveOccurrences[survived] = counts with { Consumed = counts.Consumed + 1 };
+            consumedCount++;
             restored.Add(original);
         }
 
-        // Whatever remains in unmatchedLive was added by the user after the command ran (it was never
-        // produced by the shift) — keep it, unshifted, after undo instead of silently discarding it.
-        restored.AddRange(unmatchedLive);
+        // Skip the first consumed occurrences of each shifted address, exactly matching the old
+        // first-IndexOf/remove behavior. Append unmatched/user-added watches in their live order.
+        restored.EnsureCapacity(restored.Count + workbook.WatchedCells.Count - consumedCount);
+        foreach (var address in workbook.WatchedCells)
+        {
+            var counts = liveOccurrences[address];
+            if (counts.Consumed > 0)
+            {
+                liveOccurrences[address] = counts with { Consumed = counts.Consumed - 1 };
+                continue;
+            }
+
+            restored.Add(address);
+        }
 
         workbook.WatchedCells.Clear();
         workbook.WatchedCells.AddRange(restored);
     }
+
+    private readonly record struct WatchedCellOccurrenceCounts(int Available, int Consumed);
 
     private static WorksheetCellWatchesMetadataModel? ShiftCellWatchesMetadata(
         WorksheetCellWatchesMetadataModel? metadata,
@@ -2115,53 +2137,6 @@ internal static partial class RowColumnShiftHelpers
             CloneReadOnlyDictionary(column.NativeCustomFiltersAttributes),
             column.NativeFilterXmls.ToArray(),
             CloneReadOnlyDictionary(column.NativeAttributes));
-
-    private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(
-        WorksheetPageBreaksMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetPageBreaksMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            BreakNativeAttributes = metadata.BreakNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal))
-        };
-    }
-
-    private static WorksheetCellWatchesMetadataModel? CloneCellWatchesMetadata(
-        WorksheetCellWatchesMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetCellWatchesMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            WatchNativeAttributes = metadata.WatchNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
-                StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static WorksheetIgnoredErrorsMetadataModel? CloneIgnoredErrorsMetadata(
-        WorksheetIgnoredErrorsMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetIgnoredErrorsMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            ErrorNativeAttributes = metadata.ErrorNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
-                StringComparer.OrdinalIgnoreCase)
-        };
-    }
 
     private static IReadOnlyDictionary<string, string>? CloneReadOnlyDictionary(
         IReadOnlyDictionary<string, string>? source) =>

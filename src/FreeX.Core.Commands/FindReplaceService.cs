@@ -438,18 +438,25 @@ public static class FindReplaceService
             return false;
         }
 
-        if (lookIn == FindLookIn.Formulas && cell.HasFormula)
+        if (lookIn == FindLookIn.Formulas && cell.HasFormula && newText.StartsWith('='))
         {
             newCell = cell.Clone();
             // FormulaText storage always omits the leading '=' (see Cell.cs), but currentText/
             // newText here carry it to match Excel's formula-bar semantics -- strip it back off
             // before storing.
-            newCell.FormulaText = newText.StartsWith('=') ? newText[1..] : newText;
+            newCell.FormulaText = newText[1..];
             // Clear the stale cached value so the cell shows blank rather than the old
             // result until the host triggers recalculation after the replace command.
             newCell.Value = BlankValue.Instance;
             return true;
         }
+
+        // A Formulas-mode replacement whose resulting text no longer starts with '=' is exactly
+        // what Excel treats as re-typing plain content into the formula bar: the cell stops being
+        // a formula and becomes a literal value/text entry (ISFORMULA() flips to FALSE, and the
+        // saved .xlsx gets a plain <v> cell instead of an <f> element). Fall through to the same
+        // literal re-parse path used for non-formula cells below -- it already clears FormulaText
+        // to null on the cloned cell, which is what drops the old formula.
 
         // Re-parse the replacement text the same way Excel re-parses text typed into a cell
         // (accepts "$", thousands separators, "%", and dates) so a formatted numeric match

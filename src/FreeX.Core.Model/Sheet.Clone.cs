@@ -110,10 +110,10 @@ public sealed partial class Sheet
             ProtectionMetadata            = ProtectionMetadata?.Clone(),
             // Previously missed fields:
             BackgroundImage               = BackgroundImage,
-            RowPageBreaksMetadata         = ClonePageBreaksMetadata(RowPageBreaksMetadata),
-            ColumnPageBreaksMetadata      = ClonePageBreaksMetadata(ColumnPageBreaksMetadata),
-            CellWatchesMetadata           = CloneCellWatchesMetadata(CellWatchesMetadata),
-            IgnoredErrorsMetadata         = CloneIgnoredErrorsMetadata(IgnoredErrorsMetadata),
+            RowPageBreaksMetadata         = WorksheetMetadataCloner.ClonePageBreaks(RowPageBreaksMetadata),
+            ColumnPageBreaksMetadata      = WorksheetMetadataCloner.ClonePageBreaks(ColumnPageBreaksMetadata),
+            CellWatchesMetadata           = WorksheetMetadataCloner.CloneCellWatches(CellWatchesMetadata),
+            IgnoredErrorsMetadata         = WorksheetMetadataCloner.CloneIgnoredErrors(IgnoredErrorsMetadata),
         };
 
         // Multi-area print areas: remap all areas to the new sheet id.
@@ -181,6 +181,7 @@ public sealed partial class Sheet
         foreach (var table in StructuredTables)
             copy.StructuredTables.Add(CloneStructuredTable(table, newId));
 
+        copy.ConditionalFormats.EnsureCapacity(ConditionalFormats.Count);
         foreach (var cf in ConditionalFormats)
             copy.ConditionalFormats.Add(CloneConditionalFormat(cf, newId, Name, newName));
 
@@ -467,69 +468,24 @@ public sealed partial class Sheet
 
     private static ConditionalFormat CloneConditionalFormat(ConditionalFormat cf, SheetId newId, string sourceSheetName, string newSheetName)
     {
-        IReadOnlyList<GridRange>? remappedAdditional = cf.AdditionalRanges is null
-            ? null
-            : cf.AdditionalRanges.Select(r => RemapRange(r, newId)).ToList();
-
-        var clonedFormat = new ConditionalFormat
-        {
-            AppliesTo            = RemapRange(cf.AppliesTo, newId),
-            AdditionalRanges     = remappedAdditional,
-            Priority             = cf.Priority,
-            RuleType             = cf.RuleType,
-            Operator             = cf.Operator,
-            Value1               = cf.Value1,
-            Value2               = cf.Value2,
-            FormatIfTrue         = cf.FormatIfTrue?.Clone(),
-            MinColor             = cf.MinColor,
-            MidColor             = cf.MidColor,
-            MaxColor             = cf.MaxColor,
-            UseThreeColorScale   = cf.UseThreeColorScale,
-            MinThresholdType     = cf.MinThresholdType,
-            MinThresholdValue    = cf.MinThresholdValue,
-            MinThresholdGreaterThanOrEqual = cf.MinThresholdGreaterThanOrEqual,
-            MidThresholdType     = cf.MidThresholdType,
-            MidThresholdValue    = cf.MidThresholdValue,
-            MidThresholdGreaterThanOrEqual = cf.MidThresholdGreaterThanOrEqual,
-            MaxThresholdType     = cf.MaxThresholdType,
-            MaxThresholdValue    = cf.MaxThresholdValue,
-            MaxThresholdGreaterThanOrEqual = cf.MaxThresholdGreaterThanOrEqual,
-            DataBarColor         = cf.DataBarColor,
-            DataBarMinThresholdType = cf.DataBarMinThresholdType,
-            DataBarMinThresholdValue = cf.DataBarMinThresholdValue,
-            DataBarMaxThresholdType = cf.DataBarMaxThresholdType,
-            DataBarMaxThresholdValue = cf.DataBarMaxThresholdValue,
-            DataBarShowValue     = cf.DataBarShowValue,
-            DataBarMinLength     = cf.DataBarMinLength,
-            DataBarMaxLength     = cf.DataBarMaxLength,
-            DataBarGradient      = cf.DataBarGradient,
-            DataBarBorder        = cf.DataBarBorder,
-            DataBarAxisPosition  = cf.DataBarAxisPosition,
-            DataBarAxisColor     = cf.DataBarAxisColor,
-            DataBarNegativeFillColor = cf.DataBarNegativeFillColor,
-            DataBarNegativeBorderColor = cf.DataBarNegativeBorderColor,
-            AboveAverage         = cf.AboveAverage,
-            EqualAverage         = cf.EqualAverage,
-            StdDevCount          = cf.StdDevCount,
-            FormulaText          = RewriteSameSheetQualifiedFormula(cf.FormulaText, sourceSheetName, newSheetName),
-            IconSetStyle         = cf.IconSetStyle,
-            IconSetShowValue     = cf.IconSetShowValue,
-            IconSetReverse       = cf.IconSetReverse,
-            TopBottomRank        = cf.TopBottomRank,
-            TopBottomPercent     = cf.TopBottomPercent,
-            TextRuleText         = cf.TextRuleText,
-            DateOccurringPeriod  = cf.DateOccurringPeriod,
-            StopIfTrue           = cf.StopIfTrue,
-            NativeAttributes     = cf.NativeAttributes,
-            NativeChildXmls      = ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(cf.NativeChildXmls),
-            NativePayloadAttributes = cf.NativePayloadAttributes,
-            NativePayloadChildXmls = cf.NativePayloadChildXmls,
-            NativeContainerAttributes = cf.NativeContainerAttributes,
-            NativeContainerChildXmls = cf.NativeContainerChildXmls
-        };
-        clonedFormat.IconSetThresholds.AddRange(cf.IconSetThresholds);
-        clonedFormat.IconOverrides.AddRange(cf.IconOverrides);
+        var clonedFormat = cf.Clone(Guid.NewGuid());
+        clonedFormat.AppliesTo = RemapRange(cf.AppliesTo, newId);
+        clonedFormat.AdditionalRanges = RemapRanges(cf.AdditionalRanges, newId);
+        clonedFormat.FormulaText = RewriteSameSheetQualifiedFormula(cf.FormulaText, sourceSheetName, newSheetName);
         return clonedFormat;
+    }
+
+    private static IReadOnlyList<GridRange>? RemapRanges(
+        IReadOnlyList<GridRange>? ranges,
+        SheetId newId)
+    {
+        if (ranges is null)
+            return null;
+
+        var remapped = new List<GridRange>(ranges.Count);
+        for (var index = 0; index < ranges.Count; index++)
+            remapped.Add(RemapRange(ranges[index], newId));
+        return remapped;
     }
 
     private static DataValidation CloneDataValidation(DataValidation dv, SheetId newId, string sourceSheetName, string newSheetName)
@@ -728,50 +684,6 @@ public sealed partial class Sheet
 
         foreach (var row in SubtotalRows)
             copy.SubtotalRows.Add(row);
-    }
-
-    private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetPageBreaksMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            BreakNativeAttributes = metadata.BreakNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal))
-        };
-    }
-
-    private static WorksheetCellWatchesMetadataModel? CloneCellWatchesMetadata(WorksheetCellWatchesMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetCellWatchesMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            WatchNativeAttributes = metadata.WatchNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
-                StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static WorksheetIgnoredErrorsMetadataModel? CloneIgnoredErrorsMetadata(WorksheetIgnoredErrorsMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetIgnoredErrorsMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            ErrorNativeAttributes = metadata.ErrorNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
-                StringComparer.OrdinalIgnoreCase)
-        };
     }
 
     private static WorksheetSingleXmlCellsModel? CloneSingleXmlCells(WorksheetSingleXmlCellsModel? model)

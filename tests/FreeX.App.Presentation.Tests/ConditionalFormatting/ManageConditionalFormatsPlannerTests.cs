@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FluentAssertions;
 using FreeX.App.Presentation.ConditionalFormatting;
 using Free.Shared.Localization;
@@ -285,6 +286,114 @@ public sealed class ManageConditionalFormatsPlannerTests
     }
 
     [Fact]
+    public void MoveRule_FilteredScopeSwapsVisibleNeighboursAndClonesFinalGraphOnce()
+    {
+        var sheetId = SheetId.New();
+        var visibleFirst = CreatePopulatedRule(sheetId, 1, 1, 9);
+        var hidden = CreatePopulatedRule(sheetId, 10, 1, 8);
+        var visibleSecond = CreatePopulatedRule(sheetId, 2, 1, 7);
+        var source = new[] { visibleFirst, hidden, visibleSecond };
+        var scope = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 3, 1));
+
+        var result = ManageConditionalFormatsPlanner.MoveRule(
+            source,
+            scope,
+            visibleSecond.Id,
+            ConditionalFormatRuleMoveDirection.Up);
+
+        result.Select(rule => rule.Id).Should().Equal(visibleSecond.Id, hidden.Id, visibleFirst.Id);
+        result.Select(rule => rule.Priority).Should().Equal(1, 2, 3);
+        for (var index = 0; index < result.Count; index++)
+        {
+            var original = source.Single(rule => rule.Id == result[index].Id);
+            result[index].Should().NotBeSameAs(original);
+            result[index].FormatIfTrue.Should().NotBeSameAs(original.FormatIfTrue);
+            result[index].IconSetThresholds.Should().NotBeSameAs(original.IconSetThresholds);
+            result[index].IconOverrides.Should().NotBeSameAs(original.IconOverrides);
+        }
+    }
+
+    [Fact]
+    public void MoveRule_MissingIdentityStillReturnsIndependentNormalizedRules()
+    {
+        var sheetId = SheetId.New();
+        var first = CreatePopulatedRule(sheetId, 1, 1, 8);
+        var second = CreatePopulatedRule(sheetId, 2, 1, 4);
+
+        var result = ManageConditionalFormatsPlanner.MoveRule(
+            [first, second],
+            Guid.NewGuid(),
+            ConditionalFormatRuleMoveDirection.Down);
+
+        result.Select(rule => rule.Id).Should().Equal(first.Id, second.Id);
+        result.Select(rule => rule.Priority).Should().Equal(1, 2);
+        result[0].Should().NotBeSameAs(first);
+        result[1].Should().NotBeSameAs(second);
+        result[0].FormatIfTrue.Should().NotBeSameAs(first.FormatIfTrue);
+        result[1].FormatIfTrue.Should().NotBeSameAs(second.FormatIfTrue);
+    }
+
+    [Fact]
+    public void MutationSource_ClonesEachFinalRuleWithoutReprioritizeRoundTrips()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepositoryFileLocator.FindDirectory(
+                "src",
+                "FreeX.App.Presentation",
+                "ConditionalFormatting"),
+            "ManageConditionalFormatsPlanner.cs"));
+
+        source.Should().NotContain("Reprioritize(rules).ToList()");
+        source.Should().NotContain("rules.Where(rule => rule.Id != ruleId).ToList()");
+        source.Should().Contain("new List<ConditionalFormat>(rules.Count");
+    }
+
+    [BenchmarkFact]
+    public void Benchmark_MoveRuleLargePopulatedSet_ReportsTimingAndAllocation()
+    {
+        const int ruleCount = 1_000;
+        const int iterations = 5;
+        var sheetId = SheetId.New();
+        var rules = new List<ConditionalFormat>(ruleCount);
+        for (var index = 0; index < ruleCount; index++)
+            rules.Add(CreatePopulatedRule(sheetId, (uint)index + 1, 1, ruleCount - index));
+
+        var targetId = rules[ruleCount / 2].Id;
+        ManageConditionalFormatsPlanner.MoveRule(
+            rules, targetId, ConditionalFormatRuleMoveDirection.Down).Should().HaveCount(ruleCount);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var observedRuleCount = 0;
+        for (var iteration = 0; iteration < iterations; iteration++)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var moved = ManageConditionalFormatsPlanner.MoveRule(
+                rules, targetId, ConditionalFormatRuleMoveDirection.Down);
+            stopwatch.Stop();
+            timings.Add(stopwatch.Elapsed.TotalMilliseconds);
+            observedRuleCount += moved.Count;
+        }
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        observedRuleCount.Should().Be(ruleCount * iterations);
+        Console.WriteLine(
+            "PERF MANAGE_CF_MOVE " +
+            $"rules={ruleCount} steps={iterations} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void BuildResultRules_FilteredScopeKeepsEditedRulesInOriginalVisibleSlots()
     {
         var sheetId = SheetId.New();
@@ -321,4 +430,24 @@ public sealed class ManageConditionalFormatsPlannerTests
             Value1 = "1",
             FormatIfTrue = new CellStyle { Italic = true }
         };
+
+    private static ConditionalFormat CreatePopulatedRule(
+        SheetId sheetId,
+        uint row,
+        uint col,
+        int priority)
+    {
+        var rule = CreateRule(sheetId, row, col, priority);
+        rule.IconSetThresholds.AddRange(
+        [
+            new CfThresholdModel(CfThresholdType.Number, "0"),
+            new CfThresholdModel(CfThresholdType.Percent, "50")
+        ]);
+        rule.IconOverrides.AddRange(
+        [
+            new CfIconOverride("3Arrows", 0),
+            new CfIconOverride("3Arrows", 2)
+        ]);
+        return rule;
+    }
 }

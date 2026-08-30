@@ -1553,7 +1553,11 @@ public sealed partial class MainWindow : Window
 
     private void OpenMailMergeErrorReport(TextDocument report)
     {
-        var reportWindow = new MainWindow
+        // r173 remediation: pass THIS window's real options store. The parameterless ctor
+        // defaults to an in-memory store, so any option the user changed from the error-report
+        // window was silently discarded on close. Same defect the WPF shell had; its twin was
+        // fixed in the same round and this one was missed.
+        var reportWindow = new MainWindow(Array.Empty<string>(), null, _optionsStore)
         {
             Title = FreeWUiTextCatalog.MailMergeErrorReportWindowTitle
         };

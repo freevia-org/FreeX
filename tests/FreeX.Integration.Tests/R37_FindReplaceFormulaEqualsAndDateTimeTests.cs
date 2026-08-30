@@ -154,4 +154,84 @@ public class R37_FindReplaceFormulaEqualsAndDateTimeTests
         var expectedSerial = new DateTime(2024, 6, 20).ToOADate();
         newValue.Value.Should().BeApproximately(expectedSerial, 1e-9);
     }
+
+    // freex-find-replace F1: replacing an entire formula (Look in: Formulas, Match entire cell
+    // contents) with plain text that does NOT itself start with '=' must behave exactly like
+    // re-typing that plain text into the formula bar in Excel -- the cell stops being a formula
+    // and becomes a literal value. Before the fix, FormulaText was unconditionally overwritten
+    // with the (possibly non-'='-prefixed) replacement text, leaving HasFormula still true.
+    [Fact]
+    public void ReplaceAll_FormulasMode_EntireCell_ReplacementWithoutLeadingEquals_ConvertsToLiteralNumberValue()
+    {
+        var (wb, sheet, commandBus) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(a1, "SUM(B1:B5)");
+
+        var count = FindReplaceService.ReplaceAll(
+            wb,
+            commandBus,
+            "=SUM(B1:B5)",
+            "100",
+            new FindOptions(LookIn: FindLookIn.Formulas),
+            matchEntireCell: true);
+
+        count.Should().Be(1);
+        var cell = sheet.GetCell(a1)!;
+        cell.HasFormula.Should().BeFalse();
+        cell.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new NumberValue(100));
+
+        commandBus.Undo(wb.Id).Success.Should().BeTrue();
+        var undone = sheet.GetCell(a1)!;
+        undone.HasFormula.Should().BeTrue();
+        undone.FormulaText.Should().Be("SUM(B1:B5)");
+    }
+
+    // Same defect, but the replacement text is not valid formula syntax at all -- Excel stores
+    // it as literal text rather than leaving behind a formula cell that would fail to parse.
+    [Fact]
+    public void ReplaceAll_FormulasMode_EntireCell_ReplacementWithoutLeadingEquals_NonNumericText_ConvertsToLiteralTextValue()
+    {
+        var (wb, sheet, commandBus) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(a1, "SUM(B1:B5)");
+
+        var count = FindReplaceService.ReplaceAll(
+            wb,
+            commandBus,
+            "=SUM(B1:B5)",
+            "TOTAL",
+            new FindOptions(LookIn: FindLookIn.Formulas),
+            matchEntireCell: true);
+
+        count.Should().Be(1);
+        var cell = sheet.GetCell(a1)!;
+        cell.HasFormula.Should().BeFalse();
+        cell.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new TextValue("TOTAL"));
+    }
+
+    // Sibling no-regression case: when the replacement text DOES start with '=' (the case every
+    // other test in this class already exercises), the cell must remain a formula -- this fix
+    // must not turn every Formulas-mode replace into a value conversion.
+    [Fact]
+    public void ReplaceAll_FormulasMode_EntireCell_ReplacementWithLeadingEquals_StillStaysFormula()
+    {
+        var (wb, sheet, commandBus) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(a1, "SUM(B1:B5)");
+
+        var count = FindReplaceService.ReplaceAll(
+            wb,
+            commandBus,
+            "=SUM(B1:B5)",
+            "=MAX(B1:B5)",
+            new FindOptions(LookIn: FindLookIn.Formulas),
+            matchEntireCell: true);
+
+        count.Should().Be(1);
+        var cell = sheet.GetCell(a1)!;
+        cell.HasFormula.Should().BeTrue();
+        cell.FormulaText.Should().Be("MAX(B1:B5)");
+    }
 }

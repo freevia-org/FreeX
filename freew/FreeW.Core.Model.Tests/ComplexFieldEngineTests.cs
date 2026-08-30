@@ -672,6 +672,114 @@ public class ComplexFieldEngineTests
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1");
     }
 
+    // freew-fields-toc F2: a NOTEREF imported in Word's complex fldChar/instrText form (a generic
+    // Run.ComplexField, unlike the fldSimple form which DocxReader already routes into a
+    // Run.CrossReference) must still refresh on Update Fields when the footnotes elsewhere in the
+    // document are renumbered -- not stay permanently pinned to its originally-cached number.
+    [Fact]
+    public void NoteRef_ComplexForm_RecomputesToCurrentNoteNumberAfterRenumbering()
+    {
+        var doc = new TextDocument();
+        var refParagraph = new Paragraph();
+        refParagraph.Runs.Add(new Run("Text"));
+        refParagraph.Runs.Add(Run.FootnoteReference(1));
+        refParagraph.BookmarkNames.Add("_RefNote1");
+        refParagraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note", BookmarkBoundaryKind.Start, 1, "_RefNote1"));
+        refParagraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(refParagraph);                                          // 0: the bookmarked note ref
+        var field = AddField(doc, " NOTEREF _RefNote1 \\h ", cached: "1");     // 1: complex-form NOTEREF
+        doc.Footnotes[1] = new Footnote(1, "note text");
+
+        ComplexFieldEngine.CanRecompute(field.Runs[0].ComplexField!).Should().BeTrue();
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1");
+
+        // Insert a new footnote earlier in the body -- the user gesture from the finding. Footnote 1 is
+        // still the SAME note (same id, same bookmark) but its reading-order display number is now 2nd.
+        var earlierParagraph = new Paragraph { Runs = { new Run("early "), Run.FootnoteReference(2) } };
+        doc.Blocks.Insert(0, earlierParagraph);
+        doc.Footnotes[2] = new Footnote(2, "new earlier note");
+
+        // blockIndex shifts by 1 for both paragraphs after the insert at index 0.
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("2");
+    }
+
+    // Sibling no-regression: the legacy numeric-operand NOTEREF form (no bookmark, just the raw note id --
+    // still readable per DocxReader/CrossReferences) must keep resolving via the same complex-field path,
+    // and an unresolvable target must keep falling back to the cached text like every other Resolve* here.
+    [Fact]
+    public void NoteRef_ComplexForm_LegacyNumericIdResolves_AndDanglingTargetKeepsCachedText()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FootnoteReference(5) } }); // 0
+        AddField(doc, " NOTEREF 5 ", cached: "stale");                          // 1: legacy numeric NOTEREF
+        AddField(doc, " NOTEREF 999 ", cached: "last value");                   // 2: dangling NOTEREF
+        doc.Footnotes[5] = new Footnote(5, "note text");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("last value");
+    }
+
+    // r173 remediation. The complex-form NOTEREF fix above passed CrossRefInsertAs.Text
+    // unconditionally, ignoring the field's own \p switch (Insert > Cross-reference > Footnote >
+    // Insert reference to: Above/below). That was worse than the inert field it replaced: while
+    // NOTEREF did not recompute at all, its cached "1 above" stayed intact; once it did, the first
+    // Update Fields rewrote it to a bare "1" and the above/below word was gone for good. The
+    // sibling REF path three methods away had honoured \p all along.
+    [Fact]
+    public void NoteRef_ComplexForm_WithAboveBelowSwitch_KeepsTheAboveBelowWord()
+    {
+        var doc = new TextDocument();
+        var noteParagraph = new Paragraph();
+        noteParagraph.Runs.Add(new Run("Text"));
+        noteParagraph.Runs.Add(Run.FootnoteReference(1));
+        noteParagraph.BookmarkNames.Add("_RefNote1");
+        noteParagraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note", BookmarkBoundaryKind.Start, 1, "_RefNote1"));
+        noteParagraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(noteParagraph);                                              // 0: the target
+        var field = AddField(doc, " NOTEREF _RefNote1 \\p \\h ", cached: "1 above"); // 1: the field
+        doc.Footnotes[1] = new Footnote(1, "note text");
+
+        ComplexFieldEngine.CanRecompute(field.Runs[0].ComplexField!).Should().BeTrue();
+
+        // What must NOT happen is the regression: a bare note number replacing the direction word.
+        // With the switch routed through, the field either resolves to the direction word or keeps
+        // its cached text -- both preserve what the user asked for. Resolving it as plain Text did
+        // neither: it overwrote "1 above" with "1", permanently.
+        var recomputed = ComplexFieldEngine.Recompute(doc, 1, 0);
+        recomputed.Should().NotBe(
+            "1",
+            "a NOTEREF carrying the above/below switch must never be rewritten to the bare note " +
+            "number -- that silently discards the word the user inserted");
+        recomputed.Should().BeOneOf(
+            ["above", "1 above"],
+            "either the direction word is resolved, or the cached text survives untouched");
+    }
+
+    // Sibling no-regression: without \p the field must still resolve to the note NUMBER, so the fix
+    // above cannot have turned every NOTEREF into a direction word.
+    [Fact]
+    public void NoteRef_ComplexForm_WithoutAboveBelowSwitch_StillResolvesToTheNoteNumber()
+    {
+        var doc = new TextDocument();
+        var noteParagraph = new Paragraph();
+        noteParagraph.Runs.Add(new Run("Text"));
+        noteParagraph.Runs.Add(Run.FootnoteReference(1));
+        noteParagraph.BookmarkNames.Add("_RefNote1");
+        noteParagraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note", BookmarkBoundaryKind.Start, 1, "_RefNote1"));
+        noteParagraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(noteParagraph);
+        AddField(doc, " NOTEREF _RefNote1 \\h ", cached: "1");
+        doc.Footnotes[1] = new Footnote(1, "note text");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1");
+    }
+
     // Builds a 3-row, 1-column table whose row 0 carries bookmark "rowZero" and row 2 carries bookmark
     // "rowTwo", with an authored page-break-before on the row at pageBreakBeforeRowIndex (-1 for none).
     private static Table ThreeRowBookmarkedTable(int pageBreakBeforeRowIndex)

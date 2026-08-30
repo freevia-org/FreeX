@@ -334,13 +334,16 @@ public static class ManageConditionalFormatsPlanner
         Guid ruleId,
         Guid? newId = null)
     {
-        var result = Reprioritize(rules).ToList();
-        var index = FindRuleIndex(result, ruleId);
-        if (index < 0)
-            return result;
+        var duplicateIndex = FindRuleIndex(rules, ruleId);
+        var result = new List<ConditionalFormat>(rules.Count + (duplicateIndex >= 0 ? 1 : 0));
+        for (var index = 0; index < rules.Count; index++)
+        {
+            result.Add(CloneWithPriority(rules[index], result.Count + 1));
+            if (index == duplicateIndex)
+                result.Add(CloneWithPriority(rules[index], result.Count + 1, newId ?? Guid.NewGuid()));
+        }
 
-        result.Insert(index + 1, CloneWithPriority(result[index], index + 2, newId ?? Guid.NewGuid()));
-        return Reprioritize(result);
+        return result;
     }
 
     public static IReadOnlyList<ConditionalFormat> AddRule(
@@ -350,8 +353,10 @@ public static class ManageConditionalFormatsPlanner
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(newRule);
 
-        var result = Reprioritize(rules).ToList();
-        result.Add(CloneWithPriority(newRule, result.Count + 1));
+        var result = new List<ConditionalFormat>(rules.Count + 1);
+        for (var index = 0; index < rules.Count; index++)
+            result.Add(CloneWithPriority(rules[index], index + 1));
+        result.Add(CloneWithPriority(newRule, rules.Count + 1));
         return result;
     }
 
@@ -359,20 +364,29 @@ public static class ManageConditionalFormatsPlanner
         IReadOnlyList<ConditionalFormat> rules,
         ConditionalFormat editedRule)
     {
-        var result = Reprioritize(rules).ToList();
-        var index = FindRuleIndex(result, editedRule.Id);
-        if (index < 0)
-            return result;
+        var editedIndex = FindRuleIndex(rules, editedRule.Id);
+        var result = new List<ConditionalFormat>(rules.Count);
+        for (var index = 0; index < rules.Count; index++)
+        {
+            var source = index == editedIndex ? editedRule : rules[index];
+            result.Add(CloneWithPriority(source, index + 1));
+        }
 
-        result[index] = CloneWithPriority(editedRule, index + 1);
-        return Reprioritize(result);
+        return result;
     }
 
     public static IReadOnlyList<ConditionalFormat> DeleteRule(
         IReadOnlyList<ConditionalFormat> rules,
         Guid ruleId)
     {
-        return Reprioritize(rules.Where(rule => rule.Id != ruleId).ToList());
+        var result = new List<ConditionalFormat>(rules.Count);
+        for (var index = 0; index < rules.Count; index++)
+        {
+            if (rules[index].Id != ruleId)
+                result.Add(CloneWithPriority(rules[index], result.Count + 1));
+        }
+
+        return result;
     }
 
     public static IReadOnlyList<ConditionalFormat> MoveRule(
@@ -387,24 +401,20 @@ public static class ManageConditionalFormatsPlanner
         Guid ruleId,
         ConditionalFormatRuleMoveDirection direction)
     {
-        var result = Reprioritize(rules).ToList();
-        var visible = scope is not { } range
-            ? result
-            : result.Where(rule => RuleOverlapsSelection(rule, range)).ToList();
-        var visibleIndex = FindRuleIndex(visible, ruleId);
-        if (visibleIndex < 0)
-            return result;
+        var sourceIndex = FindRuleIndex(rules, ruleId);
+        var targetIndex = FindMoveTargetIndex(rules, scope, sourceIndex, direction);
+        var result = new List<ConditionalFormat>(rules.Count);
+        for (var index = 0; index < rules.Count; index++)
+        {
+            var cloneIndex = index == sourceIndex && targetIndex >= 0
+                ? targetIndex
+                : index == targetIndex
+                    ? sourceIndex
+                    : index;
+            result.Add(CloneWithPriority(rules[cloneIndex], index + 1));
+        }
 
-        var visibleTarget = direction == ConditionalFormatRuleMoveDirection.Up
-            ? visibleIndex - 1
-            : visibleIndex + 1;
-        if (visibleTarget < 0 || visibleTarget >= visible.Count)
-            return result;
-
-        var index = FindRuleIndex(result, ruleId);
-        var target = FindRuleIndex(result, visible[visibleTarget].Id);
-        (result[index], result[target]) = (result[target], result[index]);
-        return Reprioritize(result);
+        return result;
     }
 
     public static IReadOnlyList<ConditionalFormat> ApplyRuleRange(
@@ -412,20 +422,30 @@ public static class ManageConditionalFormatsPlanner
         Guid ruleId,
         GridRange range)
     {
-        var result = Reprioritize(rules).ToList();
-        var index = FindRuleIndex(result, ruleId);
-        if (index < 0)
-            return result;
+        var editedIndex = FindRuleIndex(rules, ruleId);
+        var result = new List<ConditionalFormat>(rules.Count);
+        for (var index = 0; index < rules.Count; index++)
+        {
+            var clone = CloneWithPriority(rules[index], index + 1);
+            if (index == editedIndex)
+            {
+                clone.AppliesTo = range;
+                clone.AdditionalRanges = null;
+            }
 
-        var updated = CloneWithPriority(result[index], index + 1);
-        updated.AppliesTo = range;
-        updated.AdditionalRanges = null;
-        result[index] = updated;
+            result.Add(clone);
+        }
+
         return result;
     }
 
-    public static IReadOnlyList<ConditionalFormat> Reprioritize(IReadOnlyList<ConditionalFormat> rules) =>
-        rules.Select((rule, index) => CloneWithPriority(rule, index + 1)).ToList();
+    public static IReadOnlyList<ConditionalFormat> Reprioritize(IReadOnlyList<ConditionalFormat> rules)
+    {
+        var result = new List<ConditionalFormat>(rules.Count);
+        for (var index = 0; index < rules.Count; index++)
+            result.Add(CloneWithPriority(rules[index], index + 1));
+        return result;
+    }
 
     public static ConditionalFormat CloneWithPriority(ConditionalFormat src, int priority, Guid? id = null)
     {
@@ -447,6 +467,25 @@ public static class ManageConditionalFormatsPlanner
         {
             if (rules[i].Id == ruleId)
                 return i;
+        }
+
+        return -1;
+    }
+
+    private static int FindMoveTargetIndex(
+        IReadOnlyList<ConditionalFormat> rules,
+        GridRange? scope,
+        int sourceIndex,
+        ConditionalFormatRuleMoveDirection direction)
+    {
+        if (sourceIndex < 0 || scope is { } sourceScope && !RuleOverlapsSelection(rules[sourceIndex], sourceScope))
+            return -1;
+
+        var step = direction == ConditionalFormatRuleMoveDirection.Up ? -1 : 1;
+        for (var index = sourceIndex + step; index >= 0 && index < rules.Count; index += step)
+        {
+            if (scope is not { } range || RuleOverlapsSelection(rules[index], range))
+                return index;
         }
 
         return -1;
