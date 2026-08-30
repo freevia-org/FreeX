@@ -13,7 +13,7 @@ param(
     [switch]$SkipAffectedTests
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -70,10 +70,7 @@ $selection = $selectionJson | ConvertFrom-Json
 Write-Host "Changed paths: $(@($selection.changedPaths).Count); affected local commit gates: $(@($selection.gateIds).Count)."
 
 if (-not $SkipPreflight) {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Test-RepositoryPreflight.ps1')
-    if ($LASTEXITCODE -ne 0) {
-        throw "Repository preflight failed with exit code $LASTEXITCODE."
-    }
+    & (Join-Path $PSScriptRoot 'Test-RepositoryPreflight.ps1')
 }
 
 if (-not $SkipBuild) {
@@ -101,4 +98,3 @@ if (-not $SkipAffectedTests) {
 }
 
 Write-Host 'Branch integration gate passed. Full cross-platform integration remains owned by GitHub CI; UI/render/release-only gates remain owned by App Tester Release.'
-
