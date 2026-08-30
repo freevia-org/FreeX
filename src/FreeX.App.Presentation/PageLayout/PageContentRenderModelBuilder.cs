@@ -413,7 +413,7 @@ public static class PageContentRenderModelBuilder
                 var text = cell is not null
                     ? FormatCellText(workbook, sheet, cell, style, targetWidthCharacters, cfResult.Style)
                     : "";
-                var borders = ApplyConditionalBorderDelta(ResolveBorders(style), cfResult.Style);
+                var borders = ApplyConditionalBorderDelta(ResolveBorders(style, theme), cfResult.Style, theme);
                 var hasValidationCircle = validationCircleCells.Contains(address);
                 if (string.IsNullOrEmpty(text) && fill is null && !borders.HasAny &&
                     cfResult.DataBar is null && cfResult.IconSet is null && !hasValidationCircle)
@@ -1053,16 +1053,17 @@ public static class PageContentRenderModelBuilder
     /// edge), so print/PDF draws the same CF border the on-screen grid does instead of silently
     /// falling back to the cell's raw/unconditional borders.
     /// </summary>
-    private static PageCellBorders ApplyConditionalBorderDelta(PageCellBorders baseBorders, ConditionalFormatStylePlan? delta)
+    private static PageCellBorders ApplyConditionalBorderDelta(
+        PageCellBorders baseBorders, ConditionalFormatStylePlan? delta, WorkbookTheme theme)
     {
         if (delta is not { } d)
             return baseBorders;
 
         return new PageCellBorders(
-            d.BorderTop.Style != BorderStyle.None ? ResolveEdge(d.BorderTop) : baseBorders.Top,
-            d.BorderRight.Style != BorderStyle.None ? ResolveEdge(d.BorderRight) : baseBorders.Right,
-            d.BorderBottom.Style != BorderStyle.None ? ResolveEdge(d.BorderBottom) : baseBorders.Bottom,
-            d.BorderLeft.Style != BorderStyle.None ? ResolveEdge(d.BorderLeft) : baseBorders.Left);
+            d.BorderTop.Style != BorderStyle.None ? ResolveEdge(d.BorderTop, theme) : baseBorders.Top,
+            d.BorderRight.Style != BorderStyle.None ? ResolveEdge(d.BorderRight, theme) : baseBorders.Right,
+            d.BorderBottom.Style != BorderStyle.None ? ResolveEdge(d.BorderBottom, theme) : baseBorders.Bottom,
+            d.BorderLeft.Style != BorderStyle.None ? ResolveEdge(d.BorderLeft, theme) : baseBorders.Left);
     }
 
     private static PresentationRgb? ResolveFill(CellStyle style, WorkbookTheme theme)
@@ -1107,16 +1108,23 @@ public static class PageContentRenderModelBuilder
         return new LayoutPoint(left, top + Math.Max(0, (height - size.Height) / 2));
     }
 
-    private static PageCellBorders ResolveBorders(CellStyle style) =>
+    private static PageCellBorders ResolveBorders(CellStyle style, WorkbookTheme theme) =>
         new(
-            ResolveEdge(style.BorderTop),
-            ResolveEdge(style.BorderRight),
-            ResolveEdge(style.BorderBottom),
-            ResolveEdge(style.BorderLeft));
+            ResolveEdge(style.BorderTop, theme),
+            ResolveEdge(style.BorderRight, theme),
+            ResolveEdge(style.BorderBottom, theme),
+            ResolveEdge(style.BorderLeft, theme));
 
-    private static PageBorderEdge ResolveEdge(CellBorder border) =>
+    /// <summary>
+    /// freex-theme-border-color-F1: a theme-backed edge (CellBorder.ThemeColor, e.g. Accent1) must
+    /// re-resolve against the workbook's CURRENT theme, exactly like the sibling ResolveFill/ResolveFont
+    /// helpers already do via CellStyle.ResolveFillColor/ResolveFontColor. Reading border.Color raw
+    /// rendered the color baked in at load time, so a theme change recolored every fill and font in
+    /// print preview and the portable PDF export but left the borders on the old palette.
+    /// </summary>
+    private static PageBorderEdge ResolveEdge(CellBorder border, WorkbookTheme theme) =>
         border.Style == BorderStyle.None
             ? PageBorderEdge.None
-            : new PageBorderEdge(border.Style, PresentationRgb.FromCellColor(border.Color));
+            : new PageBorderEdge(border.Style, PresentationRgb.FromCellColor(border.ResolveColor(theme)));
 
 }
