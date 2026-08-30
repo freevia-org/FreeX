@@ -5106,17 +5106,14 @@ public static class PptxPackageWriter
     /// number we know may be stale, estimate whether the CURRENT box still fits the authored
     /// (unscaled) text using data the writer already owns — run font sizes and paragraph spacing
     /// versus the shape's current extent — with an average-glyph-width line-wrap estimate. This is
-    /// a text-metrics-free ESTIMATE, not a pixel-accurate remeasurement, so it is always recomputed
-    /// from the CURRENT geometry rather than only ever moving further from whatever was cached:
-    /// once text is deleted or the box is enlarged enough that the estimate finds no overflow, the
-    /// cached scale is dropped entirely (fontScale/lnSpcReduction both go back to unset, i.e. 100%)
-    /// exactly like PowerPoint's own normAutofit does, rather than staying frozen at the old
-    /// percentage forever (r171, freep-text-autofit F2). It mirrors TextLayoutPlanner's own
-    /// documented floor/clamp semantics (60% minimum font scale, up to a 20% line-spacing
-    /// reduction) so the two computations stay in the same spirit even though only one has real
-    /// font metrics to work with; this writer-side estimate is the single number both the .pptx
-    /// writer (below) and <see cref="PresentationPdfExporter.BuildShapeTextLines"/> use, so PDF
-    /// export and the saved file always agree.
+    /// a text-metrics-free ESTIMATE, not a pixel-accurate remeasurement, so it only ever shrinks
+    /// FURTHER than what is already cached, and only when the estimate finds clear evidence
+    /// (more than half a point of overflow) that the current geometry needs it; it never grows the
+    /// scale back up, which avoids a wrong estimate ever making an already-fitting file look better
+    /// than it actually renders. It mirrors TextLayoutPlanner's own documented floor/clamp
+    /// semantics (60% minimum font scale, never floored back above an already-lower cached value,
+    /// up to a 20% line-spacing reduction) so the two computations stay in the same spirit even
+    /// though only one has real font metrics to work with.
     /// </para>
     /// </summary>
     internal static (int? FontScalePpt, int? LnSpcReductionPpt) RecomputeNormalAutoFitScale(
@@ -5124,6 +5121,7 @@ public static class PptxPackageWriter
     {
         ArgumentNullException.ThrowIfNull(body);
 
+        var cachedFontScale = body.FontScalePPT is > 0 ? body.FontScalePPT.Value / 100000.0 : 1.0;
         var unchanged = (body.FontScalePPT, body.LnSpcReductionPPT);
 
         if (extentCxEmu <= 0 || extentCyEmu <= 0 || body.Paragraphs.Count == 0)
@@ -5168,25 +5166,19 @@ public static class PptxPackageWriter
             unscaledHeightPt += paragraph.SpaceAfterPt ?? 0;
         }
 
-        // r171 (freep-text-autofit F2): the CURRENT geometry (box size + authored text) fits at
-        // full size, with a clear margin -- so the correct value to write/export is full size
-        // (no fontScale/lnSpcReduction at all), regardless of what may have been cached from an
-        // earlier import or an earlier, more-overflowing edit of this same shape. PowerPoint
-        // itself recomputes normAutofit's shrink on every edit, including growing it back toward
-        // 100% once the box/text no longer overflows -- returning the stale `unchanged` cache
-        // here (as this function used to) permanently baked an old shrink into every future save
-        // and PDF export once a placeholder had ever been shrunk, even after the user deleted the
-        // overflowing text or enlarged the box.
+        // Fits at authored size (or no clear evidence of overflow) — no basis to override the
+        // cached value.
         if (unscaledHeightPt <= heightPt + 0.5)
-            return (null, null);
+            return unchanged;
 
         double requiredScale = heightPt / unscaledHeightPt;
-        double targetFontScale = Math.Clamp(requiredScale, RuntimeAutoFitMinimumFontScale, 1.0);
+        double minimumFontScale = Math.Min(RuntimeAutoFitMinimumFontScale, cachedFontScale);
+        double targetFontScale = Math.Clamp(requiredScale, minimumFontScale, 1.0);
 
-        // r171: always emit the scale the CURRENT geometry calls for -- this used to early-return
-        // `unchanged` here whenever the estimate did not call for MORE shrink than the cached
-        // value, which is exactly why a scale never grew back (fully or partially) once the box
-        // grew or the text shrank without going all the way back down to "fits perfectly".
+        // Only move when the estimate shows the CURRENT geometry needs strictly more shrink than
+        // what is already cached — never grow the scale back based on this coarse estimate alone.
+        if (targetFontScale >= cachedFontScale - 0.001)
+            return unchanged;
 
         double projectedHeightPt = unscaledHeightPt * targetFontScale;
         double lineSpacingReduction = 0.0;

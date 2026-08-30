@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Calc;
@@ -30,7 +31,7 @@ public sealed partial class ViewportService
         // is itself edited or a full F9 recalc runs (see NotifyAllSheetsRecalculated). Scoped to only
         // sheets that actually have a formula-driven rule so a workbook full of ordinary (non-formula)
         // CF rules never pays the cost of invalidating on an unrelated sheet's edit.
-        var crossSheetVersion = SheetHasFormulaDrivenConditionalFormat(sheet)
+        var crossSheetVersion = SheetHasConditionalFormatReachingAnotherSheet(sheet)
             ? ComputeCrossSheetContentVersionChecksum(workbook)
             : 0;
         var key = new CfContextCacheKey(sheet.Id, sheet.ContentVersion, sheet.ConditionalFormats.Version, crossSheetVersion);
@@ -90,35 +91,151 @@ public sealed partial class ViewportService
         CfEvaluationContext cfContext) =>
         ViewportConditionalFormatEvaluator.EvaluateDataBar(sheet, addr, value, workbook, cfContext, MatchesFormula);
 
-    // True when any rule on the sheet evaluates a formula that COULD read another sheet (via a
-    // direct cross-sheet reference or a defined name) -- either the main Formula rule type, or any
-    // ColorScale/DataBar/IconSet threshold configured with CfThresholdType.Formula. See the cache-key
-    // comment in BuildConditionalFormatContext for why this gates the cross-sheet version checksum.
-    private static bool SheetHasFormulaDrivenConditionalFormat(Sheet sheet)
+    // True when a rule on this sheet evaluates a formula that can actually REACH ANOTHER SHEET --
+    // a sheet-qualified reference, a defined name, or a structured/table reference, any of which
+    // may resolve elsewhere in the workbook.
+    //
+    // r171 remediation: the first version of this gate asked only whether the sheet had a
+    // FORMULA-driven rule at all, which is a different and much broader question. A rule like
+    // "=RAND()>0.5" reaches nothing outside its own cell, but under that gate any recalc anywhere
+    // in the workbook changed the cross-sheet checksum and so invalidated this sheet's cached
+    // evaluation -- re-rolling a volatile rule that nothing had touched. That broke the deliberate
+    // contract in R147_ShiftF9RerollsVolatileCfWithNoFormulaCellsTests, which requires Calculate
+    // Sheet on one sheet to leave another sheet's volatile conditional formatting frozen.
+    private static bool SheetHasConditionalFormatReachingAnotherSheet(Sheet sheet)
     {
         var rules = sheet.ConditionalFormats;
         for (var i = 0; i < rules.Count; i++)
         {
             var cf = rules[i];
-            if (cf.RuleType == CfRuleType.Formula)
+            if (cf.RuleType == CfRuleType.Formula && FormulaTextReachesAnotherSheet(cf.FormulaText))
                 return true;
-            if (cf.MinThresholdType == CfThresholdType.Formula ||
-                cf.MidThresholdType == CfThresholdType.Formula ||
-                cf.MaxThresholdType == CfThresholdType.Formula ||
-                cf.DataBarMinThresholdType == CfThresholdType.Formula ||
-                cf.DataBarMaxThresholdType == CfThresholdType.Formula)
+
+            if ((cf.MinThresholdType == CfThresholdType.Formula && FormulaTextReachesAnotherSheet(cf.MinThresholdValue)) ||
+                (cf.MidThresholdType == CfThresholdType.Formula && FormulaTextReachesAnotherSheet(cf.MidThresholdValue)) ||
+                (cf.MaxThresholdType == CfThresholdType.Formula && FormulaTextReachesAnotherSheet(cf.MaxThresholdValue)) ||
+                (cf.DataBarMinThresholdType == CfThresholdType.Formula && FormulaTextReachesAnotherSheet(cf.DataBarMinThresholdValue)) ||
+                (cf.DataBarMaxThresholdType == CfThresholdType.Formula && FormulaTextReachesAnotherSheet(cf.DataBarMaxThresholdValue)))
                 return true;
 
             var iconThresholds = cf.IconSetThresholds;
             for (var j = 0; j < iconThresholds.Count; j++)
             {
-                if (iconThresholds[j].Type == CfThresholdType.Formula)
+                if (iconThresholds[j].Type == CfThresholdType.Formula &&
+                    FormulaTextReachesAnotherSheet(iconThresholds[j].Value))
                     return true;
             }
         }
 
         return false;
     }
+
+    // Parsing a rule formula is not free and the answer depends only on the text, so it is memoised
+    // in a small bounded cache -- BuildConditionalFormatContext runs on every viewport pass,
+    // including pure scroll/resize renders.
+    private static readonly Dictionary<string, bool> _cfExternalReachCache = new(StringComparer.Ordinal);
+    private static readonly Queue<string> _cfExternalReachOrder = new();
+    private static readonly object _cfExternalReachGate = new();
+    private const int MaxCachedExternalReachFormulas = 256;
+
+    private static bool FormulaTextReachesAnotherSheet(string? formulaText)
+    {
+        if (string.IsNullOrWhiteSpace(formulaText))
+            return false;
+
+        lock (_cfExternalReachGate)
+        {
+            if (_cfExternalReachCache.TryGetValue(formulaText, out var cached))
+                return cached;
+        }
+
+        bool reaches;
+        try
+        {
+            reaches = NodeReachesAnotherSheet(FormulaEvaluator.ParseFormula(formulaText));
+        }
+        catch
+        {
+            // An unparseable rule never matches anything (see MatchesFormula), so it cannot depend
+            // on another sheet either.
+            reaches = false;
+        }
+
+        lock (_cfExternalReachGate)
+        {
+            while (_cfExternalReachCache.Count >= MaxCachedExternalReachFormulas &&
+                   _cfExternalReachOrder.TryDequeue(out var stale))
+                _cfExternalReachCache.Remove(stale);
+            _cfExternalReachCache[formulaText] = reaches;
+            _cfExternalReachOrder.Enqueue(formulaText);
+        }
+
+        return reaches;
+    }
+
+    private static bool NodeReachesAnotherSheet(FormulaNode node)
+    {
+        switch (node)
+        {
+            // A sheet qualifier means the reference may resolve on a different sheet. A defined
+            // name or a table reference resolves through the workbook, so it may too.
+            case CellRefNode cellRef:
+                return cellRef.SheetName is not null;
+            case RangeRefNode range:
+                return range.SheetName is not null || range.EndSheetName is not null;
+            case FullColumnRangeRefNode fullCol:
+                return fullCol.SheetName is not null;
+            case FullRowRangeRefNode fullRow:
+                return fullRow.SheetName is not null;
+            case NamedRangeNode:
+            case StructuredReferenceNode:
+            case StructuredCurrentRowReferenceNode:
+                return true;
+
+            case BinaryOpNode binary:
+                return NodeReachesAnotherSheet(binary.Left) || NodeReachesAnotherSheet(binary.Right);
+            case UnaryOpNode unary:
+                return NodeReachesAnotherSheet(unary.Operand);
+            case IntersectionNode intersection:
+                return NodeReachesAnotherSheet(intersection.Left) || NodeReachesAnotherSheet(intersection.Right);
+            case NamedRangeEndpointNode endpoint:
+                return NodeReachesAnotherSheet(endpoint.Start) || NodeReachesAnotherSheet(endpoint.End);
+            case UnionNode union:
+                return AnyReachesAnotherSheet(union.Areas);
+            case ArrayConstantNode array:
+                foreach (var row in array.Rows)
+                {
+                    if (AnyReachesAnotherSheet(row))
+                        return true;
+                }
+                return false;
+            case FunctionCallNode call:
+                // INDIRECT/OFFSET and friends build a reference at evaluation time, so their target
+                // cannot be known from the text. Treat them as reaching outward rather than risk
+                // serving a stale colour.
+                if (BuildsReferenceDynamically(call.FunctionName))
+                    return true;
+                return AnyReachesAnotherSheet(call.Arguments);
+
+            default:
+                return false;
+        }
+    }
+
+    private static bool AnyReachesAnotherSheet(IReadOnlyList<FormulaNode> nodes)
+    {
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (NodeReachesAnotherSheet(nodes[i]))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool BuildsReferenceDynamically(string functionName) =>
+        functionName.Equals("INDIRECT", StringComparison.OrdinalIgnoreCase) ||
+        functionName.Equals("OFFSET", StringComparison.OrdinalIgnoreCase);
 
     // Cheap combined checksum of every sheet's ContentVersion in the workbook. Used as part of the
     // CF context cache key only for sheets with a formula-driven rule (see above), so that a
