@@ -297,7 +297,7 @@ public sealed partial class OdsFileAdapter
             {
                 // A number whose style format is a date/percentage/currency keeps its ODF value-type so
                 // the typed semantics round-trip. We infer the value-type from the number format string.
-                var fmt = workbook.GetStyle(styleId).NumberFormat;
+                var fmt = workbook.GetStyleNumberFormat(styleId);
                 if (OdsNumberFormat.IsPercentage(fmt))
                 {
                     cellElement.SetAttributeValue(OfficeNs + "value-type", "percentage");

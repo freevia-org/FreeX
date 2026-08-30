@@ -263,7 +263,7 @@ internal static class XlsxNumberFormatCatalogWriter
         }
 
         foreach (var styleId in liveStyleIds)
-            liveFormatCodes.Add(workbook.GetStyle(styleId).NumberFormat);
+            liveFormatCodes.Add(workbook.GetStyleNumberFormat(styleId));
 
         return liveFormatCodes;
     }

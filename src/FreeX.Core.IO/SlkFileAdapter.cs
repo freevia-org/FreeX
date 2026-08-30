@@ -160,7 +160,7 @@ public sealed class SlkFileAdapter : IFileAdapter
         var formatIndexByCode = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var (_, cell) in cells)
         {
-            var code = workbook.GetStyle(cell.StyleId).NumberFormat;
+            var code = workbook.GetStyleNumberFormat(cell.StyleId);
             if (IsCustomNumberFormat(code) && !formatIndexByCode.ContainsKey(code))
             {
                 var index = formatIndexByCode.Count;
@@ -187,7 +187,7 @@ public sealed class SlkFileAdapter : IFileAdapter
 
             writer.WriteLine(sb.ToString());
 
-            var formatCode = workbook.GetStyle(cell.StyleId).NumberFormat;
+            var formatCode = workbook.GetStyleNumberFormat(cell.StyleId);
             if (formatIndexByCode.TryGetValue(formatCode, out var fmtIndex))
                 writer.WriteLine($"F;P{fmtIndex.ToString(CultureInfo.InvariantCulture)};Y{key.Row};X{key.Col}");
         }

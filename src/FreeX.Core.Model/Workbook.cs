@@ -909,8 +909,19 @@ public sealed class Workbook
     /// </summary>
     public CellStyle GetStyle(StyleId id)
     {
-        int idx = id.Value;
-        return (idx >= 0 && idx < _styles.Count ? _styles[idx] : _styles[0]).Clone();
+        return GetRegisteredStyleOrDefault(id).Clone();
+    }
+
+    /// <summary>
+    /// Reads a style's immutable number-format value without allocating the defensive
+    /// <see cref="CellStyle"/> clone required by <see cref="GetStyle"/>.
+    /// </summary>
+    internal string GetStyleNumberFormat(StyleId id) => GetRegisteredStyleOrDefault(id).NumberFormat;
+
+    private CellStyle GetRegisteredStyleOrDefault(StyleId id)
+    {
+        var idx = id.Value;
+        return idx >= 0 && idx < _styles.Count ? _styles[idx] : _styles[0];
     }
 
     /// <summary>Total number of registered styles.</summary>
