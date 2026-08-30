@@ -167,7 +167,10 @@ public readonly record struct DataTableRegistration(
 public sealed partial class Sheet
 {
     private readonly Dictionary<(uint Row, uint Col), Cell> _cells = [];
-    private readonly Dictionary<(uint Row, uint Col), ScalarValue> _spillValues = [];
+    // Store each live spill member's owner alongside its value. Besides keeping the two pieces of
+    // spill state in one hash table, this lets TryGetArrayExtent resolve a member directly instead
+    // of walking every spill anchor on each edit/selection guard.
+    private readonly Dictionary<(uint Row, uint Col), SpillMember> _spillValues = [];
     private readonly Dictionary<(uint Row, uint Col), (uint Rows, uint Cols)> _spillAnchors = [];
     // Maps a position to the anchor address of the array formula whose cached spill value was
     // loaded into _cells from the XLSX. These cells are displayable (in _cells) but should not
@@ -1183,7 +1186,7 @@ public sealed partial class Sheet
                 if (r == 0 && c == 0) continue;
                 var row = anchor.Row + (uint)r;
                 var col = anchor.Col + (uint)c;
-                _spillValues[(row, col)] = rv.Cells[r, c];
+                _spillValues[(row, col)] = new SpillMember(rv.Cells[r, c], anchor.Row, anchor.Col);
                 if (rv.Cells[r, c] is not BlankValue)
                     TrackUsedRangeCellSet(row, col);
             }
@@ -1235,8 +1238,8 @@ public sealed partial class Sheet
                     cells[r, c] = BlankValue.Instance;
                     continue;
                 }
-                cells[r, c] = _spillValues.TryGetValue((anchor.Row + r, anchor.Col + c), out var v)
-                    ? v
+                cells[r, c] = _spillValues.TryGetValue((anchor.Row + r, anchor.Col + c), out var member)
+                    ? member.Value
                     : BlankValue.Instance;
             }
         return new RangeValue(cells);
@@ -1319,14 +1322,14 @@ public sealed partial class Sheet
             return true;
         }
 
-        // Address is a member covered by some other live spill anchor.
-        foreach (var (anchorKey, extent) in _spillAnchors)
+        // Address is a member covered by another live spill anchor. The owner is stored with the
+        // value so this stays O(1) even on sheets containing many independent dynamic arrays.
+        if (_spillValues.TryGetValue(key, out var liveMember) &&
+            _spillAnchors.TryGetValue((liveMember.AnchorRow, liveMember.AnchorCol), out var memberExtent))
         {
-            if (address.Row < anchorKey.Row || address.Col < anchorKey.Col) continue;
-            if (address.Row >= anchorKey.Row + extent.Rows || address.Col >= anchorKey.Col + extent.Cols) continue;
-            anchor = new CellAddress(Id, anchorKey.Row, anchorKey.Col);
-            rows = extent.Rows;
-            cols = extent.Cols;
+            anchor = new CellAddress(Id, liveMember.AnchorRow, liveMember.AnchorCol);
+            rows = memberExtent.Rows;
+            cols = memberExtent.Cols;
             return true;
         }
 
@@ -1376,7 +1379,7 @@ public sealed partial class Sheet
     public ScalarValue GetValue(uint row, uint col)
     {
         if (_cells.TryGetValue((row, col), out var cell)) return cell.Value;
-        if (_spillValues.TryGetValue((row, col), out var spill)) return spill;
+        if (_spillValues.TryGetValue((row, col), out var spill)) return spill.Value;
         return BlankValue.Instance;
     }
 
@@ -1398,9 +1401,9 @@ public sealed partial class Sheet
                 yield return new CellAddress(Id, row, col);
         }
 
-        foreach (var ((row, col), value) in _spillValues)
+        foreach (var ((row, col), member) in _spillValues)
         {
-            if (value is not BlankValue && !_cells.ContainsKey((row, col)))
+            if (member.Value is not BlankValue && !_cells.ContainsKey((row, col)))
                 yield return new CellAddress(Id, row, col);
         }
     }
@@ -1578,9 +1581,9 @@ public sealed partial class Sheet
             if (col < minCol) minCol = col;
             if (col > maxCol) maxCol = col;
         }
-        foreach (var ((row, col), value) in _spillValues)
+        foreach (var ((row, col), member) in _spillValues)
         {
-            if (value is BlankValue || _cells.ContainsKey((row, col)))
+            if (member.Value is BlankValue || _cells.ContainsKey((row, col)))
                 continue;
 
             if (row < minRow) minRow = row;
@@ -1638,9 +1641,9 @@ public sealed partial class Sheet
         foreach (var (row, col) in _cells.Keys)
             Consider(row, col);
 
-        foreach (var ((row, col), value) in _spillValues)
+        foreach (var ((row, col), member) in _spillValues)
         {
-            if (value is BlankValue || _cells.ContainsKey((row, col)))
+            if (member.Value is BlankValue || _cells.ContainsKey((row, col)))
                 continue;
 
             Consider(row, col);
@@ -1678,6 +1681,8 @@ public sealed partial class Sheet
             new CellAddress(Id, minRow, minCol),
             new CellAddress(Id, maxRow, maxCol));
     }
+
+    private readonly record struct SpillMember(ScalarValue Value, uint AnchorRow, uint AnchorCol);
 
     /// <summary>
     /// Widens <paramref name="valueRange"/> (the cached value/spill bounding box) to also cover any
