@@ -3,7 +3,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
-using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Presentation.SlicerTimeline;
@@ -575,13 +574,11 @@ public partial class MainWindow
 
         SheetGrid.Viewport = viewport;
         SheetGrid.ValidationCircleCells = sheet?.ValidationCircleCells;
-        SheetGrid.PinnedNoteAddresses = sheet is null
-            ? null
-            : sheet.ShownComments.Count == 0
-                ? null
-                : sheet.ShownComments
-                    .Select(a => (a.Row, a.Col))
-                    .ToHashSet<(uint Row, uint Col)>();
+        var adornments = _worksheetViewportAdornmentCache.GetOrCreate(
+            _workbook,
+            sheet,
+            _navigationCacheRevision);
+        SheetGrid.PinnedNoteAddresses = adornments.PinnedNoteAddresses;
         SheetGrid.HiddenRows = sheet?.HiddenRows;
         SheetGrid.HiddenColumns = sheet?.HiddenCols;
         // Feed the page-break preview overlay the sheet's real "effectively hidden" predicates
@@ -589,47 +586,23 @@ public partial class MainWindow
         // above, so its pagination matches the real print output (R15-print-preview-interaction-2).
         SheetGrid.SheetIsRowHiddenPredicate = sheet is null ? null : sheet.IsRowEffectivelyHidden;
         SheetGrid.SheetIsColHiddenPredicate = sheet is null ? null : sheet.IsColEffectivelyHidden;
-        GridRange? autoFilterRange = sheet is not null &&
-                                      AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var resolvedAutoFilterRange)
-            ? resolvedAutoFilterRange
-            : null;
-        SheetGrid.AutoFilterRange = autoFilterRange;
+        SheetGrid.AutoFilterRange = adornments.AutoFilterRange;
         // R72-commands-sort-filter-4-1: without this, the AutoFilter dropdown arrow never shows the
         // filtered-state (funnel) icon for a filtered column -- GridView.Rendering.AutoFilter.cs reads
         // ActiveAutoFilterColumns (a set of column offsets from AutoFilterRange.Start.Col) to decide
         // which header buttons draw the "active" glyph, but nothing in the WPF host ever populated it.
-        SheetGrid.ActiveAutoFilterColumns = sheet is not null && autoFilterRange is { } activeFilterRange
-            ? AutoFilterHeaderButtonPlanner.GetActiveColumnOffsets(sheet, activeFilterRange)
-            : null;
-        IReadOnlyList<PivotHeaderDropdownTarget> pivotHeaderDropdownTargets = sheet is null
-            ? []
-            : PivotGridAdornmentPlanner.BuildHeaderTargets(_workbook, sheet);
-        _pivotHeaderDropdownTargets = BuildPivotHeaderDropdownTargetLookup(pivotHeaderDropdownTargets);
-        SheetGrid.PivotHeaderDropdowns = pivotHeaderDropdownTargets;
-        SheetGrid.PivotRowLabelAdornments = sheet is null
-            ? []
-            : PivotGridAdornmentPlanner.BuildRowLabelAdornments(_workbook, sheet);
+        SheetGrid.ActiveAutoFilterColumns = adornments.ActiveAutoFilterColumns;
+        _pivotHeaderDropdownTargets = adornments.PivotHeaderDropdownTargets;
+        SheetGrid.PivotHeaderDropdowns = adornments.PivotHeaderDropdowns;
+        SheetGrid.PivotRowLabelAdornments = adornments.PivotRowLabelAdornments;
         SheetGrid.FormulaTraceSheetId = _currentSheetId;
         SheetGrid.FormulaTraceArrows = _formulaTraceArrows;
-        SheetGrid.HyperlinkCells = sheet is null
-            ? null
-            : sheet.Hyperlinks.Keys
-                .Select(address => new CellAddress(default, address.Row, address.Col))
-                .ToHashSet();
+        SheetGrid.HyperlinkCells = adornments.HyperlinkCells;
         // F1: the WPF host never surfaced a hyperlinked cell's ScreenTip/target on hover (only a
         // Ctrl+hover hand cursor) -- mirror FreeX.App.Avalonia's FormatHyperlinkTooltip so
         // GridView.Input.cs's UpdateHyperlinkScreenTip has text to show: the custom ScreenTip if
         // one was set via the Insert Hyperlink dialog, otherwise the raw target.
-        SheetGrid.HyperlinkTooltips = sheet is null
-            ? null
-            : sheet.Hyperlinks
-                .Where(entry => !string.IsNullOrWhiteSpace(entry.Value))
-                .ToDictionary(
-                    entry => new CellAddress(default, entry.Key.Row, entry.Key.Col),
-                    entry => sheet.HyperlinkMetadata.TryGetValue(entry.Key, out var metadata) &&
-                             !string.IsNullOrWhiteSpace(metadata.ScreenTip)
-                        ? metadata.ScreenTip.Trim()
-                        : entry.Value.Trim());
+        SheetGrid.HyperlinkTooltips = adornments.HyperlinkTooltips;
         SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch
         {
             AppOptionsObjectDisplay.Placeholders => FreeX.App.UI.GridObjectDisplayMode.Placeholders,
@@ -818,16 +791,6 @@ public partial class MainWindow
         if (newHorizontalValue > HorizontalScroll.Maximum)
             HorizontalScroll.Maximum = newHorizontalValue;
         HorizontalScroll.Value = newHorizontalValue;
-    }
-
-    private static IReadOnlyDictionary<(uint Row, uint Col), PivotHeaderDropdownTarget> BuildPivotHeaderDropdownTargetLookup(
-        IReadOnlyList<PivotHeaderDropdownTarget> targets)
-    {
-        var lookup = new Dictionary<(uint Row, uint Col), PivotHeaderDropdownTarget>(targets.Count);
-        foreach (var target in targets)
-            lookup[(target.HeaderCell.Row, target.HeaderCell.Col)] = target;
-
-        return lookup;
     }
 
     private void RefreshViewportValidationDropdown(Sheet? sheet)

@@ -128,45 +128,48 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
 
             // --- Pass 3: pre-existing style-only entries outside the create zone ---
             // Materialise before the loop to avoid mutating _styleOnly while iterating it.
-            var preExistingStyleOnly = sheet.GetStyleOnlyEntries().ToList();
-            foreach (var ((row, col), existingStyleId) in preExistingStyleOnly)
+            if (ApplyStyleCommand.NeedsPreExistingStyleOnlyPass(_sourceRange, styleOnlyCreateZone))
             {
-                if (row < _sourceRange.Start.Row || row > _sourceRange.End.Row) continue;
-                if (col < _sourceRange.Start.Col || col > _sourceRange.End.Col) continue;
-
-                if (styleOnlyCreateZone.HasValue)
+                var preExistingStyleOnly = sheet.GetStyleOnlyEntries().ToList();
+                foreach (var ((row, col), existingStyleId) in preExistingStyleOnly)
                 {
-                    var z = styleOnlyCreateZone.Value;
-                    if (row >= z.Start.Row && row <= z.End.Row &&
-                        col >= z.Start.Col && col <= z.End.Col)
+                    if (row < _sourceRange.Start.Row || row > _sourceRange.End.Row) continue;
+                    if (col < _sourceRange.Start.Col || col > _sourceRange.End.Col) continue;
+
+                    if (styleOnlyCreateZone.HasValue)
                     {
-                        continue;
+                        var z = styleOnlyCreateZone.Value;
+                        if (row >= z.Start.Row && row <= z.End.Row &&
+                            col >= z.Start.Col && col <= z.End.Col)
+                        {
+                            continue;
+                        }
                     }
+
+                    if (sheet.GetCell(row, col) is not null)
+                        continue;
+
+                    var existingSource = sheet.GetStyleOnlySource(row, col);
+
+                    // Same row-beats-column precedence as Pass 2.
+                    if (commandSource == StyleOnlySource.Column && existingSource == StyleOnlySource.Row)
+                        continue;
+
+                    var addr = new CellAddress(sheetId, row, col);
+                    _snapshot.Add((sheetId, addr, null, existingStyleId, existingSource));
+
+                    var updatedBaseStyleId = commandSource == StyleOnlySource.Row && existingSource == StyleOnlySource.Column
+                        ? StyleId.Default
+                        : existingStyleId;
+
+                    var updated = StyleDiffStyleCache.GetOrRegister(
+                        ctx.Workbook, _diff, updatedBaseStyleId, styleCache);
+                    sheet.SetStyleOnly(row, col, updated);
+                    if (commandSource.HasValue)
+                        sheet.SetStyleOnlySource(row, col, commandSource.Value);
+                    else
+                        sheet.ClearStyleOnlySource(row, col);
                 }
-
-                if (sheet.GetCell(row, col) is not null)
-                    continue;
-
-                var existingSource = sheet.GetStyleOnlySource(row, col);
-
-                // Same row-beats-column precedence as Pass 2.
-                if (commandSource == StyleOnlySource.Column && existingSource == StyleOnlySource.Row)
-                    continue;
-
-                var addr = new CellAddress(sheetId, row, col);
-                _snapshot.Add((sheetId, addr, null, existingStyleId, existingSource));
-
-                var updatedBaseStyleId = commandSource == StyleOnlySource.Row && existingSource == StyleOnlySource.Column
-                    ? StyleId.Default
-                    : existingStyleId;
-
-                var updated = StyleDiffStyleCache.GetOrRegister(
-                    ctx.Workbook, _diff, updatedBaseStyleId, styleCache);
-                sheet.SetStyleOnly(row, col, updated);
-                if (commandSource.HasValue)
-                    sheet.SetStyleOnlySource(row, col, commandSource.Value);
-                else
-                    sheet.ClearStyleOnlySource(row, col);
             }
         }
 

@@ -146,50 +146,53 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
         // These exist when a cell was previously styled by a prior command.  We must update them
         // so that re-applying Bold on the same column after a prior Bold pass is consistent.
         // Materialise the snapshot before the loop to avoid iterating while mutating _styleOnly.
-        var preExistingStyleOnly = sheet.GetStyleOnlyEntries().ToList();
-        foreach (var ((row, col), existingStyleId) in preExistingStyleOnly)
+        if (NeedsPreExistingStyleOnlyPass(_range, styleOnlyCreateZone))
         {
-            if (row < _range.Start.Row || row > _range.End.Row) continue;
-            if (col < _range.Start.Col || col > _range.End.Col) continue;
-
-            // Skip anything already covered by Pass 2 to avoid duplicate snapshot entries.
-            if (styleOnlyCreateZone.HasValue)
+            var preExistingStyleOnly = sheet.GetStyleOnlyEntries().ToList();
+            foreach (var ((row, col), existingStyleId) in preExistingStyleOnly)
             {
-                var z = styleOnlyCreateZone.Value;
-                if (row >= z.Start.Row && row <= z.End.Row &&
-                    col >= z.Start.Col && col <= z.End.Col)
+                if (row < _range.Start.Row || row > _range.End.Row) continue;
+                if (col < _range.Start.Col || col > _range.End.Col) continue;
+
+                // Skip anything already covered by Pass 2 to avoid duplicate snapshot entries.
+                if (styleOnlyCreateZone.HasValue)
                 {
-                    continue;
+                    var z = styleOnlyCreateZone.Value;
+                    if (row >= z.Start.Row && row <= z.End.Row &&
+                        col >= z.Start.Col && col <= z.End.Col)
+                    {
+                        continue;
+                    }
                 }
+
+                // Skip if the cell is now occupied (Pass 1 handles it).
+                if (sheet.GetCell(row, col) is not null)
+                    continue;
+
+                var existingSource = sheet.GetStyleOnlySource(row, col);
+
+                // R92-render-cellstyle-inheritance-5-3: same row-beats-column precedence as Pass 2.
+                if (commandSource == StyleOnlySource.Column && existingSource == StyleOnlySource.Row)
+                    continue;
+
+                var addr = new CellAddress(_sheetId, row, col);
+                _snapshot.Add((addr, null, existingStyleId, existingSource));
+
+                var baseStyleId = commandSource == StyleOnlySource.Row && existingSource == StyleOnlySource.Column
+                    ? StyleId.Default
+                    : existingStyleId;
+
+                var newStyleId = StyleDiffStyleCache.GetOrRegister(
+                    ctx.Workbook,
+                    _diff,
+                    baseStyleId,
+                    styleCache);
+                sheet.SetStyleOnly(row, col, newStyleId);
+                if (commandSource.HasValue)
+                    sheet.SetStyleOnlySource(row, col, commandSource.Value);
+                else
+                    sheet.ClearStyleOnlySource(row, col);
             }
-
-            // Skip if the cell is now occupied (Pass 1 handles it).
-            if (sheet.GetCell(row, col) is not null)
-                continue;
-
-            var existingSource = sheet.GetStyleOnlySource(row, col);
-
-            // R92-render-cellstyle-inheritance-5-3: same row-beats-column precedence as Pass 2.
-            if (commandSource == StyleOnlySource.Column && existingSource == StyleOnlySource.Row)
-                continue;
-
-            var addr = new CellAddress(_sheetId, row, col);
-            _snapshot.Add((addr, null, existingStyleId, existingSource));
-
-            var baseStyleId = commandSource == StyleOnlySource.Row && existingSource == StyleOnlySource.Column
-                ? StyleId.Default
-                : existingStyleId;
-
-            var newStyleId = StyleDiffStyleCache.GetOrRegister(
-                ctx.Workbook,
-                _diff,
-                baseStyleId,
-                styleCache);
-            sheet.SetStyleOnly(row, col, newStyleId);
-            if (commandSource.HasValue)
-                sheet.SetStyleOnlySource(row, col, commandSource.Value);
-            else
-                sheet.ClearStyleOnlySource(row, col);
         }
 
         // Report the affected cells (mirroring PropagateCalculatedColumnCommand's use of its own
@@ -380,6 +383,9 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
             new CellAddress(range.Start.Sheet, startRow, startCol),
             new CellAddress(range.Start.Sheet, endRow, endCol));
     }
+
+    internal static bool NeedsPreExistingStyleOnlyPass(GridRange selection, GridRange? createZone) =>
+        createZone is null || createZone.Value != selection;
 }
 
 internal static class StyleDiffValidator

@@ -18,11 +18,8 @@ public sealed class MainWindowHyperlinkScreenTipSourceTests
         var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
         var lifecycleSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookLifecycle.cs");
 
-        viewportSource.Should().Contain("SheetGrid.HyperlinkTooltips = sheet is null");
-        viewportSource.Should().Contain("sheet.HyperlinkMetadata.TryGetValue(entry.Key, out var metadata)");
-        viewportSource.Should().Contain("!string.IsNullOrWhiteSpace(metadata.ScreenTip)");
-        viewportSource.Should().Contain("? metadata.ScreenTip.Trim()");
-        viewportSource.Should().Contain(": entry.Value.Trim());");
+        viewportSource.Should().Contain("SheetGrid.HyperlinkTooltips = adornments.HyperlinkTooltips;");
+        viewportSource.Should().Contain("_worksheetViewportAdornmentCache.GetOrCreate(");
         lifecycleSource.Should().Contain("SheetGrid.HyperlinkTooltips = null;");
     }
 }

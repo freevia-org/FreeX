@@ -112,27 +112,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
         IReadOnlyList<ExternalLinkModel> externalLinkMetadata = [];
         var structuredTableMetadata = StructuredTablePackageMetadata.Empty;
         IReadOnlyList<XlsxChartsheet> chartsheets = [];
-        // Raw pageSetup@useFirstPageNumber per worksheet part path (keyed like SheetXmlLayout.WorksheetPath).
-        // ClosedXML's IXLPageSetup.FirstPageNumber reflects only the raw firstPageNumber attribute value and
-        // drops the useFirstPageNumber checkbox flag entirely, so it must be read directly from the source
-        // package XML to tell an enabled custom first-page-number from a disabled one with a stale numeric
-        // value left in the file (see the FirstPageNumber assignment below).
-        Dictionary<string, bool>? firstPageNumberEnabledByWorksheetPath = null;
-        // Raw hyperlink "location" attribute per worksheet part path + cell ref, but ONLY for
-        // hyperlink elements that ALSO carry an r:id (external relationship). R55-io-hyperlink-
-        // round-trip-5-2: ClosedXML's XLHyperlink.InternalAddress getter -- the only source the load
-        // loop below otherwise reads Bookmark from -- comes back null/empty for this external+location
-        // combination (Excel's "Existing File > Bookmark..." picker), so the sub-address is recovered
-        // directly from the source XML instead.
-        Dictionary<string, Dictionary<string, string>>? externalHyperlinkLocationsByWorksheetPath = null;
-        // R106-io-hyperlink-range-shift: whole-column ("C:C"), whole-row ("3:3"), and oversized
-        // bounded-range hyperlink refs are stripped from the ClosedXML-input copy before ClosedXML
-        // loads it (XlsxWorksheetHyperlinkNormalizer.StripRangeHyperlinkRefs), so ClosedXML's own
-        // xlSheet.Hyperlinks collection below never contains them at all. Read them directly from
-        // this PRISTINE, unmodified package archive instead so Sheet.RangeHyperlinks can track their
-        // live GridRange and shift it on row/column insert/delete, mirroring
-        // ReadWorksheetExternalHyperlinkLocations just above.
-        Dictionary<string, Dictionary<string, GridRange>>? rangeHyperlinksByWorksheetPath = null;
         var packageMetadataDiagnostics = MeasureLoadPhase(() =>
         {
             try
@@ -145,10 +124,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
 
                 packageParts = XlsxLoadPackageParts.Inspect(packageArchive);
                 chartsheets = XlsxChartsheetReader.Read(packageArchive);
-                firstPageNumberEnabledByWorksheetPath = ReadWorksheetFirstPageNumberEnabledFlags(packageArchive);
-                externalHyperlinkLocationsByWorksheetPath = ReadWorksheetExternalHyperlinkLocations(packageArchive);
-                rangeHyperlinksByWorksheetPath = ReadWorksheetRangeHyperlinks(packageArchive);
-
                 workbookTheme = packageParts.HasTheme
                     ? XlsxWorkbookThemeReader.Load(packageArchive)
                     : WorkbookTheme.Office;
@@ -729,10 +704,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
                     // "Existing File > Bookmark..." feature); recover it from the raw source XML.
                     if (string.IsNullOrWhiteSpace(bookmark) &&
                         hyperlink.ExternalAddress is not null &&
-                        xmlLayout?.WorksheetPath is { Length: > 0 } hyperlinkWorksheetPath &&
-                        externalHyperlinkLocationsByWorksheetPath is not null &&
-                        externalHyperlinkLocationsByWorksheetPath.TryGetValue(hyperlinkWorksheetPath, out var locationsByRef) &&
-                        locationsByRef.TryGetValue(addr.ToA1(), out var rawLocation))
+                        xmlLayout?.ExternalHyperlinkLocations.TryGetValue(addr.ToA1(), out var rawLocation) == true)
                     {
                         bookmark = rawLocation;
                     }
@@ -755,12 +727,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             // R106-io-hyperlink-range-shift: populate Sheet.RangeHyperlinks with the whole-column/
             // row and oversized-bounded-range refs xlSheet.Hyperlinks above could never see (they
             // were stripped before ClosedXML loaded its copy). Keyed by worksheet part path, read
-            // from the pristine source archive up front (rangeHyperlinksByWorksheetPath).
-            if (xmlLayout?.WorksheetPath is { Length: > 0 } rangeHyperlinkWorksheetPath &&
-                rangeHyperlinksByWorksheetPath is not null &&
-                rangeHyperlinksByWorksheetPath.TryGetValue(rangeHyperlinkWorksheetPath, out var rangesByRef))
+            // from the pristine worksheet-layout parse up front.
+            if (xmlLayout is { RangeHyperlinks.Count: > 0 })
             {
-                foreach (var (originalRef, range) in rangesByRef)
+                foreach (var (originalRef, range) in xmlLayout.RangeHyperlinks)
                     sheet.RangeHyperlinks[originalRef] = range;
             }
 
@@ -895,11 +865,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             // FirstPageNumber here when the source XML positively confirms useFirstPageNumber was truthy;
             // if we can't determine that (no raw metadata available), fall back to ClosedXML's value
             // rather than risk dropping a genuinely-enabled custom first page number.
-            bool? firstPageNumberExplicitlyEnabled = xmlLayout?.WorksheetPath is { Length: > 0 } firstPageNumberWorksheetPath &&
-                firstPageNumberEnabledByWorksheetPath is not null &&
-                firstPageNumberEnabledByWorksheetPath.TryGetValue(firstPageNumberWorksheetPath, out var firstPageNumberEnabled)
-                ? firstPageNumberEnabled
-                : null;
+            var firstPageNumberExplicitlyEnabled = xmlLayout?.FirstPageNumberEnabled;
             sheet.FirstPageNumber = xlSheet.PageSetup.FirstPageNumber == 0 || firstPageNumberExplicitlyEnabled == false
                 ? null
                 : xlSheet.PageSetup.FirstPageNumber;
@@ -1852,155 +1818,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
     // without an explicit check here the user only ever sees a low-level zip/ClosedXML format
     // exception, never the actual reason ("this workbook is password protected").
     private static readonly byte[] CompoundFileBinarySignature = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
-
-    private static readonly XNamespace FirstPageNumberWorksheetNamespace =
-        "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-    // Reads, per worksheet part path, whether the source XML's <pageSetup useFirstPageNumber="..."/>
-    // attribute is truthy. ClosedXML's IXLPageSetup surface has no property for this flag (it only
-    // exposes the raw FirstPageNumber value), so it has to be recovered directly from the package XML.
-    // Best-effort: any entry that fails to parse or has no pageSetup element is simply omitted, and
-    // callers treat a missing entry as "unknown" rather than "disabled".
-    private static Dictionary<string, bool> ReadWorksheetFirstPageNumberEnabledFlags(ZipArchive archive)
-    {
-        var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry))
-        {
-            XDocument xml;
-            try
-            {
-                xml = XlsxPackageXmlEditor.LoadXml(entry);
-            }
-            catch (Exception)
-            {
-                continue;
-            }
-
-            if (xml.Root?.Element(FirstPageNumberWorksheetNamespace + "pageSetup") is not { } pageSetup)
-                continue;
-
-            result[XlsxPackagePath.NormalizeEntryPath(entry)] =
-                XlsxWorksheetXmlValueParser.IsTruthy(pageSetup.Attribute("useFirstPageNumber")?.Value);
-        }
-
-        return result;
-    }
-
-    private static readonly XNamespace HyperlinkRelationshipNamespace =
-        "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-
-    // R55-io-hyperlink-round-trip-5-2: reads, per worksheet part path, the raw "location" attribute
-    // of every <hyperlink> element that ALSO carries an r:id (an external relationship) -- Excel's
-    // "Existing File > Bookmark..." feature writes both together (r:id + location="Sheet2!A5") to
-    // jump to a specific sheet/cell inside the linked external workbook. ClosedXML's
-    // XLHyperlink.InternalAddress getter only ever populates for a purely INTERNAL hyperlink, so it
-    // comes back null/empty for this external+location combination and the load loop below would
-    // otherwise silently drop the sub-address. Best-effort: any entry that fails to parse, or has no
-    // hyperlinks element, is simply omitted.
-    private static Dictionary<string, Dictionary<string, string>> ReadWorksheetExternalHyperlinkLocations(
-        ZipArchive archive)
-    {
-        var result = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry))
-        {
-            XDocument xml;
-            try
-            {
-                xml = XlsxPackageXmlEditor.LoadXml(entry);
-            }
-            catch (Exception)
-            {
-                continue;
-            }
-
-            if (xml.Root is not { } root)
-                continue;
-
-            var ns = root.Name.Namespace;
-            var hyperlinksElement = root.Element(ns + "hyperlinks");
-            if (hyperlinksElement is null)
-                continue;
-
-            Dictionary<string, string>? byRef = null;
-            foreach (var hyperlinkElement in hyperlinksElement.Elements(ns + "hyperlink"))
-            {
-                var reference = hyperlinkElement.Attribute("ref")?.Value;
-                var location = hyperlinkElement.Attribute("location")?.Value;
-                var relationshipId = hyperlinkElement.Attribute(HyperlinkRelationshipNamespace + "id")?.Value;
-                if (string.IsNullOrEmpty(reference) ||
-                    string.IsNullOrWhiteSpace(location) ||
-                    string.IsNullOrEmpty(relationshipId))
-                {
-                    continue;
-                }
-
-                byRef ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                // R64-io-hyperlink-6-2: a hyperlink's "ref" may span multiple cells (e.g. "A1:B1"), but
-                // the per-cell recovery lookup below keys by a single cell's A1 address. Expand the
-                // range so every cell it covers recovers the same shared bookmark/location.
-                foreach (var cellKey in ExpandHyperlinkReferenceToCellKeys(reference))
-                {
-                    byRef[cellKey] = location;
-                }
-            }
-
-            if (byRef is not null)
-                result[XlsxPackagePath.NormalizeEntryPath(entry)] = byRef;
-        }
-
-        return result;
-    }
-
-    // R106-io-hyperlink-range-shift: reads, per worksheet part path, every hyperlink "ref" that is
-    // a whole-column ("C:C"), whole-row ("3:3"), or oversized bounded range (over
-    // MaxExpandableHyperlinkRangeCellCount cells below) -- the exact same refs
-    // XlsxWorksheetHyperlinkNormalizer.StripRangeHyperlinkRefs removes from the ClosedXML-input copy
-    // before load, so ClosedXML's own xlSheet.Hyperlinks collection (read in the main load loop
-    // above) never contains them at all. Keyed by the ORIGINAL ref string -- the identity
-    // Sheet.RangeHyperlinks uses to track a live, shift-adjusted GridRange for each one, and the
-    // same identity XlsxWorksheetMetadataPreserver.MergeWorksheetHyperlinkMetadata re-correlates
-    // against at save time. Best-effort: any worksheet entry that fails to parse is simply omitted.
-    private static Dictionary<string, Dictionary<string, GridRange>> ReadWorksheetRangeHyperlinks(
-        ZipArchive archive)
-    {
-        var result = new Dictionary<string, Dictionary<string, GridRange>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry))
-        {
-            XDocument xml;
-            try
-            {
-                xml = XlsxPackageXmlEditor.LoadXml(entry);
-            }
-            catch (Exception)
-            {
-                continue;
-            }
-
-            if (xml.Root is not { } root)
-                continue;
-
-            var ns = root.Name.Namespace;
-            var hyperlinksElement = root.Element(ns + "hyperlinks");
-            if (hyperlinksElement is null)
-                continue;
-
-            Dictionary<string, GridRange>? byRef = null;
-            foreach (var hyperlinkElement in hyperlinksElement.Elements(ns + "hyperlink"))
-            {
-                var reference = hyperlinkElement.Attribute("ref")?.Value;
-                if (string.IsNullOrWhiteSpace(reference))
-                    continue;
-
-                if (TryParseRangeHyperlinkGridRange(reference, out var range))
-                    (byRef ??= new Dictionary<string, GridRange>(StringComparer.Ordinal))[reference] = range;
-            }
-
-            if (byRef is not null)
-                result[XlsxPackagePath.NormalizeEntryPath(entry)] = byRef;
-        }
-
-        return result;
-    }
 
     /// <summary>
     /// Mirrors <see cref="XlsxWorksheetHyperlinkNormalizer"/>'s strip criteria exactly (whole-

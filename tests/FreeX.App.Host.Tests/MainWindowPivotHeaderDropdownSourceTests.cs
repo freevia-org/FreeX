@@ -14,8 +14,8 @@ public sealed class MainWindowPivotHeaderDropdownSourceTests
         var pivotSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
 
         constructorSource.Should().Contain("SheetGrid.PivotHeaderDropdownRequested += OnPivotHeaderDropdownRequested;");
-        viewportSource.Should().Contain("PivotGridAdornmentPlanner.BuildHeaderTargets(_workbook, sheet)");
-        viewportSource.Should().Contain("SheetGrid.PivotHeaderDropdowns = pivotHeaderDropdownTargets");
+        viewportSource.Should().Contain("_worksheetViewportAdornmentCache.GetOrCreate(");
+        viewportSource.Should().Contain("SheetGrid.PivotHeaderDropdowns = adornments.PivotHeaderDropdowns");
         handlerSource.Should().Contain("_pivotFieldMenuContextCaption = target.MenuTarget.FieldCaption;");
         handlerSource.Should().Contain("PivotHeaderArea.Page => PivotFieldBucket.Filters");
         handlerSource.Should().Contain("SetActiveCell(headerCell);");
