@@ -335,23 +335,10 @@ internal static class XlsxWorksheetFormControlPreserver
         foreach (var shape in root.Descendants(VmlNs + "shape"))
         {
             var id = shape.Attribute("id")?.Value;
-            if (string.IsNullOrEmpty(id))
+            if (!TryResolveVmlShapeControl(id, controlsByShapeId, out var control))
                 continue;
 
-            FormControlModel? control = null;
-            foreach (var (shapeId, candidate) in controlsByShapeId)
-            {
-                if (id.EndsWith("s" + shapeId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
-                {
-                    control = candidate;
-                    break;
-                }
-            }
-
-            if (control is null)
-                continue;
-
-            ApplyAnchorToVmlShape(shape, control.Anchor!.Value, control.AnchorOffsets);
+            ApplyAnchorToVmlShape(shape, control!.Anchor!.Value, control.AnchorOffsets);
         }
 
         var clonedVmlPath = AllocateClonedVmlDrawingPartPath(targetArchive);
@@ -647,28 +634,59 @@ internal static class XlsxWorksheetFormControlPreserver
         foreach (var shape in root.Descendants(VmlNs + "shape"))
         {
             var id = shape.Attribute("id")?.Value;
-            if (string.IsNullOrEmpty(id))
+            if (!TryResolveVmlShapeControl(id, controlsByShapeId, out var control))
                 continue;
 
-            FormControlModel? control = null;
-            foreach (var (shapeId, candidate) in controlsByShapeId)
-            {
-                if (id.EndsWith("s" + shapeId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
-                {
-                    control = candidate;
-                    break;
-                }
-            }
-
-            if (control is null)
-                continue;
-
-            ApplyAnchorToVmlShape(shape, control.Anchor!.Value, control.AnchorOffsets);
+            ApplyAnchorToVmlShape(shape, control!.Anchor!.Value, control.AnchorOffsets);
             changed = true;
         }
 
         if (changed)
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, vmlPath, vmlXml);
+    }
+
+    /// <summary>
+    /// Resolves the canonical terminal lowercase <c>s&lt;uint&gt;</c> suffix used by Excel VML shape
+    /// ids without allocating the suffix strings formerly created for every shape/control pair.
+    /// The syntax intentionally mirrors an ordinal <c>EndsWith("s" + shapeId)</c>: arbitrary
+    /// prefixes are allowed, while uppercase markers, signs, leading zeroes, non-ASCII digits, and
+    /// values outside <see cref="uint"/> are rejected.
+    /// </summary>
+    internal static bool TryResolveVmlShapeControl(
+        string? id,
+        IReadOnlyDictionary<uint, FormControlModel> controlsByShapeId,
+        out FormControlModel? control)
+    {
+        control = null;
+        if (string.IsNullOrEmpty(id))
+            return false;
+
+        var markerIndex = id.LastIndexOf('s');
+        if (markerIndex < 0 || markerIndex == id.Length - 1)
+            return false;
+
+        var digits = id.AsSpan(markerIndex + 1);
+        if (digits.Length > 1 && digits[0] == '0')
+            return false;
+
+        uint shapeId = 0;
+        foreach (var character in digits)
+        {
+            var digit = character - '0';
+            if ((uint)digit > 9)
+                return false;
+
+            if (shapeId > (uint.MaxValue - (uint)digit) / 10)
+                return false;
+
+            shapeId = (shapeId * 10) + (uint)digit;
+        }
+
+        if (!controlsByShapeId.TryGetValue(shapeId, out var candidate))
+            return false;
+
+        control = candidate;
+        return true;
     }
 
     /// <summary>
