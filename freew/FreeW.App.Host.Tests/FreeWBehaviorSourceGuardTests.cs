@@ -163,8 +163,15 @@ public sealed class FreeWBehaviorSourceGuardTests
         avalonia.Should().NotContain("FreeWRecoveryWorkflow.RunAsync(");
           avalonia.Should().Contain("RecoveryPromptDialog.ShowAsync(");
         avalonia.Should().Contain("AvaloniaBoundedDispatcherTransaction.TryExecute(");
-        avalonia.Should().Contain("_session.CompleteDocumentRecovery(");
-        avalonia.Should().Contain("_editor.LoadDocument(document)");
+        // r172: repointed from the old "_session.CompleteDocumentRecovery(" +
+        // "_editor.LoadDocument(document)" pair, which pinned the exact call the recovery
+        // fix legitimately replaced. The contract is that the Avalonia adapter completes a
+        // recovery through the shared session and restores the snapshot through the GUARDED
+        // document-file workflow -- which is what arms the external-modification baseline --
+        // rather than hand-rolling a load beside it. Pinning the method NAME made that fix
+        // look like a regression; pinning the route is what this guard is actually for.
+        avalonia.Should().Contain("_session.CompleteRecovery(");
+        avalonia.Should().Contain("_documentFileWorkflow.OpenSnapshotAsync(");
         avalonia.Should().NotContain("DocxReader");
         avalonia.Should().Contain("FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate");
     }
