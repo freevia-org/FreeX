@@ -401,6 +401,17 @@ public sealed partial class XlsxFileAdapter
             if (hyperlinksElement is null)
                 continue;
 
+            var hyperlinksByReference = new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+            foreach (var hyperlinkElement in hyperlinksElement.Elements(worksheetNs + "hyperlink"))
+            {
+                var reference = hyperlinkElement.Attribute("ref")?.Value;
+                if (!string.IsNullOrWhiteSpace(reference))
+                {
+                    // Preserve the document-order winner used by the former FirstOrDefault lookup.
+                    hyperlinksByReference.TryAdd(reference, hyperlinkElement);
+                }
+            }
+
             var changed = false;
             foreach (var (address, metadata) in sheet.HyperlinkMetadata)
             {
@@ -411,12 +422,7 @@ public sealed partial class XlsxFileAdapter
                 }
 
                 var reference = address.ToA1();
-                var hyperlinkElement = hyperlinksElement
-                    .Elements(worksheetNs + "hyperlink")
-                    .FirstOrDefault(element =>
-                        string.Equals(element.Attribute("ref")?.Value, reference, StringComparison.OrdinalIgnoreCase));
-
-                if (hyperlinkElement is null)
+                if (!hyperlinksByReference.TryGetValue(reference, out var hyperlinkElement))
                     continue;
 
                 // Defensive: never overwrite a "location" a future ClosedXML version might already
