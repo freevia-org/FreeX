@@ -49,17 +49,6 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     // Insert Cells path never touched sheet.Sparklines at all before this fix, the exact gap
     // R84-commands-clear-delete-5-1 fixed on the Delete side (see ShiftSparklinesInBandRight/Down).
     private List<SparklineBandSnapshot>? _sparklineSnapshot;
-    // chart-binding F1: mirrors InsertDeleteRowsCommand/InsertDeleteColumnsCommand's own
-    // _chartSnapshot field — this band-scoped Insert Cells path never touched chart.DataRange at
-    // all before this fix, so a chart plotting data inside the shifted band silently kept pointing
-    // at the old, now-wrong coordinate window. See ShiftChartDataRangesInBandRight/Down below.
-    private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
-    // chart-binding F1 follow-up: mirrors InsertDeleteRowsCommand/InsertDeleteColumnsCommand's own
-    // _chartSeriesFormattingSnapshot field -- this band-scoped Insert Cells path never remapped
-    // SeriesIndex/PointIndex-keyed chart formatting at all before this fix (see
-    // ShiftChartSeriesFormattingInBandRight/Down below), so undo must restore it same as they do.
-    private List<RowColumnShiftHelpers.ChartSeriesFormattingWorkbookSnapshot>? _chartSeriesFormattingSnapshot;
-
     public string Label => "Insert Cells";
 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
@@ -96,14 +85,6 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         var affectedScope = SheetRangeScope.ClampToPopulated(sheet, _range);
 
         _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
-        // chart-binding F1: capture every chart's DataRange workbook-wide BEFORE any band shift
-        // below runs, mirroring InsertDeleteRowsCommand/InsertDeleteColumnsCommand's own
-        // CaptureChartDataRanges call so Revert can restore it via RestoreChartDataRanges.
-        _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
-        // chart-binding F1 follow-up: capture workbook-wide SeriesIndex/PointIndex-keyed chart
-        // formatting BEFORE the remap below mutates it, mirroring the DataRange snapshot immediately
-        // above so Revert can restore it via RestoreChartSeriesFormatting.
-        _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
 
         if (_direction == InsertCellsShiftDirection.Right)
         {
@@ -387,12 +368,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: true);
         RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
         RestoreSparklines(sheet, _sparklineSnapshot);
-        // chart-binding F1: restore every chart's DataRange to its pre-Apply value, mirroring
-        // InsertDeleteRowsCommand/InsertDeleteColumnsCommand's own Revert-side RestoreChartDataRanges call.
-        RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
-        // chart-binding F1 follow-up: restore every chart's SeriesIndex/PointIndex-keyed formatting
-        // to its pre-Apply value too, mirroring the DataRange restore immediately above.
-        RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
+        _mutationSnapshot.RestoreChartStructuralState(ctx.Workbook);
 
         // R96-commands-undo-affected-cells-2: recompute AffectedCells to reflect where every
         // relocated formula cell ACTUALLY ended up after this Revert -- its original, pre-shift
@@ -2022,11 +1998,6 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     private List<(uint Row, uint Col, StyleId StyleId)>? _styleOnlySnapshot;
     // R84-commands-clear-delete-5-1: see InsertCellsCommand.CaptureSparklines/RestoreSparklines.
     private List<InsertCellsCommand.SparklineBandSnapshot>? _sparklineSnapshot;
-    // chart-binding F1: see InsertCellsCommand's field of the same name/rationale.
-    private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
-    // chart-binding F1 follow-up: see InsertCellsCommand's field of the same name/rationale.
-    private List<RowColumnShiftHelpers.ChartSeriesFormattingWorkbookSnapshot>? _chartSeriesFormattingSnapshot;
-
     public string Label => "Delete Cells";
 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
@@ -2063,10 +2034,6 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         var affectedScope = SheetRangeScope.ClampToPopulated(sheet, _range);
 
         _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
-        // chart-binding F1: see InsertCellsCommand.Apply's capture of the same name/rationale.
-        _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
-        // chart-binding F1 follow-up: see InsertCellsCommand.Apply's capture of the same name/rationale.
-        _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
 
         if (_direction == DeleteCellsShiftDirection.Left)
         {
@@ -2292,10 +2259,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: false);
         InsertCellsCommand.RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
         InsertCellsCommand.RestoreSparklines(sheet, _sparklineSnapshot);
-        // chart-binding F1: see InsertCellsCommand.Revert's RestoreChartDataRanges call above.
-        RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
-        // chart-binding F1 follow-up: see InsertCellsCommand.Revert's RestoreChartSeriesFormatting call above.
-        RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
+        _mutationSnapshot.RestoreChartStructuralState(ctx.Workbook);
 
         // R96-commands-undo-affected-cells-2: recompute AffectedCells to reflect where every
         // formula cell ACTUALLY ended up after this Revert -- covers both the shifted-back

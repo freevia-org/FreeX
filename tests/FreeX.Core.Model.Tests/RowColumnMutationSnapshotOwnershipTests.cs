@@ -29,7 +29,11 @@ public sealed class RowColumnMutationSnapshotOwnershipTests
         "_scopedNamedFormulaSnapshot",
         "_cfFormulaSnapshot",
         "_cfThresholdSnapshot",
-        "_dvFormulaSnapshot"
+        "_dvFormulaSnapshot",
+        "_chartSnapshot",
+        "_chartSeriesColumnMappingsSnapshot",
+        "_chartSeriesFormattingSnapshot",
+        "_chartPositionSnapshot"
     ];
 
     [Fact]
@@ -45,8 +49,10 @@ public sealed class RowColumnMutationSnapshotOwnershipTests
 
         Count(allCommandSources, "private RowColumnMutationSnapshot? _mutationSnapshot;")
             .Should().Be(6, "insert/delete rows, columns, and cells each retain the canonical snapshot");
-        Count(allCommandSources, "RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet)")
+        Count(allCommandSources, "RowColumnMutationSnapshot.Capture(")
             .Should().Be(6, "every structural mutation family must capture through the canonical owner");
+        Count(allCommandSources, "RestoreChartStructuralState(ctx.Workbook)")
+            .Should().Be(6, "every structural mutation family must restore chart state through the canonical owner");
 
         var privateFieldLines = allCommandSources
             .Split('\n')
@@ -66,11 +72,51 @@ public sealed class RowColumnMutationSnapshotOwnershipTests
         source.Should().Contain("CaptureDictionary(sheet.Comments)");
         source.Should().Contain("CaptureRuleRanges(sheet)");
         source.Should().Contain("CaptureNamedRanges(workbook)");
-        source.Should().Contain("CaptureChartVerbatimFormulas(workbook)");
+        source.Should().Contain("CaptureChartStructuralState(workbook, sheet, chartFeatures)");
         source.Should().Contain("internal void RewriteReferences");
         source.Should().Contain("internal List<CellAddress> RestoreRewrittenFormulas");
         source.Should().Contain("internal void RestoreCommonState");
+        source.Should().Contain("internal void RestoreChartStructuralState");
         source.Should().Contain("internal IReadOnlyList<CellAddress> BuildAffectedCells");
+    }
+
+    [Fact]
+    public void CanonicalChartSnapshot_CapturesAndRestoresStructuralStateInSingleTraversals()
+    {
+        var helperSource = ModelSourceTestSupport.ReadCommandsSource("RowColumnShiftHelpers.PrintAndCharts.cs");
+        var capture = Slice(
+            helperSource,
+            "internal static ChartStructuralWorkbookSnapshot CaptureChartStructuralState(",
+            "internal static void RestoreChartStructuralVerbatimFormulas(");
+        var restore = Slice(
+            helperSource,
+            "internal static void RestoreChartStructuralState(",
+            "internal static void RewriteChartVerbatimFormulas(");
+
+        Count(capture, "foreach (var sheet in workbook.Sheets)").Should().Be(1);
+        Count(capture, "foreach (var chart in sheet.Charts)").Should().Be(1);
+        capture.Should().Contain("DataRange = chart.DataRange");
+        capture.Should().Contain("new List<ChartSeriesColumnMapping>(chart.SeriesColumnMappings)");
+        capture.Should().Contain("CaptureChartSeriesFormatting(chart)");
+        capture.Should().Contain("CaptureChartVerbatimFormulas(chart)");
+
+        Count(restore, "foreach (var entry in snapshot.Sheets)").Should().Be(1);
+        restore.Should().Contain("chart.DataRange = chartSnapshot.DataRange");
+        restore.Should().Contain("chart.SeriesColumnMappings = mappings");
+        restore.Should().Contain("RestoreChartSeriesFormatting(chart, chartSnapshot.SeriesFormatting)");
+
+        var structuralCommands = string.Join(
+            Environment.NewLine,
+            ModelSourceTestSupport.ReadCommandsSource("InsertDeleteRowsCommand.cs"),
+            ModelSourceTestSupport.ReadCommandsSource("DeleteRowsCommand.cs"),
+            ModelSourceTestSupport.ReadCommandsSource("InsertDeleteColumnsCommand.cs"),
+            ModelSourceTestSupport.ReadCommandsSource("InsertDeleteCellsCommand.cs"));
+        structuralCommands.Should().NotContain("CaptureChartDataRanges(ctx.Workbook)");
+        structuralCommands.Should().NotContain("CaptureChartSeriesColumnMappings(ctx.Workbook)");
+        structuralCommands.Should().NotContain("CaptureChartSeriesFormatting(ctx.Workbook)");
+        structuralCommands.Should().NotContain("RestoreChartDataRanges(ctx.Workbook");
+        structuralCommands.Should().NotContain("RestoreChartSeriesColumnMappings(ctx.Workbook");
+        structuralCommands.Should().NotContain("RestoreChartSeriesFormatting(ctx.Workbook");
     }
 
     private static int Count(string source, string value)
@@ -84,5 +130,14 @@ public sealed class RowColumnMutationSnapshotOwnershipTests
         }
 
         return count;
+    }
+
+    private static string Slice(string source, string startMarker, string endMarker)
+    {
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+        return source[start..end];
     }
 }

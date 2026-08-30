@@ -166,19 +166,6 @@ internal static partial class RowColumnShiftHelpers
         public required double Top { get; init; }
     }
 
-    internal static List<ChartPositionSnapshot> CaptureChartPositions(Sheet sheet) =>
-        sheet.Charts.Select(c => new ChartPositionSnapshot { Chart = c, Left = c.Left, Top = c.Top }).ToList();
-
-    internal static void RestoreChartPositions(List<ChartPositionSnapshot>? snapshot)
-    {
-        if (snapshot is null) return;
-        foreach (var entry in snapshot)
-        {
-            entry.Chart.Left = entry.Left;
-            entry.Chart.Top = entry.Top;
-        }
-    }
-
     /// <summary>
     /// Cumulative pixel size of every row/column strictly before <paramref name="index"/> (1-based),
     /// mirroring XlsxWorksheetChartWriter.ToAnchorMarker's cumulative walk closely enough to locate a
@@ -303,44 +290,6 @@ internal static partial class RowColumnShiftHelpers
     // this — the mapping is column-only — so there is no corresponding row-shift variant.
 
     /// <summary>
-    /// Snapshot of a single sheet's charts' <see cref="ChartModel.SeriesColumnMappings"/> lists,
-    /// keyed by the hosting sheet and chart index, for undo.
-    /// </summary>
-    internal sealed class ChartSeriesColumnMappingsWorkbookSnapshot
-    {
-        public required SheetId HostSheet { get; init; }
-        public required List<List<ChartSeriesColumnMapping>> Charts { get; init; }
-    }
-
-    internal static List<ChartSeriesColumnMappingsWorkbookSnapshot> CaptureChartSeriesColumnMappings(Workbook workbook)
-    {
-        var result = new List<ChartSeriesColumnMappingsWorkbookSnapshot>(workbook.Sheets.Count);
-        foreach (var s in workbook.Sheets)
-        {
-            if (s.Charts.Count == 0) continue;
-            result.Add(new ChartSeriesColumnMappingsWorkbookSnapshot
-            {
-                HostSheet = s.Id,
-                Charts = s.Charts.Select(c => new List<ChartSeriesColumnMapping>(c.SeriesColumnMappings)).ToList()
-            });
-        }
-        return result;
-    }
-
-    internal static void RestoreChartSeriesColumnMappings(
-        Workbook workbook, List<ChartSeriesColumnMappingsWorkbookSnapshot>? snapshot)
-    {
-        if (snapshot is null) return;
-        foreach (var entry in snapshot)
-        {
-            var sheet = workbook.GetSheet(entry.HostSheet);
-            if (sheet is null) continue;
-            for (int i = 0; i < sheet.Charts.Count && i < entry.Charts.Count; i++)
-                sheet.Charts[i].SeriesColumnMappings = entry.Charts[i];
-        }
-    }
-
-    /// <summary>
     /// Shifts every mapped value column at or after <paramref name="start"/> up by
     /// <paramref name="count"/>, mirroring <see cref="ShiftRangeColumnsUp"/> for the chart's
     /// DataRange so a mapping still points at the same (now relocated) worksheet column.
@@ -441,85 +390,54 @@ internal static partial class RowColumnShiftHelpers
         public required List<ChartSeriesRawXmlEntry> AdditionalSeriesTrendlinesXml { get; init; }
     }
 
-    /// <summary>Workbook-wide snapshot of <see cref="ChartSeriesFormattingSnapshot"/>s, keyed by hosting sheet.</summary>
-    internal sealed class ChartSeriesFormattingWorkbookSnapshot
+    private static ChartSeriesFormattingSnapshot CaptureChartSeriesFormatting(ChartModel chart) => new()
     {
-        public required SheetId HostSheet { get; init; }
-        public required List<ChartSeriesFormattingSnapshot> Charts { get; init; }
-    }
+        SeriesOrderOverrides          = new List<ChartSeriesOrderOverride>(chart.SeriesOrderOverrides),
+        PointMarkerFormats            = new List<ChartPointMarkerFormat>(chart.PointMarkerFormats),
+        SecondaryAxisSeriesIndexes    = new List<int>(chart.SecondaryAxisSeriesIndexes),
+        ComboLineSeriesIndexes        = new List<int>(chart.ComboLineSeriesIndexes),
+        ComboScatterSeriesIndexes     = new List<int>(chart.ComboScatterSeriesIndexes),
+        TrendlineSeriesIndex          = chart.TrendlineSeriesIndex,
+        ErrorBarSeriesIndex           = chart.ErrorBarSeriesIndex,
+        ShowLinearTrendline           = chart.ShowLinearTrendline,
+        ShowErrorBars                 = chart.ShowErrorBars,
+        SeriesFormats                 = new List<ChartSeriesFormat>(chart.SeriesFormats),
+        PointFillColors               = new List<ChartPointFillFormat>(chart.PointFillColors),
+        SeriesDataLabelFormats        = new List<ChartSeriesDataLabelFormat>(chart.SeriesDataLabelFormats),
+        PointDataLabelFormats         = new List<ChartPointDataLabelFormat>(chart.PointDataLabelFormats),
+        SeriesPlotOrder               = new List<int>(chart.SeriesPlotOrder),
+        LegendEntries                 = new List<ChartLegendEntryModel>(chart.LegendEntries),
+        MultiLevelCategoryXml         = new List<ChartSeriesRawXmlEntry>(chart.MultiLevelCategoryXml),
+        ExplodedSlices                = new List<ChartPointExplosion>(chart.ExplodedSlices),
+        RangeDataLabels               = new List<ChartRangeDataLabel>(chart.RangeDataLabels),
+        SeriesRangeDataLabels         = new List<ChartSeriesRangeDataLabels>(chart.SeriesRangeDataLabels),
+        AdditionalSeriesErrorBarsXml  = new List<ChartSeriesRawXmlEntry>(chart.AdditionalSeriesErrorBarsXml),
+        AdditionalSeriesTrendlinesXml = new List<ChartSeriesRawXmlEntry>(chart.AdditionalSeriesTrendlinesXml)
+    };
 
-    internal static List<ChartSeriesFormattingWorkbookSnapshot> CaptureChartSeriesFormatting(Workbook workbook)
+    private static void RestoreChartSeriesFormatting(ChartModel chart, ChartSeriesFormattingSnapshot snapshot)
     {
-        var result = new List<ChartSeriesFormattingWorkbookSnapshot>(workbook.Sheets.Count);
-        foreach (var s in workbook.Sheets)
-        {
-            if (s.Charts.Count == 0) continue;
-            result.Add(new ChartSeriesFormattingWorkbookSnapshot
-            {
-                HostSheet = s.Id,
-                Charts = s.Charts.Select(c => new ChartSeriesFormattingSnapshot
-                {
-                    SeriesOrderOverrides       = new List<ChartSeriesOrderOverride>(c.SeriesOrderOverrides),
-                    PointMarkerFormats         = new List<ChartPointMarkerFormat>(c.PointMarkerFormats),
-                    SecondaryAxisSeriesIndexes = new List<int>(c.SecondaryAxisSeriesIndexes),
-                    ComboLineSeriesIndexes     = new List<int>(c.ComboLineSeriesIndexes),
-                    ComboScatterSeriesIndexes  = new List<int>(c.ComboScatterSeriesIndexes),
-                    TrendlineSeriesIndex       = c.TrendlineSeriesIndex,
-                    ErrorBarSeriesIndex        = c.ErrorBarSeriesIndex,
-                    ShowLinearTrendline        = c.ShowLinearTrendline,
-                    ShowErrorBars              = c.ShowErrorBars,
-                    SeriesFormats              = new List<ChartSeriesFormat>(c.SeriesFormats),
-                    PointFillColors            = new List<ChartPointFillFormat>(c.PointFillColors),
-                    SeriesDataLabelFormats     = new List<ChartSeriesDataLabelFormat>(c.SeriesDataLabelFormats),
-                    PointDataLabelFormats      = new List<ChartPointDataLabelFormat>(c.PointDataLabelFormats),
-                    SeriesPlotOrder            = new List<int>(c.SeriesPlotOrder),
-                    LegendEntries              = new List<ChartLegendEntryModel>(c.LegendEntries),
-                    MultiLevelCategoryXml         = new List<ChartSeriesRawXmlEntry>(c.MultiLevelCategoryXml),
-                    ExplodedSlices                = new List<ChartPointExplosion>(c.ExplodedSlices),
-                    RangeDataLabels               = new List<ChartRangeDataLabel>(c.RangeDataLabels),
-                    SeriesRangeDataLabels         = new List<ChartSeriesRangeDataLabels>(c.SeriesRangeDataLabels),
-                    AdditionalSeriesErrorBarsXml  = new List<ChartSeriesRawXmlEntry>(c.AdditionalSeriesErrorBarsXml),
-                    AdditionalSeriesTrendlinesXml = new List<ChartSeriesRawXmlEntry>(c.AdditionalSeriesTrendlinesXml)
-                }).ToList()
-            });
-        }
-        return result;
-    }
-
-    internal static void RestoreChartSeriesFormatting(Workbook workbook, List<ChartSeriesFormattingWorkbookSnapshot>? snapshot)
-    {
-        if (snapshot is null) return;
-        foreach (var entry in snapshot)
-        {
-            var sheet = workbook.GetSheet(entry.HostSheet);
-            if (sheet is null) continue;
-            for (int i = 0; i < sheet.Charts.Count && i < entry.Charts.Count; i++)
-            {
-                var chart = sheet.Charts[i];
-                var snap = entry.Charts[i];
-                chart.SeriesOrderOverrides       = snap.SeriesOrderOverrides;
-                chart.PointMarkerFormats         = snap.PointMarkerFormats;
-                chart.SecondaryAxisSeriesIndexes = snap.SecondaryAxisSeriesIndexes;
-                chart.ComboLineSeriesIndexes     = snap.ComboLineSeriesIndexes;
-                chart.ComboScatterSeriesIndexes  = snap.ComboScatterSeriesIndexes;
-                chart.TrendlineSeriesIndex       = snap.TrendlineSeriesIndex;
-                chart.ErrorBarSeriesIndex        = snap.ErrorBarSeriesIndex;
-                chart.ShowLinearTrendline        = snap.ShowLinearTrendline;
-                chart.ShowErrorBars              = snap.ShowErrorBars;
-                chart.SeriesFormats              = snap.SeriesFormats;
-                chart.PointFillColors            = snap.PointFillColors;
-                chart.SeriesDataLabelFormats     = snap.SeriesDataLabelFormats;
-                chart.PointDataLabelFormats      = snap.PointDataLabelFormats;
-                chart.SeriesPlotOrder            = snap.SeriesPlotOrder;
-                chart.LegendEntries              = snap.LegendEntries;
-                chart.MultiLevelCategoryXml         = snap.MultiLevelCategoryXml;
-                chart.ExplodedSlices                = snap.ExplodedSlices;
-                chart.RangeDataLabels                = snap.RangeDataLabels;
-                chart.SeriesRangeDataLabels          = snap.SeriesRangeDataLabels;
-                chart.AdditionalSeriesErrorBarsXml   = snap.AdditionalSeriesErrorBarsXml;
-                chart.AdditionalSeriesTrendlinesXml  = snap.AdditionalSeriesTrendlinesXml;
-            }
-        }
+        chart.SeriesOrderOverrides          = snapshot.SeriesOrderOverrides;
+        chart.PointMarkerFormats            = snapshot.PointMarkerFormats;
+        chart.SecondaryAxisSeriesIndexes    = snapshot.SecondaryAxisSeriesIndexes;
+        chart.ComboLineSeriesIndexes        = snapshot.ComboLineSeriesIndexes;
+        chart.ComboScatterSeriesIndexes     = snapshot.ComboScatterSeriesIndexes;
+        chart.TrendlineSeriesIndex          = snapshot.TrendlineSeriesIndex;
+        chart.ErrorBarSeriesIndex           = snapshot.ErrorBarSeriesIndex;
+        chart.ShowLinearTrendline           = snapshot.ShowLinearTrendline;
+        chart.ShowErrorBars                 = snapshot.ShowErrorBars;
+        chart.SeriesFormats                 = snapshot.SeriesFormats;
+        chart.PointFillColors               = snapshot.PointFillColors;
+        chart.SeriesDataLabelFormats        = snapshot.SeriesDataLabelFormats;
+        chart.PointDataLabelFormats         = snapshot.PointDataLabelFormats;
+        chart.SeriesPlotOrder               = snapshot.SeriesPlotOrder;
+        chart.LegendEntries                 = snapshot.LegendEntries;
+        chart.MultiLevelCategoryXml         = snapshot.MultiLevelCategoryXml;
+        chart.ExplodedSlices                = snapshot.ExplodedSlices;
+        chart.RangeDataLabels               = snapshot.RangeDataLabels;
+        chart.SeriesRangeDataLabels         = snapshot.SeriesRangeDataLabels;
+        chart.AdditionalSeriesErrorBarsXml  = snapshot.AdditionalSeriesErrorBarsXml;
+        chart.AdditionalSeriesTrendlinesXml = snapshot.AdditionalSeriesTrendlinesXml;
     }
 
     /// <summary>
@@ -1064,42 +982,45 @@ internal static partial class RowColumnShiftHelpers
     {
         var result = new List<ChartVerbatimSnapshot?>(sheet.Charts.Count);
         foreach (var chart in sheet.Charts)
-        {
-            List<ChartSeriesVerbatimFormulas>? verbatim = null;
-            if (chart.VerbatimSeriesFormulas is { Count: > 0 } vf)
-            {
-                verbatim = new List<ChartSeriesVerbatimFormulas>(vf.Count);
-                foreach (var f in vf)
-                    verbatim.Add(f); // records are immutable — safe to share
-            }
-
-            List<(int, string?)>? dlFormulas = null;
-            if (chart.SeriesRangeDataLabels is { Count: > 0 } dl)
-            {
-                dlFormulas = new List<(int, string?)>(dl.Count);
-                foreach (var d in dl)
-                    dlFormulas.Add((d.SeriesIndex, d.Formula));
-            }
-
-            var hasErrorBars = chart.ErrorBarPlusRangeFormula is not null || chart.ErrorBarMinusRangeFormula is not null;
-
-            List<ChartSeriesRawXmlEntry>? multiLevelCategory = null;
-            if (chart.MultiLevelCategoryXml is { Count: > 0 } mlc)
-                multiLevelCategory = new List<ChartSeriesRawXmlEntry>(mlc); // records are immutable — safe to share
-
-            result.Add(verbatim is not null || dlFormulas is not null || hasErrorBars || multiLevelCategory is not null
-                ? new ChartVerbatimSnapshot
-                {
-                    VerbatimSeriesFormulas    = verbatim,
-                    DataLabelFormulas         = dlFormulas,
-                    ErrorBarsCaptured         = hasErrorBars,
-                    ErrorBarPlusRangeFormula  = chart.ErrorBarPlusRangeFormula,
-                    ErrorBarMinusRangeFormula = chart.ErrorBarMinusRangeFormula,
-                    MultiLevelCategoryXml     = multiLevelCategory
-                }
-                : null);
-        }
+            result.Add(CaptureChartVerbatimFormulas(chart));
         return result;
+    }
+
+    private static ChartVerbatimSnapshot? CaptureChartVerbatimFormulas(ChartModel chart)
+    {
+        List<ChartSeriesVerbatimFormulas>? verbatim = null;
+        if (chart.VerbatimSeriesFormulas is { Count: > 0 } vf)
+        {
+            verbatim = new List<ChartSeriesVerbatimFormulas>(vf.Count);
+            foreach (var f in vf)
+                verbatim.Add(f); // records are immutable — safe to share
+        }
+
+        List<(int, string?)>? dlFormulas = null;
+        if (chart.SeriesRangeDataLabels is { Count: > 0 } dl)
+        {
+            dlFormulas = new List<(int, string?)>(dl.Count);
+            foreach (var d in dl)
+                dlFormulas.Add((d.SeriesIndex, d.Formula));
+        }
+
+        var hasErrorBars = chart.ErrorBarPlusRangeFormula is not null || chart.ErrorBarMinusRangeFormula is not null;
+
+        List<ChartSeriesRawXmlEntry>? multiLevelCategory = null;
+        if (chart.MultiLevelCategoryXml is { Count: > 0 } mlc)
+            multiLevelCategory = new List<ChartSeriesRawXmlEntry>(mlc); // records are immutable — safe to share
+
+        return verbatim is not null || dlFormulas is not null || hasErrorBars || multiLevelCategory is not null
+            ? new ChartVerbatimSnapshot
+            {
+                VerbatimSeriesFormulas    = verbatim,
+                DataLabelFormulas         = dlFormulas,
+                ErrorBarsCaptured         = hasErrorBars,
+                ErrorBarPlusRangeFormula  = chart.ErrorBarPlusRangeFormula,
+                ErrorBarMinusRangeFormula = chart.ErrorBarMinusRangeFormula,
+                MultiLevelCategoryXml     = multiLevelCategory
+            }
+            : null;
     }
 
     /// <summary>
@@ -1119,6 +1040,129 @@ internal static partial class RowColumnShiftHelpers
             });
         }
         return result;
+    }
+
+    [Flags]
+    internal enum ChartStructuralSnapshotFeatures
+    {
+        None = 0,
+        SeriesColumnMappings = 1,
+        Positions = 2
+    }
+
+    internal sealed class ChartStructuralSnapshot
+    {
+        public required GridRange DataRange { get; init; }
+        public List<ChartSeriesColumnMapping>? SeriesColumnMappings { get; init; }
+        public required ChartSeriesFormattingSnapshot SeriesFormatting { get; init; }
+        public ChartVerbatimSnapshot? VerbatimFormulas { get; init; }
+        public ChartPositionSnapshot? Position { get; init; }
+    }
+
+    internal sealed class ChartStructuralSheetSnapshot
+    {
+        public required SheetId HostSheet { get; init; }
+        public required List<ChartStructuralSnapshot> Charts { get; init; }
+    }
+
+    internal sealed class ChartStructuralWorkbookSnapshot
+    {
+        public required List<ChartStructuralSheetSnapshot> Sheets { get; init; }
+    }
+
+    /// <summary>
+    /// Captures all chart state shared by structural row, column, and band-cell commands in one
+    /// workbook traversal. A null mapping/position means that optional component was not requested;
+    /// an empty non-null mapping is a captured empty list and must be restored as such.
+    /// </summary>
+    internal static ChartStructuralWorkbookSnapshot CaptureChartStructuralState(
+        Workbook workbook,
+        Sheet positionHostSheet,
+        ChartStructuralSnapshotFeatures features)
+    {
+        var sheets = new List<ChartStructuralSheetSnapshot>(workbook.Sheets.Count);
+        var captureMappings = features.HasFlag(ChartStructuralSnapshotFeatures.SeriesColumnMappings);
+        var capturePositions = features.HasFlag(ChartStructuralSnapshotFeatures.Positions);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheet.Charts.Count == 0)
+                continue;
+
+            var charts = new List<ChartStructuralSnapshot>(sheet.Charts.Count);
+            foreach (var chart in sheet.Charts)
+            {
+                charts.Add(new ChartStructuralSnapshot
+                {
+                    DataRange = chart.DataRange,
+                    SeriesColumnMappings = captureMappings
+                        ? new List<ChartSeriesColumnMapping>(chart.SeriesColumnMappings)
+                        : null,
+                    SeriesFormatting = CaptureChartSeriesFormatting(chart),
+                    VerbatimFormulas = CaptureChartVerbatimFormulas(chart),
+                    Position = capturePositions && sheet.Id == positionHostSheet.Id
+                        ? new ChartPositionSnapshot { Chart = chart, Left = chart.Left, Top = chart.Top }
+                        : null
+                });
+            }
+
+            sheets.Add(new ChartStructuralSheetSnapshot
+            {
+                HostSheet = sheet.Id,
+                Charts = charts
+            });
+        }
+
+        return new ChartStructuralWorkbookSnapshot { Sheets = sheets };
+    }
+
+    internal static void RestoreChartStructuralVerbatimFormulas(
+        Workbook workbook,
+        ChartStructuralWorkbookSnapshot snapshot)
+    {
+        foreach (var entry in snapshot.Sheets)
+        {
+            var sheet = workbook.GetSheet(entry.HostSheet);
+            if (sheet is null)
+                continue;
+
+            for (var i = 0; i < sheet.Charts.Count && i < entry.Charts.Count; i++)
+            {
+                if (entry.Charts[i].VerbatimFormulas is { } verbatim)
+                    RestoreChartVerbatimFormulas(sheet.Charts[i], verbatim);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Restores the non-verbatim chart phase in the same component order as the former standalone
+    /// helpers: DataRange, optional column mappings, series formatting, then drawing position.
+    /// </summary>
+    internal static void RestoreChartStructuralState(
+        Workbook workbook,
+        ChartStructuralWorkbookSnapshot snapshot)
+    {
+        foreach (var entry in snapshot.Sheets)
+        {
+            var sheet = workbook.GetSheet(entry.HostSheet);
+            if (sheet is null)
+                continue;
+
+            for (var i = 0; i < sheet.Charts.Count && i < entry.Charts.Count; i++)
+            {
+                var chart = sheet.Charts[i];
+                var chartSnapshot = entry.Charts[i];
+                chart.DataRange = chartSnapshot.DataRange;
+                if (chartSnapshot.SeriesColumnMappings is { } mappings)
+                    chart.SeriesColumnMappings = mappings;
+                RestoreChartSeriesFormatting(chart, chartSnapshot.SeriesFormatting);
+                if (chartSnapshot.Position is { } position)
+                {
+                    position.Chart.Left = position.Left;
+                    position.Chart.Top = position.Top;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -1257,50 +1301,52 @@ internal static partial class RowColumnShiftHelpers
         if (snapshot is null) return;
         for (int i = 0; i < sheet.Charts.Count && i < snapshot.Count; i++)
         {
-            var snap = snapshot[i];
-            if (snap is null) continue;
-            var chart = sheet.Charts[i];
+            if (snapshot[i] is { } chartSnapshot)
+                RestoreChartVerbatimFormulas(sheet.Charts[i], chartSnapshot);
+        }
+    }
 
-            if (snap.VerbatimSeriesFormulas is not null)
-            {
-                if (chart.VerbatimSeriesFormulas is null)
-                    chart.VerbatimSeriesFormulas = new List<ChartSeriesVerbatimFormulas>(snap.VerbatimSeriesFormulas.Count);
-                else
-                    chart.VerbatimSeriesFormulas.Clear();
-                chart.VerbatimSeriesFormulas.AddRange(snap.VerbatimSeriesFormulas);
-            }
+    private static void RestoreChartVerbatimFormulas(ChartModel chart, ChartVerbatimSnapshot snapshot)
+    {
+        if (snapshot.VerbatimSeriesFormulas is not null)
+        {
+            if (chart.VerbatimSeriesFormulas is null)
+                chart.VerbatimSeriesFormulas = new List<ChartSeriesVerbatimFormulas>(snapshot.VerbatimSeriesFormulas.Count);
+            else
+                chart.VerbatimSeriesFormulas.Clear();
+            chart.VerbatimSeriesFormulas.AddRange(snapshot.VerbatimSeriesFormulas);
+        }
 
-            if (snap.DataLabelFormulas is not null)
+        if (snapshot.DataLabelFormulas is not null)
+        {
+            // Restore only the Formula field of each snapshotted entry; leave
+            // PointCount and Points (cached display strings) untouched because
+            // they are derived from data, not from cell references.
+            var dlIndex = chart.SeriesRangeDataLabels
+                .Select((d, idx) => (d, idx))
+                .ToDictionary(t => t.d.SeriesIndex, t => t.idx);
+            foreach (var (seriesIndex, formula) in snapshot.DataLabelFormulas)
             {
-                // Restore only the Formula field of each snapshotted entry; leave
-                // PointCount and Points (cached display strings) untouched because
-                // they are derived from data, not from cell references.
-                var dlIndex = chart.SeriesRangeDataLabels
-                    .Select((d, idx) => (d, idx))
-                    .ToDictionary(t => t.d.SeriesIndex, t => t.idx);
-                foreach (var (seriesIndex, formula) in snap.DataLabelFormulas)
+                if (dlIndex.TryGetValue(seriesIndex, out var listIdx))
                 {
-                    if (dlIndex.TryGetValue(seriesIndex, out var listIdx))
-                    {
-                        var entry = chart.SeriesRangeDataLabels[listIdx];
-                        chart.SeriesRangeDataLabels[listIdx] = entry with { Formula = formula };
-                    }
+                    var entry = chart.SeriesRangeDataLabels[listIdx];
+                    chart.SeriesRangeDataLabels[listIdx] = entry with { Formula = formula };
                 }
             }
+        }
 
-            // R16-chart-datasource-editing-1: undo restores the pre-edit error-bar range formulas.
-            if (snap.ErrorBarsCaptured)
-            {
-                chart.ErrorBarPlusRangeFormula = snap.ErrorBarPlusRangeFormula;
-                chart.ErrorBarMinusRangeFormula = snap.ErrorBarMinusRangeFormula;
-            }
+        // R16-chart-datasource-editing-1: undo restores the pre-edit error-bar range formulas.
+        if (snapshot.ErrorBarsCaptured)
+        {
+            chart.ErrorBarPlusRangeFormula = snapshot.ErrorBarPlusRangeFormula;
+            chart.ErrorBarMinusRangeFormula = snapshot.ErrorBarMinusRangeFormula;
+        }
 
-            // R100: undo restores the pre-edit multi-level category <c:cat> raw XML.
-            if (snap.MultiLevelCategoryXml is not null)
-            {
-                chart.MultiLevelCategoryXml.Clear();
-                chart.MultiLevelCategoryXml.AddRange(snap.MultiLevelCategoryXml);
-            }
+        // R100: undo restores the pre-edit multi-level category <c:cat> raw XML.
+        if (snapshot.MultiLevelCategoryXml is not null)
+        {
+            chart.MultiLevelCategoryXml.Clear();
+            chart.MultiLevelCategoryXml.AddRange(snapshot.MultiLevelCategoryXml);
         }
     }
 
