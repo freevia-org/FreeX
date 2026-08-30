@@ -412,6 +412,14 @@ public static class WorkbookPdfContentBuilder
         // ── Gridlines ─────────────────────────────────────────────────────────
         if (sheet.PrintGridlines)
         {
+            // freex-print-page-setup-F1: Page Setup > Sheet > "Black and white" forces every printed
+            // fill/font/border to solid black (Excel's grayscale-print behavior) -- gridlines must
+            // follow the same rule, matching the WPF native print path's BlackAndWhiteGridlinePen
+            // (PrintRenderer.GridCells.cs). Previously this used the fixed light-gray GridLineColor
+            // unconditionally, so this shared PDF-export path (and the Avalonia print preview, which
+            // has the identical gap) disagreed with what WPF actually prints.
+            var gridLineColor = sheet.PrintBlackAndWhite ? PdfColor.Black : GridLineColor;
+
             var gridBottom = rowYs.Length > 0 ? rowYs[rowCount - 1] : contentBottom;
             var gridRight  = colXs.Length > 0 ? colXs[columnCount - 1] + colWidths[columnCount - 1] : contentRight;
 
@@ -426,7 +434,7 @@ public static class WorkbookPdfContentBuilder
                 else
                     break;
 
-                ops.Add(new PdfLine(gridLeft, lineY, gridRight, lineY, GridLineColor, 0.4));
+                ops.Add(new PdfLine(gridLeft, lineY, gridRight, lineY, gridLineColor, 0.4));
             }
 
             // Vertical lines (one per column boundary + right).
@@ -440,7 +448,7 @@ public static class WorkbookPdfContentBuilder
                 else
                     break;
 
-                ops.Add(new PdfLine(lineX, gridTop, lineX, gridBottom, GridLineColor, 0.4));
+                ops.Add(new PdfLine(lineX, gridTop, lineX, gridBottom, gridLineColor, 0.4));
             }
         }
 

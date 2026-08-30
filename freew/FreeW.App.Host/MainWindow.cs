@@ -19,6 +19,7 @@ using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
+using FreeW.App.Localization;
 using FreeW.App.Presentation;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.ContextMenus;
@@ -2494,9 +2495,13 @@ public sealed partial class MainWindow : Window
     // silently left on disk. suppressStartupRecoveryOffer:true stops the new window's own Loaded
     // handler from re-running OfferRecovery and re-prompting for the very candidates the caller's
     // loop is already working through.
+    // r173: passes this window's own _optionsStore (the real disk-backed store Program.cs resolved
+    // for the process) rather than omitting it -- omitting it fell back to the constructor's
+    // InMemoryApplicationOptionsStore default, so any option changed from File > Options in a
+    // recovery-opened window silently never reached %APPDATA%\FreeW\settings.json.
     private bool OpenNewWindowWithRecoveredSnapshot(AutosaveRecoveryCandidate candidate)
     {
-        var newWindow = new MainWindow(_options, messageService: _messageService, suppressStartupRecoveryOffer: true);
+        var newWindow = new MainWindow(_options, _optionsStore, messageService: _messageService, suppressStartupRecoveryOffer: true);
         var loaded = newWindow._file.OpenSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
         newWindow.Show();
         newWindow.Activate();
@@ -2508,19 +2513,23 @@ public sealed partial class MainWindow : Window
     // OpenNewWindow()'s window-creation pattern above so multiple files dragged onto the taskbar icon
     // in one launch (delivered as multiple path arguments to a single process) all open, instead of
     // every argument after the first being silently dropped.
+    // r173: passes _optionsStore (see OpenNewWindowWithRecoveredSnapshot's comment above) so a
+    // multi-file-startup window's Options changes persist to disk instead of being silently discarded.
     private void OpenAdditionalStartupFiles(IReadOnlyList<string> paths)
     {
         foreach (var path in paths)
         {
-            var newWindow = new MainWindow(_options, messageService: _messageService);
+            var newWindow = new MainWindow(_options, _optionsStore, messageService: _messageService);
             newWindow.Show();
             newWindow._file.OpenPath(path);
         }
     }
 
+    // r173: passes _optionsStore too -- this report window is a full MainWindow with the same
+    // File > Options menu as any other, so it had the identical silent-discard defect.
     private void OpenMailMergeErrorReport(TextDocument report)
     {
-        var reportWindow = new MainWindow(_options, messageService: _messageService);
+        var reportWindow = new MainWindow(_options, _optionsStore, messageService: _messageService);
         reportWindow._editor.LoadModel(report);
         reportWindow.Title = FreeWUiTextCatalog.MailMergeErrorReportWindowTitle;
         reportWindow.Show();
@@ -3564,23 +3573,54 @@ public sealed partial class MainWindow : Window
     // Opens the modal FreeW Options editor. On OK it applies the edited settings live (by mutating the
     // shared _options instance FileCommands reads) and persists them through the shared JsonSettingsStore
     // so they survive a restart. Save is best-effort — a failure surfaces a message but never throws.
+    // r173: UI-language hint text, mirrors FreeX's ShowOptionsDialog (MainWindow.Backstage.cs) --
+    // hardcoded like the rest of this dialog's General-tab copy (see OptionsDialogPlanner's
+    // UiLanguageLabel/UiLanguageSystemHint consts), since FreeW's Options dialog does not localize
+    // its own field labels through UiText.
+    private const string AppLanguageRestartMessage =
+        "Your language choice was saved. Restart FreeW to refresh every open window.";
+
     private void OpenOptions()
     {
         var dialog = new OptionsDialog(this, _options);
         if (dialog.ShowDialog() != true)
             return;
 
-        var edited = dialog.Result;
+        ApplyOptionsEditAndNotify(dialog.Result);
+    }
+
+    // r173: split out of OpenOptions so the persist/language-change/notification logic is reachable
+    // without driving a live modal OptionsDialog -- the only piece of OpenOptions a test can exercise
+    // directly (OptionsDialog.ShowDialog() is a real blocking modal with no headless seam).
+    private void ApplyOptionsEditAndNotify(FreeWOptions edited)
+    {
+        var previousUiLanguage = AppLanguageCatalog.NormalizeCultureName(_options.UiLanguage);
         var outcome = _optionsRuntime.ApplyAndPersist(
             edited,
             options => _optionsStore.Save(options),
             () => _optionsStore.Load());
         ApplyEditorTypingOptions(outcome.EditorTypingOptions);
 
+        // r173: FreeW's UI language previously required a silent restart with no notice -- the change
+        // was accepted and (if persisted) took effect on relaunch, but the running window never told the
+        // user that. FreeX's OptionsDialog handling (MainWindow.Backstage.cs ShowOptionsDialog) both
+        // re-applies the culture immediately AND still tells the user a restart is needed (full ribbon /
+        // dialog retranslation isn't live), so this mirrors that rather than inventing a second pattern.
+        var uiLanguageChanged = !StringComparer.OrdinalIgnoreCase.Equals(
+            previousUiLanguage,
+            AppLanguageCatalog.NormalizeCultureName(_options.UiLanguage));
+        if (uiLanguageChanged)
+            AppLocalization.Bootstrap.ApplyAppLanguage(_options.UiLanguage);
+
         if (!outcome.Persisted)
             DialogMessageHelper.ShowError(
                 this,
                 _optionsStore.LastError,
+                UiText.Get("Options_Dialog_Title"));
+        else if (uiLanguageChanged)
+            DialogMessageHelper.ShowInfo(
+                this,
+                AppLanguageRestartMessage,
                 UiText.Get("Options_Dialog_Title"));
     }
 

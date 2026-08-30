@@ -59,7 +59,7 @@ public sealed class MoveSheetsCommand : IWorkbookCommand, IWholeWorkbookRecalcCo
         if (currentOrder.SequenceEqual(desiredOrder))
             return new CommandOutcome(true, IsNoOp: true);
 
-        ReorderSheets(ctx.Workbook, desiredOrder);
+        RelocateToDesiredOrder(ctx.Workbook, desiredOrder);
         _applied = true;
         return new CommandOutcome(true);
     }
@@ -69,28 +69,58 @@ public sealed class MoveSheetsCommand : IWorkbookCommand, IWholeWorkbookRecalcCo
         if (!_applied || _previousOrder is null)
             return;
 
-        ReorderSheets(ctx.Workbook, _previousOrder);
+        // Undo simply restores the order Apply recorded before it ran.
+        RelocateToDesiredOrder(ctx.Workbook, _previousOrder);
         _applied = false;
     }
 
-    private static void ReorderSheets(Workbook workbook, IReadOnlyList<SheetId> desiredOrder)
+    /// <summary>
+    /// Reorders the workbook's sheets to <paramref name="desiredOrder"/> using the fewest moves the
+    /// simple placement rule needs, without rescanning the whole workbook per sheet.
+    ///
+    /// <para>r173 remediation. The first version of this tracked each selected sheet's shifting
+    /// index and only fixed up entries it had not yet processed, on the assumption that a sheet
+    /// already placed could never be crossed by a later move. That holds for two selected sheets
+    /// and fails from three: a scope auditor's differential fuzz (20,000 randomised move/duplicate
+    /// trials against an independent oracle) found mismatches in 14% of cases, every one of them
+    /// with three or more selected sheets -- moving {A,C,D} before B yielded A,C,B,D instead of
+    /// A,C,D,B. That is a correctness regression in exchange for a performance fix, which is a bad
+    /// trade: the code it replaced was slow but never wrong.</para>
+    ///
+    /// <para>This walks the target order left to right and, whenever position i does not already
+    /// hold the sheet it should, moves that sheet there. Positions before i are final and cannot be
+    /// disturbed, because a move from j &gt; i to i shifts only the range [i, j) rightward. The
+    /// bookkeeping mirrors <c>Workbook.MoveSheet</c>'s remove-then-insert on a local copy rather
+    /// than reasoning about which entries "should" have moved, so it cannot drift from it. Work is
+    /// proportional to the total displacement, so moving one sheet a short distance stays cheap --
+    /// which is what the original finding was about.</para>
+    /// </summary>
+    private static void RelocateToDesiredOrder(Workbook workbook, IReadOnlyList<SheetId> desiredOrder)
     {
-        for (var targetIndex = 0; targetIndex < desiredOrder.Count; targetIndex++)
+        var live = workbook.Sheets.Select(sheet => sheet.Id).ToList();
+        if (live.Count != desiredOrder.Count)
+            return;
+
+        var positionOf = new Dictionary<SheetId, int>(live.Count);
+        for (var i = 0; i < live.Count; i++)
+            positionOf[live[i]] = i;
+
+        for (var i = 0; i < desiredOrder.Count; i++)
         {
-            var currentIndex = FindSheetIndex(workbook, desiredOrder[targetIndex]);
-            if (currentIndex < 0 || currentIndex == targetIndex)
+            var wanted = desiredOrder[i];
+            if (live[i].Equals(wanted))
                 continue;
 
-            workbook.MoveSheet(currentIndex, targetIndex);
+            var from = positionOf[wanted];
+            workbook.MoveSheet(from, i);
+
+            // Mirror the same remove-then-insert locally, and reindex only the range it disturbed.
+            live.RemoveAt(from);
+            live.Insert(i, wanted);
+            for (var j = i; j <= from; j++)
+                positionOf[live[j]] = j;
         }
     }
 
-    private static int FindSheetIndex(Workbook workbook, SheetId sheetId)
-    {
-        for (var index = 0; index < workbook.Sheets.Count; index++)
-            if (workbook.Sheets[index].Id == sheetId)
-                return index;
 
-        return -1;
-    }
 }

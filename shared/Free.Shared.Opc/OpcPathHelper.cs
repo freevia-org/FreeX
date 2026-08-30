@@ -49,6 +49,82 @@ public static class OpcPathHelper
             : $"{ToZipEntryPath(baseDirectory)}/{normalizedTarget}");
     }
 
+    /// <summary>
+    /// Resolves a relationship's <c>Target</c> attribute -- a URI reference, per the OPC spec and
+    /// RFC 3986, not a bare zip path -- into a zip entry path. Strips a trailing URI fragment
+    /// (<c>#...</c>, meaningless for locating a package part), percent-decodes escaped path
+    /// segments via <see cref="UnescapeRelationshipPathSegments"/>, then resolves relative/rooted-ness
+    /// and collapses dot segments via <see cref="ResolveRelativeZipPath"/>.
+    /// <para>
+    /// This is additive: it does not change <see cref="ResolveRelativeZipPath"/>'s own behavior for
+    /// existing callers that already unescape or otherwise pre-process their target before calling
+    /// it (e.g. <c>XlsxPackagePath.ResolveRelationshipTarget</c> unescapes first for its own reasons
+    /// and would double-decode if <see cref="ResolveRelativeZipPath"/> unescaped internally).
+    /// </para>
+    /// <para>
+    /// Does NOT resolve zip-entry casing -- OPC part-name comparison is case-insensitive but zip
+    /// entries are case-sensitive, so casing needs archive access; see the <paramref name="archive"/>
+    /// overload below (<see cref="ResolveRelationshipTargetZipPath(ZipArchive, string, string)"/>)
+    /// for that, or <see cref="FindEntry"/> directly.
+    /// </para>
+    /// </summary>
+    public static string ResolveRelationshipTargetZipPath(string baseDirectory, string target) =>
+        ResolveRelativeZipPath(baseDirectory, UnescapeRelationshipPathSegments(StripUriFragment(target)));
+
+    /// <summary>
+    /// Same resolution as <see cref="ResolveRelationshipTargetZipPath(string, string)"/>, plus
+    /// case-canonicalization against the archive's actual entries via <see cref="FindEntry"/>.
+    /// This matters beyond the immediate lookup: the returned path is frequently used as the base
+    /// directory for resolving THAT part's own children (e.g. presentation.xml's directory when
+    /// resolving its slide masters), or fed into <see cref="GetRelationshipPartPath"/> to find its
+    /// own .rels sibling -- both of which are exact, case-sensitive zip-entry lookups elsewhere in
+    /// the pipeline. Canonicalizing the case here, once, means every path derived from this one is
+    /// already correctly cased instead of depending on every downstream lookup also having its own
+    /// case-insensitive fallback. Falls back to the un-canonicalized resolved path when no entry
+    /// matches (exactly or unambiguously by case) so a genuinely missing part still resolves to a
+    /// path that a subsequent exact-or-fallback lookup correctly reports as missing.
+    /// </summary>
+    public static string ResolveRelationshipTargetZipPath(ZipArchive archive, string baseDirectory, string target)
+    {
+        var resolved = ResolveRelationshipTargetZipPath(baseDirectory, target);
+        return FindEntry(archive, resolved)?.FullName ?? resolved;
+    }
+
+    private static string StripUriFragment(string target)
+    {
+        var hashIndex = target.IndexOf('#');
+        return hashIndex < 0 ? target : target[..hashIndex];
+    }
+
+    /// <summary>
+    /// Looks up a zip entry by OPC part-name path: exact (ordinal) match first, falling back to a
+    /// case-insensitive match ONLY when it is unambiguous. OPC part-name equivalence is
+    /// spec-defined as case-insensitive, but zip entries themselves are case-sensitive, so a
+    /// (malformed) package could legally contain two entries differing only by case -- in that
+    /// situation this returns null, exactly like an exact-match miss, rather than silently
+    /// guessing which entry the caller meant.
+    /// </summary>
+    public static ZipArchiveEntry? FindEntry(ZipArchive archive, string path)
+    {
+        var exact = archive.GetEntry(path);
+        if (exact is not null)
+            return exact;
+
+        ZipArchiveEntry? caseInsensitiveMatch = null;
+        foreach (var entry in archive.Entries)
+        {
+            if (!string.Equals(entry.FullName, path, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (caseInsensitiveMatch is not null)
+                return null; // ambiguous: more than one entry differs from `path` only by case.
+
+            caseInsensitiveMatch = entry;
+        }
+
+        return caseInsensitiveMatch;
+    }
+
     public static string GetRelativeZipPath(string baseDirectory, string targetPath)
     {
         var baseSegments = NormalizeZipEntryPath(baseDirectory)

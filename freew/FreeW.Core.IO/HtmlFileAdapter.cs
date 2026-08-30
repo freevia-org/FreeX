@@ -1362,6 +1362,11 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             var h when h.Contains("image/gif") => ImageFormat.Gif,
             var h when h.Contains("image/bmp") => ImageFormat.Bmp,
             var h when h.Contains("image/tiff") => ImageFormat.Tiff,
+            // "image/x-emf"/"image/x-wmf" (and the unprefixed "image/emf"/"image/wmf" some producers
+            // use) are what WriteImage/MimeTypeFor now emits for metafiles -- recognise them here too,
+            // or a FreeW-authored data URI round-trips an EMF/WMF picture back in as ImageFormat.Png.
+            var h when h.Contains("image/x-emf") || h.Contains("image/emf") => ImageFormat.Emf,
+            var h when h.Contains("image/x-wmf") || h.Contains("image/wmf") => ImageFormat.Wmf,
             _ => ImageFormat.Png
         };
 
@@ -1996,14 +2001,14 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
         sb.Append('>');
     }
 
-    internal static string MimeTypeFor(ImageFormat format) => format switch
-    {
-        ImageFormat.Jpeg => "image/jpeg",
-        ImageFormat.Gif => "image/gif",
-        ImageFormat.Bmp => "image/bmp",
-        ImageFormat.Tiff => "image/tiff",
-        _ => "image/png"
-    };
+    /// <summary>
+    /// The MIME type to emit for an inline image's data-URI <c>src</c> / MHTML part <c>Content-Type</c>.
+    /// Delegates to <see cref="Ooxml.ImageContentTypeForExtension"/> -- the same table
+    /// <c>DocxWriter</c> uses for the docx package's <c>[Content_Types].xml</c> -- so EMF/WMF (and any
+    /// future format) get their real media type instead of a hand-maintained duplicate that can drift.
+    /// </summary>
+    internal static string MimeTypeFor(ImageFormat format) =>
+        Ooxml.ImageContentTypeForExtension(InlineImage.ExtensionFor(format));
 
     private static string NormalizeText(string text) =>
         text.Replace("\r\n", "\n").Replace('\r', '\n');

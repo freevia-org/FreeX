@@ -486,6 +486,91 @@ public sealed class SlideShowSessionControllerTests
         playedSteps[0].Entries.Should().ContainSingle(e => e.Animation.Trigger == AnimationTrigger.OnClick);
     }
 
+    // Round-173 F1: RevealHiddenSlide (the 'H' key) deliberately leaves Controller parked on
+    // the underlying route slide, so PlanAdvance() keeps consuming THAT slide's own click-steps
+    // while the hidden slide is the thing actually on screen. ExecuteHostCommand's
+    // PlayAnimationStep case must redisplay the underlying slide (via the same NavigateToSlide
+    // callback the real NavigateToSlide case uses) before asking the step to play, or the step
+    // targets a shape on a tree that was never redrawn.
+    [Fact]
+    public void RevealHiddenSlide_ThenExecuteHostCommand_PlaysAStep_RedisplaysTheUnderlyingSlideFirst()
+    {
+        var presentation = MakePresentation(3);
+        presentation.Slides[1].IsHidden = true;
+        AddEntranceAnimation(presentation.Slides[0], shapeId: 1, AnimationTrigger.OnClick);
+        AddEntranceAnimation(presentation.Slides[0], shapeId: 2, AnimationTrigger.OnClick);
+
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        route.SourceSlideIndices.Should().Equal(new[] { 0, 2 });
+        var started = new DateTimeOffset(2026, 8, 30, 9, 0, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("hidden reveal redisplay test"));
+
+        var navigatedSlideIndices = new List<int>();
+        var playedSteps = new List<AnimationStep>();
+        var callbacks = new SlideShowHostExecutionCallbacks(
+            () => { },
+            _ => { },
+            step => playedSteps.Add(step),
+            request => navigatedSlideIndices.Add(request.SlideIndex));
+
+        // Presenter is on route slide 0 (2 pending OnClick steps) and reveals the hidden
+        // slide via 'H'. Controller stays parked on slide 0 by design.
+        var revealed = session.RevealNextHiddenSlide();
+        revealed.Should().BeSameAs(presentation.Slides[1]);
+        session.DisplaySlide.Should().BeSameAs(presentation.Slides[1]);
+
+        // A click now consumes slide 0's own click-step while the hidden slide is still on
+        // screen.
+        var command = session.PlanAdvance();
+        command.Kind.Should().Be(SlideShowHostCommandKind.PlayAnimationStep);
+        session.ExecuteHostCommand(command, started, callbacks);
+
+        navigatedSlideIndices.Should().Equal(
+            new[] { 0 },
+            "returning from a revealed hidden slide must redraw the underlying route slide " +
+            "before playing its step, or the audience stays frozen on the hidden slide's tree");
+        playedSteps.Should().ContainSingle();
+        session.RevealedHiddenSlide.Should().BeNull("the reveal ends the moment any host command executes");
+    }
+
+    // Sibling / no-regression for F1: an ordinary click-step with no hidden-slide reveal in
+    // play is already the thing on screen and must not trigger a spurious redisplay.
+    [Fact]
+    public void PlanAdvance_ThenExecuteHostCommand_PlaysAStep_WithoutAPriorReveal_DoesNotRedisplay()
+    {
+        var presentation = MakePresentation(2);
+        AddEntranceAnimation(presentation.Slides[0], shapeId: 1, AnimationTrigger.OnClick);
+        AddEntranceAnimation(presentation.Slides[0], shapeId: 2, AnimationTrigger.OnClick);
+
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var started = new DateTimeOffset(2026, 8, 30, 9, 0, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("ordinary click-step sibling test"));
+
+        var navigatedSlideIndices = new List<int>();
+        var playedSteps = new List<AnimationStep>();
+        var callbacks = new SlideShowHostExecutionCallbacks(
+            () => { },
+            _ => { },
+            step => playedSteps.Add(step),
+            request => navigatedSlideIndices.Add(request.SlideIndex));
+
+        var command = session.PlanAdvance();
+        command.Kind.Should().Be(SlideShowHostCommandKind.PlayAnimationStep);
+        session.ExecuteHostCommand(command, started, callbacks);
+
+        navigatedSlideIndices.Should().BeEmpty(
+            "with no hidden slide ever revealed there is nothing stale on screen to redisplay");
+        playedSteps.Should().ContainSingle();
+    }
+
     private static void AddEntranceAnimation(Slide slide, uint shapeId, AnimationTrigger trigger)
     {
         slide.Shapes.Add(new SlideShape
