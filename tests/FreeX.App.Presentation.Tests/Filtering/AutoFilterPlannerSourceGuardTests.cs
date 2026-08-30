@@ -99,17 +99,25 @@ public sealed class AutoFilterPlannerSourceGuardTests
             .Should().BeFalse("localized criteria projection should use the shared menu planner");
         hostDataFilterSource.Should().NotContain("SelectionRangeService.GetCurrentRegion");
 
-        var hostViewportSource = File.ReadAllText(Path.Combine(
-            repoRoot,
-            "src",
-            "FreeX.App.Host",
-            "MainWindow.Viewport.cs"));
+        // Round 172: this used to require the GetActiveColumnOffsets call to sit in the WPF host's
+        // MainWindow.Viewport.cs. The viewport-adornment work has since hoisted that resolution into
+        // the renderer-neutral WorksheetViewportAdornmentCache, which serves BOTH shells -- a
+        // stronger form of the very delegation this guard exists to enforce, yet it read as a
+        // regression because the pin named a file rather than the property. Follow the logic to its
+        // new home and keep asserting that neither host re-grows a local copy.
         var viewportAdornmentCacheSource = File.ReadAllText(Path.Combine(
             presentationRoot,
             "GridInteraction",
             "WorksheetViewportAdornmentCache.cs"));
         viewportAdornmentCacheSource.Should().Contain("AutoFilterHeaderButtonPlanner.GetActiveColumnOffsets(");
+
+        var hostViewportSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.Viewport.cs"));
         hostViewportSource.Should().NotContain("private static IReadOnlySet<uint>? BuildActiveAutoFilterColumns(");
+        hostViewportSource.Should().Contain("SheetGrid.ActiveAutoFilterColumns = adornments.ActiveAutoFilterColumns;");
     }
 
     [Fact]

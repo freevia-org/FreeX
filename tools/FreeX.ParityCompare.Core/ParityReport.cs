@@ -341,7 +341,7 @@ public static class ParityReport
         sb.AppendLine("|---|---|---:|---|");
         foreach (var s in c.Surfaces.Where(predicate))
         {
-            string diff = s.DiffPercent is { } d ? d.ToString("0.00", CultureInfo.InvariantCulture) : "â€”";
+            string diff = s.DiffPercent is { } d ? d.ToString("0.00", CultureInfo.InvariantCulture) : "—";
             sb.AppendLine($"| `{s.Id}` | {s.Kind} | {diff} | {Evaluation(s, c.HardThreshold)} |");
         }
         sb.AppendLine();

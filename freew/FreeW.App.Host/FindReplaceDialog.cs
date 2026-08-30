@@ -89,7 +89,7 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         _useWildcards.Unchecked += (_, _) => ApplyOptionPolicy();
         ApplyOptionPolicy();
 
-        // Special â–¾ button â€” inserts a special character into whichever box last had focus.
+        // Special ▾ button — inserts a special character into whichever box last had focus.
         var specialButton = BuildSpecialButton();
         Grid.SetRow(specialButton, 5);
         Grid.SetColumn(specialButton, 1);

@@ -27,9 +27,9 @@ public sealed class RevealFormattingAndFindReplaceTests
     // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
     private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // A â€” GetCaretFormatting() DocumentView API
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // A — GetCaretFormatting() DocumentView API
+    // ═══════════════════════════════════════════════════════════════════════
 
     [Fact]
     public async Task GetCaretFormatting_returns_run_formatting_of_first_run()
@@ -54,7 +54,7 @@ public sealed class RevealFormattingAndFindReplaceTests
             return;
 
         run.Should().NotBeNull();
-        // The caret starts at block 0, offset 0 â€” the run formatting at that position is the first run's.
+        // The caret starts at block 0, offset 0 — the run formatting at that position is the first run's.
         run!.Bold.Should().BeTrue();
     }
 
@@ -93,9 +93,9 @@ public sealed class RevealFormattingAndFindReplaceTests
         pf.SpaceBeforePt.Should().Be(12);
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // B â€” RevealFormatting model (pure, no Avalonia needed)
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // B — RevealFormatting model (pure, no Avalonia needed)
+    // ═══════════════════════════════════════════════════════════════════════
 
     [Fact]
     public void RevealFormatting_Describe_produces_three_sections()
@@ -157,9 +157,9 @@ public sealed class RevealFormattingAndFindReplaceTests
         paper!.Value.Should().Contain("Portrait");
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // C â€” RevealFormattingPane toggle (Avalonia headless)
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // C — RevealFormattingPane toggle (Avalonia headless)
+    // ═══════════════════════════════════════════════════════════════════════
 
     [Fact]
     public async Task RevealFormattingPane_is_hidden_by_default()

@@ -243,7 +243,7 @@ public static partial class BuiltInFunctions
             else { colNum = 0; }
         }
 
-        // Negative indices â†’ #VALUE! (out-of-range positive â†’ #REF! per Excel)
+        // Negative indices → #VALUE! (out-of-range positive → #REF! per Excel)
         if (rowNum < 0) return ErrorValue.Value;
         if (colNum < 0) return ErrorValue.Value;
         if (rowNum > table.RowCount) return ErrorValue.Ref;

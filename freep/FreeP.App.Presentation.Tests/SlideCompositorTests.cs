@@ -11,7 +11,7 @@ namespace FreeP.App.Compositor.Tests;
 /// </summary>
 public sealed class SlideCompositorTests
 {
-    // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private static PresentationModel MakePresentation(Action<PresentationModel>? configure = null)
     {
@@ -22,7 +22,7 @@ public sealed class SlideCompositorTests
 
     private static Slide FirstSlide(PresentationModel p) => p.Slides[0];
 
-    // â”€â”€â”€ Basic composition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Basic composition ────────────────────────────────────────────────────
 
     [Fact]
     public void Compose_EmptyPresentation_ReturnsBackgroundOp()
@@ -91,7 +91,7 @@ public sealed class SlideCompositorTests
         shapeOps[1].BoundsDip.X.Should().BeLessThan(shapeOps[2].BoundsDip.X);
     }
 
-    // â”€â”€â”€ EMU â†’ DIP conversion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── EMU → DIP conversion ─────────────────────────────────────────────────
 
     [Fact]
     public void Compose_EmuToDip_ConvertsCorrectly()
@@ -645,7 +645,7 @@ public sealed class SlideCompositorTests
 
     private static double PointsToDip(double points) => points * (96.0 / 72.0);
 
-    // â”€â”€â”€ Placeholder inheritance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Placeholder inheritance ───────────────────────────────────────────────
 
     [Fact]
     public void PlaceholderResolver_InheritsFromLayout_WhenShapeHasNoExtents()
@@ -674,7 +674,7 @@ public sealed class SlideCompositorTests
             Id = 1,
             Name = "Title",
             Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
-            // ExtentCxEmu = 0 (default) â†’ should inherit from layout
+            // ExtentCxEmu = 0 (default) → should inherit from layout
         });
         p.Slides.Add(slide);
 
@@ -712,7 +712,7 @@ public sealed class SlideCompositorTests
         {
             Id = 2,
             Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
-            // No geometry â†’ inherit from master
+            // No geometry → inherit from master
         });
         p.Slides.Add(slide);
 
@@ -738,12 +738,12 @@ public sealed class SlideCompositorTests
 
         var anchor = PlaceholderResolver.ResolveAnchor(shape, p.Slides[0], p);
 
-        // Shape has explicit geometry â†’ it wins over layout.
+        // Shape has explicit geometry → it wins over layout.
         anchor.OffsetXEmu.Should().Be(100000);
         anchor.ExtentCxEmu.Should().Be(300000);
     }
 
-    // â"€â"€â"€ MM2: placeholder type-compatibility matching â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    // ─── MM2: placeholder type-compatibility matching ─────────────────────────
 
     /// <summary>
     /// PowerPoint "Title and Content" layouts declare their content placeholder as
@@ -772,12 +772,12 @@ public sealed class SlideCompositorTests
         p.Layouts.Add(layout);
 
         var slide = new Slide { LayoutId = "l1" };
-        // Slide shape has no explicit type â†’ defaults to Body; idx=1
+        // Slide shape has no explicit type → defaults to Body; idx=1
         slide.Shapes.Add(new SlideShape
         {
             Id          = 1,
             Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
-            // No geometry â†’ must inherit from layout
+            // No geometry → must inherit from layout
         });
         p.Slides.Add(slide);
 
@@ -814,12 +814,12 @@ public sealed class SlideCompositorTests
         p.Layouts.Add(layout);
 
         var slide = new Slide { LayoutId = "l1" };
-        // Slide uses CenteredTitle (idx 0) â€" must match the layout Title
+        // Slide uses CenteredTitle (idx 0) —" must match the layout Title
         slide.Shapes.Add(new SlideShape
         {
             Id          = 1,
             Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
-            // No geometry â†’ must inherit from layout
+            // No geometry → must inherit from layout
         });
         p.Slides.Add(slide);
 
@@ -854,18 +854,18 @@ public sealed class SlideCompositorTests
         p.Layouts.Add(layout);
 
         var slide = new Slide { LayoutId = "l1" };
-        // Slide has a Body placeholder at idx=1 â€" must NOT match the layout Footer
+        // Slide has a Body placeholder at idx=1 —" must NOT match the layout Footer
         slide.Shapes.Add(new SlideShape
         {
             Id          = 1,
             Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
-            // No geometry â†’ should fall through to zero (no match found)
+            // No geometry → should fall through to zero (no match found)
         });
         p.Slides.Add(slide);
 
         var anchor = PlaceholderResolver.ResolveAnchor(slide.Shapes[0], slide, p);
 
-        // No match â†’ falls back to the shape’s own (zero) extents
+        // No match → falls back to the shape’s own (zero) extents
         anchor.ExtentCxEmu.Should().Be(0, "Body ph must not match Footer ph at the same idx");
         anchor.ExtentCyEmu.Should().Be(0);
     }
@@ -932,7 +932,7 @@ public sealed class SlideCompositorTests
         p.Layouts.Add(layout);
 
         var slide = new Slide { LayoutId = "l1" };
-        // Slide has Object idx=1 â†’ should match master’s Body idx=1 via content-group compat
+        // Slide has Object idx=1 → should match master’s Body idx=1 via content-group compat
         slide.Shapes.Add(new SlideShape
         {
             Id          = 1,
@@ -1097,7 +1097,7 @@ public sealed class SlideCompositorTests
         picOp.DestDip.Width.Should().BeApproximately(8229600 / 9525.0, 0.1);
     }
 
-    // â”€â”€â”€ Theme color resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Theme color resolution ────────────────────────────────────────────────
 
     [Fact]
     public void ThemeColorResolver_ReturnsPreResolved_WhenNoSchemeRef()
@@ -1115,7 +1115,7 @@ public sealed class SlideCompositorTests
     {
         var theme = PresentationTheme.CreateDefault();
         var color = new ThemeAwareColor(
-            SrgbColor.Black, // pre-resolved fallback â€” should be overridden
+            SrgbColor.Black, // pre-resolved fallback — should be overridden
             new SchemeColorRef { Slot = ThemeColorSlot.Accent1, LumMod = 1.0, LumOff = 0.0 });
 
         var result = ThemeColorResolver.Resolve(color, theme);
@@ -1142,7 +1142,7 @@ public sealed class SlideCompositorTests
         var darkenedColor = ThemeColorResolver.Resolve(color, theme);
 
         // Darkened should be darker: all channels should be less than or equal
-        // (luminance halved â†’ each channel should be smaller)
+        // (luminance halved → each channel should be smaller)
         var fullLuminance = (fullColor.R + fullColor.G + fullColor.B);
         var darkenedLuminance = (darkenedColor.R + darkenedColor.G + darkenedColor.B);
         darkenedLuminance.Should().BeLessThan(fullLuminance,
@@ -1337,7 +1337,7 @@ public sealed class SlideCompositorTests
             "override slide: tx1 via ColorMapOverride (inverted: tx1→lt1) → Lt1 = white");
     }
 
-    //â”€â”€â”€ Background resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    //─── Background resolution ────────────────────────────────────────────────
 
     [Fact]
     public void Compose_SlideSolidFillBackground_IsResolvedCorrectly()
@@ -1374,7 +1374,7 @@ public sealed class SlideCompositorTests
         solid.Color.Should().Be(SrgbColor.White);
     }
 
-    // â”€â”€â”€ Text layout resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Text layout resolution ────────────────────────────────────────────────
 
     [Fact]
     public void Compose_ShapeWithText_IncludesResolvedTextLayout()
@@ -1465,7 +1465,7 @@ public sealed class SlideCompositorTests
         run.FontSizePt.Should().BeGreaterThan(30.0, "title font default should be larger than body");
     }
 
-    // â”€â”€â”€ Geometry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Geometry ─────────────────────────────────────────────────────────────
 
     [Fact]
     public void Compose_GeometryBoundsMatchConvertedEmuValues()
@@ -1552,7 +1552,7 @@ public sealed class SlideCompositorTests
         op.FlipV.Should().BeTrue();
     }
 
-    // â”€â”€â”€ Fill / outline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Fill / outline ───────────────────────────────────────────────────────
 
     [Fact]
     public void Compose_SolidFillShape_ResolvedColorMatches()
@@ -1781,11 +1781,11 @@ public sealed class SlideCompositorTests
         var vis = (ResolvedOutline.Visible)shapeOp.Outline;
         vis.Dash.Should().Be(OutlineDash.Dash);
         vis.Alpha.Should().Be(90);
-        // 1.5pt â†’ DIP = 1.5 * 96/72 = 2.0 DIP
+        // 1.5pt → DIP = 1.5 * 96/72 = 2.0 DIP
         vis.WidthDip.Should().BeApproximately(2.0, 0.05);
     }
 
-    // â”€â”€â”€ Rotation / flip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Rotation / flip ──────────────────────────────────────────────────────
 
     [Fact]
     public void Compose_RotatedShape_PreservesRotation()
@@ -1813,7 +1813,7 @@ public sealed class SlideCompositorTests
         shapeOp.FlipV.Should().BeFalse();
     }
 
-    // â”€â”€â”€ Argument validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Argument validation ──────────────────────────────────────────────────
 
     [Fact]
     public void Compose_NullPresentation_Throws()
@@ -1831,7 +1831,7 @@ public sealed class SlideCompositorTests
         act.Should().Throw<ArgumentNullException>();
     }
 
-    // â"€â"€â"€ P0: Placeholder text alignment + anchor inheritance (Wave 1G) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    // ─── P0: Placeholder text alignment + anchor inheritance (Wave 1G) ──────────
 
     [Fact]
     public void Compose_CenteredTitle_NoExplicitAlign_InheritsCenter_FromLayoutLstStyle()
