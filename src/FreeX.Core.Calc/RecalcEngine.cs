@@ -1382,48 +1382,47 @@ public sealed class RecalcEngine
     }
 
     /// <summary>
-    /// Extract a finite double from a cell value for use in the iterative-calc convergence check.
-    /// Returns 0 for blank/bool/text/error (matching Excel's seed behaviour).
+    /// Extracts the finite numeric magnitude used by the iterative-calc convergence check. Numeric
+    /// and date values share Excel's serial-number comparison semantics; every other value kind,
+    /// including non-finite numeric values, is left to the value-equality fallback.
     /// </summary>
-    private static double ToNumericForConvergence(ScalarValue? value) =>
-        value switch
+    private static bool TryGetFiniteNumericForConvergence(ScalarValue? value, out double numeric)
+    {
+        switch (value)
         {
-            NumberValue nv when double.IsFinite(nv.Value) => nv.Value,
-            DateTimeValue dv when double.IsFinite(dv.Value) => dv.Value,
-            _ => 0.0
-        };
-
-    /// <summary>
-    /// True when <paramref name="value"/> is a kind <see cref="ToNumericForConvergence"/> maps to
-    /// its OWN finite magnitude (a real number/date, not the shared 0.0 sentinel every other kind
-    /// collapses to).
-    /// </summary>
-    private static bool IsFiniteNumericForConvergence(ScalarValue? value) =>
-        value switch
-        {
-            NumberValue nv => double.IsFinite(nv.Value),
-            DateTimeValue dv => double.IsFinite(dv.Value),
-            _ => false
-        };
+            case NumberValue number when double.IsFinite(number.Value):
+                numeric = number.Value;
+                return true;
+            case DateTimeValue date when double.IsFinite(date.Value):
+                numeric = date.Value;
+                return true;
+            default:
+                numeric = 0.0;
+                return false;
+        }
+    }
 
     /// <summary>
     /// Compute the per-cell convergence delta <see cref="RunIterativeCalc"/> uses for its
     /// per-pass stopping condition. When both the previous and current value are finite
     /// numbers/dates, this is the plain numeric magnitude of change (unchanged from before).
     /// Otherwise — a Boolean, Text, Error, or Blank value on either side (or a pass that flips
-    /// between numeric and non-numeric) — <see cref="ToNumericForConvergence"/> would collapse
-    /// both sides to the identical 0.0 sentinel regardless of their actual content, making a
-    /// cyclic cell whose value keeps changing every pass (e.g. A1=NOT(A1), a Boolean toggle;
+    /// between numeric and non-numeric) — projecting both sides to a shared numeric sentinel would
+    /// discard their actual content, making a cyclic cell whose value keeps changing every pass
+    /// (e.g. A1=NOT(A1), a Boolean toggle;
     /// or any concatenation/IF/error-based cyclic formula) look falsely converged after a single
     /// pass. Compare the values themselves instead: an actual change reports a large-but-finite
     /// delta (so it counts exactly like a genuine numeric change and keeps the loop running
     /// toward MaxCalculationIterations, matching the numeric oscillator A1=-A1's already-correct
     /// behaviour); no change reports a true 0. See R92-calc-iterative-convergence-5-2.
     /// </summary>
-    private static double ComputeConvergenceDelta(ScalarValue? previous, ScalarValue? current)
+    internal static double ComputeConvergenceDelta(ScalarValue? previous, ScalarValue? current)
     {
-        if (IsFiniteNumericForConvergence(previous) && IsFiniteNumericForConvergence(current))
-            return Math.Abs(ToNumericForConvergence(current) - ToNumericForConvergence(previous));
+        if (TryGetFiniteNumericForConvergence(previous, out var previousNumeric) &&
+            TryGetFiniteNumericForConvergence(current, out var currentNumeric))
+        {
+            return Math.Abs(currentNumeric - previousNumeric);
+        }
 
         return Equals(previous, current) ? 0.0 : double.MaxValue;
     }
