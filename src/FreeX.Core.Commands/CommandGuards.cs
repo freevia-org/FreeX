@@ -363,11 +363,13 @@ public static class CommandGuards
         IEnumerable<CellAddress> addresses,
         bool allowDynamicSpillMemberWrite = false)
     {
-        if (!sheet.HasArrayOrSpillMembers && !sheet.HasDataTableRanges)
+        if (!RequiresArraySplitValidation(sheet))
             return null;
 
         var orderedAddresses = addresses as IReadOnlyList<CellAddress> ?? addresses.ToArray();
         HashSet<CellAddress>? addressSet = null;
+        HashSet<CellAddress>? validatedArrayAnchors = null;
+        HashSet<GridRange>? validatedDataTableRanges = null;
 
         foreach (var address in orderedAddresses)
         {
@@ -406,13 +408,16 @@ public static class CommandGuards
                 if (allowDynamicSpillMemberWrite && !isLegacyCseArray)
                     continue;
 
-                for (var r = 0u; r < rows; r++)
+                if ((validatedArrayAnchors ??= []).Add(anchor))
                 {
-                    for (var c = 0u; c < cols; c++)
+                    for (var r = 0u; r < rows; r++)
                     {
-                        var member = new CellAddress(anchor.Sheet, anchor.Row + r, anchor.Col + c);
-                        if (!addressSet.Contains(member))
-                            return new CommandOutcome(false, CannotChangePartOfArrayMessage);
+                        for (var c = 0u; c < cols; c++)
+                        {
+                            var member = new CellAddress(anchor.Sheet, anchor.Row + r, anchor.Col + c);
+                            if (!addressSet.Contains(member))
+                                return new CommandOutcome(false, CannotChangePartOfArrayMessage);
+                        }
                     }
                 }
             }
@@ -425,16 +430,22 @@ public static class CommandGuards
             {
                 addressSet ??= new HashSet<CellAddress>(orderedAddresses);
 
-                foreach (var member in dataTableRange.AllCells())
+                if ((validatedDataTableRanges ??= []).Add(dataTableRange))
                 {
-                    if (!addressSet.Contains(member))
-                        return new CommandOutcome(false, CannotChangePartOfDataTableMessage);
+                    foreach (var member in dataTableRange.AllCells())
+                    {
+                        if (!addressSet.Contains(member))
+                            return new CommandOutcome(false, CannotChangePartOfDataTableMessage);
+                    }
                 }
             }
         }
 
         return null;
     }
+
+    internal static bool RequiresArraySplitValidation(Sheet sheet) =>
+        sheet.HasArrayOrSpillMembers || sheet.HasDataTableRanges;
 
     public static CommandOutcome? RejectInvalidFilterRange(
         SheetId sheetId,
