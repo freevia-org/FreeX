@@ -223,16 +223,16 @@ internal static class XlsxX14DataValidationWriter
 
         // Attributes
         if (dv.Type != DvType.Any)
-            x14Dv.SetAttributeValue("type", ToTypeString(dv.Type));
-        if (ShouldWriteOperator(dv.Type))
-            x14Dv.SetAttributeValue("operator", ToOperatorString(dv.Operator));
+            x14Dv.SetAttributeValue("type", XlsxDataValidationXmlCodec.FormatType(dv.Type));
+        if (XlsxDataValidationXmlCodec.RequiresOperator(dv.Type))
+            x14Dv.SetAttributeValue("operator", XlsxDataValidationXmlCodec.FormatOperator(dv.Operator));
         if (dv.AllowBlank)
             x14Dv.SetAttributeValue("allowBlank", "1");
         // In OOXML, showDropDown="1" means HIDE the dropdown. When ShowDropdown=false we write "1".
         if (!dv.ShowDropdown)
             x14Dv.SetAttributeValue("showDropDown", "1");
         if (dv.AlertStyle != DvAlertStyle.Stop)
-            x14Dv.SetAttributeValue("errorStyle", ToAlertStyleString(dv.AlertStyle));
+            x14Dv.SetAttributeValue("errorStyle", XlsxDataValidationXmlCodec.FormatAlertStyle(dv.AlertStyle));
         if (dv.ShowInputMessage)
             x14Dv.SetAttributeValue("showInputMessage", "1");
         if (dv.ShowErrorMessage)
@@ -365,37 +365,4 @@ internal static class XlsxX14DataValidationWriter
         return string.Join(' ', parts);
     }
 
-    private static bool ShouldWriteOperator(DvType type) =>
-        type is DvType.WholeNumber or DvType.Decimal or DvType.Date or DvType.Time or DvType.TextLength;
-
-    private static string ToTypeString(DvType type) => type switch
-    {
-        DvType.WholeNumber => "whole",
-        DvType.Decimal => "decimal",
-        DvType.List => "list",
-        DvType.Date => "date",
-        DvType.Time => "time",
-        DvType.TextLength => "textLength",
-        DvType.Custom => "custom",
-        _ => "none",
-    };
-
-    private static string ToOperatorString(DvOperator op) => op switch
-    {
-        DvOperator.NotBetween => "notBetween",
-        DvOperator.Equal => "equal",
-        DvOperator.NotEqual => "notEqual",
-        DvOperator.GreaterThan => "greaterThan",
-        DvOperator.LessThan => "lessThan",
-        DvOperator.GreaterThanOrEqual => "greaterThanOrEqual",
-        DvOperator.LessThanOrEqual => "lessThanOrEqual",
-        _ => "between",
-    };
-
-    private static string ToAlertStyleString(DvAlertStyle style) => style switch
-    {
-        DvAlertStyle.Warning => "warning",
-        DvAlertStyle.Information => "information",
-        _ => "stop",
-    };
 }

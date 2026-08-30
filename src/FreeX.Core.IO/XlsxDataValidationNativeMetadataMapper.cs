@@ -267,15 +267,15 @@ internal static class XlsxDataValidationNativeMetadataMapper
         validationElement.SetAttributeValue(SqrefAttributeName, sqref);
 
         if (validation.Type != DvType.Any)
-            validationElement.SetAttributeValue(TypeAttributeName, ToDataValidationType(validation.Type));
-        if (ShouldWriteOperator(validation.Type))
-            validationElement.SetAttributeValue(OperatorAttributeName, ToDataValidationOperator(validation.Operator));
+            validationElement.SetAttributeValue(TypeAttributeName, XlsxDataValidationXmlCodec.FormatType(validation.Type));
+        if (XlsxDataValidationXmlCodec.RequiresOperator(validation.Type))
+            validationElement.SetAttributeValue(OperatorAttributeName, XlsxDataValidationXmlCodec.FormatOperator(validation.Operator));
         if (validation.AllowBlank)
             validationElement.SetAttributeValue(AllowBlankAttributeName, "1");
         if (!validation.ShowDropdown)
             validationElement.SetAttributeValue(ShowDropDownAttributeName, "1");
         if (validation.AlertStyle != DvAlertStyle.Stop)
-            validationElement.SetAttributeValue(ErrorStyleAttributeName, ToDataValidationAlertStyle(validation.AlertStyle));
+            validationElement.SetAttributeValue(ErrorStyleAttributeName, XlsxDataValidationXmlCodec.FormatAlertStyle(validation.AlertStyle));
         if (validation.ShowInputMessage)
             validationElement.SetAttributeValue(ShowInputMessageAttributeName, "1");
         if (validation.ShowErrorMessage)
@@ -325,40 +325,6 @@ internal static class XlsxDataValidationNativeMetadataMapper
         ApplyValidationNativeMetadata(validationElement, validation, WorksheetNs);
         return true;
     }
-
-    private static bool ShouldWriteOperator(DvType type) =>
-        type is DvType.WholeNumber or DvType.Decimal or DvType.Date or DvType.Time or DvType.TextLength;
-
-    private static string ToDataValidationType(DvType type) => type switch
-    {
-        DvType.WholeNumber => "whole",
-        DvType.Decimal => "decimal",
-        DvType.List => "list",
-        DvType.Date => "date",
-        DvType.Time => "time",
-        DvType.TextLength => "textLength",
-        DvType.Custom => "custom",
-        _ => "none",
-    };
-
-    private static string ToDataValidationOperator(DvOperator op) => op switch
-    {
-        DvOperator.NotBetween => "notBetween",
-        DvOperator.Equal => "equal",
-        DvOperator.NotEqual => "notEqual",
-        DvOperator.GreaterThan => "greaterThan",
-        DvOperator.LessThan => "lessThan",
-        DvOperator.GreaterThanOrEqual => "greaterThanOrEqual",
-        DvOperator.LessThanOrEqual => "lessThanOrEqual",
-        _ => "between",
-    };
-
-    private static string ToDataValidationAlertStyle(DvAlertStyle style) => style switch
-    {
-        DvAlertStyle.Warning => "warning",
-        DvAlertStyle.Information => "information",
-        _ => "stop",
-    };
 
     private static void AddDataValidationsInOrder(XElement root, XElement dataValidations)
     {
@@ -515,13 +481,13 @@ internal static class XlsxDataValidationNativeMetadataMapper
     private static bool MatchesMetadataContent(DataValidation validation, DataValidationNativeMetadata metadata)
     {
         var expectedType = metadata.ModeledAttributes.TryGetValue("type", out var typeValue) ? typeValue : "none";
-        if (!string.Equals(expectedType, ToDataValidationType(validation.Type), StringComparison.Ordinal))
+        if (!string.Equals(expectedType, XlsxDataValidationXmlCodec.FormatType(validation.Type), StringComparison.Ordinal))
             return false;
 
-        if (ShouldWriteOperator(validation.Type))
+        if (XlsxDataValidationXmlCodec.RequiresOperator(validation.Type))
         {
             var expectedOperator = metadata.ModeledAttributes.TryGetValue("operator", out var operatorValue) ? operatorValue : "between";
-            if (!string.Equals(expectedOperator, ToDataValidationOperator(validation.Operator), StringComparison.Ordinal))
+            if (!string.Equals(expectedOperator, XlsxDataValidationXmlCodec.FormatOperator(validation.Operator), StringComparison.Ordinal))
                 return false;
         }
 
