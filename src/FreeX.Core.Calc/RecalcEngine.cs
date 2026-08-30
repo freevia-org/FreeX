@@ -2285,7 +2285,7 @@ public sealed class RecalcEngine
     /// directly references one of them (e.g. B1=A2+1, where A2 was a spill member) would otherwise
     /// never be re-evaluated. See R22-calc-engine-dependency-1.
     /// </summary>
-    private static void CaptureVacatedSpillCells(
+    internal static void CaptureVacatedSpillCells(
         CellAddress anchor,
         uint priorRows,
         uint priorCols,
@@ -2293,15 +2293,25 @@ public sealed class RecalcEngine
         int newCols,
         ref List<CellAddress>? vacatedSpillCells)
     {
-        var keepRows = (uint)Math.Max(0, newRows);
-        var keepCols = (uint)Math.Max(0, newCols);
-        for (var r = 0u; r < priorRows; r++)
-        {
-            for (var c = 0u; c < priorCols; c++)
-            {
-                if (r == 0 && c == 0) continue;
-                if (r < keepRows && c < keepCols) continue;
+        var retainedRows = Math.Min(priorRows, (uint)Math.Max(0, newRows));
+        var retainedCols = Math.Min(priorCols, (uint)Math.Max(0, newCols));
 
+        // Preserve the old row-major order while visiting only OldExtent - RetainedExtent:
+        // the right strip of retained rows, followed by every column of removed bottom rows.
+        for (var r = 0u; r < retainedRows && retainedCols < priorCols; r++)
+        {
+            var firstCol = r == 0 && retainedCols == 0 ? 1u : retainedCols;
+            for (var c = firstCol; c < priorCols; c++)
+            {
+                (vacatedSpillCells ??= []).Add(new CellAddress(anchor.Sheet, anchor.Row + r, anchor.Col + c));
+            }
+        }
+
+        for (var r = retainedRows; r < priorRows; r++)
+        {
+            var firstCol = r == 0 ? 1u : 0u;
+            for (var c = firstCol; c < priorCols; c++)
+            {
                 (vacatedSpillCells ??= []).Add(new CellAddress(anchor.Sheet, anchor.Row + r, anchor.Col + c));
             }
         }

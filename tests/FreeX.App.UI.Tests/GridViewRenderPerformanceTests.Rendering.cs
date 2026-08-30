@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -38,7 +40,7 @@ public sealed partial class GridViewRenderPerformanceTests
         setup.Should().NotContain(".Where(");
         setup.Should().NotContain(".ToDictionary(");
 
-        source.Should().Contain("lookup.Add((cell.Row, cell.Col), style)");
+        source.Should().Contain(".Add((cell.Row, cell.Col), style)");
         source.Should().Contain("lookup.Add(row.Row, row)");
         source.Should().Contain("lookup.Add(column.Col, column)");
     }
@@ -47,43 +49,43 @@ public sealed partial class GridViewRenderPerformanceTests
     public void RenderCells_LazilyAllocatesStyleLookupForDefaultStyledViewports()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
-        var buildStyleLookup = source[
-            source.IndexOf("private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup", StringComparison.Ordinal)..
+        var buildCellLookups = source[
+            source.IndexOf("IReadOnlyList<RenderBorderCell> BorderCells) BuildRenderCellLookups", StringComparison.Ordinal)..
             source.IndexOf("private RenderCellLookupCache GetRenderCellLookups", StringComparison.Ordinal)];
 
         source.Should().Contain("private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);");
-        buildStyleLookup.Should().Contain("Dictionary<(uint Row, uint Col), CellStyle>? lookup = null;");
+        buildCellLookups.Should().Contain("Dictionary<(uint Row, uint Col), CellStyle>? styles = null;");
         // R114-render-theme-color-reresolution: HasVisibleCellSurface now takes the active
         // WorkbookTheme too, so a cell whose fill was set purely via a Theme Color picker
         // (FillThemeColor with no baked FillColor -- see StyleDiff.Apply) is not silently dropped.
-        buildStyleLookup.Should().Contain("cell.Style is { } style && HasVisibleCellSurface(style, theme)");
-        buildStyleLookup.Should().Contain("lookup ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count);");
-        buildStyleLookup.Should().Contain("return lookup ?? EmptyRenderCellStyleLookup;");
-        buildStyleLookup.Should().NotContain("var lookup = new Dictionary<(uint Row, uint Col), CellStyle>();");
+        buildCellLookups.Should().Contain("HasVisibleCellSurface(style, theme)");
+        buildCellLookups.Should().Contain("styles ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count)");
+        buildCellLookups.Should().Contain("styles ?? EmptyRenderCellStyleLookup");
+        buildCellLookups.Should().NotContain("var styles = new Dictionary<(uint Row, uint Col), CellStyle>();");
 
         var buildLookup = typeof(GridView).GetMethod(
-            "BuildRenderCellStyleLookup",
+            "BuildRenderCellLookups",
             BindingFlags.NonPublic | BindingFlags.Static);
         buildLookup.Should().NotBeNull();
 
-        var defaultLookup = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)buildLookup!.Invoke(
+        var defaultLookup = (ITuple)buildLookup!.Invoke(
             null,
             [new DisplayCell[] { Cell(1, 1, "default", CellStyle.Default) }, WorkbookTheme.Office])!;
-        defaultLookup.Should().BeEmpty();
+        ((IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)defaultLookup[0]!).Should().BeEmpty();
 
         var fontOnlyStyle = CellStyle.Default.Clone();
         fontOnlyStyle.Bold = true;
-        var fontOnlyLookup = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)buildLookup.Invoke(
+        var fontOnlyLookup = (ITuple)buildLookup.Invoke(
             null,
             [new DisplayCell[] { Cell(1, 1, "font", fontOnlyStyle) }, WorkbookTheme.Office])!;
-        fontOnlyLookup.Should().BeEmpty();
+        ((IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)fontOnlyLookup[0]!).Should().BeEmpty();
 
         var fillStyle = CellStyle.Default.Clone();
         fillStyle.FillColor = CellColor.White;
-        var fillLookup = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)buildLookup.Invoke(
+        var fillLookup = (ITuple)buildLookup.Invoke(
             null,
             [new DisplayCell[] { Cell(1, 1, "fill", fillStyle) }, WorkbookTheme.Office])!;
-        fillLookup.Should().ContainKey((1u, 1u));
+        ((IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)fillLookup[0]!).Should().ContainKey((1u, 1u));
 
         // R114 sibling coverage: a cell whose fill was set PURELY via a Theme Color reference
         // (no baked FillColor at all) must also be included -- this is exactly the reachability
@@ -91,11 +93,46 @@ public sealed partial class GridViewRenderPerformanceTests
         // FillThemeColor is set).
         var themeOnlyFillStyle = CellStyle.Default.Clone();
         themeOnlyFillStyle.FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2);
-        var themeOnlyFillLookup = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)buildLookup.Invoke(
+        var themeOnlyFillLookup = (ITuple)buildLookup.Invoke(
             null,
             [new DisplayCell[] { Cell(1, 1, "theme-fill", themeOnlyFillStyle) }, WorkbookTheme.Office])!;
-        themeOnlyFillLookup.Should().ContainKey((1u, 1u),
+        ((IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)themeOnlyFillLookup[0]!).Should().ContainKey((1u, 1u),
             "a cell whose fill was set purely via FillThemeColor (no baked FillColor) must not be silently dropped from the render lookup");
+    }
+
+    [Fact]
+    public void RenderCellLookups_CachesEveryBorderKindInSourceOrder()
+    {
+        var buildLookup = typeof(GridView).GetMethod(
+            "BuildRenderCellLookups",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        buildLookup.Should().NotBeNull();
+
+        var borderStyles = new[]
+        {
+            BorderStyleFor(s => s.BorderTop = ThinBorder),
+            BorderStyleFor(s => s.BorderBottom = ThinBorder),
+            BorderStyleFor(s => s.BorderLeft = ThinBorder),
+            BorderStyleFor(s => s.BorderRight = ThinBorder),
+            BorderStyleFor(s => s.BorderDiagonalUp = ThinBorder),
+            BorderStyleFor(s => s.BorderDiagonalDown = ThinBorder),
+        };
+        var replacement = BorderStyleFor(s => s.BorderBottom = new CellBorder(BorderStyle.Double, CellColor.Black));
+        var cells = borderStyles
+            .Select((style, index) => Cell(1, (uint)index + 1, $"border-{index}", style))
+            .Append(Cell(1, 1, "replacement", replacement))
+            .Append(Cell(2, 1, "default", CellStyle.Default))
+            .ToArray();
+
+        var result = (ITuple)buildLookup!.Invoke(null, [cells, WorkbookTheme.Office])!;
+        var stylesByAddress = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)result[1]!;
+        var orderedCells = ((IEnumerable)result[2]!).Cast<object>().ToArray();
+
+        stylesByAddress.Should().HaveCount(6);
+        stylesByAddress[(1, 1)].Should().BeSameAs(replacement);
+        orderedCells.Should().HaveCount(7, "duplicate coordinates still participate in source draw order");
+        orderedCells.Select(BorderCellAddress).Should().Equal(
+            (1u, 1u), (1u, 2u), (1u, 3u), (1u, 4u), (1u, 5u), (1u, 6u), (1u, 1u));
     }
 
     [Fact]
@@ -849,11 +886,12 @@ public sealed partial class GridViewRenderPerformanceTests
 
             var rows = new[] { new RowMetric(1, 20, 0) };
             var columns = new[] { new ColMetric(1, 64, 0) };
-            var cells = new[] { Cell(1, 1, "value") };
+            var borderStyle = BorderStyleFor(s => s.BorderBottom = ThinBorder);
+            var cells = new[] { Cell(1, 1, "value", borderStyle) };
             var grid = new GridView();
             var firstViewport = new ViewportModel(cells, rows, columns);
             var wrappedViewport = new ViewportModel(cells, rows, columns);
-            var changedCellsViewport = new ViewportModel(new[] { Cell(1, 1, "value") }, rows, columns);
+            var changedCellsViewport = new ViewportModel(new[] { Cell(1, 1, "value", borderStyle) }, rows, columns);
 
             var firstLookup = method!.Invoke(grid, [firstViewport]);
             var wrappedLookup = method.Invoke(grid, [wrappedViewport]);
@@ -861,6 +899,9 @@ public sealed partial class GridViewRenderPerformanceTests
 
             wrappedLookup.Should().BeSameAs(firstLookup);
             changedCellsLookup.Should().NotBeSameAs(firstLookup);
+            GetLookupProperty(wrappedLookup!, "BorderStyles").Should().BeSameAs(GetLookupProperty(firstLookup!, "BorderStyles"));
+            GetLookupProperty(wrappedLookup!, "BorderCells").Should().BeSameAs(GetLookupProperty(firstLookup!, "BorderCells"));
+            GetLookupProperty(changedCellsLookup!, "BorderCells").Should().NotBeSameAs(GetLookupProperty(firstLookup!, "BorderCells"));
         });
     }
 
@@ -935,16 +976,16 @@ public sealed partial class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void RenderCells_SkipsDefaultLookingStyleBordersBeforeMetricLookup()
+    public void RenderCells_UsesCachedBorderCellsBeforeMetricLookup()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var borderPass = source[
             source.IndexOf("// Pass 2: explicit cell borders", StringComparison.Ordinal)..
             source.IndexOf("// Pass 2b: comment/note indicators", StringComparison.Ordinal)];
 
-        borderPass.Should().Contain("cell.Style is not { } style || !HasVisibleCellBorder(style)");
-        borderPass.IndexOf("!HasVisibleCellBorder(style)", StringComparison.Ordinal)
-            .Should().BeLessThan(borderPass.IndexOf("rowLookupAll.TryGetValue(cell.Row", StringComparison.Ordinal));
+        borderPass.Should().Contain("foreach (var cell in lookups.BorderCells)");
+        borderPass.Should().NotContain("BuildBorderStyleLookup(viewport.Cells)");
+        borderPass.Should().NotContain("HasVisibleCellBorder(style)");
 
         var hasVisibleBorder = typeof(GridView).GetMethod(
             "HasVisibleCellBorder",
@@ -956,6 +997,26 @@ public sealed partial class GridViewRenderPerformanceTests
         borderedStyle.BorderBottom = new CellBorder(BorderStyle.Thin, CellColor.Black);
         hasVisibleBorder.Invoke(null, [borderedStyle]).Should().Be(true);
     }
+
+    private static readonly CellBorder ThinBorder = new(BorderStyle.Thin, CellColor.Black);
+
+    private static CellStyle BorderStyleFor(Action<CellStyle> configure)
+    {
+        var style = CellStyle.Default.Clone();
+        configure(style);
+        return style;
+    }
+
+    private static (uint Row, uint Col) BorderCellAddress(object cell)
+    {
+        var type = cell.GetType();
+        return (
+            (uint)type.GetProperty("Row")!.GetValue(cell)!,
+            (uint)type.GetProperty("Col")!.GetValue(cell)!);
+    }
+
+    private static object GetLookupProperty(object lookup, string name) =>
+        lookup.GetType().GetProperty(name)!.GetValue(lookup)!;
 
     [Fact]
     public void RenderCells_ReusesCellColorBrushesWithinRenderPass()

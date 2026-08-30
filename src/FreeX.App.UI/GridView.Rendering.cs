@@ -564,6 +564,7 @@ public partial class GridView
         var viewport = Viewport!;
         var lookups = GetRenderCellLookups(viewport);
         var styleLookup = lookups.Styles;
+        var borderStyleLookup = lookups.BorderStyles;
         var rowLookupAll = lookups.Rows;
         var colLookupAll = lookups.Columns;
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
@@ -614,15 +615,13 @@ public partial class GridView
         }
 
         // Pass 2: explicit cell borders.
-        // Build a lookup (by row/col) of every cell that carries a visible border, so that
-        // adjacent-edge conflicts (finding 2-4) and merge-membership (finding 2-3) can be
-        // resolved from the actual neighboring style rather than from draw order.
-        var borderStyleLookup = BuildBorderStyleLookup(viewport.Cells);
+        // Border membership, source order, and neighboring styles are cached with the stable
+        // viewport cell list so repeated paints do not rescan every cell or rebuild a dictionary.
         var borderPixelsPerDip = GetBorderEffectivePixelsPerDip();
 
-        foreach (var cell in viewport.Cells)
+        foreach (var cell in lookups.BorderCells)
         {
-            if (cell.Style is not { } style || !HasVisibleCellBorder(style)) continue;
+            var style = cell.Style;
             if (!rowLookupAll.TryGetValue(cell.Row, out var rowMetric)) continue;
             if (!colLookupAll.TryGetValue(cell.Col, out var colMetric)) continue;
 
@@ -643,8 +642,7 @@ public partial class GridView
 
             if (visibleEdges.Top)
             {
-                var neighborBottom = borderStyleLookup is not null &&
-                    borderStyleLookup.TryGetValue((cell.Row - 1, cell.Col), out var aboveStyle)
+                var neighborBottom = borderStyleLookup.TryGetValue((cell.Row - 1, cell.Col), out var aboveStyle)
                     ? aboveStyle.BorderBottom
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderTop, neighborBottom);
@@ -652,8 +650,7 @@ public partial class GridView
             }
             if (visibleEdges.Bottom)
             {
-                var neighborTop = borderStyleLookup is not null &&
-                    borderStyleLookup.TryGetValue((cell.Row + 1, cell.Col), out var belowStyle)
+                var neighborTop = borderStyleLookup.TryGetValue((cell.Row + 1, cell.Col), out var belowStyle)
                     ? belowStyle.BorderTop
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderBottom, neighborTop);
@@ -661,8 +658,7 @@ public partial class GridView
             }
             if (visibleEdges.Left)
             {
-                var neighborRight = borderStyleLookup is not null &&
-                    borderStyleLookup.TryGetValue((cell.Row, cell.Col - 1), out var leftStyle)
+                var neighborRight = borderStyleLookup.TryGetValue((cell.Row, cell.Col - 1), out var leftStyle)
                     ? leftStyle.BorderRight
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderLeft, neighborRight);
@@ -670,8 +666,7 @@ public partial class GridView
             }
             if (visibleEdges.Right)
             {
-                var neighborLeft = borderStyleLookup is not null &&
-                    borderStyleLookup.TryGetValue((cell.Row, cell.Col + 1), out var rightStyle)
+                var neighborLeft = borderStyleLookup.TryGetValue((cell.Row, cell.Col + 1), out var rightStyle)
                     ? rightStyle.BorderLeft
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderRight, neighborLeft);
@@ -1188,22 +1183,35 @@ public partial class GridView
         rect.Top < visibleBottom;
 
     private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);
+    private static readonly IReadOnlyList<RenderBorderCell> EmptyRenderBorderCells = Array.Empty<RenderBorderCell>();
 
-    private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup(
+    private static (Dictionary<(uint Row, uint Col), CellStyle> Styles,
+        Dictionary<(uint Row, uint Col), CellStyle> BorderStyles,
+        IReadOnlyList<RenderBorderCell> BorderCells) BuildRenderCellLookups(
         IReadOnlyList<DisplayCell> cells,
         WorkbookTheme theme)
     {
-        Dictionary<(uint Row, uint Col), CellStyle>? lookup = null;
+        Dictionary<(uint Row, uint Col), CellStyle>? styles = null;
+        Dictionary<(uint Row, uint Col), CellStyle>? borderStyles = null;
+        List<RenderBorderCell>? borderCells = null;
         foreach (var cell in cells)
         {
-            if (cell.Style is { } style && HasVisibleCellSurface(style, theme))
-            {
-                lookup ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count);
-                lookup.Add((cell.Row, cell.Col), style);
-            }
+            if (cell.Style is not { } style) continue;
+
+            if (HasVisibleCellSurface(style, theme))
+                (styles ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count))
+                    .Add((cell.Row, cell.Col), style);
+
+            if (!HasVisibleCellBorder(style)) continue;
+
+            (borderStyles ??= new Dictionary<(uint Row, uint Col), CellStyle>())[(cell.Row, cell.Col)] = style;
+            (borderCells ??= new List<RenderBorderCell>()).Add(new RenderBorderCell(cell.Row, cell.Col, style));
         }
 
-        return lookup ?? EmptyRenderCellStyleLookup;
+        return (
+            styles ?? EmptyRenderCellStyleLookup,
+            borderStyles ?? EmptyRenderCellStyleLookup,
+            borderCells ?? EmptyRenderBorderCells);
     }
 
     /// <summary>
@@ -1238,11 +1246,14 @@ public partial class GridView
         }
 
         var metricLookups = GetRenderMetricLookups(viewport);
+        var cellLookups = BuildRenderCellLookups(viewport.Cells, WorkbookTheme);
         var lookups = new RenderCellLookupCache(
             viewport.Cells,
             viewport.RowMetrics,
             viewport.ColMetrics,
-            BuildRenderCellStyleLookup(viewport.Cells, WorkbookTheme),
+            cellLookups.Styles,
+            cellLookups.BorderStyles,
+            cellLookups.BorderCells,
             metricLookups.Rows,
             metricLookups.Columns);
         _renderCellLookupCache = lookups;

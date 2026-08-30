@@ -9,8 +9,15 @@ public partial class GridView
         IReadOnlyList<RowMetric> RowMetrics,
         IReadOnlyList<ColMetric> ColMetrics,
         Dictionary<(uint Row, uint Col), CellStyle> Styles,
+        Dictionary<(uint Row, uint Col), CellStyle> BorderStyles,
+        IReadOnlyList<RenderBorderCell> BorderCells,
         Dictionary<uint, RowMetric> Rows,
         Dictionary<uint, ColMetric> Columns);
+
+    private readonly record struct RenderBorderCell(
+        uint Row,
+        uint Col,
+        CellStyle Style);
 
     private sealed record RenderMetricLookupCache(
         IReadOnlyList<RowMetric> RowMetrics,
