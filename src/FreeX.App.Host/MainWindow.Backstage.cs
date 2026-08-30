@@ -1229,7 +1229,7 @@ public partial class MainWindow
     // ─────────────────────────────────────────────────────────────────────────
 
     private void OpenButton_Click(object sender, RoutedEventArgs e) =>
-        RunGuardedUiCommand("Open Workbook", OpenFromBackstageAsync);
+        RunGuardedUiCommand("Backstage Open", OpenFromBackstageAsync);
 
     private async Task OpenFromBackstageAsync()
     {
@@ -1246,7 +1246,7 @@ public partial class MainWindow
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e) =>
-        RunGuardedUiCommand("Save Workbook", SaveFromBackstageAsync);
+        RunGuardedUiCommand("Backstage Save", SaveFromBackstageAsync);
 
     private async Task SaveFromBackstageAsync()
     {
@@ -1260,7 +1260,7 @@ public partial class MainWindow
     }
 
     private void SaveAsButton_Click(object sender, RoutedEventArgs e) =>
-        RunGuardedUiCommand("Save Workbook As", SaveAsFromBackstageAsync);
+        RunGuardedUiCommand("Backstage Save As", SaveAsFromBackstageAsync);
 
     private async Task SaveAsFromBackstageAsync()
     {
