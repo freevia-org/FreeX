@@ -106,6 +106,9 @@ public sealed partial class XlsxFileAdapter
         bool HasDuplicateStyleOnlyCellStyleIndexes,
         IReadOnlyList<(uint Row, uint Col)> SharedStringValueCells,
         string WorksheetPath,
+        bool? FirstPageNumberEnabled,
+        Dictionary<string, string> ExternalHyperlinkLocations,
+        Dictionary<string, GridRange> RangeHyperlinks,
         bool HasConditionalFormattingBlocks,
         bool HasPreservableSourceWorksheetMetadata,
         bool HasClosedXmlUnsupportedConditionalFormatting,
@@ -294,6 +297,9 @@ public sealed partial class XlsxFileAdapter
             ParseOptionalBool(outlinePr?.Attribute("summaryBelow")?.Value) ?? true,
             ParseOptionalBool(outlinePr?.Attribute("summaryRight")?.Value) ?? true);
         var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
+        var firstPageNumberEnabled = pageSetup is null
+            ? (bool?)null
+            : IsTruthy(pageSetup.Attribute("useFirstPageNumber")?.Value);
         var headerFooter = worksheetXml.Root?.Element(worksheetNs + "headerFooter");
         var pageMargins = worksheetXml.Root?.Element(worksheetNs + "pageMargins");
         var printOptions = worksheetXml.Root?.Element(worksheetNs + "printOptions");
@@ -301,6 +307,29 @@ public sealed partial class XlsxFileAdapter
         var colBreaks = worksheetXml.Root?.Element(worksheetNs + "colBreaks");
         var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var externalHyperlinkLocations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var rangeHyperlinks = new Dictionary<string, GridRange>(StringComparer.Ordinal);
+        var hyperlinksElement = worksheetXml.Root?.Element(worksheetNs + "hyperlinks");
+        if (hyperlinksElement is not null)
+        {
+            foreach (var hyperlinkElement in hyperlinksElement.Elements(worksheetNs + "hyperlink"))
+            {
+                var reference = hyperlinkElement.Attribute("ref")?.Value;
+                if (string.IsNullOrWhiteSpace(reference))
+                    continue;
+
+                if (TryParseRangeHyperlinkGridRange(reference, out var range))
+                    rangeHyperlinks[reference] = range;
+
+                var location = hyperlinkElement.Attribute("location")?.Value;
+                var relationshipId = hyperlinkElement.Attribute(relNs + "id")?.Value;
+                if (string.IsNullOrWhiteSpace(location) || string.IsNullOrEmpty(relationshipId))
+                    continue;
+
+                foreach (var cellKey in ExpandHyperlinkReferenceToCellKeys(reference))
+                    externalHyperlinkLocations[cellKey] = location;
+            }
+        }
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
         var activeCell = ReadActiveSelectionCell(sheetView, pane, worksheetNs);
@@ -465,6 +494,9 @@ public sealed partial class XlsxFileAdapter
             cellLayout.HasDuplicateStyleOnlyCellStyleIndexes,
             cellLayout.SharedStringValueCells,
             worksheetPath,
+            firstPageNumberEnabled,
+            externalHyperlinkLocations,
+            rangeHyperlinks,
             hasConditionalFormattingBlocks,
             hasPreservableSourceWorksheetMetadata,
             hasClosedXmlUnsupportedConditionalFormatting,

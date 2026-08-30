@@ -114,9 +114,9 @@ public sealed class PivotPlannerDedupSourceTests
         File.Exists(hostAdornmentPlannerPath).Should().BeFalse("WPF should consume the canonical row adornments directly");
         File.Exists(uiHeaderRecordPath).Should().BeFalse("the WPF renderer accepts the canonical header target record");
         File.Exists(uiAdornmentRecordPath).Should().BeFalse("the WPF renderer accepts the canonical row adornment record");
-        viewportSource.Should().Contain("PivotGridAdornmentPlanner.BuildHeaderTargets(_workbook, sheet)");
-        viewportSource.Should().Contain("SheetGrid.PivotHeaderDropdowns = pivotHeaderDropdownTargets;");
-        viewportSource.Should().Contain("PivotGridAdornmentPlanner.BuildRowLabelAdornments(_workbook, sheet)");
+        viewportSource.Should().Contain("_worksheetViewportAdornmentCache.GetOrCreate(");
+        viewportSource.Should().Contain("SheetGrid.PivotHeaderDropdowns = adornments.PivotHeaderDropdowns;");
+        viewportSource.Should().Contain("SheetGrid.PivotRowLabelAdornments = adornments.PivotRowLabelAdornments;");
         viewportSource.Should().NotContain("new FreeX.App.UI.PivotHeaderDropdownButton");
         headerRoutingSource.Should().Contain("target.MenuTarget.PivotTableName");
         headerRoutingSource.Should().Contain("target.MenuTarget.Area switch");

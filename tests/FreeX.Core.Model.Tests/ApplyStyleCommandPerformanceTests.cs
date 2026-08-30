@@ -12,6 +12,32 @@ namespace FreeX.Core.Model.Tests;
 /// </summary>
 public sealed class ApplyStyleCommandPerformanceTests
 {
+    [Fact]
+    public void NeedsPreExistingStyleOnlyPass_BoundedCreateZoneEqualToSelection_SkipsSnapshot()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(
+            new CellAddress(sheetId, 5, 6),
+            new CellAddress(sheetId, 8, 9));
+
+        ApplyStyleCommand.NeedsPreExistingStyleOnlyPass(selection, selection).Should().BeFalse();
+    }
+
+    [Fact]
+    public void NeedsPreExistingStyleOnlyPass_ClampedOrMissingCreateZone_PreservesSnapshot()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(
+            new CellAddress(sheetId, 1, 2),
+            new CellAddress(sheetId, CellAddress.MaxRow, 2));
+        var clamped = new GridRange(
+            selection.Start,
+            new CellAddress(sheetId, 100, 2));
+
+        ApplyStyleCommand.NeedsPreExistingStyleOnlyPass(selection, clamped).Should().BeTrue();
+        ApplyStyleCommand.NeedsPreExistingStyleOnlyPass(selection, null).Should().BeTrue();
+    }
+
     // ── StyleOnlyCreateZone unit tests ───────────────────────────────────────
 
     [Fact]

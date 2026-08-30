@@ -76,6 +76,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private Free.Shared.AppServices.StatusBarViewModel? _lastStatusBarDisplayState;
     private Free.Shared.AppServices.StatusBarAutomationSnapshot? _lastStatusBarAutomationSnapshot;
     private readonly SparklineValueCache _sparklineValueCache = new();
+    private readonly WorksheetViewportAdornmentCache _worksheetViewportAdornmentCache = new();
     private ulong _navigationCacheRevision;
     private bool _suppressViewOptionSync;
     private bool _suppressAppViewOptionSync;
