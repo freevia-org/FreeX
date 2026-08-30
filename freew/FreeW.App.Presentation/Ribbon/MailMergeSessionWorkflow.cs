@@ -93,7 +93,7 @@ public sealed class MailMergeSessionWorkflow
     public IReadOnlyList<string> AvailableFieldNames => Session.Data?.Header ?? [];
 
     public MailMergeValidationPlan Validate(MailMergeOperation operation) =>
-        MailMergeValidationPlanner.Validate(Session.Data, operation);
+        MailMergeValidationPlanner.Validate(Session.Data, operation, Session.HasFilteredRecipients);
 
     public MailMergeFinishRoutingPlan RouteFinish(
         MailMergeFinishPlan finishPlan,
@@ -142,9 +142,22 @@ public sealed class MailMergeSessionWorkflow
         var editableTemplate = Session.EndPreview();
         Session.Load(data);
         Session.OriginalRecordNumbers = Enumerable.Range(1, data.Count).ToList();
-        return new(
-            editableTemplate,
-            $"Loaded {data.Count} record(s) with {data.Header.Count} field(s).");
+        // Selecting recipients again restores the full list, so any earlier filter no longer explains
+        // an empty one.
+        Session.HasFilteredRecipients = false;
+        var message = $"Loaded {data.Count} record(s) with {data.Header.Count} field(s).";
+        if (data.DuplicateHeaderNames.Count > 0)
+        {
+            // The recipient list's header has column names that differ only by case (e.g. "Email" and
+            // "email"). MergeData.Rows is keyed case-insensitively, so those columns collapse to one
+            // value per row with no other signal anywhere in the pipeline -- warn here, at load time,
+            // since this is the one message the user is guaranteed to see for this recipient list.
+            message += " Warning: recipient list column name(s) differ only by case ("
+                + string.Join(", ", data.DuplicateHeaderNames)
+                + ") and will overwrite each other during merge -- rename one of them so both are kept.";
+        }
+
+        return new(editableTemplate, message);
     }
 
     public MailMergeSessionTransition SetMode(MailMergeOutputMode mode)
@@ -185,6 +198,7 @@ public sealed class MailMergeSessionWorkflow
             ResolveOriginalRecordNumbers(Session.Data, Session.OriginalRecordNumbers, data);
         Session.Data = data;
         Session.CurrentIndex = 0;
+        Session.HasFilteredRecipients = true;
         return new(editableTemplate, $"Recipient list now contains {data.Count} record(s).");
     }
 
@@ -512,7 +526,8 @@ public static class MailMergeValidationPlanner
 {
     public static MailMergeValidationPlan Validate(
         MergeData? data,
-        MailMergeOperation operation)
+        MailMergeOperation operation,
+        bool hasFilteredRecipients = false)
     {
         var requiresRecords = operation is
             MailMergeOperation.PreviewRecord or
@@ -522,8 +537,27 @@ public static class MailMergeValidationPlanner
             MailMergeOperation.FinishMerge or
             MailMergeOperation.SendEmail or
             MailMergeOperation.FilterSortRecipients;
-        var isValid = requiresRecords ? data is { Count: > 0 } : data is not null;
-        return isValid
+
+        if (requiresRecords)
+        {
+            if (data is { Count: > 0 })
+                return new(true, string.Empty);
+
+            // A list that was loaded and then filtered/sorted down to zero rows (Mailings > Filter &
+            // Sort Recipients allows unchecking every row) is a different situation from never having
+            // loaded one: the generic "select recipients first" message is actively wrong here -- the
+            // user already did that -- and never names the thing that actually explains the block.
+            // r174 remediation: gate on whether a filter was actually APPLIED, not on the list
+            // merely existing. A recipient list loaded with no data rows -- a header-only CSV,
+            // which the Select Recipients dialog seeds by default -- is also non-null with zero
+            // records, and telling that user their filter excludes everyone names a cause that
+            // never happened. A wrong explanation is worse than a vague one.
+            return new(false, hasFilteredRecipients
+                ? FilteredOutAllRecipientsMessage(operation)
+                : RequiredRecipientMessage(operation));
+        }
+
+        return data is not null
             ? new(true, string.Empty)
             : new(false, RequiredRecipientMessage(operation));
     }
@@ -551,6 +585,30 @@ public static class MailMergeValidationPlanner
         MailMergeOperation.SendEmail =>
             "Select recipients first (Mailings > Select Recipients), then Send E-mail Messages.",
         _ => "Select recipients first (Mailings > Select Recipients).",
+    };
+
+    // The excluded rows' own values are discarded the moment Filter & Sort Recipients is confirmed
+    // (ApplyRecipientFilter replaces Session.Data with just the surviving subset), so once every row is
+    // filtered out there is nothing left to re-check in that dialog -- the only real way back is to
+    // reselect recipients, which reloads the full list. Point at that actual fix instead of repeating
+    // "select recipients first" as if the list had never been loaded.
+    private static string FilteredOutAllRecipientsMessage(MailMergeOperation operation) => operation switch
+    {
+        MailMergeOperation.FilterSortRecipients =>
+            "The current filter excludes every recipient. Select recipients again (Mailings > Select Recipients) to restore the list, then filter and sort.",
+        MailMergeOperation.PreviewRecord =>
+            "The current filter excludes every recipient. Select recipients again (Mailings > Select Recipients) to restore the list, then preview a record.",
+        MailMergeOperation.StepRecords =>
+            "The current filter excludes every recipient. Select recipients again (Mailings > Select Recipients) to restore the list, then step records.",
+        MailMergeOperation.FindRecipient =>
+            "The current filter excludes every recipient. Select recipients again (Mailings > Select Recipients) to restore the list, then find a recipient.",
+        MailMergeOperation.CheckForErrors =>
+            "The current filter excludes every recipient. Select recipients again (Mailings > Select Recipients) to restore the list, then check for errors.",
+        MailMergeOperation.FinishMerge =>
+            "The current filter excludes every recipient. Select recipients again (Mailings > Select Recipients) to restore the list, then Finish & Merge.",
+        MailMergeOperation.SendEmail =>
+            "The current filter excludes every recipient. Select recipients again (Mailings > Select Recipients) to restore the list, then Send E-mail Messages.",
+        _ => "The current filter excludes every recipient. Select recipients again (Mailings > Select Recipients) to restore the list.",
     };
 }
 

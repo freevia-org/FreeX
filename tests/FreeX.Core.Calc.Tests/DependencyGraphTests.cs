@@ -775,6 +775,18 @@ public class DependencyGraphTests
         engine.RegisterFormulaDependencies(formula, ast, sheet.Id, workbook);
         sw.Stop();
 
+        // sweep112 F2: a wall-clock bound alone can go silent in exactly the direction this test
+        // exists to guard against — expanding a full-column reference into 1,048,576 individual
+        // HashSet<CellAddress> entries is itself well within reach of 500 ms on modern hardware, so a
+        // regression that reintroduces that expansion could still finish under this bound. Assert the
+        // actual compact-storage property directly (the same property the sibling Theory test above
+        // already checks for this exact formula) so this test cannot pass while the range has been
+        // silently expanded into individual cell dependencies.
+        graph.GetDirectPrecedents(formula).Count.Should().BeLessThanOrEqualTo(10_000,
+            "a full-column reference must not expand into >10k individual cell dependencies");
+        graph.GetDirectRangePrecedents(formula).Should().NotBeEmpty(
+            "a full-column reference should register at least one compact GridRange dependency");
+
         sw.ElapsedMilliseconds.Should().BeLessThan(500,
             "registering a full-column dependency must complete in under 500 ms");
     }

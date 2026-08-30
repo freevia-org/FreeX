@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using ClosedXML.Parser;
@@ -112,6 +113,17 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
         IReadOnlyList<ExternalLinkModel> externalLinkMetadata = [];
         var structuredTableMetadata = StructuredTablePackageMetadata.Empty;
         IReadOnlyList<XlsxChartsheet> chartsheets = [];
+        // R174-formula-array-cse-1: does this package carry an xl/metadata.xml declaring the
+        // "XLDAPR" dynamic-array cell-metadata type? Real Excel (and, since this fix, FreeX's own
+        // full save -- see XlsxFileAdapter.Save.cs's ApplyDynamicArrayCollapsedMetadataMarkers)
+        // stamps a modern dynamic-array formula cell with a `cm` attribute indexing into exactly
+        // this part, which a genuine legacy (Ctrl+Shift+Enter) CSE array formula never carries --
+        // that is the one real, unambiguous signal distinguishing the two when a declared
+        // <f t="array" ref="..."> range collapses to a single cell (see the 1x1 branch below).
+        // Gated on this cheap up-front presence check so the overwhelming majority of files (which
+        // have no such part at all) pay no extra cost; only when it's present does the per-cell
+        // lookup below ever ask a worksheet for its raw XML.
+        var packageHasDynamicArrayMetadata = false;
         var packageMetadataDiagnostics = MeasureLoadPhase(() =>
         {
             try
@@ -123,6 +135,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
                     inspectedFeatureReport = XlsxFeatureInspector.Inspect(packageArchive);
 
                 packageParts = XlsxLoadPackageParts.Inspect(packageArchive);
+                if (packageArchive.GetEntry("xl/metadata.xml") is { } metadataEntry)
+                {
+                    using var metadataReader = new StreamReader(metadataEntry.Open());
+                    packageHasDynamicArrayMetadata = metadataReader.ReadToEnd().Contains("XLDAPR", StringComparison.Ordinal);
+                }
                 chartsheets = XlsxChartsheetReader.Read(packageArchive);
                 workbookTheme = packageParts.HasTheme
                     ? XlsxWorkbookThemeReader.Load(packageArchive)
@@ -303,6 +320,15 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
         // spec requires cells in ascending row/col order) would allow binary search, but we keep the
         // dictionary to handle malformed files where cells arrive out of order without silent mis-styling.
         Dictionary<(uint Row, uint Col), int>? sharedPopulatedCellStyleIndexes = null;
+        // R174-formula-array-cse-1: per-sheet cache of cell addresses (A1 text) that carry a `cm`
+        // (cell-metadata) attribute in the RAW source worksheet XML -- ClosedXML's IXLCell exposes
+        // no such attribute, so this is looked up directly against the original package bytes.
+        // Populated lazily (only the first time a given sheet actually needs it, from
+        // TryGetDynamicArrayMetadataCellAddresses below) and only ever consulted at all when
+        // packageHasDynamicArrayMetadata is true, so a normal file pays zero extra parsing cost.
+        Dictionary<string, HashSet<string>>? dynamicArrayMetadataCellsBySheet =
+            packageHasDynamicArrayMetadata ? new(StringComparer.OrdinalIgnoreCase) : null;
+        XlsxWorkbookWorksheetPathMap? dynamicArrayMetadataWorksheetPathMap = null;
         // Pre-register all sheets so that the sheetNameResolver built inside ApplySheetXmlLayout
         // contains every sheet's SheetId — even sheets that haven't been fully loaded yet.
         // Without this pre-pass, charts on early sheets (e.g. "10 Charts") that reference later
@@ -378,14 +404,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
                         // provisional spill cells when they appear later in the iteration. A genuinely
                         // multi-cell ref also marks this anchor as a fixed-extent legacy CSE array
                         // formula (see Cell.LegacyArrayRows) so it never free-spills like a modern
-                        // dynamic-array formula. A 1x1 ref is deliberately NOT treated as fixed-extent
-                        // here: FreeX's own full save (XlsxFileAdapter.Save.cs) writes a currently-1x1
-                        // dynamic-array/blocked-spill formula as a single-cell "t=array ref=anchor" too
-                        // (purely to keep HasArrayFormula true across a round-trip so it can re-spill
-                        // again later) -- that representation is indistinguishable from a genuine
-                        // single-cell legacy CSE formula, and treating every 1x1 array-formula reload
-                        // as permanently fixed-extent would stop those FreeX-authored dynamic arrays
-                        // from ever re-spilling after an edit (R17_save_io_Tests, FreeXR13S11Tests).
+                        // dynamic-array formula.
                         if (arrayRef.LastAddress.RowNumber > arrayRef.FirstAddress.RowNumber ||
                             arrayRef.LastAddress.ColumnNumber > arrayRef.FirstAddress.ColumnNumber)
                         {
@@ -399,6 +418,41 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
                                 (uint)arrayRef.LastAddress.RowNumber,
                                 (uint)arrayRef.LastAddress.ColumnNumber,
                                 addr));
+                        }
+                        else
+                        {
+                            // R174-formula-array-cse-1: a declared 1x1 <f t="array" ref="..."> range is
+                            // genuinely ambiguous by shape alone -- FreeX's own full save writes a
+                            // currently-1x1 dynamic-array (or #SPILL!-blocked) formula using this exact
+                            // same single-cell "t=array ref=anchor" representation (purely to keep
+                            // HasArrayFormula true across a round-trip so it can re-spill again later:
+                            // see R17_save_io_Tests, FreeXR13S11Tests), and that is byte-for-byte what a
+                            // genuine single-cell Ctrl+Shift+Enter legacy CSE array formula also looks
+                            // like. Real Excel resolves this same ambiguity for its OWN modern
+                            // dynamic-array formulas by additionally stamping the cell with a `cm`
+                            // (cell-metadata) attribute indexing into an xl/metadata.xml part that
+                            // declares "XLDAPR" dynamic-array properties -- a legacy CSE formula never
+                            // carries that attribute. FreeX's save now replicates that real mechanism
+                            // (ApplyDynamicArrayCollapsedMetadataMarkers in XlsxFileAdapter.Save.cs)
+                            // instead of inventing a private marker, so check for it here: present ->
+                            // this is FreeX's own (or a genuine Excel 365) still-dynamic formula, leave
+                            // legacyArrayRows/Cols at 0 so it stays free-spilling; absent -> this is an
+                            // unambiguous genuine legacy CSE formula, so confine it to its declared 1x1
+                            // extent exactly like the multi-cell branch above, matching Excel's classic
+                            // array rule that a single-cell CSE result never spills into neighbors.
+                            var isDynamicArrayMetadataCell = packageHasDynamicArrayMetadata &&
+                                GetDynamicArrayMetadataCellAddresses(
+                                        packageStream,
+                                        xlSheet.Name,
+                                        dynamicArrayMetadataCellsBySheet!,
+                                        ref dynamicArrayMetadataWorksheetPathMap)
+                                    .Contains(addr.ToA1());
+
+                            if (!isDynamicArrayMetadataCell)
+                            {
+                                legacyArrayRows = 1;
+                                legacyArrayCols = 1;
+                            }
                         }
                         // Anchor falls through to normal formula-cell loading below.
                     }
@@ -1947,6 +2001,73 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
                 yield return new CellAddress(default, row, col).ToA1();
             }
         }
+    }
+
+    // R174-formula-array-cse-1: matches a <c ...> (or namespace-prefixed <ns:c ...>, which is what
+    // ClosedXML itself actually emits -- e.g. <x:c r="C1" cm="1">) opening tag that carries a
+    // `cm="N"` cell-metadata attribute anywhere within it (attribute order in real-world XML is
+    // not guaranteed, so the whole tag is captured rather than anchoring on a fixed attribute
+    // sequence).
+    private static readonly Regex CellTagWithCmAttributeRegex =
+        new(@"<(?:\w+:)?c\b[^>]*\bcm=""[0-9]+""[^>]*>", RegexOptions.Compiled);
+    private static readonly Regex CellRefAttributeRegex =
+        new(@"\br=""([^""]+)""", RegexOptions.Compiled);
+
+    /// <summary>
+    /// R174-formula-array-cse-1: returns the set of A1-notation cell addresses on the given sheet
+    /// that carry a `cm` (cell-metadata) attribute in the RAW source worksheet XML -- the real
+    /// signal (see xl/metadata.xml's "XLDAPR" dynamic-array properties) that a declared 1x1
+    /// <c>&lt;f t="array" ref="..."&gt;</c> anchor is a still-dynamic modern array formula rather
+    /// than a genuine legacy (Ctrl+Shift+Enter) CSE array formula, which never carries it. Resolved
+    /// once per sheet name and cached in <paramref name="cache"/> (an empty set is cached for a
+    /// sheet with none, so a miss is never re-scanned).
+    /// <para>
+    /// ClosedXML's object model exposes no such attribute, so this reads the original package bytes
+    /// directly via a lightweight tag-level regex scan rather than a full XML DOM parse. Only ever
+    /// reached when the package is already known to declare "XLDAPR" metadata (see
+    /// packageHasDynamicArrayMetadata in LoadCore), an up-front gate that keeps this at zero cost
+    /// for the overwhelming majority of files that have no such part at all.
+    /// </para>
+    /// </summary>
+    private static HashSet<string> GetDynamicArrayMetadataCellAddresses(
+        Stream packageStream,
+        string sheetName,
+        Dictionary<string, HashSet<string>> cache,
+        ref XlsxWorkbookWorksheetPathMap? worksheetPathMap)
+    {
+        if (cache.TryGetValue(sheetName, out var cached))
+            return cached;
+
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            packageStream.Position = 0;
+            using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
+            worksheetPathMap ??= XlsxWorkbookWorksheetPathMap.TryCreate(archive);
+            if (worksheetPathMap is not null &&
+                worksheetPathMap.SheetPathsByName.TryGetValue(sheetName, out var worksheetPath) &&
+                archive.GetEntry(worksheetPath) is { } worksheetEntry)
+            {
+                using var reader = new StreamReader(worksheetEntry.Open());
+                var xmlText = reader.ReadToEnd();
+                foreach (Match tagMatch in CellTagWithCmAttributeRegex.Matches(xmlText))
+                {
+                    var refMatch = CellRefAttributeRegex.Match(tagMatch.Value);
+                    if (refMatch.Success)
+                        result.Add(refMatch.Groups[1].Value);
+                }
+            }
+        }
+        catch (InvalidDataException)
+        {
+            // Not a valid zip archive: every earlier read against this same packageStream would
+            // already have failed the same way, so the load is already headed for the standard
+            // format-error path. Stay defensive here rather than let this best-effort lookup crash
+            // a load that ClosedXML itself is about to reject anyway.
+        }
+
+        cache[sheetName] = result;
+        return result;
     }
 
     private static void ThrowIfPasswordEncrypted(MemoryStream packageStream)

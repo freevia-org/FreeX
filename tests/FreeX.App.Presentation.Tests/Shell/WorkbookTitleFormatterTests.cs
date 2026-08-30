@@ -34,6 +34,38 @@ public sealed class WorkbookTitleFormatterTests
         WorkbookTitleFormatter.Format(workbookName, isDirty, isGrouped, windowSuffix).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("Book1", false, false, "Book1 [Read-Only] - FreeX")]
+    [InlineData("Book1", true, false, "Book1 [Read-Only]* - FreeX")]
+    [InlineData("Budget", false, true, "Budget [Group] [Read-Only] - FreeX")]
+    [InlineData("Budget", true, true, "Budget [Group] [Read-Only]* - FreeX")]
+    public void Format_AppendsReadOnlyMarkerWhenWorkbookIsReadOnly(
+        string workbookName,
+        bool isDirty,
+        bool isGrouped,
+        string expected)
+    {
+        WorkbookTitleFormatter.Format(workbookName, isDirty, isGrouped, isReadOnly: true)
+            .Should()
+            .Be(expected);
+    }
+
+    [Theory]
+    [InlineData("Book1", false, false, "Book1 - FreeX")]
+    [InlineData("Book1", true, false, "Book1* - FreeX")]
+    [InlineData("Budget", false, true, "Budget [Group] - FreeX")]
+    [InlineData("Budget", true, true, "Budget [Group]* - FreeX")]
+    public void Format_OmitsReadOnlyMarkerWhenWorkbookIsEditable(
+        string workbookName,
+        bool isDirty,
+        bool isGrouped,
+        string expected)
+    {
+        WorkbookTitleFormatter.Format(workbookName, isDirty, isGrouped, isReadOnly: false)
+            .Should()
+            .Be(expected);
+    }
+
     [Fact]
     public void DisplayNameFromPath_UsesSavedFileNameWithoutExtension()
     {

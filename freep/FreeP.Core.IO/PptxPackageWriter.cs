@@ -2283,6 +2283,34 @@ public static class PptxPackageWriter
     // ── p:transition ─────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// F1: overwrites the spd/advClick/advTm attributes (and p14:dur, if the element already
+    /// carries one) on a preserved-verbatim (<see cref="TransitionKind.Other"/>) p:transition
+    /// element with the current values of <paramref name="transition"/>. These three attributes
+    /// are the only parts of an unmodelled transition FreeP's ribbon lets the user edit
+    /// (Advance-On-Click / Advance-After / Duration), so a round-trip must let edits to them win
+    /// over whatever the raw XML originally said -- everything else (the effect child, any other
+    /// attribute, extLst, …) is left byte-identical.
+    /// </summary>
+    private static void ApplyOtherTransitionTimingAttrs(XElement transitionEl, SlideTransition transition)
+    {
+        transitionEl.SetAttributeValue("spd", PptxAnimationMap.DurationToSpd(transition.DurationMs));
+
+        transitionEl.SetAttributeValue("advClick", transition.AdvanceOnClick ? null : "0");
+
+        transitionEl.SetAttributeValue("advTm",
+            transition.AdvanceAfterMs.HasValue
+                ? transition.AdvanceAfterMs.Value.ToString(CultureInfo.InvariantCulture)
+                : null);
+
+        // p14:dur only ever appears on the mc:Choice-side p:transition captured when the source
+        // wrapped this transition in mc:AlternateContent (see ResolveTransitionEl's
+        // preferP14Dur=true path) -- only refresh it if it's already there so we never introduce
+        // a namespaced attribute onto a bare, unwrapped p:transition.
+        if (transitionEl.Attribute(P14 + "dur") is not null)
+            transitionEl.SetAttributeValue(P14 + "dur", transition.DurationMs);
+    }
+
+    /// <summary>
     /// Builds the mc:AlternateContent wrapping a p:transition element, or re-emits
     /// the verbatim RawXml for unrecognized (Other) transitions.
     /// <paramref name="soundRelId"/> is the r:embed relationship id of the audio part, if any.
@@ -2324,6 +2352,12 @@ public static class PptxPackageWriter
             try
             {
                 var rawEl = XElement.Parse(transition.RawXml, LoadOptions.PreserveWhitespace);
+
+                // F1: the ribbon lets the user edit AdvanceOnClick/AdvanceAfterMs/DurationMs
+                // regardless of Kind, so those fields must win over whatever the preserved raw
+                // XML originally said -- only the effect child (and every other attribute we
+                // don't model) stays verbatim.
+                ApplyOtherTransitionTimingAttrs(rawEl, transition);
 
                 // If there's a sound to re-attach and the raw XML doesn't already contain
                 // a sndAc element, inject it.
@@ -2557,6 +2591,14 @@ public static class PptxPackageWriter
             if (soundRelId is not null)
                 fallbackAttrs.Add(BuildSndAcEl(soundRelId, transition.Sound));
             fallbackEl = new XElement(P + "transition", fallbackAttrs.Where(a => a is not null).Cast<object>().ToArray());
+        }
+        else
+        {
+            // F1: this is the *other* place a preserved-verbatim node (the captured mc:Fallback
+            // p:transition) was being re-emitted completely unchanged -- refresh the same
+            // user-editable timing attributes here too, for old readers that fall back to this
+            // branch instead of mc:Choice.
+            ApplyOtherTransitionTimingAttrs(fallbackEl, transition);
         }
 
         return new XElement(MC + "AlternateContent",

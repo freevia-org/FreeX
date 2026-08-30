@@ -777,4 +777,58 @@ public class DocumentInspectorTests
         result.HasRevisions.Should().BeFalse();
         TrackChanges.HasRevisions(doc).Should().BeFalse();
     }
+
+    // --- freew-footnotes F1: PruneOrphanedNoteAndCommentAnchors' internal
+    // EnumerateCommentAnchorParagraphs walked HeadersFooters|Footnotes|Endnotes WITHOUT
+    // IncludeShapeTextBoxes (unlike its Body-subset call, which does include it), so a footnote/endnote
+    // reference run living inside a text box (Run.Shape) embedded in a header/footer was never counted as
+    // "in use" -- the prune then deleted the still-referenced footnote/endnote content while leaving the
+    // dangling reference-mark run behind in the header/footer shape.
+
+    private static TextDocument BuildDocumentWithFootnoteReferencedOnlyInsideHeaderShape()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 100, 50);
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(Run.FootnoteReference(1));
+        shape.TextParagraphs.Add(shapeParagraph);
+
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Clean body, no footnote reference here"));
+        doc.Footnotes[1] = new Footnote(1, "note text");
+
+        doc.Header = new HeaderFooter();
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(Run.FromShape(shape));
+        doc.Header.Paragraphs.Add(headerParagraph);
+        return doc;
+    }
+
+    [Fact]
+    public void PruneOrphanedNoteAndCommentAnchors_KeepsFootnote_WhenOnlyReferenceIsInsideHeaderTextBoxShape()
+    {
+        var doc = BuildDocumentWithFootnoteReferencedOnlyInsideHeaderShape();
+
+        DocumentInspector.PruneOrphanedNoteAndCommentAnchors(doc);
+
+        doc.Footnotes.Should().ContainKey(
+            1, "the footnote's only reference mark still exists -- inside a header text box -- so it must not be pruned");
+        var shape = doc.Header!.Paragraphs[0].Runs[0].Shape!;
+        shape.TextParagraphs.Single().Runs.Should().Contain(
+            r => r.FootnoteId == 1, "the reference-mark run itself must be left untouched by the prune");
+    }
+
+    // Sibling no-regression: a footnote with NO surviving reference anywhere (not even inside a shape)
+    // must still be pruned -- the fix must not make the prune over-cautious about shapes in general.
+    [Fact]
+    public void PruneOrphanedNoteAndCommentAnchors_StillRemovesFootnote_WhenNoReferenceExistsAnywhere()
+    {
+        var doc = BuildDocumentWithFootnoteReferencedOnlyInsideHeaderShape();
+        // Remove the only reference mark, leaving the footnote genuinely orphaned.
+        doc.Header!.Paragraphs[0].Runs[0].Shape!.TextParagraphs[0].Runs.Clear();
+
+        DocumentInspector.PruneOrphanedNoteAndCommentAnchors(doc);
+
+        doc.Footnotes.Should().BeEmpty(
+            "the footnote has no surviving reference mark anywhere, so it must still be pruned as before");
+    }
 }

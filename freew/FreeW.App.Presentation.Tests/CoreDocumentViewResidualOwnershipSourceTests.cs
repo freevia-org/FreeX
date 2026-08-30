@@ -52,6 +52,29 @@ public sealed class CoreDocumentViewResidualOwnershipSourceTests
         avalonia.Should().NotContain("private string? ResolveHfField(");
     }
 
+    [Fact]
+    public void FieldUpdateCoordinationBelongsSolelyToTheReferenceEditingCoordinator()
+    {
+        // DocumentFieldUpdateCoordinator was a second, unwired copy of the F9 field-update pass: every
+        // shipping call site (both shells) went through DocumentEditingSession.References
+        // (DocumentReferenceEditingCoordinator) instead, so a fix applied only to the dead copy changed
+        // nothing a user could observe. Guard the deletion so a future "share this logic" pass cannot
+        // reintroduce an orphaned duplicate coordinator that a fixer might mistake for the live path.
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var deadCoordinatorPath = Path.Combine(
+            root, "freew", "FreeW.App.Presentation", "DocumentView", "DocumentFieldUpdateCoordinator.cs");
+        File.Exists(deadCoordinatorPath).Should().BeFalse(
+            "DocumentFieldUpdateCoordinator has no production caller; field-update coordination lives in " +
+            "DocumentReferenceEditingCoordinator, reached via DocumentEditingSession.References");
+
+        var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        wpf.Should().NotContain("DocumentFieldUpdateCoordinator");
+        avalonia.Should().NotContain("DocumentFieldUpdateCoordinator");
+        wpf.Should().Contain("DocumentReferenceEditingCoordinator ReferenceEdits");
+        avalonia.Should().Contain("DocumentReferenceEditingCoordinator ReferenceEdits");
+    }
+
     private static string ReadSource(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");

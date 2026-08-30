@@ -453,6 +453,167 @@ public class TransitionCompletenessTests
         Assert.Null(doc.Root.Element(MC + "AlternateContent"));
     }
 
+    // ── ROUND-174 F1: editing Advance-On-Click/Advance-After/Duration on a preserved
+    //    (Other) transition must not be silently discarded on save ────────────────
+
+    [Fact]
+    public void Round174_F1_EditingTimingOnAlternateContentWrappedOtherTransition_SurvivesSaveAndReload()
+    {
+        // Source shape: an unrecognized p14 extension transition wrapped in mc:AlternateContent
+        // (real PowerPoint's own shape) with default timing (advClick absent == true, no advTm,
+        // spd/p14:dur == 500ms/"fast").
+        var pptxBytes = BuildPptxWithTransitionEl(
+            "<mc:AlternateContent xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\"" +
+            " xmlns:p14=\"http://schemas.microsoft.com/office/powerpoint/2010/main\">" +
+            "<mc:Choice Requires=\"p14\">" +
+            "<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" spd=\"fast\" p14:dur=\"500\">" +
+            "<p14:futureEffectNotYetKnown/>" +
+            "</p:transition>" +
+            "</mc:Choice>" +
+            "<mc:Fallback>" +
+            "<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" spd=\"fast\">" +
+            "<p:fade/>" +
+            "</p:transition>" +
+            "</mc:Fallback>" +
+            "</mc:AlternateContent>");
+
+        using var ms = new MemoryStream(pptxBytes);
+        var loaded = PptxPackageReader.Read(ms);
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(TransitionKind.Other, t!.Kind);
+        Assert.True(t.AdvanceOnClick);
+        Assert.Null(t.AdvanceAfterMs);
+        Assert.Equal(500, t.DurationMs);
+
+        // Simulate exactly what the ribbon's Transitions-tab commands do (see
+        // PresentationTransitionCommandPlanner.BuildAdvanceOnClickTransition /
+        // BuildAdvanceAfterTransition / BuildDurationTransition): clone the transition, flip only
+        // the structured field, leave RawXml/WasAlternateContent/etc. untouched.
+        var edited = new SlideTransition
+        {
+            Kind                        = t.Kind,
+            Direction                   = t.Direction,
+            SplitOrientation            = t.SplitOrientation,
+            DurationMs                  = 2_000,     // was 500 ("fast") -> now "slow"
+            AdvanceOnClick              = false,      // was true
+            AdvanceAfterMs              = 5_000,      // was null
+            RawXml                      = t.RawXml,
+            WasAlternateContent         = t.WasAlternateContent,
+            McRequiresToken             = t.McRequiresToken,
+            AlternateContentFallbackXml = t.AlternateContentFallbackXml,
+            Sound                       = t.Sound,
+        };
+        foreach (var kv in t.McRequiresNsUris) edited.McRequiresNsUris[kv.Key] = kv.Value;
+        loaded.Slides[0].Transition = edited;
+
+        var ms2 = new MemoryStream();
+        PptxPackageWriter.Write(loaded, ms2);
+        ms2.Position = 0;
+
+        using (var zip = new ZipArchive(ms2, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var entry = zip.Entries.First(e =>
+                e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+            XDocument doc;
+            using (var s = entry.Open()) doc = XDocument.Load(s);
+
+            var altContent = doc.Root?.Element(MC + "AlternateContent");
+            Assert.NotNull(altContent); // wrapper still intact
+
+            var choiceTrans = altContent!.Element(MC + "Choice")?.Element(P + "transition");
+            Assert.NotNull(choiceTrans);
+            // The edited timing attributes must be on the emitted Choice-side p:transition...
+            Assert.Equal("0", choiceTrans!.Attribute("advClick")?.Value);
+            Assert.Equal("5000", choiceTrans.Attribute("advTm")?.Value);
+            Assert.Equal("slow", choiceTrans.Attribute("spd")?.Value);
+            Assert.Equal("2000", choiceTrans.Attribute(P14 + "dur")?.Value);
+            // ...while the unmodelled effect element is completely untouched.
+            Assert.NotNull(choiceTrans.Elements()
+                .FirstOrDefault(e => e.Name.LocalName == "futureEffectNotYetKnown"));
+
+            // The Fallback's preserved p:transition must carry the same refreshed timing too
+            // (it is the OTHER preserved-verbatim node this same bug affected).
+            var fallbackTrans = altContent.Element(MC + "Fallback")?.Element(P + "transition");
+            Assert.NotNull(fallbackTrans);
+            Assert.Equal("0", fallbackTrans!.Attribute("advClick")?.Value);
+            Assert.Equal("5000", fallbackTrans.Attribute("advTm")?.Value);
+            Assert.Equal("slow", fallbackTrans.Attribute("spd")?.Value);
+            Assert.NotNull(fallbackTrans.Elements().FirstOrDefault(e => e.Name.LocalName == "fade"));
+        }
+
+        // And the change must actually survive a full reload (the user-visible contract).
+        ms2.Position = 0;
+        var reloaded = PptxPackageReader.Read(ms2);
+        var t2 = reloaded.Slides[0].Transition;
+        Assert.NotNull(t2);
+        Assert.Equal(TransitionKind.Other, t2!.Kind); // unmodelled part still intact
+        Assert.False(t2.AdvanceOnClick);
+        Assert.Equal(5_000, t2.AdvanceAfterMs);
+        Assert.Equal(2_000, t2.DurationMs);
+        Assert.NotNull(t2.RawXml);
+        Assert.Contains("futureEffectNotYetKnown", t2.RawXml);
+    }
+
+    [Fact]
+    public void Round174_F1_Sibling_EditingTimingOnBareUnwrappedOtherTransition_SurvivesSaveAndReload()
+    {
+        // Adjacent case / no-regression: a legacy file where the unrecognized transition was
+        // NEVER wrapped in mc:AlternateContent must still get its edited timing attributes
+        // written back, and must still stay unwrapped (the F1 fix must not start wrapping
+        // things that were never wrapped, and must not regress the bare-element path).
+        var pptxBytes = BuildPptxWithTransitionEl(
+            "<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" spd=\"fast\">" +
+            "<p:someExoticFutureTransition dir=\"l\"/>" +
+            "</p:transition>");
+
+        using var ms = new MemoryStream(pptxBytes);
+        var loaded = PptxPackageReader.Read(ms);
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(TransitionKind.Other, t!.Kind);
+        Assert.False(t.WasAlternateContent);
+        Assert.True(t.AdvanceOnClick);
+
+        var edited = new SlideTransition
+        {
+            Kind           = t.Kind,
+            DurationMs     = t.DurationMs,
+            RawXml         = t.RawXml,
+            AdvanceOnClick = false,   // the only thing the user changed
+            AdvanceAfterMs = t.AdvanceAfterMs,
+        };
+        loaded.Slides[0].Transition = edited;
+
+        var ms2 = new MemoryStream();
+        PptxPackageWriter.Write(loaded, ms2);
+        ms2.Position = 0;
+
+        using (var zip = new ZipArchive(ms2, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var entry = zip.Entries.First(e =>
+                e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+            XDocument doc;
+            using (var s = entry.Open()) doc = XDocument.Load(s);
+
+            Assert.Null(doc.Root?.Element(MC + "AlternateContent")); // stays bare, no new wrapper
+            var bareTrans = doc.Root?.Element(P + "transition");
+            Assert.NotNull(bareTrans);
+            Assert.Equal("0", bareTrans!.Attribute("advClick")?.Value);
+            Assert.NotNull(bareTrans.Elements()
+                .FirstOrDefault(e => e.Name.LocalName == "someExoticFutureTransition"));
+        }
+
+        ms2.Position = 0;
+        var reloaded = PptxPackageReader.Read(ms2);
+        var t2 = reloaded.Slides[0].Transition;
+        Assert.NotNull(t2);
+        Assert.Equal(TransitionKind.Other, t2!.Kind);
+        Assert.False(t2.AdvanceOnClick);
+        Assert.NotNull(t2.RawXml);
+        Assert.Contains("someExoticFutureTransition", t2.RawXml);
+    }
+
     // ── Round-trip: Transition sound ─────────────────────────────────────────────
 
     [Fact]
