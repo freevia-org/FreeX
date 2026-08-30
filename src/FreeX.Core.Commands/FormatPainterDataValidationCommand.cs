@@ -138,23 +138,14 @@ public sealed class FormatPainterDataValidationCommand : IWorkbookCommand
         for (var i = targetSheet.DataValidations.Count - 1; i >= 0; i--)
         {
             var rule = targetSheet.DataValidations[i];
-            var allRanges = EnumerateRuleRanges(rule).ToArray();
-            if (!allRanges.Any(range => range.Overlaps(_targetRange)))
+            if (!rule.Overlaps(_targetRange))
                 continue;
 
             targetSheet.DataValidations.RemoveAt(i);
-            var remainingRanges = allRanges
-                .SelectMany(range => GridRangeSubtraction.Subtract(range, _targetRange))
-                .ToList();
+            var remainingRanges = DataValidationRangeOperations.Subtract(rule, _targetRange);
             for (var r = remainingRanges.Count - 1; r >= 0; r--)
             {
-                var replacement = DataValidationCopySupport.CloneValidation(
-                    rule,
-                    remainingRanges[r],
-                    hostSheetName: null,
-                    rowDelta: 0,
-                    colDelta: 0,
-                    includeAdditionalRanges: false);
+                var replacement = rule.CloneWithNewIdentity(remainingRanges[r]);
                 targetSheet.DataValidations.Insert(i, replacement);
             }
         }

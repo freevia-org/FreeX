@@ -617,12 +617,8 @@ public partial class MainWindow
         SheetGrid.Pictures = keepObjectData ? sheet?.Pictures : null;
         SheetGrid.DrawingObjectZOrder = keepObjectData ? sheet?.DrawingObjectZOrder : null;
         var nativeVisualFilters = keepObjectData && sheet is not null
-            ? SlicerTimelinePanePlanner.GetNativeVisualFilters(_workbook, sheet)
+            ? _viewportNativeVisualFilterCache.GetOrCreate(_workbook, sheet, _navigationCacheRevision)
             : null;
-        if (nativeVisualFilters is { Slicers.Count: > 0 })
-        {
-            new SlicerTimelineSourceSession(_workbook).PopulateAvailableItems(nativeVisualFilters.Slicers);
-        }
         SheetGrid.NativeSlicers = nativeVisualFilters?.Slicers;
         SheetGrid.NativeTimelines = nativeVisualFilters?.Timelines;
         if (keepObjectData && sheet is not null && sheet.FormControls.Count > 0)

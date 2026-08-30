@@ -156,22 +156,17 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
         for (var i = sheet.DataValidations.Count - 1; i >= 0; i--)
         {
             var rule = sheet.DataValidations[i];
-            var allRanges = new[] { rule.AppliesTo }.Concat(rule.AdditionalRanges).ToArray();
-            if (!allRanges.Any(range => range.Overlaps(footprint)))
+            if (!rule.Overlaps(footprint))
                 continue;
 
             sheet.DataValidations.RemoveAt(i);
-            var remainingRanges = allRanges.SelectMany(range => GridRangeSubtraction.Subtract(range, footprint)).ToList();
+            var remainingRanges = DataValidationRangeOperations.Subtract(rule, footprint);
             // includeAdditionalRanges:false -- each surviving fragment (from AppliesTo OR from an
             // AdditionalRanges entry, per -3-2) becomes its own standalone rule; carrying the
             // ORIGINAL rule's AdditionalRanges along would silently reintroduce the very range(s)
             // this loop just subtracted out.
-            var replacements = remainingRanges
-                .Select(range => DataValidationCopySupport.CloneValidation(
-                    rule, range, hostSheetName: null, rowDelta: 0, colDelta: 0, includeAdditionalRanges: false))
-                .ToList();
-            for (var r = replacements.Count - 1; r >= 0; r--)
-                sheet.DataValidations.Insert(i, replacements[r]);
+            for (var r = remainingRanges.Count - 1; r >= 0; r--)
+                sheet.DataValidations.Insert(i, rule.CloneWithNewIdentity(remainingRanges[r]));
         }
     }
 

@@ -316,8 +316,9 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
-        viewportSource.Should().Contain("SlicerTimelinePanePlanner.GetNativeVisualFilters(_workbook, sheet)");
-        viewportSource.Should().Contain("new SlicerTimelineSourceSession(_workbook).PopulateAvailableItems(nativeVisualFilters.Slicers)");
+        viewportSource.Should().Contain("_viewportNativeVisualFilterCache.GetOrCreate(_workbook, sheet, _navigationCacheRevision)");
+        viewportSource.Should().NotContain("SlicerTimelinePanePlanner.GetNativeVisualFilters(_workbook, sheet)");
+        viewportSource.Should().NotContain("new SlicerTimelineSourceSession(_workbook)");
         viewportSource.Should().Contain("SheetGrid.NativeSlicers = nativeVisualFilters?.Slicers;");
         viewportSource.Should().Contain("SheetGrid.NativeTimelines = nativeVisualFilters?.Timelines;");
         viewportSource.Should().NotContain("SlicerTimelinePanePlanner.GetNativeVisualSlicers(_workbook, sheet)");

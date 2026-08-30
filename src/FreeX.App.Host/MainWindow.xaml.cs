@@ -14,6 +14,7 @@ using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Sparklines;
+using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.App.Services;
 using FreeX.App.UI;
 using Free.Shared.Theme.Wpf;
@@ -77,6 +78,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private Free.Shared.AppServices.StatusBarAutomationSnapshot? _lastStatusBarAutomationSnapshot;
     private readonly SparklineValueCache _sparklineValueCache = new();
     private readonly WorksheetViewportAdornmentCache _worksheetViewportAdornmentCache = new();
+    private readonly ViewportNativeVisualFilterCache _viewportNativeVisualFilterCache = new();
     private ulong _navigationCacheRevision;
     private bool _suppressViewOptionSync;
     private bool _suppressAppViewOptionSync;

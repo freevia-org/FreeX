@@ -60,6 +60,24 @@ public sealed class DataValidationCloneTests
         source.HasSameDefinition(differentRange).Should().BeFalse();
     }
 
+    [Fact]
+    public void Overlaps_ChecksPrimaryAndAdditionalRangesWithoutMaterializingThem()
+    {
+        var source = CreateRule();
+        var sheetId = source.AppliesTo.Start.Sheet;
+        var primaryOverlap = Range(sheetId, 2, 2, 2, 3);
+        var additionalOverlap = Range(sheetId, 4, 4, 5, 5);
+        var disjoint = Range(sheetId, 10, 10, 11, 11);
+        var other = new DataValidation { AppliesTo = disjoint };
+        other.AdditionalRanges.Add(additionalOverlap);
+
+        source.Overlaps(primaryOverlap).Should().BeTrue();
+        source.Overlaps(additionalOverlap).Should().BeTrue();
+        source.Overlaps(disjoint).Should().BeFalse();
+        source.Overlaps(other).Should().BeTrue();
+        other.Overlaps(source).Should().BeTrue();
+    }
+
     private static DataValidation CreateRule()
     {
         var sheetId = SheetId.New();

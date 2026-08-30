@@ -66,7 +66,8 @@ public static class SlicerItemResolver
                 AddPivotCacheItem(item.Index, item.IsSelected);
         }
 
-        if (slicer.SelectedItems.Count == 0 &&
+        if (!slicer.SelectionCaptured &&
+            slicer.SelectedItems.Count == 0 &&
             selectedFromCache.Count > 0 &&
             selectedFromCache.Count < available.Count)
         {

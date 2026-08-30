@@ -126,49 +126,41 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
     /// subtract-and-replace loop -- so applying a new rule to a selection always fully supersedes
     /// whatever validation previously covered any cell in that selection.
     /// </summary>
-    private static (List<(int Index, DataValidation Rule)> Removed, List<(int Index, DataValidation Rule)> Added)
+    private static (List<(int Index, DataValidation Rule)>? Removed, List<(int Index, DataValidation Rule)>? Added)
         ClearOtherOverlappingRules(Sheet sheet, DataValidation rule, DataValidation? excludeRule)
     {
-        var removed = new List<(int Index, DataValidation Rule)>();
-        var added = new List<(int Index, DataValidation Rule)>();
-        var footprints = new[] { rule.AppliesTo }.Concat(rule.AdditionalRanges).ToArray();
-
+        List<(int Index, DataValidation Rule)>? removed = null;
+        List<(int Index, DataValidation Rule)>? added = null;
         for (var i = sheet.DataValidations.Count - 1; i >= 0; i--)
         {
             var existing = sheet.DataValidations[i];
             if (ReferenceEquals(existing, excludeRule))
                 continue;
 
-            var existingRanges = new[] { existing.AppliesTo }.Concat(existing.AdditionalRanges).ToArray();
-            if (!existingRanges.Any(er => footprints.Any(fp => er.Overlaps(fp))))
+            if (!existing.Overlaps(rule))
                 continue;
 
-            removed.Add((i, existing));
+            (removed ??= []).Add((i, existing));
             sheet.DataValidations.RemoveAt(i);
 
             // Subtract every footprint range from every existing range in turn, keeping only the
             // portion that survives ALL of them.
-            IEnumerable<GridRange> remainder = existingRanges;
-            foreach (var footprint in footprints)
-                remainder = remainder.SelectMany(range => GridRangeSubtraction.Subtract(range, footprint));
+            var remainder = DataValidationRangeOperations.Subtract(existing, rule);
 
             // includeAdditionalRanges:false -- see PasteDataValidationCommand's identical fix
             // (R52-commands-data-validation-apply-3-2): each surviving fragment becomes its own
             // standalone rule, and carrying the ORIGINAL rule's AdditionalRanges along would
             // silently reintroduce the very range(s) this loop just subtracted out.
-            var replacements = remainder
-                .Select(range => DataValidationCopySupport.CloneValidation(
-                    existing, range, hostSheetName: null, rowDelta: 0, colDelta: 0, includeAdditionalRanges: false))
-                .ToList();
-            for (var r = replacements.Count - 1; r >= 0; r--)
+            for (var r = remainder.Count - 1; r >= 0; r--)
             {
-                sheet.DataValidations.Insert(i, replacements[r]);
-                added.Add((i, replacements[r]));
+                var replacement = existing.CloneWithNewIdentity(remainder[r]);
+                sheet.DataValidations.Insert(i, replacement);
+                (added ??= []).Add((i, replacement));
             }
         }
 
-        removed.Reverse();
-        added.Reverse();
+        removed?.Reverse();
+        added?.Reverse();
         return (removed, added);
     }
 
@@ -234,19 +226,15 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
         for (var i = sheet.DataValidations.Count - 1; i >= 0; i--)
         {
             var rule = sheet.DataValidations[i];
-            var allRanges = new[] { rule.AppliesTo }.Concat(rule.AdditionalRanges).ToArray();
-            if (!allRanges.Any(range => range.Overlaps(_range)))
+            if (!rule.Overlaps(_range))
                 continue;
 
             _removed.Add((i, rule));
             sheet.DataValidations.RemoveAt(i);
-            var remainingRanges = allRanges
-                .SelectMany(range => GridRangeSubtraction.Subtract(range, _range))
-                .ToList();
-            var replacements = BuildReplacementRules(rule, remainingRanges).ToList();
-            for (var r = replacements.Count - 1; r >= 0; r--)
+            var remainingRanges = DataValidationRangeOperations.Subtract(rule, _range);
+            for (var r = remainingRanges.Count - 1; r >= 0; r--)
             {
-                var replacement = replacements[r];
+                var replacement = rule.CloneWithNewIdentity(remainingRanges[r]);
                 sheet.DataValidations.Insert(i, replacement);
                 _added.Add((i, replacement));
             }
@@ -271,30 +259,4 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
             sheet.DataValidations.Insert(Math.Min(index, sheet.DataValidations.Count), rule);
     }
 
-    private static DataValidation CloneForRange(DataValidation source, GridRange range) =>
-        new()
-        {
-            AppliesTo = range,
-            Type = source.Type,
-            Operator = source.Operator,
-            Formula1 = source.Formula1,
-            Formula2 = source.Formula2,
-            AllowBlank = source.AllowBlank,
-            ShowDropdown = source.ShowDropdown,
-            AlertStyle = source.AlertStyle,
-            ShowInputMessage = source.ShowInputMessage,
-            ShowErrorMessage = source.ShowErrorMessage,
-            ErrorTitle = source.ErrorTitle,
-            ErrorMessage = source.ErrorMessage,
-            PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage,
-            IsX14 = source.IsX14,
-            NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = source.NativeChildXmls,
-            NativeContainerAttributes = source.NativeContainerAttributes,
-            NativeContainerChildXmls = source.NativeContainerChildXmls
-        };
-
-    private static IEnumerable<DataValidation> BuildReplacementRules(DataValidation source, IReadOnlyList<GridRange> ranges) =>
-        ranges.Select(range => CloneForRange(source, range));
 }
