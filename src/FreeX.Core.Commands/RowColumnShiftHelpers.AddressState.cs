@@ -874,7 +874,7 @@ internal static partial class RowColumnShiftHelpers
         if (!string.IsNullOrWhiteSpace(autoFilter.Reference) && shiftedReference is null)
             return null;
 
-        var shiftedColumns = ShiftAutoFilterColumns(autoFilter, shiftedReference, shift).ToList();
+        var shiftedColumns = ShiftAutoFilterColumns(autoFilter, shiftedReference, shift);
         var changed =
             !ReferencesEqual(autoFilter.Reference, shiftedReference) ||
             !AutoFilterColumnsEqual(autoFilter.FilterColumns, shiftedColumns);
@@ -890,21 +890,23 @@ internal static partial class RowColumnShiftHelpers
         return clone;
     }
 
-    private static IEnumerable<WorksheetAutoFilterColumnModel> ShiftAutoFilterColumns(
+    private static List<WorksheetAutoFilterColumnModel> ShiftAutoFilterColumns(
         WorksheetAutoFilterModel autoFilter,
         string? shiftedReference,
         AddressShift shift)
     {
+        var shiftedColumns = new List<WorksheetAutoFilterColumnModel>(autoFilter.FilterColumns.Count);
         if (shift.Axis != AddressShiftAxis.Columns ||
             string.IsNullOrWhiteSpace(autoFilter.Reference) ||
             string.IsNullOrWhiteSpace(shiftedReference) ||
             !TryParseSingleReference(autoFilter.Reference, shift, out var oldRange) ||
             !TryParseSingleReference(shiftedReference, shift, out var newRange))
         {
-            return autoFilter.FilterColumns.Select(column => WorksheetAutoFilterCloner.CloneColumn(column));
+            foreach (var column in autoFilter.FilterColumns)
+                shiftedColumns.Add(WorksheetAutoFilterCloner.CloneColumn(column));
+            return shiftedColumns;
         }
 
-        var shiftedColumns = new List<WorksheetAutoFilterColumnModel>();
         foreach (var column in autoFilter.FilterColumns)
         {
             if (column.ColumnId < 0)

@@ -294,6 +294,14 @@ public sealed class CoreCommandsResidualDeduplicationTests
         ModelSourceTestSupport.ReadCommandsSource("PivotTableSlicerTimelineCommands.cs")
             .Should().Contain("PivotTableTargetStateSnapshot.Capture");
 
+        var autoFilterClonerSource = ModelSourceTestSupport.ReadModelSource("WorksheetAutoFilterCloner.cs");
+        autoFilterClonerSource.Should().Contain("internal static class WorksheetAutoFilterCloner");
+        autoFilterClonerSource.Should().Contain("clone.FilterColumns.EnsureCapacity(autoFilter.FilterColumns.Count)");
+        autoFilterClonerSource.Should().NotContain(".Select(");
+        ModelSourceTestSupport.ReadCommandsSourcesMatching("ToggleWorksheetAutoFilterCommand.cs", "*.cs")
+            .Should().NotContain("class WorksheetAutoFilterCloner",
+                "AutoFilter deep-clone policy must have one Model-owned implementation");
+
         foreach (var file in new[]
                  {
                      "ConvertToRangeStructuredReferenceLowering.cs",

@@ -21,6 +21,8 @@
          part of the model's public surface. Only the test assembly that owns that investigation
          needs to see it. -->
     <InternalsVisibleTo Include="FreeX.App.Host.Logic.Tests" />
+    <InternalsVisibleTo Include="FreeX.Core.Commands" />
+    <InternalsVisibleTo Include="FreeX.Core.Model.Tests" />
   </ItemGroup>
 
 </Project>
