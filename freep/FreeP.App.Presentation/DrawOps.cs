@@ -149,6 +149,22 @@ public sealed class ResolvedParagraph
     public double SpaceAfterPt { get; init; }
 
     /// <summary>
+    /// Space before the paragraph as a percentage of a single line's height
+    /// (a:spcBef/a:spcPct; 100 = one line). Null means <see cref="SpaceBeforePt"/> applies
+    /// instead. Resolve to absolute points via
+    /// <c>TextLayoutPlanner.ResolveSpaceBeforePoints</c> rather than reading this field
+    /// directly at layout time.
+    /// </summary>
+    public double? SpaceBeforePercent { get; init; }
+
+    /// <summary>
+    /// Space after the paragraph as a percentage of a single line's height
+    /// (a:spcAft/a:spcPct). See <see cref="SpaceBeforePercent"/>; resolve with
+    /// <c>TextLayoutPlanner.ResolveSpaceAfterPoints</c>.
+    /// </summary>
+    public double? SpaceAfterPercent { get; init; }
+
+    /// <summary>
     /// Line spacing as a percentage of a single line's natural height (a:lnSpc/a:spcPct;
     /// 100 = single, 150 = 1.5x, 200 = double). Null means <see cref="LineSpacingPointsExact"/>
     /// applies instead, or the paragraph inherits default single spacing.
