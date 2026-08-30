@@ -25,6 +25,10 @@ public partial class GridView
         Dictionary<uint, RowMetric> Rows,
         Dictionary<uint, ColMetric> Columns);
 
+    private sealed record SplitPaneBorderLookupCache(
+        IReadOnlyList<DisplayCell> Cells,
+        Dictionary<(uint Row, uint Col), CellStyle>? BorderStyles);
+
     private sealed record OccupiedCellLookupCache(
         IReadOnlyList<DisplayCell> Cells,
         CellAddress? EditingCell,

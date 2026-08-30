@@ -231,7 +231,7 @@ public partial class GridView
         // SplitPaneCellLayoutPlanner.VisitLayouts silently winning, matching the main pass
         // (RenderCells) and Avalonia's split rendering (which funnels every quadrant through the
         // same ResolveCellBorderNeighborEdges-backed CreateCell path).
-        var splitBorderStyleLookup = BuildBorderStyleLookup(Viewport!.SplitPanes!.Cells);
+        var splitBorderStyleLookup = GetSplitPaneBorderStyleLookup(Viewport!.SplitPanes!.Cells);
         var consumer = new SplitPaneCellRenderConsumer(
             this,
             dc,
@@ -1233,6 +1233,17 @@ public partial class GridView
         }
 
         return lookup;
+    }
+
+    private Dictionary<(uint Row, uint Col), CellStyle>? GetSplitPaneBorderStyleLookup(
+        IReadOnlyList<DisplayCell> cells)
+    {
+        if (_splitPaneBorderLookupCache is { } cached && ReferenceEquals(cached.Cells, cells))
+            return cached.BorderStyles;
+
+        var borderStyles = BuildBorderStyleLookup(cells);
+        _splitPaneBorderLookupCache = new SplitPaneBorderLookupCache(cells, borderStyles);
+        return borderStyles;
     }
 
     private RenderCellLookupCache GetRenderCellLookups(ViewportModel viewport)

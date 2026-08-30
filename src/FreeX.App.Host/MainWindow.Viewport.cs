@@ -992,6 +992,7 @@ public partial class MainWindow
             AvailableHeight: (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel,
             AvailableWidth: CalculateViewportAvailableWidth(SheetGrid.ActualWidth, rowHeaderWidth, _zoomLevel),
             IncludeObjects: _options.ObjectsDisplay == AppOptionsObjectDisplay.All,
+            IncludeDrawingObjectBounds: false,
             SplitPaneOffsets: GetSplitPaneViewportOffsets(viewState, topRow, leftCol),
             FrozenRowsOverride: viewState.FrozenRows,
             FrozenColsOverride: viewState.FrozenCols,

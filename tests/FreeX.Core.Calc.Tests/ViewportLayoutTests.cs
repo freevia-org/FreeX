@@ -650,6 +650,40 @@ public class ViewportLayoutTests
     }
 
     [Fact]
+    public void GetViewport_CanKeepChartDataWithoutProjectingDrawingObjectBounds()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(42));
+        sheet.Charts.Add(new ChartModel
+        {
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 1))
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Name = "Shape 1"
+        });
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(
+                1,
+                1,
+                100,
+                300,
+                IncludeObjects: true,
+                IncludeDrawingObjectBounds: false));
+
+        viewport.ChartDataCells.Should().ContainSingle()
+            .Which.RawValue.Should().Be(new NumberValue(42));
+        viewport.DrawingObjects.Should().BeEmpty();
+    }
+
+    [Fact]
     public void GetViewport_DrawingObjectsExposeVisibleBoundsInZOrder()
     {
         var workbook = new Workbook("test");

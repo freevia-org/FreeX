@@ -156,6 +156,24 @@ public sealed class R37_DatabaseCriteriaAndFieldTests
             .Should().Be(new NumberValue(2));
     }
 
+    [Fact]
+    public void DatabaseHeaders_AreCaseInsensitiveAndDuplicateNamesUseFirstColumn()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        Set(sheet, 1, 1, new TextValue("Score"));
+        Set(sheet, 1, 2, new TextValue("Score"));
+        Set(sheet, 2, 1, new NumberValue(1));
+        Set(sheet, 2, 2, new NumberValue(100));
+        Set(sheet, 3, 1, new NumberValue(2));
+        Set(sheet, 3, 2, new NumberValue(200));
+        Set(sheet, 1, 4, new TextValue("sCoRe"));
+        Set(sheet, 2, 4, new TextValue("=2"));
+
+        _eval.Evaluate("=DGET(A1:B3,\"SCORE\",D1:D2)", sheet)
+            .Should().Be(new NumberValue(2),
+                "both field and criteria header resolution must preserve the first matching database column");
+    }
+
     private static void Set(Sheet sheet, uint row, uint col, ScalarValue value)
         => sheet.SetCell(new CellAddress(sheet.Id, row, col), value);
 }

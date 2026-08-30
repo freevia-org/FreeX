@@ -187,7 +187,7 @@ public sealed partial class ViewportService : IViewportService
             ? BuildChartDataCells(workbook, sheet, ref styleCache)
             : [];
 
-        var drawingObjects = request.IncludeObjects
+        var drawingObjects = request.IncludeObjects && request.IncludeDrawingObjectBounds
             ? BuildDrawingObjectBounds(sheet, workbook.Theme, rowMetrics, colMetrics)
             : [];
         var rowOutlineGroups = sheet.ShowOutlineSymbols == false

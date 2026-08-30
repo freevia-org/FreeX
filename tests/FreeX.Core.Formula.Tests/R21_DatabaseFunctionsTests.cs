@@ -70,7 +70,7 @@ public sealed class R21_DatabaseFunctionsTests
     public void FieldByName_NumericDatabaseHeader_ResolvesLikeCriteriaHeaderDoes()
     {
         // Database header B1 is a NumberValue (2020), e.g. a year-column template.
-        // Field-by-name lookup ("2020") must resolve it the same way FindDbHeaderCol
+        // Field-by-name lookup ("2020") must resolve it the same way the criteria header plan
         // already resolves numeric headers for criteria-column matching.
         var sheet = new Sheet(SheetId.New(), "S");
         Set(sheet, 1, 1, new TextValue("Item"));

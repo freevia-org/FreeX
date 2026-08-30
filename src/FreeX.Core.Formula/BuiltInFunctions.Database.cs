@@ -31,29 +31,46 @@ public static partial class BuiltInFunctions
         return null;
     }
 
-    /// <summary>Find database column index matching the given header text (case-insensitive).</summary>
-    private static int FindDbHeaderCol(RangeValue database, string headerText)
+    private readonly record struct DatabaseCriteriaPlan(int[] DatabaseColumns);
+
+    /// <summary>
+    /// Resolves criteria headers once per database-function invocation. Database headers are
+    /// invariant while rows are scanned, and duplicate names preserve Excel's first-column wins
+    /// behavior through <see cref="Dictionary{TKey,TValue}.TryAdd(TKey,TValue)"/>.
+    /// </summary>
+    private static DatabaseCriteriaPlan BuildDatabaseCriteriaPlan(RangeValue database, RangeValue criteria)
     {
+        var databaseColumns = new Dictionary<string, int>(database.ColCount, StringComparer.OrdinalIgnoreCase);
         for (int c = 0; c < database.ColCount; c++)
+            databaseColumns.TryAdd(ToText(database.Cells[0, c]), c);
+
+        var criteriaColumns = new int[criteria.ColCount];
+        for (int c = 0; c < criteria.ColCount; c++)
         {
-            var h = database.Cells[0, c];
-            string hText = h is TextValue or DirectTextLiteralValue ? ToText(h) : ToText(h);
-            if (string.Equals(hText, headerText, StringComparison.OrdinalIgnoreCase))
-                return c;
+            var header = criteria.Cells[0, c];
+            criteriaColumns[c] = header is not BlankValue &&
+                databaseColumns.TryGetValue(ToText(header), out var databaseColumn)
+                    ? databaseColumn
+                    : -1;
         }
-        return -1;
+
+        return new DatabaseCriteriaPlan(criteriaColumns);
     }
 
     /// <summary>Returns true if a single data row matches a single criteria row (AND across columns).</summary>
-    private static bool DbRowMatchesCriteriaRow(RangeValue database, int dataRow, RangeValue criteria, int critRow, IEvalContext ctx)
+    private static bool DbRowMatchesCriteriaRow(
+        RangeValue database,
+        int dataRow,
+        RangeValue criteria,
+        int critRow,
+        DatabaseCriteriaPlan plan,
+        IEvalContext ctx)
     {
         for (int cc = 0; cc < criteria.ColCount; cc++)
         {
-            var critHeader = criteria.Cells[0, cc];
-            bool blankHeader = critHeader is BlankValue;
-            int dbCol = blankHeader ? -1 : FindDbHeaderCol(database, ToText(critHeader));
+            int dbCol = plan.DatabaseColumns[cc];
 
-            if (blankHeader || dbCol < 0)
+            if (dbCol < 0)
             {
                 // Excel's documented "computed criteria" convention: a criteria column whose
                 // header is blank, or is a label that doesn't match any database column name,
@@ -79,6 +96,23 @@ public static partial class BuiltInFunctions
             if (!MatchesCriteria(cellValue, critCell, textPrefixMatch: true)) return false;
         }
         return true;
+    }
+
+    /// <summary>Returns true when any criteria row matches (OR across rows).</summary>
+    private static bool DbRowMatchesAnyCriteriaRow(
+        RangeValue database,
+        int dataRow,
+        RangeValue criteria,
+        DatabaseCriteriaPlan plan,
+        IEvalContext ctx)
+    {
+        for (int critRow = 1; critRow < criteria.RowCount; critRow++)
+        {
+            if (DbRowMatchesCriteriaRow(database, dataRow, criteria, critRow, plan, ctx))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -132,33 +166,29 @@ public static partial class BuiltInFunctions
     /// a matching row's field value errors before every match has been scanned.
     /// </remarks>
     private static (List<ScalarValue> Matches, ErrorValue? Error, int MatchCount) DatabaseExtract(
-        RangeValue database, ScalarValue fieldArg, RangeValue criteria, IEvalContext ctx)
+        RangeValue database,
+        ScalarValue fieldArg,
+        RangeValue criteria,
+        IEvalContext ctx,
+        int? resolvedFieldCol = null)
     {
         // Resolve the field argument before checking for data rows: an unresolvable field
         // name/index is a #VALUE! error even when the database has no data rows to scan
         // (matches DCOUNT/DCOUNTA's explicit ResolveDatabaseField check, which runs
         // unconditional on RowCount).
-        int? fieldCol = ResolveDatabaseField(database, fieldArg);
+        int? fieldCol = resolvedFieldCol ?? ResolveDatabaseField(database, fieldArg);
         if (fieldCol is null) return (new List<ScalarValue>(), ErrorValue.Value, 0);
 
-        if (database.RowCount < 2) return (new List<ScalarValue>(), null, 0);
+        if (database.RowCount < 2 || criteria.RowCount < 2)
+            return (new List<ScalarValue>(), null, 0);
 
+        var criteriaPlan = BuildDatabaseCriteriaPlan(database, criteria);
         var matches = new List<ScalarValue>();
         ErrorValue? firstError = null;
         int matchCount = 0;
         for (int r = 1; r < database.RowCount; r++)
         {
-            bool rowMatches = false;
-            // OR across criteria rows
-            for (int cr = 1; cr < criteria.RowCount; cr++)
-            {
-                if (DbRowMatchesCriteriaRow(database, r, criteria, cr, ctx))
-                {
-                    rowMatches = true;
-                    break;
-                }
-            }
-            if (rowMatches)
+            if (DbRowMatchesAnyCriteriaRow(database, r, criteria, criteriaPlan, ctx))
             {
                 matchCount++;
                 var cell = database.Cells[r, fieldCol.Value];
@@ -271,18 +301,13 @@ public static partial class BuiltInFunctions
     /// <summary>Counts database rows (excluding the header) that match at least one criteria row.</summary>
     private static int CountMatchingDatabaseRows(RangeValue database, RangeValue criteria, IEvalContext ctx)
     {
-        if (database.RowCount < 2) return 0;
+        if (database.RowCount < 2 || criteria.RowCount < 2) return 0;
+        var criteriaPlan = BuildDatabaseCriteriaPlan(database, criteria);
         int count = 0;
         for (int r = 1; r < database.RowCount; r++)
         {
-            for (int cr = 1; cr < criteria.RowCount; cr++)
-            {
-                if (DbRowMatchesCriteriaRow(database, r, criteria, cr, ctx))
-                {
-                    count++;
-                    break;
-                }
-            }
+            if (DbRowMatchesAnyCriteriaRow(database, r, criteria, criteriaPlan, ctx))
+                count++;
         }
         return count;
     }
@@ -304,8 +329,9 @@ public static partial class BuiltInFunctions
         // error in a matched field cell rather than propagating it -- only numeric matches
         // are counted) -- so the field-resolution failure can't be told apart from "no
         // matches" just by looking at DatabaseExtract's returned Error/matches.
-        if (ResolveDatabaseField(db, f) is null) return ErrorValue.Value;
-        var (matches, _, _) = DatabaseExtract(db, f, cr, ctx);
+        var fieldCol = ResolveDatabaseField(db, f);
+        if (fieldCol is null) return ErrorValue.Value;
+        var (matches, _, _) = DatabaseExtract(db, f, cr, ctx, fieldCol);
         int count = 0;
         foreach (var v in matches)
             if (TryCellNumber(v, out _)) count++;
@@ -323,10 +349,11 @@ public static partial class BuiltInFunctions
         }
         if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
         // See DCount: an unresolvable field is #VALUE!, matching every sibling D-function.
-        if (ResolveDatabaseField(db, f) is null) return ErrorValue.Value;
+        var fieldCol = ResolveDatabaseField(db, f);
+        if (fieldCol is null) return ErrorValue.Value;
         // Mirrors plain COUNTA: an error in a matched field cell still counts as a
         // non-blank present value rather than being propagated.
-        var (matches, _, _) = DatabaseExtract(db, f, cr, ctx);
+        var (matches, _, _) = DatabaseExtract(db, f, cr, ctx, fieldCol);
         int count = 0;
         foreach (var v in matches)
             if (v is not BlankValue && !(v is TextValue tv && tv.Value.Length == 0)) count++;

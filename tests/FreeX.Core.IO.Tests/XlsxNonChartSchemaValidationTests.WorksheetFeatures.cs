@@ -388,6 +388,38 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesAllStructuredTableIssuesInOnePass()
+    {
+        using var source = Save(CreateStructuredTableSourceWorkbook());
+        SetStructuredTableAutoFilterInvalidAttributes(source);
+        SetStructuredTableSortStateInvalidAttributes(source);
+        SetStructuredTableMetadataInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 5), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var table = ReadPackageRootElement(saved, "xl/tables/table1.xml");
+        var workbookNs = table.Name.Namespace;
+        table.Element(workbookNs + "autoFilter")!.Attribute("customAttr").Should().BeNull();
+        table.Element(workbookNs + "sortState")!.Attribute("columnSort").Should().BeNull();
+        AssertStructuredTableMetadataSanitized(saved);
+        table.Elements().Select(element => element.Name.LocalName).Should().ContainInOrder(
+            "autoFilter", "sortState", "tableColumns", "tableStyleInfo");
+        AssertStructuredTableReloadModel(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_SanitizesInvalidStructuredTableExtensionListsForSchemaValidity()
     {
         using var source = Save(CreateStructuredTableSourceWorkbook());

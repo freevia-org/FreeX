@@ -10,6 +10,40 @@ namespace FreeX.App.UI.Tests;
 public sealed partial class GridViewRenderPerformanceTests
 {
     [Fact]
+    public void RenderSplitPaneCells_CachesBorderLookupByCellListIdentity()
+    {
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+        renderSplitPaneCells.Should().Contain("GetSplitPaneBorderStyleLookup(Viewport!.SplitPanes!.Cells)");
+        renderSplitPaneCells.Should().NotContain("BuildBorderStyleLookup(Viewport!.SplitPanes!.Cells)");
+
+        RunOnStaThread(() =>
+        {
+            var method = typeof(GridView).GetMethod(
+                "GetSplitPaneBorderStyleLookup",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            method.Should().NotBeNull();
+
+            var style = BorderStyleFor(value => value.BorderDiagonalDown = ThinBorder);
+            var cells = new[] { Cell(1, 1, "border", style) };
+            var replacementCells = new[] { Cell(1, 1, "border", style) };
+            var grid = new GridView();
+
+            var first = method!.Invoke(grid, [cells]);
+            var repeated = method.Invoke(grid, [cells]);
+            var replacement = method.Invoke(grid, [replacementCells]);
+            var empty = method.Invoke(grid, [new[] { Cell(1, 1, "default", CellStyle.Default) }]);
+
+            first.Should().NotBeNull();
+            repeated.Should().BeSameAs(first);
+            replacement.Should().NotBeSameAs(first);
+            empty.Should().BeNull();
+        });
+    }
+
+    [Fact]
     public void RenderSplitPaneCells_ReusesDoubleUnderlinePensAcrossBoundedRenderCaches()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");

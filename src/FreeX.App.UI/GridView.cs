@@ -885,6 +885,7 @@ public partial class GridView : FrameworkElement
     private readonly Dictionary<ChartRenderCacheKey, ImageSource> _chartRenderCache = new();
     private RenderCellLookupCache? _renderCellLookupCache;
     private RenderMetricLookupCache? _renderMetricLookupCache;
+    private SplitPaneBorderLookupCache? _splitPaneBorderLookupCache;
     private OccupiedCellLookupCache? _occupiedCellLookupCache;
     private PageBreakLookupCache? _rowPageBreakLookupCache;
     private PageBreakLookupCache? _columnPageBreakLookupCache;

@@ -73,7 +73,10 @@ public sealed record ViewportRequest(
     // View > New Window sibling never leaks into another sibling's displayed cell text.
     // Null (the default) preserves the pre-existing behavior of ViewportService.GetDisplayText
     // reading the shared Sheet.ShowFormulas field directly.
-    bool? ShowFormulasOverride = null);
+    bool? ShowFormulasOverride = null,
+    // Some hosts render drawing objects directly from Sheet models but still need chart data
+    // projection. Let them skip the defensive drawing-object payload copies independently.
+    bool IncludeDrawingObjectBounds = true);
 
 public sealed record SplitPaneViewportOffsets(
     uint? TopRightLeftCol = null,

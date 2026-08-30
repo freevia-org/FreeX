@@ -12,6 +12,7 @@ public sealed class ViewportOriginTests
 
         source.Should().Contain("private ViewportModel CreateViewport");
         source.Should().Contain("IncludeObjects: _options.ObjectsDisplay == AppOptionsObjectDisplay.All");
+        source.Should().Contain("IncludeDrawingObjectBounds: false");
     }
 
     [Fact]

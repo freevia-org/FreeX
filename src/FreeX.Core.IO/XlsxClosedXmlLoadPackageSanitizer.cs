@@ -140,12 +140,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                     NormalizeWorksheetPageBreaks(archive);
                 if (requirements.HasWorksheetAutoFilterSchemaIssues)
                     NormalizeWorksheetAutoFilters(archive);
-                if (requirements.HasStructuredTableAutoFilterSchemaIssues)
-                    NormalizeStructuredTableAutoFilters(archive);
-                if (requirements.HasStructuredTableSortStateSchemaIssues)
-                    NormalizeStructuredTableSortStates(archive);
-                if (requirements.HasStructuredTableMetadataSchemaIssues)
-                    NormalizeStructuredTableMetadata(archive);
+                if (requirements.HasStructuredTableAutoFilterSchemaIssues ||
+                    requirements.HasStructuredTableSortStateSchemaIssues ||
+                    requirements.HasStructuredTableMetadataSchemaIssues)
+                {
+                    NormalizeStructuredTableEntries(archive, requirements);
+                }
                 if (requirements.HasWorksheetSheetViewSchemaIssues)
                     NormalizeWorksheetSheetViews(archive);
                 if (requirements.HasWorkbookViewSchemaIssues)
@@ -949,35 +949,41 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         ZipArchive targetArchive,
         SanitizationRequirements requirements)
     {
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var tableXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
-        var changed = false;
+        if (!TransformStructuredTableXml(tableXml, sourceEntry.FullName, requirements))
+            return false;
 
+        WriteXmlEntry(sourceEntry, targetArchive, tableXml);
+        return true;
+    }
+
+    private static bool TransformStructuredTableXml(
+        XDocument tableXml,
+        string entryName,
+        SanitizationRequirements requirements)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = tableXml.Root;
+        if (root is null)
+            return false;
+
+        var changed = false;
         if (requirements.HasStructuredTableAutoFilterSchemaIssues &&
-            tableXml.Root?.Element(worksheetNs + "autoFilter") is { } autoFilter)
+            root.Element(worksheetNs + "autoFilter") is { } autoFilter)
         {
             changed |= XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter);
         }
 
         if (requirements.HasStructuredTableSortStateSchemaIssues &&
-            tableXml.Root?.Element(worksheetNs + "sortState") is { } sortState)
+            root.Element(worksheetNs + "sortState") is { } sortState)
         {
             changed |= XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState);
         }
 
-        if (requirements.HasStructuredTableMetadataSchemaIssues &&
-            tableXml.Root is { } root)
-        {
-            changed |= XlsxStructuredTableSchemaNormalizer.NormalizeElement(root, sourceEntry.FullName);
-        }
+        if (requirements.HasStructuredTableMetadataSchemaIssues)
+            changed |= XlsxStructuredTableSchemaNormalizer.NormalizeElement(root, entryName);
 
-        if (!changed)
-        {
-            return false;
-        }
-
-        WriteXmlEntry(sourceEntry, targetArchive, tableXml);
-        return true;
+        return changed;
     }
 
     private static XDocument LoadStyleStrippedWorksheetXml(ZipArchiveEntry sourceEntry)
@@ -2162,23 +2168,6 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         return false;
     }
 
-    private static void NormalizeStructuredTableAutoFilters(ZipArchive archive)
-    {
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        foreach (var tableEntry in archive.Entries
-                     .Where(entry => IsStructuredTableXml(NormalizeEntryPath(entry.FullName)))
-                     .ToList())
-        {
-            var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
-            var autoFilter = tableXml.Root?.Element(worksheetNs + "autoFilter");
-            if (autoFilter is not null &&
-                XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter))
-            {
-                XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
-            }
-        }
-    }
-
     private static bool HasStructuredTableSortStateSchemaIssues(ZipArchive archive)
     {
         foreach (var tableEntry in archive.Entries
@@ -2206,23 +2195,6 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         return false;
     }
 
-    private static void NormalizeStructuredTableSortStates(ZipArchive archive)
-    {
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        foreach (var tableEntry in archive.Entries
-                     .Where(entry => IsStructuredTableXml(NormalizeEntryPath(entry.FullName)))
-                     .ToList())
-        {
-            var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
-            var sortState = tableXml.Root?.Element(worksheetNs + "sortState");
-            if (sortState is not null &&
-                XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState))
-            {
-                XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
-            }
-        }
-    }
-
     private static bool HasStructuredTableMetadataSchemaIssues(ZipArchive archive)
     {
         foreach (var tableEntry in archive.Entries
@@ -2247,18 +2219,17 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         return false;
     }
 
-    private static void NormalizeStructuredTableMetadata(ZipArchive archive)
+    private static void NormalizeStructuredTableEntries(
+        ZipArchive archive,
+        SanitizationRequirements requirements)
     {
         foreach (var tableEntry in archive.Entries
                      .Where(entry => IsStructuredTableXml(NormalizeEntryPath(entry.FullName)))
                      .ToList())
         {
             var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
-            if (tableXml.Root is not null &&
-                XlsxStructuredTableSchemaNormalizer.NormalizeElement(tableXml.Root, tableEntry.FullName))
-            {
+            if (TransformStructuredTableXml(tableXml, tableEntry.FullName, requirements))
                 XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
-            }
         }
     }
 
