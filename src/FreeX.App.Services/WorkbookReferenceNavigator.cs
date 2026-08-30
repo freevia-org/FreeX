@@ -14,6 +14,7 @@ public static class WorkbookReferenceNavigator
         IEnumerable<string>? definedNames)
     {
         var choices = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         Add(defaultAddress);
         foreach (var reference in recentReferences ?? [])
             Add(reference);
@@ -28,7 +29,7 @@ public static class WorkbookReferenceNavigator
             if (string.IsNullOrWhiteSpace(trimmed))
                 return;
 
-            if (choices.Any(existing => string.Equals(existing, trimmed, StringComparison.OrdinalIgnoreCase)))
+            if (!seen.Add(trimmed))
                 return;
 
             choices.Add(trimmed);
