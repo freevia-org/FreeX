@@ -306,6 +306,21 @@ public sealed class CoreCommandsResidualDeduplicationTests
         }
     }
 
+    [Fact]
+    public void RowAndColumnChartSeriesRemapsShareAxisNeutralMutationCores()
+    {
+        var source = ModelSourceTestSupport.ReadCommandsSource("RowColumnShiftHelpers.PrintAndCharts.cs");
+
+        source.Should().Contain("private static void RemapChartSeriesIndexedCollectionsForInsert(");
+        source.Should().Contain("private static void RemapChartSeriesIndexedCollectionsForDelete(");
+        source.Split("RemapChartSeriesIndexedCollectionsForInsert(chart, boundary, delta);")
+            .Should().HaveCount(3, "the shared insert core should be called by both axis wrappers");
+        source.Split("RemapChartSeriesIndexedCollectionsForDelete(chart, posLo, posHi, removedCount);")
+            .Should().HaveCount(3, "the shared delete core should be called by both axis wrappers");
+        source.Split("chart.SeriesOrderOverrides = chart.SeriesOrderOverrides")
+            .Should().HaveCount(2, "the series mutation body should have one authoritative implementation");
+    }
+
     private static void ClearPivotState(PivotTableModel pivot)
     {
         pivot.RowFields.Clear();
