@@ -14,6 +14,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+Import-Module (Join-Path $PSScriptRoot "UxParityCorpusPackage.psm1") -Force
 
 function Release-ComObject {
     param([object]$Value)
@@ -325,7 +326,9 @@ function New-WorkbookComparisonCopies {
         Release-ComObject $Workbook
     }
 
-    # Finish Excel's save before cloning it so both apps start from the exact same bytes.
+    $sanitization = Remove-UxParityLinkedDataTypes -WorkbookPath $ExcelWorkbookPath
+
+    # Finish Excel's save and sanitize excluded linked-data artifacts before cloning it so both apps start from the exact same bytes.
     [System.IO.File]::Copy($ExcelWorkbookPath, $FreeXWorkbookPath, $true)
     $excelHash = (Get-FileHash -LiteralPath $ExcelWorkbookPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $freeXHash = (Get-FileHash -LiteralPath $FreeXWorkbookPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -333,30 +336,16 @@ function New-WorkbookComparisonCopies {
         throw "Excel and FreeX workbook copies are not byte-identical after cloning."
     }
 
-    $linkedDataTypeEntries = Get-LinkedDataTypePackageEntries $ExcelWorkbookPath
+    $linkedDataTypeEntries = Get-UxParityLinkedDataTypePackageEntries $ExcelWorkbookPath
     if ($linkedDataTypeEntries.Count -gt 0) {
-        throw "The default UX corpus must exclude Microsoft linked data types. Excel authored: $($linkedDataTypeEntries -join ', ')"
+        throw "The default UX corpus sanitizer left Microsoft linked data types in the package: $($linkedDataTypeEntries -join ', ')"
     }
 
     return [pscustomobject]@{
         Workbook = $Excel.Workbooks.Open($ExcelWorkbookPath)
         ContentHashSha256 = $excelHash
         LinkedDataTypeEntries = $linkedDataTypeEntries
-    }
-}
-
-function Get-LinkedDataTypePackageEntries {
-    param([string]$WorkbookPath)
-
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $archive = [System.IO.Compression.ZipFile]::OpenRead($WorkbookPath)
-    try {
-        return @($archive.Entries |
-            Where-Object { $_.FullName.StartsWith("xl/richData/", [System.StringComparison]::OrdinalIgnoreCase) } |
-            ForEach-Object FullName)
-    }
-    finally {
-        $archive.Dispose()
+        Sanitization = $sanitization
     }
 }
 
@@ -414,6 +403,12 @@ $manifest = [ordered]@{
         linkedDataTypes = [ordered]@{
             policy = "excluded-from-default-manual-corpus"
             detectedEntries = @()
+            sanitization = [ordered]@{
+                removedEntries = @()
+                removedRelationshipCount = 0
+                removedMetadataPart = $false
+                removedRichValueMetadata = $false
+            }
         }
         functionInventoryCount = 0
     }
@@ -453,6 +448,10 @@ try {
     $manifest.workbook.initialContentHashSha256 = $comparisonCopies.ContentHashSha256
     $manifest.workbook.copiesByteIdentical = $true
     $manifest.workbook.linkedDataTypes.detectedEntries = @($comparisonCopies.LinkedDataTypeEntries)
+    $manifest.workbook.linkedDataTypes.sanitization.removedEntries = @($comparisonCopies.Sanitization.RemovedEntries)
+    $manifest.workbook.linkedDataTypes.sanitization.removedRelationshipCount = $comparisonCopies.Sanitization.RemovedRelationshipCount
+    $manifest.workbook.linkedDataTypes.sanitization.removedMetadataPart = $comparisonCopies.Sanitization.RemovedMetadataPart
+    $manifest.workbook.linkedDataTypes.sanitization.removedRichValueMetadata = $comparisonCopies.Sanitization.RemovedRichValueMetadata
     $manifest.excel.launched = $true
     $manifest.excel.version = [string]$excelBundle.Excel.Version
     $manifest.excel.hwnd = [int]$excelBundle.Excel.Hwnd
