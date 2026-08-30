@@ -90,6 +90,40 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void SavePostProcessing_UsesOneFeatureGatedSourceDrawingMetadataSnapshot()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SavePostProcessing.cs");
+        var readerStart = source.IndexOf(
+            "private static SourceDrawingSaveMetadata ReadSourceDrawingSaveMetadata",
+            StringComparison.Ordinal);
+        var readerEnd = source.IndexOf(
+            "private static IReadOnlyDictionary<string, string> ReadSourceDrawingPathsBySheet",
+            readerStart,
+            StringComparison.Ordinal);
+        var reader = source[readerStart..readerEnd];
+        var mediaStart = source.IndexOf("private static void ReadSourceMediaMetadata", StringComparison.Ordinal);
+        var mediaEnd = source.IndexOf("private sealed record SourceDrawingSaveMetadata", mediaStart, StringComparison.Ordinal);
+        var mediaReader = source[mediaStart..mediaEnd];
+
+        source.Should().Contain("sourceDrawingSaveMetadata ??= ReadSourceDrawingSaveMetadata(workbook, sourceDrawingMetadataFields)");
+        source.Should().Contain("SourceDrawingMetadataFields.MediaEntryNames");
+        source.Should().Contain("SourceDrawingMetadataFields.ChartHyperlinks");
+        source.Should().Contain("SourceDrawingMetadataFields.ObjectHyperlinks");
+        source.Should().Contain("SourceDrawingMetadataFields.MaxPictureIndex");
+        reader.Split("sourcePackage.OpenRead()")
+            .Should().HaveCount(2, "the source package should be opened once for the complete snapshot");
+        reader.Split("new ZipArchive(sourceStream, ZipArchiveMode.Read)")
+            .Should().HaveCount(2, "the complete snapshot should share one source archive");
+        mediaReader.Split("foreach (var entry in sourceArchive.Entries)")
+            .Should().HaveCount(2, "media names and the maximum authored-picture index should share one entry scan");
+        source.Should().NotContain("GetSourceDrawingPathsBySheet(");
+        source.Should().NotContain("GetSourceChartHyperlinksBySheet(");
+        source.Should().NotContain("GetSourceDrawingObjectHyperlinksBySheet(");
+        source.Should().NotContain("GetSourceMaxPictureIndex(");
+        source.Should().NotContain("GetSourceMediaEntryNames(");
+    }
+
+    [Fact]
     public void PackageXmlEditor_RewritesXmlWithoutFormattingWhitespace()
     {
         var editorSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxPackageXmlEditor.cs");
