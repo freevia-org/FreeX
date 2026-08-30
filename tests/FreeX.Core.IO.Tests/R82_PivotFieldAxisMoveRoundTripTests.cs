@@ -94,6 +94,35 @@ public sealed class R82_PivotFieldAxisMoveRoundTripTests
         reloadedPivot.PageFields.Should().ContainSingle(field => field.SourceFieldIndex == 0);
     }
 
+    [Fact]
+    public void SaveThenReload_CombinedAxisFilterAndLayoutChanges_AllPersistInOneRewritePass()
+    {
+        using var source = XlsxPackageTestHelper.SaveWorkbook(CreateRegionPivotWorkbook());
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        var pivot = loaded.GetSheetAt(0).PivotTables.Single();
+        var regionField = pivot.RowFields.Single();
+        pivot.RowFields.Clear();
+        pivot.PageFields.Add(regionField with { SelectedItem = "West" });
+        pivot.ShowRowGrandTotals = false;
+        pivot.ReportLayout = PivotReportLayout.Outline;
+        pivot.DataFields[0] = pivot.DataFields[0] with { SummaryFunction = "count" };
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        saved.Position = 0;
+        var reloadedPivot = adapter.Load(saved).GetSheetAt(0).PivotTables.Single();
+        reloadedPivot.RowFields.Should().BeEmpty();
+        reloadedPivot.PageFields.Should().ContainSingle()
+            .Which.SelectedItem.Should().Be("West");
+        reloadedPivot.ShowRowGrandTotals.Should().BeFalse();
+        reloadedPivot.ReportLayout.Should().Be(PivotReportLayout.Outline);
+        reloadedPivot.DataFields.Should().ContainSingle()
+            .Which.SummaryFunction.Should().Be("count");
+    }
+
     private static Workbook CreateRegionPivotWorkbook()
     {
         var workbook = new Workbook("R82PivotFieldAxisMoveWorkbook");

@@ -502,26 +502,8 @@ public sealed partial class XlsxFileAdapter
         // after PreserveSourcePackageParts (the parts must already be at their final path).
         if (featurePlan.HasPivotTables)
         {
-            // R82-io-pivot-layout-5-1: must run BEFORE RewritePivotTableFilterState/RewritePivotTableLayoutState
-            // below -- moving a field between Rows/Columns/Filters (ConfigurePivotTableLayoutCommand) only
-            // mutates PivotTableModel.RowFields/ColumnFields/PageFields in memory; nothing else on this
-            // source-package save path regenerates the preserved part's <rowFields>/<colFields>/<pageFields>
-            // containers or each <pivotField>'s own axis attribute from the CURRENT model, so the move
-            // silently reverted to its pre-edit area on reload. This IS the structural rewrite the older
-            // comment here used to say was "intentionally out of scope."
             packageStream.Position = 0;
-            RewritePivotTableFieldAxes(packageStream, workbook);
-
-            packageStream.Position = 0;
-            RewritePivotTableFilterState(packageStream, workbook);
-
-            // R75-io-pivottable-layout-4-1: sibling of RewritePivotTableFilterState above -- rewrites the
-            // preserved pivotTableDefinition's grand-total visibility, report-layout (compact/outline) form,
-            // and per-data-field summary function/number-format/showDataAs from the CURRENT model, all of
-            // which XlsxPivotTableWriter.Save (gated behind !hasSourcePackage) would otherwise silently drop
-            // on this source-package save path.
-            packageStream.Position = 0;
-            RewritePivotTableLayoutState(packageStream, workbook, numberFormatIdMap);
+            RewritePreservedPivotTableDefinitions(packageStream, workbook, numberFormatIdMap);
 
             // R117-io-pivotcache-sharedItems-growth: sibling of the two rewrites above, but for the
             // PRESERVED pivotCacheDefinitionN.xml part rather than pivotTableDefinitionN.xml.
@@ -651,16 +633,15 @@ public sealed partial class XlsxFileAdapter
         }
     }
 
-    // R82-io-pivot-layout-5-1: rewrites which axis (Row/Column/Filter) each field is assigned to on a
-    // PRESERVED pivotTableDefinition part -- sibling of RewritePivotTableFilterState/
-    // RewritePivotTableLayoutState below, gated the same way (matches a pivot table to its model purely
-    // via PivotTableModel.PackagePart; a brand-new pivot table added since Load() has no PackagePart yet
-    // and is intentionally skipped -- it needs a fully regenerated part, not a patch of one that doesn't
-    // exist yet). Moving a field between Rows/Columns/Filters (ConfigurePivotTableLayoutCommand) only
-    // mutates PivotTableModel.RowFields/ColumnFields/PageFields in memory; nothing else on this
-    // hasSourcePackage save path regenerates the preserved part's <rowFields>/<colFields>/<pageFields>
-    // containers or each <pivotField>'s own axis attribute from the CURRENT model.
-    private static void RewritePivotTableFieldAxes(Stream packageStream, Workbook workbook)
+    // Rewrites every model-backed concern in each preserved pivotTableDefinition in one archive pass.
+    // Axis membership must be applied first because it can replace pageFields; filter selection then
+    // patches that current container, and layout settings are independent. Keeping the ordering within
+    // one loaded XDocument avoids opening the package three times and parsing/replacing the same part up
+    // to three times per save while preserving the original byte-stable no-change behavior.
+    private static void RewritePreservedPivotTableDefinitions(
+        Stream packageStream,
+        Workbook workbook,
+        PivotNumberFormatIdMap numberFormatIdMap)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
@@ -690,7 +671,15 @@ public sealed partial class XlsxFileAdapter
                     continue;
 
                 cachesById.TryGetValue(pivot.CacheId, out var cache);
-                if (RewritePreservedPivotFieldAxes(root, pivot, cache, workbookNs))
+
+                var changed = RewritePreservedPivotFieldAxes(root, pivot, cache, workbookNs);
+                changed |= RewritePreservedPivotFieldItemFilters(root, pivot, cache, workbookNs);
+                changed |= RewritePreservedPivotPageFieldSelections(root, pivot, cache, workbookNs);
+                changed |= RewritePreservedPivotValueAndLabelFilters(root, pivot, workbookNs);
+                changed |= RewritePreservedPivotGrandTotals(root, pivot);
+                changed |= RewritePreservedPivotReportLayout(root, pivot, workbookNs);
+                changed |= RewritePreservedPivotDataFieldSummaries(root, pivot, workbookNs, numberFormatIdMap);
+                if (changed)
                     XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, pivotXml);
             }
         }
@@ -826,92 +815,6 @@ public sealed partial class XlsxFileAdapter
             anchor.AddBeforeSelf(newElement);
         else
             root.Add(newElement);
-    }
-
-    // P8 (R44-io-pivot-filter-page-3-1): rewrites just the page/report-filter selection and the manual
-    // item-filter (per-item hidden flags) on each PRESERVED pivotTableDefinition part so edits made to
-    // the loaded PivotTableModel after Load() survive Save() on the hasSourcePackage path, where
-    // XlsxPivotTableWriter.Save never runs. Matches a pivot table part to its model purely via
-    // PivotTableModel.PackagePart (the exact archive path the pivot table was loaded from); a pivot
-    // table added since Load() has no PackagePart yet and is intentionally skipped -- a brand-new pivot
-    // table needs a fully regenerated part, not a patch of a part that doesn't exist yet.
-    private static void RewritePivotTableFilterState(Stream packageStream, Workbook workbook)
-    {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-
-        var cachesById = new Dictionary<int, PivotCacheModel>();
-        foreach (var cache in workbook.PivotCaches)
-        {
-            if (cache.CacheId > 0)
-                cachesById[cache.CacheId] = cache;
-        }
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            foreach (var pivot in sheet.PivotTables)
-            {
-                if (string.IsNullOrWhiteSpace(pivot.PackagePart))
-                    continue;
-
-                var pivotPath = XlsxPackagePath.NormalizePackagePath(pivot.PackagePart);
-                var entry = archive.GetEntry(pivotPath);
-                if (entry is null)
-                    continue;
-
-                var pivotXml = XlsxPackageXmlEditor.LoadXml(entry);
-                var root = pivotXml.Root;
-                if (root is null || root.Name != workbookNs + "pivotTableDefinition")
-                    continue;
-
-                cachesById.TryGetValue(pivot.CacheId, out var cache);
-
-                var changedItemFilters = RewritePreservedPivotFieldItemFilters(root, pivot, cache, workbookNs);
-                var changedPageFields = RewritePreservedPivotPageFieldSelections(root, pivot, cache, workbookNs);
-                var changedValueLabelFilters = RewritePreservedPivotValueAndLabelFilters(root, pivot, workbookNs);
-                if (changedItemFilters || changedPageFields || changedValueLabelFilters)
-                    XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, pivotXml);
-            }
-        }
-    }
-
-    // R75-io-pivottable-layout-4-1: sibling of RewritePivotTableFilterState above, gated the same way (the
-    // hasSourcePackage save path never runs XlsxPivotTableWriter.Save, so nothing else ever rewrites a
-    // PRESERVED pivotTableDefinition part's grand-total visibility, report-layout form, or data-field
-    // summary settings from the CURRENT model). Rewrites, in place, ONLY what actually differs from the
-    // preserved XML so an untouched pivot table's saved part stays byte-stable.
-    private static void RewritePivotTableLayoutState(
-        Stream packageStream,
-        Workbook workbook,
-        PivotNumberFormatIdMap numberFormatIdMap)
-    {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            foreach (var pivot in sheet.PivotTables)
-            {
-                if (string.IsNullOrWhiteSpace(pivot.PackagePart))
-                    continue;
-
-                var pivotPath = XlsxPackagePath.NormalizePackagePath(pivot.PackagePart);
-                var entry = archive.GetEntry(pivotPath);
-                if (entry is null)
-                    continue;
-
-                var pivotXml = XlsxPackageXmlEditor.LoadXml(entry);
-                var root = pivotXml.Root;
-                if (root is null || root.Name != workbookNs + "pivotTableDefinition")
-                    continue;
-
-                var changedGrandTotals = RewritePreservedPivotGrandTotals(root, pivot);
-                var changedReportLayout = RewritePreservedPivotReportLayout(root, pivot, workbookNs);
-                var changedDataFields = RewritePreservedPivotDataFieldSummaries(root, pivot, workbookNs, numberFormatIdMap);
-                if (changedGrandTotals || changedReportLayout || changedDataFields)
-                    XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, pivotXml);
-            }
-        }
     }
 
     /// <summary>

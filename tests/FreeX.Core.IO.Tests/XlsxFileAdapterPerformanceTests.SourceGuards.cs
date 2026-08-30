@@ -65,6 +65,31 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void SavePostProcessing_RewritesPreservedPivotDefinitionsInOnePackagePass()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SavePostProcessing.cs");
+        var methodStart = source.IndexOf(
+            "private static void RewritePreservedPivotTableDefinitions",
+            StringComparison.Ordinal);
+        var methodEnd = source.IndexOf(
+            "private static List<int> ReadPreservedPivotFieldCollectionIndexes",
+            methodStart,
+            StringComparison.Ordinal);
+        var method = source[methodStart..methodEnd];
+
+        source.Should().Contain(
+            "RewritePreservedPivotTableDefinitions(packageStream, workbook, numberFormatIdMap);");
+        source.Should().NotContain("private static void RewritePivotTableFieldAxes(");
+        source.Should().NotContain("private static void RewritePivotTableFilterState(");
+        source.Should().NotContain("private static void RewritePivotTableLayoutState(");
+        method.Should().Contain("using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);");
+        method.Should().Contain("var pivotXml = XlsxPackageXmlEditor.LoadXml(entry);");
+        method.Should().Contain("changed |= RewritePreservedPivotPageFieldSelections");
+        method.Should().Contain("changed |= RewritePreservedPivotDataFieldSummaries");
+        method.Should().Contain("if (changed)");
+    }
+
+    [Fact]
     public void PackageXmlEditor_RewritesXmlWithoutFormattingWhitespace()
     {
         var editorSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxPackageXmlEditor.cs");
