@@ -1202,7 +1202,7 @@ public static class PptxPackageReader
         else if (lvlEl.Element(A + "buAutoNum") is { } buAutoNum2)
         {
             level.BulletKind = BulletKind.Auto;
-            level.AutoNumType = ParseAutoNumType(buAutoNum2.Attribute("type")?.Value);
+            level.AutoNumType = PptxAutoNumberTypeCodec.Parse(buAutoNum2.Attribute("type")?.Value);
         }
 
         // Wave 19A: extended bullet style fields
@@ -6204,7 +6204,7 @@ public static class PptxPackageReader
             else if (pPr.Element(A + "buAutoNum") is { } buAutoNum)
             {
                 para.BulletKind = BulletKind.Auto;
-                para.AutoNumType = ParseAutoNumType(buAutoNum.Attribute("type")?.Value);
+                para.AutoNumType = PptxAutoNumberTypeCodec.Parse(buAutoNum.Attribute("type")?.Value);
                 if (int.TryParse(buAutoNum.Attribute("startAt")?.Value, out var startAt) && startAt >= 1)
                 {
                     para.AutoNumStartAt = startAt;
@@ -8193,25 +8193,6 @@ public static class PptxPackageReader
     }
 
     // ── Value parsers ─────────────────────────────────────────────────────────────
-
-    /// <summary>Maps OOXML a:buAutoNum type= string to the <see cref="AutoNumType"/> enum.</summary>
-    private static AutoNumType ParseAutoNumType(string? typeStr) => typeStr switch
-    {
-        "arabicPeriod"     => AutoNumType.ArabicPeriod,
-        "arabicParenR"     => AutoNumType.ArabicParenR,
-        "arabicParenBoth"  => AutoNumType.ArabicParenBoth,
-        "romanUcPeriod"    => AutoNumType.RomanUcPeriod,
-        "romanLcPeriod"    => AutoNumType.RomanLcPeriod,
-        "romanUcParenR"    => AutoNumType.RomanUcParenR,
-        "romanLcParenR"    => AutoNumType.RomanLcParenR,
-        "alphaUcPeriod"    => AutoNumType.AlphaUcPeriod,
-        "alphaLcPeriod"    => AutoNumType.AlphaLcPeriod,
-        "alphaUcParenR"    => AutoNumType.AlphaUcParenR,
-        "alphaLcParenR"    => AutoNumType.AlphaLcParenR,
-        "alphaUcParenBoth" => AutoNumType.AlphaUcParenBoth,
-        "alphaLcParenBoth" => AutoNumType.AlphaLcParenBoth,
-        _                  => AutoNumType.ArabicPeriod
-    };
 
     private static uint ParseUint(string? value) =>
         uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
