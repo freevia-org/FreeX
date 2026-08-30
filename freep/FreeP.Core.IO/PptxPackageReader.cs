@@ -192,7 +192,16 @@ public static class PptxPackageReader
         // Parse root rels to find presentation.xml path
         var rootRels = OpcRelationships.LoadTargets(archive, "_rels/.rels");
         var presPath = OpcRelationships.FirstTargetByType(rootRels, OfficeDocRelType);
-        if (presPath is null) return presentation;
+        // round171 F2: a missing/corrupt root officeDocument relationship used to fall through to a
+        // silent, empty Presentation() with no exception -- indistinguishable from a genuinely blank
+        // deck, and (upstream, in PresentationFileCommandSession.OpenPathCoreAsync) treated as a clean
+        // open that a later Save would happily overwrite the damaged original file with. Mirror
+        // FreeW's DocxReader.Read, which throws InvalidDataException for the equivalent missing
+        // word/document.xml relationship instead of returning an empty TextDocument.
+        if (presPath is null)
+            throw new InvalidDataException(
+                "Not a PowerPoint presentation: the package's root relationships have no officeDocument " +
+                "relationship pointing at ppt/presentation.xml. The file may be corrupt or truncated.");
 
         // Normalize path (remove leading /)
         presPath = ToZipEntryPath(presPath);
@@ -204,6 +213,20 @@ public static class PptxPackageReader
                 archive,
                 presentation.Properties,
                 ToZipEntryPath(corePropsPath));
+
+        // round171 F2: same silent-empty-open failure as the officeDocument-relationship check above,
+        // but for the case where the relationship resolves fine while its target part is simply
+        // absent from the archive -- the "relationship pointing at nothing" repro this finding is
+        // about (a partial/interrupted download or zip-repair tool that dropped one entry). Check
+        // this specifically, rather than folding it into the presXml-is-null branch below: a part
+        // that IS present but fails the hardened XML load (e.g. Read_PresentationXmlWithDtd_Does-
+        // NotApplyParsedPayload's blocked-DTD payload) is a deliberately-tested "quarantine the
+        // rejected payload, don't crash" contract that must keep degrading to an empty presentation
+        // rather than throw.
+        if (archive.GetEntry(presPath) is null)
+            throw new InvalidDataException(
+                $"Not a PowerPoint presentation: {presPath} is missing from the package. The file may " +
+                "be corrupt or truncated.");
 
         // Parse presentation.xml
         var presXml = OpcXml.TryLoadXml(archive, presPath);
@@ -7015,7 +7038,7 @@ public static class PptxPackageReader
                 var seqChildTnLst = mainSeq.Element(P + "cTn")?.Element(P + "childTnLst");
                 if (seqChildTnLst is not null)
                 {
-                    foreach (var clickGroup in seqChildTnLst.Elements(P + "par"))
+                    foreach (var clickGroup in EnumerateTimeNodeParElements(seqChildTnLst))
                         ReadClickGroup(clickGroup, slide, triggerShapeId: null);
                 }
             }
@@ -7029,7 +7052,7 @@ public static class PptxPackageReader
                 var seqChild = triggerSeq.Element(P + "cTn")?.Element(P + "childTnLst");
                 if (seqChild is null) continue;
 
-                foreach (var clickGroup in seqChild.Elements(P + "par"))
+                foreach (var clickGroup in EnumerateTimeNodeParElements(seqChild))
                     ReadClickGroup(clickGroup, slide, triggerShapeId: trigSpid);
             }
 
@@ -7181,11 +7204,48 @@ public static class PptxPackageReader
         // Determine trigger from the click group's stCondLst
         var trigger = GetTrigger(clickGroup.Element(P + "cTn")?.Element(P + "stCondLst"));
 
-        foreach (var buildItem in innerTnLst.Elements(P + "par"))
+        foreach (var buildItem in EnumerateTimeNodeParElements(innerTnLst))
         {
             var anim = ReadBuildItem(buildItem, trigger, triggerShapeId);
             if (anim is not null)
                 slide.Animations.Add(anim);
+        }
+    }
+
+    /// <summary>
+    /// round171 F1: enumerates the effective <c>p:par</c> nodes within a <c>childTnLst</c>, in
+    /// document order, descending transparently into any <c>p:excl</c> or <c>p:seq</c> wrapper.
+    /// ECMA-376's EG_TLTimeNodeList permits <c>p:par</c>, <c>p:excl</c>, and <c>p:seq</c> (among
+    /// others) as siblings inside a childTnLst -- real PowerPoint emits a click-triggered "Play
+    /// Media" animation wrapped in <c>p:excl</c> (to make playback exclusive) instead of the bare
+    /// <c>p:par</c> every other click-triggered animation uses. The two call sites that used to
+    /// scan only <c>.Elements(P + "par")</c> (the mainSeq/trigger-seq click-group level and the
+    /// build-item level inside each click group) silently skipped any node nested in a
+    /// <c>p:excl</c>/<c>p:seq</c> sibling -- permanently dropping that animation on save and
+    /// desyncing the click number of every later click-triggered animation on the slide, because
+    /// the wrapper's click slot was still consumed by the outer scan while its content vanished.
+    /// FreeP does not model exclusivity/sequencing itself, so the wrapper is unwrapped rather than
+    /// preserved verbatim: its <c>p:par</c> descendants are yielded as if they were direct children
+    /// of <paramref name="childTnLst"/>, in the same document order, so the animation and the click
+    /// step it occupies are both preserved instead of silently discarded.
+    /// </summary>
+    private static IEnumerable<XElement> EnumerateTimeNodeParElements(XElement childTnLst)
+    {
+        foreach (var child in childTnLst.Elements())
+        {
+            if (child.Name == P + "par")
+            {
+                yield return child;
+            }
+            else if (child.Name == P + "excl" || child.Name == P + "seq")
+            {
+                var nestedChildTnLst = child.Element(P + "cTn")?.Element(P + "childTnLst");
+                if (nestedChildTnLst is null)
+                    continue;
+
+                foreach (var nested in EnumerateTimeNodeParElements(nestedChildTnLst))
+                    yield return nested;
+            }
         }
     }
 

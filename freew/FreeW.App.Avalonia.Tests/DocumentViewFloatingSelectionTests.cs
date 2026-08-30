@@ -151,6 +151,62 @@ public sealed class DocumentViewFloatingSelectionTests
         return doc;
     }
 
+    /// <summary>
+    /// One paragraph with body text at run 0, then three floating objects of different kinds
+    /// at runs 1 (Image), 2 (Shape), 3 (WordArt) -- mirrors the multi-select delete gesture
+    /// (Ctrl/Shift-click several different floating object kinds, then Delete).
+    /// </summary>
+    private static (TextDocument Doc, int BlockIdx, int ImgRun, int ShapeRun, int WordArtRun)
+        MakeDocWithThreeFloatingObjects()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Body text.", RunFormatting.Default));
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default)
+        {
+            Image = new InlineImage(SmallPng(), 60, 60)
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 1,
+            },
+        });
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default)
+        {
+            Shape = new Shape
+            {
+                Kind = ShapeKind.Rectangle,
+                WidthPt = 72,
+                HeightPt = 36,
+                FillColorHex = "#FF0000",
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalOffsetPt = 108,
+                    VerticalOffsetPt = 54,
+                    ZOrderIndex = 2,
+                },
+            },
+        });
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default)
+        {
+            WordArt = new WordArt("Transform", WordArtStyle.GlowBlue, 36)
+            {
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalOffsetPt = 180,
+                    VerticalOffsetPt = 90,
+                    ZOrderIndex = 3,
+                },
+            },
+        });
+        doc.Blocks.Add(para);
+        return (doc, 0, 1, 2, 3);
+    }
+
     private static TextDocument MakeDocWithNestedGroupAndShape()
     {
         var doc = new TextDocument();
@@ -1310,6 +1366,120 @@ public sealed class DocumentViewFloatingSelectionTests
         });
         if (!ran) return;
         Assert.True(isNullAfterDelete, "SelectedFloatingInfo should be null after delete");
+    }
+
+    // ── shared-undo-composite F1: DeleteSelectedFloating on a multi-object selection deletes
+    //    every selected object, as one composite undo step ────────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteSelectedFloating_multi_select_removes_all_selected_objects_as_one_undo_step()
+    {
+        int runCountBefore = 0, runCountAfter = 0, runCountReverted = 0;
+        int selectedCount = 0;
+        bool remainingRunIsShapeBeforeUndo = false;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, imgRi, shapeRi, wordArtRi) = MakeDocWithThreeFloatingObjects();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            // Ctrl/Shift-click all three floating objects (image, shape, wordart) to build a
+            // 3-object multi-selection -- the same list Group and Align/Distribute iterate over.
+            view.SelectFloating(bi, imgRi);
+            view.SelectFloating(bi, shapeRi, addToMultiSelect: true);
+            view.SelectFloating(bi, wordArtRi, addToMultiSelect: true);
+            selectedCount = view.SelectedFloatingObjects.Count;
+
+            runCountBefore = ((Paragraph)doc.Blocks[bi]).Runs.Count;
+            view.DeleteSelectedFloating();
+            runCountAfter = ((Paragraph)doc.Blocks[bi]).Runs.Count;
+            remainingRunIsShapeBeforeUndo = runCountAfter == 1; // only the body-text run left
+
+            // A single Ctrl+Z must restore all three objects at once (one composite step), not
+            // just the most-recently-clicked one.
+            view.Undo();
+            runCountReverted = ((Paragraph)doc.Blocks[bi]).Runs.Count;
+        });
+        if (!ran) return;
+        Assert.Equal(3, selectedCount);
+        Assert.Equal(4, runCountBefore);
+        Assert.Equal(1, runCountAfter);
+        Assert.True(remainingRunIsShapeBeforeUndo, "all three floating objects should be removed by one Delete");
+        Assert.Equal(4, runCountReverted);
+    }
+
+    // ── sibling/no-regression: an UNSELECTED floating object between two selected ones must
+    //    survive the delete, and only the two selected objects are removed ─────────────────────────
+
+    [Fact]
+    public async Task DeleteSelectedFloating_multi_select_leaves_unselected_object_between_selections_untouched()
+    {
+        int runCountBefore = 0, runCountAfter = 0, runCountReverted = 0;
+        bool shapeSurvivesDelete = false;
+        bool allThreeRestoredAfterUndo = false;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, imgRi, shapeRi, wordArtRi) = MakeDocWithThreeFloatingObjects();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            // Select the image (run 1) and the wordart (run 3), deliberately skipping the
+            // shape (run 2) in between.
+            view.SelectFloating(bi, imgRi);
+            view.SelectFloating(bi, wordArtRi, addToMultiSelect: true);
+
+            runCountBefore = ((Paragraph)doc.Blocks[bi]).Runs.Count;
+            view.DeleteSelectedFloating();
+            var para = (Paragraph)doc.Blocks[bi];
+            runCountAfter = para.Runs.Count;
+            // Body text + the untouched shape should be all that remains.
+            shapeSurvivesDelete = para.Runs.Any(r => r.Shape is not null);
+
+            view.Undo();
+            var restored = (Paragraph)doc.Blocks[bi];
+            runCountReverted = restored.Runs.Count;
+            allThreeRestoredAfterUndo =
+                restored.Runs.Any(r => r.Image is not null)
+                && restored.Runs.Any(r => r.Shape is not null)
+                && restored.Runs.Any(r => r.WordArt is not null);
+        });
+        if (!ran) return;
+        Assert.Equal(4, runCountBefore);
+        Assert.Equal(2, runCountAfter);
+        Assert.True(shapeSurvivesDelete, "the unselected shape between the two deleted objects must survive");
+        Assert.Equal(4, runCountReverted);
+        Assert.True(allThreeRestoredAfterUndo, "undo should restore image, shape, and wordart");
+    }
+
+    // ── sibling/no-regression: a single-object selection still deletes exactly one object as a
+    //    single (non-composite) undo step, matching pre-fix behaviour (FLSEL-11) ─────────────────
+
+    [Fact]
+    public async Task DeleteSelectedFloating_single_selection_is_still_one_plain_undo_step()
+    {
+        int runCountAfter = 0, runCountReverted = 0;
+        bool canUndoAfterSingleUndo = true;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            view.DeleteSelectedFloating();
+            runCountAfter = ((Paragraph)doc.Blocks[bi]).Runs.Count;
+
+            view.Undo();
+            runCountReverted = ((Paragraph)doc.Blocks[bi]).Runs.Count;
+            canUndoAfterSingleUndo = view.CanUndo;
+        });
+        if (!ran) return;
+        Assert.Equal(1, runCountAfter);
+        Assert.Equal(2, runCountReverted);
+        Assert.False(canUndoAfterSingleUndo, "a single-object delete should be exactly one undo step");
     }
 
     [Fact]

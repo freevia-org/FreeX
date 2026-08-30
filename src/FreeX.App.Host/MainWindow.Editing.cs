@@ -394,6 +394,20 @@ public partial class MainWindow
             _inlineEditorChrome.Visibility = Visibility.Collapsed;
         _inlineEditorChromeBaseRect = null;
         FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
+
+        // r171 (meta F1): _inlineEditor held keyboard focus (the user was mid-keystroke in it), and
+        // WPF cannot keep focus on a Collapsed element -- collapsing it above forces focus off to
+        // whatever WPF picks next, which is never formula-aware. Without reclaiming focus here, the
+        // very next keystroke (Escape/Enter/F9 included) misses both InlineEditor_KeyDown and
+        // FormulaBar_KeyDown (both wired via PreviewKeyDown on their own TextBoxes) and instead
+        // lands on MainWindow_KeyDown's generic fallback, which does not know how to end a formula
+        // edit. The formula bar is already this edit's surface of record while suspended (see the
+        // class doc above -- it carries the text and keeps point mode alive), so hand it focus and
+        // put the caret at the end, matching where the user was typing.
+        FormulaBar.CaretIndex = FormulaBar.Text.Length;
+        FormulaBar.SelectionLength = 0;
+        FormulaBar.Focus();
+        Keyboard.Focus(FormulaBar);
     }
 
     /// <summary>

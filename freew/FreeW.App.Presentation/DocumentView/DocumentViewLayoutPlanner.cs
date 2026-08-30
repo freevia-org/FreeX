@@ -2805,14 +2805,42 @@ public static class DocumentViewLayoutPlanner
         TableRow row,
         IReadOnlyList<double> columnWidthsDip)
     {
+        var textHeight = EstimateTableRowTextHeightDip(table, row, columnWidthsDip);
+        return ResolveAuthoredTableRowHeightDip(row, textHeight);
+    }
+
+    /// <summary>
+    /// r171: the ONE place that decides whether an authored row height
+    /// (<see cref="TableRow.HeightPt"/>/<see cref="TableRow.HeightRule"/>) overrides a row's measured
+    /// content height, or merely floors it -- <see cref="TableRowHeightRule.Exact"/> fixes the row at
+    /// the authored height regardless of <paramref name="contentHeightDip"/> (content may clip, mirroring
+    /// Word); <see cref="TableRowHeightRule.AtLeast"/> and the no-authored-height case both take the
+    /// larger of the authored height (0 when absent) and the content height, floored at
+    /// <see cref="DefaultTableRowHeightDip"/>.
+    /// <para>
+    /// Both callers that estimate a table row's height for page-layout purposes -- this planner's own
+    /// pagination pass (<see cref="EstimateTableRowHeightDip"/>, which measures content via a fast
+    /// line-count heuristic) and the print-preview change-bar estimator
+    /// (<c>PrintLayout.EstimateChangeBarTableHeightDip</c> in FreeW.App.Host/PrintPreviewWindow.cs,
+    /// which measures content with a real WPF <c>Typeface</c> because it never hosts a live
+    /// pagination pass) -- must funnel through this one method for the authored-height decision itself.
+    /// r170 shared the cell-margin and row-floor rules but left the print-preview estimator re-deriving
+    /// this decision on its own, so it never saw an authored <c>Exact</c> row height at all; this closes
+    /// that gap by making both content-measurement strategies feed the same decision (freew-print-layout
+    /// meta F2).
+    /// </para>
+    /// </summary>
+    public static double ResolveAuthoredTableRowHeightDip(TableRow row, double contentHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
         var authoredHeight = row.HeightPt is { } heightPt && heightPt > 0
             ? PageLayout.PointsToDip(heightPt)
             : 0;
-        var textHeight = EstimateTableRowTextHeightDip(table, row, columnWidthsDip);
 
         return row.HeightRule == TableRowHeightRule.Exact && authoredHeight > 0
             ? RoundDip(Math.Max(MinimumTableRowHeightDip, authoredHeight))
-            : RoundDip(Math.Max(DefaultTableRowHeightDip, Math.Max(authoredHeight, textHeight)));
+            : RoundDip(Math.Max(DefaultTableRowHeightDip, Math.Max(authoredHeight, contentHeightDip)));
     }
 
     private static double EstimateTableRowTextHeightDip(

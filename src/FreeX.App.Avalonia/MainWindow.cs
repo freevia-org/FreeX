@@ -23251,6 +23251,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ? activeRule
             : DataValidationDialogPlanner.CreateDefaultRule(initialType, _session.SelectedRange);
 
+        // Native/passthrough data captured from the rule being edited (e.g. x14 extLst flag and
+        // unmodeled attributes/child XML preserved on load). The dialog's UI controls have no
+        // editors for these, so they must be carried through untouched rather than silently
+        // dropped when the user clicks OK. Mirrors DataValidationDialog.xaml.cs (WPF host).
+        var existingIsX14 = activeRule?.IsX14 ?? false;
+        var existingNativeAttributes = activeRule?.NativeAttributes;
+        var existingNativeChildXmls = activeRule?.NativeChildXmls;
+        var existingNativeContainerAttributes = activeRule?.NativeContainerAttributes;
+        var existingNativeContainerChildXmls = activeRule?.NativeContainerChildXmls;
+
         var summaryText = new TextBlock
         {
             Text = summary.Text,
@@ -23534,7 +23544,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 PromptTitle = promptTitleBox.Text,
                 PromptMessage = promptMessageBox.Text,
                 ErrorTitle = errorTitleBox.Text,
-                ErrorMessage = errorMessageBox.Text
+                ErrorMessage = errorMessageBox.Text,
+                IsX14 = existingIsX14,
+                NativeAttributes = existingNativeAttributes,
+                NativeChildXmls = existingNativeChildXmls,
+                NativeContainerAttributes = existingNativeContainerAttributes,
+                NativeContainerChildXmls = existingNativeContainerChildXmls
             });
 
             result = new DataValidationDialogResult(DataValidationDialogAction.Apply, rule, sameSettingsBox.IsChecked == true);

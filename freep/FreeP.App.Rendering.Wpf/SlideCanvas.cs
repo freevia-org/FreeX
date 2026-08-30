@@ -1392,21 +1392,35 @@ public sealed partial class SlideCanvas : FrameworkElement
         DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds,
         FreeP.Core.Model.TableCellAnchor anchor)
     {
-        if (!TextParagraphNativeRenderDispatcher.TryRenderTableCell(
-                text,
-                bounds,
-                anchor,
-                (paragraph, width, wrap) =>
-                {
-                    var formatted = BuildFormattedText(paragraph, width, wrap);
-                    return new TextNativeMeasurement<FormattedText>(
-                        formatted,
-                        formatted.Height,
-                        formatted.WidthIncludingTrailingWhitespace);
-                },
-                (formatted, placement) =>
-                    dc.DrawText(formatted, new Point(placement.X, placement.Y))))
-            RenderText(dc, text, bounds);
+        // Table rows are never grown to fit typed text (row height only changes via explicit
+        // resize/insert commands), so wrapped text can need more vertical room than the row
+        // currently has. Clip to the cell's own bounds so overflow is cropped instead of
+        // bleeding into the row below (or off the table on the last row), matching the
+        // picture-frame clip pattern used elsewhere in this file and the Avalonia renderer.
+        dc.PushClip(new RectangleGeometry(
+            new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height)));
+        try
+        {
+            if (!TextParagraphNativeRenderDispatcher.TryRenderTableCell(
+                    text,
+                    bounds,
+                    anchor,
+                    (paragraph, width, wrap) =>
+                    {
+                        var formatted = BuildFormattedText(paragraph, width, wrap);
+                        return new TextNativeMeasurement<FormattedText>(
+                            formatted,
+                            formatted.Height,
+                            formatted.WidthIncludingTrailingWhitespace);
+                    },
+                    (formatted, placement) =>
+                        dc.DrawText(formatted, new Point(placement.X, placement.Y))))
+                RenderText(dc, text, bounds);
+        }
+        finally
+        {
+            dc.Pop();
+        }
     }
 
     // ── Chart ──────────────────────────────────────────────────────────────────

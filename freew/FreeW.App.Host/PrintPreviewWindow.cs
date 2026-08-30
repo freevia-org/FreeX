@@ -215,6 +215,18 @@ internal static class PrintLayout
     /// with substantial cell content (freew-print-layout F1). Column widths are allocated with the same
     /// <see cref="TableColumnLayoutPlanner"/> the live editor's own table layout uses, so a cell's assumed
     /// wrap width matches what actually renders.
+    /// <para>
+    /// r171: this measures each row's own CONTENT height with a real <see cref="Typeface"/> (the
+    /// planner's pagination pass instead uses a fast line-count heuristic, because it runs far more
+    /// often and per-row-per-page), but whether an authored row height
+    /// (<see cref="FreeW.Core.Model.TableRow.HeightPt"/>/<see cref="FreeW.Core.Model.TableRow.HeightRule"/>)
+    /// overrides or merely floors that content height is decided in exactly one place,
+    /// <see cref="DocumentViewLayoutPlanner.ResolveAuthoredTableRowHeightDip"/> -- this method must never
+    /// re-derive that decision itself. Doing so previously left an authored
+    /// <see cref="FreeW.Core.Model.TableRowHeightRule.Exact"/> row height (taller than its content) with
+    /// no effect at all on the change-bar estimate, under-estimating that row and every change bar after
+    /// it (freew-print-layout meta F2).
+    /// </para>
     /// </summary>
     private static double EstimateChangeBarTableHeightDip(
         FreeW.Core.Model.Table table, double availableWidthDip, Typeface typeface, double fontSize, double lineHeightDip)
@@ -259,7 +271,8 @@ internal static class PrintLayout
                     rowHeightDip = cellHeightDip;
             }
 
-            total += DocumentViewLayoutPlanner.ApplyTableRowHeightFloorDip(rowHeightDip);
+            var flooredContentHeightDip = DocumentViewLayoutPlanner.ApplyTableRowHeightFloorDip(rowHeightDip);
+            total += DocumentViewLayoutPlanner.ResolveAuthoredTableRowHeightDip(row, flooredContentHeightDip);
         }
 
         return Math.Max(lineHeightDip, total);

@@ -1744,6 +1744,76 @@ public sealed class DocumentViewRoundTripTests
             .Should().Equal(modelTable.Rows.Select(row => row.AllowBreakAcrossPages));
     }
 
+    // Regression for freew-table-pagination F2: a repeated-header render row (page 2+ of a paginated
+    // table) is a second, independent visual copy of the header. ReadTable already discards this row's
+    // content on every commit (TableRepeatHeader_RenderedRows_DoNotRoundTripIntoModel above), so a plain
+    // click-and-type into the visible duplicate used to silently vanish at the next CommitToModel. The
+    // fix hosts the repeated row's paragraphs inside a nested, IsReadOnly RichTextBox -- the same idiom
+    // BuildCellContentHost already uses for bordered/rotated/vertically-aligned cells -- instead of
+    // adding the Paragraph blocks directly to the WpfTableCell. A direct Paragraph child is part of the
+    // outer RichTextBox's own editable text stream (the outer RichTextBox places its caret straight into
+    // it and native typing mutates it); a Paragraph hosted inside a nested IsReadOnly RichTextBox is not
+    // -- WPF refuses all edits to that inner document. This asserts the actual rendered structure the fix
+    // changes, rather than a substring of some output.
+    //
+    // The header row here deliberately has NO explicit row height/rule, NO per-cell Borders override,
+    // default (Top) vertical alignment and horizontal text -- i.e. it is the "plain" shape that takes the
+    // final fallback branch in AppendRenderedRow (BuildCellContentHost only runs for an explicit row
+    // height, a per-cell border plan, rotated text, or non-Top alignment; none apply here). This is the
+    // one shape F2 actually reaches -- FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument
+    // is NOT usable for this test because its header cells set both an Exact row height and a per-cell
+    // Borders override, both of which already route through BuildCellContentHost's nested-RichTextBox
+    // rendering for a different reason, masking the bug this test targets.
+    [StaFact]
+    public void TableRepeatHeader_RenderedRowContent_IsHostedInAReadOnlyNestedEditor()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.WidthPt = 612;
+        doc.Page.HeightPt = 300;
+        doc.Page.MarginLeftPt = 36;
+        doc.Page.MarginRightPt = 36;
+        doc.Page.MarginTopPt = 36;
+        doc.Page.MarginBottomPt = 36;
+        doc.Blocks.Clear();
+
+        var table = Table.Create(17, 1);
+        table.Formatting = new TableFormatting { HeaderRow = true, RepeatHeaderRow = true };
+        table.ColumnWidthsPt.Add(300);
+        table.Rows[0].Cells[0] = new FreeW.Core.Model.TableCell("Plain Header Label");
+        for (var i = 1; i < table.Rows.Count; i++)
+            table.Rows[i].Cells[0] = new FreeW.Core.Model.TableCell($"Body row {i}");
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpfTables = RenderedTables(view.Document);
+        wpfTables.Should().HaveCountGreaterThan(1,
+            "the table must actually paginate onto a second page for this test to exercise a repeated header");
+        var secondPageRows = wpfTables[1].RowGroups.SelectMany(group => group.Rows).ToList();
+        var repeatedHeaderRow = secondPageRows[0];
+        RenderedRowText(repeatedHeaderRow).Should().Contain("Plain Header Label",
+            "the test must be inspecting the duplicate render-only header row, not some other row");
+        var repeatedHeaderCell = repeatedHeaderRow.Cells[0];
+
+        repeatedHeaderCell.Blocks.OfType<System.Windows.Documents.Paragraph>().Should().BeEmpty(
+            "the repeated header's paragraphs must not be direct children of the outer, editable RichTextBox");
+        var nestedEditor = repeatedHeaderCell.Blocks.OfType<BlockUIContainer>()
+            .Select(container => container.Child).OfType<RichTextBox>().ToList();
+        nestedEditor.Should().ContainSingle(
+            "the repeated header's content must be hosted in one isolated nested editor");
+        nestedEditor[0].IsReadOnly.Should().BeTrue(
+            "the nested editor hosting the repeated header must refuse edits");
+
+        // Sibling no-regression: the real page-1 header row is untouched -- its paragraph is still a
+        // direct child of the outer document, so editing the genuine header (not the duplicate) still
+        // works exactly as it did before this fix.
+        var firstPageRows = wpfTables[0].RowGroups.SelectMany(group => group.Rows).ToList();
+        var realHeaderCell = firstPageRows[0].Cells[0];
+        realHeaderCell.Blocks.OfType<System.Windows.Documents.Paragraph>().Should().NotBeEmpty(
+            "the real header row must keep its paragraphs directly editable, unlike the repeated copy");
+    }
+
     [StaFact]
     public void CenteredFixedWidthPaginatedTable_RendersWithWordLikeBlockMargin()
     {

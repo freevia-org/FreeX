@@ -10339,6 +10339,28 @@ public sealed partial class DocumentView : RichTextBox
                     grid.Children.Add(contentStack);
                     wpfCell.Blocks.Add(new BlockUIContainer(grid));
                 }
+                else if (isRepeatedHeader)
+                {
+                    // A repeated-header render row is a second, fully independent visual copy of the
+                    // real header (see WpfTableRowTag.IsRepeatedHeader / ReadTable's
+                    // IsRepeatedHeaderRenderRow filter, which discards this row's content on every
+                    // commit). Host its paragraphs in a read-only nested RichTextBox -- the same idiom
+                    // BuildCellContentHost already uses for bordered/rotated/vertically-aligned cells --
+                    // so the outer RichTextBox can never place an editable caret in it. Without this,
+                    // a click here lets the user type directly into the duplicate, and that edit is
+                    // silently discarded at the next CommitToModel because ReadTable never reads this row.
+                    foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document, preservedNumberingMarkers))
+                    {
+                        wpfCell.Blocks.Add(new BlockUIContainer(new System.Windows.Controls.RichTextBox
+                        {
+                            Document = new System.Windows.Documents.FlowDocument(paraBlock),
+                            IsReadOnly = true,
+                            BorderThickness = new Thickness(0),
+                            Padding = new Thickness(0),
+                            Background = System.Windows.Media.Brushes.Transparent
+                        }));
+                    }
+                }
                 else
                 {
                     foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document, preservedNumberingMarkers))

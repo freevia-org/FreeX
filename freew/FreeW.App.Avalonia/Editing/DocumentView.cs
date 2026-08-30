@@ -16360,17 +16360,51 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>
-    /// Delete the currently selected floating object. Removes the run from its paragraph.
-    /// Undoable via the command bus. No-op when nothing is selected.
+    /// Delete every currently selected floating object. Removes each run from its paragraph.
+    /// A single selected object is removed as one undo step, as before; a multi-object
+    /// selection (built via SelectFloating(..., addToMultiSelect: true), the same list Group
+    /// and Align/Distribute iterate over) is removed as one composite undo step covering all
+    /// of them. No-op when nothing is selected.
     /// </summary>
     public void DeleteSelectedFloating()
     {
         if (_selectedFloating is not { } sel) return;
-        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
-        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
 
-        // Remove the run in-place via a command (undoable).
-        _bus.Execute(new RemoveFloatingRunCommand(sel.BlockIndex, sel.RunIndex));
+        // _selectedFloatingObjects mirrors the current selection in every path that sets
+        // _selectedFloating (SelectFloatingCore always clears-and-adds or adds to this same
+        // list -- see its single- and multi-select branches), so it already holds every
+        // object to delete. Fall back to the single selection if it is ever empty so a
+        // single-select delete can never regress.
+        var targets = _selectedFloatingObjects.Count > 0
+            ? _selectedFloatingObjects
+                .Select(o => (o.BlockIndex, o.RunIndex))
+                .Distinct()
+                .ToList()
+            : [(sel.BlockIndex, sel.RunIndex)];
+
+        // Remove highest RunIndex first within each paragraph: RemoveFloatingRunCommand
+        // removes by (paragraphIndex, runIndex) and DocumentCommandBus.Execute applies it
+        // immediately, so deleting a lower index first would shift the indices of any
+        // remaining higher-index targets still queued in the same paragraph.
+        targets.Sort((a, b) => a.BlockIndex != b.BlockIndex
+            ? a.BlockIndex.CompareTo(b.BlockIndex)
+            : b.RunIndex.CompareTo(a.RunIndex));
+
+        var grouped = targets.Count > 1;
+        if (grouped)
+            _bus.BeginUndoGroup();
+
+        foreach (var (blockIndex, runIndex) in targets)
+        {
+            if (_doc.Blocks[blockIndex] is not Paragraph para) continue;
+            if (runIndex < 0 || runIndex >= para.Runs.Count) continue;
+            // Remove the run in-place via a command (undoable).
+            _bus.Execute(new RemoveFloatingRunCommand(blockIndex, runIndex));
+        }
+
+        if (grouped)
+            _bus.CommitUndoGroup("Delete");
+
         _selectedFloating = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();

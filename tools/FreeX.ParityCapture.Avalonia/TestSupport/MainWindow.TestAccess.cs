@@ -872,6 +872,8 @@ public sealed partial class MainWindow
 
     internal Task ShowDataValidationInputDialogForTestAsync() => ShowDataValidationInputDialogAsync();
 
+    internal Task ShowDataValidationDialogForTestAsync() => ShowDataValidationDialogAsync();
+
     internal Task ShowFindReplaceTabbedDialogForTestAsync(bool replaceMode = false) =>
         ShowFindReplaceTabbedDialogAsync(replaceMode);
 

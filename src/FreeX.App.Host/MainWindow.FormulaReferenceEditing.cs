@@ -48,6 +48,17 @@ public partial class MainWindow
             _formulaRangeEditingSession,
             HideFormulaFunctionAutocomplete,
             ClearFormulaReferenceHighlights);
+
+        // r171 (sweep109 F1): this is the single central "an edit just ended" cleanup point --
+        // every path that commits, cancels, or abandons a formula edit (Escape, Enter, the formula
+        // bar's OK/cancel buttons, CommitEdit, a sheet switch reconciling a stale edit, etc.) calls
+        // this. _inlineEditorAnchorOffscreen (MainWindow.Editing.cs), set when the edited cell's
+        // anchor scrolls off-screen mid-formula, was never cleared by any of those paths, so a
+        // suspended-and-abandoned edit's flag survived into a later, unrelated edit: the next
+        // RefreshInlineEditorPosition pass on that later edit would see the stale flag and force the
+        // in-cell editor open over a cell the user never asked to edit in-cell. Clearing it here
+        // gives the suspended state a defined end everywhere an edit can end.
+        _inlineEditorAnchorOffscreen = false;
     }
 
     private void ClearFormulaReferenceEntrySpan() =>

@@ -24,6 +24,30 @@ public static class DocxReader
     private const int MaxContentControlNestingDepth = 64;
     /// <summary>Maximum nested w:tbl depth followed inside table cells while reading a document.</summary>
     private const int MaxTableNestingDepth = 64;
+    /// <summary>
+    /// Maximum nesting of a "nested Word package" altChunk pointing to another nested Word-package
+    /// altChunk. TryMaterializeAltChunk resolves this content type by re-entering the full public
+    /// <see cref="Read(Stream)"/> entry point recursively (Read -> AddBodyBlock -> TryMaterializeAltChunk
+    /// -> Read -> ...), unlike the w:sdt/w:customXml/w:tbl nesting above, which only recurses one small
+    /// element-reading frame per level. Each level here re-enters the whole reader, so a much smaller cap
+    /// than <see cref="MaxContentControlNestingDepth"/> still comfortably covers any legitimate
+    /// document-in-document embed while stopping a crafted or accidental deep chain from driving the
+    /// process into an uncatchable StackOverflowException, which would kill the whole app -- including
+    /// every other open document -- instead of surfacing as a load error.
+    /// </summary>
+    private const int MaxNestedWordPackageAltChunkDepth = 32;
+
+    /// <summary>
+    /// Per-thread recursion counter for <see cref="MaxNestedWordPackageAltChunkDepth"/>. Threading an
+    /// explicit depth parameter through the public <see cref="Read(Stream)"/> entry point (used from ~170
+    /// call sites across every FreeW shell/tool/test) would mean widening that public signature just for
+    /// this one internal guard; the recursion is single-threaded per document open, so a thread-static
+    /// counter tracks it without touching the public API. Mirrors the existing
+    /// <c>[ThreadStatic] _evalDepth</c> guard FreeX's FormulaEvaluator uses for the same class of
+    /// unbounded-recursion defect.
+    /// </summary>
+    [ThreadStatic]
+    private static int _nestedWordPackageAltChunkDepth;
 
     private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
     private const string LegacyFreeWChartDesignExtensionUri = "{FW-ChartDesign-2026}";
@@ -2314,9 +2338,31 @@ public static class DocxReader
         {
             if (IsNestedWordPackageContentType(contentType))
             {
+                // Bound the recursion before entering it: StackOverflowException is uncatchable in
+                // .NET, so the check has to happen here, BEFORE the next Read(), not via a catch around
+                // it (a catch around a StackOverflowException does nothing -- the process is already
+                // gone). A chain of nested Word-package altChunks past this depth fails the whole load
+                // with a clear, catchable error instead of taking down the process.
+                if (_nestedWordPackageAltChunkDepth >= MaxNestedWordPackageAltChunkDepth)
+                {
+                    throw new WorkbookInvalidException(
+                        $"Could not read this as a Word document (.docx/.docm/.dotx/.dotm). It embeds " +
+                        $"more than {MaxNestedWordPackageAltChunkDepth} levels of nested Word-package " +
+                        "altChunk content (a Word package embedded inside another, repeated), which " +
+                        "exceeds the supported nesting depth.");
+                }
+
                 using var nestedStream = new MemoryStream(bytes, writable: false);
-                var nested = Read(nestedStream);
-                return TryMergeNestedWordPackage(target, nested, out blocks);
+                _nestedWordPackageAltChunkDepth++;
+                try
+                {
+                    var nested = Read(nestedStream);
+                    return TryMergeNestedWordPackage(target, nested, out blocks);
+                }
+                finally
+                {
+                    _nestedWordPackageAltChunkDepth--;
+                }
             }
 
             if (string.Equals(contentType, "message/rfc822", StringComparison.OrdinalIgnoreCase))
@@ -7535,22 +7581,44 @@ public static class DocxReader
             abstractLevelStarts[abstractNumId] = levelStarts;
         }
 
-        var appliedMultiLevelFormats = false;
+        // abstractNumId of the ONE multilevel/outline definition FreeW maps onto its single global
+        // MultiLevelListFormat (see MultiLevelListFormat.cs — "FreeW currently stores one outline
+        // definition per document"). Set the first time a MultiLevel numId is resolved below.
+        int? primaryMultiLevelAbstractNumId = null;
         foreach (var num in root.Elements(W + "num"))
         {
             var numId = ParseInt(num.Attribute(W + "numId")?.Value);
             var abstractNumId = ParseInt(num.Element(W + "abstractNumId")?.Attribute(W + "val")?.Value);
             if (abstractKinds.TryGetValue(abstractNumId, out var kind))
             {
+                // A document can define more than one INDEPENDENT multilevel/outline numbering
+                // definition — e.g. a decimal legal outline and a separately-authored lettered outline,
+                // each its own w:abstractNum. FreeW's native model has exactly one global
+                // MultiLevelListFormat, so only the first distinct multilevel abstractNumId encountered
+                // maps onto it (handled below, keyed on abstractNumId identity — not on paragraph order
+                // or count, so a later list sharing no paragraphs with the first is still routed
+                // correctly). Every OTHER, distinct multilevel abstractNumId is left OUT of `map`
+                // entirely: ReadParagraphFormatting's numId lookup then misses, ListKind falls back to
+                // None, and the paragraph is routed to the Paragraph.PreservedNumbering /
+                // PreservedParts.OriginalNumbering path instead (see DocxReader's capturePreservedNumbering
+                // call sites and DocxWriter.BuildPreservedNumberingPlan) — keeping that list's own format
+                // and its own counter intact through a round trip instead of silently merging it into the
+                // first list's format and running count (freew-styles-numbering F1).
+                var isAdditionalMultiLevelDefinition = kind == ListKind.MultiLevel
+                    && primaryMultiLevelAbstractNumId is { } primaryAbstractNumId
+                    && abstractNumId != primaryAbstractNumId;
+                if (isAdditionalMultiLevelDefinition)
+                    continue;
+
                 map[numId] = kind;
-                if (!appliedMultiLevelFormats
-                    && kind == ListKind.MultiLevel
+                if (kind == ListKind.MultiLevel
+                    && primaryMultiLevelAbstractNumId is null
                     && abstractMultiLevelFormats.TryGetValue(abstractNumId, out var numberFormats))
                 {
                     document.MultiLevelList.SetNumberFormats(numberFormats);
                     if (abstractMultiLevelLevelTexts.TryGetValue(abstractNumId, out var levelTexts))
                         document.MultiLevelList.SetLevelTexts(levelTexts);
-                    appliedMultiLevelFormats = true;
+                    primaryMultiLevelAbstractNumId = abstractNumId;
                 }
                 if (abstractLevelStarts.TryGetValue(abstractNumId, out var levelStarts))
                 {
