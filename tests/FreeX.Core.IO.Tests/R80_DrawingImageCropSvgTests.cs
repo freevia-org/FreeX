@@ -9,7 +9,7 @@ namespace FreeX.Core.IO.Tests;
 /// </summary>
 public sealed class R80_DrawingImageCropSvgTests
 {
-    // R80-io-drawing-image-5-2: ReadSourceRectangleRatio/ToSourceRectanglePercent clamped every
+    // R80-io-drawing-image-5-2: the read/write source-rectangle conversions clamped every
     // srcRect inset to [0, 1], silently flooring a NEGATIVE (outward/"crop past the image edge")
     // inset to 0 on both read and write, and HasPictureCrop's "> 0" check meant a picture cropped
     // ONLY outward (all insets <= 0) was treated as having no crop at all and lost its srcRect

@@ -547,10 +547,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 pictureRotation,
                 pictureFlipHorizontal,
                 pictureFlipVertical,
-                ReadSourceRectangleRatio(sourceRectangle, "l"),
-                ReadSourceRectangleRatio(sourceRectangle, "t"),
-                ReadSourceRectangleRatio(sourceRectangle, "r"),
-                ReadSourceRectangleRatio(sourceRectangle, "b"),
+                XlsxSourceRectangleRatioCodec.Parse(sourceRectangle?.Attribute("l")?.Value),
+                XlsxSourceRectangleRatioCodec.Parse(sourceRectangle?.Attribute("t")?.Value),
+                XlsxSourceRectangleRatioCodec.Parse(sourceRectangle?.Attribute("r")?.Value),
+                XlsxSourceRectangleRatioCodec.Parse(sourceRectangle?.Attribute("b")?.Value),
                 anchorElement is null ? -1 : ReadAnchorOrderIndex(anchorElement, spreadsheetDrawingNs),
                 linkTarget,
                 svgImageBytes,
@@ -1505,25 +1505,6 @@ internal static partial class XlsxWorksheetDrawingPartReader
     /// itself) is required to ignore-and-preserve when it doesn't recognize the uri.
     /// </summary>
     internal const string CellRangeSnapshotGroupExtensionUri = "{6E6ECF3A-6EFD-46C8-9E23-4E1B2E9D6DE0}";
-
-    private static double ReadSourceRectangleRatio(XElement? sourceRectangle, string attributeName)
-    {
-        if (!double.TryParse(
-                sourceRectangle?.Attribute(attributeName)?.Value,
-                NumberStyles.Float,
-                CultureInfo.InvariantCulture,
-                out var value))
-        {
-            return 0;
-        }
-
-        // R80-io-drawing-image-5-2: a NEGATIVE l/t/r/b is a valid, Excel-authored "crop past the
-        // image edge" (dragging a crop handle outward pads/zooms-out the picture within its frame) --
-        // clamping the floor to 0 here silently discarded that outward crop and made the picture
-        // render as if uncropped. Preserve negative insets (mirrored against the +1/-1 = ±100% bound
-        // that already applied on the positive side) instead of flooring them to 0.
-        return Math.Clamp(value / 100000d, -1, 1);
-    }
 
     private static double ReadDrawingRotation(XElement? transform)
     {
