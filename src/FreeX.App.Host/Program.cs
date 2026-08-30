@@ -18,8 +18,10 @@ namespace FreeX.App.Host;
 public static class Program
 {
     [STAThread]
-    public static void Main()
+    public static void Main(string[] args)
     {
+        ArgumentNullException.ThrowIfNull(args);
+
         // Velopack first — before the WPF Application exists. Exits fast on hook invocations.
         // The .Run() call is kept here at the entry point so Velopack's entry-point detection
         // recognizes it; hook configuration lives in VelopackBootstrap.Configure().
@@ -32,7 +34,7 @@ public static class Program
         Free.Shared.AppServices.AppProduct.Current =
             FreeX.App.Services.FreeXApplicationStartupDescriptor.ProductIdentity;
 
-        var app = new App();
+        var app = new App(args);
         app.InitializeComponent();
         app.Run();
     }

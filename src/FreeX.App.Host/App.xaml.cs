@@ -24,6 +24,18 @@ public partial class App : Application
     private static readonly IUserMessageService StartupMessageService = new WpfUserMessageService();
 
     private static ServiceProvider? _services;
+    private readonly string[] _launchArguments;
+
+    public App()
+        : this([])
+    {
+    }
+
+    internal App(IEnumerable<string> launchArguments)
+    {
+        ArgumentNullException.ThrowIfNull(launchArguments);
+        _launchArguments = launchArguments.ToArray();
+    }
 
     /// <summary>
     /// The active brand theme selected at startup (default: <see cref="BrandThemes.FreeX"/>).
@@ -263,13 +275,11 @@ public partial class App : Application
         resources[SystemColors.MenuTextBrushKey] = new SolidColorBrush(SystemColors.MenuTextColor);
     }
 
-    private static IReadOnlyList<string> GetStartupArgs(StartupEventArgs e)
-    {
-        if (e.Args.Length > 0)
-            return e.Args;
-
-        return Environment.GetCommandLineArgs().Skip(1).ToArray();
-    }
+    private IReadOnlyList<string> GetStartupArgs(StartupEventArgs e) =>
+        StartupArgumentResolver.Resolve(
+            e.Args,
+            _launchArguments,
+            Environment.GetCommandLineArgs());
 
     private static void ConfigureServices(
         IServiceCollection services,
