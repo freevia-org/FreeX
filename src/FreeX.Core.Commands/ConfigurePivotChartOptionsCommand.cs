@@ -79,7 +79,7 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         _previousShowReportFilterButtons = chart.ShowPivotChartReportFilterButtons;
         _previousShowAxisFieldButtons = chart.ShowPivotChartAxisFieldButtons;
         _previousShowValueFieldButtons = chart.ShowPivotChartValueFieldButtons;
-        _previousDataTable = CloneDataTable(chart.DataTable);
+        _previousDataTable = chart.DataTable?.Clone();
         _previousDataTableCaptured = true;
         _previousRoundedCorners = chart.RoundedCorners;
         _previousShowHiddenData = chart.ShowDataInHiddenRowsAndColumns;
@@ -134,7 +134,7 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         chart.ShowPivotChartAxisFieldButtons = _previousShowAxisFieldButtons ?? true;
         chart.ShowPivotChartValueFieldButtons = _previousShowValueFieldButtons ?? true;
         if (_previousDataTableCaptured)
-            chart.DataTable = CloneDataTable(_previousDataTable);
+            chart.DataTable = _previousDataTable?.Clone();
         chart.RoundedCorners = _previousRoundedCorners ?? false;
         chart.ShowDataInHiddenRowsAndColumns = _previousShowHiddenData ?? false;
         chart.BlankDisplayMode = _previousBlankDisplayMode ?? ChartBlankDisplayMode.Gap;
@@ -149,25 +149,6 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         _previousShowHiddenData = null;
         _previousBlankDisplayMode = null;
     }
-
-    private static ChartDataTableModel? CloneDataTable(ChartDataTableModel? dataTable) =>
-        dataTable is null
-            ? null
-            : new ChartDataTableModel
-            {
-                ShowHorizontalBorder = dataTable.ShowHorizontalBorder,
-                ShowVerticalBorder = dataTable.ShowVerticalBorder,
-                ShowOutline = dataTable.ShowOutline,
-                ShowLegendKeys = dataTable.ShowLegendKeys,
-                FillColor = dataTable.FillColor,
-                FillThemeColor = dataTable.FillThemeColor,
-                BorderColor = dataTable.BorderColor,
-                BorderThemeColor = dataTable.BorderThemeColor,
-                BorderThickness = dataTable.BorderThickness,
-                TextColor = dataTable.TextColor,
-                TextThemeColor = dataTable.TextThemeColor,
-                FontSize = dataTable.FontSize
-            };
 
     private static int? NormalizeStyleId(int? chartStyleId)
     {

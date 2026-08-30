@@ -917,23 +917,7 @@ internal static class DuplicateSheetDrawingCloner
             YAxisCustomDisplayUnit = chart.YAxisCustomDisplayUnit,
             ShowXAxisDisplayUnitLabel = chart.ShowXAxisDisplayUnitLabel,
             ShowYAxisDisplayUnitLabel = chart.ShowYAxisDisplayUnitLabel,
-            DataTable = chart.DataTable is null
-                ? null
-                : new ChartDataTableModel
-                {
-                    ShowHorizontalBorder = chart.DataTable.ShowHorizontalBorder,
-                    ShowVerticalBorder = chart.DataTable.ShowVerticalBorder,
-                    ShowOutline = chart.DataTable.ShowOutline,
-                    ShowLegendKeys = chart.DataTable.ShowLegendKeys,
-                    FillColor = chart.DataTable.FillColor,
-                    FillThemeColor = chart.DataTable.FillThemeColor,
-                    BorderColor = chart.DataTable.BorderColor,
-                    BorderThemeColor = chart.DataTable.BorderThemeColor,
-                    BorderThickness = chart.DataTable.BorderThickness,
-                    TextColor = chart.DataTable.TextColor,
-                    TextThemeColor = chart.DataTable.TextThemeColor,
-                    FontSize = chart.DataTable.FontSize
-            },
+            DataTable = chart.DataTable?.Clone(),
             ThreeDView = chart.ThreeDView,
             FloorFormat = CloneSurfaceFormat(chart.FloorFormat),
             SideWallFormat = CloneSurfaceFormat(chart.SideWallFormat),
