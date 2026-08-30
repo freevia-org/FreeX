@@ -5508,8 +5508,8 @@ public sealed partial class XlsxFileAdapter
         /// Streaming read of just the root-level <c>sheetProtection</c>/<c>protectedRanges</c>
         /// elements' protection-relevant attributes, without loading the full worksheet XDocument
         /// (mirrors <see cref="XlsxWorksheetGridXmlNormalizer.AnyRowMissingRowIndex"/>'s style).
-        /// Encodes the password the same way <c>XlsxFileAdapter.SheetXmlLayout</c>'s
-        /// <c>ReadSheetProtectionPasswordHash</c> does at full-load time, so the result is directly
+        /// Encodes the password through <see cref="XlsxSheetProtectionPasswordCodec"/>, the same
+        /// policy used at full-load time, so the result is directly
         /// comparable to <see cref="Sheet.ProtectionPassword"/>. Also captures the permission
         /// booleans (via <see cref="XlsxSheetProtectionPermissionMapper.Read"/>) and the Allow-Edit
         /// ranges/range-passwords (via <see cref="XlsxAllowEditRangeMapper.Read(XDocument, XNamespace, out Dictionary{GridRange, string})"/>)
@@ -5566,22 +5566,13 @@ public sealed partial class XlsxFileAdapter
                     if (reader.LocalName == "sheetProtection")
                     {
                         isProtected = XlsxWorksheetXmlValueParser.IsTruthy(reader.GetAttribute("sheet"));
-                        var legacyPassword = reader.GetAttribute("password");
-                        if (!string.IsNullOrEmpty(legacyPassword))
-                        {
-                            passwordHash = legacyPassword;
-                        }
-                        else
-                        {
-                            var hashValue = reader.GetAttribute("hashValue");
-                            passwordHash = string.IsNullOrEmpty(hashValue)
-                                ? null
-                                : ProtectionPasswordHelper.EncodeIso29500Hash(
-                                    reader.GetAttribute("algorithmName"),
-                                    reader.GetAttribute("spinCount"),
-                                    reader.GetAttribute("saltValue"),
-                                    hashValue);
-                        }
+                        passwordHash = XlsxSheetProtectionPasswordCodec.Decode(
+                            new XlsxSheetProtectionPasswordAttributes(
+                                reader.GetAttribute("password"),
+                                reader.GetAttribute("algorithmName"),
+                                reader.GetAttribute("spinCount"),
+                                reader.GetAttribute("saltValue"),
+                                reader.GetAttribute("hashValue")));
 
                         var protectionElement = new XElement(worksheetNs + "sheetProtection");
                         if (reader.MoveToFirstAttribute())

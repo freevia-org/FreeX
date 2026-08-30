@@ -279,7 +279,13 @@ public sealed partial class XlsxFileAdapter
 
         var protection = worksheetXml.Root?.Element(worksheetNs + "sheetProtection");
         var isProtected = IsTruthy(protection?.Attribute("sheet")?.Value);
-        var passwordHash = ReadSheetProtectionPasswordHash(protection);
+        var passwordHash = XlsxSheetProtectionPasswordCodec.Decode(
+            new XlsxSheetProtectionPasswordAttributes(
+                protection?.Attribute("password")?.Value,
+                protection?.Attribute("algorithmName")?.Value,
+                protection?.Attribute("spinCount")?.Value,
+                protection?.Attribute("saltValue")?.Value,
+                protection?.Attribute("hashValue")?.Value));
         var protectionMetadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetProtectionMetadata(protection);
         var protectionPermissions = XlsxSheetProtectionPermissionMapper.Read(protection);
         var allowEditRanges = XlsxAllowEditRangeMapper.Read(worksheetXml, worksheetNs, out var allowEditRangePasswords);
@@ -712,30 +718,6 @@ public sealed partial class XlsxFileAdapter
         return CellAddress.TryParse(reference.Split(':')[0], SheetId.New(), out var address)
             ? address
             : null;
-    }
-
-    /// <summary>
-    /// Reads the legacy 4-hex <c>password</c> attribute when present, otherwise falls back to the
-    /// modern ISO 29500 salted/iterated hash (<c>algorithmName</c>/<c>hashValue</c>/<c>saltValue</c>/
-    /// <c>spinCount</c>) Excel writes by default since Excel 2013 — encoded so
-    /// <see cref="ProtectionPasswordHelper.VerifyStoredPassword"/> can verify against it. Returns null
-    /// when neither scheme is present (protected with no password at all).
-    /// </summary>
-    private static string? ReadSheetProtectionPasswordHash(XElement? protection)
-    {
-        var legacyPassword = protection?.Attribute("password")?.Value;
-        if (!string.IsNullOrEmpty(legacyPassword))
-            return legacyPassword;
-
-        var hashValue = protection?.Attribute("hashValue")?.Value;
-        if (string.IsNullOrEmpty(hashValue))
-            return null;
-
-        return ProtectionPasswordHelper.EncodeIso29500Hash(
-            protection?.Attribute("algorithmName")?.Value,
-            protection?.Attribute("spinCount")?.Value,
-            protection?.Attribute("saltValue")?.Value,
-            hashValue);
     }
 
     private static bool IsTruthy(string? value) =>
