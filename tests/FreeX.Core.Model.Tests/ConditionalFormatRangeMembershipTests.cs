@@ -52,6 +52,15 @@ public sealed class ConditionalFormatRangeMembershipTests
 
         rule.Contains(address).Should().BeTrue();
         rule.Overlaps(new GridRange(address, address)).Should().BeTrue();
+
+        // Exercise the complete loop before measuring so tiered JIT/PGO setup is not
+        // attributed to the allocation-free membership operations on cold CI workers.
+        for (var iteration = 0; iteration < 10_000; iteration++)
+        {
+            _ = rule.Contains(address);
+            _ = rule.Overlaps(new GridRange(address, address));
+        }
+
         var before = GC.GetAllocatedBytesForCurrentThread();
 
         for (var iteration = 0; iteration < 10_000; iteration++)
