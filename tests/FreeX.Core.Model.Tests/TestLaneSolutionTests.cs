@@ -151,8 +151,8 @@ public sealed class TestLaneSolutionTests
         var readme = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("README.md");
         var plan = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("docs", "release/test-distribution.md");
 
-        agents.Should().Contain("default local branch verification path");
-        agents.Should().Contain("dotnet build FreeX.slnx --configuration Release");
+        agents.Should().Contain("tools/Test-BranchForIntegration.ps1");
+        agents.Should().Contain("Do not merge ordinary work while the exact `origin/main` CI candidate");
         agents.Should().NotContain("- `dotnet test FreeX.DefaultTests.slnx");
         agents.Should().Contain("Do not run `dotnet test FreeX.slnx` or `dotnet test FreeX.UiTests.slnx` as routine/default verification.");
         readme.Should().Contain("push to `main` runs the hosted integration matrix");
