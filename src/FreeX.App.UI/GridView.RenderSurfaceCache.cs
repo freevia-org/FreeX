@@ -55,7 +55,16 @@ public partial class GridView
         IReadOnlyDictionary<Guid, IReadOnlyList<double>>? SparklineValues,
         int SparklineValueCount,
         GridRange? QuickAnalysisPreviewRange,
-        QuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual);
+        QuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual,
+        // R175: this cache holds the fully rendered cell layer, so anything the cell painters
+        // resolve against the workbook theme -- font colors, fills (CellStyle.ResolveFontColor/
+        // ResolveFillColor) and, since R175, border colors (CellBorder.ResolveColor) -- is baked
+        // into the cached DrawingGroup. Without the theme in the key a Theme Colors swap that left
+        // the viewport otherwise untouched replayed the stale drawing forever. WorkbookTheme is a
+        // record whose Colors dictionary compares by reference, so a genuinely new theme never
+        // matches while the SAME instance being re-assigned (what MainWindow.Viewport.cs does on
+        // every viewport refresh) still does -- the cache survives the common no-op case.
+        WorkbookTheme WorkbookTheme);
 
     private void RenderPreSelectionLayersWithCache(
         DrawingContext dc,
@@ -169,7 +178,8 @@ public partial class GridView
             sparklineValues,
             sparklineValues?.Count ?? 0,
             QuickAnalysisPreviewRange,
-            QuickAnalysisPreviewVisual);
+            QuickAnalysisPreviewVisual,
+            WorkbookTheme);
     }
 
     private void MarkSelectionVisualOnlyChange() => _selectionVisualOnlyChangePending = true;
