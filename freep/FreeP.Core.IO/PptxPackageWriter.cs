@@ -3514,23 +3514,8 @@ public static class PptxPackageWriter
             case BulletKind.Char:
                 el.Add(new XElement(A + "buChar", new XAttribute("char", level.BulletChar ?? "•"))); break;
             case BulletKind.Auto:
-                var lvlAutoNumTypeStr = level.AutoNumType switch
-                {
-                    AutoNumType.ArabicParenR    => "arabicParenR",
-                    AutoNumType.ArabicParenBoth => "arabicParenBoth",
-                    AutoNumType.RomanUcPeriod   => "romanUcPeriod",
-                    AutoNumType.RomanLcPeriod   => "romanLcPeriod",
-                    AutoNumType.RomanUcParenR   => "romanUcParenR",
-                    AutoNumType.RomanLcParenR   => "romanLcParenR",
-                    AutoNumType.AlphaUcPeriod   => "alphaUcPeriod",
-                    AutoNumType.AlphaLcPeriod   => "alphaLcPeriod",
-                    AutoNumType.AlphaUcParenR   => "alphaUcParenR",
-                    AutoNumType.AlphaLcParenR   => "alphaLcParenR",
-                    AutoNumType.AlphaUcParenBoth => "alphaUcParenBoth",
-                    AutoNumType.AlphaLcParenBoth => "alphaLcParenBoth",
-                    _                           => "arabicPeriod"
-                };
-                el.Add(new XElement(A + "buAutoNum", new XAttribute("type", lvlAutoNumTypeStr))); break;
+                el.Add(new XElement(A + "buAutoNum",
+                    new XAttribute("type", PptxAutoNumberTypeCodec.Format(level.AutoNumType)))); break;
         }
 
         // a:defRPr
@@ -5370,23 +5355,8 @@ public static class PptxPackageWriter
             case BulletKind.Char:
                 pPr.Add(new XElement(A + "buChar", new XAttribute("char", para.BulletChar ?? "•"))); hasPPr = true; break;
             case BulletKind.Auto:
-                var autoNumTypeStr = para.AutoNumType switch
-                {
-                    AutoNumType.ArabicParenR    => "arabicParenR",
-                    AutoNumType.ArabicParenBoth => "arabicParenBoth",
-                    AutoNumType.RomanUcPeriod   => "romanUcPeriod",
-                    AutoNumType.RomanLcPeriod   => "romanLcPeriod",
-                    AutoNumType.RomanUcParenR   => "romanUcParenR",
-                    AutoNumType.RomanLcParenR   => "romanLcParenR",
-                    AutoNumType.AlphaUcPeriod   => "alphaUcPeriod",
-                    AutoNumType.AlphaLcPeriod   => "alphaLcPeriod",
-                    AutoNumType.AlphaUcParenR   => "alphaUcParenR",
-                    AutoNumType.AlphaLcParenR   => "alphaLcParenR",
-                    AutoNumType.AlphaUcParenBoth => "alphaUcParenBoth",
-                    AutoNumType.AlphaLcParenBoth => "alphaLcParenBoth",
-                    _                           => "arabicPeriod"
-                };
-                var autoNumEl = new XElement(A + "buAutoNum", new XAttribute("type", autoNumTypeStr));
+                var autoNumEl = new XElement(A + "buAutoNum",
+                    new XAttribute("type", PptxAutoNumberTypeCodec.Format(para.AutoNumType)));
                 if (para.AutoNumStartAtSpecified || para.AutoNumStartAt != 1)
                     autoNumEl.Add(new XAttribute("startAt", Math.Max(1, para.AutoNumStartAt)));
                 pPr.Add(autoNumEl); hasPPr = true; break;

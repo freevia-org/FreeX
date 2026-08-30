@@ -162,7 +162,11 @@ public static class ChartStockFormatPlanner
         out ChartStockFormatInput input,
         out ChartStockFormatParseIssue issue)
     {
-        if (!TryParseClampedInt(upDownBarGapWidthText, MinGapWidth, MaxGapWidth, out var gapWidth))
+        if (!NumericInputParser.TryParseInt32InRange(
+                upDownBarGapWidthText,
+                MinGapWidth,
+                MaxGapWidth,
+                out var gapWidth))
         {
             input = default;
             issue = ChartStockFormatParseIssue.UpDownBarGapWidth;
@@ -213,13 +217,6 @@ public static class ChartStockFormatPlanner
             HighLowLineColor: normalized.HighLowLineColor,
             HighLowLineThickness: normalized.HighLowLineThickness);
     }
-
-    private static bool TryParseClampedInt(string text, int min, int max, out int value) =>
-        TryParseInt(text, out value) && value >= min && value <= max;
-
-    private static bool TryParseInt(string text, out int value) =>
-        int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value)
-        || int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
 
     private static bool TryParseClampedDouble(string text, double min, double max, out double value) =>
         NumericInputParser.TryParseFiniteDouble(
