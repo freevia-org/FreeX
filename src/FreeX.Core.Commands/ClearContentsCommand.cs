@@ -96,12 +96,29 @@ public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
             // already recreated at the destination by the paste half of the composite command),
             // so remove it here at the source -- otherwise Sheet1 keeps rendering a merged (now
             // blank) block that real Excel would have unmerged.
-            var vacatedMerges = sheet.MergedRegions.Where(range => _range.Contains(range)).ToList();
-            if (vacatedMerges.Count > 0)
+            List<GridRange>? retainedMerges = null;
+            var mergedRegions = sheet.MergedRegions;
+            for (var index = 0; index < mergedRegions.Count; index++)
             {
-                _mergedRegionsSnapshot = sheet.MergedRegions.ToList();
-                sheet.ReplaceMergedRegions(sheet.MergedRegions.Where(range => !vacatedMerges.Contains(range)));
+                var mergedRegion = mergedRegions[index];
+                if (_range.Contains(mergedRegion))
+                {
+                    if (retainedMerges is null)
+                    {
+                        _mergedRegionsSnapshot = mergedRegions.ToList();
+                        retainedMerges = new List<GridRange>(mergedRegions.Count - 1);
+                        for (var retainedIndex = 0; retainedIndex < index; retainedIndex++)
+                            retainedMerges.Add(mergedRegions[retainedIndex]);
+                    }
+
+                    continue;
+                }
+
+                retainedMerges?.Add(mergedRegion);
             }
+
+            if (retainedMerges is not null)
+                sheet.ReplaceMergedRegions(retainedMerges);
         }
 
         var affected = new List<CellAddress>();
