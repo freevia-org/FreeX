@@ -39,10 +39,9 @@
 
 ## Verification
 
-- Before integrating a branch, run repository preflight and the full Release build from that branch's worktree. Run focused tests when they are useful for the changed component, but do not make a complete local test lane a routine branch gate. GitHub runs the manifest-driven integration suite after `main` is pushed, and the canonical release workflow completes the UI/render/release-only gates for the same immutable SHA before packaging.
-- The default local branch verification path favors the normal .NET restore/build cache, build servers, shared compilation, and parallelism. It is repository preflight and full-solution build:
-  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1`
-  - `dotnet build FreeX.slnx --configuration Release`
+- Before integrating a committed branch, run `pwsh -NoProfile -File tools/Test-BranchForIntegration.ps1` from that branch's worktree. It verifies exact-base CI health, runs repository preflight and the full Release build, and executes only the manifest-defined Windows commit gates affected by the branch's paths and transitive project references.
+- Do not merge ordinary work while the exact `origin/main` CI candidate is running, missing, cancelled, or failed. Only a branch whose purpose is to repair that failure may use `-AllowRedMainFix`; do not use `-SkipMainHealthCheck` for integration.
+- The affected-gate runner favors the normal .NET restore/build cache, build servers, shared compilation, and parallelism. Run additional focused tests during development when useful, but do not make a complete local test lane a routine branch gate. GitHub runs the manifest-driven cross-platform integration suite after `main` is pushed, and the canonical release workflow completes the UI/render/release-only gates for the same immutable SHA before packaging.
 - Do not run `dotnet test FreeX.slnx` or `dotnet test FreeX.UiTests.slnx` as routine/default verification.
 - Run the UI lane (`dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"`) locally only when the user explicitly requests it or there is a specific UI failure that cannot be diagnosed through focused tests. Tester-release candidates run the complete UI/release lane on GitHub; do not duplicate it locally without a concrete reason.
 - For ribbon rendering/adaptive-layout/resize work, the focused ribbon lane is `dotnet test FreeX.RibbonTests.slnx --configuration Release --filter Category=RibbonUiLane` (see `docs/ribbon-ui-test-lane.md`).

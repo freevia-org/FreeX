@@ -325,8 +325,10 @@ public sealed class CoreCommandsResidualDeduplicationTests
             .Should().HaveCount(3, "the shared insert core should be called by both axis wrappers");
         source.Split("RemapChartSeriesIndexedCollectionsForDelete(chart, posLo, posHi, removedCount);")
             .Should().HaveCount(3, "the shared delete core should be called by both axis wrappers");
-        source.Split("chart.SeriesOrderOverrides = chart.SeriesOrderOverrides")
-            .Should().HaveCount(2, "the series mutation body should have one authoritative implementation");
+        source.Split("chart.SeriesOrderOverrides = RemapIndexedItemsForInsert(")
+            .Should().HaveCount(2, "the insert mutation body should have one authoritative implementation");
+        source.Split("chart.SeriesOrderOverrides = RemapIndexedItemsForDelete(")
+            .Should().HaveCount(2, "the delete mutation body should have one authoritative implementation");
     }
 
     private static void ClearPivotState(PivotTableModel pivot)
