@@ -89,16 +89,61 @@ public partial class XlsxFeatureInspectorTests
 
 
     [Fact]
-    public void Inspect_RichDataPackage_DetectsLinkedDataTypes()
+    public void Inspect_RichDataPackageWithLinkedEntityStructure_DetectsLinkedDataTypes()
     {
-        using var package = CreatePackage(
-            "xl/richData/rdrichvalue.xml",
-            "xl/richData/rdRichValueTypes.xml",
-            "xl/richData/richValueRel.xml");
+        using var package = CreatePackageWithContent(
+            ("xl/richData/rdrichvalue.xml", "<rvData/ >"),
+            ("xl/richData/rdrichvaluestructure.xml", """
+                <rvStructures xmlns="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata">
+                  <s t="_linkedentity"><k n="EntityId" t="s"/></s>
+                </rvStructures>
+                """));
 
         var report = XlsxFeatureInspector.Inspect(package);
 
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.LinkedDataTypes);
+    }
+
+
+    [Fact]
+    public void Inspect_ExcelStyleFilterWithFormulaCreatedRichArray_DoesNotWarnForLinkedDataTypes()
+    {
+        // This is the minimal relevant shape emitted by current Excel builds for a normal spilled
+        // FILTER result: XLDAPR marks the formula while rich-data describes the formula-created
+        // rich array.  The rich-data type is _array, not the _linkedentity type used by Stocks,
+        // Geography, and other service-connected Microsoft linked data types.
+        using var package = CreatePackageWithContent(
+            ("xl/_rels/workbook.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdRichValue" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue" Target="richData/rdrichvalue.xml"/>
+                  <Relationship Id="rIdRichValueStructure" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure" Target="richData/rdrichvaluestructure.xml"/>
+                </Relationships>
+                """),
+            ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData><row r="1"><c r="A1" cm="1"><f>_xlfn.FILTER(B1:B3,C1:C3=1)</f><v>alpha</v></c></row></sheetData>
+                </worksheet>
+                """),
+            ("xl/metadata.xml", """
+                <metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <metadataTypes count="1"><metadataType name="XLDAPR" cellMeta="1"/></metadataTypes>
+                  <cellMetadata count="1"><bk><rc t="1" v="0"/></bk></cellMetadata>
+                </metadata>
+                """),
+            ("xl/richData/rdrichvalue.xml", """
+                <rvData xmlns="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata" count="1">
+                  <rv s="0"><v>0</v></rv>
+                </rvData>
+                """),
+            ("xl/richData/rdrichvaluestructure.xml", """
+                <rvStructures xmlns="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata" count="1">
+                  <s t="_array"><k n="array" t="a"/></s>
+                </rvStructures>
+                """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.LinkedDataTypes);
     }
 
 
