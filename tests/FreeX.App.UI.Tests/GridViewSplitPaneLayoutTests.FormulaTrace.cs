@@ -205,12 +205,26 @@ public sealed partial class GridViewSplitPaneLayoutTests
         FormulaTraceLayoutPlanner.HitTestMarker(viewport, arrows, sheetId, markerPoint)
             .Should().Be(new CellAddress(sheetId, 201, 1));
 
+        // sweep112 F3: a wall-clock bound alone would very likely stay green even if HitTestMarker
+        // regressed to building the full per-call IReadOnlyList<FormulaTraceArrowLayout> that
+        // FormulaTraceLayoutPlanner.CalculateLayouts builds (500 iterations over only 5,000 arrows is
+        // still cheap in absolute terms). The property this test's name promises -- "streams ...
+        // without building layouts" -- is really an allocation claim, so measure it directly, the same
+        // way GridViewMergeLookupPerformanceTests already does for its own streaming/caching claim.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
         var elapsed = Stopwatch.StartNew();
         for (var i = 0; i < 500; i++)
             FormulaTraceLayoutPlanner.HitTestMarker(viewport, arrows, sheetId, markerPoint);
         elapsed.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
 
         elapsed.ElapsedMilliseconds.Should().BeLessThan(1_500);
+        allocatedBytes.Should().BeLessThan(6_000_000,
+            "HitTestMarker must stream arrows without materializing a per-call layout list");
     }
 
     [Fact]

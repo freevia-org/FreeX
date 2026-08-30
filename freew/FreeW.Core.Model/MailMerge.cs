@@ -1123,9 +1123,20 @@ public sealed class MergeData
         ArgumentNullException.ThrowIfNull(rows);
 
         Header = header.Select(h => (h ?? string.Empty).Trim()).ToList();
+        DuplicateHeaderNames = Header
+            .Select((name, index) => (name, index))
+            .GroupBy(entry => entry.name, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.OrderBy(entry => entry.index).First().name)
+            .ToList();
         foreach (var cells in rows)
         {
             ArgumentNullException.ThrowIfNull(cells);
+            // NOTE: keyed case-insensitively so a template field «Name» binds to a "name" header (see
+            // class summary). When Header itself contains two names that differ only by case, this loop
+            // necessarily collapses them to one entry -- the second write silently wins. That collision
+            // is surfaced via DuplicateHeaderNames below so callers can warn instead of losing data with
+            // no signal at all.
             var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (var i = 0; i < Header.Count; i++)
                 row[Header[i]] = i < cells.Count ? cells[i] ?? string.Empty : string.Empty;
@@ -1135,6 +1146,17 @@ public sealed class MergeData
 
     /// <summary>The field names, in header order (trimmed).</summary>
     public IReadOnlyList<string> Header { get; }
+
+    /// <summary>
+    /// Header names (one per colliding group, in first-appearance order) that appear more than once when
+    /// compared case-insensitively -- e.g. a header of "Email","email" reports "Email" here. Because
+    /// <see cref="Rows"/> keys each record case-insensitively (matching how Word resolves merge-field
+    /// names), every column in a colliding group overwrites the others in every row, and only the last
+    /// column's value survives. Empty when every header name is unique ignoring case. Callers that show
+    /// the loaded recipient list to the user should warn when this is non-empty, since the data loss is
+    /// otherwise silent.
+    /// </summary>
+    public IReadOnlyList<string> DuplicateHeaderNames { get; }
 
     /// <summary>The records, each a case-insensitive map from field name to value.</summary>
     public IReadOnlyList<IReadOnlyDictionary<string, string>> Rows => _rows;

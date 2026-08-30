@@ -549,7 +549,10 @@ public sealed class PptxRepairCorpusValidityTests
             paragraph.BulletText.Should().BeEmpty();
             paragraph.SpaceBeforePt.Should().BeApproximately(0.0, 0.001);
             paragraph.SpaceAfterPt.Should().BeApproximately(0.0, 0.001);
-            paragraph.LineSpacingPercent.Should().BeNull();
+            paragraph.LineSpacingPercent.Should().Be(90.0,
+                "the SmartArt fallback source (ppt/diagrams/drawing9.xml) carries " +
+                "a:lnSpc/a:spcPct val=\"90000\" on this paragraph, and the raster-calibration " +
+                "clone path must preserve it rather than silently dropping it");
             paragraph.LineSpacingPointsExact.Should().BeNull();
             paragraph.TabStops.Should().BeEmpty();
             paragraph.IndentDip.Should().BeApproximately(0.0, 0.001);

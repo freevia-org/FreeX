@@ -509,6 +509,68 @@ public sealed class InCanvasRichClipboardTests
         payload.TypingRun.Bold.Should().BeTrue();
     }
 
+    [Fact]
+    public void CaptureAndCodecRoundTrip_PreservesPercentBasedSpacing()
+    {
+        var body = Body("Alpha");
+        body.Paragraphs[0].SpaceBeforePercent = 50;
+        body.Paragraphs[0].SpaceAfterPercent = 75;
+        body.Paragraphs[0].LineSpacingPercent = 150;
+
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            body,
+            new InCanvasEditorTextSelection(0, 5));
+        var decoded = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        var paragraph = decoded!.Body.Paragraphs[0];
+
+        paragraph.SpaceBeforePercent.Should().Be(50);
+        paragraph.SpaceAfterPercent.Should().Be(75);
+        paragraph.LineSpacingPercent.Should().Be(150);
+        paragraph.SpaceBeforePt.Should().BeNull();
+        paragraph.SpaceAfterPt.Should().BeNull();
+        paragraph.LineSpacingPointsExact.Should().BeNull();
+    }
+
+    [Fact]
+    public void CaptureAndCodecRoundTrip_PreservesExactLineSpacingPoints()
+    {
+        var body = Body("Alpha");
+        body.Paragraphs[0].LineSpacingPointsExact = 18.5;
+
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            body,
+            new InCanvasEditorTextSelection(0, 5));
+        var decoded = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        var paragraph = decoded!.Body.Paragraphs[0];
+
+        paragraph.LineSpacingPointsExact.Should().Be(18.5);
+        paragraph.LineSpacingPercent.Should().BeNull();
+    }
+
+    [Fact]
+    public void CaptureAndCodecRoundTrip_PreservesPointBasedSpacingAlongsidePercent()
+    {
+        var body = Body("Alpha");
+        body.Paragraphs[0].SpaceBeforePt = 12;
+        body.Paragraphs[0].SpaceAfterPt = 6;
+
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            body,
+            new InCanvasEditorTextSelection(0, 5));
+        var decoded = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        var paragraph = decoded!.Body.Paragraphs[0];
+
+        paragraph.SpaceBeforePt.Should().Be(12);
+        paragraph.SpaceAfterPt.Should().Be(6);
+        paragraph.SpaceBeforePercent.Should().BeNull();
+        paragraph.SpaceAfterPercent.Should().BeNull();
+        paragraph.LineSpacingPercent.Should().BeNull();
+        paragraph.LineSpacingPointsExact.Should().BeNull();
+    }
+
     private static TextBody RichBody()
     {
         var body = new TextBody { DefaultParaAlign = TextAlign.Left };

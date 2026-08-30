@@ -171,7 +171,7 @@ public static class DocumentInspector
         var usedEndnoteIds = new HashSet<int>();
         var usedCommentIds = new HashSet<int>();
 
-        foreach (var paragraph in EnumerateCommentAnchorParagraphs(document))
+        foreach (var paragraph in EnumerateNoteAndCommentAnchorParagraphsForPruning(document))
         {
             foreach (var run in paragraph.Runs)
             {
@@ -359,6 +359,46 @@ public static class DocumentInspector
                      | TextDocumentStorySubset.Footnotes
                      | TextDocumentStorySubset.Endnotes,
                      TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
+            yield return paragraph;
+    }
+
+    /// <summary>
+    /// Every paragraph that can carry a footnote/endnote/comment reference/anchor run for the purposes of
+    /// <see cref="PruneOrphanedNoteAndCommentAnchors"/>: the same stores as
+    /// <see cref="EnumerateCommentAnchorParagraphs"/> (body/table paragraphs, every header/footer slot, and
+    /// footnote/endnote content), but — unlike that helper — also descending into any text box
+    /// (<see cref="Run.Shape"/>) found while walking the header/footer/footnote/endnote paragraphs, exactly
+    /// as the body branch already does and exactly as <see cref="NoteCommands.DeleteNoteCommand"/>'s own
+    /// marker-removal walk does for the identical Body|HeadersFooters combination. Without this, a
+    /// footnote/endnote/comment reference mark that lives only inside a text box embedded in a header or
+    /// footer would never be counted as "in use", so the prune would delete its still-referenced
+    /// footnote/endnote/comment content while leaving the reference-mark run behind in the header/footer
+    /// shape — a silent content loss plus an invalid docx on the next save (a dangling
+    /// w:footnoteReference/w:endnoteReference/w:commentReference with no matching entry). This walk is
+    /// intentionally NOT shared with <see cref="EnumerateCommentAnchorParagraphs"/>: that helper's
+    /// header/footer/footnote/endnote branch deliberately stays shape-free for
+    /// <see cref="RemoveComments"/> (see
+    /// <c>TextDocumentStoryTraversalAdoptionTests.DocumentInspector_PreservesItsBodyOnlyShapeExpansion</c>),
+    /// so widening it there would silently change that removal's existing scope instead of only fixing the
+    /// prune's orphan check.
+    /// </summary>
+    private static IEnumerable<Paragraph> EnumerateNoteAndCommentAnchorParagraphsForPruning(TextDocument document)
+    {
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
+                     document,
+                     TextDocumentStorySubset.Body,
+                     TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
+                     | TextDocumentStoryTraversalOptions.IncludeNestedTables
+                     | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
+            yield return paragraph;
+
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
+                     document,
+                     TextDocumentStorySubset.HeadersFooters
+                     | TextDocumentStorySubset.Footnotes
+                     | TextDocumentStorySubset.Endnotes,
+                     TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
+                     | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
             yield return paragraph;
     }
 }

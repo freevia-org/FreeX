@@ -615,6 +615,10 @@ public static class InCanvasRichClipboardPlanner
         BulletFontFollowsText = paragraph.BulletFontFollowsText,
         SpaceBeforePt = paragraph.SpaceBeforePt,
         SpaceAfterPt = paragraph.SpaceAfterPt,
+        SpaceBeforePercent = paragraph.SpaceBeforePercent,
+        SpaceAfterPercent = paragraph.SpaceAfterPercent,
+        LineSpacingPercent = paragraph.LineSpacingPercent,
+        LineSpacingPointsExact = paragraph.LineSpacingPointsExact,
         TabStops = paragraph.TabStops.Select(stop => new ClipboardTabStopDto
         {
             PositionEmu = stop.PositionEmu,
@@ -809,6 +813,10 @@ public static class InCanvasRichClipboardPlanner
             BulletFontFollowsText = dto.BulletFontFollowsText,
             SpaceBeforePt = dto.SpaceBeforePt,
             SpaceAfterPt = dto.SpaceAfterPt,
+            SpaceBeforePercent = dto.SpaceBeforePercent,
+            SpaceAfterPercent = dto.SpaceAfterPercent,
+            LineSpacingPercent = dto.LineSpacingPercent,
+            LineSpacingPointsExact = dto.LineSpacingPointsExact,
         };
         foreach (var stop in dto.TabStops ?? [])
             paragraph.TabStops.Add(new TabStop
@@ -1164,6 +1172,10 @@ public static class InCanvasRichClipboardPlanner
         public bool BulletFontFollowsText { get; set; }
         public double? SpaceBeforePt { get; set; }
         public double? SpaceAfterPt { get; set; }
+        public double? SpaceBeforePercent { get; set; }
+        public double? SpaceAfterPercent { get; set; }
+        public double? LineSpacingPercent { get; set; }
+        public double? LineSpacingPointsExact { get; set; }
         public List<ClipboardTabStopDto>? TabStops { get; set; }
         public ClipboardImageDto? BulletImage { get; set; }
         public List<ClipboardRunDto>? Runs { get; set; }

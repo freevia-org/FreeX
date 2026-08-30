@@ -249,6 +249,57 @@ public sealed class LegacyXlsFileAdapterTests
         modelSheet.GetValue(2, 5).Should().Be(new NumberValue(4), "E2");
     }
 
+    [Fact]
+    public void R174_Load_LegacyCseArrayFormula_1x1DeclaredRange_TakesTopLeftElementNotPositionalIntersection()
+    {
+        // Regression for freex-array-formulas F2: a genuinely single-cell (1x1-declared) CSE array
+        // formula (Ctrl+Shift+Enter over exactly one cell) whose natural result is a multi-cell range
+        // reference must resolve to the array's TOP-LEFT element (Excel's real legacy-CSE rule),
+        // not to whatever element positionally lines up with the formula cell's own row/column (which
+        // is what FormulaArrayMode.Implicit's ImplicitIntersection.Resolve does — that is the rule for
+        // an ordinary *non-array* formula's automatic @ operator, not for a declared CSE array).
+        var hssf = new HSSFWorkbook();
+        var sheet = hssf.CreateSheet("Sheet1");
+
+        // A1:A5 = 10,20,30,40,50 (a 5-row x 1-col column).
+        for (var r = 0; r < 5; r++)
+        {
+            var row = sheet.CreateRow(r);
+            row.CreateCell(0).SetCellValue((r + 1) * 10);
+        }
+
+        // C3 (row index 2, col index 2) was CSE-entered as {=A1:A5}: a genuine 1x1 selection (Ctrl+Shift+
+        // Enter over exactly one cell) referencing a range that does NOT start at the formula's own
+        // row/column. Excel's CSE rule always takes the array's top-left element (A1=10) regardless of
+        // where the formula cell sits; positional/implicit intersection would instead pick the element
+        // that shares C3's row (A3=30).
+        sheet.SetArrayFormula("A1:A5", new CellRangeAddress(2, 2, 2, 2));
+
+        using var stream = new MemoryStream();
+        hssf.Write(stream, leaveOpen: true);
+        stream.Position = 0;
+
+        var workbook = new LegacyXlsFileAdapter().Load(stream);
+        var modelSheet = workbook.GetSheetAt(0);
+
+        // LegacyXlsFileAdapter's ToModelIndex adds 1 to NPOI's zero-based indices, so the NPOI (2,2)
+        // anchor (0-based row/col) lands at model address (3,3).
+        var loadedAnchor = modelSheet.GetCell(3, 3);
+        loadedAnchor.Should().NotBeNull();
+        loadedAnchor!.LegacyArrayRows.Should().Be(1u,
+            "a declared 1x1 CSE array must still be confined via the LegacyArrayRows/Cols machinery, " +
+            "the same mechanism used for multi-cell declared CSE ranges, so it takes the top-left " +
+            "element instead of positionally intersecting");
+        loadedAnchor.LegacyArrayCols.Should().Be(1u);
+
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        engine.RecalculateAllFormulas(workbook);
+
+        modelSheet.GetValue(3, 3).Should().Be(new NumberValue(10),
+            "Excel's CSE rule takes the array's top-left element (A1=10), not the element positionally " +
+            "aligned with the formula cell's own row (A3=30)");
+    }
+
     // Note: the legacy .xls adapter is open-only (Save throws NotSupportedException), so there is no NPOI
     // write path to carry the mirror-image 1904 conversion — the fix is load-side only. A 1904 workbook is
     // reproduced here the way a genuine Excel-authored file exists on disk: the BIFF DateWindow1904 record

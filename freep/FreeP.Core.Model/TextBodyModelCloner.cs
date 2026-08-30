@@ -77,6 +77,10 @@ public static class TextBodyModelCloner
             BulletFontFollowsText = source.BulletFontFollowsText,
             SpaceBeforePt = source.SpaceBeforePt,
             SpaceAfterPt = source.SpaceAfterPt,
+            SpaceBeforePercent = source.SpaceBeforePercent,
+            SpaceAfterPercent = source.SpaceAfterPercent,
+            LineSpacingPercent = source.LineSpacingPercent,
+            LineSpacingPointsExact = source.LineSpacingPointsExact,
         };
 
         foreach (var tabStop in source.TabStops)

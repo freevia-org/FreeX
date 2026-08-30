@@ -745,7 +745,7 @@ public class CrossReferencesTests
             CrossRefFieldKind.PageRef, "rowTwo", CrossRefInsertAs.PageNumber, Hyperlink: false);
 
         // A single host resolver keyed to the table's own top-level block index, exactly as production
-        // wires it (DocumentReferenceBlockPageResolverPlanner.Resolve / DocumentFieldUpdateCoordinator).
+        // wires it (DocumentReferenceBlockPageResolverPlanner.Resolve / DocumentReferenceEditingCoordinator).
         int? PageOf(int blockIndex) => blockIndex == 0 ? 3 : null;
 
         CrossReferences.ResolveField(doc, rowZero, "stale", sourceBlockIndex: 1, pageOf: PageOf)

@@ -538,11 +538,112 @@ public sealed class MailMergeSessionWorkflowTests
         validation.Message.Should().Contain(expectedText);
     }
 
+    [Theory]
+    [InlineData(MailMergeOperation.PreviewRecord)]
+    [InlineData(MailMergeOperation.StepRecords)]
+    [InlineData(MailMergeOperation.FindRecipient)]
+    [InlineData(MailMergeOperation.CheckForErrors)]
+    [InlineData(MailMergeOperation.FinishMerge)]
+    [InlineData(MailMergeOperation.SendEmail)]
+    [InlineData(MailMergeOperation.FilterSortRecipients)]
+    public void ValidationPlanner_FilteredToZeroRecipients_ReportsFilterCauseNotNeverLoaded(
+        MailMergeOperation operation)
+    {
+        // A list that WAS loaded and then filtered/sorted down to zero rows (Mailings > Filter & Sort
+        // Recipients has no minimum-selection guard) must not be reported the same way as a session
+        // that never had recipients selected: the "select recipients first" message is wrong here (the
+        // user already did) and never names the actual cause (the active filter), sending the user in
+        // circles. Regression coverage for finding freew-mail-merge F2.
+        var filteredToZero = new MergeData(["Name"], []);
+
+        // r174 remediation: the filter-specific message is now gated on a filter having actually been
+        // applied, so this test says so explicitly rather than inferring it from the list being non-null.
+        var validation = MailMergeValidationPlanner.Validate(filteredToZero, operation, hasFilteredRecipients: true);
+
+        validation.IsValid.Should().BeFalse();
+        validation.Message.Should().NotContain("Select recipients first");
+        validation.Message.Should().Contain("filter");
+    }
+
+    [Theory]
+    [InlineData(MailMergeOperation.PreviewRecord)]
+    [InlineData(MailMergeOperation.StepRecords)]
+    [InlineData(MailMergeOperation.FindRecipient)]
+    [InlineData(MailMergeOperation.CheckForErrors)]
+    [InlineData(MailMergeOperation.FinishMerge)]
+    [InlineData(MailMergeOperation.SendEmail)]
+    [InlineData(MailMergeOperation.FilterSortRecipients)]
+    public void ValidationPlanner_NeverLoadedRecipients_StillReportsSelectRecipientsFirst(
+        MailMergeOperation operation)
+    {
+        // Sibling/no-regression case: a session where recipients were never selected at all (Session.Data
+        // is null, as opposed to loaded-then-filtered-to-zero) must keep the original, unchanged message.
+        var validation = MailMergeValidationPlanner.Validate(null, operation);
+
+        validation.IsValid.Should().BeFalse();
+        validation.Message.Should().Contain("Select recipients first (Mailings > Select Recipients)");
+    }
+
     private static MailMergeSessionWorkflow WorkflowWith(string csv)
     {
         var workflow = new MailMergeSessionWorkflow();
         workflow.LoadRecipients(MergeData.FromCsv(csv));
         return workflow;
+    }
+
+    /// <summary>
+    /// r174 remediation. The fix above began telling the user "the current filter excludes every
+    /// recipient" whenever the recipient list was non-null and empty. A list can be empty without any
+    /// filter ever having been applied: a header-only CSV loads as a real MergeData with zero rows,
+    /// and the Select Recipients dialog seeds exactly that (just the header line), so a user who
+    /// confirms it without typing rows lands there. Blaming a filter that user never opened states a
+    /// cause that did not happen, which is worse than the vague message it replaced.
+    /// </summary>
+    [Theory]
+    [InlineData(MailMergeOperation.PreviewRecord)]
+    [InlineData(MailMergeOperation.FindRecipient)]
+    [InlineData(MailMergeOperation.CheckForErrors)]
+    [InlineData(MailMergeOperation.FinishMerge)]
+    [InlineData(MailMergeOperation.SendEmail)]
+    [InlineData(MailMergeOperation.FilterSortRecipients)]
+    public void ValidationPlanner_ListLoadedWithNoRowsAndNeverFiltered_DoesNotBlameTheFilter(
+        MailMergeOperation operation)
+    {
+        // Exactly what MergeData.FromCsv returns for a header-only recipient list.
+        var loadedEmpty = new MergeData(["Name"], []);
+
+        var validation = MailMergeValidationPlanner.Validate(loadedEmpty, operation, hasFilteredRecipients: false);
+
+        validation.IsValid.Should().BeFalse();
+        validation.Message.Should().NotContain(
+            "The current filter excludes every recipient",
+            "no filter was ever applied, so naming one invents a cause the user cannot act on");
+        validation.Message.Should().Contain(
+            "Select recipients",
+            "the actionable advice is still to choose a recipient list that has rows in it");
+    }
+
+    /// <summary>
+    /// Sibling: the session flag drives the distinction end to end, not just the planner. Loading a
+    /// recipient list again clears it, because reselecting restores the full list.
+    /// </summary>
+    [Fact]
+    public void LoadRecipients_AfterFilteringToZero_ClearsTheFilteredMarker()
+    {
+        var session = new MailMergeSession();
+        var workflow = new MailMergeSessionWorkflow(session);
+
+        workflow.LoadRecipients(new MergeData(["Name"], [["A"]]));
+        workflow.ApplyRecipientFilter(new MergeData(["Name"], []));
+        session.HasFilteredRecipients.Should().BeTrue();
+        workflow.Validate(MailMergeOperation.FinishMerge).Message.Should()
+            .Contain("The current filter excludes every recipient");
+
+        workflow.LoadRecipients(new MergeData(["Name"], []));
+
+        session.HasFilteredRecipients.Should().BeFalse();
+        workflow.Validate(MailMergeOperation.FinishMerge).Message.Should()
+            .NotContain("The current filter excludes every recipient");
     }
 
     private static TextDocument DocumentWith(string text)

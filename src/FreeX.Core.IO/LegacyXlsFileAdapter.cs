@@ -2151,23 +2151,24 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
                     if (isAnchor)
                     {
-                        // A single-cell "array formula" (FirstRow==LastRow && FirstColumn==LastColumn)
-                        // has no spill/member semantics beyond the anchor itself — Dynamic with a 1x1
-                        // extent behaves identically to Implicit, so only mark it Dynamic when the
-                        // declared range actually covers more than one cell.
-                        var isMultiCell = arrayRange.LastRow > arrayRange.FirstRow || arrayRange.LastColumn > arrayRange.FirstColumn;
-                        cell.ArrayMode = isMultiCell ? FormulaArrayMode.Dynamic : FormulaArrayMode.Implicit;
-                        if (isMultiCell)
-                        {
-                            // Mirror XlsxFileAdapter's legacy-CSE handling (see Cell.LegacyArrayRows /
-                            // RecalcEngine): confine this formula's result to the originally declared
-                            // ref extent on every recalc instead of letting it free-spill like a modern
-                            // dynamic-array formula. Without this, RecalcEngine's LegacyArrayRows > 0
-                            // gate never fires for .xls-sourced CSE arrays and they fall through to the
-                            // free-spilling / IsSpillBlocked path instead.
-                            cell.LegacyArrayRows = (uint)(arrayRange.LastRow - arrayRange.FirstRow + 1);
-                            cell.LegacyArrayCols = (uint)(arrayRange.LastColumn - arrayRange.FirstColumn + 1);
-                        }
+                        // Every declared BIFF8 array-formula anchor — including a 1x1 range (FirstRow==
+                        // LastRow && FirstColumn==LastColumn) — is a genuine legacy Ctrl+Shift+Enter CSE
+                        // array: BIFF8 predates Excel 365 dynamic arrays, so unlike the XLSX loader's
+                        // equivalent 1x1 case (XlsxFileAdapter's isDynamicArrayMetadataCell check) there
+                        // is no "this might actually be a modern dynamic-array formula that currently
+                        // happens to be 1x1" ambiguity to resolve here — a .xls file simply cannot
+                        // contain that concept. Route it through the same LegacyArrayRows/Cols-confinement
+                        // machinery as a multi-cell declared range (RecalcEngine.cs's "cell.LegacyArrayRows
+                        // > 0" branch), which implements Excel's real CSE rule of always taking the
+                        // declared range's top-left element. FormulaArrayMode.Implicit would be wrong
+                        // here: it routes through ImplicitIntersection.Resolve, which positionally
+                        // intersects against the formula cell's OWN row/column — the rule for an ordinary
+                        // non-array formula's automatic @ operator, not for a declared CSE array, and it
+                        // silently returns the wrong element whenever the formula cell doesn't happen to
+                        // sit at the array's top-left row/column. See freex-array-formulas F2.
+                        cell.ArrayMode = FormulaArrayMode.Dynamic;
+                        cell.LegacyArrayRows = (uint)(arrayRange.LastRow - arrayRange.FirstRow + 1);
+                        cell.LegacyArrayCols = (uint)(arrayRange.LastColumn - arrayRange.FirstColumn + 1);
                         sheet.SetCell(address, cell);
                     }
                     else

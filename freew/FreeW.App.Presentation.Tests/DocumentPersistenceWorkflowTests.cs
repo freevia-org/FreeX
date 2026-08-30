@@ -295,6 +295,115 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
         result.SourceLastWriteTimeUtc.Should().Be(File.GetLastWriteTimeUtc(path));
     }
 
+    // ── r174-freew-persistence-readonly-open ────────────────────────────────────────────────────
+    //
+    // FreeX's WorkbookReadOnlySession.IsFileWriteRestricted (round 149) checks the OS read-only
+    // attribute at Open time specifically because, before that fix, "opened fully editable with
+    // zero indication until the first Save failed". FreeW's Open had no equivalent check at all.
+
+    [Fact]
+    public void Open_OsReadOnlyAttributeSet_FlagsResultAsFileSystemReadOnly()
+    {
+        // FAIL-BEFORE: before the fix, DocumentOpenResult had no IsFileSystemReadOnly member and
+        // Open never inspected File.GetAttributes at all, so a read-only file opened with no way
+        // for a caller to distinguish it from any other editable file until Save later failed.
+        var adapter = new FakeDocumentAdapter([new FileFormatDescriptor(".docx", "Word Document")]);
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+        var path = WriteText("ReadOnly.docx", "content");
+        File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+
+        try
+        {
+            var result = workflow.Open(path);
+
+            result.IsFileSystemReadOnly.Should().BeTrue();
+        }
+        finally
+        {
+            // Clear the attribute so the temp-directory cleanup in Dispose() can delete the file.
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+        }
+    }
+
+    // r174 remediation. The Open fix above left the recovery door open: OpenSnapshot in the same file
+    // returns originalPath as the save target -- the caller wires it straight into MarkDirtyWithPath --
+    // but never performed the write-restriction check. So crashing with a read-only original and then
+    // accepting crash recovery produced a fully editable document with no indication, which is exactly
+    // the defect Open was fixed for, reached through a different door. A scope auditor found this; it
+    // was not disclosed in the partial status.
+    [Fact]
+    public void OpenSnapshot_OriginalIsOsReadOnly_FlagsResultAsFileSystemReadOnly()
+    {
+        var workflow = new DocumentPersistenceWorkflow([new FakeDocumentAdapter([new FileFormatDescriptor(".docx", "Word Document")])]);
+        var snapshotPath = WriteDocx("Snapshot.docx");
+        var originalPath = WriteDocx("ReadOnlyOriginal.docx");
+        File.SetAttributes(originalPath, File.GetAttributes(originalPath) | FileAttributes.ReadOnly);
+
+        try
+        {
+            var result = workflow.OpenSnapshot(snapshotPath, originalPath);
+
+            result.TargetPath.Should().Be(originalPath, "recovery adopts the original as the save target");
+            result.IsFileSystemReadOnly.Should().BeTrue(
+                "the save target is write-restricted, and the recovery path must say so just as Open does");
+        }
+        finally
+        {
+            File.SetAttributes(originalPath, File.GetAttributes(originalPath) & ~FileAttributes.ReadOnly);
+        }
+    }
+
+    [Fact]
+    public void OpenSnapshot_WritableOriginal_IsNotFlaggedFileSystemReadOnly()
+    {
+        // No-regression sibling: ordinary crash recovery onto a writable original stays editable.
+        var workflow = new DocumentPersistenceWorkflow([new FakeDocumentAdapter([new FileFormatDescriptor(".docx", "Word Document")])]);
+        var snapshotPath = WriteDocx("Snapshot2.docx");
+        var originalPath = WriteDocx("WritableOriginal.docx");
+
+        var result = workflow.OpenSnapshot(snapshotPath, originalPath);
+
+        result.IsFileSystemReadOnly.Should().BeFalse();
+    }
+
+    private string WriteDocx(string name)
+    {
+        var path = Path.Combine(_tempDir, name);
+        DocxWriter.Write(TextDocument.CreateEmpty(), path);
+        return path;
+    }
+
+    [Fact]
+    public void Open_OrdinaryWritableFile_IsNotFlaggedFileSystemReadOnly()
+    {
+        // No-regression sibling: an ordinary writable file must still open as fully editable, with
+        // the new flag reporting false rather than the check misfiring on the common case.
+        var adapter = new FakeDocumentAdapter([new FileFormatDescriptor(".docx", "Word Document")]);
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+        var path = WriteText("Writable.docx", "content");
+
+        var result = workflow.Open(path);
+
+        result.IsFileSystemReadOnly.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Open_MissingFile_StillThrowsFileNotFoundExceptionUnaffectedByReadOnlyCheck()
+    {
+        // Adjacent-case regression: the read-only probe now runs before File.OpenRead. It must not
+        // change Open's existing contract of throwing when the source file does not exist at all --
+        // the probe itself hits the missing file first (via File.GetAttributes), swallows it
+        // internally (treated the same as "not restricted"), and Open then goes on to the normal
+        // File.OpenRead call, which still throws exactly as it always did.
+        var adapter = new FakeDocumentAdapter([new FileFormatDescriptor(".docx", "Word Document")]);
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+        var path = Path.Combine(_tempDir, "DoesNotExist.docx");
+
+        var act = () => workflow.Open(path);
+
+        act.Should().Throw<FileNotFoundException>();
+    }
+
     [Fact]
     public void Save_FileModifiedSinceOpen_ThrowsAndLeavesTargetAndTempUntouched()
     {
