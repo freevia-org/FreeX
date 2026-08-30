@@ -46,18 +46,20 @@ public sealed partial class PrintRendererPageSetupTests
         var section = new Rect(24, 10, 200, PrintRenderer.CalculateHeaderFooterLineHeight(header, pictures));
 
         PrintRenderer.CalculateHeaderFooterLineHeight(header, pictures).Should().Be(42);
+        // R168-headerfooter-section-padding-1: the picture sits flush against the section's left edge
+        // (x=24, the section's own left), matching Excel and the PDF export path rather than the
+        // 2-unit pad this path used to add.
         PrintRenderer.CalculateHeaderFooterPictureRect(picture, section, TextAlignment.Left)
             .Should()
-            .Be(new Rect(26, 10, 96, 42));
+            .Be(new Rect(24, 10, 96, 42));
         // R168-presentation-headerfooter-text-inset-1: the text rect is measured from where the
-        // picture is actually DRAWN (x=26 above, 2 inside the section's own left edge) plus the 4-unit
-        // gap, so it starts at 126 -- not from the section's edge plus the picture's raw width, which
-        // put it at 124 and left a visible gap of only 2. See
-        // R168_HeaderFooterPictureTextInsetAndBandPlacementTests for the shrunk-picture half of the
-        // same defect, where the raw-width formula was off by far more than 2.
+        // picture is actually DRAWN plus the 4-unit gap -- not from the section's edge plus the
+        // picture's RAW width, which happens to give the same answer here only because this picture
+        // needs no scaling. See R168_HeaderFooterPictureTextInsetAndBandPlacementTests for the
+        // shrunk-picture case, where the two differ by far more.
         PrintRenderer.CalculateHeaderFooterTextRect(section, picture, TextAlignment.Left)
             .Should()
-            .Be(new Rect(126, 10, 98, 42));
+            .Be(new Rect(124, 10, 100, 42));
     }
 
     [Fact]

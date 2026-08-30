@@ -251,10 +251,12 @@ public static class PageContentRenderModelBuilder
 
         var headerFooter = WorksheetPrintPageContentPlanner.ResolveHeaderFooterVariant(sheet, pageNumber);
         var resolvedNow = now ?? DateTime.Now;
-        var (headerRuns, footerRuns) = BuildHeaderFooterRuns(
+        var (headerRuns, footerRuns, headerFooterPictures) = BuildHeaderFooterRuns(
             sheet,
             headerFooter.Header,
             headerFooter.Footer,
+            headerFooter.HeaderPictures,
+            headerFooter.FooterPictures,
             pageW,
             pageH,
             marginLeft,
@@ -284,7 +286,8 @@ public static class PageContentRenderModelBuilder
             headerRuns,
             footerRuns,
             pictures,
-            []);
+            [],
+            headerFooterPictures);
     }
 
     /// <summary>Scales a resolved cell font's size by the page's Scale%/Fit-to-pages ratio.</summary>
@@ -733,10 +736,25 @@ public static class PageContentRenderModelBuilder
         return new PageHeadingCell(rect, label, origin);
     }
 
-    private static (IReadOnlyList<PageHeaderFooterRun> Header, IReadOnlyList<PageHeaderFooterRun> Footer) BuildHeaderFooterRuns(
+    /// <summary>
+    /// R168-presentation-preview-headerfooter-picture-1: resolves both header/footer bands together
+    /// with the <c>&amp;G</c> pictures configured in them. The picture sets used to be dropped on the
+    /// floor here (<c>WorksheetHeaderFooterPictureSet.Empty</c> with <c>sizeToContent: false</c>), so
+    /// the only print preview Linux/macOS has showed a sheet's header/footer text but never its
+    /// picture, and sized the band as if no picture existed -- disagreeing with the PDF that same
+    /// platform exports from the same workbook. The bands are now sized to their content, exactly as
+    /// the WPF print path does, and each section's picture is resolved through the same shared
+    /// <see cref="WorksheetPrintHeaderFooterGeometryPlanner.ResolvePictureBounds"/> both export paths
+    /// use, so the preview's picture lands where the printed/exported one will.
+    /// </summary>
+    private static (IReadOnlyList<PageHeaderFooterRun> Header,
+                    IReadOnlyList<PageHeaderFooterRun> Footer,
+                    IReadOnlyList<PageHeaderFooterPictureBlock> Pictures) BuildHeaderFooterRuns(
         Sheet sheet,
         WorksheetHeaderFooter header,
         WorksheetHeaderFooter footer,
+        WorksheetHeaderFooterPictureSet headerPictures,
+        WorksheetHeaderFooterPictureSet footerPictures,
         double pageW,
         double pageH,
         double marginLeft,
@@ -753,9 +771,19 @@ public static class PageContentRenderModelBuilder
         ITextMeasurer textMeasurer)
     {
         const double lineHeight = 16.0;
+
+        // Draft quality suppresses header/footer pictures on every path (PrintRenderer's own
+        // !draftQuality guard, and WorkbookPdfContentBuilder's), so drop them before any geometry is
+        // derived from them -- the band must not grow for a picture that will not be drawn.
+        if (sheet.PrintDraftQuality)
+        {
+            headerPictures = WorksheetHeaderFooterPictureSet.Empty;
+            footerPictures = WorksheetHeaderFooterPictureSet.Empty;
+        }
+
         var headerBand = WorksheetPrintHeaderFooterGeometryPlanner.BuildBand(
             header,
-            WorksheetHeaderFooterPictureSet.Empty,
+            headerPictures,
             pageW,
             pageH,
             marginLeft,
@@ -764,13 +792,13 @@ public static class PageContentRenderModelBuilder
             headerMargin,
             sheet.HeaderFooterAlignWithMargins,
             isFooter: false,
-            draftQuality: false,
+            draftQuality: sheet.PrintDraftQuality,
             fontScale: 1.0,
             baseLineHeight: lineHeight,
-            sizeToContent: false);
+            sizeToContent: true);
         var footerBand = WorksheetPrintHeaderFooterGeometryPlanner.BuildBand(
             footer,
-            WorksheetHeaderFooterPictureSet.Empty,
+            footerPictures,
             pageW,
             pageH,
             marginLeft,
@@ -779,10 +807,10 @@ public static class PageContentRenderModelBuilder
             footerMargin,
             sheet.HeaderFooterAlignWithMargins,
             isFooter: true,
-            draftQuality: false,
+            draftQuality: sheet.PrintDraftQuality,
             fontScale: 1.0,
             baseLineHeight: lineHeight,
-            sizeToContent: false);
+            sizeToContent: true);
 
         var headerRuns = BuildBandRuns(
             header, headerBand,
@@ -790,7 +818,42 @@ public static class PageContentRenderModelBuilder
         var footerRuns = BuildBandRuns(
             footer, footerBand,
             workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
-        return (headerRuns, footerRuns);
+
+        List<PageHeaderFooterPictureBlock> pictures = [];
+        AddBandPictures(pictures, header, headerPictures, headerBand);
+        AddBandPictures(pictures, footer, footerPictures, footerBand);
+        return (headerRuns, footerRuns, pictures);
+    }
+
+    /// <summary>
+    /// R168-presentation-preview-headerfooter-picture-1: resolves one band's three sections into
+    /// page-space picture blocks. A section contributes a picture only when its text actually carries
+    /// a picture token (<see cref="PagePrintTextPlanner.HasPictureToken"/>, the shared escape-aware
+    /// test) AND a picture is configured for it -- the same pair of conditions both export paths
+    /// apply -- and its rectangle comes from the shared
+    /// <see cref="WorksheetPrintHeaderFooterGeometryPlanner.ResolvePictureBounds"/>, so it is already
+    /// uniformly scaled into the section rather than stretched to fill it.
+    /// </summary>
+    private static void AddBandPictures(
+        List<PageHeaderFooterPictureBlock> pictures,
+        WorksheetHeaderFooter value,
+        WorksheetHeaderFooterPictureSet bandPictures,
+        WorksheetPrintHeaderFooterBandGeometry geometry)
+    {
+        Add(value.Left, bandPictures.Left, geometry.Left, PageTextAlignment.Left);
+        Add(value.Center, bandPictures.Center, geometry.Center, PageTextAlignment.Center);
+        Add(value.Right, bandPictures.Right, geometry.Right, PageTextAlignment.Right);
+
+        void Add(string raw, WorksheetHeaderFooterPicture? picture, LayoutRect section, PageTextAlignment alignment)
+        {
+            if (picture is null || !WorksheetPrintHeaderFooterGeometryPlanner.HasPictureToken(raw))
+                return;
+
+            pictures.Add(new PageHeaderFooterPictureBlock(
+                WorksheetPrintHeaderFooterGeometryPlanner.ResolvePictureBounds(picture, section, alignment),
+                picture.ImageBytes,
+                picture.ContentType));
+        }
     }
 
     private static IReadOnlyList<PageHeaderFooterRun> BuildBandRuns(
@@ -849,7 +912,13 @@ public static class PageContentRenderModelBuilder
             firstRun.FontSize ?? PrintFontSize,
             firstRun.Bold,
             firstRun.Italic,
-            bounds.Left + 2,
+            // R168-headerfooter-section-padding-1: flush with the section's edge -- the page margin
+            // itself once "Align with margins" is on -- matching Excel, the PDF export path, and now
+            // the WPF print path. The old 2-unit inset was also asymmetric here: this origin is
+            // consumed together with the section's FULL width (PrintPreviewInstructionBuilder's
+            // TextRun), so centred and right-aligned band text was measured inside a box that started
+            // 2 units in and ran 2 units past the section's right edge.
+            bounds.Left,
             bounds.Top,
             bounds.Height);
         runs.Add(new PageHeaderFooterRun(bounds, text, formattedRuns, alignment, origin));

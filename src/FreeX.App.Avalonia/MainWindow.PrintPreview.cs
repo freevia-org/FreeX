@@ -19,6 +19,7 @@ using Free.Shared.Ribbon.Avalonia;
 using AvaloniaControlShapesLine = Avalonia.Controls.Shapes.Line;
 using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaImage = Avalonia.Controls.Image;
 using AvaloniaPolygon = Avalonia.Controls.Shapes.Polygon;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
@@ -1225,8 +1226,43 @@ public sealed partial class MainWindow
                 case PrintPreviewPaintKind.Polygon:
                     AddPreviewPolygon(canvas, instruction);
                     break;
+                case PrintPreviewPaintKind.Image:
+                    AddPreviewImage(canvas, instruction);
+                    break;
             }
         }
+    }
+
+    /// <summary>
+    /// R168-presentation-preview-headerfooter-picture-1: paints a header/footer <c>&amp;G</c> picture
+    /// as the real raster image, stretched to the bounds the shared geometry planner already scaled
+    /// uniformly (so <c>Stretch.Fill</c> here cannot distort it -- the rect carries the picture's own
+    /// aspect ratio). Undecodable bytes fall back to the same neutral placeholder box this preview
+    /// paints for a worksheet picture, rather than leaving a hole where the picture should be.
+    /// </summary>
+    private static void AddPreviewImage(Canvas canvas, PrintPreviewPaintInstruction instruction)
+    {
+        var width = Math.Max(0, instruction.Width);
+        var height = Math.Max(0, instruction.Height);
+        if (instruction.ImageBytes is not { Length: > 0 } bytes || !TryCreateDrawingBitmap(bytes, out var bitmap))
+        {
+            AddPreviewRectangle(canvas, PrintPreviewPaintInstruction.Rectangle(
+                new LayoutRect(instruction.Left, instruction.Top, width, height),
+                PrintPreviewInstructionBuilder.PicturePlaceholderFill));
+            return;
+        }
+
+        var image = new AvaloniaImage
+        {
+            Source = bitmap,
+            Width = width,
+            Height = height,
+            Stretch = Stretch.Fill,
+        };
+
+        Canvas.SetLeft(image, instruction.Left);
+        Canvas.SetTop(image, instruction.Top);
+        canvas.Children.Add(image);
     }
 
     private static void AddPreviewRectangle(Canvas canvas, PrintPreviewPaintInstruction instruction)
