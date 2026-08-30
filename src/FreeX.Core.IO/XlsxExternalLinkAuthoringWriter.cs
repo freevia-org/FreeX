@@ -262,12 +262,13 @@ internal static class XlsxExternalLinkAuthoringWriter
     // container -- both pre-existing entries carried in from a source package/earlier save, and any
     // just appended above, since both are resolvable identically once their backing part/rels exist in
     // the archive and their r:id is registered in workbookRelsXml.
-    private static Dictionary<string, int> BuildBookKeyOrdinals(
+    internal static Dictionary<string, int> BuildBookKeyOrdinals(
         ZipArchive archive,
         XDocument workbookRelsXml,
         XElement externalReferencesElement)
     {
         var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var workbookRelationshipsById = BuildWorkbookRelationshipsById(workbookRelsXml);
         var ordinal = 0;
         foreach (var externalReference in externalReferencesElement.Elements(WorkbookNs + "externalReference"))
         {
@@ -276,7 +277,7 @@ internal static class XlsxExternalLinkAuthoringWriter
             if (string.IsNullOrEmpty(relId))
                 continue;
 
-            var bookKey = ResolveBookKeyForWorkbookRelationshipId(archive, workbookRelsXml, relId);
+            var bookKey = ResolveBookKeyForWorkbookRelationshipId(archive, workbookRelationshipsById, relId);
             if (bookKey is not null)
                 result.TryAdd(bookKey, ordinal);
         }
@@ -284,12 +285,31 @@ internal static class XlsxExternalLinkAuthoringWriter
         return result;
     }
 
-    private static string? ResolveBookKeyForWorkbookRelationshipId(ZipArchive archive, XDocument workbookRelsXml, string relId)
+    private static Dictionary<string, XElement> BuildWorkbookRelationshipsById(XDocument workbookRelsXml)
     {
-        var relationship = workbookRelsXml.Root?
-            .Elements(PackageRelNs + "Relationship")
-            .FirstOrDefault(element => string.Equals(element.Attribute("Id")?.Value?.Trim(), relId, StringComparison.OrdinalIgnoreCase));
-        var target = relationship?.Attribute("Target")?.Value;
+        var result = new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var relationship in workbookRelsXml.Root?.Elements(PackageRelNs + "Relationship") ?? [])
+        {
+            var id = relationship.Attribute("Id")?.Value?.Trim();
+            if (!string.IsNullOrEmpty(id))
+            {
+                // Preserve the document-order winner used by the former FirstOrDefault lookup.
+                result.TryAdd(id, relationship);
+            }
+        }
+
+        return result;
+    }
+
+    private static string? ResolveBookKeyForWorkbookRelationshipId(
+        ZipArchive archive,
+        IReadOnlyDictionary<string, XElement> workbookRelationshipsById,
+        string relId)
+    {
+        if (!workbookRelationshipsById.TryGetValue(relId, out var relationship))
+            return null;
+
+        var target = relationship.Attribute("Target")?.Value;
         if (string.IsNullOrWhiteSpace(target))
             return null;
 
