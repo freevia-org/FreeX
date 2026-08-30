@@ -2997,6 +2997,98 @@ public sealed class RecalcEngine
                 return true; // INDIRECT is always volatile -- see IsVolatileFunctionName.
             }
 
+            // A Name-Manager custom function invoked with call syntax: MYCALC(A1) where the
+            // defined name MYCALC's RefersTo is a LAMBDA (Excel's documented "custom function via
+            // Name Manager" pattern). FormulaEvaluator.Functions.cs's EvaluateFunction resolves
+            // exactly this -- when the callee is neither a LET/LAMBDA-scoped binding, nor one of
+            // the AST-aware special forms, nor a built-in, it falls back to TryEvaluateNamedFormula
+            // and, if that yields a LambdaValue, invokes it -- so the LAMBDA BODY's own references
+            // (e.g. the Sheet2!$A$1 in "=LAMBDA(n,n+Sheet2!$A$1)") are genuinely read every time
+            // the calling cell evaluates. Before this case existed, the generic FunctionCallNode
+            // arm below walked only the call's ARGUMENTS, so those body references got no
+            // dependency edge at all: editing Sheet2!A1 left the calling cell permanently stale
+            // until an unrelated full recalc happened to re-evaluate it. Recurse into the resolved
+            // LAMBDA definition itself (which the LAMBDA case above then handles, binding the
+            // parameter names into local scope) so the body's precedents are registered precisely,
+            // exactly like the NamedRangeNode case already does for a BARE named-formula reference.
+            case FunctionCallNode namedLambdaCall when TryGetNamedLambdaFormulaText(
+                namedLambdaCall.FunctionName, defaultSheetId, workbook, localScopeNames,
+                out var namedLambdaText, out var namedLambdaScopeId):
+            {
+                cacheableForDependencyPlan = false;
+
+                // The call's own arguments are evaluated in the CALLER's scope, so walk them with
+                // the caller's local scope exactly like the generic case below.
+                var hasVolatile = FormulaVolatilityPolicy.IsVolatileCall(namedLambdaCall);
+                var callArguments = namedLambdaCall.Arguments;
+                for (var i = 0; i < callArguments.Count; i++)
+                {
+                    if (CollectReferences(callArguments[i], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, localScopeNames))
+                        hasVolatile = true;
+                }
+
+                // Same (name, defining-scope) cycle guard the NamedRangeNode case and the
+                // evaluator's own EvaluateNamedFormulaText use -- a Name-Manager LAMBDA is
+                // routinely self-recursive (FACT -> =LAMBDA(n,IF(n<=1,1,n*FACT(n-1)))), so the
+                // body walk must not recurse forever.
+                var namedLambdaKey = FormulaEvaluator.NamedFormulaVisitingKey(
+                    namedLambdaCall.FunctionName, namedLambdaScopeId);
+                namedFormulaStack ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (!namedFormulaStack.Add(namedLambdaKey))
+                    return hasVolatile;
+
+                try
+                {
+                    var namedLambdaAst = FormulaEvaluator.ParseFormula(namedLambdaText);
+
+                    // Only a name whose RefersTo actually parses to a LAMBDA is callable; anything
+                    // else yields #NAME? at eval time and reads nothing beyond the arguments
+                    // already walked above (EvaluateFunction's `is LambdaValue` check).
+                    if (namedLambdaAst is FunctionCallNode { Arguments.Count: >= 1 } lambdaDefinition &&
+                        string.Equals(lambdaDefinition.FunctionName, "LAMBDA", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Re-anchor the name's relative (non-$) references to formulaCell, and apply
+                        // the same self-reference fallback, exactly as the NamedRangeNode case
+                        // documents (mirroring FormulaEvaluator.ApplyRelativeNameAnchor).
+                        var namedLambdaAnchor = new CellAddress(formulaCell.Sheet, 1, 1);
+                        var shiftedLambdaAst = FormulaEvaluator.ShiftFormulaForCell(namedLambdaAst, namedLambdaAnchor, formulaCell);
+                        var effectiveLambdaAst = FormulaReferenceContainment.ContainsUnqualifiedCell(shiftedLambdaAst, formulaCell)
+                            ? namedLambdaAst
+                            : shiftedLambdaAst;
+
+                        // The body is evaluated in the LAMBDA's own scope, not the caller's: a LET
+                        // binding live at the call site is invisible inside the named formula's
+                        // body (the lambda closes over its parameters only), so passing the
+                        // caller's localScopeNames through would wrongly SUPPRESS an edge onto a
+                        // same-named defined name the body genuinely reads. Start from a null
+                        // scope; the LAMBDA case then binds the definition's own parameter names.
+                        if (CollectReferences(
+                                effectiveLambdaAst,
+                                defaultSheetId,
+                                formulaCell,
+                                workbook,
+                                refs,
+                                ref cacheableForDependencyPlan,
+                                namedFormulaStack,
+                                localScopeNames: null))
+                        {
+                            hasVolatile = true;
+                        }
+                    }
+                }
+                catch (FormulaParseException)
+                {
+                    // Unparseable RefersTo: the evaluator surfaces an error and reads nothing
+                    // further, so leave the argument edges already registered above as-is.
+                }
+                finally
+                {
+                    namedFormulaStack.Remove(namedLambdaKey);
+                }
+
+                return hasVolatile;
+            }
+
             case FunctionCallNode func:
             {
                 var containsVolatileFunction = FormulaVolatilityPolicy.IsVolatileCall(func);
@@ -3012,6 +3104,67 @@ public sealed class RecalcEngine
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Resolves a function-call name to the RefersTo text of a Name-Manager defined name that the
+    /// evaluator would invoke as a custom function, for dependency-registration purposes. Mirrors
+    /// FormulaEvaluator.Functions.cs's EvaluateFunction resolution ORDER exactly: a LET/LAMBDA-
+    /// scoped binding wins first (so a shadowed defined name must not be resolved here at all),
+    /// then the AST-aware special forms, then the built-in registry, and only a name that survives
+    /// all three falls back to the workbook's named formulas (TryEvaluateNamedFormula). Sheet-scope
+    /// beats workbook-global, matching Workbook.TryGetNamedFormulaText / the NamedRangeNode case in
+    /// <see cref="CollectReferences"/>; <paramref name="scopeSheetId"/> reports which tier the text
+    /// actually came from so the caller's cycle-guard key matches the evaluator's own.
+    /// Whether the text really is a LAMBDA is decided by the caller after parsing -- this only
+    /// answers "could this call reach a named formula's body at all".
+    /// </summary>
+    private static bool TryGetNamedLambdaFormulaText(
+        string functionName,
+        SheetId defaultSheetId,
+        FreeX.Core.Model.Workbook? workbook,
+        HashSet<string>? localScopeNames,
+        out string formulaText,
+        out SheetId? scopeSheetId)
+    {
+        formulaText = string.Empty;
+        scopeSheetId = null;
+
+        if (workbook is null)
+            return false;
+
+        // A LET binding / LAMBDA parameter holding a lambda is invoked by the same call syntax and
+        // is resolved BEFORE any workbook name (EvaluateFunction's TryResolveLambdaBinding check),
+        // so an in-scope local name shadows the defined name entirely -- its body is reached
+        // through the binding's own value expression, which CollectReferences already walked at
+        // the binding site.
+        if (localScopeNames is not null && localScopeNames.Contains(functionName))
+            return false;
+
+        // Compared case-insensitively (unlike EvaluateFunction's ordinal check on an already-
+        // canonicalised name) to match the LET/LAMBDA cases in CollectReferences itself, which are
+        // OrdinalIgnoreCase -- those arms precede this one in the switch, so anything reaching here
+        // is genuinely not a special form under either comparison.
+        if (functionName.Equals("LET", StringComparison.OrdinalIgnoreCase) ||
+            functionName.Equals("LAMBDA", StringComparison.OrdinalIgnoreCase) ||
+            functionName.Equals("SINGLE", StringComparison.OrdinalIgnoreCase) ||
+            functionName.Equals("ANCHORARRAY", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (BuiltInFunctions.TryGet(functionName, out _))
+            return false;
+
+        var text = workbook.TryGetNamedFormulaText(functionName, defaultSheetId);
+        if (text is null || string.IsNullOrWhiteSpace(text))
+            return false;
+
+        formulaText = text;
+        scopeSheetId = workbook.ScopedNamedFormulas.ContainsKey((functionName, defaultSheetId))
+            ? defaultSheetId
+            : null;
+        return true;
     }
 
     // Best-effort structural check for whether `node` contains an unqualified (implicit-sheet)
