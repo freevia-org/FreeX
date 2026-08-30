@@ -104,7 +104,11 @@ public sealed class AutoFilterPlannerSourceGuardTests
             "src",
             "FreeX.App.Host",
             "MainWindow.Viewport.cs"));
-        hostViewportSource.Should().Contain("AutoFilterHeaderButtonPlanner.GetActiveColumnOffsets(");
+        var viewportAdornmentCacheSource = File.ReadAllText(Path.Combine(
+            presentationRoot,
+            "GridInteraction",
+            "WorksheetViewportAdornmentCache.cs"));
+        viewportAdornmentCacheSource.Should().Contain("AutoFilterHeaderButtonPlanner.GetActiveColumnOffsets(");
         hostViewportSource.Should().NotContain("private static IReadOnlySet<uint>? BuildActiveAutoFilterColumns(");
     }
 
