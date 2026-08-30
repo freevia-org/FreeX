@@ -86,10 +86,33 @@ public sealed class CompositeDocumentCommand : IDocumentCommand
             }
             catch
             {
-                // A child threw mid-apply: roll back the children that already
-                // succeeded so the composite stays atomic (no user-unauthored partial
-                // state), then let the caller see the failure -- DocumentCommandBus.Execute
-                // never pushes an undo entry for a command whose Apply throws.
+                // A child threw mid-apply. Roll back in two stages so the composite stays
+                // atomic (no user-unauthored partial state), then let the caller see the
+                // failure -- DocumentCommandBus.Execute never pushes an undo entry for a
+                // command whose Apply throws.
+                //
+                // Stage 1 -- the THROWING child itself. It is deliberately absent from
+                // _applied (it never returned), but an IDocumentCommand that mutates in
+                // several steps can already have changed the document before it threw:
+                // FormatParagraphRunsCommand, for instance, snapshots every run's formatting
+                // and then rewrites the runs one at a time inside a loop, so a transform that
+                // throws on run K leaves runs 0..K-1 rewritten. Its Revert() restores from
+                // the snapshot taken before that loop, so it CAN undo a partial apply -- we
+                // just have to ask it. Best-effort and wrapped in its own try/catch: a child
+                // whose Revert is unhappy about half-applied state must not mask the original
+                // exception nor abort the sibling rollback below. Mirrors FreeX's
+                // CompositeWorkbookCommand.
+                try
+                {
+                    cmd.Revert(context);
+                }
+                catch
+                {
+                    // Best-effort: nothing more can be done for this child, and the original
+                    // exception is the one the caller needs to see.
+                }
+
+                // Stage 2 -- the siblings that fully succeeded before it.
                 RevertApplied(context);
                 throw;
             }

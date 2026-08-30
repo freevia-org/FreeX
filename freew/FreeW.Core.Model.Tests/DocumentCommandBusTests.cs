@@ -148,6 +148,99 @@ public class DocumentCommandBusTests
         bus.CanUndo.Should().BeFalse();
     }
 
+    // R175-documentcommands-composite-throwing-child-revert-1: the R137 fix above rolled back
+    // only the children in _applied -- and a child is added to _applied AFTER its Apply returns,
+    // so the child that actually threw was never reverted. That is invisible with a
+    // ThrowingCommand whose Apply mutates nothing, but a real multi-step IDocumentCommand can
+    // already have changed the document before it throws.
+    //
+    // Production path this models: DocumentEditingSession.FormatParagraphRuns (FreeW.App.-
+    // Presentation/Editing/DocumentEditingSession.cs:589) builds one FormatParagraphRunsCommand
+    // per selected paragraph and hands them to DocumentUndoGroupExecutor.Execute, which commits
+    // them as a single CompositeDocumentCommand("Character Formatting"). Composite.Apply is what
+    // DocumentCommandBus.Redo calls, so Ctrl+Z then Ctrl+Y over a multi-paragraph character-
+    // format edit (DocumentView.ApplyCharacterFormattingToParagraphs, the character
+    // border/shading gesture) re-runs it. FormatParagraphRunsCommand rewrites its paragraph's
+    // runs one at a time inside a loop, calling the caller-supplied transform per run, so a
+    // transform that throws on run K leaves runs 0..K-1 already rewritten -- exactly the shape
+    // below. Its Revert() restores from the snapshot taken before that loop, so asking the
+    // throwing child to revert genuinely restores the document; the composite just never asked.
+    [Fact]
+    public void CompositeCommand_ThrowingChildAlreadyMutated_RevertsThatChildToo()
+    {
+        var (doc, bus) = New();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("a"));
+        paragraph.Runs.Add(new Run("b"));
+        paragraph.Runs.Add(new Run("c"));
+        doc.Blocks.Add(paragraph);
+        var formattingBefore = paragraph.Runs.Select(r => r.Formatting).ToArray();
+
+        // Child 1 succeeds with a real mutation; it shifts the paragraph to index 1.
+        var first = new InsertParagraphCommand(0, new Paragraph("A"));
+        // Child 2 mutates run 0, then throws while transforming run 1.
+        var calls = 0;
+        var second = new FormatParagraphRunsCommand(1, formatting =>
+            ++calls == 2
+                ? throw new InvalidOperationException("transform boom")
+                : formatting with { Bold = true });
+        var composite = new CompositeDocumentCommand("Character Formatting", [first, second]);
+
+        Action act = () => bus.Execute(composite);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("transform boom");
+        calls.Should().Be(2, "the transform must have mutated run 0 before throwing on run 1");
+
+        // The sibling rollback the R137 fix already covered.
+        doc.Blocks.Should().ContainSingle();
+        doc.PlainText.Should().Be("abc");
+        // The differentiator: before this fix run 0 kept Bold = true, leaving the document in a
+        // partially formatted state the user never authored and that no undo entry could reach.
+        paragraph.Runs.Select(r => r.Formatting).Should().Equal(formattingBefore);
+        bus.CanUndo.Should().BeFalse();
+    }
+
+    /// <summary>Mutates the document, then throws -- and its Revert throws too. Proves the
+    /// throwing child's best-effort revert cannot mask the original exception nor abort the
+    /// sibling rollback.</summary>
+    private sealed class MutateThenThrowCommand(bool throwOnRevert = false) : IDocumentCommand
+    {
+        public string Label => "Mutate then throw";
+
+        public void Apply(IDocumentCommandContext context)
+        {
+            context.Document.Blocks.Add(new Paragraph("partial"));
+            throw new InvalidOperationException("apply boom");
+        }
+
+        public void Revert(IDocumentCommandContext context)
+        {
+            if (throwOnRevert)
+                throw new InvalidOperationException("revert boom");
+            var blocks = context.Document.Blocks;
+            if (blocks.Count > 0 && blocks[^1] is Paragraph { } p && p.PlainText == "partial")
+                blocks.RemoveAt(blocks.Count - 1);
+        }
+    }
+
+    [Fact]
+    public void CompositeCommand_ThrowingChildRevertAlsoThrows_StillRollsBackSiblings_AndSurfacesOriginal()
+    {
+        var (doc, bus) = New();
+        var first = new InsertParagraphCommand(0, new Paragraph("A"));
+        var second = new MutateThenThrowCommand(throwOnRevert: true);
+        var composite = new CompositeDocumentCommand("Two-step", [first, second]);
+
+        Action act = () => bus.Execute(composite);
+
+        // The child's own revert failure must not replace the exception the caller needs.
+        act.Should().Throw<InvalidOperationException>().WithMessage("apply boom");
+        // ...nor abort the sibling rollback: "A" is gone, only the child's own unrecoverable
+        // "partial" paragraph survives.
+        doc.Blocks.Should().ContainSingle().Which.As<Paragraph>().PlainText.Should().Be("partial");
+        bus.CanUndo.Should().BeFalse();
+    }
+
     // Sibling no-regression: a composite whose children all succeed still applies and reverts
     // normally through the same Apply()/Revert() code path exercised above.
     [Fact]
