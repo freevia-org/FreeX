@@ -1,6 +1,7 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
+using System.Diagnostics;
 
 namespace FreeX.Core.Calc.Tests;
 
@@ -207,6 +208,138 @@ public partial class DataValidationTests
             .Should().BeNull("10:30 is within the workday validation window");
         DataValidationService.Validate(dv, new NumberValue(new TimeSpan(18, 0, 0).TotalDays))
             .Should().NotBeNull("18:00 is outside the workday validation window");
+    }
+
+    [Fact]
+    public void Validate_Date_GreaterThan_PreservesOperatorAndCustomError()
+    {
+        var dv = new DataValidation
+        {
+            Type = DvType.Date,
+            Operator = DvOperator.GreaterThan,
+            Formula1 = "2026-05-01",
+            ErrorMessage = "Choose a later date.",
+        };
+
+        DataValidationService.Validate(dv, DateTimeValue.FromDateTime(new DateTime(2026, 5, 2)))
+            .Should().BeNull("May 2 is later than the resolved May 1 bound");
+        DataValidationService.Validate(dv, DateTimeValue.FromDateTime(new DateTime(2026, 5, 1)))
+            .Should().Be("Choose a later date.", "an equal date fails the strict comparison");
+    }
+
+    [Fact]
+    public void Validate_Time_NotBetween_NormalizesFractionalDayAndPreservesCustomError()
+    {
+        var dv = new DataValidation
+        {
+            Type = DvType.Time,
+            Operator = DvOperator.NotBetween,
+            Formula1 = "09:00",
+            Formula2 = "17:30",
+            ErrorMessage = "Choose a time outside working hours.",
+        };
+
+        DataValidationService.Validate(dv, new NumberValue(2 + new TimeSpan(10, 30, 0).TotalDays))
+            .Should().Be("Choose a time outside working hours.", "the whole-day portion is ignored for time rules");
+        DataValidationService.Validate(dv, new NumberValue(2 + new TimeSpan(18, 0, 0).TotalDays))
+            .Should().BeNull("18:00 is outside the excluded window after fractional-day normalization");
+    }
+
+    [Theory]
+    [InlineData(DvType.Date, "not-a-date")]
+    [InlineData(DvType.Time, "not-a-time")]
+    public void Validate_DateOrTime_WithMalformedBound_IsTreatedAsValid(DvType type, string malformedBound)
+    {
+        var dv = new DataValidation
+        {
+            Type = type,
+            Operator = DvOperator.Equal,
+            Formula1 = malformedBound,
+        };
+
+        DataValidationService.Validate(dv, new NumberValue(0.5))
+            .Should().BeNull("an unresolved validation bound cannot be enforced");
+    }
+
+    [Fact]
+    public void Validate_Time_GreaterThan_ResolvesAndNormalizesContextualBound()
+    {
+        var (workbook, sheet) = MakeWorkbook();
+        var boundAddress = new CellAddress(sheet.Id, 1, 1);
+        var targetAddress = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(
+            boundAddress,
+            Cell.FromValue(DateTimeValue.FromDateTime(new DateTime(2026, 5, 1, 9, 0, 0))));
+
+        var dv = new DataValidation
+        {
+            Type = DvType.Time,
+            Operator = DvOperator.GreaterThan,
+            Formula1 = "=A1",
+        };
+
+        DataValidationService.Validate(
+                dv,
+                new NumberValue(new TimeSpan(10, 0, 0).TotalDays),
+                sheet,
+                targetAddress,
+                workbook)
+            .Should().BeNull("10:00 is later than the 09:00 time resolved from A1");
+        DataValidationService.Validate(
+                dv,
+                new NumberValue(new TimeSpan(8, 0, 0).TotalDays),
+                sheet,
+                targetAddress,
+                workbook)
+            .Should().NotBeNull("08:00 is earlier than the 09:00 time resolved from A1");
+    }
+
+    [BenchmarkFact]
+    public void Benchmark_ValidateResolvedDateAndTimeBounds_ReportsTimingAndAllocation()
+    {
+        const int iterations = 100_000;
+        var dateRule = new DataValidation
+        {
+            Type = DvType.Date,
+            Operator = DvOperator.Between,
+            Formula1 = "2026-01-01",
+            Formula2 = "2026-12-31",
+        };
+        var timeRule = new DataValidation
+        {
+            Type = DvType.Time,
+            Operator = DvOperator.Between,
+            Formula1 = "09:00",
+            Formula2 = "17:30",
+        };
+        var dateValue = DateTimeValue.FromDateTime(new DateTime(2026, 8, 30));
+        var timeValue = new NumberValue(new TimeSpan(12, 0, 0).TotalDays);
+
+        DataValidationService.Validate(dateRule, dateValue).Should().BeNull();
+        DataValidationService.Validate(timeRule, timeValue).Should().BeNull();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var validCount = 0;
+        var stopwatch = Stopwatch.StartNew();
+        for (var iteration = 0; iteration < iterations; iteration++)
+        {
+            if (DataValidationService.Validate(dateRule, dateValue) is null)
+                validCount++;
+            if (DataValidationService.Validate(timeRule, timeValue) is null)
+                validCount++;
+        }
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        validCount.Should().Be(iterations * 2);
+        Console.WriteLine(
+            "PERF DATAVALIDATION_RESOLVED_BOUNDS " +
+            $"validations={iterations * 2} total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ns={stopwatch.Elapsed.TotalNanoseconds / (iterations * 2):F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
     }
 
     // ─── WholeNumber bounds resolved from cell references (F11) ───────────────
