@@ -112,6 +112,30 @@ public sealed class R163_PivotSlicerSourceFieldRenameResilienceTests
     }
 
     [Fact]
+    public void DuplicateSheet_ThenRenameCopiedSourceHeader_ClonedSlicerRetainsPositionalFallback()
+    {
+        var (workbook, sheet, _) = BuildPivotOnRegionAmount();
+        var context = new TestCommandContext(workbook);
+        new AddSlicerCommand("Region Slicer", "PT1", "Region").Apply(context).Success.Should().BeTrue();
+
+        new DuplicateSheetCommand(sheet.Id).Apply(context).Success.Should().BeTrue();
+
+        var copySheet = workbook.Sheets[1];
+        var copyPivot = copySheet.PivotTables.Should().ContainSingle().Subject;
+        var copiedSlicer = workbook.Slicers.Single(slicer =>
+            string.Equals(slicer.SourceSheetName, copySheet.Name, StringComparison.Ordinal));
+        copiedSlicer.SourceFieldIndex.Should().Be(0);
+
+        copySheet.SetCell(Addr(copySheet, "A1"), new TextValue("Territory"));
+        PivotTableRefreshService.Refresh(workbook, copySheet, copyPivot, rescanCacheSharedItems: true);
+
+        var outcome = new SetSlicerSelectionCommand(copiedSlicer.Name, ["West"]).Apply(context);
+
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+        copiedSlicer.SourceFieldName.Should().Be("Territory");
+    }
+
+    [Fact]
     public void SetSlicerSelectionCommand_Apply_NameStaleAndNoKnownFieldIndex_StillFailsCleanly()
     {
         // Sibling / no-regression case: a slicer whose SourceFieldIndex was never resolved (e.g. loaded

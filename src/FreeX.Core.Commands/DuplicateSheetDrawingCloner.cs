@@ -120,36 +120,14 @@ internal static class DuplicateSheetDrawingCloner
                      .Where(s => string.Equals(s.SourceSheetName, source.Name, StringComparison.OrdinalIgnoreCase))
                      .ToList())
         {
-            var clone = new SlicerModel
+            var state = slicer.CaptureCopyState() with
             {
                 Name = GenerateUniqueName(workbook.Slicers.Select(s => s.Name), slicer.Name),
-                Caption = slicer.Caption,
                 CacheName = GenerateUniqueName(workbook.Slicers.Select(s => s.CacheName), slicer.CacheName),
-                SourcePivotTableName = slicer.SourcePivotTableName,
-                // R133-io-slicer-timeline-multipivot: copy the list rather than aliasing the source
-                // slicer's instance (same reasoning as CacheItems below), and rather than leaving it
-                // to the property's own `= []` default, which would silently drop every OTHER pivot
-                // connection this slicer carries beyond SourcePivotTableName.
-                ConnectedPivotTableNames = slicer.ConnectedPivotTableNames.ToList(),
-                SourceFieldName = slicer.SourceFieldName,
-                StyleName = slicer.StyleName,
                 PackagePart = string.Empty,
-                DrawingAnchor = slicer.DrawingAnchor,
-                DrawingShapeName = slicer.DrawingShapeName,
-                ColumnCount = slicer.ColumnCount,
-                ShowCaption = slicer.ShowCaption,
-                SourceSheetName = copy.Name,
-                SourceTableId = slicer.SourceTableId,
-                SourceTableColumnId = slicer.SourceTableColumnId,
-                // R117-commands-pivot-slicer-growth: CacheItems is now a mutable List<> (a later
-                // refresh can append newly-appeared indices to it); copy the list rather than aliasing
-                // the source slicer's instance, or a refresh-driven append to one would silently mutate
-                // the other's cache items too.
-                CacheItems = slicer.CacheItems.ToList(),
-                AvailableItems = slicer.AvailableItems,
-                SelectionCaptured = slicer.SelectionCaptured
+                SourceSheetName = copy.Name
             };
-            clone.SelectedItems.AddRange(slicer.SelectedItems);
+            var clone = SlicerModel.FromCopyState(state);
             workbook.Slicers.Add(clone);
             clonedSlicers.Add(clone);
         }
