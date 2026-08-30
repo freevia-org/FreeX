@@ -19,18 +19,21 @@ public sealed partial class ViewportService
 
         var bounds = new List<DrawingObjectBounds>(
             sheet.DrawingShapes.Count + sheet.Pictures.Count + sheet.TextBoxes.Count);
+        var shapesById = BuildFirstById(sheet.DrawingShapes, static shape => shape.Id);
+        var picturesById = BuildFirstById(sheet.Pictures, static picture => picture.Id);
+        var textBoxesById = BuildFirstById(sheet.TextBoxes, static textBox => textBox.Id);
         foreach (var entry in DrawingObjectZOrder.GetNormalizedOrder(sheet))
         {
             switch (entry.Kind)
             {
-                case SelectionPaneObjectKind.Shape:
-                    AddShapeBounds(sheet, theme, entry.Id, rowMetrics, colMetrics, bounds);
+                case SelectionPaneObjectKind.Shape when shapesById.TryGetValue(entry.Id, out var shape):
+                    AddShapeBounds(shape, theme, rowMetrics, colMetrics, bounds);
                     break;
-                case SelectionPaneObjectKind.Picture:
-                    AddPictureBounds(sheet, entry.Id, rowMetrics, colMetrics, bounds);
+                case SelectionPaneObjectKind.Picture when picturesById.TryGetValue(entry.Id, out var picture):
+                    AddPictureBounds(picture, rowMetrics, colMetrics, bounds);
                     break;
-                case SelectionPaneObjectKind.TextBox:
-                    AddTextBoxBounds(sheet, theme, entry.Id, rowMetrics, colMetrics, bounds);
+                case SelectionPaneObjectKind.TextBox when textBoxesById.TryGetValue(entry.Id, out var textBox):
+                    AddTextBoxBounds(textBox, theme, rowMetrics, colMetrics, bounds);
                     break;
             }
         }
@@ -38,16 +41,29 @@ public sealed partial class ViewportService
         return bounds;
     }
 
+    private static Dictionary<Guid, T> BuildFirstById<T>(
+        IReadOnlyList<T> items,
+        Func<T, Guid> getId)
+        where T : class
+    {
+        var byId = new Dictionary<Guid, T>(items.Count);
+        for (var index = 0; index < items.Count; index++)
+        {
+            var item = items[index];
+            byId.TryAdd(getId(item), item);
+        }
+
+        return byId;
+    }
+
     private static void AddShapeBounds(
-        Sheet sheet,
+        DrawingShapeModel shape,
         WorkbookTheme theme,
-        Guid id,
         IReadOnlyList<RowMetric> rowMetrics,
         IReadOnlyList<ColMetric> colMetrics,
         List<DrawingObjectBounds> bounds)
     {
-        if (!TryFindDrawingShape(sheet, id, out var shape) ||
-            !shape.IsVisible ||
+        if (!shape.IsVisible ||
             !TryCreateAnchoredDrawingObjectBounds(
                 rowMetrics,
                 colMetrics,
@@ -135,14 +151,12 @@ public sealed partial class ViewportService
     }
 
     private static void AddPictureBounds(
-        Sheet sheet,
-        Guid id,
+        PictureModel picture,
         IReadOnlyList<RowMetric> rowMetrics,
         IReadOnlyList<ColMetric> colMetrics,
         List<DrawingObjectBounds> bounds)
     {
-        if (!TryFindPicture(sheet, id, out var picture) ||
-            !picture.IsVisible ||
+        if (!picture.IsVisible ||
             !TryCreateAnchoredDrawingObjectBounds(
                 rowMetrics,
                 colMetrics,
@@ -189,15 +203,13 @@ public sealed partial class ViewportService
     }
 
     private static void AddTextBoxBounds(
-        Sheet sheet,
+        TextBoxModel textBox,
         WorkbookTheme theme,
-        Guid id,
         IReadOnlyList<RowMetric> rowMetrics,
         IReadOnlyList<ColMetric> colMetrics,
         List<DrawingObjectBounds> bounds)
     {
-        if (!TryFindTextBox(sheet, id, out var textBox) ||
-            !textBox.IsVisible ||
+        if (!textBox.IsVisible ||
             !TryCreateAnchoredDrawingObjectBounds(
                 rowMetrics,
                 colMetrics,
@@ -298,51 +310,6 @@ public sealed partial class ViewportService
         }
 
         metric = null!;
-        return false;
-    }
-
-    private static bool TryFindDrawingShape(Sheet sheet, Guid id, out DrawingShapeModel shape)
-    {
-        for (var i = 0; i < sheet.DrawingShapes.Count; i++)
-        {
-            if (sheet.DrawingShapes[i].Id == id)
-            {
-                shape = sheet.DrawingShapes[i];
-                return true;
-            }
-        }
-
-        shape = null!;
-        return false;
-    }
-
-    private static bool TryFindPicture(Sheet sheet, Guid id, out PictureModel picture)
-    {
-        for (var i = 0; i < sheet.Pictures.Count; i++)
-        {
-            if (sheet.Pictures[i].Id == id)
-            {
-                picture = sheet.Pictures[i];
-                return true;
-            }
-        }
-
-        picture = null!;
-        return false;
-    }
-
-    private static bool TryFindTextBox(Sheet sheet, Guid id, out TextBoxModel textBox)
-    {
-        for (var i = 0; i < sheet.TextBoxes.Count; i++)
-        {
-            if (sheet.TextBoxes[i].Id == id)
-            {
-                textBox = sheet.TextBoxes[i];
-                return true;
-            }
-        }
-
-        textBox = null!;
         return false;
     }
 

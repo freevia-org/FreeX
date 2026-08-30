@@ -43,11 +43,12 @@ public static class DrawingObjectZOrder
 
     private static void AddNormalizedEntries(Sheet sheet, List<DrawingObjectZOrderEntry> normalized)
     {
+        var present = BuildPresentObjectSet(sheet);
         var seen = new HashSet<DrawingObjectZOrderEntry>();
         foreach (var entry in sheet.DrawingObjectZOrder)
         {
             if (!IsSupportedKind(entry.Kind) ||
-                !ContainsObject(sheet, entry) ||
+                !present.Contains(entry) ||
                 !seen.Add(entry))
             {
                 continue;
@@ -60,6 +61,20 @@ public static class DrawingObjectZOrder
         AddMissingPictures(sheet, normalized, seen);
         AddMissingTextBoxes(sheet, normalized, seen);
         AddMissingCharts(sheet, normalized, seen);
+    }
+
+    private static HashSet<DrawingObjectZOrderEntry> BuildPresentObjectSet(Sheet sheet)
+    {
+        var present = new HashSet<DrawingObjectZOrderEntry>(SupportedObjectCount(sheet));
+        foreach (var shape in sheet.DrawingShapes)
+            present.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id));
+        foreach (var picture in sheet.Pictures)
+            present.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id));
+        foreach (var textBox in sheet.TextBoxes)
+            present.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id));
+        foreach (var chart in sheet.Charts)
+            present.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Chart, chart.Id));
+        return present;
     }
 
     private static void AddMissingShapes(

@@ -223,6 +223,37 @@ public sealed class DrawingObjectRenderPlannerTests
             bounds => bounds.FlipHorizontal && bounds.FlipVertical);
     }
 
+    [Fact]
+    public void GetViewport_DuplicateDrawingIdsPreserveFirstModelWinsBehavior()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sharedId = Guid.NewGuid();
+        var first = new DrawingShapeModel
+        {
+            Id = sharedId,
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Name = "First",
+        };
+        var duplicate = new DrawingShapeModel
+        {
+            Id = sharedId,
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Name = "Duplicate",
+        };
+        sheet.DrawingShapes.Add(first);
+        sheet.DrawingShapes.Add(duplicate);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, sharedId));
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 120, 120));
+
+        viewport.DrawingObjects.Should().ContainSingle();
+        viewport.DrawingObjects[0].DisplayName.Should().Be("First");
+    }
+
     // ── Wave 3: outline width/dash/no-fill + shape text projection ──────────────────────────────
 
     [Fact]
