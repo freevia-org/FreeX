@@ -6685,21 +6685,7 @@ public sealed class WorkbookSession : IDisposable
     {
         foreach (var rule in sheet.DataValidations)
         {
-            if (DataValidationOverlaps(rule, range))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool DataValidationOverlaps(DataValidation rule, GridRange range)
-    {
-        if (rule.AppliesTo.Overlaps(range))
-            return true;
-
-        foreach (var ruleRange in rule.AdditionalRanges)
-        {
-            if (ruleRange.Overlaps(range))
+            if (rule.Overlaps(range))
                 return true;
         }
 

@@ -95,6 +95,36 @@ public sealed class DataValidation
         return clone;
     }
 
+    public bool Overlaps(GridRange range)
+    {
+        if (AppliesTo.Overlaps(range))
+            return true;
+
+        foreach (var additionalRange in AdditionalRanges)
+        {
+            if (additionalRange.Overlaps(range))
+                return true;
+        }
+
+        return false;
+    }
+
+    public bool Overlaps(DataValidation other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        if (other.Overlaps(AppliesTo))
+            return true;
+
+        foreach (var additionalRange in AdditionalRanges)
+        {
+            if (other.Overlaps(additionalRange))
+                return true;
+        }
+
+        return false;
+    }
+
     public bool HasSameSettings(DataValidation? other, bool includeNativeMetadata = false)
     {
         if (other is null ||

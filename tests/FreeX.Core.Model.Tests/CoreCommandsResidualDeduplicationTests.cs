@@ -248,16 +248,26 @@ public sealed class CoreCommandsResidualDeduplicationTests
         foreach (var file in new[]
                  {
                      "ApplyConditionalFormatCommand.cs",
-                     "PasteConditionalFormatsCommand.cs",
-                     "SetDataValidationCommand.cs",
-                     "PasteDataValidationCommand.cs",
-                     "FormatPainterDataValidationCommand.cs"
+                     "PasteConditionalFormatsCommand.cs"
                  })
         {
             var source = ModelSourceTestSupport.ReadCommandsSource(file);
             source.Should().Contain("GridRangeSubtraction.Subtract(", file);
             source.Should().NotContain("IEnumerable<GridRange> Subtract", file);
         }
+
+        foreach (var file in new[]
+                 {
+                     "SetDataValidationCommand.cs",
+                     "PasteDataValidationCommand.cs",
+                     "FormatPainterDataValidationCommand.cs"
+                 })
+        {
+            ModelSourceTestSupport.ReadCommandsSource(file)
+                .Should().Contain("DataValidationRangeOperations.Subtract", file);
+        }
+        ModelSourceTestSupport.ReadCommandsSource("DataValidationRangeOperations.cs")
+            .Should().Contain("GridRangeSubtraction.Subtract(");
 
         ModelSourceTestSupport.ReadCommandsSource("Commands.cs").Should().Contain("CellEditCompanionSnapshot");
         ModelSourceTestSupport.ReadCommandsSource("PasteCellsCommand.cs").Should().Contain("CellEditCompanionSnapshot");

@@ -366,13 +366,14 @@ public static class CommandGuards
         if (!sheet.HasArrayOrSpillMembers && !sheet.HasDataTableRanges)
             return null;
 
+        var orderedAddresses = addresses as IReadOnlyList<CellAddress> ?? addresses.ToArray();
         HashSet<CellAddress>? addressSet = null;
 
-        foreach (var address in addresses)
+        foreach (var address in orderedAddresses)
         {
             if (sheet.HasArrayOrSpillMembers && sheet.TryGetArrayExtent(address, out var anchor, out var rows, out var cols))
             {
-                addressSet ??= new HashSet<CellAddress>(addresses);
+                addressSet ??= new HashSet<CellAddress>(orderedAddresses);
 
                 var isLegacyCseArray = (sheet.GetCell(anchor)?.LegacyArrayRows ?? 0) > 0;
 
@@ -422,7 +423,7 @@ public static class CommandGuards
             // change part of a Data Table.", while still allowing the whole body to be replaced at once.
             if (sheet.HasDataTableRanges && sheet.TryGetDataTableRange(address, out var dataTableRange))
             {
-                addressSet ??= new HashSet<CellAddress>(addresses);
+                addressSet ??= new HashSet<CellAddress>(orderedAddresses);
 
                 foreach (var member in dataTableRange.AllCells())
                 {

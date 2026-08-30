@@ -19,6 +19,7 @@ public partial class MainWindow
         _statusBarStatsCache.Clear();
         _sparklineValueCache.Clear();
         _worksheetViewportAdornmentCache.Clear();
+        _viewportNativeVisualFilterCache.Clear();
     }
 
     private void RefreshKeyLockIndicators()
