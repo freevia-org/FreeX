@@ -1,4 +1,5 @@
 using FreeP.App.Media;
+using LibVLCSharp.Shared;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -15,6 +16,33 @@ public sealed class MediaPlaybackBackendTests
         availability.Capabilities.Audio.Should().BeFalse();
         availability.Capabilities.VideoSurface.Should().BeFalse();
         availability.FailureReason.Should().Contain("native");
+        factory.TryCreate(out var backend, out var failure).Should().BeFalse();
+        backend.Should().BeNull();
+        failure!.Kind.Should().Be(MediaPlaybackFailureKind.NativeLibraryUnavailable);
+    }
+
+    // Round 172: the fallback above only covers a bootstrap that RETURNS false. Real LibVLCSharp
+    // reports missing natives by THROWING its own VLCException, which derives straight from
+    // Exception and so matched none of the framework types TryCreate caught -- it escaped, and
+    // Probe(), whose contract is to report unavailability rather than throw, threw instead. The
+    // pre-existing coverage could not see this: it exercised the real runtime, so it only failed on
+    // a machine without the native package. Injecting the throw pins the degradation path itself.
+    [Fact]
+    public void LibVlcFactory_ReportsFallbackWhenNativeBootstrapThrowsVlcException()
+    {
+        var factory = new LibVlcMediaPlaybackBackendFactory(
+            initialize: () => throw new VLCException("Failed to load required native libraries."));
+
+        var probe = () => factory.Probe();
+
+        probe.Should().NotThrow("a missing LibVLC runtime is an expected deployment state, not a crash");
+        var availability = factory.Probe();
+        availability.IsAvailable.Should().BeFalse();
+        availability.Capabilities.BackendName.Should().Be("LibVLC");
+        availability.Capabilities.Audio.Should().BeFalse();
+        availability.Capabilities.VideoSurface.Should().BeFalse();
+        availability.FailureReason.Should().NotBeNullOrWhiteSpace();
+
         factory.TryCreate(out var backend, out var failure).Should().BeFalse();
         backend.Should().BeNull();
         failure!.Kind.Should().Be(MediaPlaybackFailureKind.NativeLibraryUnavailable);
