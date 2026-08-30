@@ -1,6 +1,5 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-using System.Globalization;
 
 namespace FreeX.App.Presentation.Charts.Editing;
 
@@ -123,14 +122,22 @@ public static class ChartBarFormatPlanner
         out ChartBarFormatInput input,
         out ChartBarFormatParseIssue issue)
     {
-        if (!TryParseClampedInt(gapWidthText, MinGapWidth, MaxGapWidth, out var gapWidth))
+        if (!NumericInputParser.TryParseInt32InRange(
+                gapWidthText,
+                MinGapWidth,
+                MaxGapWidth,
+                out var gapWidth))
         {
             input = default;
             issue = ChartBarFormatParseIssue.GapWidth;
             return false;
         }
 
-        if (!TryParseClampedInt(overlapText, MinOverlap, MaxOverlap, out var overlap))
+        if (!NumericInputParser.TryParseInt32InRange(
+                overlapText,
+                MinOverlap,
+                MaxOverlap,
+                out var overlap))
         {
             input = default;
             issue = ChartBarFormatParseIssue.Overlap;
@@ -156,10 +163,4 @@ public static class ChartBarFormatPlanner
             BarOverlap: normalized.BarOverlap);
     }
 
-    private static bool TryParseClampedInt(string text, int min, int max, out int value) =>
-        TryParseInt(text, out value) && value >= min && value <= max;
-
-    private static bool TryParseInt(string text, out int value) =>
-        int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value)
-        || int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
 }
