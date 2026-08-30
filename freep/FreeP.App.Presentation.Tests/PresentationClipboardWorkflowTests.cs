@@ -209,6 +209,42 @@ public sealed class PresentationClipboardWorkflowTests
             "a wrapped cell is still one row of a real table");
     }
 
+    /// <summary>
+    /// r172 follow-up. Row splitting became quote-aware in r169, but the column-count check on the
+    /// next line still used a raw '\t' split. FreeX quotes a cell whose text contains a literal tab
+    /// (RequiresTsvQuoting treats tab exactly like a quote or a newline), so that row appeared to
+    /// have one column too many, the counts disagreed, and a genuine 2x2 range copy was rejected as
+    /// non-tabular -- pasted as the flat tab-riddled text box this check exists to prevent, even
+    /// though ClipboardTablePlanner.SplitCells would have rebuilt the cell correctly. Both now use
+    /// the same quote-aware field splitter.
+    /// </summary>
+    [Fact]
+    public void ApplyPaste_RangeCopyWithATabInsideACell_StillCreatesATable()
+    {
+        var (editor, slide) = CreateEditor();
+        var content = new PresentationClipboardContent(Text: "A\t\"B\tC\"\r\nD\tE");
+
+        content.HasTabularText.Should().BeTrue(
+            "a tab inside a quoted field is cell content, not an extra column");
+
+        PresentationClipboardWorkflow.ApplyPaste(
+            PresentationClipboardWorkflow.PreparePaste(editor),
+            content,
+            ownCopyIsCurrent: false);
+
+        var pasted = slide.Shapes[^1];
+        pasted.Kind.Should().Be(SlideShapeKind.Table,
+            "a cell containing a literal tab is still a real 2x2 table");
+        pasted.Table.Should().NotBeNull();
+        pasted.Table!.Rows.Should().HaveCount(2);
+        pasted.Table.Rows[0].Cells.Should().HaveCount(2);
+        CellText(pasted.Table, 0, 0).Should().Be("A");
+        CellText(pasted.Table, 0, 1).Should().Be("B\tC",
+            "the quoted cell's own tab must survive into the cell's text");
+        CellText(pasted.Table, 1, 0).Should().Be("D");
+        CellText(pasted.Table, 1, 1).Should().Be("E");
+    }
+
     [Fact]
     public void ApplyPaste_TabIndentedTextWithNoImage_StaysATextBox()
     {
@@ -532,6 +568,11 @@ public sealed class PresentationClipboardWorkflowTests
             TextBody = body,
         };
     }
+
+    private static string CellText(TableShape table, int row, int col) =>
+        string.Concat(table.Rows[row].Cells[col].TextBody!.Paragraphs
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Text));
 
     private static string ExtractText(SlideShape shape) =>
         string.Concat(shape.TextBody!.Paragraphs.SelectMany(p => p.Runs).Select(run => run.Text));

@@ -62,11 +62,18 @@ public sealed record PresentationClipboardContent(
             if (lines.Length < 2)
                 return false;
 
-            var columns = lines[0].Split('\t').Length;
-            if (columns < 2 || lines.Any(line => line.Split('\t').Length != columns))
+            // r172 follow-up: count fields quote-aware too, not just rows. FreeX quotes a cell
+            // whose text contains a literal tab (RequiresTsvQuoting treats tab like quote/CR/LF),
+            // so a raw '\t' split saw an extra column in that one row, the counts disagreed, and
+            // the whole range was rejected as non-tabular -- while ClipboardTablePlanner.SplitCells
+            // would have reconstructed the cell correctly had it ever been handed the body. Same
+            // splitter for both now.
+            var rows = lines.Select(ClipboardTsvFields.SplitFields).ToArray();
+            var columns = rows[0].Count;
+            if (columns < 2 || rows.Any(row => row.Count != columns))
                 return false;
 
-            return lines.Any(line => line.Split('\t')[0].Length > 0);
+            return rows.Any(row => row[0].Length > 0);
         }
     }
 
