@@ -434,21 +434,12 @@ public static class ManageConditionalFormatsPlanner
         return cf;
     }
 
-    public static bool RangesOverlap(GridRange a, GridRange b)
-    {
-        if (a.Start.Sheet != b.Start.Sheet)
-            return false;
-
-        return a.Start.Row <= b.End.Row && a.End.Row >= b.Start.Row
-            && a.Start.Col <= b.End.Col && a.End.Col >= b.Start.Col;
-    }
-
     /// <summary>
-    /// Matches the Manage-Rules dialog's display predicate (which filters on <see cref="ConditionalFormat.AllRanges"/>),
+    /// Matches the Manage-Rules dialog's display predicate (which filters on every rule range),
     /// so the edited-rule merge in <see cref="BuildResultRules"/> aligns 1:1 with the rules actually shown to the user.
     /// </summary>
     private static bool RuleOverlapsSelection(ConditionalFormat rule, GridRange selection) =>
-        rule.AllRanges.Any(range => RangesOverlap(range, selection));
+        rule.Overlaps(selection);
 
     private static int FindRuleIndex(IReadOnlyList<ConditionalFormat> rules, Guid ruleId)
     {

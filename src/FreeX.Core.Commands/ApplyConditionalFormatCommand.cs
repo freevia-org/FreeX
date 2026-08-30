@@ -120,7 +120,7 @@ public sealed class ClearConditionalFormatsCommand : IWorkbookCommand
         var newRules = new List<ConditionalFormat>(sheet.ConditionalFormats.Count);
         foreach (var rule in sheet.ConditionalFormats)
         {
-            if (rule.AppliesTo.Start.Sheet != _sheetId || !rule.AllRanges.Any(r => _range.Overlaps(r)))
+            if (rule.AppliesTo.Start.Sheet != _sheetId || !rule.Overlaps(_range))
             {
                 newRules.Add(rule);
                 continue;

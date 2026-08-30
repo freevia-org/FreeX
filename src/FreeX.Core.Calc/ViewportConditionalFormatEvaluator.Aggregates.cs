@@ -177,7 +177,7 @@ internal static partial class ViewportConditionalFormatEvaluator
             foreach (var ((row, col), cell) in occupiedCells)
             {
                 var address = new CellAddress(sheet.Id, row, col);
-                if (cf.AllRanges.Any(range => range.Contains(address)))
+                if (cf.Contains(address))
                     yield return (address, cell.Value);
             }
 
@@ -191,9 +191,14 @@ internal static partial class ViewportConditionalFormatEvaluator
         // Top10 ranking and percentile/percent thresholds. Single-range rules (the common case)
         // never allocate the tracking set.
         HashSet<CellAddress>? seen = null;
-        var multiRange = cf.AllRanges.Count() > 1;
-        foreach (var range in cf.AllRanges)
+        var additionalRanges = cf.AdditionalRanges;
+        var multiRange = additionalRanges is { Count: > 0 };
+        var additionalRangeCount = additionalRanges?.Count ?? 0;
+        for (var rangeIndex = -1; rangeIndex < additionalRangeCount; rangeIndex++)
         {
+            var range = rangeIndex < 0
+                ? cf.AppliesTo
+                : additionalRanges![rangeIndex];
             foreach (var item in EnumerateAggregateValues(sheet, range))
             {
                 if (multiRange)

@@ -78,6 +78,31 @@ public class FreeXCleanupMED8Tests
         plan.OrderedCells.Should().Equal(deprioritizedPrecedent, realDependent);
     }
 
+    [Fact]
+    public void GetEvaluationOrder_NewlyReadyNormalCell_PreemptsOlderAndNewerDeprioritizedCells()
+    {
+        var graph = new DependencyGraph();
+        var sheet = SheetId.New();
+        var normalRoot = new CellAddress(sheet, 1, 1);
+        var normalDependent = new CellAddress(sheet, 1, 2);
+        var olderDeprioritizedRoot = new CellAddress(sheet, 2, 1);
+        var newerDeprioritizedDependent = new CellAddress(sheet, 2, 2);
+
+        graph.SetDependencies(normalDependent, [normalRoot]);
+        graph.SetDependencies(newerDeprioritizedDependent, [normalRoot]);
+
+        var plan = graph.GetEvaluationOrder(
+            [normalRoot, normalDependent, olderDeprioritizedRoot, newerDeprioritizedDependent],
+            [olderDeprioritizedRoot, newerDeprioritizedDependent]);
+
+        plan.CyclicCells.Should().BeEmpty();
+        plan.OrderedCells.Should().Equal(
+            normalRoot,
+            normalDependent,
+            olderDeprioritizedRoot,
+            newerDeprioritizedDependent);
+    }
+
     // ── End-to-end RecalcEngine scenario matching the finding's exact repro ─────────────────────
 
     [Fact]

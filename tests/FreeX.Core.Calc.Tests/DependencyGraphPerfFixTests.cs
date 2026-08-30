@@ -13,6 +13,28 @@ namespace FreeX.Core.Calc.Tests;
 /// </summary>
 public class DependencyGraphPerfFixCorrectnessTests
 {
+    [BenchmarkFact]
+    public void Benchmark_AllDeprioritizedReadyCells_UsesLinearQueueProcessing()
+    {
+        const int cellCount = 20_000;
+        var graph = new DependencyGraph();
+        var sheet = SheetId.New();
+        var cells = Enumerable.Range(1, cellCount)
+            .Select(index => new CellAddress(sheet, (uint)index, 1))
+            .ToArray();
+        var deprioritized = cells.ToHashSet();
+
+        var stopwatch = Stopwatch.StartNew();
+        var plan = graph.GetEvaluationOrder(cells, deprioritized);
+        stopwatch.Stop();
+
+        plan.OrderedCells.Should().HaveCount(cellCount);
+        plan.CyclicCells.Should().BeEmpty();
+        stopwatch.Elapsed.Should().BeLessThan(
+            TimeSpan.FromSeconds(2),
+            "ready cells should be dequeued once instead of rotating the remaining queue for every cell");
+    }
+
     // ------------------------------------------------------------------
     // Fix 1: CountPrecedentsWithin / GetRecalcOrder with range precedents
     // ------------------------------------------------------------------

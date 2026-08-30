@@ -86,7 +86,7 @@ public sealed class ConditionalFormatRenderEvaluator
         for (var i = 0; i < _rulesByPriority.Count; i++)
         {
             var rule = _rulesByPriority[i];
-            if (!rule.AllRanges.Any(range => range.Contains(address)))
+            if (!rule.Contains(address))
                 continue;
 
             var conditionMet = EvaluateRule(

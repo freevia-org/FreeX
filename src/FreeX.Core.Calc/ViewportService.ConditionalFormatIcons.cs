@@ -14,7 +14,7 @@ public sealed partial class ViewportService
         for (var i = 0; i < cfContext.IconRulesByPriority.Count; i++)
         {
             var rule = cfContext.IconRulesByPriority[i];
-            if (!rule.AllRanges.Any(r => r.Contains(addr)))
+            if (!rule.Contains(addr))
                 continue;
 
             // A higher-priority rule of ANY kind (style, icon set, or data bar) whose condition is

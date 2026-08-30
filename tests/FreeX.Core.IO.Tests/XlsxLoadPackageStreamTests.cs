@@ -892,6 +892,76 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesHintedWorkbookFeaturesInOneSelectivePass()
+    {
+        using var package = CreatePackageWithWorkbook(
+            """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <workbookPr customWorkbookPrFlag="preserved"><nativeWorkbookPrChild/></workbookPr>
+              <fileSharing readOnlyRecommended="1" customFileSharingFlag="removed"><nativeFileSharingChild/></fileSharing>
+              <workbookProtection lockStructure="1" customProtectionFlag="removed"><nativeProtectionChild/></workbookProtection>
+              <sheets/>
+              <calcPr calcId=" 42 " customCalculationFlag="removed"><nativeCalculationChild/></calcPr>
+            </workbook>
+            """);
+        var hints = new XlsxClosedXmlLoadSanitizationHints(
+            HasPivotPackageMetadata: false,
+            HasChartExChartParts: false,
+            HasDrawingPackageParts: false,
+            HasConditionalFormattingBlocks: false,
+            HasUnsupportedConditionalFormattingBlocks: false,
+            HasWorksheetDynamicFilters: false,
+            HasWorksheetGridXmlSchemaIssues: false,
+            HasWorksheetPageLayoutSchemaIssues: false,
+            HasWorksheetPageBreakSchemaIssues: false,
+            HasWorksheetAutoFilterSchemaIssues: false,
+            HasStructuredTableAutoFilterSchemaIssues: false,
+            HasStructuredTableSortStateSchemaIssues: false,
+            HasStructuredTableMetadataSchemaIssues: false,
+            HasDocumentPropertiesPackageGraphIssues: false,
+            HasCustomRibbonPackageGraphIssues: false,
+            HasWorksheetSheetViewSchemaIssues: false,
+            HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: true,
+            HasWorkbookFileSharingSchemaIssues: true,
+            HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: true,
+            HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
+            HasWorksheetNativeMetadataSchemaIssues: false,
+            MergeCellWorksheetPathsToStrip: null);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
+            package,
+            removeUnsupportedConditionalFormatting: false,
+            removeAllConditionalFormatting: false,
+            hints);
+
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml").Root!;
+
+        var calcPr = root.Element(workbookNs + "calcPr")!;
+        calcPr.Attribute("calcId")!.Value.Should().Be("42");
+        calcPr.Attribute("customCalculationFlag").Should().BeNull();
+        calcPr.Elements().Should().BeEmpty();
+
+        var fileSharing = root.Element(workbookNs + "fileSharing")!;
+        fileSharing.Attribute("customFileSharingFlag").Should().BeNull();
+        fileSharing.Elements().Should().BeEmpty();
+
+        var protection = root.Element(workbookNs + "workbookProtection")!;
+        protection.Attribute("customProtectionFlag").Should().BeNull();
+        protection.Elements().Should().BeEmpty();
+
+        var workbookPr = root.Element(workbookNs + "workbookPr")!;
+        workbookPr.Attribute("customWorkbookPrFlag")!.Value.Should().Be("preserved");
+        workbookPr.Element(workbookNs + "nativeWorkbookPrChild").Should().NotBeNull();
+    }
+
+    [Fact]
     public void ClosedXmlLoadSanitizer_NormalizesWorkbookSmartTagMetadata()
     {
         using var package = CreatePackageWithWorkbook(

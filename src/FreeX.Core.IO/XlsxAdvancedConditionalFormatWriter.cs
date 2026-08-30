@@ -252,7 +252,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             var group = groups[i];
             var (container, cfRule, tokenCount) = physicalBlocks[i];
 
-            var expectedTokenCount = group.Sum(cf => cf.AllRanges.Count());
+            var expectedTokenCount = group.Sum(cf => cf.RangeCount);
             if (tokenCount != expectedTokenCount)
                 continue;
 

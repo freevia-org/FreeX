@@ -114,12 +114,57 @@ public sealed class ConditionalFormat
 
     /// <summary>
     /// Returns all ranges covered by this rule: <see cref="AppliesTo"/> followed by any
-    /// <see cref="AdditionalRanges"/>. Use this when testing whether a cell falls within the rule.
+    /// <see cref="AdditionalRanges"/>. Use <see cref="Contains"/> for hot-path membership tests.
     /// </summary>
     public IEnumerable<GridRange> AllRanges =>
         AdditionalRanges is null
             ? [AppliesTo]
             : [AppliesTo, .. AdditionalRanges];
+
+    /// <summary>The number of ranges covered by this rule.</summary>
+    public int RangeCount => 1 + (AdditionalRanges?.Count ?? 0);
+
+    /// <summary>
+    /// Tests whether <paramref name="address"/> is covered without materializing
+    /// <see cref="AllRanges"/>.
+    /// </summary>
+    public bool Contains(CellAddress address)
+    {
+        if (AppliesTo.Contains(address))
+            return true;
+
+        if (AdditionalRanges is null)
+            return false;
+
+        for (var index = 0; index < AdditionalRanges.Count; index++)
+        {
+            if (AdditionalRanges[index].Contains(address))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Tests whether <paramref name="range"/> overlaps any covered range without materializing
+    /// <see cref="AllRanges"/>.
+    /// </summary>
+    public bool Overlaps(GridRange range)
+    {
+        if (AppliesTo.Overlaps(range))
+            return true;
+
+        if (AdditionalRanges is null)
+            return false;
+
+        for (var index = 0; index < AdditionalRanges.Count; index++)
+        {
+            if (AdditionalRanges[index].Overlaps(range))
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>Lower priority number = higher precedence (Excel convention).</summary>
     public int Priority { get; set; } = 1;

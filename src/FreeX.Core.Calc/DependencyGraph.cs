@@ -532,14 +532,14 @@ public sealed class DependencyGraph
 
         var sorted = new List<CellAddress>(candidates.Count);
         var ready = new Queue<CellAddress>();
-        foreach (var (cell, degree) in inDegree)
-        {
-            if (degree == 0)
-                ready.Enqueue(cell);
-        }
-
         if (deprioritized is null || deprioritized.Count == 0)
         {
+            foreach (var (cell, degree) in inDegree)
+            {
+                if (degree == 0)
+                    ready.Enqueue(cell);
+            }
+
             while (ready.Count > 0)
             {
                 var cell = ready.Dequeue();
@@ -551,23 +551,29 @@ public sealed class DependencyGraph
         else
         {
             var deprioritizedSet = deprioritized as HashSet<CellAddress> ?? new HashSet<CellAddress>(deprioritized);
-
-            // Rotate past any deprioritized cell at the front of the queue as long as a
-            // non-deprioritized cell is also currently ready (bounded by ready.Count rotations —
-            // once every remaining ready cell is deprioritized, the rotation stops and one is taken).
-            while (ready.Count > 0)
+            var deprioritizedReady = new Queue<CellAddress>();
+            foreach (var (cell, degree) in inDegree)
             {
-                var rotations = 0;
-                while (deprioritizedSet.Contains(ready.Peek()) && rotations < ready.Count)
-                {
-                    ready.Enqueue(ready.Dequeue());
-                    rotations++;
-                }
+                if (degree == 0)
+                    EnqueueReady(cell, ready, deprioritizedReady, deprioritizedSet);
+            }
 
-                var cell = ready.Dequeue();
+            // Separate FIFO queues preserve the relative order within each priority class while
+            // avoiding repeated rotation of an all-deprioritized ready queue. A newly unblocked
+            // normal cell preempts older deprioritized cells on the next iteration.
+            while (ready.Count > 0 || deprioritizedReady.Count > 0)
+            {
+                var cell = ready.Count > 0
+                    ? ready.Dequeue()
+                    : deprioritizedReady.Dequeue();
                 sorted.Add(cell);
 
-                DecrementDependentInDegrees(cell, inDegree, ready);
+                DecrementDependentInDegrees(
+                    cell,
+                    inDegree,
+                    ready,
+                    deprioritizedReady,
+                    deprioritizedSet);
             }
         }
 
@@ -915,16 +921,24 @@ public sealed class DependencyGraph
     private void DecrementDependentInDegrees(
         CellAddress cell,
         Dictionary<CellAddress, int> inDegree,
-        Queue<CellAddress> ready)
+        Queue<CellAddress> ready,
+        Queue<CellAddress>? deprioritizedReady = null,
+        HashSet<CellAddress>? deprioritized = null)
     {
         var exactDeps = _dependents.GetValueOrDefault(cell);
         if (!_rangeDependentsBySheet.TryGetValue(cell.Sheet, out var rangeDeps))
         {
-            DecrementExactDependentInDegrees(exactDeps, inDegree, ready);
+            DecrementExactDependentInDegrees(exactDeps, inDegree, ready, deprioritizedReady, deprioritized);
             return;
         }
 
-        var rangeSeen = DecrementRangeDependentInDegrees(cell, rangeDeps, inDegree, ready);
+        var rangeSeen = DecrementRangeDependentInDegrees(
+            cell,
+            rangeDeps,
+            inDegree,
+            ready,
+            deprioritizedReady,
+            deprioritized);
 
         if (exactDeps is null)
             return;
@@ -934,26 +948,30 @@ public sealed class DependencyGraph
             if (rangeSeen?.Contains(dep) == true)
                 continue;
 
-            DecrementInDegree(dep, inDegree, ready);
+            DecrementInDegree(dep, inDegree, ready, deprioritizedReady, deprioritized);
         }
     }
 
     private static void DecrementExactDependentInDegrees(
         HashSet<CellAddress>? exactDeps,
         Dictionary<CellAddress, int> inDegree,
-        Queue<CellAddress> ready)
+        Queue<CellAddress> ready,
+        Queue<CellAddress>? deprioritizedReady,
+        HashSet<CellAddress>? deprioritized)
     {
         if (exactDeps is null)
             return;
 
         foreach (var dep in exactDeps)
-            DecrementInDegree(dep, inDegree, ready);
+            DecrementInDegree(dep, inDegree, ready, deprioritizedReady, deprioritized);
     }
 
     private static void DecrementInDegree(
         CellAddress dep,
         Dictionary<CellAddress, int> inDegree,
-        Queue<CellAddress> ready)
+        Queue<CellAddress> ready,
+        Queue<CellAddress>? deprioritizedReady = null,
+        HashSet<CellAddress>? deprioritized = null)
     {
         if (!inDegree.TryGetValue(dep, out var degree))
             return;
@@ -961,7 +979,19 @@ public sealed class DependencyGraph
         degree--;
         inDegree[dep] = degree;
         if (degree == 0)
-            ready.Enqueue(dep);
+            EnqueueReady(dep, ready, deprioritizedReady, deprioritized);
+    }
+
+    private static void EnqueueReady(
+        CellAddress cell,
+        Queue<CellAddress> ready,
+        Queue<CellAddress>? deprioritizedReady,
+        HashSet<CellAddress>? deprioritized)
+    {
+        if (deprioritizedReady is not null && deprioritized?.Contains(cell) == true)
+            deprioritizedReady.Enqueue(cell);
+        else
+            ready.Enqueue(cell);
     }
 
     private HashSet<CellAddress>? CollectRangeDependents(CellAddress cell)
@@ -1082,21 +1112,27 @@ public sealed class DependencyGraph
         CellAddress cell,
         RangeDependencyIndex rangeDeps,
         Dictionary<CellAddress, int> inDegree,
-        Queue<CellAddress> ready)
+        Queue<CellAddress> ready,
+        Queue<CellAddress>? deprioritizedReady,
+        HashSet<CellAddress>? deprioritized)
     {
         var rangeSeen = DecrementRangeDependentCandidates(
             cell,
             rangeDeps.GetRowCandidates(cell.Row),
             null,
             inDegree,
-            ready);
+            ready,
+            deprioritizedReady,
+            deprioritized);
 
         return DecrementRangeDependentCandidates(
             cell,
             rangeDeps.GetColumnCandidates(cell.Col),
             rangeSeen,
             inDegree,
-            ready);
+            ready,
+            deprioritizedReady,
+            deprioritized);
     }
 
     private static HashSet<CellAddress>? DecrementRangeDependentCandidates(
@@ -1104,7 +1140,9 @@ public sealed class DependencyGraph
         List<RangeDependencyGroup>? candidates,
         HashSet<CellAddress>? rangeSeen,
         Dictionary<CellAddress, int> inDegree,
-        Queue<CellAddress> ready)
+        Queue<CellAddress> ready,
+        Queue<CellAddress>? deprioritizedReady,
+        HashSet<CellAddress>? deprioritized)
     {
         if (candidates is null)
             return rangeSeen;
@@ -1120,7 +1158,7 @@ public sealed class DependencyGraph
                 if (!rangeSeen.Add(dependent))
                     continue;
 
-                DecrementInDegree(dependent, inDegree, ready);
+                DecrementInDegree(dependent, inDegree, ready, deprioritizedReady, deprioritized);
             }
         }
 

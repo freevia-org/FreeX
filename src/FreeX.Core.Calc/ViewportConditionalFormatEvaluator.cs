@@ -359,7 +359,7 @@ internal static partial class ViewportConditionalFormatEvaluator
         for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
         {
             var cf = cfContext.RulesByPriority[i];
-            if (!cf.AllRanges.Any(r => r.Contains(addr)))
+            if (!cf.Contains(addr))
                 continue;
 
             CfStyleResult? matchedStyle = null;
@@ -483,7 +483,7 @@ internal static partial class ViewportConditionalFormatEvaluator
 
             if (!cf.StopIfTrue)
                 continue;
-            if (!cf.AllRanges.Any(r => r.Contains(addr)))
+            if (!cf.Contains(addr))
                 continue;
 
             if (MatchesRuleCondition(cf, sheet, addr, value, workbook, cfContext, matchesFormula, out _))

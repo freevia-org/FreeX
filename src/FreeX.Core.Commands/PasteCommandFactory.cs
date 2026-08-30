@@ -537,7 +537,7 @@ public static class PasteCommandFactory
                 // "All merging conditional formats" action (mergeConditionalFormats:true, set only by
                 // the ContentKind==AllMergingConditionalFormats branch above), which must keep adding
                 // alongside existing destination rules instead of superseding them.
-                if (sourceSheet is not null && sourceSheet.ConditionalFormats.Any(rule => rule.AllRanges.Any(range => range.Overlaps(sourceRange))))
+                if (sourceSheet is not null && sourceSheet.ConditionalFormats.Any(rule => rule.Overlaps(sourceRange)))
                 {
                     specialExtraCommands.Add(new PasteConditionalFormatsCommand(
                         targetSheetId, sourceRange, destination, options.Transpose, merge: mergeConditionalFormats, sourceAreas: sourceAreas));
@@ -715,7 +715,7 @@ public static class PasteCommandFactory
             // when this call is the recursive continuation of the dedicated "All merging conditional
             // formats" action (mergeConditionalFormats:true) -- see the identical reasoning on the
             // specialCarriesFormatting branch above.
-            if (sourceSheet is not null && sourceSheet.ConditionalFormats.Any(rule => rule.AllRanges.Any(range => range.Overlaps(sourceRange))))
+            if (sourceSheet is not null && sourceSheet.ConditionalFormats.Any(rule => rule.Overlaps(sourceRange)))
             {
                 extraCommands.Add(new PasteConditionalFormatsCommand(
                     targetSheetId, sourceRange, destination, transpose: false, merge: mergeConditionalFormats, sourceAreas: sourceAreas));
@@ -1081,7 +1081,7 @@ public static class PasteCommandFactory
             // conditional formats" action (add alongside existing destination rules), false (the
             // default) for every other formatting-carrying content kind tiled onto a larger
             // destination (supersede, matching real Excel's ordinary paste-with-formatting).
-            if (sourceSheet is not null && sourceSheet.ConditionalFormats.Any(rule => rule.AllRanges.Any(range => range.Overlaps(sourceRange))))
+            if (sourceSheet is not null && sourceSheet.ConditionalFormats.Any(rule => rule.Overlaps(sourceRange)))
             {
                 tiledExtraCommands.Add(new PasteConditionalFormatsCommand(
                     targetSheetId,

@@ -223,7 +223,7 @@ public sealed class ManageConditionalFormatsSession
         GridRange? scope) =>
         rules
             .Where(rule => scope is not { } range
-                || rule.AllRanges.Any(candidate => ManageConditionalFormatsPlanner.RangesOverlap(candidate, range)))
+                || rule.Overlaps(range))
             .OrderBy(rule => rule.Priority)
             .ToList();
 
