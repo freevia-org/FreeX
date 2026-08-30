@@ -1944,21 +1944,13 @@ public sealed partial class XlsxFileAdapter
                 changed = true;
             }
 
-            var existingKeys = targetDefinedNames
-                .Elements(workbookNs + "definedName")
-                .Select(XlsxDefinedNamePreservationPolicy.GetKey)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingNamesByKey = XlsxDefinedNamePreservationPolicy.CreateFirstElementIndex(
+                targetDefinedNames.Elements(workbookNs + "definedName"));
 
             foreach (var sourceName in sourceDefinedNames.Elements(workbookNs + "definedName"))
             {
                 var key = XlsxDefinedNamePreservationPolicy.GetKey(sourceName);
-                var existing = targetDefinedNames
-                    .Elements(workbookNs + "definedName")
-                    .FirstOrDefault(element => string.Equals(
-                        XlsxDefinedNamePreservationPolicy.GetKey(element),
-                        key,
-                        StringComparison.OrdinalIgnoreCase));
-                if (existing is not null)
+                if (existingNamesByKey.TryGetValue(key, out var existing))
                 {
                     if (XlsxDefinedNamePreservationPolicy.BackfillMissingAttributes(sourceName, existing))
                         changed = true;
@@ -1999,7 +1991,7 @@ public sealed partial class XlsxFileAdapter
                     // Re-check for a collision at the remapped index: ClosedXML may already have
                     // re-emitted an entry for this name at the sheet's new index (common for
                     // Excel-reserved names like Print_Area).
-                    if (existingKeys.Contains(key))
+                    if (existingNamesByKey.ContainsKey(key))
                         continue;
 
                     // R62-io-defined-name-print-6-1: Print_Area/Print_Titles are Excel-reserved
@@ -2021,7 +2013,7 @@ public sealed partial class XlsxFileAdapter
                 }
 
                 targetDefinedNames.Add(resurrected);
-                existingKeys.Add(key);
+                existingNamesByKey.TryAdd(key, resurrected);
                 changed = true;
             }
 

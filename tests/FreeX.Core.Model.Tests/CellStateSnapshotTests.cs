@@ -7,6 +7,39 @@ namespace FreeX.Core.Model.Tests;
 public sealed class CellStateSnapshotTests
 {
     [Fact]
+    public void CellStateSnapshot_CaptureAndToCell_MatchesCanonicalCloneForEveryField()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 7, 9);
+        var cachedAst = new object();
+        var original = new Cell
+        {
+            Value = new TextValue("00123"),
+            IgnoreFormulaError = true,
+            StyleId = new StyleId(17),
+            QuotePrefix = true
+        };
+        original.FormulaText = "A1+B2";
+        original.CachedAst = cachedAst;
+        original.ArrayMode = FormulaArrayMode.Implicit;
+        original.LegacyArrayRows = 3;
+        original.LegacyArrayCols = 4;
+
+        var canonicalClone = original.Clone();
+        var snapshot = CellStateSnapshot.Capture(address, original);
+        var restored = snapshot.ToCell();
+
+        snapshot.Row.Should().Be(address.Row);
+        snapshot.Col.Should().Be(address.Col);
+        snapshot.FormulaText.Should().Be(original.FormulaText);
+        snapshot.ToAddress(sheetId).Should().Be(address);
+        restored.Should().NotBeSameAs(original);
+        restored.Should().BeEquivalentTo(canonicalClone);
+        restored.CachedAst.Should().BeSameAs(cachedAst);
+        restored.QuotePrefix.Should().BeTrue();
+    }
+
+    [Fact]
     public void CellStateSnapshot_CaptureAndToCell_PreservesImplicitArrayMode()
     {
         var workbook = new Workbook("CellSnapshotTest");
@@ -81,5 +114,82 @@ public sealed class CellStateSnapshotTests
         restoredCell.Should().NotBeNull();
         restoredCell!.ArrayMode.Should().Be(FormulaArrayMode.Implicit,
             "undo of row insert must preserve ArrayMode=Implicit via CellStateSnapshot");
+    }
+
+    [Theory]
+    [InlineData(StructuralMutation.InsertRows)]
+    [InlineData(StructuralMutation.DeleteRows)]
+    [InlineData(StructuralMutation.InsertColumns)]
+    [InlineData(StructuralMutation.DeleteColumns)]
+    public void StructuralCommand_Undo_PreservesQuotePrefixOnShiftedCell(StructuralMutation mutation)
+    {
+        var workbook = new Workbook("QuotePrefixStructuralUndo");
+        var sheet = workbook.AddSheet("Sheet1");
+        var originalAddress = new CellAddress(sheet.Id, 5, 5);
+        sheet.SetCell(originalAddress, new Cell
+        {
+            Value = new TextValue("00123"),
+            QuotePrefix = true
+        });
+
+        var command = CreateCommand(mutation, sheet.Id);
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+
+        var shiftedAddress = mutation switch
+        {
+            StructuralMutation.InsertRows => new CellAddress(sheet.Id, 6, 5),
+            StructuralMutation.DeleteRows => new CellAddress(sheet.Id, 4, 5),
+            StructuralMutation.InsertColumns => new CellAddress(sheet.Id, 5, 6),
+            StructuralMutation.DeleteColumns => new CellAddress(sheet.Id, 5, 4),
+            _ => throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null)
+        };
+        sheet.GetCell(shiftedAddress)!.QuotePrefix.Should().BeTrue();
+
+        command.Revert(new TestCommandContext(workbook));
+
+        sheet.GetCell(originalAddress)!.QuotePrefix.Should().BeTrue(
+            "undo reconstructs shifted cells through CellStateSnapshot");
+    }
+
+    [Theory]
+    [InlineData(StructuralMutation.DeleteRows)]
+    [InlineData(StructuralMutation.DeleteColumns)]
+    public void DeleteCommand_Undo_RestoresQuotePrefixOnDeletedCell(StructuralMutation mutation)
+    {
+        var workbook = new Workbook("QuotePrefixDeletedCellUndo");
+        var sheet = workbook.AddSheet("Sheet1");
+        var deletedAddress = mutation == StructuralMutation.DeleteRows
+            ? new CellAddress(sheet.Id, 2, 5)
+            : new CellAddress(sheet.Id, 5, 2);
+        sheet.SetCell(deletedAddress, new Cell
+        {
+            Value = new TextValue("00456"),
+            QuotePrefix = true
+        });
+
+        var command = CreateCommand(mutation, sheet.Id);
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        command.Revert(new TestCommandContext(workbook));
+
+        sheet.GetCell(deletedAddress)!.QuotePrefix.Should().BeTrue(
+            "undo reconstructs cells removed with the deleted row or column through CellStateSnapshot");
+    }
+
+    private static IWorkbookCommand CreateCommand(StructuralMutation mutation, SheetId sheetId) =>
+        mutation switch
+        {
+            StructuralMutation.InsertRows => new InsertRowsCommand(sheetId, beforeRow: 2, count: 1),
+            StructuralMutation.DeleteRows => new DeleteRowsCommand(sheetId, startRow: 2, count: 1),
+            StructuralMutation.InsertColumns => new InsertColumnsCommand(sheetId, beforeCol: 2, count: 1),
+            StructuralMutation.DeleteColumns => new DeleteColumnsCommand(sheetId, startCol: 2, count: 1),
+            _ => throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null)
+        };
+
+    public enum StructuralMutation
+    {
+        InsertRows,
+        DeleteRows,
+        InsertColumns,
+        DeleteColumns
     }
 }

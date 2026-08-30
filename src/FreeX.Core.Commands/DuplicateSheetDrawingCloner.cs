@@ -630,23 +630,51 @@ internal static class DuplicateSheetDrawingCloner
         string copySheetName,
         SheetId copyId)
     {
+        var linkedSourceRange = picture.LinkedSourceRange is { } range &&
+            range.Start.Sheet == sourceSheetId
+                ? RemapRange(range, copyId)
+                : picture.LinkedSourceRange;
+        var linkedSourceSheetName = picture.LinkedSourceSheetName == sourceSheetName
+            ? copySheetName
+            : picture.LinkedSourceSheetName;
+
+        return ClonePictureCore(
+            picture,
+            RemapAddress(picture.Anchor, copyId),
+            linkedSourceRange,
+            linkedSourceSheetName);
+    }
+
+    /// <summary>
+    /// Builds an authored picture copy at a paste destination while deliberately retaining the
+    /// camera/linked-picture source. Pasting a linked picture moves the picture, not the range it
+    /// displays; whole-sheet duplication uses <see cref="ClonePicture"/> to remap that source.
+    /// </summary>
+    internal static PictureModel ClonePictureForPaste(PictureModel picture, CellAddress destinationAnchor) =>
+        ClonePictureCore(
+            picture,
+            destinationAnchor,
+            picture.LinkedSourceRange,
+            picture.LinkedSourceSheetName);
+
+    private static PictureModel ClonePictureCore(
+        PictureModel picture,
+        CellAddress anchor,
+        GridRange? linkedSourceRange,
+        string? linkedSourceSheetName)
+    {
         var copiedPicture = new PictureModel
         {
             Name = picture.Name,
-            Anchor = RemapAddress(picture.Anchor, copyId),
+            Anchor = anchor,
             AnchorOffsetX = picture.AnchorOffsetX,
             AnchorOffsetY = picture.AnchorOffsetY,
             Kind = picture.Kind,
             SourceRowCount = picture.SourceRowCount,
             SourceColumnCount = picture.SourceColumnCount,
             IsLinkedToSourceRange = picture.IsLinkedToSourceRange,
-            LinkedSourceRange = picture.LinkedSourceRange is { } linkedSourceRange &&
-                linkedSourceRange.Start.Sheet == sourceSheetId
-                    ? RemapRange(linkedSourceRange, copyId)
-                    : picture.LinkedSourceRange,
-            LinkedSourceSheetName = picture.LinkedSourceSheetName == sourceSheetName
-                ? copySheetName
-                : picture.LinkedSourceSheetName,
+            LinkedSourceRange = linkedSourceRange,
+            LinkedSourceSheetName = linkedSourceSheetName,
             ImageBytes = picture.ImageBytes?.ToArray(),
             ContentType = picture.ContentType,
             // R80-io-drawing-image-5-3: an Insert > Icons/SVG picture keeps a PNG rasterization in

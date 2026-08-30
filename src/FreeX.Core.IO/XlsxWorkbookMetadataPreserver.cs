@@ -724,11 +724,8 @@ internal static class XlsxWorkbookMetadataPreserver
             targetSheetNames);
 
         var targetDefinedNames = targetRoot.Element(workbookNs + "definedNames");
-        var existingKeys = targetDefinedNames?
-            .Elements(workbookNs + "definedName")
-            .Select(XlsxDefinedNamePreservationPolicy.GetKey)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase)
-            ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var existingNamesByKey = XlsxDefinedNamePreservationPolicy.CreateFirstElementIndex(
+            targetDefinedNames?.Elements(workbookNs + "definedName") ?? []);
 
         var changed = false;
         foreach (var sourceName in sourceNames)
@@ -737,7 +734,7 @@ internal static class XlsxWorkbookMetadataPreserver
                 continue;
 
             var key = XlsxDefinedNamePreservationPolicy.GetKey(candidate);
-            if (existingKeys.Contains(key))
+            if (existingNamesByKey.TryGetValue(key, out var existingElement))
             {
                 // This name was already re-emitted into the target by the full-rebuild name
                 // write-back (e.g. a formula/constant-refersTo name via NamedFormulas, which has no
@@ -746,14 +743,7 @@ internal static class XlsxWorkbookMetadataPreserver
                 // the pristine source element but missing from the freshly-written one, mirroring
                 // RestorePatchWorkbookDefinedNames' backfill for the patch-save path, so a live,
                 // unchanged name's hidden/comment attributes survive a full rebuild too.
-                var existingElement = targetDefinedNames?
-                    .Elements(workbookNs + "definedName")
-                    .FirstOrDefault(element => string.Equals(
-                        XlsxDefinedNamePreservationPolicy.GetKey(element),
-                        key,
-                        StringComparison.OrdinalIgnoreCase));
-                if (existingElement is not null &&
-                    XlsxDefinedNamePreservationPolicy.BackfillMissingAttributes(candidate, existingElement))
+                if (XlsxDefinedNamePreservationPolicy.BackfillMissingAttributes(candidate, existingElement))
                     changed = true;
 
                 continue;
@@ -769,7 +759,7 @@ internal static class XlsxWorkbookMetadataPreserver
             }
 
             targetDefinedNames.Add(candidate);
-            existingKeys.Add(key);
+            existingNamesByKey.TryAdd(key, candidate);
             changed = true;
         }
 
