@@ -39,7 +39,7 @@ public sealed partial class Sheet
             ShowZeros                     = ShowZeros,
             FullCalculationOnLoad         = FullCalculationOnLoad,
             PhoneticProperties            = PhoneticProperties,
-            AutoFilter                    = CloneAutoFilter(AutoFilter),
+            AutoFilter                    = WorksheetAutoFilterCloner.Clone(AutoFilter),
             SmartTags                     = SmartTags,
             DataConsolidation             = DataConsolidation,
             SortState                     = SortState,

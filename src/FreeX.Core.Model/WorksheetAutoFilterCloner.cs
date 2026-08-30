@@ -1,7 +1,10 @@
-using FreeX.Core.Model;
+namespace FreeX.Core.Model;
 
-namespace FreeX.Core.Commands;
-
+/// <summary>
+/// Owns the canonical deep clone for the mutable worksheet AutoFilter metadata graph. Commands use
+/// the same implementation for undo/custom-view snapshots and may override only a column's relative
+/// id while shifting worksheet columns.
+/// </summary>
 internal static class WorksheetAutoFilterCloner
 {
     public static WorksheetAutoFilterModel? Clone(WorksheetAutoFilterModel? autoFilter)
@@ -14,7 +17,9 @@ internal static class WorksheetAutoFilterCloner
             NativeAttributes = CloneDictionary(autoFilter.NativeAttributes),
             NativeChildXmls = autoFilter.NativeChildXmls?.ToArray()
         };
-        clone.FilterColumns.AddRange(autoFilter.FilterColumns.Select(column => CloneColumn(column)));
+        clone.FilterColumns.EnsureCapacity(autoFilter.FilterColumns.Count);
+        foreach (var column in autoFilter.FilterColumns)
+            clone.FilterColumns.Add(CloneColumn(column));
         return clone;
     }
 
@@ -25,7 +30,7 @@ internal static class WorksheetAutoFilterCloner
             columnId ?? column.ColumnId,
             column.Values.ToArray(),
             column.IncludeBlank,
-            column.CustomFilters.Select(CloneCustomFilter).ToArray(),
+            CloneCustomFilters(column.CustomFilters),
             column.CustomFiltersAnd,
             column.CustomFiltersAndRaw,
             CloneDictionary(column.NativeCustomFiltersAttributes),
@@ -33,18 +38,48 @@ internal static class WorksheetAutoFilterCloner
             CloneDynamicFilter(column.DynamicFilter),
             CloneColorFilter(column.ColorFilter),
             CloneIconFilter(column.IconFilter),
-            column.DateGroups.Select(CloneDateGroup).ToArray(),
+            CloneDateGroups(column.DateGroups),
             CloneDictionary(column.NativeFiltersAttributes),
             column.NativeFilterXmls.ToArray(),
             CloneDictionary(column.NativeAttributes));
 
-    private static WorksheetAutoFilterCustomFilterModel CloneCustomFilter(
-        WorksheetAutoFilterCustomFilterModel filter) =>
-        new(filter.Operator, filter.Value, CloneDictionary(filter.NativeAttributes));
+    private static WorksheetAutoFilterCustomFilterModel[] CloneCustomFilters(
+        IReadOnlyList<WorksheetAutoFilterCustomFilterModel> filters)
+    {
+        if (filters.Count == 0)
+            return [];
 
-    private static WorksheetAutoFilterDateGroupItemModel CloneDateGroup(
-        WorksheetAutoFilterDateGroupItemModel dateGroup) =>
-        dateGroup with { NativeAttributes = CloneDictionary(dateGroup.NativeAttributes) };
+        var clones = new WorksheetAutoFilterCustomFilterModel[filters.Count];
+        for (var i = 0; i < filters.Count; i++)
+        {
+            var filter = filters[i];
+            clones[i] = new WorksheetAutoFilterCustomFilterModel(
+                filter.Operator,
+                filter.Value,
+                CloneDictionary(filter.NativeAttributes));
+        }
+
+        return clones;
+    }
+
+    private static WorksheetAutoFilterDateGroupItemModel[] CloneDateGroups(
+        IReadOnlyList<WorksheetAutoFilterDateGroupItemModel> dateGroups)
+    {
+        if (dateGroups.Count == 0)
+            return [];
+
+        var clones = new WorksheetAutoFilterDateGroupItemModel[dateGroups.Count];
+        for (var i = 0; i < dateGroups.Count; i++)
+        {
+            var dateGroup = dateGroups[i];
+            clones[i] = dateGroup with
+            {
+                NativeAttributes = CloneDictionary(dateGroup.NativeAttributes)
+            };
+        }
+
+        return clones;
+    }
 
     private static WorksheetAutoFilterTop10Model? CloneTop10(WorksheetAutoFilterTop10Model? top10) =>
         top10 is null ? null : top10 with { NativeAttributes = CloneDictionary(top10.NativeAttributes) };
