@@ -208,6 +208,69 @@ public sealed class Round56_IoABucketTests
             e.Attribute("numFmtId")!.Value == "171" && e.Attribute("formatCode")!.Value == "0.0000%");
     }
 
+    [Fact]
+    public void NumberFormatCatalogWriter_DuplicateAndMalformedEntries_PreserveFirstMatchSemantics()
+    {
+        using var stream = BuildMinimalXlsxWithStyles(
+            "<numFmts count=\"5\">" +
+            "<numFmt numFmtId=\"not-an-id\" formatCode=\"target\"/>" +
+            "<numFmt numFmtId=\"165\" formatCode=\"target\"/>" +
+            "<numFmt numFmtId=\"166\" formatCode=\"target\"/>" +
+            "<numFmt numFmtId=\"170\" formatCode=\"wrong\"/>" +
+            "<numFmt numFmtId=\"170\" formatCode=\"target\"/>" +
+            "</numFmts>");
+
+        var workbook = new Workbook("Untitled");
+        workbook.NumberFormatCatalog[170] = "target";
+        var sheet = workbook.AddSheet("Sheet1");
+        var styleId = workbook.RegisterStyle(new CellStyle { NumberFormat = "target" });
+        var cell = Cell.FromValue(new NumberValue(1));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var remap = XlsxNumberFormatCatalogWriter.Save(stream, workbook);
+
+        remap[170].Should().Be(165,
+            "the first occurrence of an id and the first valid custom-code match must keep winning");
+
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var stylesXml = XlsxPackageXmlEditor.LoadXml(archive.GetEntry("xl/styles.xml")!);
+        System.Xml.Linq.XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var numFmts = stylesXml.Root!.Element(ns + "numFmts")!;
+        numFmts.Attribute("count")!.Value.Should().Be("5");
+        numFmts.Elements(ns + "numFmt").Should().HaveCount(5,
+            "malformed and duplicate source entries remain part of the preserved XML catalog");
+    }
+
+    [Fact]
+    public void NumberFormatCatalogWriter_AppendedCode_IsReusedByLaterPivotCollision()
+    {
+        using var stream = BuildMinimalXlsxWithStyles("<numFmts count=\"0\"/>");
+        var workbook = new Workbook("Untitled");
+        var sheet = workbook.AddSheet("Sheet1");
+        var pivot = new PivotTableModel { Name = "PivotTable1" };
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            0, "Primary", "sum", NumberFormatId: 164, NumberFormatCode: "primary"));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            1, "Colliding", "sum", NumberFormatId: 164, NumberFormatCode: "secondary"));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            2, "Independent", "sum", NumberFormatId: 170, NumberFormatCode: "secondary"));
+        sheet.PivotTables.Add(pivot);
+
+        var remap = XlsxNumberFormatCatalogWriter.Save(stream, workbook);
+
+        remap.ResolveDataFieldNumberFormatId(164, "secondary").Should().Be(170,
+            "the main catalog appended code must be visible to the later pivot-collision lookup");
+
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var stylesXml = XlsxPackageXmlEditor.LoadXml(archive.GetEntry("xl/styles.xml")!);
+        System.Xml.Linq.XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        stylesXml.Root!.Element(ns + "numFmts")!.Elements(ns + "numFmt")
+            .Should().ContainSingle(element => element.Attribute("formatCode")!.Value == "secondary");
+    }
+
     // ---------------------------------------------------------------------------------------
     // R56-io-shared-strings-richtext-5-1
     // ---------------------------------------------------------------------------------------
