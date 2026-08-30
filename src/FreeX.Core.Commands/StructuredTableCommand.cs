@@ -690,38 +690,17 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
         bool? hasAutoFilter,
         bool? totalsRowShown)
     {
-        var copy = new StructuredTableModel
+        var state = table.CaptureCopyState() with
         {
-            Id = table.Id,
-            Name = table.Name,
-            DisplayName = table.DisplayName,
-            Range = table.Range,
             HasAutoFilter = hasAutoFilter ?? table.HasAutoFilter,
             TotalsRowShown = totalsRowShown ?? table.TotalsRowShown,
-            HeaderRowCount = table.HeaderRowCount,
-            TotalsRowCount = table.TotalsRowCount,
-            InsertRow = table.InsertRow,
-            InsertRowShift = table.InsertRowShift,
-            Published = table.Published,
-            Comment = table.Comment,
             StyleName = updateStyleName ? styleName : table.StyleName,
             ShowFirstColumn = showFirstColumn,
             ShowLastColumn = showLastColumn,
             ShowRowStripes = showRowStripes,
-            ShowColumnStripes = showColumnStripes,
-            PackagePart = table.PackagePart,
-            NativeSortStateXml = table.NativeSortStateXml,
-            NativeAttributes = table.NativeAttributes,
-            NativeChildXmls = table.NativeChildXmls,
-            NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
-            NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
-            NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
-            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
+            ShowColumnStripes = showColumnStripes
         };
-
-        copy.Columns.AddRange(table.Columns);
-        copy.FilterColumns.AddRange(table.FilterColumns);
-        return copy;
+        return StructuredTableModel.FromCopyState(state);
     }
 }
 

@@ -1032,38 +1032,15 @@ public static class StructuredTableDesignCommandHelpers
         IReadOnlyList<StructuredTableColumnModel>? columns = null,
         IReadOnlyList<StructuredTableFilterColumnModel>? filterColumns = null)
     {
-        var copy = new StructuredTableModel
+        var state = table.CaptureCopyState() with
         {
-            Id = table.Id,
             Name = name ?? table.Name,
             DisplayName = displayName ?? table.DisplayName,
             Range = range ?? table.Range,
-            HasAutoFilter = table.HasAutoFilter,
-            TotalsRowShown = table.TotalsRowShown,
-            HeaderRowCount = table.HeaderRowCount,
-            TotalsRowCount = table.TotalsRowCount,
-            InsertRow = table.InsertRow,
-            InsertRowShift = table.InsertRowShift,
-            Published = table.Published,
-            Comment = table.Comment,
-            StyleName = table.StyleName,
-            ShowFirstColumn = table.ShowFirstColumn,
-            ShowLastColumn = table.ShowLastColumn,
-            ShowRowStripes = table.ShowRowStripes,
-            ShowColumnStripes = table.ShowColumnStripes,
-            PackagePart = table.PackagePart,
-            NativeSortStateXml = table.NativeSortStateXml,
-            NativeAttributes = table.NativeAttributes,
-            NativeChildXmls = table.NativeChildXmls,
-            NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
-            NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
-            NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
-            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
+            Columns = columns ?? table.Columns,
+            FilterColumns = filterColumns ?? table.FilterColumns
         };
-
-        copy.Columns.AddRange(columns ?? table.Columns);
-        copy.FilterColumns.AddRange(filterColumns ?? table.FilterColumns);
-        return copy;
+        return StructuredTableModel.FromCopyState(state);
     }
 
     private static bool IsValidTableNameStart(char ch) =>

@@ -1,5 +1,39 @@
 namespace FreeX.Core.Model;
 
+/// <summary>
+/// Complete allocation-free copy state for <see cref="StructuredTableModel"/>. Callers apply their
+/// intentional identity, range, package, or metadata transformations with a record <c>with</c>
+/// expression before materializing a new table through <see cref="StructuredTableModel.FromCopyState"/>.
+/// </summary>
+internal readonly record struct StructuredTableCopyState(
+    int Id,
+    string Name,
+    string DisplayName,
+    GridRange Range,
+    bool HasAutoFilter,
+    bool TotalsRowShown,
+    int? HeaderRowCount,
+    int? TotalsRowCount,
+    bool? InsertRow,
+    bool? InsertRowShift,
+    bool? Published,
+    string? Comment,
+    string? StyleName,
+    bool ShowFirstColumn,
+    bool ShowLastColumn,
+    bool ShowRowStripes,
+    bool ShowColumnStripes,
+    string PackagePart,
+    string? NativeSortStateXml,
+    IReadOnlyDictionary<string, string>? NativeAttributes,
+    IReadOnlyList<string>? NativeChildXmls,
+    IReadOnlyDictionary<string, string>? NativeAutoFilterAttributes,
+    IReadOnlyList<string>? NativeAutoFilterChildXmls,
+    IReadOnlyDictionary<string, string>? NativeStyleInfoAttributes,
+    IReadOnlyList<string>? NativeStyleInfoChildXmls,
+    IReadOnlyList<StructuredTableColumnModel> Columns,
+    IReadOnlyList<StructuredTableFilterColumnModel> FilterColumns);
+
 /// <summary>Structured Excel table metadata loaded from XLSX packages.</summary>
 public sealed class StructuredTableModel
 {
@@ -30,6 +64,110 @@ public sealed class StructuredTableModel
     public IReadOnlyList<string>? NativeStyleInfoChildXmls { get; init; }
     public List<StructuredTableColumnModel> Columns { get; } = [];
     public List<StructuredTableFilterColumnModel> FilterColumns { get; } = [];
+
+    /// <summary>Captures every table field without allocating a second model graph.</summary>
+    internal StructuredTableCopyState CaptureCopyState() =>
+        new(
+            Id,
+            Name,
+            DisplayName,
+            Range,
+            HasAutoFilter,
+            TotalsRowShown,
+            HeaderRowCount,
+            TotalsRowCount,
+            InsertRow,
+            InsertRowShift,
+            Published,
+            Comment,
+            StyleName,
+            ShowFirstColumn,
+            ShowLastColumn,
+            ShowRowStripes,
+            ShowColumnStripes,
+            PackagePart,
+            NativeSortStateXml,
+            NativeAttributes,
+            NativeChildXmls,
+            NativeAutoFilterAttributes,
+            NativeAutoFilterChildXmls,
+            NativeStyleInfoAttributes,
+            NativeStyleInfoChildXmls,
+            Columns,
+            FilterColumns);
+
+    /// <summary>Materializes a table from the canonical complete copy state.</summary>
+    internal static StructuredTableModel FromCopyState(StructuredTableCopyState state)
+    {
+        var copy = new StructuredTableModel
+        {
+            Id = state.Id,
+            Name = state.Name,
+            DisplayName = state.DisplayName,
+            Range = state.Range,
+            HasAutoFilter = state.HasAutoFilter,
+            TotalsRowShown = state.TotalsRowShown,
+            HeaderRowCount = state.HeaderRowCount,
+            TotalsRowCount = state.TotalsRowCount,
+            InsertRow = state.InsertRow,
+            InsertRowShift = state.InsertRowShift,
+            Published = state.Published,
+            Comment = state.Comment,
+            StyleName = state.StyleName,
+            ShowFirstColumn = state.ShowFirstColumn,
+            ShowLastColumn = state.ShowLastColumn,
+            ShowRowStripes = state.ShowRowStripes,
+            ShowColumnStripes = state.ShowColumnStripes,
+            PackagePart = state.PackagePart,
+            NativeSortStateXml = state.NativeSortStateXml,
+            NativeAttributes = state.NativeAttributes,
+            NativeChildXmls = state.NativeChildXmls,
+            NativeAutoFilterAttributes = state.NativeAutoFilterAttributes,
+            NativeAutoFilterChildXmls = state.NativeAutoFilterChildXmls,
+            NativeStyleInfoAttributes = state.NativeStyleInfoAttributes,
+            NativeStyleInfoChildXmls = state.NativeStyleInfoChildXmls
+        };
+        copy.Columns.AddRange(state.Columns);
+        copy.FilterColumns.AddRange(state.FilterColumns);
+        return copy;
+    }
+
+    /// <summary>
+    /// Deep-clones the mutable collection/native-metadata graph of a table filter column. The
+    /// optional id override is used when structural column edits reindex the criterion.
+    /// </summary>
+    internal static StructuredTableFilterColumnModel DeepCloneFilterColumn(
+        StructuredTableFilterColumnModel column,
+        int? columnId = null) =>
+        new(
+            columnId ?? column.ColumnId,
+            column.Values.ToArray(),
+            column.IncludeBlank,
+            column.CustomFilters.Select(filter => filter with
+            {
+                NativeAttributes = CloneDictionary(filter.NativeAttributes)
+            }).ToArray(),
+            column.CustomFiltersAnd,
+            column.CustomFiltersAndRaw,
+            CloneDictionary(column.NativeCustomFiltersAttributes),
+            column.NativeFilterXmls.ToArray(),
+            CloneDictionary(column.NativeAttributes))
+        {
+            ColorFilter = column.ColorFilter is null
+                ? null
+                : column.ColorFilter with
+                {
+                    NativeAttributes = CloneDictionary(column.ColorFilter.NativeAttributes)
+                },
+            DateGroups = column.DateGroups.Select(dateGroup => dateGroup with
+            {
+                NativeAttributes = CloneDictionary(dateGroup.NativeAttributes)
+            }).ToArray()
+        };
+
+    private static IReadOnlyDictionary<string, string>? CloneDictionary(
+        IReadOnlyDictionary<string, string>? source) =>
+        source is null ? null : new Dictionary<string, string>(source, StringComparer.Ordinal);
 
     /// <summary>
     /// Sets (or clears) <see cref="StructuredTableColumnModel.CalculatedColumnFormula"/> for the

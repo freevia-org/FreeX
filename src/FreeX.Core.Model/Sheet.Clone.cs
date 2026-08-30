@@ -391,25 +391,12 @@ public sealed partial class Sheet
         int? overrideTableId = null,
         string? overrideName = null)
     {
-        var clonedTable = new StructuredTableModel
+        var state = table.CaptureCopyState() with
         {
             Id = overrideTableId ?? table.Id,
             Name = overrideName ?? table.Name,
             DisplayName = overrideName ?? table.DisplayName,
             Range = RemapRange(table.Range, newId),
-            HasAutoFilter = table.HasAutoFilter,
-            TotalsRowShown = table.TotalsRowShown,
-            HeaderRowCount = table.HeaderRowCount,
-            TotalsRowCount = table.TotalsRowCount,
-            InsertRow = table.InsertRow,
-            InsertRowShift = table.InsertRowShift,
-            Published = table.Published,
-            Comment = table.Comment,
-            StyleName = table.StyleName,
-            ShowFirstColumn = table.ShowFirstColumn,
-            ShowLastColumn = table.ShowLastColumn,
-            ShowRowStripes = table.ShowRowStripes,
-            ShowColumnStripes = table.ShowColumnStripes,
             // R128-model-table-clone-packagepart: deliberately NOT table.PackagePart, mirroring the
             // R127B fix applied to PivotTableModel above (and PivotCacheModel/SlicerModel/TimelineModel
             // in DuplicateSheetCommand.cs / DuplicateSheetDrawingCloner.cs). PackagePart is the exact
@@ -435,36 +422,13 @@ public sealed partial class Sheet
             NativeStyleInfoAttributes = table.NativeStyleInfoAttributes is null
                 ? null
                 : new Dictionary<string, string>(table.NativeStyleInfoAttributes, StringComparer.Ordinal),
-            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls?.ToArray()
+            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls?.ToArray(),
+            FilterColumns = table.FilterColumns
+                .Select(column => StructuredTableModel.DeepCloneFilterColumn(column))
+                .ToArray()
         };
-        clonedTable.Columns.AddRange(table.Columns);
-        clonedTable.FilterColumns.AddRange(table.FilterColumns.Select(CloneStructuredTableFilterColumn));
-        return clonedTable;
+        return StructuredTableModel.FromCopyState(state);
     }
-
-    private static StructuredTableFilterColumnModel CloneStructuredTableFilterColumn(StructuredTableFilterColumnModel column) =>
-        new(
-            column.ColumnId,
-            column.Values.ToArray(),
-            column.IncludeBlank,
-            column.CustomFilters.Select(CloneStructuredTableCustomFilter).ToArray(),
-            column.CustomFiltersAnd,
-            column.CustomFiltersAndRaw,
-            column.NativeCustomFiltersAttributes is null
-                ? null
-                : new Dictionary<string, string>(column.NativeCustomFiltersAttributes, StringComparer.Ordinal),
-            column.NativeFilterXmls.ToArray(),
-            column.NativeAttributes is null
-                ? null
-                : new Dictionary<string, string>(column.NativeAttributes, StringComparer.Ordinal));
-
-    private static StructuredTableCustomFilterModel CloneStructuredTableCustomFilter(StructuredTableCustomFilterModel filter) =>
-        new(
-            filter.Operator,
-            filter.Value,
-            filter.NativeAttributes is null
-                ? null
-                : new Dictionary<string, string>(filter.NativeAttributes, StringComparer.Ordinal));
 
     private static ConditionalFormat CloneConditionalFormat(ConditionalFormat cf, SheetId newId, string sourceSheetName, string newSheetName)
     {

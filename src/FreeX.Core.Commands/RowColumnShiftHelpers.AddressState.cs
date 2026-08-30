@@ -2088,55 +2088,27 @@ internal static partial class RowColumnShiftHelpers
                 && table.Range.End.Row >= shift.Start
                 && table.Range.End.Row <= shift.End);
 
-        var clone = new StructuredTableModel
+        var state = table.CaptureCopyState() with
         {
-            Id = table.Id,
-            Name = table.Name,
-            DisplayName = table.DisplayName,
             Range = range,
-            HasAutoFilter = table.HasAutoFilter,
             TotalsRowShown = totalsRowShown,
-            HeaderRowCount = table.HeaderRowCount,
-            TotalsRowCount = table.TotalsRowCount,
-            InsertRow = table.InsertRow,
-            InsertRowShift = table.InsertRowShift,
-            Published = table.Published,
-            Comment = table.Comment,
-            StyleName = table.StyleName,
-            ShowFirstColumn = table.ShowFirstColumn,
-            ShowLastColumn = table.ShowLastColumn,
-            ShowRowStripes = table.ShowRowStripes,
-            ShowColumnStripes = table.ShowColumnStripes,
-            PackagePart = table.PackagePart,
             NativeSortStateXml = ShiftSortStateNativeXml(table.NativeSortStateXml, shift),
             NativeAttributes = CloneReadOnlyDictionary(table.NativeAttributes),
             NativeChildXmls = table.NativeChildXmls?.ToArray(),
             NativeAutoFilterAttributes = CloneReadOnlyDictionary(table.NativeAutoFilterAttributes),
             NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls?.ToArray(),
             NativeStyleInfoAttributes = CloneReadOnlyDictionary(table.NativeStyleInfoAttributes),
-            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls?.ToArray()
+            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls?.ToArray(),
+            Columns = ReconcileStructuredTableColumns(table, range, shift),
+            FilterColumns = ReconcileStructuredTableFilterColumns(table, range, shift)
         };
-        clone.Columns.AddRange(ReconcileStructuredTableColumns(table, range, shift));
-        clone.FilterColumns.AddRange(ReconcileStructuredTableFilterColumns(table, range, shift));
-        return clone;
+        return StructuredTableModel.FromCopyState(state);
     }
 
     private static StructuredTableFilterColumnModel CloneStructuredTableFilterColumn(
         StructuredTableFilterColumnModel column,
         int? columnId = null) =>
-        new(
-            columnId ?? column.ColumnId,
-            column.Values.ToArray(),
-            column.IncludeBlank,
-            column.CustomFilters.Select(filter => new StructuredTableCustomFilterModel(
-                filter.Operator,
-                filter.Value,
-                CloneReadOnlyDictionary(filter.NativeAttributes))).ToArray(),
-            column.CustomFiltersAnd,
-            column.CustomFiltersAndRaw,
-            CloneReadOnlyDictionary(column.NativeCustomFiltersAttributes),
-            column.NativeFilterXmls.ToArray(),
-            CloneReadOnlyDictionary(column.NativeAttributes));
+        StructuredTableModel.DeepCloneFilterColumn(column, columnId);
 
     private static IReadOnlyDictionary<string, string>? CloneReadOnlyDictionary(
         IReadOnlyDictionary<string, string>? source) =>

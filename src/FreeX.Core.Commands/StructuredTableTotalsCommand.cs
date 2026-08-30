@@ -570,38 +570,14 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
         bool updateTotalsRowCount = false,
         IReadOnlyList<StructuredTableColumnModel>? columnsOverride = null)
     {
-        var copy = new StructuredTableModel
+        var state = table.CaptureCopyState() with
         {
-            Id = table.Id,
-            Name = table.Name,
-            DisplayName = table.DisplayName,
             Range = range,
-            HasAutoFilter = table.HasAutoFilter,
             TotalsRowShown = totalsRowShown ?? table.TotalsRowShown,
-            HeaderRowCount = table.HeaderRowCount,
             TotalsRowCount = updateTotalsRowCount ? totalsRowCount : table.TotalsRowCount,
-            InsertRow = table.InsertRow,
-            InsertRowShift = table.InsertRowShift,
-            Published = table.Published,
-            Comment = table.Comment,
-            StyleName = table.StyleName,
-            ShowFirstColumn = table.ShowFirstColumn,
-            ShowLastColumn = table.ShowLastColumn,
-            ShowRowStripes = table.ShowRowStripes,
-            ShowColumnStripes = table.ShowColumnStripes,
-            PackagePart = table.PackagePart,
-            NativeSortStateXml = table.NativeSortStateXml,
-            NativeAttributes = table.NativeAttributes,
-            NativeChildXmls = table.NativeChildXmls,
-            NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
-            NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
-            NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
-            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
+            Columns = columnsOverride ?? table.Columns
         };
-
-        copy.Columns.AddRange(columnsOverride ?? table.Columns);
-        copy.FilterColumns.AddRange(table.FilterColumns);
-        return copy;
+        return StructuredTableModel.FromCopyState(state);
     }
 
     private static void ReplaceStructuredTables(Sheet sheet, IEnumerable<StructuredTableModel> tables)

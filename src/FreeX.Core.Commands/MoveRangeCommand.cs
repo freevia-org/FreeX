@@ -827,27 +827,9 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
     /// </summary>
     private static StructuredTableModel CloneStructuredTableWithRange(StructuredTableModel table, GridRange newRange)
     {
-        var clone = new StructuredTableModel
+        var state = table.CaptureCopyState() with
         {
-            Id = table.Id,
-            Name = table.Name,
-            DisplayName = table.DisplayName,
             Range = newRange,
-            HasAutoFilter = table.HasAutoFilter,
-            TotalsRowShown = table.TotalsRowShown,
-            HeaderRowCount = table.HeaderRowCount,
-            TotalsRowCount = table.TotalsRowCount,
-            InsertRow = table.InsertRow,
-            InsertRowShift = table.InsertRowShift,
-            Published = table.Published,
-            Comment = table.Comment,
-            StyleName = table.StyleName,
-            ShowFirstColumn = table.ShowFirstColumn,
-            ShowLastColumn = table.ShowLastColumn,
-            ShowRowStripes = table.ShowRowStripes,
-            ShowColumnStripes = table.ShowColumnStripes,
-            PackagePart = table.PackagePart,
-            NativeSortStateXml = table.NativeSortStateXml,
             NativeAttributes = table.NativeAttributes is null
                 ? null
                 : new Dictionary<string, string>(table.NativeAttributes, StringComparer.Ordinal),
@@ -861,9 +843,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
                 : new Dictionary<string, string>(table.NativeStyleInfoAttributes, StringComparer.Ordinal),
             NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls?.ToArray()
         };
-        clone.Columns.AddRange(table.Columns);
-        clone.FilterColumns.AddRange(table.FilterColumns);
-        return clone;
+        return StructuredTableModel.FromCopyState(state);
     }
 
     /// <summary>
