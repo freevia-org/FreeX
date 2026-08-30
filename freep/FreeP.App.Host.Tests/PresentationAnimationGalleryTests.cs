@@ -25,7 +25,13 @@ public sealed class PresentationAnimationGalleryTests
             VisualDescendants<Button>(window)
                 .Where(button => !string.IsNullOrEmpty(AutomationProperties.GetName(button)))
                 .Select(AutomationProperties.GetName)
-                .Should().Contain(["No Animation", "Appear", "Fade In", "Fly In", "Wipe", "Zoom In", "More Effects"]);
+                .Should().Contain(["No Animation", "Appear", "Fade In", "More Effects"]);
+
+            var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
+            definition.FindTab("animations")!.FindGroup("animation-effects")!.Controls
+                .Select(control => control.Label)
+                .Should().Contain(["Fly In", "Wipe", "Zoom In"],
+                    "the compact strip's More Effects menu is populated from the complete animation group");
         }
         finally
         {
