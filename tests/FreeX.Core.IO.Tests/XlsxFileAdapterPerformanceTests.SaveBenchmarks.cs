@@ -65,6 +65,85 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [BenchmarkFact]
+    public void Benchmark_NumberFormatCatalogWriter_LargeDistinctCatalog_ReportsTiming()
+    {
+        const int iterations = 3;
+        const int formatCount = 1_000;
+        var (workbook, package) = CreateNumberFormatCatalogBenchmark(formatCount);
+
+        using (var warmup = OpenWritablePackage(package))
+            XlsxNumberFormatCatalogWriter.Save(warmup, workbook);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = OpenWritablePackage(package);
+            var step = Stopwatch.StartNew();
+            XlsxNumberFormatCatalogWriter.Save(stream, workbook);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        Console.WriteLine(
+            "PERF XLSX_NUMFMT_CATALOG " +
+            $"existing_formats={formatCount} live_formats={formatCount} steps={iterations} " +
+            $"mean_ms={timings.Average():F2} max_ms={timings.Max():F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    private static (Workbook Workbook, byte[] Package) CreateNumberFormatCatalogBenchmark(int formatCount)
+    {
+        var workbook = new Workbook("NumberFormatCatalogBenchmark");
+        var sheet = workbook.AddSheet("Sheet1");
+        for (var i = 0; i < formatCount; i++)
+        {
+            var formatCode = $"0.0000\\ \"live-{i}\"";
+            workbook.NumberFormatCatalog[2_000 + i] = formatCode;
+            var styleId = workbook.RegisterStyle(new CellStyle { NumberFormat = formatCode });
+            var cell = Cell.FromValue(new NumberValue(i));
+            cell.StyleId = styleId;
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)i + 1, 1), cell);
+        }
+
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteTextEntry(archive, "xl/styles.xml", writer =>
+            {
+                writer.Write(
+                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                    "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +
+                    $"<numFmts count=\"{formatCount}\">");
+                for (var i = 0; i < formatCount; i++)
+                {
+                    writer.Write(
+                        $"<numFmt numFmtId=\"{164 + i}\" formatCode=\"0.0000 existing-{i}\"/>");
+                }
+
+                writer.Write("</numFmts></styleSheet>");
+            });
+        }
+
+        return (workbook, stream.ToArray());
+    }
+
+    private static MemoryStream OpenWritablePackage(byte[] package)
+    {
+        var stream = new MemoryStream(package.Length * 4);
+        stream.Write(package);
+        stream.Position = 0;
+        return stream;
+    }
+
+    [BenchmarkFact]
     public void Benchmark_LoadDrawingPicturesWorkbook_ReportsTiming()
     {
         const int iterations = 3;

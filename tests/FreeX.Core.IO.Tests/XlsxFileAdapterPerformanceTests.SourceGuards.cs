@@ -170,6 +170,19 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void NumberFormatCatalogWriter_IndexesExistingFormatsOnce()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxNumberFormatCatalogWriter.cs");
+
+        source.Should().Contain("var formatIndex = NumberFormatIndex.Create(numFmts, workbookNs);");
+        source.Should().Contain("_formatCodesById.TryAdd(id, formatCode);");
+        source.Should().Contain("_customIdsByCode.TryAdd(formatCode, id);");
+        source.Should().Contain("numFmts.SetAttributeValue(\"count\", formatIndex.Count");
+        source.Should().NotContain("FindNumberFormatById");
+        source.Should().NotContain("FindEquivalentNumberFormat");
+    }
+
+    [Fact]
     public void LoadCore_ReadsWorkbookMetadataInSinglePackagePass()
     {
         var adapterSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.cs");
