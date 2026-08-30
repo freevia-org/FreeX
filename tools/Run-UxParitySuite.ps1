@@ -289,8 +289,8 @@ function Build-CorpusWorkbook {
         Set-Cell $pivots 5 2 "Grid Basics!UxParitySales"
         $pivots.Columns.AutoFit() | Out-Null
 
-        $workbook.SaveAs($WorkbookPath, 51)
         $excel.CalculateFullRebuild()
+        $workbook.SaveAs($WorkbookPath, 51)
 
         return [pscustomobject]@{
             Excel = $excel
@@ -308,6 +308,78 @@ function Build-CorpusWorkbook {
     }
 }
 
+function New-WorkbookComparisonCopies {
+    param(
+        [object]$Excel,
+        [object]$Workbook,
+        [string]$ExcelWorkbookPath,
+        [string]$FreeXWorkbookPath
+    )
+
+    try {
+        $Excel.CalculateFullRebuild()
+        $Workbook.Save()
+        $Workbook.Close($false)
+    }
+    finally {
+        Release-ComObject $Workbook
+    }
+
+    # Finish Excel's save before cloning it so both apps start from the exact same bytes.
+    [System.IO.File]::Copy($ExcelWorkbookPath, $FreeXWorkbookPath, $true)
+    $excelHash = (Get-FileHash -LiteralPath $ExcelWorkbookPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $freeXHash = (Get-FileHash -LiteralPath $FreeXWorkbookPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($excelHash -cne $freeXHash) {
+        throw "Excel and FreeX workbook copies are not byte-identical after cloning."
+    }
+
+    $linkedDataTypeEntries = Get-LinkedDataTypePackageEntries $ExcelWorkbookPath
+    if ($linkedDataTypeEntries.Count -gt 0) {
+        throw "The default UX corpus must exclude Microsoft linked data types. Excel authored: $($linkedDataTypeEntries -join ', ')"
+    }
+
+    return [pscustomobject]@{
+        Workbook = $Excel.Workbooks.Open($ExcelWorkbookPath)
+        ContentHashSha256 = $excelHash
+        LinkedDataTypeEntries = $linkedDataTypeEntries
+    }
+}
+
+function Get-LinkedDataTypePackageEntries {
+    param([string]$WorkbookPath)
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($WorkbookPath)
+    try {
+        return @($archive.Entries |
+            Where-Object { $_.FullName.StartsWith("xl/richData/", [System.StringComparison]::OrdinalIgnoreCase) } |
+            ForEach-Object FullName)
+    }
+    finally {
+        $archive.Dispose()
+    }
+}
+
+function Start-FreeXDesktopHost {
+    param(
+        [string]$ExePath,
+        [string]$WorkbookPath
+    )
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $ExePath
+    $startInfo.Arguments = '"' + $WorkbookPath + '"'
+    $startInfo.WorkingDirectory = Split-Path -Parent $ExePath
+    $startInfo.UseShellExecute = $false
+
+    # Do not inherit a developer-local runtime root that can hide the installed host runtime.
+    foreach ($variableName in @("DOTNET_ROOT", "DOTNET_ROOT_X64", "DOTNET_ROOT_X86", "DOTNET_ROOT_ARM64")) {
+        [void]$startInfo.EnvironmentVariables.Remove($variableName)
+    }
+
+    return [System.Diagnostics.Process]::Start($startInfo)
+}
+
 $repoRoot = Get-RepoRoot -ScriptRoot $PSScriptRoot
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $runRoot = Join-Path (Resolve-Path $repoRoot).Path $OutputRoot
@@ -315,7 +387,8 @@ $runDir = Join-Path $runRoot $timestamp
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 
 $manifestPath = Join-Path $runDir "ux-parity-run.json"
-$workbookPath = Join-Path $runDir "ux-parity-corpus.xlsx"
+$excelWorkbookPath = Join-Path $runDir "excel-workbook.xlsx"
+$freeXWorkbookPath = Join-Path $runDir "freex-workbook.xlsx"
 $excelBundle = $null
 $freeXProcess = $null
 
@@ -333,8 +406,15 @@ $manifest = [ordered]@{
         status = Get-GitValue $repoRoot @("status", "--short", "--branch")
     }
     workbook = [ordered]@{
-        path = $workbookPath
+        excelPath = $excelWorkbookPath
+        freexPath = $freeXWorkbookPath
         authoringApp = "Microsoft Excel COM"
+        initialContentHashSha256 = $null
+        copiesByteIdentical = $false
+        linkedDataTypes = [ordered]@{
+            policy = "excluded-from-default-manual-corpus"
+            detectedEntries = @()
+        }
         functionInventoryCount = 0
     }
     excel = [ordered]@{
@@ -347,7 +427,7 @@ $manifest = [ordered]@{
         launched = $false
         processId = $null
         exe = $null
-        startupWorkbook = $workbookPath
+        startupWorkbook = $freeXWorkbookPath
     }
     scenarioMatrix = @(
         [ordered]@{ id = "launch.open-corpus"; area = "App launch"; status = "started"; evidence = @() },
@@ -355,7 +435,7 @@ $manifest = [ordered]@{
         [ordered]@{ id = "grid.mouse-keyboard"; area = "Worksheet grid"; status = "planned"; evidence = @() },
         [ordered]@{ id = "ribbon.all-tabs-keytips"; area = "Ribbon"; status = "planned"; evidence = @() },
         [ordered]@{ id = "dialogs.full-catalog"; area = "Dialogs"; status = "planned"; evidence = @() },
-        [ordered]@{ id = "workbook.feature-corpus"; area = "Workbook features"; status = "started"; evidence = @($workbookPath) },
+        [ordered]@{ id = "workbook.feature-corpus"; area = "Workbook features"; status = "started"; evidence = @($excelWorkbookPath, $freeXWorkbookPath) },
         [ordered]@{ id = "visual.paired-screenshots"; area = "Visual comparison"; status = "planned"; evidence = @() },
         [ordered]@{ id = "disparities.triage"; area = "Disparity log"; status = "planned"; evidence = @() }
     )
@@ -366,8 +446,13 @@ $manifest = [ordered]@{
 }
 
 try {
-    $excelBundle = Build-CorpusWorkbook $repoRoot $workbookPath
+    $excelBundle = Build-CorpusWorkbook $repoRoot $excelWorkbookPath
+    $comparisonCopies = New-WorkbookComparisonCopies $excelBundle.Excel $excelBundle.Workbook $excelWorkbookPath $freeXWorkbookPath
+    $excelBundle.Workbook = $comparisonCopies.Workbook
     $manifest.workbook.functionInventoryCount = $excelBundle.FunctionCount
+    $manifest.workbook.initialContentHashSha256 = $comparisonCopies.ContentHashSha256
+    $manifest.workbook.copiesByteIdentical = $true
+    $manifest.workbook.linkedDataTypes.detectedEntries = @($comparisonCopies.LinkedDataTypeEntries)
     $manifest.excel.launched = $true
     $manifest.excel.version = [string]$excelBundle.Excel.Version
     $manifest.excel.hwnd = [int]$excelBundle.Excel.Hwnd
@@ -382,7 +467,7 @@ try {
 
     $freeXPath = Resolve-FreeXExe $repoRoot $FreeXExe -SkipBuild:$SkipFreeXBuild
     $manifest.freex.exe = $freeXPath
-    $freeXProcess = Start-Process -FilePath $freeXPath -ArgumentList @($workbookPath) -PassThru
+    $freeXProcess = Start-FreeXDesktopHost $freeXPath $freeXWorkbookPath
     Start-Sleep -Seconds 8
     $manifest.freex.launched = -not $freeXProcess.HasExited
     $manifest.freex.processId = $freeXProcess.Id
@@ -424,7 +509,8 @@ finally {
 }
 
 Write-Host "UX parity suite run manifest: $manifestPath"
-Write-Host "UX parity corpus workbook: $workbookPath"
+Write-Host "Excel workbook copy: $excelWorkbookPath"
+Write-Host "FreeX workbook copy: $freeXWorkbookPath"
 if ($KeepAppsOpen) {
     Write-Host "Excel and FreeX were left open for interactive walkthrough."
 }
