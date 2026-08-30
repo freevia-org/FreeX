@@ -6,6 +6,7 @@
       "app": "FreeX",
       "gate": "commit",
       "platforms": ["windows"],
+      "impactPaths": ["src/FreeX.Core.*/**"],
       "projects": [
         "tests/Free.Shared.AppServices.Tests/Free.Shared.AppServices.Tests.csproj",
         "tests/FreeX.Core.Formula.Tests/FreeX.Core.Formula.Tests.csproj",
@@ -18,6 +19,11 @@
       "app": "FreeX",
       "gate": "commit",
       "platforms": ["windows"],
+      "impactPaths": [
+        "src/FreeX.App.Host/**",
+        "src/FreeX.App.UI/**",
+        "src/FreeX.Ribbon.Definitions/**"
+      ],
       "projects": [
         "tests/FreeX.App.Localization.Tests/FreeX.App.Localization.Tests.csproj",
         "tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj",
@@ -61,6 +67,7 @@
         "tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj"
       ],
       "platforms": ["windows", "linux", "macos"],
+      "impactPaths": ["src/FreeX.App.Avalonia/**"],
       "projects": [
         "tests/Free.Shared.Shell.Avalonia.Tests/Free.Shared.Shell.Avalonia.Tests.csproj",
         "tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj"
@@ -146,6 +153,12 @@
       "app": "FreeW",
       "gate": "commit",
       "platforms": ["windows", "linux", "macos"],
+      "impactPaths": [
+        "freew/FreeW.Core.*/**",
+        "freew/FreeW.App.Localization/**",
+        "freew/FreeW.App.Presentation/**",
+        "freew/FreeW.Ribbon.Definitions/**"
+      ],
       "preflightModes": {
         "macos": ["platform"]
       },
@@ -166,6 +179,10 @@
       "app": "FreeW",
       "gate": "commit",
       "platforms": ["windows"],
+      "impactPaths": [
+        "freew/FreeW.App.Host/**",
+        "freew/FreeW.App.Avalonia/**"
+      ],
       "buildProjects": [
         "freew/FreeW.App.Host/FreeW.App.Host.csproj",
         "freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj"
@@ -180,6 +197,14 @@
       "app": "FreeP",
       "gate": "commit",
       "platforms": ["windows", "linux", "macos"],
+      "impactPaths": [
+        "freep/FreeP.Core.*/**",
+        "freep/FreeP.App.Localization/**",
+        "freep/FreeP.App.Media/**",
+        "freep/FreeP.App.Presentation/**",
+        "freep/FreeP.App.Recording/**",
+        "freep/FreeP.Ribbon.Definitions/**"
+      ],
       "preflightModes": {
         "windows": ["platform"],
         "linux": ["static", "platform"]
@@ -200,6 +225,12 @@
       "app": "FreeP",
       "gate": "commit",
       "platforms": ["windows"],
+      "impactPaths": [
+        "freep/FreeP.App.Host/**",
+        "freep/FreeP.App.Rendering.Wpf/**",
+        "freep/FreeP.App.Ole.Windows/**",
+        "freep/FreeP.App.Recording.Windows/**"
+      ],
       "buildProjects": [
         "freep/FreeP.App.Host/FreeP.App.Host.csproj"
       ],
@@ -213,6 +244,10 @@
       "gate": "commit",
       "requiresFullHistory": true,
       "platforms": ["windows"],
+      "impactPaths": [
+        "freep/FreeP.App.Avalonia/**",
+        "freep/FreeP.App.Rendering.Avalonia/**"
+      ],
       "buildProjects": [
         "freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj"
       ],

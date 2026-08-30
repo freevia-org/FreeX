@@ -43,6 +43,18 @@ foreach ($gate in @($manifest.gates)) {
     if (@($gate.platforms).Count -eq 0 -or @($gate.platforms | Where-Object { $allowedPlatforms -notcontains $_ }).Count -gt 0) {
         $errors.Add("Gate '$($gate.id)' must target one or more supported platforms.")
     }
+    if ($gate.gate -eq "commit" -and @($gate.platforms) -contains "windows") {
+        if ($gate.PSObject.Properties.Name -notcontains "impactPaths" -or @($gate.impactPaths).Count -eq 0) {
+            $errors.Add("Windows commit gate '$($gate.id)' must declare impactPaths for cross-project source-contract coverage.")
+        }
+        else {
+            foreach ($impactPath in @($gate.impactPaths)) {
+                if ($impactPath -isnot [string] -or [string]::IsNullOrWhiteSpace($impactPath) -or $impactPath.Contains('\')) {
+                    $errors.Add("Gate '$($gate.id)' contains invalid impact path '$impactPath'; use a non-empty repository path with forward slashes.")
+                }
+            }
+        }
+    }
     $platformProjects = [System.Collections.Generic.List[object]]::new()
     if ($gate.PSObject.Properties.Name -contains "platformProjects") {
         foreach ($platformProperty in @($gate.platformProjects.PSObject.Properties)) {
@@ -238,6 +250,42 @@ Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expect
 Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expected 'name: FreeX full release gate'
 Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expected 'name: Validate complete release inventory'
 
+function Get-SelectedLocalGateIds {
+    param([string[]]$ChangedPaths)
+
+    $selector = Join-Path $PSScriptRoot "Get-ImpactedTestGates.ps1"
+    $json = & $selector -ChangedPaths $ChangedPaths -OutputFormat Json
+    return @(($json | ConvertFrom-Json).gateIds)
+}
+
+$hostSourceGates = @(Get-SelectedLocalGateIds -ChangedPaths @("src/FreeX.App.Host/MainWindow.Viewport.cs"))
+if ($hostSourceGates -notcontains "freex-contract") {
+    $errors.Add("FreeX host source changes must select the freex-contract gate, including source guards that do not use ProjectReference.")
+}
+$freePHostGates = @(Get-SelectedLocalGateIds -ChangedPaths @("freep/FreeP.App.Host/PresentationAnimationGallery.cs"))
+if ($freePHostGates -notcontains "freep-wpf-desktop") {
+    $errors.Add("FreeP WPF host changes must select the freep-wpf-desktop gate.")
+}
+$coreGates = @(Get-SelectedLocalGateIds -ChangedPaths @("src/FreeX.Core.Commands/CommandDispatcher.cs"))
+foreach ($requiredGate in @("freex-core-portable", "freex-contract", "freex-avalonia")) {
+    if ($coreGates -notcontains $requiredGate) {
+        $errors.Add("FreeX core changes must transitively select '$requiredGate'.")
+    }
+}
+$documentationGates = @(Get-SelectedLocalGateIds -ChangedPaths @("docs/testing/example.md"))
+if ($documentationGates.Count -ne 0) {
+    $errors.Add("Documentation-only changes must not select local commit-test gates.")
+}
+$globalGates = @(Get-SelectedLocalGateIds -ChangedPaths @("Directory.Build.props"))
+$expectedWindowsCommitGates = @($manifest.gates | Where-Object {
+    $_.gate -eq "commit" -and @($_.platforms) -contains "windows"
+} | ForEach-Object { [string]$_.id })
+$actualGlobalGateSet = @($globalGates | Sort-Object) -join '|'
+$expectedGlobalGateSet = @($expectedWindowsCommitGates | Sort-Object) -join '|'
+if ($actualGlobalGateSet -ne $expectedGlobalGateSet) {
+    $errors.Add("Global build-contract changes must select every Windows commit gate.")
+}
+
 $gateDocumentation = Get-Content -LiteralPath (Join-Path $repoRoot "docs/testing/test-gates.md") -Raw
 foreach ($requiredHeading in @("Commit gate", "Release gate", "all platforms", "Invoke-TestGate.ps1")) {
     if ($gateDocumentation.IndexOf($requiredHeading, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
@@ -249,4 +297,4 @@ if ($errors.Count -gt 0) {
     throw ("Test-gate contract failed:`n - " + ($errors -join "`n - "))
 }
 
-Write-Host "Test-gate contract passed: $($manifest.gates.Count) gates, $($coveredProjects.Count) assigned projects."
+Write-Host "Test-gate contract passed: $($manifest.gates.Count) gates, $($coveredProjects.Count) assigned projects, and affected-gate selection probes."

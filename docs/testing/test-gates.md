@@ -34,6 +34,13 @@ to short existing integration entries, so they reuse the same checkout, SDK setu
 and runner slot instead of occupying four additional jobs. The gate contract requires exactly one
 static owner and one platform owner per OS. This also avoids rebuilding generated-document
 validators and rescanning every tracked path three times. All integration entries run in parallel.
+
+Before integration, `tools/Test-BranchForIntegration.ps1` verifies the exact `origin/main` CI result,
+runs preflight and the Release build, and then executes only the affected Windows commit gates.
+`tools/Get-ImpactedTestGates.ps1` derives those gates from transitive `ProjectReference` consumers
+plus each gate's `impactPaths`. The latter covers source-contract tests that intentionally inspect
+shipping source without compiling a reference to it. Ordinary branches cannot advance a red or
+still-running `main`; `-AllowRedMainFix` is reserved for a branch that repairs the observed failure.
 FreeX keeps core and contract suites isolated on Windows, where they have distinct runtime and
 failure characteristics, but coalesces them on Linux and macOS. This removes two checkout/setup/
 restore jobs and keeps CI plus CodeQL within the repository's observed 20-runner concurrency ceiling.
