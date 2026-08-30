@@ -164,11 +164,19 @@ public static class InCanvasRichClipboardPlanner
             typingRun is null ? null : TextBodyModelCloner.CloneRun(typingRun));
     }
 
+    /// <param name="destinationSlideIds">
+    /// Slide ids of the presentation being pasted into. When supplied, a pasted run whose
+    /// hyperlink jumps to a slide that does not exist here -- the cross-presentation paste
+    /// case -- has its <see cref="Hyperlink.TargetSlideId"/> cleared, mirroring how deleting a
+    /// slide orphans the links that pointed at it. Url and Tooltip are preserved. Pass null
+    /// (the default) to keep the fragment exactly as captured.
+    /// </param>
     public static TextBody Apply(
         TextBody destination,
         InCanvasEditorTextSelection selection,
         InCanvasRichClipboardPayload payload,
-        out int caret)
+        out int caret,
+        IReadOnlyCollection<string>? destinationSlideIds = null)
     {
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(payload);
@@ -180,7 +188,38 @@ public static class InCanvasRichClipboardPlanner
             destination,
             start,
             end - start,
-            payload.Body);
+            ResolveFragmentSlideJumps(payload.Body, destinationSlideIds));
+    }
+
+    /// <summary>
+    /// Drops internal slide-jump targets the destination presentation cannot resolve. The
+    /// fragment is cloned before it is edited: the same payload can be pasted again, so the
+    /// clipboard copy must keep its original targets for a paste back into the source deck.
+    /// </summary>
+    private static TextBody ResolveFragmentSlideJumps(
+        TextBody fragment,
+        IReadOnlyCollection<string>? destinationSlideIds)
+    {
+        if (destinationSlideIds is null)
+            return fragment;
+
+        var known = destinationSlideIds as ISet<string>
+            ?? new HashSet<string>(destinationSlideIds, StringComparer.Ordinal);
+        bool needsResolution = fragment.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.Hyperlink?.TargetSlideId is { } id && !known.Contains(id));
+        if (!needsResolution)
+            return fragment;
+
+        var resolved = TextBodyModelCloner.CloneTextBody(fragment) ?? new TextBody();
+        foreach (var run in resolved.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+        {
+            if (run.Hyperlink is { TargetSlideId: { } targetSlideId } hyperlink
+                && !known.Contains(targetSlideId))
+                hyperlink.TargetSlideId = null;
+        }
+
+        return resolved;
     }
 
     /// <summary>

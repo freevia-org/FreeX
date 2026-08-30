@@ -622,6 +622,14 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
     }
 
     /// <summary>Activates the text editor for the given shape.</summary>
+    /// <summary>
+    /// Slide ids of the deck currently being edited, read at paste time so a slide-jump
+    /// hyperlink pasted in from another presentation is orphaned rather than left pointing at
+    /// an id this deck cannot resolve.
+    /// </summary>
+    private IReadOnlyCollection<string>? CurrentSlideIds() =>
+        _editor.Presentation?.Slides.Select(slide => slide.Id).ToArray();
+
     public void Activate(uint shapeId)
     {
         if (_active && _editingShapeId == shapeId)
@@ -665,7 +673,8 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             fallbackFontSizePt: shapeFallbackFontSizePt,
             layoutBody: startPlan.InheritedLayoutBody,
             masterTextStyles: startPlan.InheritedMasterTextStyles,
-            category: startPlan.InheritedStyleCategory)
+            category: startPlan.InheritedStyleCategory,
+            destinationSlideIdsProvider: CurrentSlideIds)
         {
             MinWidth = rasterAlignedWidth,
             MinHeight = placement.Height,
@@ -729,7 +738,8 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         _cellTextBox = new AvaloniaRichTextEditor(
             startPlan.OriginalBody,
             backgroundAlpha: 0xEE,
-            fallbackFontSizePt: cellFallbackFontSizePt)
+            fallbackFontSizePt: cellFallbackFontSizePt,
+            destinationSlideIdsProvider: CurrentSlideIds)
         {
             MinWidth = placement.Width,
             MinHeight = placement.Height,
