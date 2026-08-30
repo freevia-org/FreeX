@@ -210,6 +210,62 @@ public sealed class R104_ChangePivotSourceTableBindingResetTests
         ReadGrandTotalAmount(sheet, pivot).Should().Be(300);
     }
 
+    [Fact]
+    public void Apply_RedirectsAcrossSourceType_PreservesCompatibleCalculatedItems()
+    {
+        var (workbook, sheet, pivot, cache) = CreateTableBackedPivotWithAlternatives("PivotSourceCalculatedItemsTest");
+        var calculatedItem = new PivotCalculatedItemModel(0, "North + South", "North+South");
+        cache.CalculatedItems.Add(calculatedItem);
+        pivot.CalculatedItems.Add(calculatedItem);
+
+        var command = new ChangePivotTableSourceCommand(sheet.Id, pivot.Name, Range(sheet, "N1", "Q3"));
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+
+        var redirectedCache = CommandGuards.FindPivotCache(workbook, pivot);
+        redirectedCache.Should().NotBeSameAs(cache, "crossing Table to WorksheetRange replaces the init-only SourceType");
+        redirectedCache!.CalculatedItems.Should().ContainSingle()
+            .Which.Should().BeSameAs(calculatedItem,
+                "a compatible cache-level calculated item must not disappear merely because SourceType changed");
+        pivot.CalculatedItems.Should().ContainSingle()
+            .Which.Should().BeSameAs(calculatedItem,
+                "the PivotTable's runtime calculated-item definition must remain available to refresh and save");
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Apply_WithCalculatedItemOutsideNewSource_RejectsAtomically(
+        bool addToCache,
+        bool addToPivotTable)
+    {
+        var (workbook, sheet, pivot, cache) = CreateTableBackedPivotWithAlternatives("PivotSourceCalculatedItemGuardTest");
+        var calculatedItem = new PivotCalculatedItemModel(3, "Calculated Units", "Units");
+        if (addToCache)
+            cache.CalculatedItems.Add(calculatedItem);
+        if (addToPivotTable)
+            pivot.CalculatedItems.Add(calculatedItem);
+        var originalSourceRange = pivot.SourceRange;
+        var originalRenderedRange = pivot.LastRenderedRange;
+        var originalFields = cache.Fields.ToList();
+
+        // N1:P3 has only three fields. The pivot's row field (0) and data field (2) still fit, so
+        // only the calculated item's field index exposes the incompatible source narrowing.
+        var command = new ChangePivotTableSourceCommand(sheet.Id, pivot.Name, Range(sheet, "N1", "P3"));
+        var outcome = command.Apply(new TestCommandContext(workbook));
+
+        outcome.Success.Should().BeFalse();
+        pivot.SourceRange.Should().Be(originalSourceRange);
+        pivot.LastRenderedRange.Should().Be(originalRenderedRange);
+        pivot.CalculatedItems.Should().HaveCount(addToPivotTable ? 1 : 0);
+        CommandGuards.FindPivotCache(workbook, pivot).Should().BeSameAs(cache);
+        cache.SourceType.Should().Be(PivotCacheSourceType.Table);
+        cache.SourceReference.Should().Be("A1:D5");
+        cache.SourceTableName.Should().Be("SalesTable");
+        cache.SourceTableId.Should().Be(1);
+        cache.Fields.Should().Equal(originalFields);
+        cache.CalculatedItems.Should().HaveCount(addToCache ? 1 : 0);
+    }
+
     // --- direction 4: table-backed pivot -> a DIFFERENT table ---
     // Expected after: SourceType=Table, SourceTableName/SourceTableId = the NEW table's identity
     // (old SalesTable identity fully discarded).
