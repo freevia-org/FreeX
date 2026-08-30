@@ -34,69 +34,29 @@ public sealed partial class FormulaEvaluator
     /// ANCHORARRAY (AST-aware special forms, never in the registry) and any Name-Manager-defined
     /// custom function are left alone, matching <see cref="EvaluateFunction"/>'s own carve-outs.
     /// </summary>
-    public static void ValidateBuiltInFunctionArity(FormulaNode root)
+    public static void ValidateBuiltInFunctionArity(FormulaNode root) =>
+        ValidateFormulaEntryAstCore(root, validateArity: true, validateNesting: false);
+
+    private static void ValidateBuiltInCallArity(FunctionCallNode call)
     {
-        switch (root)
+        if (!BuiltInFunctions.TryGet(call.FunctionName, out var entry))
+            return;
+
+        var (_, minArgs, maxArgs) = entry;
+        var count = call.Arguments.Count;
+
+        if (count < minArgs)
         {
-            case FunctionCallNode call:
-                if (BuiltInFunctions.TryGet(call.FunctionName, out var entry))
-                {
-                    var (_, minArgs, maxArgs) = entry;
-                    var count = call.Arguments.Count;
+            throw new FormulaParseException(
+                $"Too few arguments for function {call.FunctionName}(). " +
+                $"Requires at least {minArgs}, got {count}.");
+        }
 
-                    if (count < minArgs)
-                    {
-                        throw new FormulaParseException(
-                            $"Too few arguments for function {call.FunctionName}(). " +
-                            $"Requires at least {minArgs}, got {count}.");
-                    }
-
-                    if (count > maxArgs)
-                    {
-                        throw new FormulaParseException(
-                            $"Too many arguments for function {call.FunctionName}(). " +
-                            $"Allows at most {maxArgs}, got {count}.");
-                    }
-                }
-
-                foreach (var argument in call.Arguments)
-                    ValidateBuiltInFunctionArity(argument);
-                break;
-
-            case BinaryOpNode binaryOp:
-                ValidateBuiltInFunctionArity(binaryOp.Left);
-                ValidateBuiltInFunctionArity(binaryOp.Right);
-                break;
-
-            case UnaryOpNode unaryOp:
-                ValidateBuiltInFunctionArity(unaryOp.Operand);
-                break;
-
-            case IntersectionNode intersection:
-                ValidateBuiltInFunctionArity(intersection.Left);
-                ValidateBuiltInFunctionArity(intersection.Right);
-                break;
-
-            case NamedRangeEndpointNode endpoint:
-                ValidateBuiltInFunctionArity(endpoint.Start);
-                ValidateBuiltInFunctionArity(endpoint.End);
-                break;
-
-            case UnionNode union:
-                foreach (var area in union.Areas)
-                    ValidateBuiltInFunctionArity(area);
-                break;
-
-            case ArrayConstantNode array:
-                foreach (var row in array.Rows)
-                    foreach (var cell in row)
-                        ValidateBuiltInFunctionArity(cell);
-                break;
-
-            // NumberNode, StringNode, BooleanNode, OmittedArgumentNode, CellRefNode, RangeRefNode,
-            // FullColumnRangeRefNode, FullRowRangeRefNode, NamedRangeNode, StructuredReferenceNode,
-            // StructuredCurrentRowReferenceNode, and ErrorNode are all leaves with no nested
-            // FormulaNode operands to walk.
+        if (count > maxArgs)
+        {
+            throw new FormulaParseException(
+                $"Too many arguments for function {call.FunctionName}(). " +
+                $"Allows at most {maxArgs}, got {count}.");
         }
     }
 }

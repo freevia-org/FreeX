@@ -117,4 +117,57 @@ public sealed class R120_FormulaEvaluatorArityValidationTests
 
         act.Should().NotThrow();
     }
+
+    [Fact]
+    public void ValidateBuiltInFunctionArity_OverNestedValidCalls_DoesNotThrow()
+    {
+        var ast = FormulaEvaluator.ParseFormula(BuildNestedIfFormula(65));
+
+        var act = () => FormulaEvaluator.ValidateBuiltInFunctionArity(ast);
+
+        act.Should().NotThrow("the standalone arity validator must not enforce entry nesting");
+    }
+
+    [Fact]
+    public void ValidateBuiltInFunctionArity_TenThousandNodeBinaryChain_DoesNotOverflowStack()
+    {
+        FormulaNode ast = new NumberNode(1);
+        for (var i = 0; i < 10_000; i++)
+            ast = new BinaryOpNode(ast, BinaryOperator.Add, new NumberNode(1));
+
+        var act = () => FormulaEvaluator.ValidateBuiltInFunctionArity(ast);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void ValidateFormulaEntryAst_TwoInvalidCalls_ReportsLeftCallFirst()
+    {
+        var ast = FormulaEvaluator.ParseFormula("IF(1)+LEFT(\"x\",1,2)");
+
+        var act = () => FormulaEvaluator.ValidateFormulaEntryAst(ast);
+
+        act.Should().Throw<FormulaParseException>()
+            .WithMessage("Too few arguments for function IF(). Requires at least 2, got 1.");
+    }
+
+    [Fact]
+    public void ValidateFormulaEntryAst_BadArityAnywhere_WinsOverEarlierExcessNesting()
+    {
+        var ast = FormulaEvaluator.ParseFormula(
+            $"{BuildNestedIfFormula(65)}+LEFT(\"x\",1,2)");
+
+        var act = () => FormulaEvaluator.ValidateFormulaEntryAst(ast);
+
+        act.Should().Throw<FormulaParseException>()
+            .WithMessage("Too many arguments for function LEFT(). Allows at most 2, got 3.");
+    }
+
+    private static string BuildNestedIfFormula(int levels)
+    {
+        var formula = "1";
+        for (var i = 0; i < levels; i++)
+            formula = $"IF({formula},1,1)";
+        return formula;
+    }
 }

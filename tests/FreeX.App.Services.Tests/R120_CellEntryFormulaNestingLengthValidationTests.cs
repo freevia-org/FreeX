@@ -85,6 +85,19 @@ public sealed class R120_CellEntryFormulaNestingLengthValidationTests
     }
 
     [Fact]
+    public void CreateCell_MaxLengthScaleLeftDeepBinaryFormula_DoesNotOverflowValidatorStack()
+    {
+        var body = string.Join("+", Enumerable.Repeat("1", 4_000));
+        var entered = "=" + body;
+        entered.Length.Should().BeLessThanOrEqualTo(FormulaEvaluator.MaxFormulaEntryLength);
+
+        var cell = CellEntryParser.CreateCell(
+            entered, Anchor, useR1C1ReferenceStyle: false);
+
+        cell.FormulaText.Should().Be(body);
+    }
+
+    [Fact]
     public void CommitCellText_100NestedIfCalls_FailsCommitInsteadOfPersistingOverNestedFormula()
     {
         var (session, sheet, address) = CreateSessionAtA1();
