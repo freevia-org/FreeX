@@ -121,4 +121,39 @@ public sealed class InsertSectionBreakSectionScopeTests
         insertedPage.WidthPt.Should().Be(612);
         insertedPage.HeightPt.Should().Be(792);
     }
+
+    /// <summary>
+    /// Regression test for freew-sections-headers F1 at the actual production call site
+    /// (<see cref="DocumentView.InsertSectionBreak"/>): a single-section document that already has a
+    /// header/footer must keep showing it on the pages before an inserted section break, not blank it.
+    /// Mirrors <c>FreeW.App.Host.Tests.InsertSectionBreakSectionScopeTests</c>'s equivalent test.
+    /// </summary>
+    [Fact]
+    public void InsertSectionBreak_SingleSectionDocument_PreservesHeaderAndFooterOnPagesBeforeBreak()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Only section."));
+        doc.Header = new HeaderFooter("MY RUNNING HEADER");
+        doc.Footer = new HeaderFooter("MY RUNNING FOOTER");
+
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.MoveCaretToBlockForTest(0, 0);
+
+        view.InsertSectionBreak(SectionBreakKind.NextPage);
+
+        var inserted = view.Document.Blocks
+            .OfType<Paragraph>()
+            .First(p => p.SectionBreak is not null);
+
+        inserted.SectionBreak!.HeadersFooters.Header.Should().NotBeNull();
+        inserted.SectionBreak!.HeadersFooters.Header!.PlainText.Should().Be("MY RUNNING HEADER");
+        inserted.SectionBreak!.HeadersFooters.Footer.Should().NotBeNull();
+        inserted.SectionBreak!.HeadersFooters.Footer!.PlainText.Should().Be("MY RUNNING FOOTER");
+
+        // Sibling no-regression: the document's own (final-section) header/footer are unaffected.
+        view.Document.Header!.PlainText.Should().Be("MY RUNNING HEADER");
+        view.Document.Footer!.PlainText.Should().Be("MY RUNNING FOOTER");
+    }
 }

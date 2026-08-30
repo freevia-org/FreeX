@@ -4935,7 +4935,12 @@ public sealed partial class DocumentView : Control
             return;
 
         var fontSizePt = Math.Max(1, text.FontSize / PxPerPoint);
-        var estimatedWidthDip = text.Text.Length * text.FontSize * 0.5;
+        // r172 remediation: the on-screen chart renderer measures this very string with
+        // BuildChartSceneText and centres on WidthIncludingTrailingWhitespace (DrawSceneText).
+        // A flat character-count guess put chart titles, legend entries and data labels in a
+        // different place in the exported PDF than on screen -- the third copy of this defect
+        // in this file.
+        var estimatedWidthDip = BuildChartSceneText(text).WidthIncludingTrailingWhitespace;
         var xDip = text.Anchor switch
         {
             ChartSceneTextAnchor.TopCenter or ChartSceneTextAnchor.Center => text.X - estimatedWidthDip / 2,
@@ -5253,7 +5258,21 @@ public sealed partial class DocumentView : Control
         if (string.IsNullOrEmpty(text))
             return;
 
-        var widthDip = text.Length * fontSizePt * PxPerPoint * 0.5;
+        // r172 remediation: measure the text the same way the on-screen renderer for it does
+        // (DrawSmartArtNodeText builds the identical RunFormatting and centers on
+        // WidthIncludingTrailingWhitespace). A flat character-count guess centred wide or narrow
+        // depending on the string, so a SmartArt node label sat in a different place in the
+        // exported PDF than on screen -- the same defect this round fixed for the embedded-object
+        // fallback label, in a second hand-written copy the first fix's sibling scan missed.
+        var widthDip = Build(
+            text,
+            new RunFormatting
+            {
+                FontSizePt = Math.Max(1, fontSizePt),
+                Bold = bold,
+                FontFamily = fontFamily,
+                ColorHex = colorHex,
+            }).WidthIncludingTrailingWhitespace;
         var x = xDip - widthDip / 2;
         var baseline = pageHeightPt - ((sourceRect.Top + yDip + fontSizePt * PxPerPoint - pageTopDip) / PxPerPoint);
         var textOp = new PdfText(
@@ -12609,7 +12628,10 @@ public sealed partial class DocumentView : Control
         else
         {
             const double fontSizePt = 10;
-            var estimatedTextWidth = plan.Label.Length * fontSizePt * 0.52;
+            var measuredLabel = Build(
+                plan.Label,
+                RunFormatting.Default with { FontSizePt = fontSizePt, ColorHex = plan.ForegroundColorHex });
+            var estimatedTextWidth = measuredLabel.WidthIncludingTrailingWhitespace / PxPerPoint;
             ops.Add(new PdfText(
                 xPt + Math.Max(4, (widthPt - estimatedTextWidth) / 2),
                 yPt + Math.Max(fontSizePt, (heightPt - fontSizePt) / 2),
@@ -22020,17 +22042,22 @@ public sealed partial class DocumentView : Control
     /// Insert a section break after the caret block, inheriting the page settings of the section the
     /// caret is actually in (resolved via <see cref="PageSettingsSectionResolver"/>), not necessarily the
     /// document's final section, so the new section starts with the same layout as the text it was split
-    /// out of. Mirrors <c>FreeW.App.Host.Editing.DocumentView.InsertSectionBreak</c>.
+    /// out of -- and likewise inherits that section's effective header/footer (see
+    /// <see cref="DocumentOps.ResolveInheritedHeadersFooters"/>), so splitting off a leading section does
+    /// not blank the header/footer that was showing on it. Mirrors
+    /// <c>FreeW.App.Host.Editing.DocumentView.InsertSectionBreak</c>.
     /// </summary>
     public void InsertSectionBreak(SectionBreakKind breakKind)
     {
         if (IsEditingLocked)
             return;
 
-        var inheritedPage = PageSettingsSectionResolver.Resolve(_doc, CurrentPageSettingsSectionIndex());
+        var sectionIndex = CurrentPageSettingsSectionIndex();
+        var inheritedPage = PageSettingsSectionResolver.Resolve(_doc, sectionIndex);
+        var inheritedHeadersFooters = DocumentOps.ResolveInheritedHeadersFooters(_doc, sectionIndex);
         _editingSession.InsertBlockAfter(
             _caret.Block,
-            DocumentOps.CreateSectionBreak(breakKind, inheritedPage));
+            DocumentOps.CreateSectionBreak(breakKind, inheritedPage, inheritedHeadersFooters));
     }
 
     /// <summary>

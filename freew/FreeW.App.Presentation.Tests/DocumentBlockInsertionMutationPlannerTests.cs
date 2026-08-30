@@ -1,4 +1,5 @@
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -164,6 +165,59 @@ public sealed class DocumentBlockInsertionMutationPlannerTests
         insertedPage.MarginLeftPt.Should().Be(document.Page.MarginLeftPt);
         insertedPage.WidthPt.Should().Be(document.Page.WidthPt);
         insertedPage.HeightPt.Should().Be(document.Page.HeightPt);
+    }
+
+    /// <summary>
+    /// End-to-end regression test for freew-sections-headers F1: Insert &gt; Section Break must not
+    /// blank the header/footer that was showing on the pages before the break. Exercises the full
+    /// production pipeline both editors' InsertSectionBreak and print/PDF export use: build the
+    /// section-break paragraph via <see cref="DocumentBlockInsertionMutationPlanner.PlanSectionBreak"/>,
+    /// then resolve per-page headers/footers via
+    /// <see cref="HeaderFooterPagePlanner.MapPagesToSections(TextDocument, IReadOnlyList{int}, int)"/> and
+    /// <see cref="HeaderFooterPagePlanner.ResolveSlots"/> -- the same resolver the screen editor
+    /// (PaginatedEditorPanel) and print/PDF export (SectionAwareDocumentPaginator) both call. Asserts the
+    /// writer (the planner that creates the section break) and the reader (the page planner that decides
+    /// what to draw) agree, not just that the model carries a non-null field.
+    /// </summary>
+    [Fact]
+    public void Section_break_preserves_effective_header_and_footer_on_pages_before_the_break()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Body before the break."));
+        document.Header = new HeaderFooter("MY RUNNING HEADER");
+        document.Footer = new HeaderFooter("MY RUNNING FOOTER");
+
+        var plan = DocumentBlockInsertionMutationPlanner.PlanSectionBreak(document, 0, SectionBreakKind.NextPage);
+        document.Blocks.InsertRange(plan.StartIndex, plan.Replacement);
+        document.Blocks.Add(new Paragraph("Body after the break."));
+
+        // Block 0 = body before the break (section 0), block 1 = the section-break marker paragraph
+        // (section 0), block 2 = body after the break (section 1, the document's unchanged final
+        // section). Page 0 renders block 0 (and the marker); page 1 renders block 2.
+        var pages = HeaderFooterPagePlanner.MapPagesToSections(
+            document,
+            blockPageAssignments: [0, 0, 1],
+            pageCount: 2);
+
+        pages[0].SectionIndex.Should().Be(0);
+        pages[1].SectionIndex.Should().Be(1);
+
+        var pageZeroSlots = HeaderFooterPagePlanner.ResolveSlots(
+            pages[0].HeadersFooters, sectionRelativePageNumber: 1, pages[0].PageSettings, differentOddEvenPages: false);
+        var pageOneSlots = HeaderFooterPagePlanner.ResolveSlots(
+            pages[1].HeadersFooters, sectionRelativePageNumber: 1, pages[1].PageSettings, differentOddEvenPages: false);
+
+        // The page BEFORE the break (section 0, newly created by the break) must still show the header
+        // and footer that were showing there before the break was inserted.
+        pageZeroSlots.Header.Should().NotBeNull("the header must not be blanked by inserting a section break");
+        pageZeroSlots.Header!.PlainText.Should().Be("MY RUNNING HEADER");
+        pageZeroSlots.Footer.Should().NotBeNull("the footer must not be blanked by inserting a section break");
+        pageZeroSlots.Footer!.PlainText.Should().Be("MY RUNNING FOOTER");
+
+        // Sibling no-regression: the page AFTER the break (the document's original final section) must
+        // keep showing the same header/footer, unaffected by the fix.
+        pageOneSlots.Header!.PlainText.Should().Be("MY RUNNING HEADER");
+        pageOneSlots.Footer!.PlainText.Should().Be("MY RUNNING FOOTER");
     }
 
     private static TextDocument DocumentWithTwoParagraphs()

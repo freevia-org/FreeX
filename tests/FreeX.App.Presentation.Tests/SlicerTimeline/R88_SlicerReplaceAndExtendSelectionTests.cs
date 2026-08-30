@@ -58,9 +58,34 @@ public sealed class R88_SlicerReplaceAndExtendSelectionTests
     [Fact]
     public void ExtendSlicerSelection_WorksBackwardWhenTheClickedItemPrecedesTheAnchor()
     {
+        var allItems = new[] { "East", "North", "South", "West", "Central" };
+
+        var result = SlicerTimelinePanePlanner.ExtendSlicerSelection(allItems, ["West"], "East");
+
+        result.Should().BeEquivalentTo(["East", "North", "South", "West"]);
+    }
+
+    // R172-freex-pivot-tables-F1: a shift-click range that happens to span every item in the field
+    // must normalize to "no filter" (empty), mirroring ToggleSlicerSelection's existing all-selected
+    // guard, instead of surfacing the full literal item list as an active filter.
+    [Fact]
+    public void ExtendSlicerSelection_RangeSpanningEveryItem_NormalizesToNoFilter()
+    {
         var allItems = new[] { "East", "North", "South", "West" };
 
         var result = SlicerTimelinePanePlanner.ExtendSlicerSelection(allItems, ["West"], "East");
+
+        result.Should().BeEmpty();
+    }
+
+    // No-regression sibling: a range that covers most but not all items must still return the
+    // literal contiguous range untouched by the new all-selected normalization.
+    [Fact]
+    public void ExtendSlicerSelection_RangeSpanningAllButOneItem_StillReturnsTheLiteralRange()
+    {
+        var allItems = new[] { "East", "North", "South", "West", "Central" };
+
+        var result = SlicerTimelinePanePlanner.ExtendSlicerSelection(allItems, ["East"], "West");
 
         result.Should().BeEquivalentTo(["East", "North", "South", "West"]);
     }

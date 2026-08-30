@@ -48,6 +48,11 @@ public sealed class MediaRenderUtilityPolicyTests
     [Theory]
     [InlineData("photo.jpeg", OpcMediaContentTypeProfile.PresentationPictureInsertion, "image/jpeg")]
     [InlineData("photo.tiff", OpcMediaContentTypeProfile.PresentationPictureInsertion, "image/png")]
+    // round-172 (freep-media F1): WMF/EMF must resolve to their real content type, not fall
+    // through to "image/png" -- see SlideObjectInsertionPlannerTests for the saved-package assertion.
+    [InlineData("clip.wmf", OpcMediaContentTypeProfile.PresentationPictureInsertion, "image/x-wmf")]
+    [InlineData("clip.emf", OpcMediaContentTypeProfile.PresentationPictureInsertion, "image/x-emf")]
+    [InlineData("clip.WMF", OpcMediaContentTypeProfile.PresentationPictureInsertion, "image/x-wmf")]
     [InlineData("movie.m4v", OpcMediaContentTypeProfile.PresentationVideoInsertion, "video/x-m4v")]
     [InlineData("sound.m4a", OpcMediaContentTypeProfile.PresentationAudioInsertion, "audio/mp4")]
     [InlineData("sound.aac", OpcMediaContentTypeProfile.PresentationAudioInsertion, "audio/aac")]

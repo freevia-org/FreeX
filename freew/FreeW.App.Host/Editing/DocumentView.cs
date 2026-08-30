@@ -2202,7 +2202,9 @@ public sealed partial class DocumentView : RichTextBox
     /// through the undo/redo bus. The new paragraph's SectionBreak inherits the page settings of the
     /// section the caret is actually in (resolved via <see cref="PageSettingsSectionResolver"/>), not
     /// necessarily the document's final section, so the new section starts with the same layout as the
-    /// text it was split out of.
+    /// text it was split out of -- and likewise inherits that section's effective header/footer (see
+    /// <see cref="DocumentOps.ResolveInheritedHeadersFooters"/>), so splitting off a leading section does
+    /// not blank the header/footer that was showing on it.
     /// </summary>
     public void InsertSectionBreak(SectionBreakKind breakKind)
     {
@@ -2211,10 +2213,12 @@ public sealed partial class DocumentView : RichTextBox
 
         CommitToModel();
         var caretBlockIndex = CaretBlockIndex();
-        var inheritedPage = PageSettingsSectionResolver.Resolve(_model, CurrentPageSettingsSectionIndex());
+        var sectionIndex = CurrentPageSettingsSectionIndex();
+        var inheritedPage = PageSettingsSectionResolver.Resolve(_model, sectionIndex);
+        var inheritedHeadersFooters = DocumentOps.ResolveInheritedHeadersFooters(_model, sectionIndex);
         _editingSession.InsertBlockAfter(
             caretBlockIndex,
-            DocumentOps.CreateSectionBreak(breakKind, inheritedPage));
+            DocumentOps.CreateSectionBreak(breakKind, inheritedPage, inheritedHeadersFooters));
     }
 
     /// <summary>

@@ -26,6 +26,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
     private readonly DocumentView _editor;
     private readonly IDisposable _emergencySnapshotRegistration;
     private readonly FileCommandWorkflow _workflow;
+    private readonly FreeWDocumentFileWorkflow _documentFileWorkflow;
     private readonly AutosavePeriodicTaskLoop _periodicLoop;
     private readonly FreeWAutosaveSession _session;
     private readonly Func<AutosaveRecoveryCandidate, Task<bool>>? _recoverInNewWindowAsync;
@@ -37,13 +38,34 @@ internal sealed partial class AutosaveAdapter : IDisposable
         Func<FreeWAutosavePorts, FreeWAutosaveSession>? sessionFactory = null,
         Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null,
         Func<Task<bool>>? confirmDiscardOrSaveAsync = null,
-        Func<TextDocument?>? getMailMergeTemplate = null)
+        Func<TextDocument?>? getMailMergeTemplate = null,
+        // Round-172 finding shared-autosave-recovery/F3: the window's REAL FreeWDocumentFileWorkflow
+        // -- the object that owns the external-modification write-time guard
+        // (_currentFileSourceLastWriteTimeUtc) and whose OpenSnapshotAsync is the only place that
+        // re-arms it correctly on recovery (see CompleteDocumentRecovery below). MainWindow always
+        // supplies its own _documentFileWorkflow here so recovery shares the SAME FileCommandWorkflow
+        // identity and guard state that the window's real Ctrl+S save goes through. Left null (as
+        // every pre-existing test double here does), a fresh, fully-functional workflow is built over
+        // the same `workflow`/`editor` -- still a genuine guarded OpenSnapshotAsync, just not the
+        // window's shared instance, which is irrelevant for tests that never assert cross-object guard
+        // state.
+        FreeWDocumentFileWorkflow? documentFileWorkflow = null)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(workflow);
 
         _editor = editor;
         _workflow = workflow;
+        _documentFileWorkflow = documentFileWorkflow ?? new FreeWDocumentFileWorkflow(
+            workflow,
+            new DocumentPersistenceWorkflow(),
+            new FreeWDocumentFilePorts(
+                GetDocument: () => getMailMergeTemplate?.Invoke() ?? editor.Document,
+                LoadDocumentAsync: (document, _) =>
+                {
+                    editor.LoadDocument(document);
+                    return ValueTask.CompletedTask;
+                }));
         var ports = new FreeWAutosavePorts(
             GetOriginalFilePath: () => workflow.CurrentPath,
             GetDisplayName: () => workflow.DisplayName,
@@ -176,12 +198,32 @@ internal sealed partial class AutosaveAdapter : IDisposable
                 _session.CompleteRecoveryResult(recovery, accepted, recovered));
     }
 
+    /// <summary>
+    /// Round-172 finding shared-autosave-recovery/F3: this used to hand-roll the restore
+    /// (<c>_editor.LoadDocument(document); _workflow.MarkDirtyWithPath(originalPath);</c> via
+    /// <c>FreeWAutosaveSession.CompleteDocumentRecovery</c>'s document-callback overload), bypassing
+    /// <see cref="FreeWDocumentFileWorkflow.OpenSnapshotAsync"/> entirely -- the one place that
+    /// re-arms the external-modification write-time guard from the ORIGINAL file's current on-disk
+    /// write time. <c>_workflow.CurrentPath</c> ended up correctly pointed at the original file (both
+    /// objects share the same underlying <see cref="FileCommandWorkflow"/>), but the guard field
+    /// inside <see cref="_documentFileWorkflow"/> was never touched, so it stayed at whatever stale
+    /// value (or null) it already held -- letting the first save after recovery silently overwrite a
+    /// copy that changed on disk while the app was gone. Routes through the path-based
+    /// <see cref="FreeWAutosaveSession.CompleteRecovery"/> overload (the same one the WPF host's
+    /// <c>AutosaveCoordinator</c> uses via <c>FileCommands.OpenSnapshot</c>) so recovery is treated as
+    /// a form of opening a document and goes through the identical guarded path a normal open does,
+    /// rather than a second, unguarded load routine living beside it. <c>OpenSnapshotAsync</c> never
+    /// throws (it catches and reports failure via <c>Succeeded</c>), so a corrupt/truncated snapshot
+    /// still surfaces as <c>recovered: false</c> exactly as before.
+    /// </summary>
     private bool CompleteDocumentRecovery(AutosaveRecoveryPlan recovery) =>
-        _session.CompleteDocumentRecovery(recovery, accepted: true, (document, originalPath) =>
-        {
-            _editor.LoadDocument(document);
-            _workflow.MarkDirtyWithPath(originalPath);
-        }, FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
+        _session.CompleteRecovery(
+            recovery,
+            accepted: true,
+            restoreSnapshot: (snapshotPath, originalPath) =>
+                _documentFileWorkflow.OpenSnapshotAsync(snapshotPath, originalPath)
+                    .GetAwaiter().GetResult().Succeeded,
+            FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
 
     public void Dispose()
     {

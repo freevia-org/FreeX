@@ -1,4 +1,6 @@
+using System.IO;
 using System.Threading.Tasks;
+using FreeW.Core.IO;
 using Free.Shared.AppServices;
 using FreeW.App.Avalonia;
 using FreeW.App.Presentation.Options;
@@ -33,12 +35,19 @@ public sealed class RecoveredWindowOptionsStorePathTests
     {
         string? recoveredStorePath = null;
 
-        var ran = await HeadlessUiThread.Run(() =>
+        // r172: a real snapshot on disk -- the factory now performs the guarded snapshot
+        // open rather than taking an already-read document, so a bogus path would quietly
+        // exercise the failure branch instead of the production one.
+        var snapshotPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".docx");
+        DocxWriter.Write(TextDocument.CreateEmpty(), snapshotPath);
+        try
+        {
+        var ran = await HeadlessUiThread.RunAsync(async () =>
         {
             // The exact production factory OpenNewWindowWithRecoveredSnapshotAsync calls, minus the
             // Show()/Activate() a headless test cannot observe.
-            var window = MainWindow.CreateRecoveredSnapshotWindow(
-                TextDocument.CreateEmpty(),
+            var window = await MainWindow.CreateRecoveredSnapshotWindowAsync(
+                snapshotPath,
                 originalFilePath: null);
             recoveredStorePath = window.OptionsStoreForTests.StorePath;
         });
@@ -52,6 +61,11 @@ public sealed class RecoveredWindowOptionsStorePathTests
         recoveredStorePath.Should().Be(
             canonicalPath,
             "a crash-recovery window must read/write the same settings.json as normal startup and the WPF host");
+        }
+        finally
+        {
+            File.Delete(snapshotPath);
+        }
     }
 
     /// <summary>

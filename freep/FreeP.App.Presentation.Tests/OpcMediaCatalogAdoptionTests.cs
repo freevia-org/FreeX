@@ -21,6 +21,17 @@ public sealed class OpcMediaCatalogAdoptionTests
     [InlineData("IMAGE/JPEG", OpcMediaExtensionProfile.PresentationZoomCoverImage, true, null, ".png")]
     [InlineData("IMAGE/JPEG", OpcMediaExtensionProfile.PresentationSmartArtImage, false, null, "jpg")]
     [InlineData(" image/jpeg ", OpcMediaExtensionProfile.PresentationSmartArtImage, false, null, "png")]
+    // round-172 (freep-media F1 sibling coverage): SmartArtPicture/ZoomCoverImage insertion both
+    // infer their content type via OpcMediaContentTypeProfile.PresentationPictureInsertion (see
+    // PresentationAssetImportWorkflow.CreatePayload), so once that profile learns wmf/emf, these
+    // extension-naming mappers must independently agree -- else the saved part is named "*.png"
+    // while its Override declares "image/x-wmf"/"image/x-emf", a NEW self-inconsistent package
+    // (exactly the class of defect the r157-remediation comment on GetPresentationSmartArtExtension
+    // documents for webp).
+    [InlineData("image/x-wmf", OpcMediaExtensionProfile.PresentationSmartArtImage, false, null, "wmf")]
+    [InlineData("image/x-emf", OpcMediaExtensionProfile.PresentationSmartArtImage, false, null, "emf")]
+    [InlineData("image/x-wmf", OpcMediaExtensionProfile.PresentationZoomCoverImage, true, null, ".wmf")]
+    [InlineData("image/x-emf", OpcMediaExtensionProfile.PresentationZoomCoverImage, true, null, ".emf")]
     [InlineData("application/ttaf+xml", OpcMediaExtensionProfile.PresentationCaptionTrack, false, null, "ttml")]
     [InlineData("unknown", OpcMediaExtensionProfile.PresentationCaptionTrack, false, "https://example.test/captions.DFXP?download=1#track", "dfxp")]
     [InlineData("unknown", OpcMediaExtensionProfile.PresentationCaptionTrack, false, null, "vtt")]

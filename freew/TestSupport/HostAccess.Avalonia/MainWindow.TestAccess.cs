@@ -19,6 +19,10 @@ public sealed partial class MainWindow
     internal RevealFormattingPane RevealPane => _revealPane;
     internal FreeWViewDepthMode ViewDepthMode => _viewSession.CurrentDepth.Mode;
     internal bool IsSplitPreviewActive => _viewSession.CurrentDepth.IsSplitActive;
+    // r172: lets a test assert that the crash-recovery window factory armed the external-
+    // modification guard, rather than hand-rolling a load that leaves it disarmed.
+    internal FreeWDocumentFileWorkflow DocumentFileWorkflowForTests => _documentFileWorkflow;
+
     internal DocumentView? SplitEditorForTests => _splitEditor;
     internal Grid? SplitGridForTests => _splitPreviewGrid;
     internal DocumentView ActiveDocumentEditorForTests => ResolveActiveDocumentEditor();

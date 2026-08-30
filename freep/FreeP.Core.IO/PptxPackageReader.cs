@@ -203,8 +203,14 @@ public static class PptxPackageReader
                 "Not a PowerPoint presentation: the package's root relationships have no officeDocument " +
                 "relationship pointing at ppt/presentation.xml. The file may be corrupt or truncated.");
 
-        // Normalize path (remove leading /)
-        presPath = ToZipEntryPath(presPath);
+        // Resolve the root relationship's Target as the URI reference it actually is: dot
+        // segments ("./ppt/presentation.xml") collapse and a leading '/' is stripped, exactly
+        // like every other relationship target in this reader is resolved via
+        // ResolveRelativeZipPath (see e.g. the master/layout/slide resolution below). A bare
+        // ToZipEntryPath call here (round171 F2) only stripped a leading slash -- it never
+        // collapsed dot segments -- so a spec-legal, dot-relative target failed the exact-match
+        // GetEntry lookup just below and made an intact package throw "missing from the package".
+        presPath = ResolveRelativeZipPath(string.Empty, presPath);
 
         // Core properties
         var corePropsPath = OpcRelationships.FirstTargetByType(rootRels, CorePropsRelType);
@@ -298,10 +304,22 @@ public static class PptxPackageReader
             // Use this master's own theme (or fall back to presentation.Theme) for layout parsing.
             var masterEffectiveTheme = master.Theme ?? presentation.Theme;
             var masterColorScheme = masterEffectiveTheme.ColorScheme;
-            foreach (var (layoutId, _, layoutTarget) in masterRels.Where(r => r.Type == SlideLayoutRelType))
+            foreach (var (_, _, layoutTarget) in masterRels.Where(r => r.Type == SlideLayoutRelType))
             {
                 var layoutPath = ResolveRelativeZipPath(masterDir, layoutTarget);
-                var layout = ReadSlideLayout(archive, layoutPath, layoutId, master.Id, masterColorScheme, masterEffectiveTheme);
+                // round172 F2: key SlideLayout.Id by the layout's own normalized zip PartPath, not
+                // the raw relationship id from the OWNING MASTER's .rels file. Every master's
+                // .rels is numbered independently starting at "rId1", so in a multi-master deck
+                // two different masters' first layouts both got Id=="rId1" -- the 13+ downstream
+                // consumers that do presentation.Layouts.Find(l => l.Id == slide.LayoutId) (List.Find
+                // returns the FIRST match) then silently resolved every slide attached to the
+                // second-or-later master's layout back to the FIRST master's layout instead.
+                // layoutPath is a real zip entry path, which is globally unique across the whole
+                // package, so this can never collide the way a master-scoped relationship id can.
+                // This also matches the convention ResolveOrphanLayout below already uses (it
+                // passes layoutPath as the layoutId argument too) -- the normal master-walk loop
+                // was the one path in this file that hadn't caught up to it.
+                var layout = ReadSlideLayout(archive, layoutPath, layoutPath, master.Id, masterColorScheme, masterEffectiveTheme);
                 presentation.Layouts.Add(layout);
             }
         }

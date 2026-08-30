@@ -579,6 +579,18 @@ public sealed class PresentationFileCommandSession
     /// must NOT delete the snapshot on <c>false</c>: it may be the user's only copy of the unsaved
     /// presentation. Mirrors FreeW's <c>FileCommands.OpenSnapshot</c>.
     /// </summary>
+    /// <remarks>
+    /// Recovery is a form of opening a document, so it must re-establish the external-modification
+    /// guard baseline exactly like <see cref="ApplyWindowState"/> and a normal open do -- otherwise
+    /// <c>_currentFileSourceLastWriteTimeUtc</c> stays at its null default even though
+    /// <see cref="CurrentPath"/> now points at the ORIGINAL file, and SavePathCoreAsync's
+    /// ExternalFileWriteConflictPolicy check silently treats "unknown" as "unchanged" -- letting the
+    /// first save after recovery overwrite a copy that changed on disk while the app was gone. Recompute
+    /// from the original path's write time as it stands right now (not the snapshot's): this still
+    /// catches a genuine edit to the original between recovery and save while not comparing against
+    /// the unrelated snapshot file. No original file (moved/deleted since the crash) means nothing to
+    /// compare against, so the guard stays off until the next save establishes a new baseline.
+    /// </remarks>
     public bool RestoreAutosaveSnapshot(string snapshotPath, string? originalPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(snapshotPath);
@@ -594,8 +606,29 @@ public sealed class PresentationFileCommandSession
         }
 
         _loadPresentation(recovered);
-        _lifecycle.MarkDirtyWithPath(originalPath);
+        AdoptRecoveredPresentation(originalPath);
         return true;
+    }
+
+    /// <summary>
+    /// r172 remediation: marks an ALREADY-LOADED recovered presentation as this session current
+    /// document and re-arms the external-modification guard against its original file.
+    ///
+    /// <para>Recovery reaches this session by two routes. <see cref="RestoreAutosaveSnapshot"/>
+    /// reads the snapshot itself (the recover-into-a-NEW-window gesture); the recover-into-the-
+    /// CURRENT-window gesture -- the startup offer and the Backstage command, which is the common
+    /// case -- hands the shell a presentation that has already been read, so it cannot use that
+    /// method. That second route previously only marked the document dirty, leaving
+    /// <c>_currentFileSourceLastWriteTimeUtc</c> null, so the first save after recovery skipped the
+    /// changed-on-disk check entirely and could overwrite a copy edited while the app was gone.
+    /// Both routes now end here, so the guard is armed exactly once, in one place.</para>
+    /// </summary>
+    public void AdoptRecoveredPresentation(string? originalPath)
+    {
+        _lifecycle.MarkDirtyWithPath(originalPath);
+        _currentFileSourceLastWriteTimeUtc = string.IsNullOrWhiteSpace(originalPath) || !File.Exists(originalPath)
+            ? null
+            : File.GetLastWriteTimeUtc(originalPath);
     }
 
     public async Task<PresentationFileCommandResult> NewAsync(CancellationToken cancellationToken = default)

@@ -99,12 +99,86 @@ public static class DocumentOps
     /// carrying that section's page setup. A new <see cref="PageSettings"/> is cloned from
     /// <paramref name="inherited"/> (when supplied) so the new section inherits the current layout;
     /// when <paramref name="inherited"/> is null a fresh default <see cref="PageSettings"/> is used.
+    ///
+    /// <para>
+    /// <paramref name="inheritedHeadersFooters"/> mirrors that same inheritance for headers/footers
+    /// (see <see cref="ResolveInheritedHeadersFooters"/>): a brand-new <see cref="Section"/> otherwise
+    /// gets an entirely empty <see cref="SectionHeadersFooters"/>, which, for the overwhelmingly common
+    /// case (splitting the document's only section, which owns the header/footer via
+    /// <see cref="TextDocument.FinalSectionHeadersFooters"/>), would make every page before the break
+    /// render with no header/footer at all -- the resolver that decides what to draw on a page walks
+    /// backward for a section that defines no slot of its own, and a newly created leading section has
+    /// nothing earlier to walk back to. Passing the currently-effective header/footer set here (cloned,
+    /// the same way <paramref name="inherited"/> clones the page settings) keeps the header/footer
+    /// visibly unchanged on the pages before the break, exactly as Word does not blank a section's
+    /// running header/footer merely because a break was inserted after it.
+    /// </para>
     /// </summary>
-    public static Paragraph CreateSectionBreak(SectionBreakKind breakKind, PageSettings? inherited = null) =>
-        new()
+    public static Paragraph CreateSectionBreak(
+        SectionBreakKind breakKind,
+        PageSettings? inherited = null,
+        SectionHeadersFooters? inheritedHeadersFooters = null)
+    {
+        var section = new Section(inherited?.Clone() ?? new PageSettings(), breakKind);
+        if (inheritedHeadersFooters is not null)
         {
-            SectionBreak = new Section(inherited?.Clone() ?? new PageSettings(), breakKind)
+            section.HeadersFooters = new SectionHeadersFooters
+            {
+                Header = DocumentModelCloner.CloneHeaderFooter(inheritedHeadersFooters.Header, RevisionClonePolicy.Preserve),
+                Footer = DocumentModelCloner.CloneHeaderFooter(inheritedHeadersFooters.Footer, RevisionClonePolicy.Preserve),
+                EvenHeader = DocumentModelCloner.CloneHeaderFooter(inheritedHeadersFooters.EvenHeader, RevisionClonePolicy.Preserve),
+                EvenFooter = DocumentModelCloner.CloneHeaderFooter(inheritedHeadersFooters.EvenFooter, RevisionClonePolicy.Preserve),
+                FirstHeader = DocumentModelCloner.CloneHeaderFooter(inheritedHeadersFooters.FirstHeader, RevisionClonePolicy.Preserve),
+                FirstFooter = DocumentModelCloner.CloneHeaderFooter(inheritedHeadersFooters.FirstFooter, RevisionClonePolicy.Preserve)
+            };
+        }
+
+        return new Paragraph { SectionBreak = section };
+    }
+
+    /// <summary>
+    /// Resolves the effective (through per-slot "link to previous") header/footer set for
+    /// <paramref name="sectionIndex"/> in <paramref name="document"/> -- the value a section-break
+    /// insertion should copy into the new leading section it creates (see
+    /// <see cref="CreateSectionBreak"/>), so splitting a section does not blank the header/footer that
+    /// was showing there. Each of the six slots (default/even/first header and footer) is resolved
+    /// independently: when the target section does not define a slot itself, this walks backward
+    /// through earlier sections for the nearest one that does, exactly like the presentation-layer page
+    /// planner that decides what to actually draw (duplicated here, in Core.Model, which cannot
+    /// reference that layer). A negative <paramref name="sectionIndex"/> matches
+    /// <see cref="PageSettingsSectionResolver"/>'s convention and resolves against the document's final
+    /// section.
+    /// </summary>
+    public static SectionHeadersFooters ResolveInheritedHeadersFooters(TextDocument document, int sectionIndex)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var sections = document.Sections;
+        var clamped = sectionIndex < 0
+            ? sections.Count - 1
+            : Math.Clamp(sectionIndex, 0, sections.Count - 1);
+
+        HeaderFooter? ResolveSlot(Func<SectionHeadersFooters, HeaderFooter?> selector)
+        {
+            for (var i = clamped; i >= 0; i--)
+            {
+                var value = selector(sections[i].HeadersFooters);
+                if (value is not null)
+                    return value;
+            }
+
+            return null;
+        }
+
+        return new SectionHeadersFooters
+        {
+            Header = ResolveSlot(hf => hf.Header),
+            Footer = ResolveSlot(hf => hf.Footer),
+            EvenHeader = ResolveSlot(hf => hf.EvenHeader),
+            EvenFooter = ResolveSlot(hf => hf.EvenFooter),
+            FirstHeader = ResolveSlot(hf => hf.FirstHeader),
+            FirstFooter = ResolveSlot(hf => hf.FirstFooter)
         };
+    }
 
     /// <summary>
     /// Creates a column-break paragraph. Word represents a column break as a <c>w:br w:type="column"</c>

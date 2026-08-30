@@ -27445,6 +27445,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             ReplaceSession(_sessionFactory.Create(source, viewportHeight, viewportWidth, includeObjects: true));
+            // ReplaceSession just reset _currentFileSourceLastWriteTimeUtc to null (a fresh document
+            // identity), but this is a RECOVERY load, not an untitled New: _session.CurrentFilePath now
+            // points at originalFilePath (StartupWorkbookLoadResult.SourcePath), so a later Save to that
+            // SAME path must still be guarded against a concurrent second writer -- otherwise the null
+            // baseline reads as "unchanged" and the first save after recovery silently overwrites a copy
+            // that changed on disk while the app was gone. Recompute from the ORIGINAL file's write time
+            // as it stands right now (not the snapshot's, which would spuriously fire on every ordinary
+            // recover-then-save) -- mirrors the WPF host's SetCurrentFilePathForRecovery and FreeP's
+            // PresentationFileCommandSession.RestoreAutosaveSnapshot. No original file (moved/deleted
+            // since the crash) means nothing to compare against, so the guard stays off until the next
+            // save establishes a new baseline.
+            _currentFileSourceLastWriteTimeUtc =
+                !string.IsNullOrWhiteSpace(originalFilePath) && File.Exists(originalFilePath)
+                    ? File.GetLastWriteTimeUtc(originalFilePath)
+                    : null;
             _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
             _session.SortAdjacentDataPromptResolver = ResolveSortAdjacentDataPrompt;
             // Mark the recovered session dirty so the user sees the modified indicator and is

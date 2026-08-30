@@ -32,7 +32,9 @@ public static class DocumentBlockInsertionMutationPlanner
     /// The new section-break paragraph inherits the <see cref="PageSettings"/> of the section
     /// <paramref name="caretBlockIndex"/> is actually in (resolved via
     /// <see cref="PageSettingsSectionResolver"/>), not unconditionally the document's final section
-    /// (<see cref="TextDocument.Page"/>). Mirrors
+    /// (<see cref="TextDocument.Page"/>) -- and likewise inherits that section's effective header/footer
+    /// (see <see cref="DocumentOps.ResolveInheritedHeadersFooters"/>), so splitting off a leading section
+    /// does not blank the header/footer that was showing on it. Mirrors
     /// <c>FreeW.App.Host.Editing.DocumentView.InsertSectionBreak</c> and
     /// <c>FreeW.App.Avalonia.Editing.DocumentView.InsertSectionBreak</c>, the WPF- and Avalonia-hosted
     /// equivalents of this same gesture.
@@ -43,13 +45,13 @@ public static class DocumentBlockInsertionMutationPlanner
         SectionBreakKind breakKind)
     {
         ArgumentNullException.ThrowIfNull(document);
-        var inheritedPage = PageSettingsSectionResolver.Resolve(
-            document,
-            PageSettingsSectionResolver.ResolveSectionIndex(document, caretBlockIndex));
+        var sectionIndex = PageSettingsSectionResolver.ResolveSectionIndex(document, caretBlockIndex);
+        var inheritedPage = PageSettingsSectionResolver.Resolve(document, sectionIndex);
+        var inheritedHeadersFooters = DocumentOps.ResolveInheritedHeadersFooters(document, sectionIndex);
         return PlanAfterCaret(
             document,
             caretBlockIndex,
-            [DocumentOps.CreateSectionBreak(breakKind, inheritedPage)]);
+            [DocumentOps.CreateSectionBreak(breakKind, inheritedPage, inheritedHeadersFooters)]);
     }
 
     private static DocumentBlockReplacementPlan PlanAfterCaret(

@@ -72,6 +72,17 @@ public sealed class FreeWDocumentFileWorkflow
     // is already false against a null CurrentPath, so a stale value here is inert.
     private DateTime? _currentFileSourceLastWriteTimeUtc;
 
+    /// <summary>
+    /// r172: the external-modification guard baseline, exposed so a test can assert that a code
+    /// path which OPENS a document actually armed it. The guard behaviour itself (prompt, refuse)
+    /// is pinned behaviourally elsewhere; this exists for paths that construct a whole window,
+    /// where driving the confirm dialog is not reachable from a headless test.
+    /// </summary>
+    public DateTime? CurrentFileSourceLastWriteTimeUtcForTests => _currentFileSourceLastWriteTimeUtc;
+
+    /// <summary>Companion to the property above: the save target recovery adopted.</summary>
+    public string? CurrentPathForTests => _lifecycle.CurrentPath;
+
     public FreeWDocumentFileWorkflow(
         FileCommandWorkflow lifecycle,
         DocumentPersistenceWorkflow persistence,

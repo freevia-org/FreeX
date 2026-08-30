@@ -359,7 +359,12 @@ public sealed partial class MainWindow : Window
             // Deferred accessor: _mailMerge is only built later, when the Mailings tab's commands are
             // wired up in BuildRibbon(). Null unless Mailings > Preview Results is currently showing a
             // merged record, in which case the autosave snapshot must capture the template instead.
-            getMailMergeTemplate: () => _mailMerge?.Session.Template);
+            getMailMergeTemplate: () => _mailMerge?.Session.Template,
+            // Round-172 finding shared-autosave-recovery/F3: share THIS window's real
+            // FreeWDocumentFileWorkflow (built above) so a crash-recovery restore re-arms the same
+            // external-modification write-time guard a normal Ctrl+S save reads, instead of the
+            // adapter falling back to its own throwaway default instance.
+            documentFileWorkflow: _documentFileWorkflow);
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: ConfirmCloseAllowedAndStopAutosaveAsync,
             requestClose: () =>
@@ -1503,8 +1508,9 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var doc = DocxReader.Read(candidate.SnapshotPath);
-            var newWindow = CreateRecoveredSnapshotWindow(doc, candidate.Sidecar.OriginalFilePath);
+            var newWindow = await CreateRecoveredSnapshotWindowAsync(
+                candidate.SnapshotPath,
+                candidate.Sidecar.OriginalFilePath);
             newWindow.Show();
             newWindow.Activate();
             return true;
@@ -1526,15 +1532,22 @@ public sealed partial class MainWindow : Window
     /// Factored out of <see cref="OpenNewWindowWithRecoveredSnapshotAsync"/> so tests can observe the
     /// store the production path builds without showing a window.
     /// </summary>
-    internal static MainWindow CreateRecoveredSnapshotWindow(TextDocument document, string? originalFilePath)
+    internal static async Task<MainWindow> CreateRecoveredSnapshotWindowAsync(
+        string snapshotPath,
+        string? originalFilePath)
     {
         var newWindow = new MainWindow(
             Array.Empty<string>(),
             null,
             ApplicationOptionsStore<FreeWOptions>.Create(),
             suppressStartupRecoveryOffer: true);
-        newWindow.LoadDocumentContent(document);
-        newWindow._fileWorkflow.MarkDirtyWithPath(originalFilePath);
+
+        // r172: read the snapshot through the GUARDED workflow rather than DocxReader plus a bare
+        // MarkDirtyWithPath. The hand-rolled load left the new window _documentFileWorkflow guard
+        // baseline null while its CurrentPath was the real original file, so the first save in a
+        // recovered window skipped the changed-on-disk check and could overwrite a copy edited
+        // while the app was gone. OpenSnapshotAsync is the one place that arms that baseline.
+        await newWindow._documentFileWorkflow.OpenSnapshotAsync(snapshotPath, originalFilePath);
         return newWindow;
     }
 

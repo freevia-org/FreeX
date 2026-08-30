@@ -1,4 +1,6 @@
+using System.IO;
 using System.Threading.Tasks;
+using FreeW.Core.IO;
 using FreeW.App.Avalonia;
 using FreeW.Core.Model;
 
@@ -26,10 +28,17 @@ public sealed class StartupOptionsStorePathTests
     {
         string? recoveredStorePath = null;
 
-        var ran = await HeadlessUiThread.Run(() =>
+        // r172: a real snapshot on disk -- the factory now performs the guarded snapshot
+        // open rather than taking an already-read document, so a bogus path would quietly
+        // exercise the failure branch instead of the production one.
+        var snapshotPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".docx");
+        DocxWriter.Write(TextDocument.CreateEmpty(), snapshotPath);
+        try
         {
-            var window = MainWindow.CreateRecoveredSnapshotWindow(
-                TextDocument.CreateEmpty(),
+        var ran = await HeadlessUiThread.RunAsync(async () =>
+        {
+            var window = await MainWindow.CreateRecoveredSnapshotWindowAsync(
+                snapshotPath,
                 originalFilePath: null);
             recoveredStorePath = window.OptionsStoreForTests.StorePath;
         });
@@ -39,5 +48,10 @@ public sealed class StartupOptionsStorePathTests
         recoveredStorePath.Should().Be(
             App.DesktopProfile.Options.CreateStore().StorePath,
             "a recovery window and normal startup must not keep separate copies of the user's options");
+        }
+        finally
+        {
+            File.Delete(snapshotPath);
+        }
     }
 }

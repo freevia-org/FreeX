@@ -116,7 +116,11 @@ public static class SlicerTimelinePanePlanner
 
         var start = Math.Min(anchorIndex, targetIndex);
         var end = Math.Max(anchorIndex, targetIndex);
-        return allItems.Skip(start).Take(end - start + 1).ToList();
+        var range = allItems.Skip(start).Take(end - start + 1).ToList();
+        if (range.Count == allItems.Count)
+            return [];
+
+        return range;
     }
 
     public static bool HasActiveSlicerFilter(SlicerModel slicer) =>

@@ -4237,8 +4237,23 @@ public static class PptxPackageWriter
                 xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
             if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
             if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
-            xfrm.Add(new XElement(A + "off", new XAttribute("x", shape.OffsetXEmu), new XAttribute("y", shape.OffsetYEmu)));
-            xfrm.Add(new XElement(A + "ext", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+
+            // <a:off> and <a:ext> are independently optional in CT_Transform2D (ECMA-376
+            // 20.1.7.6), and a placeholder can legally carry only one of them (e.g. an explicit
+            // position override with an inherited size). Only emit the half the shape actually
+            // has its own value for -- an extent the app merely INFERRED by inheritance (still
+            // 0/0 here; PlaceholderResolver never writes a resolved value back into the shape)
+            // must never be baked into the file as an explicit <a:ext cx="0" cy="0">, which the
+            // reader (and every writer here) treats as PowerPoint's "deliberately hidden"
+            // zero-extent placeholder marker (HasExplicitZeroExtentTransform) -- see
+            // freep-masters-layouts F3. An explicit zero-extent shape (HasExplicitZeroExtentTransform
+            // already true from the source file) still round-trips its <a:ext cx="0" cy="0">.
+            var hasOwnOffset = shape.OffsetXEmu != 0 || shape.OffsetYEmu != 0;
+            var hasOwnExtent = shape.ExtentCxEmu != 0 || shape.ExtentCyEmu != 0 || shape.HasExplicitZeroExtentTransform;
+            if (hasOwnOffset)
+                xfrm.Add(new XElement(A + "off", new XAttribute("x", shape.OffsetXEmu), new XAttribute("y", shape.OffsetYEmu)));
+            if (hasOwnExtent)
+                xfrm.Add(new XElement(A + "ext", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
         }
 
         // Geometry: custom or preset

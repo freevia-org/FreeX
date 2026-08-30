@@ -1,3 +1,6 @@
+using System.IO.Compression;
+using System.Xml.Linq;
+using Free.Shared.Opc;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 
@@ -1103,5 +1106,128 @@ public sealed class SlideObjectInsertionPlannerTests
             .Should().BeTrue();
         w.Should().Be(640);
         h.Should().Be(480);
+    }
+
+    // round-172 (freep-media F1): Insert Picture must label WMF/EMF files with their real image/x-wmf
+    // / image/x-emf content type, not fall through to "image/png", because PptxPackageWriter names
+    // the saved media part purely from that declared content type (OpcMediaTypes.GetDrawingMediaExtension)
+    // -- a part whose bytes are WMF/EMF but whose declared content type AND extension both say "png" is
+    // exactly the mismatch that trips PowerPoint's "we found a problem with content" repair prompt.
+    // This asserts the content type actually written into the saved .pptx package, not just the return
+    // value of the lookup helper (rule: a substring/return-value check would have missed the original bug,
+    // since InferPictureContentType's caller never surfaces its return value anywhere else).
+    [Theory]
+    [InlineData("clip.wmf", "image/x-wmf", "wmf")]
+    [InlineData("clip.emf", "image/x-emf", "emf")]
+    public void ApplyCommand_InsertsWmfOrEmfPicture_SavedPackageDeclaresMatchingContentType(
+        string fileName,
+        string expectedContentType,
+        string expectedExtension)
+    {
+        var editor = MakeSession();
+        var sourceBytes = new byte[] { 0xD7, 0xCD, 0xC6, 0x9A, 0x01, 0x02, 0x03 }; // WMF-placebo signature bytes
+        var payload = SlideObjectInsertionPlanner.CreatePicturePayload(sourceBytes, fileName);
+
+        // The in-memory model must already carry the correct content type ...
+        payload.ContentType.Should().Be(expectedContentType);
+
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.PictureCommandId,
+            payload);
+        added.Should().NotBeNull();
+        added!.Picture!.ContentType.Should().Be(expectedContentType);
+
+        // ... and so must the SAVED PACKAGE: the media part's extension and the [Content_Types].xml
+        // Default entry for that extension must both agree with the declared content type, and the
+        // bytes written must be the original (untouched) source bytes -- not silently re-labelled png.
+        using var package = new MemoryStream();
+        PptxPackageWriter.Write(editor.Presentation, package);
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read);
+
+        var mediaEntry = archive.Entries.Should().ContainSingle(entry =>
+            entry.FullName.StartsWith("ppt/media/slide1_media", StringComparison.Ordinal))
+            .Subject;
+        mediaEntry.FullName.Should().EndWith("." + expectedExtension);
+        using (var mediaStream = mediaEntry.Open())
+        using (var mediaBuffer = new MemoryStream())
+        {
+            mediaStream.CopyTo(mediaBuffer);
+            mediaBuffer.ToArray().Should().Equal(sourceBytes);
+        }
+
+        var contentTypesXml = XDocument.Load(archive.GetEntry(OpcMediaTypes.ContentTypesPath)!.Open());
+        var defaultEntries = contentTypesXml.Root!
+            .Elements(OpcMediaTypes.ContentTypesNamespace + "Default")
+            .Where(element => string.Equals(
+                element.Attribute("Extension")?.Value, expectedExtension, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var defaultEntry = defaultEntries.Should().ContainSingle().Subject;
+        defaultEntry.Attribute("ContentType")!.Value.Should().Be(expectedContentType);
+    }
+
+    // Sibling/no-regression case: an already-correct format (jpg) sharing the same
+    // PresentationPictureInsertion profile must keep behaving exactly as before -- same
+    // saved-package assertions as above, applied to a format the switch already mapped correctly.
+    [Fact]
+    public void ApplyCommand_InsertsJpegPicture_SavedPackageStillDeclaresJpegContentType()
+    {
+        var editor = MakeSession();
+        var sourceBytes = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x01, 0x02, 0x03 };
+        var payload = SlideObjectInsertionPlanner.CreatePicturePayload(sourceBytes, "photo.jpg");
+        payload.ContentType.Should().Be("image/jpeg");
+
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.PictureCommandId,
+            payload);
+        added.Should().NotBeNull();
+
+        using var package = new MemoryStream();
+        PptxPackageWriter.Write(editor.Presentation, package);
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read);
+
+        var mediaEntry = archive.Entries.Should().ContainSingle(entry =>
+            entry.FullName.StartsWith("ppt/media/slide1_media", StringComparison.Ordinal))
+            .Subject;
+        mediaEntry.FullName.Should().EndWith(".jpg");
+
+        var contentTypesXml = XDocument.Load(archive.GetEntry(OpcMediaTypes.ContentTypesPath)!.Open());
+        var defaultEntries = contentTypesXml.Root!
+            .Elements(OpcMediaTypes.ContentTypesNamespace + "Default")
+            .Where(element => string.Equals(
+                element.Attribute("Extension")?.Value, "jpg", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var defaultEntry = defaultEntries.Should().ContainSingle().Subject;
+        defaultEntry.Attribute("ContentType")!.Value.Should().Be("image/jpeg");
+    }
+
+    // round-172 sibling coverage: the SAME PresentationPictureInsertion profile also supplies the
+    // content type for SmartArt-picture and Zoom-Cover-Image insertion (see
+    // PresentationAssetImportWorkflow.CreatePayload), but those two kinds name their saved part's
+    // extension through separate mappers (GetPresentationSmartArtExtension /
+    // GetPresentationZoomCoverExtension) that must independently agree wmf/emf resolve to "wmf"/"emf"
+    // -- otherwise teaching only the content-type side about wmf/emf would produce a WORSE, newly
+    // self-inconsistent pairing (extension "png" declared as content type "image/x-wmf"), exactly the
+    // trap the r157-remediation comment on GetPresentationSmartArtExtension documents for webp.
+    [Theory]
+    [InlineData(OpcMediaExtensionProfile.PresentationSmartArtImage, "image/x-wmf", "wmf")]
+    [InlineData(OpcMediaExtensionProfile.PresentationSmartArtImage, "image/x-emf", "emf")]
+    [InlineData(OpcMediaExtensionProfile.PresentationZoomCoverImage, "image/x-wmf", "wmf")]
+    [InlineData(OpcMediaExtensionProfile.PresentationZoomCoverImage, "image/x-emf", "emf")]
+    public void SmartArtAndZoomCoverExtensionMappers_AgreeWithPictureInsertionContentType(
+        OpcMediaExtensionProfile extensionProfile,
+        string contentType,
+        string expectedExtension)
+    {
+        // The content-type side (what SmartArtPicture/ZoomCoverImage insertion actually infers today).
+        var inferredContentType = SlideObjectInsertionPlanner.InferPictureContentType("clip." + expectedExtension);
+        inferredContentType.Should().Be(contentType);
+
+        // The extension side used to name the saved part from that same content type must agree.
+        OpcMediaTypes.GetMediaFileExtension(inferredContentType, extensionProfile)
+            .Should().Be(expectedExtension);
     }
 }

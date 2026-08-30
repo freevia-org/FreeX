@@ -694,25 +694,35 @@ public static partial class ChartRenderer
         for (uint r = dataStartRow; r <= endRow; r++, i++)
         {
             double x = xPositions is not null && i < xPositions.Length ? xPositions[i] : i;
-            if (cellLookup.TryGetValue((r, col), out var cell)
-                && TryGetChartNumericValue(cell, out var v))
+            if (!cellLookup.TryGetValue((r, col), out var cell))
+                continue;
+
+            if (TryGetChartNumericValue(cell, out var v))
             {
                 var point = new DataPoint(x, v);
                 series.Points.Add(point);
                 trendPoints?.Add(point);
+                continue;
             }
-            else if (cellLookup.TryGetValue((r, col), out cell) && IsChartBlank(cell))
+
+            // Blank cell OR any other non-numeric cell that isn't "blank" either -- most notably a
+            // formula error such as #DIV/0!/#N/A/#VALUE! -- both mean "no plotted value here" and
+            // must follow the chart's BlankDisplayMode the same way. Previously an error-valued cell
+            // matched neither branch, so no point (not even a NaN gap point) was added for its index
+            // and OxyPlot silently interpolated a straight line across it -- the same "omitted index
+            // lets the line jump straight across the gap" hazard round R29
+            // (R29-chart-render-pixel-deep-2) already fixed for the portable/Avalonia layout engine's
+            // ChartLayoutEngine.LayoutLineSeries, which treats any "no value" uniformly regardless of
+            // blank vs error.
+            if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
             {
-                if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
-                {
-                    var point = new DataPoint(x, 0);
-                    series.Points.Add(point);
-                    trendPoints?.Add(point);
-                }
-                else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Gap)
-                {
-                    series.Points.Add(new DataPoint(x, double.NaN));
-                }
+                var point = new DataPoint(x, 0);
+                series.Points.Add(point);
+                trendPoints?.Add(point);
+            }
+            else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Gap)
+            {
+                series.Points.Add(new DataPoint(x, double.NaN));
             }
         }
 
@@ -734,7 +744,12 @@ public static partial class ChartRenderer
         {
             Key = SecondaryYAxisKey,
             Position = AxisPosition.Right,
-            Title = "Secondary"
+            // Was hardcoded to the literal "Secondary" -- ChartModel.SecondaryAxisTitle carries the
+            // workbook's own authored secondary-axis title (round-tripped by
+            // XlsxChartAxisReader.cs/XlsxChartXmlWriter.Axes.cs), mirroring how every primary-axis
+            // call site in this file passes chart.XAxisTitle/YAxisTitle straight through (null just
+            // leaves the axis untitled, matching OxyPlot's default for those calls).
+            Title = chart.SecondaryAxisTitle
         });
     }
 

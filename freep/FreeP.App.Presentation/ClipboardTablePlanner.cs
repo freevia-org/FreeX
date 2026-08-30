@@ -164,28 +164,111 @@ public static class ClipboardTablePlanner
         }
     }
 
+    /// <summary>
+    /// Splits one row's paragraph into per-column cell text bodies on tab boundaries, undoing the
+    /// RFC4180-style quoting FreeX's plain-text clipboard serializer applies to any field containing
+    /// a delimiter, a quote, or a newline (<c>ClipboardSerializer.AppendTsvCell</c> /
+    /// <c>RequiresTsvQuoting</c> in FreeX.Core.Commands). A tab inside a genuinely quoted field is
+    /// cell content, not a column boundary; a doubled quote (<c>""</c>) inside one collapses to a
+    /// single literal quote; and the field's own wrapping quotes are dropped. The same disagreement
+    /// this method resolves is already resolved, for FreeX pasting into itself, by
+    /// <c>ClipboardSerializer.Deserialize</c> / <c>IsProperlyQuotedField</c> -- this mirrors that
+    /// algorithm rather than inventing a third one.
+    /// <para>
+    /// This method also receives paragraphs built by the RTF/XAML rich-clipboard table projection
+    /// (<see cref="EditingSession.InsertTableFromClipboard"/>'s other caller), whose cell text is
+    /// literal user content that was never CSV-quoted -- a Word table cell containing a typed
+    /// quotation mark must not have it stripped. <see cref="IsProperlyQuotedCell"/> guards this: a
+    /// leading quote only opens quoting when a genuine closing quote (immediately followed by a tab
+    /// or the row's end) can be found ahead of it, exactly as FreeX's own reader requires, so an
+    /// ordinary stray quote in rich text is left alone as data.
+    /// </para>
+    /// </summary>
     private static List<TextBody> SplitCells(Paragraph source)
     {
-        var cellRuns = new List<List<Run>> { new() };
+        var chars = new List<char>();
+        var owners = new List<Run>();
         foreach (var sourceRun in source.Runs)
         {
             var text = sourceRun.Text ?? string.Empty;
-            var segment = new StringBuilder();
             foreach (char character in text)
             {
-                if (character == '\t')
-                {
-                    AddRun(cellRuns[^1], sourceRun, segment);
-                    cellRuns.Add(new List<Run>());
-                    segment.Clear();
-                }
-                else
-                {
-                    segment.Append(character);
-                }
+                chars.Add(character);
+                owners.Add(sourceRun);
             }
-            AddRun(cellRuns[^1], sourceRun, segment);
         }
+
+        var cellRuns = new List<List<Run>> { new() };
+        var segment = new StringBuilder();
+        Run? segmentOwner = null;
+
+        void Flush()
+        {
+            if (segment.Length > 0)
+                AddRun(cellRuns[^1], segmentOwner!, segment);
+            segment.Clear();
+            segmentOwner = null;
+        }
+
+        void Append(char character, Run owner)
+        {
+            if (segmentOwner is not null && !ReferenceEquals(segmentOwner, owner))
+                Flush();
+            segmentOwner ??= owner;
+            segment.Append(character);
+        }
+
+        var inQuotes = false;
+        var atFieldStart = true;
+        var i = 0;
+        while (i < chars.Count)
+        {
+            var character = chars[i];
+            if (inQuotes)
+            {
+                if (character == '"')
+                {
+                    if (i + 1 < chars.Count && chars[i + 1] == '"')
+                    {
+                        Append('"', owners[i]);
+                        i += 2;
+                        continue;
+                    }
+
+                    inQuotes = false;
+                    atFieldStart = false;
+                    i++;
+                    continue;
+                }
+
+                Append(character, owners[i]);
+                i++;
+                continue;
+            }
+
+            if (character == '"' && atFieldStart && IsProperlyQuotedCell(chars, i))
+            {
+                inQuotes = true;
+                atFieldStart = false;
+                i++;
+                continue;
+            }
+
+            if (character == '\t')
+            {
+                Flush();
+                cellRuns.Add(new List<Run>());
+                atFieldStart = true;
+                i++;
+                continue;
+            }
+
+            Append(character, owners[i]);
+            atFieldStart = false;
+            i++;
+        }
+
+        Flush();
 
         return cellRuns.Select(runs =>
         {
@@ -197,6 +280,32 @@ public static class ClipboardTablePlanner
                 paragraph.Runs.Add(new Run());
             return new TextBody { Paragraphs = { paragraph, } };
         }).ToList();
+    }
+
+    /// <summary>Mirrors ClipboardSerializer.IsProperlyQuotedField: the quote at <paramref
+    /// name="quoteIndex"/> (already known to be the first character of a field) opens genuine
+    /// RFC4180 quoting only if scanning forward -- treating a doubled quote as an escaped literal --
+    /// reaches a closing quote immediately followed by the next tab or the end of the row. Otherwise
+    /// it is a literal quote character (typed by a user, or produced by a rich-text source that never
+    /// CSV-quotes its cells) and must be preserved as data rather than consumed as CSV syntax.</summary>
+    private static bool IsProperlyQuotedCell(List<char> chars, int quoteIndex)
+    {
+        for (var i = quoteIndex + 1; i < chars.Count; i++)
+        {
+            if (chars[i] != '"')
+                continue;
+
+            if (i + 1 < chars.Count && chars[i + 1] == '"')
+            {
+                i++;
+                continue;
+            }
+
+            var next = i + 1;
+            return next >= chars.Count || chars[next] == '\t';
+        }
+
+        return false;
     }
 
     private static void AddRun(List<Run> target, Run source, StringBuilder text)

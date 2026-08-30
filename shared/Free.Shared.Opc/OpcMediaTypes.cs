@@ -178,6 +178,8 @@ public static class OpcMediaTypes
                 "bmp" => "image/bmp",
                 "svg" => "image/svg+xml",
                 "webp" => "image/webp",
+                "wmf" => "image/x-wmf",
+                "emf" => "image/x-emf",
                 _ => "image/png",
             },
             OpcMediaContentTypeProfile.PresentationAudioInsertion => extension switch
@@ -676,6 +678,8 @@ public static class OpcMediaTypes
             "image/bmp" => "bmp",
             "image/svg+xml" => "svg",
             "image/webp" => "webp",
+            "image/x-wmf" => "wmf",
+            "image/x-emf" => "emf",
             _ => "png",
         };
 
@@ -694,6 +698,8 @@ public static class OpcMediaTypes
             "image/bmp" => "bmp",
             "image/svg+xml" => "svg",
             "image/webp" => "webp",
+            "image/x-wmf" or "image/wmf" => "wmf",
+            "image/x-emf" or "image/emf" => "emf",
             _ => "png",
         };
 

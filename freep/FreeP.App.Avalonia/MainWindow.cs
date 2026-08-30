@@ -637,7 +637,11 @@ public sealed partial class MainWindow : Window,
             applyRecoveredPresentation: (presentation, originalPath) =>
             {
                 LoadPresentationContent(presentation);
-                _fileWorkflow.Workflow.MarkDirtyWithPath(originalPath);
+                // r172: route through the session so the external-modification guard is re-armed.
+                // Marking dirty alone left the guard disarmed, so the first save after recovering
+                // into THIS window skipped the changed-on-disk check and could overwrite a copy
+                // edited while the app was gone.
+                _fileSession.AdoptRecoveredPresentation(originalPath);
             },
             recoverInNewWindowAsync: OpenNewWindowWithRecoveredSnapshotAsync,
             // r146-remediation: the manual "Recover Unsaved Presentations" Backstage command can be

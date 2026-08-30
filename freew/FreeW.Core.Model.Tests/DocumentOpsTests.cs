@@ -120,6 +120,103 @@ public class DocumentOpsTests
         paragraph.SectionBreak!.Page.Should().NotBeNull();
     }
 
+    // --- freew-sections-headers F1: CreateSectionBreak must not blank the header/footer that was
+    // showing on the pages before the break -- see FreeW.Core.Model.DocumentOps.CreateSectionBreak's
+    // inheritedHeadersFooters parameter and ResolveInheritedHeadersFooters below.
+
+    [Fact]
+    public void CreateSectionBreak_UsesEmptyHeadersFooters_WhenNoneProvided()
+    {
+        // Sibling no-regression case: callers that omit the new parameter (there are none left in the
+        // shipping app, but this pins the default) keep the pre-fix behaviour of a brand-new, empty
+        // SectionHeadersFooters -- unchanged from before this fix.
+        var paragraph = DocumentOps.CreateSectionBreak(SectionBreakKind.NextPage);
+
+        var headersFooters = paragraph.SectionBreak!.HeadersFooters;
+        headersFooters.IsEmpty.Should().BeTrue();
+        headersFooters.Header.Should().BeNull();
+        headersFooters.Footer.Should().BeNull();
+    }
+
+    [Fact]
+    public void CreateSectionBreak_InheritsHeadersFooters_WhenProvided()
+    {
+        var inherited = new SectionHeadersFooters
+        {
+            Header = new HeaderFooter("MY RUNNING HEADER"),
+            Footer = new HeaderFooter("MY RUNNING FOOTER"),
+            FirstHeader = new HeaderFooter("First Header")
+        };
+
+        var paragraph = DocumentOps.CreateSectionBreak(SectionBreakKind.NextPage, inheritedHeadersFooters: inherited);
+
+        var headersFooters = paragraph.SectionBreak!.HeadersFooters;
+        headersFooters.Header.Should().NotBeNull();
+        headersFooters.Header!.PlainText.Should().Be("MY RUNNING HEADER");
+        headersFooters.Footer!.PlainText.Should().Be("MY RUNNING FOOTER");
+        headersFooters.FirstHeader!.PlainText.Should().Be("First Header");
+        headersFooters.EvenHeader.Should().BeNull();
+        headersFooters.EvenFooter.Should().BeNull();
+        headersFooters.FirstFooter.Should().BeNull();
+
+        // Cloned, not shared: mutating the source afterwards must not affect the new section.
+        headersFooters.Header.Should().NotBeSameAs(inherited.Header);
+        inherited.Header.Paragraphs[0].Runs[0].Text = "Mutated";
+        headersFooters.Header!.PlainText.Should().Be("MY RUNNING HEADER");
+    }
+
+    [Fact]
+    public void ResolveInheritedHeadersFooters_SingleSectionDocument_ReturnsDocumentHeaderAndFooter()
+    {
+        // Direct reproduction of freew-sections-headers F1: a single-section document that already
+        // has a header/footer must resolve that same header/footer for section 0 (the section the
+        // caret is in before any break exists), so CreateSectionBreak can carry it into the new leading
+        // section a section break creates.
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Only section."));
+        document.Header = new HeaderFooter("MY RUNNING HEADER");
+        document.Footer = new HeaderFooter("MY RUNNING FOOTER");
+
+        var resolved = DocumentOps.ResolveInheritedHeadersFooters(document, sectionIndex: 0);
+
+        resolved.Header.Should().BeSameAs(document.Header);
+        resolved.Footer.Should().BeSameAs(document.Footer);
+    }
+
+    [Fact]
+    public void ResolveInheritedHeadersFooters_WalksBackwardPerSlot_WhenSectionDefinesNoSlotOfItsOwn()
+    {
+        // Sibling no-regression case: a later section that does not define its own default header must
+        // still resolve to the nearest earlier section that does (per-slot "link to previous"), matching
+        // FreeW.App.Presentation.Ribbon.HeaderFooterPagePlanner's resolution used for display/print.
+        var document = new TextDocument();
+        var firstSection = new Section(new PageSettings());
+        firstSection.HeadersFooters.Header = new HeaderFooter("Section One Header");
+        document.Blocks.Add(new Paragraph("Section one body.") { SectionBreak = firstSection });
+        document.Blocks.Add(new Paragraph("Section two body (defines no header of its own)."));
+
+        var resolved = DocumentOps.ResolveInheritedHeadersFooters(document, sectionIndex: 1);
+
+        resolved.Header.Should().BeSameAs(firstSection.HeadersFooters.Header);
+    }
+
+    [Fact]
+    public void ResolveInheritedHeadersFooters_ReturnsNull_WhenNothingEarlierDefinesSlot()
+    {
+        // Sibling no-regression case: when a leading section genuinely has no header/footer anywhere
+        // before or on it, resolution must stay blank (matching Word), not reach forward into a later
+        // section that happens to define one.
+        var document = new TextDocument();
+        var emptyFirstSection = new Section(new PageSettings());
+        document.Blocks.Add(new Paragraph("Section one body.") { SectionBreak = emptyFirstSection });
+        document.Blocks.Add(new Paragraph("Section two body."));
+        document.Header = new HeaderFooter("Only On The Final Section");
+
+        var resolved = DocumentOps.ResolveInheritedHeadersFooters(document, sectionIndex: 0);
+
+        resolved.Header.Should().BeNull();
+    }
+
     [Theory]
     [InlineData(CoverPagePreset.Default)]
     [InlineData(CoverPagePreset.Banded)]

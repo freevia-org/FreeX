@@ -71,7 +71,10 @@ public static class PlaceholderResolver
     /// </summary>
     public static ResolvedAnchor ResolveAnchor(SlideShape shape, Slide slide, PresentationModel presentation)
     {
-        if (shape.ExtentCxEmu > 0 || shape.ExtentCyEmu > 0)
+        var hasOwnOffset = shape.OffsetXEmu != 0 || shape.OffsetYEmu != 0;
+        var hasOwnExtent = shape.ExtentCxEmu > 0 || shape.ExtentCyEmu > 0;
+
+        if (hasOwnOffset && hasOwnExtent)
             return new ResolvedAnchor(shape.OffsetXEmu, shape.OffsetYEmu,
                                       shape.ExtentCxEmu, shape.ExtentCyEmu,
                                       shape.RotationDeg, shape.FlipH, shape.FlipV);
@@ -81,21 +84,57 @@ public static class PlaceholderResolver
                                       shape.ExtentCxEmu, shape.ExtentCyEmu,
                                       shape.RotationDeg, shape.FlipH, shape.FlipV);
 
+        // ECMA-376's CT_Transform2D makes <a:off> and <a:ext> independently optional, so a
+        // placeholder shape can carry its own explicit position while inheriting only its size
+        // (or vice-versa). Resolve each half of the geometry independently against the
+        // layout/master cascade instead of discarding the shape's own explicit half whenever the
+        // *other* half happens to be inherited -- see freep-masters-layouts F2.
         var layoutPh = FindLayoutPlaceholder(shape.Placeholder, slide, presentation);
-        if (layoutPh is not null && (layoutPh.ExtentCxEmu > 0 || layoutPh.ExtentCyEmu > 0))
-            return new ResolvedAnchor(layoutPh.OffsetXEmu, layoutPh.OffsetYEmu,
-                                      layoutPh.ExtentCxEmu, layoutPh.ExtentCyEmu,
-                                      layoutPh.RotationDeg, layoutPh.FlipH, layoutPh.FlipV);
-
         var masterPh = FindMasterPlaceholder(shape.Placeholder, slide, presentation);
-        if (masterPh is not null && (masterPh.ExtentCxEmu > 0 || masterPh.ExtentCyEmu > 0))
-            return new ResolvedAnchor(masterPh.OffsetXEmu, masterPh.OffsetYEmu,
-                                      masterPh.ExtentCxEmu, masterPh.ExtentCyEmu,
-                                      masterPh.RotationDeg, masterPh.FlipH, masterPh.FlipV);
 
-        return new ResolvedAnchor(shape.OffsetXEmu, shape.OffsetYEmu,
-                                  shape.ExtentCxEmu, shape.ExtentCyEmu,
-                                  shape.RotationDeg, shape.FlipH, shape.FlipV);
+        var offsetXEmu = shape.OffsetXEmu;
+        var offsetYEmu = shape.OffsetYEmu;
+        var rotationDeg = shape.RotationDeg;
+        var flipH = shape.FlipH;
+        var flipV = shape.FlipV;
+        if (!hasOwnOffset)
+        {
+            if (layoutPh is not null && (layoutPh.OffsetXEmu != 0 || layoutPh.OffsetYEmu != 0))
+            {
+                offsetXEmu = layoutPh.OffsetXEmu;
+                offsetYEmu = layoutPh.OffsetYEmu;
+                rotationDeg = layoutPh.RotationDeg;
+                flipH = layoutPh.FlipH;
+                flipV = layoutPh.FlipV;
+            }
+            else if (masterPh is not null && (masterPh.OffsetXEmu != 0 || masterPh.OffsetYEmu != 0))
+            {
+                offsetXEmu = masterPh.OffsetXEmu;
+                offsetYEmu = masterPh.OffsetYEmu;
+                rotationDeg = masterPh.RotationDeg;
+                flipH = masterPh.FlipH;
+                flipV = masterPh.FlipV;
+            }
+        }
+
+        var extentCxEmu = shape.ExtentCxEmu;
+        var extentCyEmu = shape.ExtentCyEmu;
+        if (!hasOwnExtent)
+        {
+            if (layoutPh is not null && (layoutPh.ExtentCxEmu > 0 || layoutPh.ExtentCyEmu > 0))
+            {
+                extentCxEmu = layoutPh.ExtentCxEmu;
+                extentCyEmu = layoutPh.ExtentCyEmu;
+            }
+            else if (masterPh is not null && (masterPh.ExtentCxEmu > 0 || masterPh.ExtentCyEmu > 0))
+            {
+                extentCxEmu = masterPh.ExtentCxEmu;
+                extentCyEmu = masterPh.ExtentCyEmu;
+            }
+        }
+
+        return new ResolvedAnchor(offsetXEmu, offsetYEmu, extentCxEmu, extentCyEmu,
+                                  rotationDeg, flipH, flipV);
     }
 
     private static bool MatchesPlaceholder(SlideShape candidate, Placeholder target)

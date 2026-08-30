@@ -215,6 +215,27 @@ public sealed partial class ViewportService
                 // serving a stale colour.
                 if (BuildsReferenceDynamically(call.FunctionName))
                     return true;
+
+                // r172: a function name that is neither a built-in nor one of the evaluator's
+                // AST-aware special forms (LET/LAMBDA/SINGLE/ANCHORARRAY) can only be Excel's
+                // documented "custom function via Name Manager" pattern -- see
+                // FormulaEvaluator.Functions.cs's EvaluateFunction, which checks LET/LAMBDA/SINGLE/
+                // ANCHORARRAY and then BuiltInFunctions.TryGet BEFORE ever falling through to
+                // TryEvaluateNamedFormula's "resolve a workbook/sheet-scoped name to a LAMBDA and
+                // invoke it" fallback (lines 21-38). That LAMBDA's own body is an arbitrary formula
+                // that can read any sheet in the workbook -- e.g. Name Manager MYCALC ->
+                // "LAMBDA(n,n+Sheet2!$A$1)" called as "=MYCALC(A1)" -- which this switch cannot see
+                // by walking only the call's own argument nodes (A1 has no SheetName). Rather than
+                // resolving the Name Manager entry's body here (which would need a Workbook, and
+                // would make the reach answer depend on which workbook/sheet asked -- see the
+                // memoization note on FormulaTextReachesAnotherSheet), treat an unrecognized
+                // callee exactly like a bare NamedRangeNode just below: conservatively "might reach
+                // outward" without attempting to resolve it. Whether a name is one of Excel's
+                // built-ins is a fixed, workbook-independent fact, so this keeps the formula-text-
+                // only cache sound.
+                if (!IsBuiltInOrSpecialForm(call.FunctionName))
+                    return true;
+
                 return AnyReachesAnotherSheet(call.Arguments);
 
             default:
@@ -236,6 +257,15 @@ public sealed partial class ViewportService
     private static bool BuildsReferenceDynamically(string functionName) =>
         functionName.Equals("INDIRECT", StringComparison.OrdinalIgnoreCase) ||
         functionName.Equals("OFFSET", StringComparison.OrdinalIgnoreCase);
+
+    // True when `functionName` is one the evaluator resolves WITHOUT ever consulting the
+    // workbook's Name Manager (a real built-in via BuiltInFunctions.TryGet, or one of the
+    // AST-aware special forms LET/LAMBDA/SINGLE/ANCHORARRAY -- see FormulaEvaluator.Functions.cs's
+    // EvaluateFunction, which checks exactly these before its TryEvaluateNamedFormula fallback).
+    // Purely syntactic (no Workbook parameter) so callers can keep memoizing by formula text alone.
+    private static bool IsBuiltInOrSpecialForm(string functionName) =>
+        functionName is "LET" or "LAMBDA" or "SINGLE" or "ANCHORARRAY" ||
+        BuiltInFunctions.TryGet(functionName, out _);
 
     // Cheap combined checksum of every sheet's ContentVersion in the workbook. Used as part of the
     // CF context cache key only for sheets with a formula-driven rule (see above), so that a
