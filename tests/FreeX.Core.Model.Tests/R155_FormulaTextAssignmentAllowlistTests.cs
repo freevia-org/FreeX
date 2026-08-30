@@ -45,7 +45,6 @@ public sealed class R155_FormulaTextAssignmentAllowlistTests
     {
         ["Sheet.cs"] = "authoring: SetFormula is where a new formula legitimately resets array identity",
         ["Sheet.Clone.cs"] = "clone: saves and restores the array fields around the assignment",
-        ["CellStateSnapshot.cs"] = "restore: reassigns the array fields explicitly after the text",
         ["RowColumnShiftHelpers.Formulas.cs"] = "the preserving helper itself",
         ["XlsxFileAdapter.SourcePackageSnapshot.cs"] = "patch-save revert: restores the extent it captured",
         ["PasteCommandFactory.cs"] = "clear-to-literal: assigns null when a paste computes a value",
