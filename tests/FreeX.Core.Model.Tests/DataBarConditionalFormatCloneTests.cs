@@ -145,19 +145,27 @@ public sealed class DataBarConditionalFormatCloneTests
             DataBarMaxLength = 88,
             DataBarGradient = false,
             DataBarBorder = true,
+            DataBarBorderColor = new RgbColor(11, 12, 13),
             DataBarAxisPosition = "middle",
             DataBarAxisColor = new RgbColor(1, 2, 3),
             DataBarNegativeFillColor = new RgbColor(4, 5, 6),
-            DataBarNegativeBorderColor = new RgbColor(7, 8, 9)
+            DataBarNegativeBorderColor = new RgbColor(7, 8, 9),
+            DataBarNegativeFillSameAsPositive = true,
+            DataBarNegativeBorderSameAsPositive = true,
+            DataBarDirection = "rightToLeft"
         };
 
     private static void AssertAdvancedDataBar(ConditionalFormat rule)
     {
         rule.DataBarBorder.Should().BeTrue();
+        rule.DataBarBorderColor.Should().Be(new RgbColor(11, 12, 13));
         rule.DataBarAxisPosition.Should().Be("middle");
         rule.DataBarAxisColor.Should().Be(new RgbColor(1, 2, 3));
         rule.DataBarNegativeFillColor.Should().Be(new RgbColor(4, 5, 6));
         rule.DataBarNegativeBorderColor.Should().Be(new RgbColor(7, 8, 9));
+        rule.DataBarNegativeFillSameAsPositive.Should().BeTrue();
+        rule.DataBarNegativeBorderSameAsPositive.Should().BeTrue();
+        rule.DataBarDirection.Should().Be("rightToLeft");
     }
 
 }
