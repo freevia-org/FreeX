@@ -873,7 +873,7 @@ public partial class FunctionLibraryTests
     public void AscDbcsAndJis_RangeArgument_SpillsElementwise()
     {
         var sheet = MakeSheet(
-            (1, 1, new TextValue("ï¼¡ï¼¢ï¼£")),
+            (1, 1, new TextValue("ＡＢＣ")),
             (2, 1, new TextValue("ABC")));
 
         var asc = _eval.Evaluate("=ASC(A1:A2)", sheet);

@@ -325,6 +325,11 @@ public sealed class CoreCommandsResidualDeduplicationTests
             .Should().HaveCount(3, "the shared insert core should be called by both axis wrappers");
         source.Split("RemapChartSeriesIndexedCollectionsForDelete(chart, posLo, posHi, removedCount);")
             .Should().HaveCount(3, "the shared delete core should be called by both axis wrappers");
+        // Round 172: this used to pin the literal "chart.SeriesOrderOverrides = chart.SeriesOrderOverrides",
+        // the in-place mutation the no-op-allocation work replaced with the shared RemapIndexedItems*
+        // helpers. The property the guard defends -- ONE authoritative series-mutation body per
+        // direction, reached from both axis wrappers -- still holds; only the expression it was
+        // spelled with changed.
         source.Split("chart.SeriesOrderOverrides = RemapIndexedItemsForInsert(")
             .Should().HaveCount(2, "the insert mutation body should have one authoritative implementation");
         source.Split("chart.SeriesOrderOverrides = RemapIndexedItemsForDelete(")

@@ -867,7 +867,7 @@ public sealed class MailingsTabTests
     [Fact]
     public void Start_mail_merge_commands_set_output_mode_and_clear_session()
     {
-        var view = ViewWith(new Paragraph("Dear Â«FirstNameÂ»"));
+        var view = ViewWith(new Paragraph("Dear «FirstName»"));
         var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks(), out var engine);
         engine.LoadRecipientsCsv(SampleCsv);
 

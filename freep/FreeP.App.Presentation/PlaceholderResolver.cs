@@ -11,7 +11,7 @@ namespace FreeP.App.Compositor;
 /// </summary>
 public static class PlaceholderResolver
 {
-    // â”€â”€â”€ Public entry point â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Public entry point ───────────────────────────────────────────────────
 
     /// <summary>
     /// Resolves inherited run-level text defaults for a shape, using the slide's exact
@@ -26,7 +26,7 @@ public static class PlaceholderResolver
             ?? FindMasterPlaceholder(shape.Placeholder, slide, presentation);
     }
 
-    // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Helpers ──────────────────────────────────────────────────────────────
 
     /// <summary>
     /// All-layouts fallback used only when a master lookup cannot be anchored to a specific
