@@ -65,6 +65,17 @@ public static class FreeWClipboardApplicationWorkflow
     public const string ClipboardUnsupportedMessage = "This clipboard operation is not supported.";
     public const string ClipboardFailureMessage = "The clipboard operation failed.";
 
+    /// <summary>
+    /// The clipboard failure message with a platform detail appended, composed HERE rather than in a
+    /// shell so neither renderer assembles user-facing text of its own (which is what
+    /// RendererLocalizationExhaustionTests forbids, and what let the Avalonia thesaurus pane's
+    /// failure text drift out of the localization catalogs) and so both shells word it identically.
+    /// </summary>
+    public static string DescribeClipboardFailure(string? detail) =>
+        string.IsNullOrWhiteSpace(detail)
+            ? ClipboardFailureMessage
+            : ClipboardFailureMessage + " " + detail.Trim();
+
     // clip-1 (R143): FreeX (and any other HTML-aware source: browsers, LibreOffice Calc, Word) never
     // places "Rich Text Format" on the clipboard for a cell-range copy -- it places plain text plus an
     // HTML table fragment (CF_HTML), under "text/html" cross-platform and/or the Windows "HTML Format"

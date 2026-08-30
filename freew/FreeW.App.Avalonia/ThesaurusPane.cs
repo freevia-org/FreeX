@@ -162,7 +162,7 @@ internal sealed partial class ThesaurusPane : Border
             // Copy is invoked by an async-void Avalonia click handler. Clipboard implementations can
             // throw when the OS clipboard/portal disappears; contain that routine platform failure so
             // it cannot escape through the dispatcher and terminate the app.
-            _status.Text = $"{FreeWClipboardApplicationWorkflow.ClipboardFailureMessage} {ex.Message}";
+            _status.Text = FreeWClipboardApplicationWorkflow.DescribeClipboardFailure(ex.Message);
             return false;
         }
     }
