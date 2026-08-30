@@ -91,7 +91,17 @@ public sealed class XlsxHeaderFooterPicturePackagePlannerTests
     }
 
     [Theory]
-    [InlineData("logo.png", ".jpg", "logo.png")]
+    // Round 172 (freep-media F1 follow-up): a name whose extension disagrees with the picture's own
+    // content type is no longer preserved. The writer names the media part from this method and
+    // declares [Content_Types].xml from the picture's content type, so keeping "logo.png" for a
+    // picture stored as image/jpeg produced exactly the mismatched pair the r157-remediation note in
+    // OpcMediaTypes warns about -- a .png part declared image/jpeg. Extensions that AGREE are still
+    // preserved, including differently spelled ones (.tif for image/tiff, .jpeg for image/jpeg).
+    [InlineData("logo.png", ".jpg", "logo.jpg")]
+    [InlineData("logo.jpeg", ".jpg", "logo.jpeg")]
+    [InlineData("logo.tif", ".tiff", "logo.tif")]
+    [InlineData("logo.bin", ".png", "logo.png")]
+    [InlineData("logo.png", ".png", "logo.png")]
     [InlineData("logo", ".png", "logo.png")]
     [InlineData("", ".jpeg", "freexHeaderFooter3_7.jpeg")]
     [InlineData("   ", ".gif", "freexHeaderFooter3_7.gif")]
