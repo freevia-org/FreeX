@@ -336,31 +336,67 @@ public sealed class FormulaEvaluatorPerformanceTests
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
-        var beforeSameSheetBytes = GC.GetAllocatedBytesForCurrentThread();
-        var sameSheetStopwatch = Stopwatch.StartNew();
-        var sameSheetResult = evaluator.Evaluate(sameSheetFormula, dataSheet, workbook);
-        sameSheetStopwatch.Stop();
-        var sameSheetAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeSameSheetBytes;
+        (ScalarValue Result, TimeSpan Elapsed, long AllocatedBytes) Measure(string formula, Sheet sheet)
+        {
+            var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+            var stopwatch = Stopwatch.StartNew();
+            var result = evaluator.Evaluate(formula, sheet, workbook);
+            stopwatch.Stop();
+            return (result, stopwatch.Elapsed, GC.GetAllocatedBytesForCurrentThread() - beforeBytes);
+        }
 
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
+        // A single wall-clock sample is vulnerable to runner preemption (especially immediately
+        // after a forced full GC). Interleave both paths and compare their best samples: scheduling
+        // can only add elapsed time, while a real repeated sheet-name lookup makes every cross-sheet
+        // sample slow. The allocation assertion remains the deterministic regression guard.
+        var sameSheetElapsed = TimeSpan.MaxValue;
+        var crossSheetElapsed = TimeSpan.MaxValue;
+        long crossSheetAllocatedBytes = 0;
+        for (var iteration = 0; iteration < 5; iteration++)
+        {
+            var sameSheetMeasurement = iteration % 2 == 0
+                ? Measure(sameSheetFormula, dataSheet)
+                : default;
+            var crossSheetMeasurement = Measure(crossSheetFormula, formulaSheet);
+            if (iteration % 2 != 0)
+                sameSheetMeasurement = Measure(sameSheetFormula, dataSheet);
 
-        var beforeCrossSheetBytes = GC.GetAllocatedBytesForCurrentThread();
-        var crossSheetStopwatch = Stopwatch.StartNew();
-        var crossSheetResult = evaluator.Evaluate(crossSheetFormula, formulaSheet, workbook);
-        crossSheetStopwatch.Stop();
-        var crossSheetAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeCrossSheetBytes;
+            sameSheetMeasurement.Result.Should().Be(new NumberValue(expected));
+            crossSheetMeasurement.Result.Should().Be(new NumberValue(expected));
+            sameSheetElapsed = TimeSpan.FromTicks(Math.Min(sameSheetElapsed.Ticks, sameSheetMeasurement.Elapsed.Ticks));
+            crossSheetElapsed = TimeSpan.FromTicks(Math.Min(crossSheetElapsed.Ticks, crossSheetMeasurement.Elapsed.Ticks));
+            crossSheetAllocatedBytes = Math.Max(crossSheetAllocatedBytes, crossSheetMeasurement.AllocatedBytes);
+        }
 
-        sameSheetResult.Should().Be(new NumberValue(expected));
-        crossSheetResult.Should().Be(new NumberValue(expected));
         _output.WriteLine(
-            $"{sameSheetFormula}: elapsed={sameSheetStopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={sameSheetAllocatedBytes:N0} bytes");
+            $"{sameSheetFormula}: best_elapsed={sameSheetElapsed.TotalMilliseconds:F2}ms");
         _output.WriteLine(
-            $"{crossSheetFormula}: elapsed={crossSheetStopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={crossSheetAllocatedBytes:N0} bytes");
+            $"{crossSheetFormula}: best_elapsed={crossSheetElapsed.TotalMilliseconds:F2}ms max_allocated={crossSheetAllocatedBytes:N0} bytes");
 
         crossSheetAllocatedBytes.Should().BeLessThan(1_000_000);
-        crossSheetStopwatch.Elapsed.Should().BeLessThan(sameSheetStopwatch.Elapsed * 4 + TimeSpan.FromMilliseconds(10));
+        crossSheetElapsed.Should().BeLessThan(sameSheetElapsed * 4 + TimeSpan.FromMilliseconds(10));
+    }
+
+    [Fact]
+    public void CrossSheetFastAggregate_ResolvesAndCachesSheetBeforeCellLoop()
+    {
+        var aggregateSource = FormulaSourceTestSupport.ReadFormulaSource("FormulaEvaluator.FastAggregates.cs");
+        var sumMethod = aggregateSource[
+            aggregateSource.IndexOf("private static ScalarValue EvaluateFastRangeOnlySum", StringComparison.Ordinal)..
+            aggregateSource.IndexOf("private static ScalarValue EvaluateFastRangeOnlyAverage", StringComparison.Ordinal)];
+        sumMethod.IndexOf("ResolveFastAggregateSheet(range, sheetContext)", StringComparison.Ordinal)
+            .Should().BeLessThan(sumMethod.IndexOf("for (var row = range.StartRow", StringComparison.Ordinal));
+        sumMethod.Should().Contain("sheet.GetValue(row, col)");
+
+        var contextSource = FormulaSourceTestSupport.ReadFormulaSource("FormulaEvaluator.Contexts.cs");
+        var resolveMethod = contextSource[
+            contextSource.IndexOf("private FreeX.Core.Model.Sheet? ResolveSheet(string sheetName)", StringComparison.Ordinal)..
+            contextSource.IndexOf("private sealed class ScopedEvalContext", StringComparison.Ordinal)];
+        resolveMethod.Should().Contain("StringComparer.OrdinalIgnoreCase");
+        resolveMethod.IndexOf("_sheetNameCache.TryGetValue", StringComparison.Ordinal)
+            .Should().BeLessThan(resolveMethod.IndexOf("_workbook.GetSheet(sheetName)", StringComparison.Ordinal));
+        resolveMethod.IndexOf("_workbook.GetSheet(sheetName)", StringComparison.Ordinal)
+            .Should().BeLessThan(resolveMethod.IndexOf("_sheetNameCache[sheetName] = resolvedSheet", StringComparison.Ordinal));
     }
 
     [Fact]
