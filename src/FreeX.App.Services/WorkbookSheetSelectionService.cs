@@ -79,7 +79,8 @@ public sealed class WorkbookSheetSelectionService
                     sheet.Id,
                     sheet.Name,
                     sheet.Id == activeSheet.Id,
-                    sheet.TabColor,
+                    // Theme-relative tab colours must follow the live theme, not the RGB baked at load.
+                    sheet.ResolveTabColor(workbook.Theme),
                     groupedSheetIds?.Contains(sheet.Id) == true);
             })
             .ToList();

@@ -258,7 +258,23 @@ public sealed class PresentationCommandBus
         // Skip no-op commands entirely so they don't create an empty undo entry.
         if (!command.HasEffect(_presentation))
             return;
-        command.Apply(_presentation);
+
+        try
+        {
+            command.Apply(_presentation);
+        }
+        catch
+        {
+            // Apply threw mid-mutation. Nothing is pushed to the undo stack for a failed command,
+            // so without this the user was left with a half-edited presentation and NO way to undo
+            // it. Attempt a best-effort rollback -- the same net FreeX's CommandBus.Execute casts
+            // via TryRevert -- then rethrow so the shell's own error reporting still sees the
+            // failure (Execute returns void here, unlike FreeX's CommandOutcome, so swallowing
+            // would silently report success).
+            TryRevert(command);
+            throw;
+        }
+
         _stack.Push(command, command.EstimatedBytes, payload: null, command.Label);
         Changed?.Invoke();
     }
@@ -268,7 +284,18 @@ public sealed class PresentationCommandBus
         if (!_stack.CanUndo)
             return;
         var entry = _stack.PopUndo();
-        entry.Command.Revert(_presentation);
+        try
+        {
+            entry.Command.Revert(_presentation);
+        }
+        catch
+        {
+            // Put the entry back so a failed undo doesn't silently drop the command from history
+            // and leave the user unable to retry (mirrors FreeX's CommandBus.Undo rollback).
+            _stack.RollbackPopUndo(entry);
+            throw;
+        }
+
         Changed?.Invoke();
     }
 
@@ -277,9 +304,37 @@ public sealed class PresentationCommandBus
         if (!_stack.CanRedo)
             return;
         var entry = _stack.PopRedo();
-        entry.Command.Apply(_presentation);
+        try
+        {
+            entry.Command.Apply(_presentation);
+        }
+        catch
+        {
+            TryRevert(entry.Command);
+            _stack.PushRedo(entry); // restore so the user can retry
+            throw;
+        }
+
         _stack.PushWithoutClearingRedo(entry);
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Best-effort rollback of a command whose Apply threw. A composite (<c>BatchCommand</c>)
+    /// already rolled its own applied children back before rethrowing, and its Revert is a no-op
+    /// afterwards; a leaf command's Revert restores whatever undo state it captured before it
+    /// failed. A secondary failure here must not mask the original one.
+    /// </summary>
+    private void TryRevert(IPresentationCommand command)
+    {
+        try
+        {
+            command.Revert(_presentation);
+        }
+        catch
+        {
+            // Intentionally swallowed -- the original failure is the one being reported.
+        }
     }
 }
 
