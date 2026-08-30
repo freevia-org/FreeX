@@ -304,4 +304,55 @@ public sealed class SheetTabListPlannerTests
                 throw new InvalidOperationException("Sheet tab planner returned an unexpected large-workbook plan.");
         }
     }
+
+    [Fact]
+    public void Build_ResolvesThemeRelativeTabColorAgainstTheCurrentWorkbookTheme()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Data");
+        // Baked-stale RGB plus a live theme link, exactly as XlsxFileAdapter loads <tabColor theme="4"/>.
+        sheet.TabColor = new CellColor(1, 2, 3);
+        sheet.TabThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1);
+
+        var themeA = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(200, 10, 20));
+        var themeB = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(20, 200, 10));
+
+        workbook.Theme = themeA;
+        var planA = SheetTabListPlanner.Build(workbook, sheet.Id, []);
+        workbook.Theme = themeB;
+        var planB = SheetTabListPlanner.Build(workbook, sheet.Id, []);
+
+        planA.Tabs.Should().ContainSingle().Which.TabColor.Should().Be(sheet.ResolveTabColor(themeA));
+        planB.Tabs.Should().ContainSingle().Which.TabColor.Should().Be(sheet.ResolveTabColor(themeB));
+        planA.Tabs[0].TabColor.Should().NotBe(planB.Tabs[0].TabColor);
+        planA.Tabs[0].TabColor.Should().NotBe(new CellColor(1, 2, 3));
+    }
+
+    [Fact]
+    public void Build_KeepsExplicitRgbTabColorConstantAcrossThemeChanges()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Data");
+        sheet.TabColor = new CellColor(0, 112, 192);
+        sheet.TabThemeColor.Should().BeNull();
+
+        workbook.Theme = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(200, 10, 20));
+        var planA = SheetTabListPlanner.Build(workbook, sheet.Id, []);
+        workbook.Theme = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(20, 200, 10));
+        var planB = SheetTabListPlanner.Build(workbook, sheet.Id, []);
+
+        planA.Tabs.Should().ContainSingle().Which.TabColor.Should().Be(new CellColor(0, 112, 192));
+        planB.Tabs.Should().ContainSingle().Which.TabColor.Should().Be(new CellColor(0, 112, 192));
+    }
+
+    [Fact]
+    public void Build_LeavesTabColorNullWhenSheetHasNeitherRgbNorThemeLink()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Data");
+
+        var plan = SheetTabListPlanner.Build(workbook, sheet.Id, []);
+
+        plan.Tabs.Should().ContainSingle().Which.TabColor.Should().BeNull();
+    }
 }

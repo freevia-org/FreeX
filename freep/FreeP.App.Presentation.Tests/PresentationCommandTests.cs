@@ -3516,4 +3516,208 @@ public sealed class PresentationCommandTests
         body.Paragraphs.Add(paragraph);
         return body;
     }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // ROLLBACK FAMILY (r175): a command whose Apply throws mid-mutation must not
+    // leave the presentation half-edited with nothing on the undo stack.
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Test double: appends <see cref="Token"/> to slide 0's Title on Apply (so the model records
+    /// exactly which children ran, in order), removes it again on Revert, and optionally throws
+    /// AFTER mutating -- the "mutates then throws" shape a real command hits when a later step of
+    /// its own Apply fails.
+    /// </summary>
+    private sealed class MarkerCommand : IPresentationCommand
+    {
+        private readonly bool _throwAfterMutating;
+
+        public MarkerCommand(string token, bool throwAfterMutating = false)
+        {
+            Token = token;
+            _throwAfterMutating = throwAfterMutating;
+        }
+
+        public string Token { get; }
+        public string Label => $"Marker {Token}";
+        public int ApplyCount { get; private set; }
+        public int RevertCount { get; private set; }
+
+        public void Apply(Presentation p)
+        {
+            ApplyCount++;
+            p.Slides[0].Title += Token;
+            if (_throwAfterMutating)
+                throw new InvalidOperationException($"boom:{Token}");
+        }
+
+        public void Revert(Presentation p)
+        {
+            RevertCount++;
+            var title = p.Slides[0].Title;
+            var index = title.LastIndexOf(Token, StringComparison.Ordinal);
+            if (index >= 0)
+                p.Slides[0].Title = title.Remove(index, Token.Length);
+        }
+    }
+
+    /// <summary>
+    /// Before the fix, <see cref="BatchCommand.Apply"/> had no try/catch and tracked nothing: a
+    /// middle child that mutated and then threw propagated immediately, leaving every EARLIER
+    /// child's mutation applied with no rollback at all. Every multi-shape/multi-slide gesture
+    /// (Delete Shapes, Delete Slides, Move Slides, Align/Distribute) wraps its per-target commands
+    /// in exactly one BatchCommand, so this was a half-applied multi-select edit.
+    /// </summary>
+    [Fact]
+    public void BatchCommand_ChildThrowsMidApply_RollsBackEarlierChildrenAndItsOwnMutation()
+    {
+        var (p, _) = Make();
+        p.Slides[0].Title = "base";
+
+        var first = new MarkerCommand("-A");
+        var second = new MarkerCommand("-B", throwAfterMutating: true);
+        var third = new MarkerCommand("-C");
+        var batch = new BatchCommand("Test Batch", new IPresentationCommand[] { first, second, third });
+
+        var act = () => batch.Apply(p);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("boom:-B");
+        p.Slides[0].Title.Should().Be("base",
+            "the successful earlier child AND the throwing child's own partial mutation must both " +
+            "be rolled back, so the batch is atomic");
+        third.ApplyCount.Should().Be(0, "children after the failure never run");
+        first.RevertCount.Should().Be(1);
+        second.RevertCount.Should().Be(1, "the throwing child gets a best-effort revert of its partial mutation");
+        third.RevertCount.Should().Be(0, "a child that never applied must never be reverted");
+    }
+
+    /// <summary>
+    /// The second half of the same bug: a caller that reacts to the failure by calling Revert() on
+    /// the same batch instance ("it failed, better undo it") used to walk EVERY child unconditionally,
+    /// including ones whose Apply never ran -- a command's Revert generally assumes its own Apply
+    /// captured undo state first, so that is a crash or silent corruption. After the fix Revert only
+    /// walks the actually-applied list, which Apply's own rollback already drained.
+    /// </summary>
+    [Fact]
+    public void BatchCommand_RevertAfterFailedApply_DoesNotTouchNeverAppliedChildren()
+    {
+        var (p, _) = Make();
+        p.Slides[0].Title = "base";
+
+        var first = new MarkerCommand("-A");
+        var second = new MarkerCommand("-B", throwAfterMutating: true);
+        var third = new MarkerCommand("-C");
+        var batch = new BatchCommand("Test Batch", new IPresentationCommand[] { first, second, third });
+
+        try
+        {
+            batch.Apply(p);
+        }
+        catch (InvalidOperationException)
+        {
+            // expected -- the failure this test is reacting to
+        }
+
+        batch.Revert(p);
+
+        third.RevertCount.Should().Be(0, "a child whose Apply never ran must never be reverted");
+        first.RevertCount.Should().Be(1, "the rollback already ran inside Apply; Revert must not double-revert");
+        p.Slides[0].Title.Should().Be("base", "a post-failure Revert must be a no-op, not a second rollback pass");
+    }
+
+    /// <summary>
+    /// A batch that applies cleanly still reverts every child in reverse order, i.e. the new
+    /// tracking list did not break the ordinary undo path.
+    /// </summary>
+    [Fact]
+    public void BatchCommand_SuccessfulApply_StillRevertsEveryChildInReverse()
+    {
+        var (p, _) = Make();
+        p.Slides[0].Title = "base";
+
+        var first = new MarkerCommand("-A");
+        var second = new MarkerCommand("-B");
+        var batch = new BatchCommand("Test Batch", new IPresentationCommand[] { first, second });
+
+        batch.Apply(p);
+        p.Slides[0].Title.Should().Be("base-A-B");
+
+        batch.Revert(p);
+        p.Slides[0].Title.Should().Be("base");
+        first.RevertCount.Should().Be(1);
+        second.RevertCount.Should().Be(1);
+    }
+
+    /// <summary>
+    /// <see cref="PresentationCommandBus.Execute"/> had no try/catch at all: a command whose Apply
+    /// threw propagated straight out with nothing pushed to the undo stack and nothing reverted, so
+    /// the user was left with a half-edited presentation they could not undo. The bus now casts a
+    /// best-effort rollback net (FreeX's CommandBus.Execute/TryRevert shape) before rethrowing.
+    /// </summary>
+    [Fact]
+    public void Bus_Execute_CommandThrowsMidApply_RevertsAndLeavesUndoStackEmpty()
+    {
+        var (p, bus) = Make();
+        p.Slides[0].Title = "base";
+
+        var command = new MarkerCommand("-X", throwAfterMutating: true);
+
+        var act = () => bus.Execute(command);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("boom:-X");
+        command.RevertCount.Should().Be(1, "the bus must attempt a rollback of the command that threw");
+        p.Slides[0].Title.Should().Be("base", "the presentation must not be left half-edited");
+        bus.CanUndo.Should().BeFalse("a command whose Apply threw is never pushed to the undo stack");
+    }
+
+    /// <summary>
+    /// The end-to-end reproduction: a real multi-select gesture routed through the bus as one
+    /// <see cref="BatchCommand"/>. Both fixes have to hold together -- the batch rolls its children
+    /// back, and the bus refuses to record the failed operation.
+    /// </summary>
+    [Fact]
+    public void Bus_Execute_BatchWithThrowingChild_LeavesPresentationUnchangedAndNothingToUndo()
+    {
+        var (p, bus) = Make();
+        p.Slides[0].Title = "base";
+
+        var batch = new BatchCommand("Delete Shapes", new IPresentationCommand[]
+        {
+            new MarkerCommand("-A"),
+            new MarkerCommand("-B", throwAfterMutating: true),
+            new MarkerCommand("-C"),
+        });
+
+        var act = () => bus.Execute(batch);
+
+        act.Should().Throw<InvalidOperationException>();
+        p.Slides[0].Title.Should().Be("base");
+        bus.CanUndo.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A failed Undo must not silently drop the command from history: the entry goes back so the
+    /// user can retry (FreeX's CommandBus.Undo/RollbackPopUndo shape).
+    /// </summary>
+    [Fact]
+    public void Bus_Undo_RevertThrows_KeepsTheEntryOnTheUndoStack()
+    {
+        var (p, bus) = Make();
+        p.Slides[0].Title = "base";
+
+        bus.Execute(new ThrowOnRevertCommand());
+        bus.CanUndo.Should().BeTrue();
+
+        var act = () => bus.Undo();
+
+        act.Should().Throw<InvalidOperationException>();
+        bus.CanUndo.Should().BeTrue("a failed undo must leave the command in history so it can be retried");
+    }
+
+    private sealed class ThrowOnRevertCommand : IPresentationCommand
+    {
+        public string Label => "Throws On Revert";
+        public void Apply(Presentation p) => p.Slides[0].Title += "-R";
+        public void Revert(Presentation p) => throw new InvalidOperationException("revert boom");
+    }
 }

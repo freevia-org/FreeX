@@ -77,7 +77,10 @@ public static class SheetTabListPlanner
             tabs.Add(new SheetTabListEntry(
                 sheet.Id,
                 sheet.Name,
-                sheet.TabColor,
+                // Re-resolve the theme link (when the tab colour came from a <tabColor theme="n"/>)
+                // against the workbook's CURRENT theme rather than reading the RGB baked at load time,
+                // so a theme swap repaints the tab strip in both shells.
+                sheet.ResolveTabColor(workbook.Theme),
                 sheet.IsProtected,
                 sheet.Id == currentSheetId,
                 groupedSheetIds.Contains(sheet.Id),

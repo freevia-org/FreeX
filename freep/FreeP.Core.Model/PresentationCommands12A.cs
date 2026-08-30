@@ -95,6 +95,13 @@ file static class ShapeHelper12A
 public sealed class BatchCommand : IPresentationCommand
 {
     private readonly List<IPresentationCommand> _commands;
+
+    // Tracks which children are currently applied and therefore must be reverted. Only children
+    // whose Apply RETURNED are added: a child whose Apply threw has no reliable undo state of its
+    // own, so walking it on a later Revert would restore uncaptured state (or throw again).
+    // Mirrors FreeX's CompositeWorkbookCommand._applied and FreeW's CompositeDocumentCommand.
+    private readonly List<IPresentationCommand> _applied = [];
+
     public string Label { get; }
 
     public BatchCommand(string label, IEnumerable<IPresentationCommand> commands)
@@ -115,15 +122,60 @@ public sealed class BatchCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
+        _applied.Clear();
         foreach (var cmd in _commands)
-            cmd.Apply(p);
+        {
+            try
+            {
+                cmd.Apply(p);
+            }
+            catch
+            {
+                // A child threw mid-apply. Without this the batch left the presentation
+                // half-mutated (the N-1 earlier children stayed applied) AND a caller that then
+                // called Revert() on this same instance walked EVERY child -- including ones whose
+                // Apply never ran -- restoring undo state they never captured. Roll back the
+                // throwing child's own partial mutation (best-effort) plus every prior sibling in
+                // reverse so the batch stays atomic, then rethrow: PresentationCommandBus.Execute
+                // never pushes an undo entry for a command whose Apply throws.
+                TryRevert(cmd, p);
+                RevertApplied(p);
+                throw;
+            }
+
+            _applied.Add(cmd);
+        }
     }
 
-    public void Revert(Presentation p)
+    public void Revert(Presentation p) => RevertApplied(p);
+
+    /// <summary>Reverts the children that actually applied, newest first, then clears the list.</summary>
+    private void RevertApplied(Presentation p)
     {
-        // Revert in reverse order.
-        for (int i = _commands.Count - 1; i >= 0; i--)
-            _commands[i].Revert(p);
+        try
+        {
+            for (int i = _applied.Count - 1; i >= 0; i--)
+                TryRevert(_applied[i], p);
+        }
+        finally
+        {
+            // Cleared even if the loop is torn down, so a second Revert pass can never
+            // double-revert children that were already rolled back.
+            _applied.Clear();
+        }
+    }
+
+    private static void TryRevert(IPresentationCommand command, Presentation p)
+    {
+        try
+        {
+            command.Revert(p);
+        }
+        catch
+        {
+            // Best-effort rollback: a failing child revert must not abort the rest of the
+            // rollback, nor mask the original failure that started it.
+        }
     }
 
     public bool HasEffect(Presentation p) => _commands.Any(c => c.HasEffect(p));
