@@ -8,11 +8,14 @@ public sealed class PictureInsertionPlannerTests
     public void PickerContractIncludesRasterFormatsAndSvgForBothRenderers()
     {
         PictureInsertionPlanner.SupportedFilePatterns.Should().Equal(
-            "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff", "*.svg");
+            "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff", "*.svg", "*.wmf", "*.emf");
         PictureInsertionPlanner.SupportedMimeTypes.Should().Contain("image/svg+xml");
+        // Round 172: metafiles are a first-class FreeW picture format (see
+        // R172_MetafilePictureInsertionTests) and must be offered by name, not only via "All files".
+        PictureInsertionPlanner.SupportedMimeTypes.Should().Contain(["image/x-wmf", "image/x-emf"]);
         PictureInsertionPlanner.BuildWindowsFileDialogFilter().Should().Be(
-            "Images (*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.tif;*.tiff;*.svg)|" +
-            "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.tif;*.tiff;*.svg|All files (*.*)|*.*");
+            "Images (*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.tif;*.tiff;*.svg;*.wmf;*.emf)|" +
+            "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.tif;*.tiff;*.svg;*.wmf;*.emf|All files (*.*)|*.*");
     }
 
     [Fact]

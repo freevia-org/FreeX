@@ -30,6 +30,27 @@ public partial class MainWindow
             title: UiText.Get("MainWindowDialog_InsertPictureTitle"));
         if (!result.Chosen) return;
 
+        // Round 172 (freep-media follow-up): resolve the content type through the SHARED picker policy
+        // -- the same one the Avalonia shell uses -- and reject what it does not support instead of
+        // silently defaulting an unknown extension to image/png. The dialog carries an "All files"
+        // entry, so a .wmf/.emf/.heic can be chosen even though neither shell's named filter lists it;
+        // the old default meant those bytes were written into the package as
+        // xl/media/freexPictureN.png declared image/png (XlsxWorksheetDrawingObjectWriter names the
+        // media part from this very content type via OpcMediaTypes.GetImageExtension) -- a
+        // self-consistent but wrong package no reader can decode. FreeX has no metafile decoder in
+        // either toolkit (WpfBitmapImageLoader and the Avalonia loader are raster-only), so wmf/emf
+        // stay deliberately unsupported here and are rejected rather than mislabelled.
+        var contentType = InsertPictureCommandFactory.ContentTypeForPath(result.FileName!);
+        if (contentType is null)
+        {
+            ShowOwnedMessage(
+                UiText.Get("InsertLoc_UnsupportedImageFormat"),
+                UiText.Get("MainWindowMessage_InsertPictureTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         var readResult = await FileByteReadWorkflow.ReadLocalPathAsync(result.FileName!);
         if (readResult.Outcome == FileByteReadOutcome.Canceled)
             return;
@@ -44,7 +65,6 @@ public partial class MainWindow
         }
 
         var bytes = readResult.Bytes;
-        var contentType = DrawingInputParser.GetImageContentType(result.FileName!);
         InsertPictureCommand? currentSheetCommand = null;
         if (!TryExecuteGroupedSheetCommand(
                 "Insert Picture",

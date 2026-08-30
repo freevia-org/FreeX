@@ -388,7 +388,16 @@ internal static class XlsxHeaderFooterPicturePackageWriter
             using (var imageStream = imageEntry.Open())
                 imageStream.Write(picture.ImageBytes);
 
-            XlsxPackageXmlEditor.EnsureDefaultContentType(archive, extension.TrimStart('.'), picture.ContentType);
+            // Round 172 (freep-media F1 follow-up): declare the Default for the extension the part
+            // ACTUALLY carries. The media file name preserves the picture's own file name when its
+            // extension agrees with the content type, and agreeing extensions can still be spelled
+            // differently ("logo.tif" vs the content-type-derived "tiff"). Declaring the derived
+            // spelling left xl/media/logo.tif with no Default covering it -- an invalid package, the
+            // mirror image of the r157 mislabel: right content type, wrong part.
+            XlsxPackageXmlEditor.EnsureDefaultContentType(
+                archive,
+                Path.GetExtension(imagePath).TrimStart('.'),
+                picture.ContentType);
             var imageRelId = XlsxPackageXmlEditor.NextRelationshipId(vmlRelsXml, packageRelNs);
             vmlRelsXml.Root!.Add(new XElement(
                 packageRelNs + "Relationship",

@@ -15,11 +15,17 @@ public static class PictureInsertionPlanner
     public const int DefaultVectorRasterExtentPx = 400;
     public const double DefaultIconWidthPt = 72d;
 
+    // Round 172: kept in step with FreeWPictureImportPlanner's picker lists (the live Insert Picture
+    // route) so the two published "supported picture formats" contracts never disagree.
     public static IReadOnlyList<string> SupportedFilePatterns { get; } = Array.AsReadOnly(
-        new[] { "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff", "*.svg" });
+        new[] { "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff", "*.svg", "*.wmf", "*.emf" });
 
     public static IReadOnlyList<string> SupportedMimeTypes { get; } = Array.AsReadOnly(
-        new[] { "image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff", "image/svg+xml" });
+        new[]
+        {
+            "image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff", "image/svg+xml",
+            "image/x-wmf", "image/x-emf",
+        });
 
     public static string BuildWindowsFileDialogFilter(string label = "Images")
     {

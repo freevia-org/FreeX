@@ -68,7 +68,14 @@ public sealed partial class MainWindowSourceHygieneTests
         drawingSource.Should().Contain("readResult.Outcome == FileByteReadOutcome.Canceled");
         drawingSource.Should().Contain("if (!readResult.IsReadable)");
         drawingSource.Should().Contain("var bytes = readResult.Bytes;");
-        drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(result.FileName!)");
+        // Round 172 (freep-media follow-up): the WPF shell must resolve the picture content type from
+        // the shared policy and REJECT an unsupported format, exactly as the Avalonia shell does. The
+        // old DrawingInputParser.GetImageContentType silently defaulted to image/png, so a .wmf/.emf
+        // chosen through the dialog's "All files" entry was written into the package as a .png part
+        // declared image/png.
+        drawingSource.Should().Contain("InsertPictureCommandFactory.ContentTypeForPath(result.FileName!)");
+        drawingSource.Should().Contain("UiText.Get(\"InsertLoc_UnsupportedImageFormat\")");
+        drawingSource.Should().NotContain("DrawingInputParser.GetImageContentType(");
         drawingSource.Should().Contain("PictureInsertionPlacementPlanner.CreateInsertPictureCommand(");
         drawingSource.Should().Contain("UiText.Format(\"MainWindowMessage_InsertPictureReadFailed\", readResult.FailureMessage)");
         drawingSource.Should().NotContain("File.ReadAllBytesAsync(");
@@ -157,7 +164,11 @@ public sealed partial class MainWindowSourceHygieneTests
         pageLayoutSource.Should().Contain("CreatePageLayoutCommandSession().PlanSetBackground(background)");
         pageLayoutSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
         pageLayoutSource.Should().NotContain("private static bool IsSupportedSheetBackgroundFile(string fileName)");
-        pageLayoutSource.Should().NotContain("DrawingInputParser.GetImageContentType(result.FileName!)");
+        // The sheet-background route owns its own (narrower) format policy in
+        // SheetBackgroundPickerPlanner and must not short-circuit to the insert-picture content-type
+        // mapper -- the two lists differ, and TryBuildBackgroundImage is what rejects the rest.
+        pageLayoutSource.Should().NotContain("DrawingInputParser.GetImageContentType(");
+        pageLayoutSource.Should().NotContain("InsertPictureCommandFactory.ContentTypeForPath(result.FileName!)");
         pageLayoutSource.Should().NotContain("File.ReadAllBytesAsync(");
         pageLayoutSource.Should().Contain("private void BackgroundClearMenuItem_Click(");
         pageLayoutSource.Should().Contain("CreatePageLayoutCommandSession().PlanClearBackground()");
