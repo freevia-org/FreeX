@@ -70,7 +70,10 @@ $selection = $selectionJson | ConvertFrom-Json
 Write-Host "Changed paths: $(@($selection.changedPaths).Count); affected local commit gates: $(@($selection.gateIds).Count)."
 
 if (-not $SkipPreflight) {
-    & (Join-Path $PSScriptRoot 'Test-RepositoryPreflight.ps1')
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Test-RepositoryPreflight.ps1')
+    if ($LASTEXITCODE -ne 0) {
+        throw "Repository preflight failed with exit code $LASTEXITCODE."
+    }
 }
 
 if (-not $SkipBuild) {
