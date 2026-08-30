@@ -72,7 +72,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             foreach (var row in root.Element(worksheetNs + "sheetData")?.Elements(rowName) ?? [])
             {
                 if (uint.TryParse(row.Attribute("r")?.Value, out var rowNumber))
-                    ReadRowLayout(row, rowNumber, hiddenRows, rowOutlineLevels, groupHiddenRows, collapsedAnchorRows, rowHeights, styledRows);
+                    ReadRowLayout(RowLayoutAttributes.From(row), rowNumber, hiddenRows, rowOutlineLevels, collapsedAnchorRows, rowHeights, styledRows);
 
                 foreach (var cell in row.Elements(cellName))
                 {
@@ -255,7 +255,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 }
 
                 if (uint.TryParse(reader.GetAttribute("r"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowNumber))
-                    ReadRowLayout(reader, rowNumber, hiddenRows, rowOutlineLevels, groupHiddenRows, collapsedAnchorRows, rowHeights, styledRows);
+                    ReadRowLayout(RowLayoutAttributes.From(reader), rowNumber, hiddenRows, rowOutlineLevels, collapsedAnchorRows, rowHeights, styledRows);
 
                 rowDepth = reader.Depth;
                 if (reader.IsEmptyElement)
@@ -462,23 +462,21 @@ internal static class XlsxWorksheetRowColumnLayoutReader
     // A row with s="0" (Excel's default style) is not flagged -- registering it would be a wasted
     // round-trip through the resolver for a style that always maps to CellStyle.Default.
     private static void ReadRowLayout(
-        XElement row,
+        RowLayoutAttributes row,
         uint rowNumber,
         HashSet<uint> hiddenRows,
         Dictionary<uint, int> rowOutlineLevels,
-        HashSet<uint> groupHiddenRows,
         HashSet<uint> collapsedAnchorRows,
         Dictionary<uint, double> rowHeights,
         HashSet<uint>? styledRows = null)
     {
-        var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("hidden")?.Value);
-        if (TryReadRowHeight(row.Attribute("ht")?.Value, row.Attribute("customHeight")?.Value, out var height))
+        var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(row.Hidden);
+        if (TryReadRowHeight(row.Height, row.CustomHeight, out var height))
             rowHeights[rowNumber] = height;
 
-        var isCollapsed = XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("collapsed")?.Value);
+        var isCollapsed = XlsxWorksheetXmlValueParser.IsTruthy(row.Collapsed);
 
-        var outlineStr = row.Attribute("outlineLevel")?.Value;
-        var hasOutline = int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0;
+        var hasOutline = int.TryParse(row.OutlineLevel, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0;
         if (hasOutline)
         {
             rowOutlineLevels[rowNumber] = outlineLevel;
@@ -493,50 +491,42 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             collapsedAnchorRows.Add(rowNumber);
 
         if (styledRows is not null &&
-            XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("customFormat")?.Value) &&
-            int.TryParse(row.Attribute("s")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowStyleIndex) &&
+            XlsxWorksheetXmlValueParser.IsTruthy(row.CustomFormat) &&
+            int.TryParse(row.Style, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowStyleIndex) &&
             rowStyleIndex != 0)
         {
             styledRows.Add(rowNumber);
         }
     }
 
-    private static void ReadRowLayout(
-        XmlReader row,
-        uint rowNumber,
-        HashSet<uint> hiddenRows,
-        Dictionary<uint, int> rowOutlineLevels,
-        HashSet<uint> groupHiddenRows,
-        HashSet<uint> collapsedAnchorRows,
-        Dictionary<uint, double> rowHeights,
-        HashSet<uint>? styledRows = null)
+    private readonly record struct RowLayoutAttributes(
+        string? Hidden,
+        string? Height,
+        string? CustomHeight,
+        string? Collapsed,
+        string? OutlineLevel,
+        string? CustomFormat,
+        string? Style)
     {
-        var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("hidden"));
-        if (TryReadRowHeight(row.GetAttribute("ht"), row.GetAttribute("customHeight"), out var height))
-            rowHeights[rowNumber] = height;
+        internal static RowLayoutAttributes From(XElement row) =>
+            new(
+                row.Attribute("hidden")?.Value,
+                row.Attribute("ht")?.Value,
+                row.Attribute("customHeight")?.Value,
+                row.Attribute("collapsed")?.Value,
+                row.Attribute("outlineLevel")?.Value,
+                row.Attribute("customFormat")?.Value,
+                row.Attribute("s")?.Value);
 
-        var isCollapsed = XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("collapsed"));
-
-        var outlineStr = row.GetAttribute("outlineLevel");
-        var hasOutline = int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0;
-        if (hasOutline)
-        {
-            rowOutlineLevels[rowNumber] = outlineLevel;
-        }
-
-        if (styledRows is not null &&
-            XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("customFormat")) &&
-            int.TryParse(row.GetAttribute("s"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowStyleIndex) &&
-            rowStyleIndex != 0)
-        {
-            styledRows.Add(rowNumber);
-        }
-
-        if (isHidden)
-            hiddenRows.Add(rowNumber);
-
-        if (isCollapsed)
-            collapsedAnchorRows.Add(rowNumber);
+        internal static RowLayoutAttributes From(XmlReader row) =>
+            new(
+                row.GetAttribute("hidden"),
+                row.GetAttribute("ht"),
+                row.GetAttribute("customHeight"),
+                row.GetAttribute("collapsed"),
+                row.GetAttribute("outlineLevel"),
+                row.GetAttribute("customFormat"),
+                row.GetAttribute("s"));
     }
 
     // R136-io-worksheet-props-col-row-default-style: a column's whole-column default style (a
