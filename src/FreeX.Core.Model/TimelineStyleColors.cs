@@ -42,7 +42,9 @@ public readonly record struct TimelineStyleColors(
     {
         ArgumentNullException.ThrowIfNull(theme);
 
-        var slot = ResolveAccentSlot(styleName);
+        var slot = BuiltInFilterControlStylePolicy.ResolveLightAccentSlot(
+            styleName,
+            "TimeSlicerStyleLight");
         if (slot is null)
             return ResolveLight1(theme);
 
@@ -75,22 +77,4 @@ public readonly record struct TimelineStyleColors(
             SummaryLabel: accent);
     }
 
-    // TimeSlicerStyleLight2 -> Accent2, Light3 -> Accent3, … Light6 -> Accent6.
-    // Light1 (and unknown) => null (neutral default). Custom/other styles fall through to null.
-    // Excel's actual mapping is a uniform +1 shift from the style number to the accent slot.
-    private static WorkbookThemeColorSlot? ResolveAccentSlot(string? styleName)
-    {
-        if (string.IsNullOrWhiteSpace(styleName))
-            return null;
-
-        return styleName.Trim() switch
-        {
-            "TimeSlicerStyleLight2" => WorkbookThemeColorSlot.Accent2,
-            "TimeSlicerStyleLight3" => WorkbookThemeColorSlot.Accent3,
-            "TimeSlicerStyleLight4" => WorkbookThemeColorSlot.Accent4,
-            "TimeSlicerStyleLight5" => WorkbookThemeColorSlot.Accent5,
-            "TimeSlicerStyleLight6" => WorkbookThemeColorSlot.Accent6,
-            _ => null,
-        };
-    }
 }
