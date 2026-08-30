@@ -11,8 +11,6 @@ public sealed class DocxWriterXmlTextSanitizerDelegationTests
         yield return ["tab\tline\ncarriage\rreturn", "tab\tline\ncarriage\rreturn"];
         yield return ["before\0\u0001\u0008\u000B\u000C\u001Fafter", "beforeafter"];
         yield return ["before\uFFFE\uFFFFafter", "beforeafter"];
-        yield return ["before" + new string((char)0xD800, 1) + "after", "beforeafter"];
-        yield return ["before" + new string((char)0xDC00, 1) + "after", "beforeafter"];
         yield return ["before" + char.ConvertFromUtf32(0x1F642) + "after", "before" + char.ConvertFromUtf32(0x1F642) + "after"];
     }
 
@@ -35,6 +33,16 @@ public sealed class DocxWriterXmlTextSanitizerDelegationTests
     }
 
     [Fact]
+    public void PrivateWrapper_DropsLoneSurrogatesCreatedAtExecutionTime()
+    {
+        var loneHigh = "before" + new string((char)0xD800, 1) + "after";
+        var loneLow = "before" + new string((char)0xDC00, 1) + "after";
+
+        InvokeSanitizeXmlText(loneHigh).Should().Be("beforeafter");
+        InvokeSanitizeXmlText(loneLow).Should().Be("beforeafter");
+    }
+
+    [Fact]
     public void PrivateWrapper_RemainsABlockBodiedSharedHelperDelegation()
     {
         var source = File.ReadAllText(Path.Combine(
@@ -43,14 +51,13 @@ public sealed class DocxWriterXmlTextSanitizerDelegationTests
             "FreeW.Core.IO",
             "DocxWriter.cs"));
 
-        const string expected = """
-            private static string SanitizeXmlText(string? text)
-            {
-                return XmlTextSanitizer.Sanitize(text);
-            }
-            """;
+        const string expected =
+            "    private static string SanitizeXmlText(string? text)\n" +
+            "    {\n" +
+            "        return XmlTextSanitizer.Sanitize(text);\n" +
+            "    }";
 
-        source.Should().Contain(expected)
+        source.Replace("\r\n", "\n", StringComparison.Ordinal).Should().Contain(expected)
             .And.NotContain("static bool IsXmlIllegal(char c, string s, ref int i)")
             .And.NotContain("static bool IsXml10IllegalChar(char c)");
     }
