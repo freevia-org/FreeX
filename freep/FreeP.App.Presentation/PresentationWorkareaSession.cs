@@ -50,6 +50,8 @@ public enum PresentationWorkareaOperation
     RefreshAltTextRequest,
     RefreshReadingOrder,
     RefreshAltTextPane,
+    MarkSavedAtUndoDepth,
+    TryMarkCleanIfAtSavePoint,
 }
 
 public enum PresentationWorkareaPane
@@ -395,9 +397,11 @@ public sealed class PresentationWorkareaSession : IDisposable
         {
             case PresentationWorkareaEditorCommand.Undo:
                 Editor.Undo();
+                TryMarkCleanIfAtSavePoint();
                 return;
             case PresentationWorkareaEditorCommand.Redo:
                 Editor.Redo();
+                TryMarkCleanIfAtSavePoint();
                 return;
             case PresentationWorkareaEditorCommand.DeleteSelectedShapes:
                 Editor.DeleteSelected();
@@ -412,6 +416,28 @@ public sealed class PresentationWorkareaSession : IDisposable
                 throw new ArgumentOutOfRangeException(nameof(command), command, null);
         }
     }
+
+    /// <summary>
+    /// R175-shared-undo-across-save-F2: call after a completed Save/Save As so a later Undo/Redo
+    /// that returns the command bus to exactly this depth/version can clear the dirty flag instead
+    /// of leaving a permanent unsaved marker for a presentation that is byte-identical to what is on
+    /// disk (mirrors FreeX's <c>WorkbookSession.RecordUndoSavePoint</c>). The endpoint reads the
+    /// bus's current <see cref="PresentationCommandBus.UndoDepth"/>/<see cref="PresentationCommandBus.Version"/>
+    /// from the same <see cref="EditingSession"/> <see cref="PresentationWorkareaOperation.BindEditor"/>
+    /// already carries, and forwards them to the shared FileCommandSession.MarkSavedAtUndoDepth.
+    /// </summary>
+    public void NotifySaved() =>
+        Apply(PresentationWorkareaOperation.MarkSavedAtUndoDepth, PresentationWorkareaTransition.EditorChanged);
+
+    /// <summary>
+    /// Asks the file layer to clear the dirty flag if the bus's current depth/version match the
+    /// point recorded by the last <see cref="NotifySaved"/> -- called after every Undo/Redo. A no-op
+    /// when no save point was recorded, or the stack has not returned to it (see
+    /// FileCommandSession.TryMarkCleanIfAtSavePoint for the depth+version identity check, which is
+    /// immune to the depth-only aliasing a raw undo-stack-size comparison would be vulnerable to).
+    /// </summary>
+    private void TryMarkCleanIfAtSavePoint() =>
+        Apply(PresentationWorkareaOperation.TryMarkCleanIfAtSavePoint, PresentationWorkareaTransition.EditorChanged);
 
     public PresentationWorkareaStatusPlan BuildStatusPlan(string? dataFolderLabel = null)
     {

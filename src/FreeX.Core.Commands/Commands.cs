@@ -223,7 +223,35 @@ internal static class StructuredTableEditEffects
             {
                 var previousRange = table.Range;
                 var resizeCommand = new ResizeStructuredTableCommand(address.Sheet, tableId, expandRange);
-                var resizeOutcome = resizeCommand.Apply(ctx);
+                CommandOutcome resizeOutcome;
+                try
+                {
+                    resizeOutcome = resizeCommand.Apply(ctx);
+                }
+                catch
+                {
+                    // R175-auditB-F1: resizeCommand can throw PARTWAY through its own multi-step
+                    // mutation (row/column insert, hidden-row/filter/subtotal-marker shifts,
+                    // named-range/chart/table rewrites) instead of merely returning a failed
+                    // CommandOutcome. A failed CommandOutcome is already handled below by this
+                    // method's documented "best-effort, silently skip" contract (resizeCommand is
+                    // simply never added to `applied`) -- but an exception is different: it
+                    // propagates out of this static helper, through EditCellsCommand.Apply (which
+                    // does not catch it), up to CommandBus.Execute's own top-level handler, which
+                    // reverts the WHOLE EditCellsCommand (EditCellsCommand.Revert calls
+                    // StructuredTableEditEffects.Revert, which unwinds every entry already in
+                    // `applied` -- i.e. every earlier sibling effect in this same loop is already
+                    // correctly rolled back by that existing mechanism, and the base cell edits are
+                    // restored from the snapshot). The one thing that mechanism cannot fix is THIS
+                    // command's own partial mutation, because resizeCommand was never added to
+                    // `applied` (that only happens on success, below). So best-effort revert it
+                    // right here, before letting the original exception continue on its existing
+                    // path via rethrow. Any secondary exception from that revert is swallowed the
+                    // same way CommandBus.TryRevert swallows one, so a broken child Revert cannot
+                    // mask the original exception or block the rethrow.
+                    try { resizeCommand.Revert(ctx); } catch { }
+                    throw;
+                }
                 if (resizeOutcome.Success)
                 {
                     applied.Add(resizeCommand);
@@ -252,7 +280,23 @@ internal static class StructuredTableEditEffects
             if (propagateCommand is null)
                 continue;
 
-            var propagateOutcome = propagateCommand.Apply(ctx);
+            CommandOutcome propagateOutcome;
+            try
+            {
+                propagateOutcome = propagateCommand.Apply(ctx);
+            }
+            catch
+            {
+                // R175-auditB-F1: same reasoning as the resizeCommand catch above -- an exception
+                // here (rather than a failed CommandOutcome) propagates out of this static helper
+                // and ultimately fails the whole EditCellsCommand via CommandBus.Execute's top-level
+                // catch, which reverts every earlier sibling already in `applied` plus the base
+                // edits. Only propagateCommand's own partial mutation is missed by that mechanism
+                // (it was never added to `applied`), so best-effort revert it here before rethrowing
+                // so the original exception is not lost.
+                try { propagateCommand.Revert(ctx); } catch { }
+                throw;
+            }
             if (propagateOutcome.Success)
             {
                 applied.Add(propagateCommand);

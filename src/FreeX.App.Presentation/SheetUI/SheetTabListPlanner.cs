@@ -27,6 +27,7 @@ public static class SheetTabListPlanner
         SheetId currentSheetId,
         HashSet<SheetId> groupedSheetIds)
     {
+        var theme = workbook.Theme;
         var sheets = workbook.Sheets;
         var firstVisibleIndex = -1;
         for (var index = 0; index < sheets.Count; index++)
@@ -77,7 +78,7 @@ public static class SheetTabListPlanner
             tabs.Add(new SheetTabListEntry(
                 sheet.Id,
                 sheet.Name,
-                sheet.TabColor,
+                sheet.ResolveTabColor(theme),
                 sheet.IsProtected,
                 sheet.Id == currentSheetId,
                 groupedSheetIds.Contains(sheet.Id),

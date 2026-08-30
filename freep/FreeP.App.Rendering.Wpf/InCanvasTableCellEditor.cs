@@ -558,7 +558,8 @@ public sealed class InCanvasTableCellEditor
                     e,
                     _cellTextBox,
                     currentBody,
-                    onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted);
+                    onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted,
+                    destinationSlideIds: _editor.Presentation?.Slides.Select(s => s.Id).ToArray());
                 if (e.Key is Key.C or Key.X &&
                     !result.Handled &&
                     result.FailureMessage is { } failureMessage)

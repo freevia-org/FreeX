@@ -305,6 +305,25 @@ public interface IPresentationFileLifecyclePort
     void MarkSavedWithPath(string path, bool suppressRecentFiles);
 
     /// <summary>
+    /// R175-shared-undo-across-save-F2: records the undo-stack depth/version at the moment of a
+    /// successful save, so a later <see cref="TryMarkCleanIfAtSavePoint"/> call can detect "the user
+    /// undid/redid back to exactly what is on disk" and clear the dirty flag without an explicit
+    /// save. Mirrors FreeX's WorkbookSession/WorkbookDocumentState pairing. Defaults to a no-op so
+    /// implementations that predate this (test fakes, an unmigrated shell) keep compiling unchanged.
+    /// </summary>
+    void MarkSavedAtUndoDepth(int undoDepthAtSave, long undoStackVersionAtSave)
+    {
+    }
+
+    /// <summary>
+    /// R175-shared-undo-across-save-F2: if the undo stack has returned to the depth/version recorded
+    /// by <see cref="MarkSavedAtUndoDepth"/>, clears the dirty flag. Defaults to a no-op false so
+    /// implementations that predate this keep compiling unchanged (and simply never auto-clean,
+    /// which is the pre-fix behavior).
+    /// </summary>
+    bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion) => false;
+
+    /// <summary>
     /// Initializes an independently opened View &gt; New Window snapshot without treating it as a
     /// newly opened/recent file. Implementations with a richer file workflow may override this;
     /// the default preserves the path and dirty state through the existing lifecycle operations.
@@ -562,6 +581,14 @@ public sealed class PresentationFileCommandSession
     private int _videoExportInProgress;
 
     public void MarkDirty() => _lifecycle.MarkDirty();
+
+    /// <summary>See <see cref="IPresentationFileLifecyclePort.MarkSavedAtUndoDepth"/>.</summary>
+    public void MarkSavedAtUndoDepth(int undoDepthAtSave, long undoStackVersionAtSave) =>
+        _lifecycle.MarkSavedAtUndoDepth(undoDepthAtSave, undoStackVersionAtSave);
+
+    /// <summary>See <see cref="IPresentationFileLifecyclePort.TryMarkCleanIfAtSavePoint"/>.</summary>
+    public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion) =>
+        _lifecycle.TryMarkCleanIfAtSavePoint(currentUndoDepth, currentUndoStackVersion);
 
     /// <summary>Restores the file identity for an independent New Window snapshot.</summary>
     public void ApplyWindowState(string? path, bool isDirty)

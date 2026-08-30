@@ -325,6 +325,19 @@ public partial class MainWindow
     private PivotFieldListRefreshKey? _lastViewportPivotFieldListRefreshKey;
     private SlicerTimelineRefreshKey? _lastViewportSlicerTimelineRefreshKey;
 
+    /// <summary>
+    /// This window's own last-computed scroll origin (<see cref="Sheet.ViewTopRow"/>/
+    /// <see cref="Sheet.ViewLeftCol"/>) for every sheet this window has ever displayed, kept current
+    /// by <see cref="UpdateViewport"/> every time it runs for a sheet. Closes shared-view-state-F1:
+    /// unlike <see cref="_worksheetViewStates"/>/<see cref="_worksheetSelections"/>, which already
+    /// let <see cref="ReconcileViewStateForSave"/> protect every visited sheet's zoom/mode/freeze/
+    /// split and active cell from a sibling "New Window" overwriting the shared <see cref="Sheet"/>
+    /// fields, there was previously no equivalent per-window store for scroll position -- so a sheet
+    /// this window navigated away from kept whatever a sibling window's later scroll left on the
+    /// shared fields. Mirrors the Avalonia shell's <c>WorkbookSession._viewViewportOrigins</c>.
+    /// </summary>
+    private readonly Dictionary<SheetId, (uint TopRow, uint LeftCol)> _worksheetViewportOrigins = new();
+
     // ── Navigation helpers ────────────────────────────────────────────────────
 
     /// <summary>
@@ -434,16 +447,24 @@ public partial class MainWindow
     /// </para>
     /// <para>
     /// R152-freeze-split-F2: <see cref="Sheet.ViewTopRow"/>/<see cref="Sheet.ViewLeftCol"/> get the
-    /// same treatment for the currently displayed sheet. Unlike every field above, there is no
-    /// per-window store for scroll position on sheets this window has navigated away from -- but
-    /// for <see cref="_currentSheetId"/>, this window's own live <c>VerticalScroll.Value</c>/
-    /// <c>HorizontalScroll.Value</c> (native WPF <see cref="System.Windows.Controls.Primitives.ScrollBar"/>
-    /// instances, one per window, never shared) already IS this window's own scroll position, exactly
-    /// like <see cref="_selectionAnchor"/> is this window's own active cell above. Recomputing the
-    /// origin from them the same way <see cref="UpdateViewport"/> does and writing it onto the shared
-    /// sheet right before save means Ctrl+S from THIS window persists what THIS window is actually
+    /// same treatment for the currently displayed sheet. For <see cref="_currentSheetId"/>, this
+    /// window's own live <c>VerticalScroll.Value</c>/<c>HorizontalScroll.Value</c> (native WPF
+    /// <see cref="System.Windows.Controls.Primitives.ScrollBar"/> instances, one per window, never
+    /// shared) already IS this window's own scroll position, exactly like
+    /// <see cref="_selectionAnchor"/> is this window's own active cell above. Recomputing the origin
+    /// from them the same way <see cref="UpdateViewport"/> does and writing it onto the shared sheet
+    /// right before save means Ctrl+S from THIS window persists what THIS window is actually
     /// scrolled to, instead of whichever sibling window's <see cref="UpdateViewport"/> last happened
     /// to run and overwrite the shared fields.
+    /// </para>
+    /// <para>
+    /// shared-view-state-F1: every OTHER sheet this window has navigated away from gets the same
+    /// protection from <see cref="_worksheetViewportOrigins"/>, which <see cref="UpdateViewport"/>
+    /// keeps current for whichever sheet it last ran against -- exactly like
+    /// <see cref="_worksheetSelections"/> does for active cell below. Without this, a sheet this
+    /// window had visited earlier kept whatever scroll position a sibling "New Window" last wrote
+    /// onto its shared <see cref="Sheet"/> fields, so Ctrl+S from THIS window could persist a
+    /// sibling's scroll position for a background sheet instead of this window's own.
     /// </para>
     /// </summary>
     private void ReconcileViewStateForSave()
@@ -492,6 +513,18 @@ public partial class MainWindow
                     : (uint)WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(SheetGrid.Viewport, scrollViewState.FrozenCols));
             currentSheetForScroll.ViewTopRow = topRow;
             currentSheetForScroll.ViewLeftCol = leftCol;
+            _worksheetViewportOrigins[currentSheetForScroll.Id] = (topRow, leftCol);
+        }
+
+        foreach (var (sheetId, origin) in _worksheetViewportOrigins)
+        {
+            if (sheetId == _currentSheetId)
+                continue;
+            if (_workbook.GetSheet(sheetId) is not { } otherViewportSheet)
+                continue;
+
+            otherViewportSheet.ViewTopRow = origin.TopRow;
+            otherViewportSheet.ViewLeftCol = origin.LeftCol;
         }
 
         foreach (var (sheetId, snapshot) in _worksheetSelections.Snapshots)
@@ -565,6 +598,7 @@ public partial class MainWindow
         {
             sheet.ViewTopRow = topRow;
             sheet.ViewLeftCol = leftCol;
+            _worksheetViewportOrigins[sheet.Id] = (topRow, leftCol);
         }
 
         // Compute the correct row-header width before building the viewport so it is

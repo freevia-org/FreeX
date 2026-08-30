@@ -79,7 +79,7 @@ public sealed class WorkbookSheetSelectionService
                     sheet.Id,
                     sheet.Name,
                     sheet.Id == activeSheet.Id,
-                    sheet.TabColor,
+                    sheet.ResolveTabColor(workbook.Theme),
                     groupedSheetIds?.Contains(sheet.Id) == true);
             })
             .ToList();

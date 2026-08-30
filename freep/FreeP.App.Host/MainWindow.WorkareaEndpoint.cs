@@ -42,6 +42,9 @@ public sealed partial class MainWindow
                 RefreshAltTextRequest = RefreshAltTextRequestPlan,
                 RefreshReadingOrder = () => _ = _reviewWorkflowSession.RefreshReadingOrderPlan(),
                 RefreshAltTextPane = ShowAltTextPane,
+                MarkSavedAtUndoDepth = editor => _fileSession.MarkSavedAtUndoDepth(editor.Bus.UndoDepth, editor.Bus.Version),
+                TryMarkCleanIfAtSavePoint = editor =>
+                    _fileSession.TryMarkCleanIfAtSavePoint(editor.Bus.UndoDepth, editor.Bus.Version),
             },
             NativeCommands = new PresentationWorkareaNativeCommandEndpoints
             {

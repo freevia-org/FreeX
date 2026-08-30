@@ -206,15 +206,15 @@ internal static class HtmlTableWriter
         if (align is not null)
             sb.Append($"text-align:{align};");
 
-        AppendBorder(sb, "top", style.BorderTop);
-        AppendBorder(sb, "right", style.BorderRight);
-        AppendBorder(sb, "bottom", style.BorderBottom);
-        AppendBorder(sb, "left", style.BorderLeft);
+        AppendBorder(sb, "top", style.BorderTop, theme);
+        AppendBorder(sb, "right", style.BorderRight, theme);
+        AppendBorder(sb, "bottom", style.BorderBottom, theme);
+        AppendBorder(sb, "left", style.BorderLeft, theme);
 
         return sb.ToString();
     }
 
-    private static void AppendBorder(StringBuilder sb, string edge, CellBorder border)
+    private static void AppendBorder(StringBuilder sb, string edge, CellBorder border, WorkbookTheme theme)
     {
         if (border.Style == BorderStyle.None)
             return;
@@ -228,7 +228,11 @@ internal static class HtmlTableWriter
             BorderStyle.Double => ("3px", "double"),
             _ => ("1px", "solid"),
         };
-        sb.Append($"border-{edge}:{width} {line} {Hex(border.Color)};");
+        // Resolve through CellBorder.ResolveColor (mirrors ResolveFontColor/ResolveFillColor
+        // above) instead of reading the plain Color field directly, so a border set via the
+        // ribbon's Theme Colors picker exports to HTML/MHT in its CURRENT theme color instead
+        // of the stale color captured when the file was loaded/authored.
+        sb.Append($"border-{edge}:{width} {line} {Hex(border.ResolveColor(theme))};");
     }
 
     private static string Hex(CellColor c) =>

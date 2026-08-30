@@ -6,6 +6,94 @@ namespace FreeX.Core.Model.Tests;
 
 public sealed class CompositeWorkbookCommandTests
 {
+    /// <summary>
+    /// Test double standing in for a real multi-step child command (e.g. InsertRowsCommand's
+    /// ~300-line sequence of cell moves and rewrites): its Apply performs one real mutation on
+    /// the sheet, THEN throws -- simulating a later step in that same sequence failing after an
+    /// earlier step already wrote to the document. Its Revert undoes that one mutation, exactly
+    /// as a real command's Revert would undo whatever partial state its own Apply left behind.
+    /// </summary>
+    private sealed class PartialMutationThenThrowCommand(SheetId sheetId, CellAddress address) : IWorkbookCommand
+    {
+        public string Label => "Partial Mutation";
+
+        public CommandOutcome Apply(ICommandContext ctx)
+        {
+            ctx.GetSheet(sheetId).SetCell(address, new TextValue("PARTIAL"));
+            throw new InvalidOperationException("boom mid-mutation");
+        }
+
+        public void Revert(ICommandContext ctx) => ctx.GetSheet(sheetId).ClearCell(address);
+    }
+
+    [Fact]
+    public void Apply_RevertsThePartiallyMutatedChildThatThrew_NotJustItsSiblings()
+    {
+        // R175-sweep113-F1 regression: a grouped multi-sheet operation (Insert/Delete Rows,
+        // AutoFit across selected tabs) wraps one child command per sheet. If the SECOND
+        // sheet's child throws AFTER already mutating its sheet (as a real multi-step command
+        // like InsertRowsCommand can), the composite must leave the WHOLE workbook exactly as
+        // it was -- not just roll back the first sheet (which fully succeeded) while leaving
+        // the second sheet's partial edit permanently in the document.
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        var address1 = new CellAddress(sheet1.Id, 1, 1);
+        var address2 = new CellAddress(sheet2.Id, 1, 1);
+        var command = new CompositeWorkbookCommand(
+            "Grouped Edit",
+            [
+                EditCellsCommand.ForValue(sheet1.Id, address1, new TextValue("A")),
+                new PartialMutationThenThrowCommand(sheet2.Id, address2)
+            ]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("boom mid-mutation");
+        sheet1.GetCell(address1).Should().BeNull();
+        sheet2.GetCell(address2).Should().BeNull();
+    }
+
+    [Fact]
+    public void Apply_RevertsAlreadyAppliedCommandsWhenLaterCommandThrows_EvenIfThrowingCommandsRevertAlsoThrows()
+    {
+        // Sibling no-regression / risk case named by the round-175 directive: reverting a
+        // command that threw mid-way is itself risky if that command's OWN Revert assumes
+        // Apply completed further than it did and throws too. That must not (a) lose the
+        // original exception message, and (b) must not abort the rollback of the prior
+        // successful siblings -- the composite must still end up fully reverted.
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        var address1 = new CellAddress(sheet1.Id, 1, 1);
+        var command = new CompositeWorkbookCommand(
+            "Grouped Edit",
+            [
+                EditCellsCommand.ForValue(sheet1.Id, address1, new TextValue("A")),
+                new ThrowsOnApplyAndOnRevertCommand()
+            ]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("original apply failure");
+        sheet1.GetCell(address1).Should().BeNull();
+    }
+
+    private sealed class ThrowsOnApplyAndOnRevertCommand : IWorkbookCommand
+    {
+        public string Label => "Broken Command";
+
+        public CommandOutcome Apply(ICommandContext ctx) =>
+            throw new InvalidOperationException("original apply failure");
+
+        public void Revert(ICommandContext ctx) =>
+            throw new InvalidOperationException("revert also fails");
+    }
+
     [Fact]
     public void Apply_RunsCommandsAsSingleUndoableUnit()
     {

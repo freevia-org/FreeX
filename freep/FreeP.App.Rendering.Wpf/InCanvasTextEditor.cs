@@ -654,7 +654,8 @@ public sealed class InCanvasTextEditor : IDisposable
                 layoutBody: _inheritedLayoutBody,
                 masterTextStyles: _inheritedMasterTextStyles,
                 category: _inheritedStyleCategory,
-                onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted);
+                onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted,
+                destinationSlideIds: _editor.Presentation?.Slides.Select(s => s.Id).ToArray());
             if (e.Key == Key.V && result.Handled)
             {
                 _shapeParagraphBody = result.UpdatedBody;

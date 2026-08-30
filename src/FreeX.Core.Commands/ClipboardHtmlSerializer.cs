@@ -172,14 +172,14 @@ public static class ClipboardHtmlSerializer
         if (alignment is not null)
             css.Append($"text-align:{alignment};");
 
-        AppendBorderCss(css, "top", style.BorderTop);
-        AppendBorderCss(css, "right", style.BorderRight);
-        AppendBorderCss(css, "bottom", style.BorderBottom);
-        AppendBorderCss(css, "left", style.BorderLeft);
+        AppendBorderCss(css, "top", style.BorderTop, theme);
+        AppendBorderCss(css, "right", style.BorderRight, theme);
+        AppendBorderCss(css, "bottom", style.BorderBottom, theme);
+        AppendBorderCss(css, "left", style.BorderLeft, theme);
         return css.ToString();
     }
 
-    private static void AppendBorderCss(StringBuilder css, string edge, CellBorder border)
+    private static void AppendBorderCss(StringBuilder css, string edge, CellBorder border, WorkbookTheme theme)
     {
         if (border.Style == BorderStyle.None)
             return;
@@ -194,7 +194,11 @@ public static class ClipboardHtmlSerializer
             BorderStyle.Double => ("3px", "double"),
             _ => ("1px", "solid"),
         };
-        css.Append($"border-{edge}:{width} {line} {HexColor(border.Color)};");
+        // Resolve through CellBorder.ResolveColor (mirrors ResolveFontColor/ResolveFillColor
+        // above) instead of reading the plain Color field directly, so a border set via the
+        // ribbon's Theme Colors picker copies to the clipboard in its CURRENT theme color
+        // instead of the stale color captured when the file was loaded/authored.
+        css.Append($"border-{edge}:{width} {line} {HexColor(border.ResolveColor(theme))};");
     }
 
     private static string HexColor(CellColor color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";

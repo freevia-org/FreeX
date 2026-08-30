@@ -192,4 +192,69 @@ public sealed class ClipboardHtmlSerializerTests
         var start = payload.IndexOf(field, StringComparison.Ordinal) + field.Length;
         return int.Parse(payload.AsSpan(start, 10));
     }
+
+    // R175 F2 (clipboard half): AppendBorderCss read border.Color directly, unlike the
+    // ResolveFontColor/ResolveFillColor calls a few lines above it in the same BuildCellCss method,
+    // so a border set via the ribbon's Theme Colors picker copied to the clipboard with the color
+    // baked in at load time instead of the CURRENT workbook theme.
+    [Fact]
+    public void Serialize_ThemeColoredBorder_UsesCurrentThemeColor_NotTheColorBakedAtLoadTime()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        var oldTheme = WorkbookTheme.Office;
+        var staleBakedColor = oldTheme.GetColor(WorkbookThemeColorSlot.Accent1);
+        var newTheme = oldTheme.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(200, 20, 20));
+
+        var border = new CellBorder(
+            BorderStyle.Thick,
+            staleBakedColor,
+            new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1));
+        var style = new CellStyle { BorderTop = border };
+        var viewport = new ViewportModel(
+            [new DisplayCell(1, 1, new TextValue("x"), "x", null, default, null, style)],
+            [],
+            []);
+
+        var expected = border.ResolveColor(newTheme);
+        expected.Should().NotBe(staleBakedColor, "the test theme swap must actually change Accent1");
+        var expectedHex = $"#{expected.R:X2}{expected.G:X2}{expected.B:X2}";
+        var staleHex = $"#{staleBakedColor.R:X2}{staleBakedColor.G:X2}{staleBakedColor.B:X2}";
+
+        var payload = ClipboardHtmlSerializer.Serialize(viewport, sheet, new GridRange(address, address), newTheme);
+
+        payload.Should().NotBeNull();
+        payload!.Fragment.Should().Contain($"border-top:3px solid {expectedHex};",
+            "the copied border must follow the CURRENT theme's Accent1, not the color baked in at load time");
+        payload.Fragment.Should().NotContain(staleHex,
+            "the copied border must not still show the stale load-time color after the theme changed");
+    }
+
+    [Fact]
+    public void Serialize_ExplicitRgbBorder_StillCopiesItsOwnColor_NoRegression()
+    {
+        // Sibling/no-regression case: a border with NO ThemeColor (a plain RGB swatch, not a Theme
+        // Color) must keep copying its own authored color regardless of the workbook theme.
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        var explicitColor = new CellColor(10, 200, 30);
+        var theme = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(200, 20, 20));
+
+        var border = new CellBorder(BorderStyle.Thick, explicitColor, ThemeColor: null);
+        var style = new CellStyle { BorderTop = border };
+        var viewport = new ViewportModel(
+            [new DisplayCell(1, 1, new TextValue("x"), "x", null, default, null, style)],
+            [],
+            []);
+
+        var payload = ClipboardHtmlSerializer.Serialize(viewport, sheet, new GridRange(address, address), theme);
+
+        payload.Should().NotBeNull();
+        payload!.Fragment.Should().Contain("border-top:3px solid #0AC81E;",
+            "an explicit-RGB border must keep copying its own authored color regardless of the workbook theme");
+    }
 }

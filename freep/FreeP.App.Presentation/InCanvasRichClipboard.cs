@@ -168,7 +168,8 @@ public static class InCanvasRichClipboardPlanner
         TextBody destination,
         InCanvasEditorTextSelection selection,
         InCanvasRichClipboardPayload payload,
-        out int caret)
+        out int caret,
+        IReadOnlyCollection<string>? destinationSlideIds = null)
     {
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(payload);
@@ -176,11 +177,45 @@ public static class InCanvasRichClipboardPlanner
         int start = Math.Clamp(Math.Min(selection.Start, selection.End), 0, textLength);
         int end = Math.Clamp(Math.Max(selection.Start, selection.End), 0, textLength);
         caret = start + payload.PlainText.Length;
+        var fragment = destinationSlideIds is null
+            ? payload.Body
+            : WithValidatedSlideHyperlinks(payload.Body, destinationSlideIds);
         return RichTextBodyMutationPlanner.ReplaceWithFragment(
             destination,
             start,
             end - start,
-            payload.Body);
+            fragment);
+    }
+
+    /// <summary>
+    /// Drops a pasted run's internal slide-jump target when it does not name a slide that exists
+    /// in the destination document. <see cref="Hyperlink.TargetSlideId"/> round-trips through the
+    /// clipboard verbatim, but for a slide loaded from a real .pptx that value is the small
+    /// per-file OOXML relationship id (e.g. "rId4"), not a globally unique identifier -- so a
+    /// fragment copied from one open presentation and pasted into another can silently name an
+    /// unrelated slide there. <paramref name="destinationSlideIds"/> is the caller's own document,
+    /// so a same-document paste (the common case) always validates and is left untouched. Url and
+    /// Tooltip survive; only the internal jump target is cleared, the same treatment
+    /// <c>PresentationCommands</c> already gives a hyperlink whose target slide was deleted.
+    /// </summary>
+    private static TextBody WithValidatedSlideHyperlinks(
+        TextBody body,
+        IReadOnlyCollection<string> destinationSlideIds)
+    {
+        bool HasInvalidTarget(TextBody candidate) => candidate.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.Hyperlink?.TargetSlideId is { } id && !destinationSlideIds.Contains(id));
+
+        if (!HasInvalidTarget(body))
+            return body;
+
+        var clone = TextBodyModelCloner.CloneTextBody(body)!;
+        foreach (var run in clone.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+        {
+            if (run.Hyperlink?.TargetSlideId is { } id && !destinationSlideIds.Contains(id))
+                run.Hyperlink.TargetSlideId = null;
+        }
+        return clone;
     }
 
     /// <summary>

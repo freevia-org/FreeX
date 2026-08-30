@@ -222,6 +222,26 @@ public sealed partial class MainWindow : Window
     private DocumentView? _splitEditor;
     private DocumentView? _lastEditedDocumentEditor;
     private bool _synchronizingSplitEditors;
+
+    // R175-shared-undo-across-save-F1: a synthetic shadow of the native RichTextBox undo/redo stack
+    // for the primary (non-split) body editor, so undo/redo back to exactly the content on disk can
+    // clear the dirty flag. WPF's own undo manager exposes no depth or identity token to query, so
+    // this rebuilds an equivalent stamped stack purely from TextChangedEventArgs.UndoAction, fed
+    // through the same FileCommandSession.MarkSavedAtUndoDepth/TryMarkCleanIfAtSavePoint API FreeX's
+    // WorkbookSession uses. See OnDocumentEditorChanged and UpdateTitle for where it is driven, and
+    // MarkDirtyOutsideBodyUndo for the edits it deliberately does not track. Cleared/reset only via
+    // UpdateTitle recording a fresh save point; the stack itself never resets on its own.
+    private readonly List<long> _bodyUndoStamps = new();
+    private readonly List<long> _bodyRedoStamps = new();
+    private long _nextBodyUndoStamp;
+
+    // True once an edit occurs since the last save point that this shadow stack cannot represent
+    // (Split View's independent per-pane native undo, or a DocumentCommandBus/dialog-driven change
+    // that isn't itself undoable -- Accept/Reject Revision, header/footer OK, Properties OK). While
+    // true, TryMarkCleanIfAtSavePoint is never attempted, so undo/redo of an unrelated, still-tracked
+    // edit cannot falsely report "clean" while this untracked change remains unsaved.
+    private bool _hasUntrackedBodyEdit;
+
     private readonly DispatcherTimer _editorChromeRefreshTimer;
     private DocumentView? _pendingEditorChromeRefresh;
 
@@ -505,7 +525,7 @@ public sealed partial class MainWindow : Window
             UpdateCurrentField: () => ExecuteCurrentFieldCommand(
                 FreeWKeyboardCommand.UpdateCurrentField,
                 ResolveFieldCommandEditor())));
-        editor.TextChanged += (_, _) => OnDocumentEditorChanged(editor);
+        editor.TextChanged += (_, e) => OnDocumentEditorChanged(editor, e.UndoAction);
         editor.ZoomChanged += (_, factor) =>
         {
             if (_splitEditor is not null && _splitEditor.ZoomLevel != factor)
@@ -1163,8 +1183,36 @@ public sealed partial class MainWindow : Window
         lifetime?.Dispose();
     }
 
+    /// <summary>
+    /// R175-shared-undo-across-save-F1: <see cref="FileCommands.MarkDirty"/> for an edit that is NOT
+    /// reflected in <see cref="_bodyUndoStamps"/> -- Accept/Reject Revision, the Notes pane, the
+    /// Header/Footer pane, and the Properties dialog all mutate the model directly rather than
+    /// through the body editor's own native undo, so none of them is something a later Ctrl+Z/Ctrl+Y
+    /// of a separate, still-tracked body edit could ever legitimately "undo". Routing them through
+    /// here (instead of <c>_file.MarkDirty()</c> directly) sets <see cref="_hasUntrackedBodyEdit"/> so
+    /// OnDocumentEditorChanged's save-point check cannot fire a false "clean" for as long as this
+    /// change remains unsaved -- only an explicit Save clears it, exactly as before this fix.
+    /// </summary>
+    private void MarkDirtyOutsideBodyUndo()
+    {
+        _hasUntrackedBodyEdit = true;
+        _file.MarkDirty();
+    }
+
     private void UpdateTitle()
     {
+        // R175-shared-undo-across-save-F1: whenever we observe the document clean (a real Save, New,
+        // or Open just completed -- all of which reset the shared session's own recorded save point
+        // to "none"), re-establish it at the CURRENT shadow-stack position. Idempotent when nothing
+        // changed; correct for the "saved while some undo entries are already undone" boundary case,
+        // since the save point becomes wherever the stack is now, not the document's start.
+        if (!_file.IsDirty)
+        {
+            var currentVersion = _bodyUndoStamps.Count > 0 ? _bodyUndoStamps[^1] : 0L;
+            _file.MarkSavedAtUndoDepth(_bodyUndoStamps.Count, currentVersion);
+            _hasUntrackedBodyEdit = false;
+        }
+
         _titleBinder.Update(new SisterWpfWindowTitleSpec(
             DisplayName: _file.DisplayName,
             ApplicationName: "FreeW",
@@ -1972,7 +2020,7 @@ public sealed partial class MainWindow : Window
         var outcome = _reviewingPaneSession.AcceptSelected();
         if (outcome.MutationApplied)
         {
-            _file.MarkDirty();
+            MarkDirtyOutsideBodyUndo();
             UpdateCounts();
         }
         RenderReviewOutcome(outcome);
@@ -1984,7 +2032,7 @@ public sealed partial class MainWindow : Window
         var outcome = _reviewingPaneSession.RejectSelected();
         if (outcome.MutationApplied)
         {
-            _file.MarkDirty();
+            MarkDirtyOutsideBodyUndo();
             UpdateCounts();
         }
         RenderReviewOutcome(outcome);
@@ -2174,7 +2222,7 @@ public sealed partial class MainWindow : Window
         _notesSubEditor.CommitToModel();
         var outcome = _documentNotesPaneSession.Apply(_notesSubEditor.Model.Blocks);
         if (outcome.MutationApplied)
-            _file.MarkDirty();
+            MarkDirtyOutsideBodyUndo();
         RenderNotesOutcome(outcome);
     }
 
@@ -2183,7 +2231,7 @@ public sealed partial class MainWindow : Window
     {
         var outcome = _documentNotesPaneSession.DeleteSelected();
         if (outcome.MutationApplied)
-            _file.MarkDirty();
+            MarkDirtyOutsideBodyUndo();
         RenderNotesOutcome(outcome);
     }
 
@@ -2311,7 +2359,7 @@ public sealed partial class MainWindow : Window
         // Re-render the main editor and return focus (no-op page-settings commit triggers
         // CommitToModel + Render inside ApplyPageSettings without changing any setting).
         _editor.ApplyPageSettings(_ => { });
-        _file.MarkDirty();
+        MarkDirtyOutsideBodyUndo();
         _editor.Focus();
     }
 
@@ -3103,7 +3151,7 @@ public sealed partial class MainWindow : Window
         splitEditor.SetViewMode(_editor.ViewMode);
         splitEditor.ZoomLevel = _editor.ZoomLevel;
         splitEditor.ApplyViewDepthLayout(_viewSession.CurrentDepth.Layout);
-        splitEditor.TextChanged += (_, _) => OnDocumentEditorChanged(splitEditor);
+        splitEditor.TextChanged += (_, e) => OnDocumentEditorChanged(splitEditor, e.UndoAction);
         splitEditor.SelectionChanged += (_, _) => OnDocumentEditorSelectionChanged(splitEditor);
         Grid.SetRow(splitEditor, 2);
         splitGrid.Children.Add(splitEditor);
@@ -3533,7 +3581,7 @@ public sealed partial class MainWindow : Window
         if (dialog.ShowDialog() == true && dialog.Result is { } result)
         {
             _editor.ApplyDocumentProperties(result);
-            _file.MarkDirty();
+            MarkDirtyOutsideBodyUndo();
         }
     }
 
@@ -3805,7 +3853,7 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    private void OnDocumentEditorChanged(DocumentView source)
+    private void OnDocumentEditorChanged(DocumentView source, UndoAction undoAction = UndoAction.None)
     {
         if (_synchronizingSplitEditors)
             return;
@@ -3842,6 +3890,63 @@ public sealed partial class MainWindow : Window
         _lastEditedDocumentEditor = source;
 
         _file.MarkDirty();
+
+        // R175-shared-undo-across-save-F1: mirror WPF's native undo/redo bookkeeping into our own
+        // stamped shadow stack, then ask the shared save-point API whether an Undo/Redo just landed
+        // back on the exact save point. Deliberately scoped to the single-pane case -- Split View
+        // gives _editor and _splitEditor independent native undo stacks that one shared stamp stack
+        // cannot represent, so a split session is treated the same conservative way structural
+        // (DocumentCommandBus) edits already are: MarkDirty above still applies, but only an
+        // explicit Save can clear it (unchanged from before this fix).
+        if (_splitEditor is not null)
+        {
+            _hasUntrackedBodyEdit = true;
+        }
+        else
+        {
+            switch (undoAction)
+            {
+                case UndoAction.Create:
+                    // A brand-new revertible unit was pushed -- matches WPF's own redo invalidation
+                    // on a fresh edit.
+                    _bodyUndoStamps.Add(++_nextBodyUndoStamp);
+                    _bodyRedoStamps.Clear();
+                    break;
+                case UndoAction.Merge:
+                    // Folded into the existing top unit (e.g. a burst of typed characters) -- the
+                    // native stack's depth is unchanged, so this shadow stack's depth stays put too.
+                    break;
+                case UndoAction.Undo:
+                    if (_bodyUndoStamps.Count > 0)
+                    {
+                        var stamp = _bodyUndoStamps[^1];
+                        _bodyUndoStamps.RemoveAt(_bodyUndoStamps.Count - 1);
+                        _bodyRedoStamps.Add(stamp);
+                    }
+                    break;
+                case UndoAction.Redo:
+                    if (_bodyRedoStamps.Count > 0)
+                    {
+                        var stamp = _bodyRedoStamps[^1];
+                        _bodyRedoStamps.RemoveAt(_bodyRedoStamps.Count - 1);
+                        _bodyUndoStamps.Add(stamp);
+                    }
+                    break;
+                default:
+                    // UndoAction.None/ClearUndoStack: a change this shadow stack cannot represent
+                    // (e.g. a DocumentCommandBus-driven structural edit reflected into the
+                    // FlowDocument by Render()). Conservative: never self-clean until the next Save.
+                    _hasUntrackedBodyEdit = true;
+                    break;
+            }
+
+            if ((undoAction == UndoAction.Undo || undoAction == UndoAction.Redo) && !_hasUntrackedBodyEdit)
+            {
+                var currentVersion = _bodyUndoStamps.Count > 0 ? _bodyUndoStamps[^1] : 0L;
+                _file.TryMarkCleanIfAtSavePoint(_bodyUndoStamps.Count, currentVersion);
+            }
+        }
+
         ScheduleEditorChromeRefresh(source);
     }
 

@@ -68,11 +68,18 @@ public partial class GridView
         return dict;
     });
 
+    // theme is required (rather than reading border.Color alone) so a border set via the ribbon's
+    // Theme Colors picker (which populates CellBorder.ThemeColor alongside a Color baked at load
+    // time -- mirrors CellStyle.FontThemeColor/FillThemeColor) re-resolves against the CURRENT
+    // WorkbookTheme on every paint instead of showing the stale color captured when the file was
+    // loaded/authored or when the theme was last swapped. Mirrors PrintRenderer.GridCells.cs'
+    // DrawPrintedBorderEdge, which resolves the identical way via CellBorder.ResolveColor(theme).
     private static void DrawBorderEdge(
         DrawingContext dc,
         CellBorder border,
         Point p1,
         Point p2,
+        WorkbookTheme theme,
         Dictionary<CellColor, SolidColorBrush>? brushCache = null,
         Dictionary<CellBorder, Pen>? borderPenCache = null,
         double effectivePixelsPerDip = 1.0)
@@ -101,7 +108,7 @@ public partial class GridView
                 _ => DashStyles.Solid
             };
 
-            pen = new Pen(BrushForCellColor(border.Color, brushCache), thickness) { DashStyle = dash };
+            pen = new Pen(BrushForCellColor(border.ResolveColor(theme), brushCache), thickness) { DashStyle = dash };
             if (pen.CanFreeze)
                 pen.Freeze();
             if (borderPenCache is not null)

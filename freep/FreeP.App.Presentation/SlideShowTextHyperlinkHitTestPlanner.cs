@@ -54,8 +54,12 @@ public static class SlideShowTextHyperlinkHitTestPlanner
         foreach (var paragraph in paragraphs)
         {
             currentY += paragraph.SpaceBeforeDip;
-            foreach (var line in paragraph.Lines)
+            bool justify = paragraph.Align is TextAlign.Justify or TextAlign.Distributed;
+            for (int lineIndex = 0; lineIndex < paragraph.Lines.Count; lineIndex++)
             {
+                var line = paragraph.Lines[lineIndex];
+                bool isLastLineOfParagraph = lineIndex == paragraph.Lines.Count - 1;
+
                 double lineX = paragraph.Align switch
                 {
                     TextAlign.Center => left + Math.Max(0, (width - line.WidthDip) * 0.5),
@@ -63,11 +67,21 @@ public static class SlideShowTextHyperlinkHitTestPlanner
                     _ => left
                 };
 
+                // Justify/Distributed stretch the gaps between words to fill the line
+                // width on every line except the last (matching TextAlignment.Justify in
+                // TextBodyFlowDocumentConverter), so a run positioned after a gap on a
+                // stretched line renders further right than its natural, unstretched
+                // width would place it.
+                double perGapDip = justify && !isLastLineOfParagraph && line.GapCount > 0
+                    ? Math.Max(0, width - line.WidthDip) / line.GapCount
+                    : 0.0;
+
                 foreach (var span in line.Spans)
                 {
+                    double spanX = lineX + span.XDip + (perGapDip * span.GapsBefore);
                     if (span.Hyperlink is not null
-                        && slidePoint.X >= lineX + span.XDip
-                        && slidePoint.X <= lineX + span.XDip + span.WidthDip
+                        && slidePoint.X >= spanX
+                        && slidePoint.X <= spanX + span.WidthDip
                         && slidePoint.Y >= currentY
                         && slidePoint.Y <= currentY + line.HeightDip)
                     {
@@ -88,6 +102,7 @@ public static class SlideShowTextHyperlinkHitTestPlanner
     {
         var lines = new List<Line>();
         var line = new Line();
+        bool atGap = true; // leading whitespace never opens a justification gap
 
         foreach (var run in paragraph.Runs)
         {
@@ -99,6 +114,7 @@ public static class SlideShowTextHyperlinkHitTestPlanner
                 {
                     FinishLine(lines, line);
                     line = new Line();
+                    atGap = true;
                     continue;
                 }
 
@@ -107,9 +123,15 @@ public static class SlideShowTextHyperlinkHitTestPlanner
                 {
                     FinishLine(lines, line);
                     line = new Line();
+                    atGap = true;
                 }
 
-                if (run.Hyperlink is not null && !char.IsWhiteSpace(character))
+                bool isWhitespace = char.IsWhiteSpace(character);
+                if (isWhitespace && !atGap)
+                    line.GapCount++;
+                atGap = isWhitespace;
+
+                if (run.Hyperlink is not null && !isWhitespace)
                 {
                     var last = line.Spans.LastOrDefault();
                     if (last is not null && ReferenceEquals(last.Hyperlink, run.Hyperlink))
@@ -118,7 +140,7 @@ public static class SlideShowTextHyperlinkHitTestPlanner
                     }
                     else
                     {
-                        line.Spans.Add(new RunSpan(run.Hyperlink, line.WidthDip, characterWidth));
+                        line.Spans.Add(new RunSpan(run.Hyperlink, line.WidthDip, characterWidth, line.GapCount));
                     }
                 }
 
@@ -172,20 +194,32 @@ public static class SlideShowTextHyperlinkHitTestPlanner
         public List<RunSpan> Spans { get; } = new();
         public double WidthDip { get; set; }
         public double HeightDip { get; set; }
+
+        /// <summary>
+        /// Count of word-break gaps (whitespace runs) in this line, used to spread the
+        /// extra width of a Justify/Distributed line across the gaps between words --
+        /// mirroring how TextAlignment.Justify stretches inter-word spacing rather than
+        /// glyph widths.
+        /// </summary>
+        public int GapCount { get; set; }
     }
 
     private sealed class RunSpan
     {
-        public RunSpan(Hyperlink hyperlink, double xDip, double widthDip)
+        public RunSpan(Hyperlink hyperlink, double xDip, double widthDip, int gapsBefore)
         {
             Hyperlink = hyperlink;
             XDip = xDip;
             WidthDip = widthDip;
+            GapsBefore = gapsBefore;
         }
 
         public Hyperlink Hyperlink { get; }
         public double XDip { get; }
         public double WidthDip { get; set; }
+
+        /// <summary>Number of justification gaps that precede this span within its line.</summary>
+        public int GapsBefore { get; }
     }
 
     private sealed record ParagraphLines(
