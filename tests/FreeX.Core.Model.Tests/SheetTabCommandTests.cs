@@ -327,7 +327,7 @@ public class SheetTabCommandTests
     // ── F14/F23 regression: Sheet.Clone must copy comment authors/shown-comments and the
     // ignored-errors/cell-watches metadata dictionaries, not just the plain Comments dictionary. ──
     [Fact]
-    public void DuplicateSheetCommand_CopiesCommentAuthorsShownCommentsIgnoredErrorsAndCellWatches()
+    public void DuplicateSheetCommand_CopiesCommentAuthorsShownCommentsAndAddressMetadata()
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
@@ -341,6 +341,21 @@ public class SheetTabCommandTests
         sheet.CellWatchesMetadata.WatchNativeAttributes["C5"] = new Dictionary<string, string> { ["xr:uid"] = "C5" };
         sheet.IgnoredErrorsMetadata = new WorksheetIgnoredErrorsMetadataModel();
         sheet.IgnoredErrorsMetadata.ErrorNativeAttributes["B5:C6"] = new Dictionary<string, string> { ["numberStoredAsText"] = "1" };
+        sheet.RowPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["count"] = "1" },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [5] = new Dictionary<string, string> { ["man"] = "1" }
+            }
+        };
+        sheet.ColumnPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [3] = new Dictionary<string, string> { ["min"] = "1" }
+            }
+        };
 
         var command = new DuplicateSheetCommand(sheet.Id);
         command.Apply(ctx).Success.Should().BeTrue();
@@ -363,6 +378,19 @@ public class SheetTabCommandTests
         copy.IgnoredErrorsMetadata.ErrorNativeAttributes["B5:C6"]["numberStoredAsText"].Should().Be("1");
         copy.IgnoredErrorsMetadata.ErrorNativeAttributes["B5:C6"]["numberStoredAsText"] = "changed";
         sheet.IgnoredErrorsMetadata!.ErrorNativeAttributes["B5:C6"]["numberStoredAsText"].Should().Be("1");
+
+        copy.RowPageBreaksMetadata.Should().NotBeNull();
+        copy.RowPageBreaksMetadata!.NativeAttributes["count"].Should().Be("1");
+        copy.RowPageBreaksMetadata.BreakNativeAttributes[5]["man"].Should().Be("1");
+        copy.RowPageBreaksMetadata.NativeAttributes["count"] = "changed";
+        copy.RowPageBreaksMetadata.BreakNativeAttributes[5]["man"] = "changed";
+        sheet.RowPageBreaksMetadata!.NativeAttributes["count"].Should().Be("1");
+        sheet.RowPageBreaksMetadata.BreakNativeAttributes[5]["man"].Should().Be("1");
+
+        copy.ColumnPageBreaksMetadata.Should().NotBeNull();
+        copy.ColumnPageBreaksMetadata!.BreakNativeAttributes[3]["min"].Should().Be("1");
+        copy.ColumnPageBreaksMetadata.BreakNativeAttributes[3]["min"] = "changed";
+        sheet.ColumnPageBreaksMetadata!.BreakNativeAttributes[3]["min"].Should().Be("1");
     }
 
     [Fact]

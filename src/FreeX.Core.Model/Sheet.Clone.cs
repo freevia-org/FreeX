@@ -110,10 +110,10 @@ public sealed partial class Sheet
             ProtectionMetadata            = ProtectionMetadata?.Clone(),
             // Previously missed fields:
             BackgroundImage               = BackgroundImage,
-            RowPageBreaksMetadata         = ClonePageBreaksMetadata(RowPageBreaksMetadata),
-            ColumnPageBreaksMetadata      = ClonePageBreaksMetadata(ColumnPageBreaksMetadata),
-            CellWatchesMetadata           = CloneCellWatchesMetadata(CellWatchesMetadata),
-            IgnoredErrorsMetadata         = CloneIgnoredErrorsMetadata(IgnoredErrorsMetadata),
+            RowPageBreaksMetadata         = WorksheetMetadataCloner.ClonePageBreaks(RowPageBreaksMetadata),
+            ColumnPageBreaksMetadata      = WorksheetMetadataCloner.ClonePageBreaks(ColumnPageBreaksMetadata),
+            CellWatchesMetadata           = WorksheetMetadataCloner.CloneCellWatches(CellWatchesMetadata),
+            IgnoredErrorsMetadata         = WorksheetMetadataCloner.CloneIgnoredErrors(IgnoredErrorsMetadata),
         };
 
         // Multi-area print areas: remap all areas to the new sheet id.
@@ -728,50 +728,6 @@ public sealed partial class Sheet
 
         foreach (var row in SubtotalRows)
             copy.SubtotalRows.Add(row);
-    }
-
-    private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetPageBreaksMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            BreakNativeAttributes = metadata.BreakNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal))
-        };
-    }
-
-    private static WorksheetCellWatchesMetadataModel? CloneCellWatchesMetadata(WorksheetCellWatchesMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetCellWatchesMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            WatchNativeAttributes = metadata.WatchNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
-                StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static WorksheetIgnoredErrorsMetadataModel? CloneIgnoredErrorsMetadata(WorksheetIgnoredErrorsMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetIgnoredErrorsMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            ErrorNativeAttributes = metadata.ErrorNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
-                StringComparer.OrdinalIgnoreCase)
-        };
     }
 
     private static WorksheetSingleXmlCellsModel? CloneSingleXmlCells(WorksheetSingleXmlCellsModel? model)
