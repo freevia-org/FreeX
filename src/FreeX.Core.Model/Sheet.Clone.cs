@@ -262,10 +262,8 @@ public sealed partial class Sheet
 
     private static PivotTableModel ClonePivotTable(PivotTableModel pt, SheetId sourceSheetId, SheetId newId)
     {
-        var clonedPt = new PivotTableModel
+        var state = pt.CaptureCopyState() with
         {
-            Name        = pt.Name,
-            CacheId     = pt.CacheId,
             // Only remap SourceRange onto the copy when it actually points at the sheet being
             // duplicated -- a cross-sheet SourceRange (e.g. a pivot table on its own sheet reading
             // data from a Data sheet, Excel's normal "PivotTable on new sheet, data on the original
@@ -292,69 +290,9 @@ public sealed partial class Sheet
             // patch-save guard gracefully treats an empty PackagePart as "needs a full regenerate"
             // rather than colliding, and the full-write path (XlsxPivotTableWriter) always mints a
             // fresh part path regardless of this field.
-            PackagePart = string.Empty,
-            CreatedVersion = pt.CreatedVersion,
-            UpdatedVersion = pt.UpdatedVersion,
-            MinRefreshableVersion = pt.MinRefreshableVersion,
-            DataOnRows = pt.DataOnRows,
-            FirstHeaderRow = pt.FirstHeaderRow,
-            FirstDataRow = pt.FirstDataRow,
-            FirstDataColumn = pt.FirstDataColumn,
-            ShowSubtotals = pt.ShowSubtotals,
-            SubtotalPlacement = pt.SubtotalPlacement,
-            ShowRowGrandTotals = pt.ShowRowGrandTotals,
-            ShowColumnGrandTotals = pt.ShowColumnGrandTotals,
-            RepeatItemLabels = pt.RepeatItemLabels,
-            BlankLineAfterItems = pt.BlankLineAfterItems,
-            ReportLayout = pt.ReportLayout,
-            CompactRowLabelIndent = pt.CompactRowLabelIndent,
-            StyleName = pt.StyleName,
-            ShowRowHeaders = pt.ShowRowHeaders,
-            ShowColumnHeaders = pt.ShowColumnHeaders,
-            ShowRowStripes = pt.ShowRowStripes,
-            ShowColumnStripes = pt.ShowColumnStripes,
-            ShowFieldHeaders = pt.ShowFieldHeaders,
-            ShowContextualTooltips = pt.ShowContextualTooltips,
-            ShowPropertiesInTooltips = pt.ShowPropertiesInTooltips,
-            ShowClassicLayout = pt.ShowClassicLayout,
-            MergeAndCenterLabels = pt.MergeAndCenterLabels,
-            ShowItemsWithNoDataOnRows = pt.ShowItemsWithNoDataOnRows,
-            ShowItemsWithNoDataOnColumns = pt.ShowItemsWithNoDataOnColumns,
-            PageOverThenDown = pt.PageOverThenDown,
-            PageWrap = pt.PageWrap,
-            EmptyValueText = pt.EmptyValueText,
-            ApplyNumberFormats = pt.ApplyNumberFormats,
-            ApplyBorderFormats = pt.ApplyBorderFormats,
-            ApplyFontFormats = pt.ApplyFontFormats,
-            ApplyPatternFormats = pt.ApplyPatternFormats,
-            AutofitColumnsOnUpdate = pt.AutofitColumnsOnUpdate,
-            PreserveFormattingOnUpdate = pt.PreserveFormattingOnUpdate,
-            ShowExpandCollapseButtons = pt.ShowExpandCollapseButtons,
-            EnableDrill = pt.EnableDrill,
-            AsteriskTotals = pt.AsteriskTotals,
-            MultipleFieldFilters = pt.MultipleFieldFilters,
-            EnableFieldDialog = pt.EnableFieldDialog,
-            EnableFieldProperties = pt.EnableFieldProperties,
-            EnableDataValueEditing = pt.EnableDataValueEditing,
-            PrintTitles = pt.PrintTitles,
-            PrintExpandCollapseButtons = pt.PrintExpandCollapseButtons,
-            AltTextTitle = pt.AltTextTitle,
-            AltTextDescription = pt.AltTextDescription,
-            DataCaption = pt.DataCaption,
-            GrandTotalCaption = pt.GrandTotalCaption,
-            MissingCaption = pt.MissingCaption,
-            ErrorCaption = pt.ErrorCaption
+            PackagePart = string.Empty
         };
-        clonedPt.RowFields.AddRange(pt.RowFields);
-        clonedPt.ColumnFields.AddRange(pt.ColumnFields);
-        clonedPt.PageFields.AddRange(pt.PageFields);
-        clonedPt.DataFields.AddRange(pt.DataFields);
-        clonedPt.CalculatedFields.AddRange(pt.CalculatedFields);
-        clonedPt.CalculatedItems.AddRange(pt.CalculatedItems);
-        clonedPt.LabelFilters.AddRange(pt.LabelFilters);
-        clonedPt.ValueFilters.AddRange(pt.ValueFilters);
-        clonedPt.Sorts.AddRange(pt.Sorts);
-        return clonedPt;
+        return PivotTableModel.FromCopyState(state);
     }
 
     /// <summary>
