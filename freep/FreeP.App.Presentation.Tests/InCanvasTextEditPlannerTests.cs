@@ -405,6 +405,76 @@ public sealed class InCanvasTextEditPlannerTests
         decision.Command!.Label.Should().Be("Edit Rich Text");
     }
 
+    [Theory]
+    [InlineData(nameof(Paragraph.SpaceBeforePercent))]
+    [InlineData(nameof(Paragraph.SpaceAfterPercent))]
+    [InlineData(nameof(Paragraph.LineSpacingPercent))]
+    [InlineData(nameof(Paragraph.LineSpacingPointsExact))]
+    public void CommitRichText_PercentSpacingOnlyChange_ReturnsCommandCarryingNewValue(string field)
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var original = MakeBody("Hello");
+        var shape = new SlideShape
+        {
+            Id = 1,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+            TextBody = original,
+        };
+        slide.Shapes.Add(shape);
+
+        var edited = MakeBody("Hello");
+        SetSpacingField(edited.Paragraphs[0], field, 150);
+
+        var planner = InCanvasTextEditPlanner.BeginRichText(0, shape.Id, original);
+        var decision = planner.CommitRichText(edited);
+
+        decision.Outcome.Should().Be(InCanvasTextEditOutcome.Commit,
+            "a percent-based spacing change is a real edit and must not be dropped as a no-op");
+        decision.Command.Should().NotBeNull();
+
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(decision.Command!);
+
+        var committed = shape.TextBody!.Paragraphs[0];
+        ReadSpacingField(committed, field).Should().Be(150);
+
+        bus.Undo();
+        ReadSpacingField(shape.TextBody!.Paragraphs[0], field).Should().BeNull();
+    }
+
+    private static void SetSpacingField(Paragraph paragraph, string field, double? value)
+    {
+        switch (field)
+        {
+            case nameof(Paragraph.SpaceBeforePercent):
+                paragraph.SpaceBeforePercent = value;
+                break;
+            case nameof(Paragraph.SpaceAfterPercent):
+                paragraph.SpaceAfterPercent = value;
+                break;
+            case nameof(Paragraph.LineSpacingPercent):
+                paragraph.LineSpacingPercent = value;
+                break;
+            case nameof(Paragraph.LineSpacingPointsExact):
+                paragraph.LineSpacingPointsExact = value;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown spacing field.");
+        }
+    }
+
+    private static double? ReadSpacingField(Paragraph paragraph, string field) => field switch
+    {
+        nameof(Paragraph.SpaceBeforePercent) => paragraph.SpaceBeforePercent,
+        nameof(Paragraph.SpaceAfterPercent) => paragraph.SpaceAfterPercent,
+        nameof(Paragraph.LineSpacingPercent) => paragraph.LineSpacingPercent,
+        nameof(Paragraph.LineSpacingPointsExact) => paragraph.LineSpacingPointsExact,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown spacing field."),
+    };
+
     [Fact]
     public void ApplyTextValueFormat_AutomaticColor_ClearsOnlySelectedRunColor()
     {
