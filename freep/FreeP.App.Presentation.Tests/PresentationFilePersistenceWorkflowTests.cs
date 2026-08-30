@@ -106,6 +106,76 @@ public sealed class PresentationFilePersistenceWorkflowTests : IDisposable
         result.SavedPath.Should().BeNull();
     }
 
+    // ── r174-shared-protection-readonly F2 (FreeP) ─────────────────────────────────────────
+    //
+    // FAIL-BEFORE: Open() performed no OS read-only / ACL check at all (PresentationFileOpenResult
+    // had no IsFileSystemReadOnly member), so a presentation on a read-only file opened fully
+    // editable with zero indication and the restriction only surfaced when the save failed. Ported
+    // from FreeW's DocumentPersistenceWorkflow.Open, which mirrors FreeX's WorkbookReadOnlySession.
+
+    [Fact]
+    public void Open_OfReadOnlyPresentation_ReportsFileSystemReadOnly()
+    {
+        var path = WritePptx("ReadOnly.pptx", "Locked Deck");
+        File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+
+        try
+        {
+            var result = PresentationFilePersistenceWorkflow.Open(path);
+
+            result.IsFileSystemReadOnly.Should().BeTrue();
+            result.SavedPath.Should().Be(path);
+            result.Presentation.Properties.Title.Should().Be("Locked Deck");
+        }
+        finally
+        {
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+        }
+    }
+
+    [Fact]
+    public void Open_OfReadOnlyLegacyFxpPresentation_ReportsFileSystemReadOnly()
+    {
+        var path = WriteFxp("ReadOnly.fxp", "Locked Legacy");
+        File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+
+        try
+        {
+            PresentationFilePersistenceWorkflow.Open(path).IsFileSystemReadOnly.Should().BeTrue();
+        }
+        finally
+        {
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+        }
+    }
+
+    [Fact]
+    public void Open_OfWritablePresentation_DoesNotReportFileSystemReadOnly() =>
+        PresentationFilePersistenceWorkflow.Open(WritePptx("Writable.pptx", "Open Deck"))
+            .IsFileSystemReadOnly.Should().BeFalse(
+                "the check must not misclassify the read handle Open itself takes as a write restriction");
+
+    // A template never targets its own file for a future save (SavedPath is null), so its
+    // write-restriction state is irrelevant and must not push the fresh draft toward Save-As.
+    [Fact]
+    public void Open_OfReadOnlyTemplate_DoesNotReportFileSystemReadOnly()
+    {
+        var path = WritePptx("ReadOnly.potx", "Locked Template");
+        File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+
+        try
+        {
+            var result = PresentationFilePersistenceWorkflow.Open(path);
+
+            result.SavedPath.Should().BeNull();
+            result.IsFileSystemReadOnly.Should().BeFalse();
+        }
+        finally
+        {
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+        }
+    }
+
     [Fact]
     public void Save_WritesPptxAtomicallyAndReturnsSavedPathMetadata()
     {

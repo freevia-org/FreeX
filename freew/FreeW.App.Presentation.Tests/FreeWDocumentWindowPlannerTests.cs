@@ -18,6 +18,12 @@ public sealed class FreeWDocumentWindowPlannerTests
         source.Should().Contain("FreeWDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber)");
     }
 
+    [Theory]
+    [InlineData(true, " [Read-Only]")]
+    [InlineData(false, "")]
+    public void FormatReadOnlySuffix_MarksOnlyAReadOnlySource(bool isReadOnly, string expected) =>
+        FreeWDocumentWindowPlanner.FormatReadOnlySuffix(isReadOnly).Should().Be(expected);
+
     [Fact]
     public void CreateNext_ClonesLiveDocumentAndPreservesFileState()
     {

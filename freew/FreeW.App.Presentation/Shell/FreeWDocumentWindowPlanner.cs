@@ -52,4 +52,14 @@ public sealed class FreeWDocumentWindowPlanner
 
         return windowNumber > 1 ? $" : {windowNumber}" : string.Empty;
     }
+
+    /// <summary>
+    /// The title suffix shown while the current document came from a file that cannot be written
+    /// back to, matching FreeX's <c>WorkbookTitleFormatter</c> marker so the sister apps read the
+    /// same. Composed after the window suffix, in the title policy's group-suffix slot.
+    /// </summary>
+    public const string ReadOnlySuffix = " [Read-Only]";
+
+    public static string FormatReadOnlySuffix(bool isReadOnly) =>
+        isReadOnly ? ReadOnlySuffix : string.Empty;
 }

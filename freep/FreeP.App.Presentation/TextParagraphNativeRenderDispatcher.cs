@@ -101,8 +101,8 @@ public static class TextParagraphNativeRenderDispatcher
             measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 index,
                 measurement.HeightDip,
-                paragraph.SpaceBeforePt,
-                paragraph.SpaceAfterPt));
+                TextLayoutPlanner.ResolveSpaceBeforePoints(paragraph),
+                TextLayoutPlanner.ResolveSpaceAfterPoints(paragraph)));
         }
 
         var plan = TextLayoutPlanner.PlanTableCellText(text, bounds, anchor, measures);

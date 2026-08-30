@@ -144,46 +144,13 @@ public sealed class DocumentPersistenceWorkflow
 
     /// <summary>
     /// Best-effort check of whether <paramref name="filePath"/> can currently be written back to.
-    /// Mirrors FreeX's <c>WorkbookReadOnlySession.IsFileWriteRestricted</c> (round 149): checks the
-    /// OS read-only attribute first (Explorer's Read-only checkbox, or <c>attrib +r</c>), then falls
-    /// back to a lightweight open-for-write probe so a read-only network share, a read-only-mounted
-    /// volume, or a denied ACL are caught too -- none of those necessarily set the DOS read-only
-    /// attribute. A transient sharing violation (another process briefly holding an exclusive
-    /// handle) is deliberately NOT treated as read-only, since it says nothing about the file's
-    /// durable write permission.
+    /// Delegates to the shared <see cref="FileWriteRestrictionProbe"/> so FreeW, FreeX
+    /// (<c>WorkbookReadOnlySession</c>, round 149) and FreeP classify a read-only source file
+    /// identically -- see that type for the attribute-then-write-probe rationale, and for why this
+    /// must run before the caller opens its own read handle.
     /// </summary>
-    private static bool IsFileWriteRestricted(string filePath)
-    {
-        try
-        {
-            if (File.GetAttributes(filePath).HasFlag(FileAttributes.ReadOnly))
-                return true;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return true;
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-
-        try
-        {
-            using var probe = new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return true;
-        }
-        catch (IOException)
-        {
-            // Locked by another process, a network hiccup, etc. -- not necessarily a write
-            // restriction, so don't force the file read-only on a transient failure.
-            return false;
-        }
-    }
+    private static bool IsFileWriteRestricted(string filePath) =>
+        FileWriteRestrictionProbe.IsWriteRestricted(filePath);
 
     public DocumentSnapshotOpenResult OpenSnapshot(string snapshotPath, string? originalPath)
     {

@@ -1171,7 +1171,8 @@ public sealed partial class MainWindow : Window
             IsDirty: _file.IsDirty,
             DirtyMarker: " *",
             Separator: " \u2014 ",
-            WindowSuffix: FreeWDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber)));
+            WindowSuffix: FreeWDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber),
+            GroupSuffix: FreeWDocumentWindowPlanner.FormatReadOnlySuffix(_file.IsFileSystemReadOnly)));
     }
 
     // Recompute the live status-bar counts. When there is a non-empty selection, show that selection's

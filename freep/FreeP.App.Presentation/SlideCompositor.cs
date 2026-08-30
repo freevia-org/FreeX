@@ -2300,6 +2300,8 @@ public static class SlideCompositor
                 BulletImage  = para.BulletImage,
                 SpaceBeforePt = para.SpaceBeforePt ?? 0,
                 SpaceAfterPt  = para.SpaceAfterPt ?? 0,
+                SpaceBeforePercent = para.SpaceBeforePercent,
+                SpaceAfterPercent  = para.SpaceAfterPercent,
                 LineSpacingPercent = para.LineSpacingPercent,
                 LineSpacingPointsExact = para.LineSpacingPointsExact
             });
@@ -3001,6 +3003,8 @@ public static class SlideCompositor
                 BulletImage = marker.Image,
                 SpaceBeforePt = para.SpaceBeforePt ?? 0,
                 SpaceAfterPt = para.SpaceAfterPt ?? 0,
+                SpaceBeforePercent = para.SpaceBeforePercent,
+                SpaceAfterPercent = para.SpaceAfterPercent,
                 LineSpacingPercent = para.LineSpacingPercent,
                 LineSpacingPointsExact = para.LineSpacingPointsExact,
                 TabStops = resolvedTabStops,  // Wave 18B
