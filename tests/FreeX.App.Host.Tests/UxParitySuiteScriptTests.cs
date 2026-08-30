@@ -29,11 +29,11 @@ public sealed class UxParitySuiteScriptTests
         script.Should().Contain("excelPath = $excelWorkbookPath");
         script.Should().Contain("freexPath = $freeXWorkbookPath");
         script.Should().Contain("copiesByteIdentical = $true");
-        script.Should().Contain("Import-Module (Join-Path $PSScriptRoot \"UxParityCorpusPackage.psm1\") -Force");
-        script.Should().Contain("Remove-UxParityLinkedDataTypes -WorkbookPath $ExcelWorkbookPath");
-        script.Should().Contain("Get-UxParityLinkedDataTypePackageEntries $ExcelWorkbookPath");
-        script.Should().Contain("sanitization = [ordered]@{");
-        script.Should().Contain("excluded-from-default-manual-corpus");
+        script.Should().Contain("function Get-LinkedDataTypePackageEntries");
+        script.Should().Contain("Add-Type -AssemblyName System.IO.Compression");
+        script.Should().Contain("Get-LinkedDataTypePackageEntries $ExcelWorkbookPath");
+        script.Should().Contain("must-not-appear-in-default-manual-corpus");
+        script.Should().Contain("dynamic-array metadata is exercised in a dedicated parity fixture");
         script.Should().Contain("startupWorkbook = $freeXWorkbookPath");
     }
 }

@@ -14,7 +14,22 @@ param(
 $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
-Import-Module (Join-Path $PSScriptRoot "UxParityCorpusPackage.psm1") -Force
+
+function Get-LinkedDataTypePackageEntries {
+    param([Parameter(Mandatory = $true)][string]$WorkbookPath)
+
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($WorkbookPath)
+    try {
+        return @($archive.Entries |
+            Where-Object { $_.FullName.Replace('\', '/').StartsWith('xl/richData/', [System.StringComparison]::OrdinalIgnoreCase) } |
+            ForEach-Object FullName)
+    }
+    finally {
+        $archive.Dispose()
+    }
+}
 
 function Release-ComObject {
     param([object]$Value)
@@ -190,7 +205,7 @@ function Build-CorpusWorkbook {
         $formulaRows = @(
             @("Math", "=SUM(1,2,3)", 6, "scalar arithmetic"),
             @("Lookup", "=XLOOKUP(""Ada"",'Grid Basics'!B:B,'Grid Basics'!E:E)", 2400, "modern lookup"),
-            @("Dynamic array", "=FILTER('Grid Basics'!A2:E9,'Grid Basics'!A2:A9=""North"")", "spill", "visible spill behavior"),
+            @("Conditional aggregate", "=SUMIFS('Grid Basics'!E:E,'Grid Basics'!A:A,""North"")", 8120, "dynamic-array metadata is exercised in a dedicated parity fixture"),
             @("Text", "=TEXTJOIN(""-"",TRUE,""FreeX"",""Excel"",""Parity"")", "FreeX-Excel-Parity", "text join"),
             @("Date", "=DATE(2026,7,1)+7", 46211, "date serial/rendering"),
             @("Logical", "=IF(SUM('Grid Basics'!D2:D9)>100,""high"",""low"")", "high", "range reference"),
@@ -326,9 +341,13 @@ function New-WorkbookComparisonCopies {
         Release-ComObject $Workbook
     }
 
-    $sanitization = Remove-UxParityLinkedDataTypes -WorkbookPath $ExcelWorkbookPath
+    # The baseline must remain a valid Excel-authored package and must not include a dynamic-array
+    # rich-data graph. That graph is exercised by its own FreeX parity fixture.
+    $linkedDataTypeEntries = Get-LinkedDataTypePackageEntries $ExcelWorkbookPath
+    if ($linkedDataTypeEntries.Count -gt 0) {
+        throw "The default UX corpus unexpectedly contains rich-data parts: $($linkedDataTypeEntries -join ', ')"
+    }
 
-    # Finish Excel's save and sanitize excluded linked-data artifacts before cloning it so both apps start from the exact same bytes.
     [System.IO.File]::Copy($ExcelWorkbookPath, $FreeXWorkbookPath, $true)
     $excelHash = (Get-FileHash -LiteralPath $ExcelWorkbookPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $freeXHash = (Get-FileHash -LiteralPath $FreeXWorkbookPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -336,16 +355,10 @@ function New-WorkbookComparisonCopies {
         throw "Excel and FreeX workbook copies are not byte-identical after cloning."
     }
 
-    $linkedDataTypeEntries = Get-UxParityLinkedDataTypePackageEntries $ExcelWorkbookPath
-    if ($linkedDataTypeEntries.Count -gt 0) {
-        throw "The default UX corpus sanitizer left Microsoft linked data types in the package: $($linkedDataTypeEntries -join ', ')"
-    }
-
     return [pscustomobject]@{
         Workbook = $Excel.Workbooks.Open($ExcelWorkbookPath)
         ContentHashSha256 = $excelHash
         LinkedDataTypeEntries = $linkedDataTypeEntries
-        Sanitization = $sanitization
     }
 }
 
@@ -401,14 +414,8 @@ $manifest = [ordered]@{
         initialContentHashSha256 = $null
         copiesByteIdentical = $false
         linkedDataTypes = [ordered]@{
-            policy = "excluded-from-default-manual-corpus"
+            policy = "must-not-appear-in-default-manual-corpus"
             detectedEntries = @()
-            sanitization = [ordered]@{
-                removedEntries = @()
-                removedRelationshipCount = 0
-                removedMetadataPart = $false
-                removedRichValueMetadata = $false
-            }
         }
         functionInventoryCount = 0
     }
@@ -448,10 +455,6 @@ try {
     $manifest.workbook.initialContentHashSha256 = $comparisonCopies.ContentHashSha256
     $manifest.workbook.copiesByteIdentical = $true
     $manifest.workbook.linkedDataTypes.detectedEntries = @($comparisonCopies.LinkedDataTypeEntries)
-    $manifest.workbook.linkedDataTypes.sanitization.removedEntries = @($comparisonCopies.Sanitization.RemovedEntries)
-    $manifest.workbook.linkedDataTypes.sanitization.removedRelationshipCount = $comparisonCopies.Sanitization.RemovedRelationshipCount
-    $manifest.workbook.linkedDataTypes.sanitization.removedMetadataPart = $comparisonCopies.Sanitization.RemovedMetadataPart
-    $manifest.workbook.linkedDataTypes.sanitization.removedRichValueMetadata = $comparisonCopies.Sanitization.RemovedRichValueMetadata
     $manifest.excel.launched = $true
     $manifest.excel.version = [string]$excelBundle.Excel.Version
     $manifest.excel.hwnd = [int]$excelBundle.Excel.Hwnd
