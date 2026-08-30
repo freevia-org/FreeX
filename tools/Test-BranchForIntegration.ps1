@@ -90,8 +90,6 @@ if (-not $SkipAffectedTests) {
             -Platform windows `
             -GateId ([string]$gateId) `
             -Configuration Release `
-            -NoBuild `
-            -NoRestore `
             -HangTimeout 15m `
             -ResultsDirectory 'artifacts/pre-merge-test-gates'
         if ($LASTEXITCODE -ne 0) {

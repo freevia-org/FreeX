@@ -250,6 +250,11 @@ Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expect
 Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expected 'name: FreeX full release gate'
 Assert-WorkflowContains -Path ".github/workflows/app-tester-release.yml" -Expected 'name: Validate complete release inventory'
 
+$integrationGateContent = Get-Content -LiteralPath (Join-Path $repoRoot "tools/Test-BranchForIntegration.ps1") -Raw
+if ($integrationGateContent -match '(?m)^\s+-NoBuild\s+`?\s*$') {
+    $errors.Add("The branch integration gate must let selected test projects build; FreeW and FreeP test projects are not all outputs of FreeX.slnx.")
+}
+
 function Get-SelectedLocalGateIds {
     param([string[]]$ChangedPaths)
 
