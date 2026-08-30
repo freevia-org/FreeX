@@ -199,10 +199,15 @@ public sealed class RibbonShellBuilderTests
         var window = panel.Children
             .OfType<RibbonGroupHost>()
             .Single(group => group.GroupName == "Window");
+        var show = panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Show");
 
         window.Collapsed.Should().BeFalse(
             "Word keeps New Window, Arrange All, Split, and Switch Windows reachable before Zoom's secondary presets at 900 DIPs");
         FindLogicalChild<Button>(Assert.IsAssignableFrom<DependencyObject>(window.Content)).Should().NotBeNull();
+        show.Collapsed.Should().BeTrue(
+            "Word folds the secondary Ruler, Navigation Pane, and Gridlines controls into one Show affordance at 900 DIPs");
     }
 
     [StaFact]
@@ -223,6 +228,11 @@ public sealed class RibbonShellBuilderTests
             .Single(group => group.GroupName == "Window")
             .Collapsed.Should().BeTrue(
                 "Word folds the Window command stack into one flyout at the 750-DIP View ribbon reference width");
+        panel.Children
+            .OfType<RibbonGroupHost>()
+            .Single(group => group.GroupName == "Show")
+            .Collapsed.Should().BeTrue(
+                "Word keeps the secondary View aids behind the compact Show affordance at the 750-DIP reference width");
     }
 
     [StaFact]
