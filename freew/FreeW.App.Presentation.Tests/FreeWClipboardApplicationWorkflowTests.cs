@@ -399,6 +399,63 @@ public sealed class FreeWClipboardApplicationWorkflowTests
         FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges: []).Should().BeNull();
     }
 
+    [Fact]
+    public void BuildSelectionNativeDocument_ReplyAnchorCarriesItsTopLevelCommentThread()
+    {
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Reply anchor") { CommentId = 3 });
+        source.Blocks.Add(paragraph);
+
+        var root = new Comment(2, "Root comment");
+        root.AddReply(3, "Reply comment");
+        source.Comments[root.Id] = root;
+
+        var native = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(source, AllRanges(source))!;
+
+        native.Comments.Should().ContainSingle();
+        native.Comments[root.Id].Should().BeSameAs(root);
+        native.Comments[root.Id].Replies.Single().Id.Should().Be(3);
+    }
+
+    [Fact]
+    public void BuildSelectionNativeDocument_DenseReplyAnchorsCarryEveryDistinctTopLevelThread()
+    {
+        const int count = 1_000;
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+
+        for (var index = 0; index < count; index++)
+        {
+            var rootId = index * 2;
+            var root = new Comment(rootId, "Root " + index);
+            root.AddReply(rootId + 1, "Reply " + index);
+            source.Comments[rootId] = root;
+
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Reply anchor") { CommentId = rootId + 1 });
+            source.Blocks.Add(paragraph);
+        }
+
+        var native = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(source, AllRanges(source))!;
+
+        native.Comments.Keys.Should().Equal(Enumerable.Range(0, count).Select(index => index * 2));
+        native.Comments[0].Replies.Single().Id.Should().Be(1);
+        native.Comments[(count - 1) * 2].Replies.Single().Id.Should().Be(count * 2 - 1);
+    }
+
+    [Fact]
+    public void BuildSelectionNativeDocument_SourceGuardUsesSharedCommentThreadIndex()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.App.Presentation", "Editing", "FreeWClipboardApplicationWorkflow.cs");
+
+        source.Should().Contain("var topLevelByCommentId = CommentThreadIndex.BuildTopLevelByCommentId(source);")
+            .And.Contain("topLevelByCommentId.TryGetValue(commentId, out var root)")
+            .And.NotContain("source.Comments.Values.FirstOrDefault(");
+    }
+
     /// <summary>
     /// freew-bookmarks-hyperlinks F1: a whole-paragraph bookmark (the shape Insert &gt; Bookmark actually
     /// produces -- a name in <see cref="Paragraph.BookmarkNames"/> with no run-anchored boundary, see

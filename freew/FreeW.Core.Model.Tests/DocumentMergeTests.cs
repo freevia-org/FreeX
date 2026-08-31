@@ -487,14 +487,13 @@ public class DocumentMergeTests
     }
 
     [Fact]
-    public void Merge_SourceGuardIndexesSourceCommentRootsOnce()
+    public void Merge_SourceGuardUsesSharedCommentThreadIndex()
     {
         var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.Model", "DocumentMerge.cs");
 
-        source.Should().Contain("var sourceCommentRootsById = BuildTopLevelCommentIndex(source);")
-            .And.Contain("sourceCommentRootsById[rootId] = root;")
-            .And.Contain("sourceCommentRootsById.TryAdd(node.Id, root);")
+        source.Should().Contain("var sourceCommentRootsById = CommentThreadIndex.BuildTopLevelByCommentId(source);")
             .And.Contain("sourceCommentRootsById.TryGetValue(commentId, out var topComment)")
+            .And.NotContain("BuildTopLevelCommentIndex(")
             .And.NotContain("source.Comments.Values.FirstOrDefault(candidate => candidate.ThreadInOrder().Any(node => node.Id == id))");
     }
 

@@ -242,6 +242,10 @@ internal static class PptxChartReader
             return null;
 
         var dataElements = chartSpace.Element(Cx + "chartData")?.Elements(Cx + "data").ToList() ?? [];
+        var dataById = new Dictionary<int, XElement>();
+        foreach (var dataElement in dataElements)
+            dataById.TryAdd(ParseInt(dataElement.Attribute("id")?.Value), dataElement);
+
         var categoryData = FindChartExCategoryData(dataElements);
         var categoryLevel = categoryData?.Element(Cx + "strDim")?.Element(Cx + "lvl");
         var categories = categoryLevel?.Elements(Cx + "pt")
@@ -320,7 +324,7 @@ internal static class PptxChartReader
                 Name = seriesElement.Element(Cx + "tx")?.Element(Cx + "txData")?.Element(Cx + "v")?.Value ?? string.Empty,
                 ChartExLayoutId = seriesElement.Attribute("layoutId")?.Value,
             };
-            var seriesData = FindChartExSeriesData(dataElements, seriesElement);
+            var seriesData = FindChartExSeriesData(dataElements, dataById, seriesElement);
             var valueLevel = FindChartExValueDataLevel(seriesData);
             if (valueLevel is not null)
             {
@@ -581,11 +585,12 @@ internal static class PptxChartReader
 
     private static XElement? FindChartExSeriesData(
         IReadOnlyList<XElement> dataElements,
+        IReadOnlyDictionary<int, XElement> dataById,
         XElement series)
     {
         var dataId = series.Element(Cx + "dataId")?.Attribute("val")?.Value;
         if (int.TryParse(dataId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
-            return dataElements.FirstOrDefault(data => ParseInt(data.Attribute("id")?.Value) == id);
+            return dataById.TryGetValue(id, out var data) ? data : null;
 
         return dataElements.Count == 1 ? dataElements[0] : null;
     }

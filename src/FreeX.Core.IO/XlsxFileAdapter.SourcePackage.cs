@@ -556,6 +556,21 @@ public sealed partial class XlsxFileAdapter
         // media part "alive" for some other, still-live sheet either.
         var aliveMediaTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var sheetsWithDeletions = new List<(string SourceDrawingPath, HashSet<string> DeletedNames)>();
+        // A deleted drawing participates in both passes below. Materialize its source anchors once:
+        // each enumeration otherwise reopens and parses the drawing XML and its relationship part.
+        // ZIP entry paths remain ordinal here, matching ZipArchive.GetEntry's exact lookup behavior.
+        var pictureAnchorMediaTargetsByDrawingPath = new Dictionary<string, (string AnchorName, string MediaTarget)[]>(StringComparer.Ordinal);
+
+        (string AnchorName, string MediaTarget)[] GetOrReadPictureAnchorMediaTargets(string sourceDrawingPath)
+        {
+            if (pictureAnchorMediaTargetsByDrawingPath.TryGetValue(sourceDrawingPath, out var targets))
+                return targets;
+
+            targets = GetPictureAnchorMediaTargets(sourceArchive, sourceDrawingPath, context.RelNs, context.PackageRelNs).ToArray();
+            pictureAnchorMediaTargetsByDrawingPath.Add(sourceDrawingPath, targets);
+            return targets;
+        }
+
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
             if (!IsWorksheetPartPath(sourceWorksheetPath))
@@ -576,7 +591,7 @@ public sealed partial class XlsxFileAdapter
                 continue;
 
             var deletedNames = sheet.DeletedSourceDrawingObjectNames;
-            foreach (var (anchorName, mediaTarget) in GetPictureAnchorMediaTargets(sourceArchive, sourceDrawingPath, context.RelNs, context.PackageRelNs))
+            foreach (var (anchorName, mediaTarget) in GetOrReadPictureAnchorMediaTargets(sourceDrawingPath))
             {
                 if (deletedNames.Count == 0 || !deletedNames.Contains(anchorName))
                     aliveMediaTargets.Add(mediaTarget);
@@ -591,7 +606,7 @@ public sealed partial class XlsxFileAdapter
 
         foreach (var (sourceDrawingPath, deletedNames) in sheetsWithDeletions)
         {
-            foreach (var (anchorName, mediaTarget) in GetPictureAnchorMediaTargets(sourceArchive, sourceDrawingPath, context.RelNs, context.PackageRelNs))
+            foreach (var (anchorName, mediaTarget) in GetOrReadPictureAnchorMediaTargets(sourceDrawingPath))
             {
                 if (!deletedNames.Contains(anchorName) || aliveMediaTargets.Contains(mediaTarget))
                     continue;

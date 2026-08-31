@@ -2810,6 +2810,79 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void Read_NativeDenseChartEx_ResolvesReversedDataIds()
+    {
+        const int seriesCount = 256;
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var data = Enumerable.Range(0, seriesCount)
+            .Reverse()
+            .Select(id => CreateChartExValueData(cxNs, id, id + 0.25));
+        var series = Enumerable.Range(0, seriesCount)
+            .Select(id => CreateChartExSeries(cxNs, $"Series {id}", id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        var chart = ReadRawChartEx(new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData", data),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion", series))))));
+
+        chart.Series.Should().HaveCount(seriesCount);
+        chart.Series.Select(item => item.Name)
+            .Should().Equal(Enumerable.Range(0, seriesCount).Select(id => $"Series {id}"));
+        chart.Series.Select(item => item.Values.Single())
+            .Should().Equal(Enumerable.Range(0, seriesCount).Select(id => (double?)(id + 0.25)));
+    }
+
+    [Fact]
+    public void Read_NativeChartEx_DuplicateZeroAndMalformedDataIdsKeepFirstDocumentMatch()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var malformedZero = CreateChartExValueData(cxNs, "invalid", 10);
+        var explicitZero = CreateChartExValueData(cxNs, 0, 20);
+        var firstSeven = CreateChartExValueData(cxNs, 7, 70);
+        var duplicateSeven = CreateChartExValueData(cxNs, 7, 71);
+        var chart = ReadRawChartEx(new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData", malformedZero, explicitZero, firstSeven, duplicateSeven),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            CreateChartExSeries(cxNs, "Zero", "0"),
+                            CreateChartExSeries(cxNs, "Seven", "7"),
+                            CreateChartExSeries(cxNs, "Malformed reference", "invalid"),
+                            CreateChartExSeries(cxNs, "Missing reference", null)))))));
+
+        chart.Series.Select(item => item.Values.ToArray()).Should().SatisfyRespectively(
+            values => values.Should().Equal(10),
+            values => values.Should().Equal(70),
+            values => values.Should().BeEmpty(),
+            values => values.Should().BeEmpty());
+    }
+
+    [Fact]
+    public void Read_NativeChartEx_MalformedOrMissingSeriesDataIdUsesSoleDataFallback()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var chart = ReadRawChartEx(new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData", CreateChartExValueData(cxNs, 42, 42.5)),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            CreateChartExSeries(cxNs, "Malformed reference", "invalid"),
+                            CreateChartExSeries(cxNs, "Missing reference", null)))))));
+
+        chart.Series.Should().HaveCount(2);
+        chart.Series.Should().OnlyContain(item => item.Values.SequenceEqual(new double?[] { 42.5 }));
+    }
+
+    [Fact]
     public void Edit_NativeChartExSeriesLayouts_RoundTripAndUndoWithoutFlatteningFamily()
     {
         const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
@@ -3689,6 +3762,41 @@ public sealed class ChartTests : IDisposable
         using var readArchive = new ZipArchive(stream, ZipArchiveMode.Read);
         using var chartStream = readArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open();
         return XDocument.Load(chartStream);
+    }
+
+    private static ChartShape ReadRawChartEx(XDocument document)
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        using (var entryStream = archive.CreateEntry("ppt/charts/chartEx1.xml").Open())
+            document.Save(entryStream);
+
+        stream.Position = 0;
+        using var readArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+        return PptxChartReader.ReadChartExPart(
+            readArchive,
+            "ppt/charts/chartEx1.xml",
+            PresentationColorScheme.CreateDefault())!;
+    }
+
+    private static XElement CreateChartExValueData(XNamespace cxNs, object id, double value) =>
+        new(cxNs + "data",
+            new XAttribute("id", id),
+            new XElement(cxNs + "numDim",
+                new XAttribute("type", "val"),
+                new XElement(cxNs + "lvl",
+                    new XAttribute("ptCount", 1),
+                    new XElement(cxNs + "pt", new XAttribute("idx", 0), value))));
+
+    private static XElement CreateChartExSeries(XNamespace cxNs, string name, string? dataId)
+    {
+        var series = new XElement(cxNs + "series",
+            new XAttribute("layoutId", "histogram"),
+            new XElement(cxNs + "tx",
+                new XElement(cxNs + "txData", new XElement(cxNs + "v", name))));
+        if (dataId is not null)
+            series.Add(new XElement(cxNs + "dataId", new XAttribute("val", dataId)));
+        return series;
     }
 
     private string WriteToPptx(Presentation pres)

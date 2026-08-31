@@ -123,6 +123,82 @@ public sealed class R147_DeletedPictureMediaOrphanTests
         reloadedPictures[0].ImageBytes.Should().NotBeNullOrEmpty("the surviving picture must still carry real image bytes after reload");
     }
 
+    [Fact]
+    public void DeleteSourceLoadedPicturesAcrossDenseSheets_SaveAndReload_RemovesOnlyDeletedMedia()
+    {
+        const int sheetCount = 3;
+        const int picturesPerSheet = 16;
+        const int picturesToDeletePerSheet = 8;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = new Workbook("DeleteDensePictureMedia");
+        var context = new TestCommandContext(workbook);
+        for (var sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++)
+        {
+            var sheet = workbook.AddSheet($"Sheet{sheetIndex + 1}");
+            for (var pictureIndex = 0; pictureIndex < picturesPerSheet; pictureIndex++)
+            {
+                new InsertPictureCommand(
+                    sheet.Id,
+                    new CellAddress(sheet.Id, (uint)pictureIndex + 1, (uint)pictureIndex + 1),
+                    CreatePngBytes(),
+                    "image/png")
+                    .Apply(context).Success.Should().BeTrue();
+            }
+        }
+
+        using var initialSave = new MemoryStream();
+        adapter.Save(workbook, initialSave);
+
+        initialSave.Position = 0;
+        var loaded = adapter.Load(initialSave);
+        foreach (var sheet in loaded.Sheets)
+        {
+            var picturesToDelete = sheet.Pictures.Take(picturesToDeletePerSheet).ToArray();
+            foreach (var picture in picturesToDelete)
+            {
+                new DeleteDrawingObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, picture.Id)
+                    .Apply(new TestCommandContext(loaded)).Success.Should().BeTrue();
+            }
+        }
+
+        using var deletedSave = new MemoryStream();
+        adapter.Save(loaded, deletedSave);
+
+        deletedSave.Position = 0;
+        using (var archive = new ZipArchive(deletedSave, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            archive.Entries
+                .Count(entry => entry.FullName.StartsWith("xl/media/", System.StringComparison.OrdinalIgnoreCase))
+                .Should().Be(sheetCount * (picturesPerSheet - picturesToDeletePerSheet),
+                    "each deleted source-loaded picture should lose its media while every surviving anchor remains intact across sheets");
+        }
+
+        deletedSave.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(deletedSave);
+        reloaded.Sheets.Should().OnlyContain(sheet => sheet.Pictures.Count == picturesPerSheet - picturesToDeletePerSheet);
+        reloaded.Sheets.SelectMany(sheet => sheet.Pictures)
+            .Should().OnlyContain(picture => picture.ImageBytes != null && picture.ImageBytes.Length > 0,
+                "all surviving pictures must still resolve their source media after the package-preservation pass");
+    }
+
+    [Fact]
+    public void SourcePackageDeletedPictureMediaPass_CachesMaterializedDrawingTargetsByOrdinalPath()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackage.cs"));
+        var methodStart = source.IndexOf("private static IReadOnlySet<string> GetExcludedDeletedPicturePartPaths", StringComparison.Ordinal);
+        var methodEnd = source.IndexOf("    // Resolved (anchor cNvPr@name, media target path)", methodStart, StringComparison.Ordinal);
+        var method = source[methodStart..methodEnd];
+
+        const string cacheDeclaration = "pictureAnchorMediaTargetsByDrawingPath = new Dictionary<string, (string AnchorName, string MediaTarget)[]>";
+        method.Should().Contain($"{cacheDeclaration}(StringComparer.Ordinal)")
+            .And.NotContain($"{cacheDeclaration}(StringComparer.OrdinalIgnoreCase)",
+                "drawing paths must retain exact ZIP-entry case semantics instead of conflating distinct ordinal paths")
+            .And.Contain("GetOrReadPictureAnchorMediaTargets(sourceDrawingPath)")
+            .And.Contain("GetPictureAnchorMediaTargets(sourceArchive, sourceDrawingPath, context.RelNs, context.PackageRelNs).ToArray()");
+    }
+
     private static byte[] CreatePngBytes()
     {
         // Minimal valid 1x1 transparent PNG.

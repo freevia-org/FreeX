@@ -554,12 +554,15 @@ public static class FreeWClipboardApplicationWorkflow
                 selection.Endnotes[id] = endnote;
         }
 
+        var commentIds = runs.Select(run => run.CommentId).OfType<int>().Distinct().ToArray();
+        if (commentIds.Length == 0)
+            return;
+
         // A comment id may name a reply, so the thread ROOT is what has to travel.
-        foreach (var id in runs.Select(run => run.CommentId).OfType<int>().Distinct())
+        var topLevelByCommentId = CommentThreadIndex.BuildTopLevelByCommentId(source);
+        foreach (var commentId in commentIds)
         {
-            var root = source.Comments.Values.FirstOrDefault(
-                comment => comment.ThreadInOrder().Any(node => node.Id == id));
-            if (root is not null)
+            if (topLevelByCommentId.TryGetValue(commentId, out var root))
                 selection.Comments[root.Id] = root;
         }
     }

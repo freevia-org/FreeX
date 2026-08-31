@@ -30,24 +30,37 @@ public static class RibbonKeyTipResolutionPlanner
 
         enabledSelector ??= static _ => true;
         longerPrefixSelector ??= static _ => true;
-        var normalized = candidates
-            .Select((candidate, index) =>
-                (candidate, index, keyTip: RibbonKeyTipText.Normalize(keyTipSelector(candidate))))
-            .Where(entry => enabledSelector(entry.candidate) && entry.keyTip is not null)
-            .ToArray();
+        var exactIndex = -1;
+        var hasPrefix = false;
+        var hasLongerPrefix = false;
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            var candidate = candidates[index];
+            var keyTip = RibbonKeyTipText.Normalize(keyTipSelector(candidate));
+            if (!enabledSelector(candidate) || keyTip is null)
+                continue;
 
-        var exact = normalized.FirstOrDefault(entry =>
-            string.Equals(entry.keyTip, normalizedSequence, StringComparison.OrdinalIgnoreCase));
-        var hasLongerPrefix = normalized.Any(entry =>
-            longerPrefixSelector(entry.candidate) &&
-            entry.keyTip!.Length > normalizedSequence.Length &&
-            entry.keyTip.StartsWith(normalizedSequence, StringComparison.OrdinalIgnoreCase));
+            var startsWithSequence = keyTip.StartsWith(normalizedSequence, StringComparison.OrdinalIgnoreCase);
+            hasPrefix |= startsWithSequence;
+            if (exactIndex < 0 &&
+                string.Equals(keyTip, normalizedSequence, StringComparison.OrdinalIgnoreCase))
+            {
+                exactIndex = index;
+            }
 
-        if (exact.keyTip is not null && !hasLongerPrefix)
-            return new(RibbonKeyTipResolutionKind.Exact, exact.index);
+            if (!hasLongerPrefix &&
+                startsWithSequence &&
+                keyTip.Length > normalizedSequence.Length &&
+                longerPrefixSelector(candidate))
+            {
+                hasLongerPrefix = true;
+            }
+        }
 
-        if (hasLongerPrefix || normalized.Any(entry =>
-                entry.keyTip!.StartsWith(normalizedSequence, StringComparison.OrdinalIgnoreCase)))
+        if (exactIndex >= 0 && !hasLongerPrefix)
+            return new(RibbonKeyTipResolutionKind.Exact, exactIndex);
+
+        if (hasPrefix)
             return new(RibbonKeyTipResolutionKind.Prefix);
 
         return new(RibbonKeyTipResolutionKind.NoMatch);
