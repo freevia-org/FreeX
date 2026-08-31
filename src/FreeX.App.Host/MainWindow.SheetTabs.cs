@@ -1388,7 +1388,14 @@ public partial class MainWindow
         if (activeTab is null)
             return false;
 
-        return FindSheetTabContextMenuTarget(activeTab)?.Focus() == true;
+        var tabChrome = FindSheetTabContextMenuTarget(activeTab);
+        var focusTarget = tabChrome is null
+            ? null
+            : FindVisualDescendant<Button>(
+                tabChrome,
+                element => element.Name == "SheetTabFocusTarget");
+
+        return focusTarget is not null && TryFocusElement(focusTarget);
     }
 
     private bool TryOpenFocusedSheetTabContextMenu()

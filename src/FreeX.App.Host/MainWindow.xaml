@@ -790,6 +790,21 @@
                                                 </Style.Triggers>
                                             </Style>
                                         </Grid.Style>
+                                        <!-- Grid focus is invisible to native UIA. This inert button gives
+                                             F6 a peer-backed target while the surrounding Grid retains all
+                                             sheet-tab mouse and context-menu behavior. -->
+                                        <Button x:Name="SheetTabFocusTarget"
+                                                Focusable="True"
+                                                IsTabStop="True"
+                                                IsHitTestVisible="False"
+                                                Background="Transparent"
+                                                BorderBrush="Transparent"
+                                                BorderThickness="0"
+                                                Padding="0"
+                                                FocusVisualStyle="{x:Null}"
+                                                AutomationProperties.Name="{Binding AutomationName}"
+                                                AutomationProperties.AutomationId="{Binding Name}"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_SelectThisSheetRightClickOrPressShiftF10ForSheetTabOptions}"/>
                                         <Border x:Name="TabBorder"
                                                 CornerRadius="0,0,4,4" Padding="12,4,12,0"
                                                 Margin="8,0,8,0"
@@ -1017,33 +1032,54 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <Border x:Name="StatusModeFocusTarget" Grid.Column="0"
-                        Focusable="True"
-                        BorderBrush="Transparent"
-                        BorderThickness="1"
-                        Padding="2,0"
-                        AutomationProperties.Name="{Binding Text, ElementName=StatusReadyText, StringFormat=Cell Mode {0}}"
-                        AutomationProperties.AutomationId="StatusCellMode"
-                        AutomationProperties.HelpText="Current worksheet cell mode.">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Style.Triggers>
-                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                    <Setter Property="BorderBrush" Value="{DynamicResource FreeXAccentDarkBrush}"/>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
+                <Grid x:Name="StatusModeFocusContainer" Grid.Column="0">
+                    <!-- A real control is required here: WPF can keyboard-focus a Border, but native UIA
+                         reports the window instead of the focused status region. -->
+                    <Button x:Name="StatusModeFocusTarget"
+                            Focusable="True"
+                            IsTabStop="True"
+                            IsHitTestVisible="False"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            BorderThickness="1"
+                            Padding="2,0"
+                            AutomationProperties.Name="{Binding Text, ElementName=StatusReadyText, StringFormat=Cell Mode {0}}"
+                            AutomationProperties.AutomationId="StatusCellMode"
+                            AutomationProperties.HelpText="Current worksheet cell mode.">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="FocusChrome"
+                                                    Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                    <Setter TargetName="FocusChrome" Property="BorderBrush" Value="{DynamicResource FreeXAccentDarkBrush}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
+                    </Button>
                     <StackPanel x:Name="StatusModePanel"
                                 Orientation="Horizontal"
-                                VerticalAlignment="Center">
+                                VerticalAlignment="Center"
+                                IsHitTestVisible="False">
                         <TextBlock x:Name="StatusReadyText" Text="{local:Loc Key=MainWindow_Text_Ready}" Foreground="{DynamicResource FreeXStatusForegroundBrush}"
                                    FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center"/>
                         <TextBlock x:Name="StatusPageNumberText" Text="" Foreground="{DynamicResource FreeXStatusForegroundBrush}"
                                    FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center" Margin="16,0,0,0"
                                    Visibility="Collapsed"/>
                     </StackPanel>
-                </Border>
+                </Grid>
 
                 <Border x:Name="StatusStatsViewport" Grid.Column="1"
                         Margin="8,0,12,0"
