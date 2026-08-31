@@ -26,11 +26,28 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             harness.FocusedMenuHeader.Should().Be("Cu_t");
             harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
             harness.OpenMenuHeaders.Should().StartWith(["Cu_t", "_Copy", "_Paste"]);
-            harness.OpenMenuHeaders.Where(header => header.Length > 0).Should().HaveCount(13);
+            harness.OpenMenuHeaders.Where(header => header.Length > 0).Should().HaveCount(32);
             harness.OpenMenuHeaders.Should().ContainInOrder([
-                "_Paste Options",
-                "_Insert and Delete",
-                "Sort and _Filter",
+                "Paste _Special...",
+                "Insert Copied _Cells...",
+                "_Insert...",
+                "Insert Row _Above",
+                "Insert Row _Below",
+                "Insert Column _Left",
+                "Insert Column _Right",
+                "_Delete...",
+                "Delete _Row(s)",
+                "Delete _Column(s)",
+                "Clear C_ontents",
+                "Sort _A to Z",
+                "Sort _Z to A",
+                "C_ustom Sort...",
+                "_Filter...",
+                "_Quick Analysis",
+                "Define _Name...",
+                "Create Ta_ble...",
+                "Format as _Table...",
+                "Data _Validation...",
                 "Data _Tools",
                 "_Rows and Columns",
                 "Co_mments and Notes",
@@ -39,19 +56,14 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 "C_lear"
             ]);
             harness.OpenMenuHeaders.Should().NotContain([
-                "Paste _Special...",
-                "Insert Row _Above",
-                "Data _Validation...",
-                "Clear C_ontents"
+                "_Paste Options",
+                "_Insert and Delete",
+                "Sort and _Filter"
             ]);
             harness.OpenMenuHeadersRecursive.Should().Contain([
-                "Paste _Special...",
-                "Insert Row _Above",
-                "Delete _Column(s)",
-                "Data _Validation...",
                 "Row _Height...",
                 "New Co_mment",
-                "Clear C_ontents"
+                "Clear _All"
             ]);
         });
     }
