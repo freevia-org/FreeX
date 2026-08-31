@@ -119,10 +119,12 @@ internal static class ExternalRichTextClipboardRtfWriter
             output.Append(@"\li").Append(ToTwips(margin));
         if (paragraph.IndentEmu is { } indent)
             output.Append(@"\fi").Append(ToTwips(indent));
-        if (paragraph.SpaceBeforePt is { } before)
-            output.Append(@"\sb").Append(ToTwips(before));
-        if (paragraph.SpaceAfterPt is { } after)
-            output.Append(@"\sa").Append(ToTwips(after));
+        // RTF has no percentage space-before/after, so percent-authored spacing must be resolved
+        // to points here or it is lost on export.
+        if (paragraph.SpaceBeforePt is not null || paragraph.SpaceBeforePercent is not null)
+            output.Append(@"\sb").Append(ToTwips(ParagraphSpacingMetrics.ResolveSpaceBeforePoints(paragraph)));
+        if (paragraph.SpaceAfterPt is not null || paragraph.SpaceAfterPercent is not null)
+            output.Append(@"\sa").Append(ToTwips(ParagraphSpacingMetrics.ResolveSpaceAfterPoints(paragraph)));
         foreach (var tab in paragraph.TabStops)
             output.Append(@"\tx").Append(ToTwips(tab.PositionEmu));
 
