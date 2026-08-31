@@ -76,8 +76,8 @@ public static partial class FormulaAuditingService
                     continue;
                 }
 
-                var precedents = ExtractPrecedents(workbook, sheet.Id, cell.FormulaText);
-                if (ContainsAny(precedents, precedentRange))
+                var precedentRegions = ExtractPrecedentRegions(workbook, sheet.Id, cell.FormulaText);
+                if (OverlapsAny(precedentRegions, precedentRange))
                     result.Add(formulaAddress);
             }
         }
@@ -85,10 +85,10 @@ public static partial class FormulaAuditingService
         return SortByWorkbookOrder(workbook, result).ToList();
     }
 
-    private static bool ContainsAny(IReadOnlyList<CellAddress> addresses, GridRange range)
+    private static bool OverlapsAny(IReadOnlyList<GridRange> regions, GridRange range)
     {
-        foreach (var address in addresses)
-            if (range.Contains(address))
+        foreach (var region in regions)
+            if (region.Overlaps(range))
                 return true;
 
         return false;

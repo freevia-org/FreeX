@@ -22,9 +22,10 @@ public enum TextDocumentStorySubset
 }
 
 /// <summary>
-/// Enumerates the paragraph-bearing stories shared by package and document services. Comment ordering is
-/// supplied by the caller because package serialization and model services intentionally use different
-/// thread-order policies.
+/// Owns the canonical paragraph walks shared by package, document-model, and presentation services.
+/// Story subsets and structural expansion remain caller-selected so body-only consumers do not silently
+/// acquire headers, notes, nested tables, or text boxes. Comment ordering is supplied by the caller because
+/// package serialization and model services intentionally use different thread-order policies.
 /// </summary>
 public static class TextDocumentStoryTraversal
 {

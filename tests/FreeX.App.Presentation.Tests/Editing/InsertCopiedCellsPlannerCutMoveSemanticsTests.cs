@@ -15,6 +15,18 @@ namespace FreeX.App.Presentation.Tests.Editing;
 public sealed class InsertCopiedCellsPlannerCutMoveSemanticsTests
 {
     [Fact]
+    public void CutMoveFollowUp_RemovesMergedRegionsInOnePass()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation", "Editing"),
+            "InsertCopiedCellsPlanner.cs"));
+
+        source.Should().Contain("var retainedMergedRegions = new List<GridRange>(sheet.MergedRegions.Count)");
+        source.Should().Contain("foreach (var region in sheet.MergedRegions)");
+        source.Should().NotContain("_removedMergedRegions.Contains(region)");
+    }
+
+    [Fact]
     public void CreateCommand_Cut_KeepsOwnFormulaLiteral_AndRepointsExternalReference()
     {
         // A1=5; B1="=A1+1" (=6, the cell being cut); C1="=B1*10" (=60, external ref TO the cut cell).

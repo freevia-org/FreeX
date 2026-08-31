@@ -2040,12 +2040,18 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartLineSegmentPrimitive>();
         }
 
+        var slicesByPointIndex = new Dictionary<int, ChartPieSlicePrimitive>();
+        foreach (var slice in slices)
+            slicesByPointIndex.TryAdd(slice.PointIndex, slice);
+
         var lines = new List<ChartLineSegmentPrimitive>();
         foreach (var label in labels)
         {
-            var slice = slices.FirstOrDefault(candidate => candidate.PointIndex == label.CategoryIndex);
-            if (slice.OuterRadius <= 0)
+            if (!slicesByPointIndex.TryGetValue(label.CategoryIndex, out var slice)
+                || slice.OuterRadius <= 0)
+            {
                 continue;
+            }
 
             double midAngle = (slice.StartAngle + slice.EndAngle) / 2.0;
             double scaleY = slice.EffectiveVerticalScale;
@@ -2355,15 +2361,7 @@ public static partial class ChartRenderPlanner
         ChartTrendline trendline)
     {
         if (trendline.Type == ChartTrendlineType.MovingAverage)
-        {
-            int period = Math.Clamp(trendline.MovingAveragePeriod ?? 2, 2, samples.Count);
-            return samples.Select((sample, index) =>
-            {
-                int start = Math.Max(0, index - period + 1);
-                double average = samples.Skip(start).Take(index - start + 1).Average(item => item.Y);
-                return (sample.X, average);
-            }).ToArray();
-        }
+            return BuildMovingAverageTrendlineValues(samples, trendline.MovingAveragePeriod);
 
         if (!TryBuildTrendlineFit(samples, trendline, out var fitSamples, out var evaluator, out _))
             return Array.Empty<(double X, double Y)>();
@@ -2381,6 +2379,27 @@ public static partial class ChartRenderPlanner
         }
 
         return result;
+    }
+
+    internal static IReadOnlyList<(double X, double Y)> BuildMovingAverageTrendlineValues(
+        IReadOnlyList<(double X, double Y)> samples,
+        int? authoredPeriod)
+    {
+        int period = Math.Clamp(authoredPeriod ?? 2, 2, samples.Count);
+        var values = new (double X, double Y)[samples.Count];
+        double rollingSum = 0;
+
+        for (int index = 0; index < samples.Count; index++)
+        {
+            rollingSum += samples[index].Y;
+            if (index >= period)
+                rollingSum -= samples[index - period].Y;
+
+            int windowCount = Math.Min(index + 1, period);
+            values[index] = (samples[index].X, rollingSum / windowCount);
+        }
+
+        return values;
     }
 
     private static bool TryBuildTrendlineFit(

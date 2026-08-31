@@ -323,4 +323,37 @@ public sealed class CompositeWorkbookCommandTests
         // Only the child's own unrecoverable write survives.
         sheet2.GetValue(partialAddress).Should().Be(new TextValue("partial"));
     }
+
+    // R175-commands-composite-failure-outcome-audit-1: pins the deliberate asymmetry documented in
+    // CompositeWorkbookCommand.Apply -- the throwing command IS reverted, a command that RETURNED a
+    // failure outcome is NOT. This test fails the moment someone "completes" the fix by adding a
+    // blanket Revert to the !outcome.Success branch.
+    //
+    // SetCalculationModeCommand is the worked example from the audit: it rejects an undefined mode
+    // BEFORE assigning _previousMode, and its Revert is one of the 74 (of 236) with no
+    // never-applied guard -- so reverting it here would write default(WorkbookCalculationMode) ==
+    // Automatic over a workbook the command never touched.
+    [Fact]
+    public void Apply_WhenCommandRejectsWithoutMutating_DoesNotRevertThatCommand()
+    {
+        var wb = new Workbook("test") { CalculationMode = WorkbookCalculationMode.Manual };
+        var sheet1 = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var command = new CompositeWorkbookCommand(
+            "Grouped Edit",
+            [
+                EditCellsCommand.ForValue(sheet1.Id, new CellAddress(sheet1.Id, 1, 1), new TextValue("A")),
+                new SetCalculationModeCommand((WorkbookCalculationMode)999)
+            ]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        // The sibling that really did apply is still rolled back...
+        sheet1.GetCell(new CellAddress(sheet1.Id, 1, 1)).Should().BeNull();
+        // ...but the cleanly-rejecting command must be left alone: it never captured a previous
+        // mode, so reverting it would silently flip this workbook from Manual to Automatic.
+        wb.CalculationMode.Should().Be(WorkbookCalculationMode.Manual);
+    }
 }

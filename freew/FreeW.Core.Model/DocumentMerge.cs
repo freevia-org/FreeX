@@ -393,9 +393,11 @@ public static class DocumentMerge
             .Where(id => id is not null)
             .Select(id => id!.Value)
             .ToHashSet();
+        var abstractIdAllocator = new IntegerIdAllocator(usedAbstractIds, firstFreshId: 0);
+        var numberIdAllocator = new IntegerIdAllocator(usedNumIds, firstFreshId: 0);
         var abstractIds = new Dictionary<int, int>();
         foreach (var sourceAbstractId in referencedAbstracts)
-            abstractIds[sourceAbstractId] = AllocateId(sourceAbstractId, usedAbstractIds, firstId: 0);
+            abstractIds[sourceAbstractId] = AllocateId(sourceAbstractId, abstractIdAllocator, firstId: 0);
 
         foreach (var sourceAbstractId in referencedAbstracts)
         {
@@ -415,7 +417,7 @@ public static class DocumentMerge
             if (sourceAbstractId is null || !abstractIds.TryGetValue(sourceAbstractId.Value, out var targetAbstractId))
                 continue;
 
-            var targetNumId = AllocateId(sourceNumId, usedNumIds, firstId: 0);
+            var targetNumId = AllocateId(sourceNumId, numberIdAllocator, firstId: 0);
             var clone = new XElement(sourceNum);
             clone.SetAttributeValue(Wordprocessing + "numId", targetNumId);
             clone.Element(Wordprocessing + "abstractNumId")!.SetAttributeValue(Wordprocessing + "val", targetAbstractId);
@@ -552,6 +554,9 @@ public static class DocumentMerge
         var usedFootnotes = target.Footnotes.Keys.ToHashSet();
         var usedEndnotes = target.Endnotes.Keys.ToHashSet();
         var usedComments = target.Comments.Values.SelectMany(comment => comment.ThreadInOrder()).Select(comment => comment.Id).ToHashSet();
+        var footnoteIdAllocator = new IntegerIdAllocator(usedFootnotes, firstFreshId: 1);
+        var endnoteIdAllocator = new IntegerIdAllocator(usedEndnotes, firstFreshId: 1);
+        var commentIdAllocator = new IntegerIdAllocator(usedComments, firstFreshId: 0);
 
         for (var cursor = 0; cursor < paragraphs.Count; cursor++)
         {
@@ -561,7 +566,7 @@ public static class DocumentMerge
                     && !footnoteIds.ContainsKey(footnoteId)
                     && source.Footnotes.TryGetValue(footnoteId, out var footnote))
                 {
-                    var mappedId = AllocateId(footnoteId, usedFootnotes, firstId: 1);
+                    var mappedId = AllocateId(footnoteId, footnoteIdAllocator, firstId: 1);
                     footnoteIds[footnoteId] = mappedId;
                     var clone = new Footnote(mappedId)
                     {
@@ -580,7 +585,7 @@ public static class DocumentMerge
                     && !endnoteIds.ContainsKey(endnoteId)
                     && source.Endnotes.TryGetValue(endnoteId, out var endnote))
                 {
-                    var mappedId = AllocateId(endnoteId, usedEndnotes, firstId: 1);
+                    var mappedId = AllocateId(endnoteId, endnoteIdAllocator, firstId: 1);
                     endnoteIds[endnoteId] = mappedId;
                     var clone = new Endnote(mappedId)
                     {
@@ -601,7 +606,7 @@ public static class DocumentMerge
                     continue;
 
                 foreach (var node in topComment.ThreadInOrder())
-                    commentIds[node.Id] = AllocateId(node.Id, usedComments, firstId: 0);
+                    commentIds[node.Id] = AllocateId(node.Id, commentIdAllocator, firstId: 0);
                 var copied = CloneComment(topComment, id => commentIds[id], paragraphs);
                 target.Comments[copied.Id] = copied;
             }
@@ -621,15 +626,10 @@ public static class DocumentMerge
         return paragraphs;
     }
 
-    private static int AllocateId(int sourceId, HashSet<int> usedIds, int firstId)
-    {
-        if (sourceId >= firstId && usedIds.Add(sourceId))
-            return sourceId;
-        var candidate = Math.Max(firstId, usedIds.Count == 0 ? firstId : usedIds.Max() + 1);
-        while (!usedIds.Add(candidate))
-            candidate++;
-        return candidate;
-    }
+    private static int AllocateId(int sourceId, IntegerIdAllocator allocator, int firstId) =>
+        sourceId >= firstId && allocator.TryReservePreferred(sourceId)
+            ? sourceId
+            : allocator.AllocateNext();
 
     private static void TransferCitationSources(
         TextDocument target,

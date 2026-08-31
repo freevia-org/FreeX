@@ -180,6 +180,16 @@ public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
         // and its Undo/Revert restore are SheetCommands.cs-only local-variable names.
         ("SheetCommands.cs", new Regex(@"^rewrittenDrawingObjectHyperlink$", RegexOptions.Compiled)),
         ("SheetCommands.cs", new Regex(@"^savedDrawingObjectHyperlink$", RegexOptions.Compiled)),
+        // R175-rowcol-shift-drawing-hyperlink (see audit note above): unlike every exemption above, this
+        // one is NOT justified by the cell-patch path being unreachable. A row/column insert or delete
+        // leaves the sheet name and the worksheet parts intact, so PackageAllowsCellPatchSave can and
+        // does admit the patch path. It is justified instead by the fingerprint now COVERING the field:
+        // WriteDrawingObjectHyperlinkFingerprint (XlsxFileAdapter.SourcePackageSnapshot.cs) is called
+        // from all four drawing fingerprint writers, so a shifted hyperlink changes the fingerprint,
+        // which forces the full rebuild for that save and preserves the change. That is exactly the
+        // remedy this guard's own message prescribes, done rather than exempted.
+        ("RowColumnShiftHelpers.AddressState.cs",
+            new Regex(@"^ShiftDrawingObjectHyperlinkForShift\(\w+(\.\w+)*\.Hyperlink$", RegexOptions.Compiled)),
     ];
 
     [Fact]

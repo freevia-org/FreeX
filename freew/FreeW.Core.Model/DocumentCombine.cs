@@ -178,15 +178,14 @@ public static class DocumentCombine
             .SelectMany(comment => comment.ThreadInOrder())
             .Select(comment => comment.Id)
             .ToHashSet();
+        var commentIds = new IntegerIdAllocator(usedIds, firstFreshId: 0);
         var commentIdMapA = new Dictionary<int, int>();
 
         foreach (var comment in blacklineA.Comments.Values)
         {
             foreach (var node in comment.ThreadInOrder())
             {
-                var id = node.Id;
-                if (!usedIds.Add(id))
-                    id = NextUnusedCommentId(usedIds);
+                var id = commentIds.ReservePreferredOrNext(node.Id);
                 commentIdMapA[node.Id] = id;
             }
 
@@ -195,14 +194,6 @@ public static class DocumentCombine
         }
 
         return commentIdMapA;
-    }
-
-    private static int NextUnusedCommentId(HashSet<int> usedIds)
-    {
-        var id = usedIds.Count == 0 ? 0 : usedIds.Max() + 1;
-        while (!usedIds.Add(id))
-            id++;
-        return id;
     }
 
     private static Comment CloneComment(Comment source, Func<int, int> mapId)
@@ -249,9 +240,10 @@ public static class DocumentCombine
     {
         var footnoteIdMapA = new Dictionary<int, int>();
         var usedFootnoteIds = result.Footnotes.Keys.ToHashSet();
+        var footnoteIds = new IntegerIdAllocator(usedFootnoteIds, firstFreshId: 1);
         foreach (var (id, footnote) in blacklineA.Footnotes)
         {
-            var mappedId = usedFootnoteIds.Add(id) ? id : NextUnusedNoteId(usedFootnoteIds);
+            var mappedId = footnoteIds.ReservePreferredOrNext(id);
             footnoteIdMapA[id] = mappedId;
             var clone = new Footnote(mappedId) { HasAutomaticReferenceMark = footnote.HasAutomaticReferenceMark };
             foreach (var paragraph in footnote.Content)
@@ -261,9 +253,10 @@ public static class DocumentCombine
 
         var endnoteIdMapA = new Dictionary<int, int>();
         var usedEndnoteIds = result.Endnotes.Keys.ToHashSet();
+        var endnoteIds = new IntegerIdAllocator(usedEndnoteIds, firstFreshId: 1);
         foreach (var (id, endnote) in blacklineA.Endnotes)
         {
-            var mappedId = usedEndnoteIds.Add(id) ? id : NextUnusedNoteId(usedEndnoteIds);
+            var mappedId = endnoteIds.ReservePreferredOrNext(id);
             endnoteIdMapA[id] = mappedId;
             var clone = new Endnote(mappedId) { HasAutomaticReferenceMark = endnote.HasAutomaticReferenceMark };
             foreach (var paragraph in endnote.Content)
@@ -272,14 +265,6 @@ public static class DocumentCombine
         }
 
         return (footnoteIdMapA, endnoteIdMapA);
-    }
-
-    private static int NextUnusedNoteId(HashSet<int> usedIds)
-    {
-        var id = usedIds.Count == 0 ? 1 : usedIds.Max() + 1;
-        while (!usedIds.Add(id))
-            id++;
-        return id;
     }
 
     private static Run RemapANotes(

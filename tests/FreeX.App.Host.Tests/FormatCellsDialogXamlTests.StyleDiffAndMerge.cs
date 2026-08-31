@@ -261,7 +261,7 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new FormatCellsDialog(new CellStyle(), FormatCellsDialogTab.Alignment, mergeCells: false);
+            var dialog = new FormatCellsDialog(new CellStyle(), WorkbookTheme.Office, FormatCellsDialogTab.Alignment, mergeCells: false);
             dialog.Show();
             try
             {
@@ -286,7 +286,7 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new FormatCellsDialog(new CellStyle(), FormatCellsDialogTab.Alignment, mergeCells: true);
+            var dialog = new FormatCellsDialog(new CellStyle(), WorkbookTheme.Office, FormatCellsDialogTab.Alignment, mergeCells: true);
             dialog.Show();
             try
             {

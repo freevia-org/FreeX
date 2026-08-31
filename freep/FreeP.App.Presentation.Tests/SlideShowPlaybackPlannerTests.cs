@@ -676,6 +676,78 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void MorphPlanner_DuplicateStableIdsConsumeDistinctSourcesInSourceOrder()
+    {
+        var source = new Slide();
+        source.Shapes.Add(new SlideShape { Id = 7, Name = "First source" });
+        source.Shapes.Add(new SlideShape { Id = 7, Name = "Second source" });
+        var target = new Slide();
+        target.Shapes.Add(new SlideShape { Id = 7, Name = "First target" });
+        target.Shapes.Add(new SlideShape { Id = 7, Name = "Second target" });
+
+        var plan = SlideShowMorphPlanner.Plan(
+            new SlideTransition { Kind = TransitionKind.Morph }, source, target);
+
+        plan.Matches.Should().HaveCount(2);
+        plan.Matches.Select(match => match.Source.Name)
+            .Should().Equal("First source", "Second source");
+        plan.Matches.Select(match => match.Target.Name)
+            .Should().Equal("First target", "Second target");
+        plan.Matches.Should().OnlyContain(match => match.MatchKey == "id:7");
+    }
+
+    [Fact]
+    public void MorphPlanner_LargeIdentitySetPreservesIdThenUniqueNameMatchOrdering()
+    {
+        const int matchCount = 256;
+        var source = new Slide();
+        var target = new Slide();
+        for (uint index = 1; index <= matchCount; index++)
+        {
+            source.Shapes.Add(new SlideShape { Id = index, Name = $"Stable source {index}" });
+            target.Shapes.Add(new SlideShape { Id = index, Name = $"Stable target {index}" });
+        }
+
+        for (uint index = 1; index <= matchCount; index++)
+        {
+            source.Shapes.Add(new SlideShape { Id = 1000 + index, Name = $"Named {index}" });
+            target.Shapes.Add(new SlideShape { Id = 2000 + index, Name = $"Named {index}" });
+        }
+
+        var plan = SlideShowMorphPlanner.Plan(
+            new SlideTransition { Kind = TransitionKind.Morph }, source, target);
+
+        plan.Matches.Should().HaveCount(matchCount * 2);
+        plan.Matches.Take(matchCount).Select(match => match.MatchKey)
+            .Should().Equal(Enumerable.Range(1, matchCount).Select(index => $"id:{index}"));
+        plan.Matches.Skip(matchCount).Select(match => match.MatchKey)
+            .Should().Equal(Enumerable.Range(1, matchCount).Select(index => $"name:named {index}"));
+        plan.UnmatchedSourceCount.Should().Be(0);
+        plan.UnmatchedTargetCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void MorphPlanner_SourceGuardIndexesObjectIdentityPasses()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Presentation", "SlideShowMorphPlanner.cs");
+        int start = source.IndexOf(
+            "// Stable OOXML ids are the strongest identity signal within a deck.",
+            StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        int end = source.IndexOf("if (option is \"byWord\" or \"byChar\")", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+
+        var identityPasses = source[start..end];
+        identityPasses.Should().Contain("new Dictionary<uint, Queue<SlideShape>>()")
+            .And.Contain("new Dictionary<string, List<SlideShape>>(StringComparer.Ordinal)")
+            .And.Contain("shapesWithId.Enqueue(sourceShape)")
+            .And.Contain("unmatchedSourcesByName.Remove(key)")
+            .And.NotContain("sourceShapes.FirstOrDefault(")
+            .And.NotContain("sourceShapes.Where(");
+    }
+
+    [Fact]
     public void MorphPlanner_ByWordMatchesUniqueTextOverlapAfterIdentityPasses()
     {
         var source = new Slide();

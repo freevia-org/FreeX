@@ -185,7 +185,17 @@ public sealed class InlineTableLayoutPlan
                     widthDip + (columnIndex + 1 < columnCount ? spacingDip : 0));
             })
             .ToArray();
-        double contentWidthDip = columns.Sum(column => column.TrackWidthDip);
+        var columnTrackOffsets = new double[columnCount + 1];
+        var columnWidthPrefixes = new double[columnCount + 1];
+        for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
+        {
+            columnTrackOffsets[columnIndex + 1] =
+                columnTrackOffsets[columnIndex] + columns[columnIndex].TrackWidthDip;
+            columnWidthPrefixes[columnIndex + 1] =
+                columnWidthPrefixes[columnIndex] + columns[columnIndex].WidthDip;
+        }
+
+        double contentWidthDip = columnTrackOffsets[columnCount];
         double widthDip = Math.Max(
             MinimumColumnWidthDip,
             contentWidthDip + Math.Max(0, leftIndentDip));
@@ -199,7 +209,7 @@ public sealed class InlineTableLayoutPlan
         var baseColumnWidths = columns.Select(column => column.WidthDip).ToArray();
 
         var rows = new InlineTableRowLayout[rowCount];
-        double heightDip = 0;
+        var rowHeightPrefixes = new double[rowCount + 1];
         for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
         {
             var row = table.Rows.ElementAtOrDefault(rowIndex);
@@ -224,7 +234,8 @@ public sealed class InlineTableLayoutPlan
                 horizontal.RowWidth,
                 horizontal.Offset,
                 row?.HorizontalAlignment);
-            heightDip += resolvedHeightDip;
+            rowHeightPrefixes[rowIndex + 1] =
+                rowHeightPrefixes[rowIndex] + resolvedHeightDip;
         }
 
         var cells = new List<InlineTableCellPlacement>(logicalGrid.Cells.Count);
@@ -232,17 +243,15 @@ public sealed class InlineTableLayoutPlan
         {
             double x = leftIndentDip
                 + rows[logicalCell.RowIndex].HorizontalOffsetDip
-                + columns.Take(logicalCell.ColumnIndex).Sum(column => column.TrackWidthDip);
-            double y = rows.Take(logicalCell.RowIndex).Sum(row => row.HeightDip);
-            double cellWidthDip = columns
-                .Skip(logicalCell.ColumnIndex)
-                .Take(logicalCell.ColumnSpan)
-                .Sum(column => column.WidthDip)
+                + columnTrackOffsets[logicalCell.ColumnIndex];
+            double y = rowHeightPrefixes[logicalCell.RowIndex];
+            double cellWidthDip =
+                columnWidthPrefixes[logicalCell.ColumnIndex + logicalCell.ColumnSpan]
+                - columnWidthPrefixes[logicalCell.ColumnIndex]
                 + spacingDip * Math.Max(0, logicalCell.ColumnSpan - 1);
-            double cellHeightDip = rows
-                .Skip(logicalCell.RowIndex)
-                .Take(logicalCell.RowSpan)
-                .Sum(row => row.HeightDip);
+            double cellHeightDip =
+                rowHeightPrefixes[logicalCell.RowIndex + logicalCell.RowSpan]
+                - rowHeightPrefixes[logicalCell.RowIndex];
             cells.Add(new InlineTableCellPlacement(
                 logicalCell,
                 logicalCell.ColumnSpan,
@@ -262,7 +271,7 @@ public sealed class InlineTableLayoutPlan
             leftIndentDip,
             contentWidthDip,
             widthDip,
-            Math.Max(MinimumRowHeightDip, heightDip),
+            Math.Max(MinimumRowHeightDip, rowHeightPrefixes[rowCount]),
             effectiveAvailableWidthDip,
             table.Rows.FirstOrDefault()?.HorizontalAlignment);
     }

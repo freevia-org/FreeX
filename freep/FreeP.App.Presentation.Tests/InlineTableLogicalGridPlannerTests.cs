@@ -190,6 +190,112 @@ public sealed class InlineTableLogicalGridPlannerTests
     }
 
     [Fact]
+    public void LargeMergedGrid_PrefixMetricsMatchDirectPlacementArithmetic()
+    {
+        const int rowCount = 36;
+        const int columnCount = 48;
+        var table = Table(rowCount, columnCount);
+        table.RichTextCellSpacingPt = 3.75;
+        table.RichTextLeftIndentPt = 5.25;
+
+        for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
+            table.ColumnWidthsEmu[columnIndex] = columnIndex % 7 == 0
+                ? 0
+                : 200000 + columnIndex * 7300;
+
+        for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
+        {
+            table.Rows[rowIndex].HeightEmu = rowIndex % 9 == 0
+                ? 0
+                : 150000 + rowIndex * 4100;
+            table.Rows[rowIndex].HorizontalAlignment = (rowIndex % 3) switch
+            {
+                1 => TableRowHorizontalAlignment.Center,
+                2 => TableRowHorizontalAlignment.Right,
+                _ => TableRowHorizontalAlignment.Left,
+            };
+        }
+
+        for (int rowIndex = 0; rowIndex + 1 < rowCount; rowIndex += 4)
+        {
+            for (int columnIndex = 0; columnIndex + 2 < columnCount; columnIndex += 6)
+            {
+                table.Rows[rowIndex].Cells[columnIndex].GridSpan = 3;
+                table.Rows[rowIndex].Cells[columnIndex].RowSpan = 2;
+                table.Rows[rowIndex].Cells[columnIndex + 1].HMerge = true;
+                table.Rows[rowIndex].Cells[columnIndex + 2].HMerge = true;
+                table.Rows[rowIndex + 1].Cells[columnIndex].VMerge = true;
+                table.Rows[rowIndex + 1].Cells[columnIndex + 1].VMerge = true;
+                table.Rows[rowIndex + 1].Cells[columnIndex + 2].VMerge = true;
+            }
+        }
+
+        var layout = InlineTableLogicalGridPlan.CreateLayout(
+            table,
+            availableWidthDip: 1800);
+
+        layout.Cells.Should().Contain(cell => cell.ColumnSpan == 3 && cell.RowSpan == 2);
+        foreach (var cell in layout.Cells)
+        {
+            double expectedX = layout.LeftIndentDip + layout.Rows[cell.RowIndex].HorizontalOffsetDip;
+            for (int columnIndex = 0; columnIndex < cell.ColumnIndex; columnIndex++)
+                expectedX += layout.Columns[columnIndex].TrackWidthDip;
+
+            double expectedY = 0;
+            for (int rowIndex = 0; rowIndex < cell.RowIndex; rowIndex++)
+                expectedY += layout.Rows[rowIndex].HeightDip;
+
+            double expectedWidth = layout.CellSpacingDip * Math.Max(0, cell.ColumnSpan - 1);
+            for (int columnIndex = cell.ColumnIndex;
+                 columnIndex < cell.ColumnIndex + cell.ColumnSpan;
+                 columnIndex++)
+            {
+                expectedWidth += layout.Columns[columnIndex].WidthDip;
+            }
+
+            double expectedHeight = 0;
+            for (int rowIndex = cell.RowIndex;
+                 rowIndex < cell.RowIndex + cell.RowSpan;
+                 rowIndex++)
+            {
+                expectedHeight += layout.Rows[rowIndex].HeightDip;
+            }
+
+            cell.Bounds.X.Should().BeApproximately(expectedX, 1e-9);
+            cell.Bounds.Y.Should().BeApproximately(expectedY, 1e-9);
+            cell.Bounds.Width.Should().BeApproximately(expectedWidth, 1e-9);
+            cell.Bounds.Height.Should().BeApproximately(expectedHeight, 1e-9);
+        }
+    }
+
+    [Fact]
+    public void LayoutPlacement_SourceGuard_KeepsPrefixBasedConstantTimeCellArithmetic()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Presentation", "InlineTableLogicalGridPlanner.cs");
+        int start = source.IndexOf(
+            "internal static InlineTableLayoutPlan Create(",
+            StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        int end = source.IndexOf("private static double Sanitize(", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+
+        var method = source[start..end];
+        method.Should().Contain("var columnTrackOffsets = new double[columnCount + 1]")
+            .And.Contain("var columnWidthPrefixes = new double[columnCount + 1]")
+            .And.Contain("var rowHeightPrefixes = new double[rowCount + 1]")
+            .And.Contain("columnTrackOffsets[logicalCell.ColumnIndex]")
+            .And.Contain("columnWidthPrefixes[logicalCell.ColumnIndex + logicalCell.ColumnSpan]")
+            .And.Contain("spacingDip * Math.Max(0, logicalCell.ColumnSpan - 1)")
+            .And.Contain("rowHeightPrefixes[logicalCell.RowIndex + logicalCell.RowSpan]")
+            .And.NotContain("columns.Take(")
+            .And.NotContain("columns.Skip(")
+            .And.NotContain("rows.Take(")
+            .And.NotContain("rows.Skip(")
+            .And.NotContain(".Sum(");
+    }
+
+    [Fact]
     public void RendererAdapters_ConsumeSharedLayoutWithoutOwningSpanArithmetic()
     {
         var wpf = TestWorkspaceFileLocator.ReadAllText(

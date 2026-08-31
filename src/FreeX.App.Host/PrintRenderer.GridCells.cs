@@ -178,7 +178,8 @@ public static partial class PrintRenderer
                         rightWinner,
                         isMergeAnchor,
                         diagonalWidth,
-                        diagonalHeight);
+                        diagonalHeight,
+                        workbook.Theme);
                 }
             }
         }
@@ -861,23 +862,38 @@ public static partial class PrintRenderer
         CellBorder rightBorder,
         bool drawDiagonal,
         double diagonalWidth,
-        double diagonalHeight)
+        double diagonalHeight,
+        WorkbookTheme theme)
     {
         if (!suppressTop)
-            DrawPrintedBorderEdge(dc, topBorder, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), blackAndWhite);
+            DrawPrintedBorderEdge(dc, topBorder, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), theme, blackAndWhite);
         if (!suppressBottom)
-            DrawPrintedBorderEdge(dc, bottomBorder, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), blackAndWhite);
+            DrawPrintedBorderEdge(dc, bottomBorder, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), theme, blackAndWhite);
         if (!suppressLeft)
-            DrawPrintedBorderEdge(dc, leftBorder, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), blackAndWhite);
+            DrawPrintedBorderEdge(dc, leftBorder, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), theme, blackAndWhite);
         if (!suppressRight)
-            DrawPrintedBorderEdge(dc, rightBorder, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), blackAndWhite);
+            DrawPrintedBorderEdge(dc, rightBorder, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), theme, blackAndWhite);
         if (drawDiagonal && style.BorderDiagonalDown.Style != BorderStyle.None)
-            DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Left + diagonalWidth, rect.Top + diagonalHeight), blackAndWhite);
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Left + diagonalWidth, rect.Top + diagonalHeight), theme, blackAndWhite);
         if (drawDiagonal && style.BorderDiagonalUp.Style != BorderStyle.None)
-            DrawPrintedBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Top + diagonalHeight), new Point(rect.Left + diagonalWidth, rect.Top), blackAndWhite);
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Top + diagonalHeight), new Point(rect.Left + diagonalWidth, rect.Top), theme, blackAndWhite);
     }
 
-    private static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2, bool blackAndWhite = false)
+    private static SolidColorBrush BrushForResolvedBorderColor(CellColor color)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+        brush.Freeze();
+        return brush;
+    }
+
+    /// <summary>
+    /// freex-theme-border-color-F1: a theme-backed edge (CellBorder.ThemeColor, e.g. Accent1) must
+    /// re-resolve against the workbook's CURRENT theme, exactly like the fill/font colors this same
+    /// print pass already resolve (DrawPrintedCellFill / ResolvePrintedTextBrush). Reading border.Color
+    /// raw printed the color baked in at load time, so a theme change recolored every printed fill and
+    /// font but left the borders on the old palette.
+    /// </summary>
+    private static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2, WorkbookTheme theme, bool blackAndWhite = false)
     {
         if (border.Style == BorderStyle.None) return;
 
@@ -905,7 +921,7 @@ public static partial class PrintRenderer
         // its authored color.
         var borderBrush = blackAndWhite
             ? Brushes.Black
-            : new SolidColorBrush(Color.FromRgb(border.Color.R, border.Color.G, border.Color.B));
+            : BrushForResolvedBorderColor(border.ResolveColor(theme));
         var pen = new Pen(borderBrush, thickness)
         {
             DashStyle = dash

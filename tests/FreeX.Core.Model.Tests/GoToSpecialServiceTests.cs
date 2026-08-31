@@ -428,6 +428,54 @@ public sealed class GoToSpecialServiceTests
             .Equal(expected);
     }
 
+    [Fact]
+    public void FindRuleBackedKinds_MatchingActiveCellReusesIndexedRangeSearch()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var activeCell = new CellAddress(sheet.Id, 1, 1);
+        var range = Range(sheet, 1, 1, 1, 16);
+        var expected = Enumerable.Range(1, 9)
+            .Select(col => new CellAddress(sheet.Id, 1, (uint)col))
+            .ToArray();
+
+        for (uint endCol = 2; endCol <= 9; endCol++)
+        {
+            sheet.ConditionalFormats.Add(new ConditionalFormat
+            {
+                AppliesTo = Range(sheet, 1, 1, 1, endCol),
+                RuleType = CfRuleType.Formula
+            });
+
+            var validation = new DataValidation
+            {
+                AppliesTo = Range(sheet, 1, endCol, 1, endCol),
+                Type = DvType.WholeNumber
+            };
+            validation.AdditionalRanges.Add(new GridRange(activeCell, activeCell));
+            sheet.DataValidations.Add(validation);
+        }
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 1, 16, 1, 16),
+            RuleType = CfRuleType.Formula
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, 1, 16, 1, 16),
+            Type = DvType.WholeNumber
+        });
+
+        var options = new GoToSpecialOptions(MatchActiveCellRuleOnly: true);
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.ConditionalFormats, activeCell, options)
+            .Should()
+            .Equal(expected);
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.DataValidation, activeCell, options)
+            .Should()
+            .Equal(expected);
+    }
+
     [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_FindConditionalFormatsManyRules_ReportsTimingAndAllocatedBytes()
@@ -490,6 +538,61 @@ public sealed class GoToSpecialServiceTests
         WritePerfLine(
             $"PERF GOTO_SPECIAL_DATA_VALIDATION_RANGE_LOOKUP rows={rows} cols={cols} rules={rules} steps=5 total_ms={elapsed.TotalMilliseconds:F2} allocated_bytes={allocated} matches={count}");
         count.Should().Be(rules);
+    }
+
+    [BenchmarkFact]
+    [Trait("Category", "Benchmark")]
+    public void Benchmark_FindRuleBackedKindsMatchingActiveCellManyRules_ReportsTimingAndAllocatedBytes()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        const uint rows = 200;
+        const uint cols = 200;
+        const int rules = 400;
+        var activeCell = new CellAddress(sheet.Id, 1, 1);
+        var activeRange = new GridRange(activeCell, activeCell);
+        var searchRange = Range(sheet, 1, 1, rows, cols);
+
+        for (var i = 0; i < rules; i++)
+        {
+            sheet.ConditionalFormats.Add(new ConditionalFormat
+            {
+                AppliesTo = activeRange,
+                RuleType = CfRuleType.Formula
+            });
+            sheet.DataValidations.Add(new DataValidation
+            {
+                AppliesTo = activeRange,
+                Type = DvType.WholeNumber
+            });
+        }
+
+        var options = new GoToSpecialOptions(MatchActiveCellRuleOnly: true);
+        var conditionalFormats = MeasureFind(
+            () => GoToSpecialService.Find(
+                sheet,
+                searchRange,
+                GoToSpecialKind.ConditionalFormats,
+                activeCell,
+                options),
+            iterations: 5);
+        var dataValidations = MeasureFind(
+            () => GoToSpecialService.Find(
+                sheet,
+                searchRange,
+                GoToSpecialKind.DataValidation,
+                activeCell,
+                options),
+            iterations: 5);
+
+        WritePerfLine(
+            $"PERF GOTO_SPECIAL_ACTIVE_RULE_RANGE_LOOKUP rows={rows} cols={cols} rules={rules} steps=5 " +
+            $"conditional_ms={conditionalFormats.Elapsed.TotalMilliseconds:F2} " +
+            $"conditional_allocated_bytes={conditionalFormats.Allocated} " +
+            $"validation_ms={dataValidations.Elapsed.TotalMilliseconds:F2} " +
+            $"validation_allocated_bytes={dataValidations.Allocated}");
+        conditionalFormats.Count.Should().Be(1);
+        dataValidations.Count.Should().Be(1);
     }
 
     [BenchmarkFact]

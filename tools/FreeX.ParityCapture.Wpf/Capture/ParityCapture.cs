@@ -492,7 +492,7 @@ internal static class ParityCapture
             if (string.Equals(targetSurfaceId, "dialog.FormatCells", StringComparison.Ordinal))
             {
                 CaptureDialogTabs(results, "dialog.FormatCells", outDir,
-                    () => new FormatCellsDialog(CellStyle.Default, FormatCellsDialogTab.Number),
+                    () => new FormatCellsDialog(CellStyle.Default, WorkbookTheme.Office, FormatCellsDialogTab.Number),
                     ["Number", "Alignment", "Font", "Border", "Fill", "Protection"]);
             }
             else if (string.Equals(targetSurfaceId, "dialog.AccessibilityChecker", StringComparison.Ordinal))
@@ -614,7 +614,7 @@ internal static class ParityCapture
         }
 
         CaptureDialogTabs(results, "dialog.FormatCells", outDir,
-            () => new FormatCellsDialog(CellStyle.Default, FormatCellsDialogTab.Number),
+            () => new FormatCellsDialog(CellStyle.Default, WorkbookTheme.Office, FormatCellsDialogTab.Number),
             ["Number", "Alignment", "Font", "Border", "Fill", "Protection"]);
 
         CaptureDialogTabs(results, "dialog.FindReplace", outDir,

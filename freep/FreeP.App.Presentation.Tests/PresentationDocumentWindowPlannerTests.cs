@@ -5,6 +5,15 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class PresentationDocumentWindowPlannerTests
 {
+    // r174-shared-protection-readonly (FreeP host wiring): the title marker both FreeP shells
+    // compose for a source file that cannot be written back to, pinned to the same text FreeW and
+    // FreeX use so the sister apps read identically.
+    [Theory]
+    [InlineData(true, " [Read-Only]")]
+    [InlineData(false, "")]
+    public void FormatReadOnlySuffix_MarksOnlyAReadOnlySource(bool isReadOnly, string expected) =>
+        PresentationDocumentWindowPlanner.FormatReadOnlySuffix(isReadOnly).Should().Be(expected);
+
     [Fact]
     public void CreateNext_round_trips_an_independent_presentation_snapshot_and_file_state()
     {

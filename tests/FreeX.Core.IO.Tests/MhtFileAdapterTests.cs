@@ -40,6 +40,19 @@ public sealed class MhtFileAdapterTests
         return new MhtFileAdapter().Load(stream);
     }
 
+    private static byte[] BuildQuotedPrintableMht(string html) =>
+        Encoding.UTF8.GetBytes(string.Join("\r\n",
+            "MIME-Version: 1.0",
+            "Content-Type: multipart/related; boundary=FreeXBoundary",
+            "",
+            "--FreeXBoundary",
+            "Content-Type: text/html; charset=utf-8",
+            "Content-Transfer-Encoding: quoted-printable",
+            "",
+            html,
+            "--FreeXBoundary--",
+            ""));
+
     // ---- descriptor tests ------------------------------------------------------------------------
 
     [Fact]
@@ -204,6 +217,49 @@ public sealed class MhtFileAdapterTests
         var act = () => Load(bytes);
 
         act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Load_QuotedPrintableDecodesHexSoftBreaksAndLiteralSurrogatePairs()
+    {
+        var html = "<table><tr><td>R=C3=A9su=\r\nm=C3=A9 =E2=82=AC 😀</td></tr></table>";
+        var loaded = Load(BuildQuotedPrintableMht(html));
+        var sheet = loaded.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(new TextValue("Résumé € 😀"));
+    }
+
+    [Fact]
+    public void Load_QuotedPrintableLargeLiteralUnicodeHasBoundedAllocation()
+    {
+        var literal = new string('é', 100_000);
+        var mht = BuildQuotedPrintableMht($"<table><tr><td>{literal}</td></tr></table>");
+        Load(mht).Sheets.Single().GetValue(1, 1).Should().Be(new TextValue(literal));
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var loaded = Load(mht);
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        loaded.Sheets.Single().GetValue(1, 1).Should().Be(new TextValue(literal));
+        allocatedBytes.Should().BeLessThan(
+            4_000_000,
+            "literal Unicode should be UTF-8 encoded in spans instead of allocating arrays per character");
+        Console.WriteLine($"MHT quoted-printable literal Unicode allocated {allocatedBytes:N0} bytes.");
+    }
+
+    [Fact]
+    public void Load_QuotedPrintableSourceGuardBatchesLiteralUtf8Encoding()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoSource("MhtFileAdapter.cs");
+
+        source.Should().Contain("AppendUtf8(bytes, body.AsSpan(literalStart, i - literalStart));");
+        source.Should().Contain("body.AsSpan(i + 1, 2)");
+        source.Should().NotContain("Encoding.UTF8.GetBytes(new[] { c })");
+        source.Should().NotContain("body.Substring(i + 1, 2)");
     }
 
     // ---- Determinism -------------------------------------------------------------------------

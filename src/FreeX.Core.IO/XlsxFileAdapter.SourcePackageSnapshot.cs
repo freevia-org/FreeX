@@ -132,6 +132,24 @@ public sealed partial class XlsxFileAdapter
         return Convert.ToHexString(hash.Hash ?? []);
     }
 
+    /// <summary>
+    /// A drawing object hyperlink participates in the patch-safety fingerprint.
+    ///
+    /// <para>The row/column shift rewrites "Place in This Document" hyperlinks on shapes, pictures,
+    /// text boxes and charts, which makes the Hyperlink field mutable from a command that does not
+    /// force a full save. This fingerprint decides whether a cell-patch save may reuse the source
+    /// package's drawing parts verbatim, so a field it does not compare is a field whose change gets
+    /// silently thrown away. R101_DrawingChartHyperlinkPatchSafetyGuardTests exists to catch exactly
+    /// that, and it caught this.</para>
+    /// </summary>
+    private static void WriteDrawingObjectHyperlinkFingerprint(Stream stream, DrawingObjectHyperlink? hyperlink)
+    {
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintString(stream, hyperlink?.Target);
+        WriteFingerprintString(stream, hyperlink?.TargetMode);
+        WriteFingerprintString(stream, hyperlink?.Tooltip);
+    }
+
     private static void WriteDrawingChartFingerprint(Stream stream, ChartModel chart)
     {
         WriteFingerprintString(stream, chart.Name);
@@ -153,6 +171,7 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintNumber(stream, chart.Height);
         WriteFingerprintToken(stream, "\t");
         WriteFingerprintNumber(stream, (int)chart.DrawingAnchorKind);
+        WriteDrawingObjectHyperlinkFingerprint(stream, chart.Hyperlink);
         WriteFingerprintToken(stream, "\n");
     }
 
@@ -191,6 +210,7 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintNumber(stream, picture.CropRight);
         WriteFingerprintToken(stream, "\t");
         WriteFingerprintNumber(stream, picture.CropBottom);
+        WriteDrawingObjectHyperlinkFingerprint(stream, picture.Hyperlink);
         WriteFingerprintToken(stream, "\n");
     }
 
@@ -222,6 +242,7 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintNullableColor(stream, textBox.OutlineColor);
         WriteFingerprintNullableThemeColor(stream, textBox.FillThemeColor);
         WriteFingerprintNullableThemeColor(stream, textBox.OutlineThemeColor);
+        WriteDrawingObjectHyperlinkFingerprint(stream, textBox.Hyperlink);
         WriteFingerprintToken(stream, "\n");
     }
 
@@ -260,6 +281,7 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintNumber(stream, shape.OutlineWidthPoints);
         WriteFingerprintBoolean(stream, shape.OutlineHasNoFill);
         WriteFingerprintNumber(stream, (int)shape.OutlineDash);
+        WriteDrawingObjectHyperlinkFingerprint(stream, shape.Hyperlink);
         WriteFingerprintToken(stream, "\n");
     }
 

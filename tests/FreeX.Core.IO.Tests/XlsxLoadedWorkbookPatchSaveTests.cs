@@ -256,6 +256,15 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     public void Save_LoadedWorkbookWithRichDataGraph_PreservesRichDataPartsRelationshipsAndContentTypes()
     {
         var sourceBytes = AddRichDataPackageParts(CreateSourcePackage());
+        using (var inspectionSource = new MemoryStream(sourceBytes, writable: false))
+        {
+            XlsxFeatureInspector.Inspect(inspectionSource).Features
+                .Select(feature => feature.Kind)
+                .Should()
+                .NotContain(
+                    XlsxUnsupportedFeatureKind.LinkedDataTypes,
+                    "the preserved rich-data graph describes Excel local images, not service-linked data types");
+        }
         var adapter = new XlsxFileAdapter();
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))

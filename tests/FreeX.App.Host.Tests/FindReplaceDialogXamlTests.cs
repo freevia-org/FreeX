@@ -496,7 +496,7 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("FindReplaceTabs.SelectedItem = ReplaceTab");
         source.Should().Contain("CreateFindOptions()");
         source.Should().Contain("requiredFormat: _findFormatDiff");
-        source.Should().Contain("new FormatCellsDialog(baseStyle, FormatCellsDialogTab.Font)");
+        source.Should().Contain("new FormatCellsDialog(baseStyle, _getWorkbook().Theme, FormatCellsDialogTab.Font)");
         source.Should().Contain("FindFormatButton_Click");
         source.Should().Contain("ReplaceWithFormatButton_Click");
         source.Should().Contain("ChooseFindFormatFromCellButton_Click");

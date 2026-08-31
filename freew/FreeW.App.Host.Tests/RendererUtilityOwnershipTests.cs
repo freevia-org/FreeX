@@ -111,7 +111,8 @@ public sealed class RendererUtilityOwnershipTests
         avaloniaFileWorkflow.Should().Contain("string GroupSuffix = \"\"");
         avaloniaFileWorkflow.Should().Contain("public void ApplyDocumentState(");
         avaloniaFileWorkflow.Should().Contain("windowSuffix: _titleSpec.WindowSuffix");
-        avaloniaFileWorkflow.Should().Contain("groupSuffix: _titleSpec.GroupSuffix");
+        avaloniaFileWorkflow.Should().Contain(
+            "groupSuffix: _groupSuffixProvider?.Invoke() ?? _titleSpec.GroupSuffix");
     }
 
     private static string ReadSource(params string[] relativePath)

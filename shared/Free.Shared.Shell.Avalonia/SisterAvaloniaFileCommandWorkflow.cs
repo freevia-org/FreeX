@@ -44,6 +44,7 @@ public sealed class SisterAvaloniaFileCommandWorkflow
     private readonly Func<Task<bool>> _saveAsync;
     private readonly Func<string, Exception, Task> _showFileCommandErrorAsync;
     private readonly Action? _restoreOwnerFocus;
+    private readonly Func<string>? _groupSuffixProvider;
     private readonly SemaphoreSlim _destructiveActionGate = new(1, 1);
     private readonly IUserMessageService _messageService;
 
@@ -58,7 +59,14 @@ public sealed class SisterAvaloniaFileCommandWorkflow
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
         Func<string, Exception, Task>? showFileCommandErrorAsync = null,
         Action? restoreOwnerFocus = null,
-        IUserMessageService? messageService = null)
+        IUserMessageService? messageService = null,
+        // r174-shared-protection-readonly: the group-suffix slot of the title has to be able to
+        // change while a window lives (a read-only source marker appears on open and disappears on
+        // Save-As), which the captured titleSpec.GroupSuffix cannot express. When supplied, this is
+        // queried on every title refresh instead. It is invoked from the constructor's own
+        // RefreshTitle, so an app whose state object is built AFTER this workflow must tolerate
+        // that (see FreeP's MainWindow.IsCurrentPresentationReadOnly).
+        Func<string>? groupSuffixProvider = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(titleSpec);
@@ -77,6 +85,7 @@ public sealed class SisterAvaloniaFileCommandWorkflow
         _saveAsync = saveAsync ?? (() => Task.FromResult(save!()));
         _showFileCommandErrorAsync = showFileCommandErrorAsync ?? ShowFileCommandErrorCoreAsync;
         _restoreOwnerFocus = restoreOwnerFocus;
+        _groupSuffixProvider = groupSuffixProvider;
         _messageService = messageService ?? new AvaloniaUserMessageService(owner);
         _workflow = new FileCommandWorkflow(
             maxRecentEntries,
@@ -195,7 +204,7 @@ public sealed class SisterAvaloniaFileCommandWorkflow
             ResolveDocumentDisplayName(),
             _workflow.IsDirty,
             windowSuffix: _titleSpec.WindowSuffix,
-            groupSuffix: _titleSpec.GroupSuffix,
+            groupSuffix: _groupSuffixProvider?.Invoke() ?? _titleSpec.GroupSuffix,
             isDefaultDocument: _workflow.CurrentPath is null);
 
     private SaveChangesPrompt PromptSaveChangesSync(string action) =>

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Xml.Linq;
@@ -531,6 +532,45 @@ public class SmartArtRoundTripTests
                 "{4F4B0000-0000-4000-8000-000000009018}");
         drawing.Descendants(A + "t").Select(t => t.Value)
             .Should().Contain(["CEO", "VP Eng", "Lead", "VP Sales"]);
+    }
+
+    [Fact]
+    public void Hierarchy_RenderedDrawing_DenseWideTreeKeepsPreorderShapesAndSequentialIds()
+    {
+        const int childCount = 1_000;
+        var root = new SmartArtNode("Root");
+        for (var index = 0; index < childCount; index++)
+            root.AddChild("Child " + index);
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.Nodes.Add(root);
+
+        var drawing = EntryXml(
+            WriteBytes(SingleDiagramDocument(smartArt)),
+            "word/diagrams/drawing1.xml");
+        var shapes = drawing.Descendants(Dsp + "sp").ToList();
+
+        shapes.Should().HaveCount(1 + childCount * 2,
+            "every child contributes one connector and one text shape in addition to the root shape");
+        shapes.Select(shape => int.Parse(
+                shape.Element(Dsp + "nvSpPr")!.Element(Dsp + "cNvPr")!.Attribute("id")!.Value,
+                CultureInfo.InvariantCulture))
+            .Should().Equal(Enumerable.Range(1, shapes.Count));
+        shapes.Where(shape => shape.Descendants(A + "t").Any())
+            .Select(shape => shape.Descendants(A + "t").Single().Value)
+            .Should().Equal(["Root", .. Enumerable.Range(0, childCount).Select(index => "Child " + index)]);
+    }
+
+    [Fact]
+    public void Hierarchy_RenderedDrawing_SourceGuardKeepsLinearLayoutIndexes()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.IO", "DocxWriter.cs");
+
+        source.Should().Contain("parentIndexes.Add(parentIndex);")
+            .And.Contain("nodeCountsByDepth[depth] = nodeCountsByDepth.GetValueOrDefault(depth) + 1;")
+            .And.Contain("new XAttribute(\"id\", nextCachedShapeId++)")
+            .And.NotContain("nodes.FindIndex(candidate => candidate.Node.Children.Contains(nodes[i].Node))")
+            .And.NotContain("var siblings = nodes.Select((item, index)")
+            .And.NotContain("spTree.Elements(Dsp + \"sp\").Count() + 1");
     }
 
     [Fact]
