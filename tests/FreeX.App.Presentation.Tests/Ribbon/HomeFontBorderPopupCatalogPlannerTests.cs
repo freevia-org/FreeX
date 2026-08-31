@@ -55,12 +55,15 @@ public sealed class HomeFontBorderPopupCatalogPlannerTests
                 ("Red", "#FF0000"),
                 ("Green", "#008000"),
                 ("Blue", "#0000FF"),
-                // NOTE: the FONT color swatches still carry the legacy Office 2013-2021 accents and are
-                // not theme-linked -- unlike the BORDER line-color swatches above, which now follow the
-                // workbook theme (freex-border-accent-swatch-F1). Same gap, different picker; untouched
-                // here deliberately rather than silently changed.
-                ("Accent 1", "#4472C4"),
-                ("Accent 2", "#ED7D31"));
+                // Default-theme accents. Unlike the BORDER line-color swatches -- which are painted by
+                // BorderMenuIcon and therefore had to start following the live theme
+                // (freex-border-accent-swatch-F1) -- these font values are catalog metadata only:
+                // FontColorPopupGroups consumes just the Label, the declarative ribbon renders Font
+                // Color as a single icon with no swatch bar, and the real gallery comes from
+                // CellColorPalettePlanner.BuildThemePalette(workbook theme). Pinned here so the catalog
+                // cannot silently drift back to a palette that matches neither the theme nor the gallery.
+                ("Accent 1", "#156082"),
+                ("Accent 2", "#E97132"));
 
         HomeFontBorderPopupCatalogPlanner.FontColorSwatches
             .Where(swatch => swatch.Label.StartsWith("Accent ", StringComparison.Ordinal))
