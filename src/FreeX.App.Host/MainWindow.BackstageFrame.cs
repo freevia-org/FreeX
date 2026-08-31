@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell;
@@ -29,9 +30,15 @@ public partial class MainWindow
 
     private void InitializeBackstageFrame()
     {
-        var backstageTheme = SisterBackstageTheme.FromTheme(App.ActiveTheme, tileWidth: 150, tileHeight: 190);
         var frame = BackstageFrameComposer.Build(new BackstageFrameComposerSpec(
-            backstageTheme.Accent,
+            // Excel's File screen uses a quiet neutral rail. Keep FreeX's workbook accent inside the
+            // content panes, while this frame uses dense, readable chrome that does not compete with them.
+            new BackstageAccent(
+                Sidebar: Color.FromRgb(0xF3, 0xF4, 0xF6),
+                Hover: Color.FromRgb(0xE5, 0xE9, 0xED),
+                Selected: Color.FromRgb(0xD8, 0xE5, 0xE9),
+                Separator: Color.FromRgb(0xD7, 0xDC, 0xE2),
+                Foreground: Color.FromRgb(0x24, 0x2A, 0x31)),
             BuildBackstageEntries())
         {
             // FreeX's panes (SsHomeView/SsInfoView/SsPrintView) carry their own internal padding, so drop

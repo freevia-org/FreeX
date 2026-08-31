@@ -43,6 +43,45 @@ public sealed class BackstageRecentFileListPlannerTests
     }
 
     [Fact]
+    public void Build_CompactsDeepDisplayDirectoryButKeepsFullDirectorySearchable()
+    {
+        const string path = @"C:\Users\quinn\Documents\GitHub\FreeX\.worktrees\ux-parity-foreground-20260823\tools\ux-parity-runs\20260831-160540\freex-workbook.xlsx";
+        var entries = new[]
+        {
+            new RecentFileEntry { Path = path, LastOpened = DateTimeOffset.UtcNow }
+        };
+
+        var item = BackstageRecentFileListPlanner.Build(entries, filter: null).RecentItems.Single();
+
+        item.Directory.Should().Be(Path.GetDirectoryName(path));
+        item.DisplayDirectory.Should().Be(@"C:\…\tools\ux-parity-runs\20260831-160540");
+        BackstageRecentFileListPlanner.Build(entries, "ux-parity-foreground-20260823")
+            .RecentItems.Should().ContainSingle("filtering must continue to use the unabridged directory");
+    }
+
+    [Fact]
+    public void Build_CompactsDeepUncDisplayDirectoryWithoutHidingServerAndShare()
+    {
+        const string path = @"\\fileserver\workbooks\Finance\Forecasting\Quarterly\North America\FY2026\forecast.xlsx";
+
+        var item = BackstageRecentFileListPlanner.Build(
+            [new RecentFileEntry { Path = path, LastOpened = DateTimeOffset.UtcNow }],
+            filter: null).RecentItems.Single();
+
+        item.DisplayDirectory.Should().Be(@"\\fileserver\workbooks\…\Quarterly\North America\FY2026");
+    }
+
+    [Fact]
+    public void Build_LeavesShortDisplayDirectoryUnchanged()
+    {
+        var item = BackstageRecentFileListPlanner.Build(
+            [new RecentFileEntry { Path = @"C:\Work\Budget.xlsx", LastOpened = DateTimeOffset.UtcNow }],
+            filter: null).RecentItems.Single();
+
+        item.DisplayDirectory.Should().Be(@"C:\Work");
+    }
+
+    [Fact]
     public void Build_SortsRecentAndPinnedItemsNewestFirst()
     {
         var now = DateTimeOffset.UtcNow;
