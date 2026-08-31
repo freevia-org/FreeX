@@ -643,4 +643,25 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             ".ToList()",
             "order normalization should only copy child elements after it detects out-of-order native payloads");
     }
+
+    [Fact]
+    public void DeferredChartExReader_IndexesFirstOrdinalDataEntryOncePerChart()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxChartPartReader.Deferred.cs");
+        var readerStart = source.IndexOf("    private static bool TryReadDeferredAdvancedChart(", StringComparison.Ordinal);
+        var orientationStart = source.IndexOf("    private static bool DetectDeferredSeriesInRows(", StringComparison.Ordinal);
+        var lookupStart = source.IndexOf("    private sealed class ChartExDataLookup", StringComparison.Ordinal);
+        var firstChildStart = source.IndexOf("    private static XElement? FirstChildElementByLocalName", StringComparison.Ordinal);
+        var reader = source[readerStart..orientationStart];
+        var lookup = source[lookupStart..firstChildStart];
+
+        reader.Should().Contain("var chartExDataLookup = chartExSeries.Length > 0 ? ChartExDataLookup.Create(chartXml) : null;")
+            .And.NotContain("FindChartExData(",
+                "each chartEx series must reuse the per-chart data index rather than rescan the XML document");
+        lookup.Should().Contain("new Dictionary<string, XElement>(StringComparer.Ordinal)")
+            .And.Contain("dataById.TryAdd(dataId, element)",
+                "first duplicate IDs must preserve the former document-order lookup result")
+            .And.NotContain("FindChartExData(",
+                "the old per-dataId full-document scan should be removed after indexing");
+    }
 }
