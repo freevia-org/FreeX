@@ -89,6 +89,29 @@ public sealed class PptxPackageReaderSourceTests
     }
 
     [Fact]
+    public void MediaTiming_IndexesTheShapeTreeOnceWithDepthFirstFirstWinsSemantics()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.Core.IO",
+            "PptxPackageReader.cs"));
+        var reader = ExtractMethod(source, "private static void ReadMediaPlaybackStartModes(");
+        var indexer = ExtractMethod(source, "private static Dictionary<uint, SlideShape> IndexShapesById(");
+
+        reader.Should()
+            .Contain("Dictionary<uint, SlideShape>? shapesById = null;")
+            .And.Contain("shapesById ??= IndexShapesById(slide.Shapes);")
+            .And.Contain("shapesById.TryGetValue(shapeId, out var shape)")
+            .And.NotContain("FindShapeRecursive(");
+        indexer.Should().Contain("AddShapesById(shapes, shapesById)");
+        ExtractMethod(source, "private static void AddShapesById(").Should()
+            .Contain("shapesById.TryAdd(shape.Id, shape)")
+            .And.Contain("AddShapesById(shape.Children, shapesById)");
+        source.Should().NotContain("private static SlideShape? FindShapeRecursive(");
+    }
+
+    [Fact]
     public void SlideCatalog_IndexesNumericIdsOnceWithFirstCaseInsensitiveMatch()
     {
         var source = File.ReadAllText(Path.Combine(

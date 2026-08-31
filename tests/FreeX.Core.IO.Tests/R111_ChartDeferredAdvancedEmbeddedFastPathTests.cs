@@ -25,6 +25,7 @@ namespace FreeX.Core.IO.Tests;
 public sealed class R111_ChartDeferredAdvancedEmbeddedFastPathTests
 {
     private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace ChartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
 
     // ---------------------------------------------------------------------------------------------
     // Direct reader-seam evidence (real parser entry point TryReadSupportedChart, hand-authored
@@ -203,6 +204,43 @@ public sealed class R111_ChartDeferredAdvancedEmbeddedFastPathTests
         series0.SeriesName.Should().Be("Region");
         series0.Categories.Should().Equal("North", "South");
         series0.Values.Should().Equal(12.0, 27.0);
+    }
+
+    [Fact]
+    public void ChartExSeriesShape_DenseDataIds_UsesFirstDuplicateDataEntryForEverySeries()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartData = new XElement(ChartExNs + "chartData");
+        var plotAreaRegion = new XElement(ChartExNs + "plotAreaRegion");
+        for (var i = 0; i < 48; i++)
+        {
+            var dataId = i.ToString();
+            chartData.Add(CreateChartExData(dataId, "'Data'!rngValues", i));
+            plotAreaRegion.Add(new XElement(
+                ChartExNs + "series",
+                new XAttribute("layoutId", "waterfall"),
+                new XElement(ChartExNs + "dataId", new XAttribute("val", dataId))));
+        }
+
+        // The legacy scan selected the first document-order <cx:data id="0">. The index must
+        // retain that duplicate precedence while removing every per-series XML traversal.
+        chartData.Add(CreateChartExData("0", "'Data'!duplicate", 999));
+        var chartXml = new XDocument(
+            new XElement(
+                ChartExNs + "chartSpace",
+                chartData,
+                new XElement(
+                    ChartExNs + "chart",
+                    new XElement(ChartExNs + "plotArea", plotAreaRegion))));
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart).Should().BeTrue();
+
+        chart.Type.Should().Be(ChartType.Waterfall);
+        chart.EmbeddedSeriesData.Should().NotBeNull().And.HaveCount(48);
+        chart.EmbeddedSeriesData![0].Values.Should().Equal(0.0);
+        chart.EmbeddedSeriesData[47].Values.Should().Equal(47.0);
+        chart.VerbatimSeriesFormulas.Should().NotBeNull().And.HaveCount(48);
+        chart.VerbatimSeriesFormulas![0].ValFormula.Should().Be("'Data'!rngValues");
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -456,4 +494,17 @@ public sealed class R111_ChartDeferredAdvancedEmbeddedFastPathTests
 
         return stream.ToArray();
     }
+
+    private static XElement CreateChartExData(string dataId, string formula, int value) =>
+        new(
+            ChartExNs + "data",
+            new XAttribute("id", dataId),
+            new XElement(
+                ChartExNs + "numDim",
+                new XAttribute("type", "val"),
+                new XElement(ChartExNs + "f", formula),
+                new XElement(
+                    ChartExNs + "lvl",
+                    new XAttribute("ptCount", "1"),
+                    new XElement(ChartExNs + "pt", new XAttribute("idx", "0"), value))));
 }
