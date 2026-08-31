@@ -17091,7 +17091,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (border is { } b && b.Style != BorderStyle.None)
             {
                 SetEdgeStyle(styleBox, b.Style);
-                colorBox.SelectColor(b.Color);
+                // freex-theme-border-color-F1 (Avalonia dialog parity with the WPF Border tab): show the
+                // colour the grid is actually painting, not the RGB baked in at load time. Write-back
+                // stays safe because ReadBorderSide compares against the seeded BOX value, so an
+                // untouched edge still yields null and keeps its CellBorder.ThemeColor link.
+                colorBox.SelectColor(b.ResolveColor(_session.Workbook.Theme));
                 toggle.IsChecked = true;
             }
             else

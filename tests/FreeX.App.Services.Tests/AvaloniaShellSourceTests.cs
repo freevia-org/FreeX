@@ -6074,6 +6074,28 @@ public sealed class AvaloniaShellSourceTests
         foreach (var marker in expectedMarkers)
             catalogSource.Should().Contain(marker);
     }
+
+    /// <summary>
+    /// freex-theme-border-color-F1 (Avalonia Format Cells parity): the Border tab must seed each edge's
+    /// colour box from the THEME-RESOLVED colour, matching the WPF dialog's PopulateBorder, so a
+    /// theme-backed edge shows what the grid paints rather than the RGB baked in at load time.
+    ///
+    /// The companion guard is ReadBorderSide: it compares the live box against the value that was
+    /// SEEDED into that same box, so an untouched edge still returns null and the CellBorder.ThemeColor
+    /// link survives OK. Reading the model's baked b.Color here instead would reintroduce the stale
+    /// display; dropping the seeded-comparison guard would reintroduce the silent unlink.
+    /// </summary>
+    [Fact]
+    public void MainWindow_FormatCellsBorderTabSeedsEdgeColorsFromTheResolvedTheme()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("colorBox.SelectColor(b.ResolveColor(_session.Workbook.Theme));");
+        source.Should().NotContain("colorBox.SelectColor(b.Color);");
+
+        // The untouched-edge guard that keeps the theme link alive on OK.
+        source.Should().Contain("if (style == seeded.Style && (style is null || color == seeded.Color))");
+    }
 }
 
 internal static class AvaloniaShellSourceFile
