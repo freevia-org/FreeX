@@ -283,7 +283,15 @@ public partial class MainWindow
             isCut,
             areas.Count > 1 ? areas : null,
             clipboardMarker,
-            SourceSheet: sheet,
+            // r179: a DETACHED snapshot of the copied range rich content, not the live sheet.
+            // PasteCommandFactory reads hyperlinks, rich-text runs, hyperlink metadata and
+            // phonetic guides off this at PASTE time, so holding the live Sheet meant editing the
+            // source cell between Ctrl+C and Ctrl+V changed what got pasted -- change the source
+            // hyperlink after copying and the paste carried the new one. The cell values here were
+            // already independent clones; this side channel was the one that stayed live.
+            SourceSheet: sheet is null
+                ? null
+                : ClipboardRichContentSnapshot.Capture(sheet, copyRange, areas.Count > 1 ? areas : null),
             SourceWorkbook: _workbook),
             owner: this);
     }
