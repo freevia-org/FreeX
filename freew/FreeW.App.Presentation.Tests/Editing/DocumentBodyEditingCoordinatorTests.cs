@@ -190,7 +190,7 @@ public sealed class DocumentBodyEditingCoordinatorTests
 
         var empty = new Paragraph
         {
-            Formatting = new ParagraphFormatting { ListKind = ListKind.Bullet, ListLevel = 1 },
+            Formatting = new ParagraphFormatting { ListKind = ListKind.Bullet, ListLevel = 0 },
         };
         session = SessionWith(empty);
 
@@ -202,6 +202,32 @@ public sealed class DocumentBodyEditingCoordinatorTests
             DocumentBodyEditorTransition.ExitEmptyList));
         session.Document.Blocks.Should().HaveCount(1);
         ParagraphAt(session, 0).Formatting.ListKind.Should().Be(ListKind.None);
+    }
+
+    [Theory]
+    [InlineData(2, ListKind.Bullet, 1)]
+    [InlineData(1, ListKind.Bullet, 0)]
+    [InlineData(0, ListKind.None, 0)]
+    public void EnterOnEmptyListItem_OutdentsOneLevelOrExitsAtLevelZero(
+        int initialLevel,
+        ListKind expectedKind,
+        int expectedLevel)
+    {
+        var empty = new Paragraph
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.Bullet, ListLevel = initialLevel },
+        };
+        var session = SessionWith(empty);
+
+        session.Body.TryApplyParagraphBreak(Range(0, 0, 0, 0), out var result)
+            .Should().BeTrue();
+
+        result.Should().Be(new DocumentBodyEditorActionResult(
+            new DocumentTextPosition(0, 0),
+            DocumentBodyEditorTransition.ExitEmptyList));
+        session.Document.Blocks.Should().HaveCount(1);
+        ParagraphAt(session, 0).Formatting.ListKind.Should().Be(expectedKind);
+        ParagraphAt(session, 0).Formatting.ListLevel.Should().Be(expectedLevel);
     }
 
     [Fact]

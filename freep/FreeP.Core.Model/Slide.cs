@@ -448,6 +448,23 @@ public sealed class PictureFormat
     /// </summary>
     public string? ArtisticEffectXml { get; set; }
 
+    /// <summary>
+    /// Verbatim outer XML of the <c>a:duotone</c> element from <c>a:blip</c> (PowerPoint's
+    /// Picture Format &gt; Color &gt; Recolor gallery -- every preset other than "No Recolor"
+    /// serializes as a two-color-stop <c>a:duotone</c>). Not modeled color-by-color -- round-
+    /// tripped byte-for-byte so a picture opened and re-saved keeps whichever recolor PowerPoint
+    /// applied to it. Null when the picture has no recolor applied.
+    /// </summary>
+    public string? DuotoneXml { get; set; }
+
+    /// <summary>
+    /// Verbatim outer XML of the <c>a:clrChange</c> element from <c>a:blip</c> (PowerPoint's
+    /// Picture Format &gt; Color &gt; Set Transparent Color). Not modeled attribute-by-attribute
+    /// -- round-tripped byte-for-byte so a picture opened and re-saved keeps the transparent
+    /// color PowerPoint applied to it. Null when the picture has no transparent color set.
+    /// </summary>
+    public string? ClrChangeXml { get; set; }
+
     /// <summary>True when any colour effect is active.</summary>
     public bool HasColorEffect =>
         Grayscale ||
@@ -455,7 +472,9 @@ public sealed class PictureFormat
         Brightness.HasValue ||
         Contrast.HasValue ||
         AlphaModPct.HasValue ||
-        ArtisticEffectXml is not null;
+        ArtisticEffectXml is not null ||
+        DuotoneXml is not null ||
+        ClrChangeXml is not null;
 }
 
 /// <summary>

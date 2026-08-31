@@ -164,6 +164,40 @@ public sealed class DocumentViewListEditTests
         kind.Should().Be(ListKind.None, "paragraph becomes non-list after exit");
     }
 
+    /// <summary>
+    /// r176. Test 2 above pins only the OUTERMOST level, which left the nested case -- by far the
+    /// easier one to get wrong -- unpinned in this shell. Enter in an empty level-2 item must
+    /// promote exactly ONE level and stay in the list; unwinding the whole nesting in one
+    /// keystroke would be unrecoverable except by re-indenting by hand.
+    ///
+    /// Note what this does and does not cover: DocumentView.InsertParagraphBreak tries the shared
+    /// DocumentEditingSession path first, so this exercises that shared rule through the Avalonia
+    /// view. The view own AV-LIST fallback below it was aligned to the same rule in r176 but is
+    /// not reached by this gesture, so it stays unpinned.
+    /// </summary>
+    [Fact]
+    public async Task Enter_in_empty_NESTED_list_item_promotes_one_level_and_stays_in_the_list()
+    {
+        int blockCount = 0;
+        int level = -1;
+        ListKind kind = ListKind.None;
+
+        var ran = await OnUiThread(() =>
+        {
+            var (view, _) = MakeListDoc("", ListKind.Number, level: 2);
+            view.MoveCaretToBlock(0, 0);
+            view.InsertParagraphBreakPublic();    // Enter on empty nested item
+            blockCount = view.Document.Blocks.Count;
+            level = Para(view, 0).Formatting.ListLevel;
+            kind = Para(view, 0).Formatting.ListKind;
+        });
+
+        ran.Should().BeTrue();
+        blockCount.Should().Be(1, "empty-item Enter still does not split");
+        level.Should().Be(1, "one Enter promotes exactly one level, it does not unwind the nesting");
+        kind.Should().Be(ListKind.Number, "a nested item is still IN the list after one Enter");
+    }
+
     // ── 3. Tab at start of list item → demotes (ListLevel + 1) ──────────────────────────────────
 
     [Fact]

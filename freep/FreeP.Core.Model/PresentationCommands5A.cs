@@ -39,10 +39,18 @@ public sealed class PasteShapesCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
+        // r176: remove by shape Id. ShapeListOrNull already re-resolves the LIST from the live
+        // presentation, but List<SlideShape>.Remove is reference equality and a slide swap
+        // (Insert > Header and Footer) replaces every shape object in that list with a clone,
+        // which would leave every pasted shape stranded on the slide after undo.
         var list = ShapeListOrNull(p);
         if (list is null) return;
         foreach (var s in _shapes)
-            list.Remove(s);
+        {
+            var index = list.FindIndex(shape => shape.Id == s.Id);
+            if (index >= 0)
+                list.RemoveAt(index);
+        }
     }
 
     private List<SlideShape>? ShapeListOrNull(Presentation p) =>
@@ -55,7 +63,7 @@ public sealed class PasteShapesCommand : IPresentationCommand
 
 /// <summary>
 /// Inserts a cloned slide at <paramref name="insertAt"/> (a deep-clone is passed in at
-/// construction time). Revert removes by reference.
+/// construction time). Revert removes by Slide.Id, not by reference.
 /// </summary>
 public sealed class PasteSlideCommand : IPresentationCommand
 {
@@ -85,7 +93,15 @@ public sealed class PasteSlideCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        p.Slides.Remove(_slide);
+        // r176 remediation: resolve by identity, not by reference. A Header/Footer edit clones and
+        // swaps the slide objects, so the reference captured at Apply time is no longer the one in
+        // the list and List<Slide>.Remove silently does nothing -- leaving the pasted slide behind
+        // after undo. Same defect and same fix as DuplicateSlideCommand and InsertSlideCommand this
+        // round; an auditor reproduced this one at runtime (paste, header/footer edit, undo twice,
+        // slide count stayed 2 instead of 1).
+        var index = p.Slides.FindIndex(slide => string.Equals(slide.Id, _slide.Id, StringComparison.Ordinal));
+        if (index >= 0)
+            p.Slides.RemoveAt(index);
         _beforeSections?.Restore(p);
     }
 }

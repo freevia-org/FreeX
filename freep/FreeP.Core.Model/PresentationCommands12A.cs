@@ -270,11 +270,20 @@ public sealed class GroupShapesCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var shapes = _parentShapes;
-        if (shapes is null || _group is null || _removed is null) return;
+        // r176: re-resolve the container from the live presentation instead of trusting the
+        // list captured at Apply time, and remove the group by Id rather than by reference.
+        // A Slide clone allocates a brand-new Shapes/Children list and brand-new shape
+        // objects (see ShapeHelper.FindContainingListWithParent), so once an intervening
+        // command on the same undo stack has swapped the slide -- Insert > Header and Footer
+        // is the reachable one -- _parentShapes is a detached list nothing renders from and
+        // Remove(_group) is a silent no-op. Undo would then appear to do nothing at all.
+        if (_group is null || _removed is null) return;
+        var shapes = ShapeHelper12A.ContainingShapes(p, _slideIndex, _group.Id) ?? _parentShapes;
+        if (shapes is null) return;
 
-        // Remove the group.
-        shapes.Remove(_group);
+        var groupIndex = shapes.FindIndex(shape => shape.Id == _group.Id);
+        if (groupIndex >= 0)
+            shapes.RemoveAt(groupIndex);
 
         // Re-insert the originals at their original z-indices (lowest first).
         foreach (var (zIdx, shape) in _removed.OrderBy(t => t.zIdx))
@@ -426,12 +435,20 @@ public sealed class UngroupShapeCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var shapes = _parentShapes;
-        if (shapes is null || _group is null || _children is null) return;
+        // r176: same reference-staleness fix as GroupShapesCommand.Revert above -- resolve the
+        // container and the freed children through the live presentation by Id, because a
+        // slide swap replaces both the list and every shape object in it.
+        if (_group is null || _children is null || _children.Count == 0) return;
+        var shapes = ShapeHelper12A.ContainingShapes(p, _slideIndex, _children[0].Id) ?? _parentShapes;
+        if (shapes is null) return;
 
         // Remove freed children.
         foreach (var child in _children)
-            shapes.Remove(child);
+        {
+            var childIndex = shapes.FindIndex(shape => shape.Id == child.Id);
+            if (childIndex >= 0)
+                shapes.RemoveAt(childIndex);
+        }
 
         // Re-insert the group.
         int idx = Math.Clamp(_groupZIdx, 0, shapes.Count);
@@ -461,10 +478,16 @@ public sealed class UngroupShapeCommand : IPresentationCommand
 
         if (_capturedConnectorAttachments is not null)
         {
+            // r176: written through a fresh lookup. The captured tuples hold connector OBJECT
+            // references from Apply time; after a slide swap those are detached clones, so
+            // restoring the attachments onto them would leave the rendered connectors still
+            // pointing at the destroyed group id -- undo silently losing the attachment.
+            var liveShapes = ShapeHelper.All(p, _slideIndex).ToList();
             foreach (var (connector, start, end) in _capturedConnectorAttachments)
             {
-                connector.ConnectionStart = start;
-                connector.ConnectionEnd = end;
+                var live = liveShapes.FirstOrDefault(shape => shape.Id == connector.Id) ?? connector;
+                live.ConnectionStart = start;
+                live.ConnectionEnd = end;
             }
         }
 
