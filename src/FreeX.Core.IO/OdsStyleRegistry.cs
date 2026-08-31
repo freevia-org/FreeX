@@ -134,7 +134,13 @@ internal sealed class OdsStyleRegistry
         var cellProps = new XElement(styleNs + "table-cell-properties");
         var hasCellProps = false;
 
-        if (style.FillColor is { } fill)
+        // freex-theme-fill-color-F1: ODF has no theme, so the EFFECTIVE fill must be flattened here,
+        // exactly like the font color below (ResolveFontColor) and the borders (ResolveColor). Reading
+        // style.FillColor raw did not merely export a stale color -- StyleDiff.Apply sets FillThemeColor
+        // WITHOUT baking FillColor (see CellStyle.Apply), so every cell filled from the ribbon's Theme
+        // Colors picker has FillColor == null and this test silently dropped its fill from the .ods
+        // altogether.
+        if (style.ResolveFillColor(_workbook.Theme) is { } fill)
         {
             cellProps.SetAttributeValue(foNs + "background-color", HexColor(fill));
             hasCellProps = true;

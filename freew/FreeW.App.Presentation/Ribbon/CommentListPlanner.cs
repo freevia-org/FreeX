@@ -37,6 +37,7 @@ public static class CommentListPlanner
 
         var items = new List<CommentListItem>();
         var seen = new HashSet<int>();
+        var topLevelByCommentId = BuildTopLevelCommentIds(document);
         for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
         {
             foreach (var paragraph in ParagraphsInBlock(document.Blocks[blockIndex]))
@@ -52,7 +53,8 @@ public static class CommentListPlanner
                         paragraph.TableGridColumnIndex,
                         paragraph.TableParagraphIndex),
                     items,
-                    seen);
+                    seen,
+                    topLevelByCommentId);
             }
         }
 
@@ -73,7 +75,8 @@ public static class CommentListPlanner
                 paragraph,
                 offset => new CommentAnchorPosition(capturedBlockIndex, offset, IsHeaderFooterOrNoteAnchor: true),
                 items,
-                seen);
+                seen,
+                topLevelByCommentId);
             outOfBodyBlockIndex++;
         }
 
@@ -85,7 +88,8 @@ public static class CommentListPlanner
         Paragraph paragraph,
         Func<int, CommentAnchorPosition> anchorAt,
         List<CommentListItem> items,
-        HashSet<int> seen)
+        HashSet<int> seen,
+        IReadOnlyDictionary<int, int> topLevelByCommentId)
     {
         var offset = 0;
         foreach (var run in paragraph.Runs)
@@ -96,7 +100,7 @@ public static class CommentListPlanner
                 continue;
             }
 
-            var topLevelId = TopLevelCommentId(document, commentId);
+            var topLevelId = TopLevelCommentId(topLevelByCommentId, commentId);
             if (!seen.Add(topLevelId) || !document.Comments.TryGetValue(topLevelId, out var comment))
             {
                 offset += run.Text.Length;
@@ -166,19 +170,30 @@ public static class CommentListPlanner
         return -1;
     }
 
-    private static int TopLevelCommentId(TextDocument document, int commentId)
+    private static IReadOnlyDictionary<int, int> BuildTopLevelCommentIds(TextDocument document)
     {
-        if (document.Comments.ContainsKey(commentId))
-            return commentId;
+        var topLevelByCommentId = new Dictionary<int, int>(document.Comments.Count);
 
-        foreach (var comment in document.Comments.Values)
+        // Establish direct roots first: a malformed document that repeats an id in a reply must still
+        // resolve a direct root the same way the former ContainsKey check did.
+        foreach (var root in document.Comments.Values)
+            topLevelByCommentId[root.Id] = root.Id;
+
+        // Thread ids are normally globally unique. TryAdd keeps the former first-root resolution if a
+        // malformed document duplicates a reply id across roots.
+        foreach (var root in document.Comments.Values)
         {
-            if (comment.Replies.Any(reply => reply.Id == commentId))
-                return comment.Id;
+            foreach (var comment in root.ThreadInOrder())
+                topLevelByCommentId.TryAdd(comment.Id, root.Id);
         }
 
-        return commentId;
+        return topLevelByCommentId;
     }
+
+    private static int TopLevelCommentId(
+        IReadOnlyDictionary<int, int> topLevelByCommentId,
+        int commentId) =>
+        topLevelByCommentId.TryGetValue(commentId, out var topLevelId) ? topLevelId : commentId;
 
     private static IEnumerable<ParagraphAddress> ParagraphsInBlock(Block block)
     {

@@ -15,6 +15,13 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     /// <summary>
+    /// The Home ▸ Borders menu icons built at ribbon materialization, tracked so the theme-backed
+    /// "Accent n" swatches can be repainted when the workbook theme changes
+    /// (freex-border-accent-swatch-F1).
+    /// </summary>
+    private readonly List<BorderMenuIcon> _homeBorderMenuIcons = [];
+
+    /// <summary>
     /// Installs the declarative <see cref="FreeXRibbonDefinition"/> through the shared WPF renderer.
     /// Tab shells, commands, keytips, and adaptive policy all come from the shared definition before
     /// workbook and option state is applied.
@@ -153,8 +160,9 @@ public partial class MainWindow
     private TabItem? FindRibbonTabByCatalogId(string catalogId) =>
         _ribbonTabsByCatalogId.GetValueOrDefault(catalogId);
 
-    private static void ApplyRenderedHomeBorderMenuIcons(IReadOnlyDictionary<string, Control> renderedByName)
+    private void ApplyRenderedHomeBorderMenuIcons(IReadOnlyDictionary<string, Control> renderedByName)
     {
+        _homeBorderMenuIcons.Clear();
         if (!renderedByName.TryGetValue("Borders", out var borders) || borders.ContextMenu is not { } menu)
             return;
 
@@ -163,9 +171,23 @@ public partial class MainWindow
             if (RibbonMetadata.TryGetCommandName(item, out var commandId) &&
                 BorderMenuIconCatalog.TryGetKind(commandId, out var kind))
             {
-                item.Icon = new BorderMenuIcon { Kind = kind };
+                var icon = new BorderMenuIcon { Kind = kind, Theme = _workbook.Theme };
+                item.Icon = icon;
+                _homeBorderMenuIcons.Add(icon);
             }
         }
+    }
+
+    /// <summary>
+    /// freex-border-accent-swatch-F1: the "Accent n" Line Color swatches are painted from the workbook
+    /// theme, so they must be repainted when the theme changes. The icons are built once at ribbon
+    /// materialization, so they are tracked here and refreshed from <c>RefreshViewport</c> alongside
+    /// <c>SheetGrid.WorkbookTheme</c>, which is the shell's existing theme-propagation point.
+    /// </summary>
+    private void RefreshHomeBorderMenuIconTheme()
+    {
+        foreach (var icon in _homeBorderMenuIcons)
+            icon.Theme = _workbook.Theme;
     }
 
     private static IEnumerable<MenuItem> EnumerateMenuItems(ItemCollection items)

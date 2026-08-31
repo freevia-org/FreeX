@@ -2311,6 +2311,123 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void Edit_NativeChartExDataPointFormatting_PreservesFirstMatchMalformedNodesAndInsertionOrder()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        const string drawingMlUri = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace cxNs = chartExUri;
+        XNamespace aNs = drawingMlUri;
+        var chart = BuildPreservedChartEx(
+            new XElement(cxNs + "dataPt",
+                new XAttribute("idx", "malformed"),
+                new XElement(cxNs + "spPr",
+                    new XElement(aNs + "solidFill",
+                        new XElement(aNs + "srgbClr", new XAttribute("val", "111111"))))),
+            new XElement(cxNs + "dataPt",
+                new XAttribute("idx", 3),
+                new XElement(cxNs + "spPr",
+                    new XElement(aNs + "solidFill",
+                        new XElement(aNs + "srgbClr", new XAttribute("val", "222222")))),
+                new XElement(cxNs + "extLst",
+                    new XElement(cxNs + "ext", new XAttribute("uri", "urn:freep:first")))),
+            new XElement(cxNs + "dataPt",
+                new XAttribute("idx", 3),
+                new XElement(cxNs + "spPr",
+                    new XElement(aNs + "solidFill",
+                        new XElement(aNs + "srgbClr", new XAttribute("val", "333333")))),
+                new XElement(cxNs + "extLst",
+                    new XElement(cxNs + "ext", new XAttribute("uri", "urn:freep:duplicate")))),
+            new XElement(cxNs + "dataLabels", new XAttribute("pos", "outEnd")),
+            new XElement(cxNs + "dataId", new XAttribute("val", 0)));
+        var series = chart.Series[0];
+        series.PointStyles[3] = new ChartPointStyle
+        {
+            FillColor = new ThemeAwareColor(SrgbColor.FromRgb(0x00AA00))
+        };
+        series.PointStyles[2] = new ChartPointStyle
+        {
+            FillColor = new ThemeAwareColor(SrgbColor.FromRgb(0x0000CC))
+        };
+        series.PointStyles[1] = new ChartPointStyle
+        {
+            FillColor = new ThemeAwareColor(SrgbColor.FromRgb(0xCC0000))
+        };
+        series.PointStyles[4] = new ChartPointStyle();
+
+        var written = WriteChartExDocument(chart);
+        var writtenSeries = written.Descendants(cxNs + "series").Single();
+        var points = writtenSeries.Elements(cxNs + "dataPt").ToList();
+
+        points.Select(point => point.Attribute("idx")!.Value)
+            .Should().Equal("malformed", "3", "3", "1", "2");
+        points[0].Descendants(aNs + "srgbClr").Single().Attribute("val")!.Value
+            .Should().Be("111111", "a malformed native index remains outside the modeled lookup");
+        points[1].Descendants(aNs + "srgbClr").Single().Attribute("val")!.Value
+            .Should().Be("00AA00", "the first native point with a duplicate index owns the edit");
+        points[1].Descendants(cxNs + "ext").Single().Attribute("uri")!.Value
+            .Should().Be("urn:freep:first");
+        points[2].Descendants(aNs + "srgbClr").Single().Attribute("val")!.Value
+            .Should().Be("333333", "later duplicate native points remain untouched");
+        points[2].Descendants(cxNs + "ext").Single().Attribute("uri")!.Value
+            .Should().Be("urn:freep:duplicate");
+
+        var children = writtenSeries.Elements().ToList();
+        children.IndexOf(points[3]).Should().BeLessThan(children.FindIndex(element => element.Name == cxNs + "dataLabels"));
+        children.IndexOf(points[4]).Should().Be(children.IndexOf(points[3]) + 1,
+            "new points retain deterministic ascending PointStyles order before the shared anchor");
+        points.Select(point => (string?)point.Attribute("idx")).Should().NotContain("4",
+            "point styles without modeled shape formatting must not create native points");
+    }
+
+    [Fact]
+    public void Edit_NativeChartExDataPointFormatting_DenseSeriesUpdatesEveryPointInPlace()
+    {
+        const int pointCount = 512;
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        const string drawingMlUri = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace cxNs = chartExUri;
+        XNamespace aNs = drawingMlUri;
+        var nativePoints = Enumerable.Range(0, pointCount)
+            .Reverse()
+            .Select(index => new XElement(cxNs + "dataPt",
+                new XAttribute("idx", index),
+                new XElement(cxNs + "spPr",
+                    new XElement(aNs + "solidFill",
+                        new XElement(aNs + "srgbClr", new XAttribute("val", "010101")))),
+                new XElement(cxNs + "extLst",
+                    new XElement(cxNs + "ext", new XAttribute("uri", $"urn:freep:dense:{index}")))))
+            .Cast<object>()
+            .Append(new XElement(cxNs + "dataId", new XAttribute("val", 0)))
+            .ToArray();
+        var chart = BuildPreservedChartEx(nativePoints);
+        var series = chart.Series[0];
+        for (var index = 0; index < pointCount; index++)
+        {
+            series.PointStyles[index] = new ChartPointStyle
+            {
+                FillColor = new ThemeAwareColor(new SrgbColor(
+                    (byte)index,
+                    (byte)(index >> 8),
+                    0x7F))
+            };
+        }
+
+        var written = WriteChartExDocument(chart);
+        var pointsByIndex = written.Descendants(cxNs + "dataPt")
+            .ToDictionary(point => int.Parse(point.Attribute("idx")!.Value));
+
+        pointsByIndex.Should().HaveCount(pointCount);
+        for (var index = 0; index < pointCount; index++)
+        {
+            var point = pointsByIndex[index];
+            point.Descendants(aNs + "srgbClr").Single().Attribute("val")!.Value
+                .Should().Be($"{(byte)index:X2}{(byte)(index >> 8):X2}7F");
+            point.Descendants(cxNs + "ext").Single().Attribute("uri")!.Value
+                .Should().Be($"urn:freep:dense:{index}");
+        }
+    }
+
+    [Fact]
     public void Edit_NativeChartExValueColors_RoundTripsGradientStopsAndPositions()
     {
         const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
@@ -3534,6 +3651,44 @@ public sealed class ChartTests : IDisposable
         });
         pres.Slides.Add(slide);
         return pres;
+    }
+
+    private static ChartShape BuildPreservedChartEx(params object[] seriesContent)
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var nativeSeries = new XElement(cxNs + "series",
+            new XAttribute("layoutId", "histogram"));
+        nativeSeries.Add(seriesContent);
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion", nativeSeries)))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Series.Add(new ChartSeries { Name = "Revenue" });
+        return chart;
+    }
+
+    private static XDocument WriteChartExDocument(ChartShape chart)
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+            PptxChartWriter.WriteChartExPart(archive, chart, 1);
+
+        stream.Position = 0;
+        using var readArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var chartStream = readArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open();
+        return XDocument.Load(chartStream);
     }
 
     private string WriteToPptx(Presentation pres)

@@ -15,8 +15,8 @@ public sealed class HomeFontBorderPopupCatalogPlannerTests
             .Equal(
                 ("Black", "#000000"),
                 ("Gray", "#808080"),
-                ("Accent 1", "#4472C4"),
-                ("Accent 2", "#ED7D31"));
+                ("Accent 1", "#156082"),
+                ("Accent 2", "#E97132"));
 
         HomeFontBorderPopupCatalogPlanner.BorderLineStyles
             .Select(style => (style.Label, style.Style))
@@ -55,6 +55,10 @@ public sealed class HomeFontBorderPopupCatalogPlannerTests
                 ("Red", "#FF0000"),
                 ("Green", "#008000"),
                 ("Blue", "#0000FF"),
+                // NOTE: the FONT color swatches still carry the legacy Office 2013-2021 accents and are
+                // not theme-linked -- unlike the BORDER line-color swatches above, which now follow the
+                // workbook theme (freex-border-accent-swatch-F1). Same gap, different picker; untouched
+                // here deliberately rather than silently changed.
                 ("Accent 1", "#4472C4"),
                 ("Accent 2", "#ED7D31"));
 

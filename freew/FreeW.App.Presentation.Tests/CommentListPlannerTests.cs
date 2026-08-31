@@ -50,6 +50,63 @@ public sealed class CommentListPlannerTests
     }
 
     [Fact]
+    public void Build_ReplyAnchorResolvesToItsTopLevelThread()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Reply anchor") { CommentId = 3 });
+        doc.Blocks.Add(paragraph);
+
+        var root = new Comment(2, "Root comment", "Alex", "A");
+        root.AddReply(3, "Reply", "Casey", "C");
+        doc.Comments[root.Id] = root;
+
+        var item = CommentListPlanner.Build(doc).Should().ContainSingle().Subject;
+
+        item.Id.Should().Be(root.Id);
+        item.Text.Should().Be("Root comment");
+        item.ReplyCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void Build_DenseReplyAnchorsPreservesEveryTopLevelThreadInDocumentOrder()
+    {
+        const int count = 1_000;
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+
+        for (var index = 0; index < count; index++)
+        {
+            var rootId = index * 2 + 1;
+            var root = new Comment(rootId, "Root " + index);
+            root.AddReply(rootId + 1, "Reply " + index);
+            doc.Comments[rootId] = root;
+
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Anchor") { CommentId = rootId + 1 });
+            doc.Blocks.Add(paragraph);
+        }
+
+        CommentListPlanner.Build(doc)
+            .Select(item => item.Id)
+            .Should().Equal(Enumerable.Range(0, count).Select(index => index * 2 + 1));
+    }
+
+    [Fact]
+    public void Build_SourceGuardIndexesThreadIdsOnce()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.App.Presentation", "Ribbon", "CommentListPlanner.cs");
+
+        source.Should().Contain("var topLevelByCommentId = BuildTopLevelCommentIds(document);")
+            .And.Contain("topLevelByCommentId[root.Id] = root.Id;")
+            .And.Contain("topLevelByCommentId.TryAdd(comment.Id, root.Id);")
+            .And.Contain("topLevelByCommentId.TryGetValue(commentId, out var topLevelId)")
+            .And.NotContain("comment.Replies.Any(reply => reply.Id == commentId)");
+    }
+
+    [Fact]
     public void SelectAdjacent_WrapsAroundDocumentOrder()
     {
         var items = new[]

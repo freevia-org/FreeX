@@ -75,8 +75,13 @@ public static class HomeBorderMenuCatalog
     [
         new("Black", "Black", "K", "#000000"),
         new("Gray", "Gray", "G", "#808080"),
-        new("Accent 1", "Accent 1", "1", "#4472C4"),
-        new("Accent 2", "Accent 2", "2", "#ED7D31"),
+        // freex-border-accent-swatch-F1: these are the DEFAULT (Office theme) accents, matching what
+        // BorderLineColorAccent1/2MenuItem_Click applies via WorkbookTheme.GetColor and what
+        // BorderMenuIcon paints. They were the legacy Office 2013-2021 palette (#4472C4/#ED7D31), which
+        // matched neither. This catalog is a static ribbon definition with no workbook in reach, so it
+        // can only carry the default-theme value; the rendered swatch itself follows the live theme.
+        new("Accent 1", "Accent 1", "1", "#156082"),
+        new("Accent 2", "Accent 2", "2", "#E97132"),
     ];
 
     public static readonly IReadOnlyList<HomeBorderLineStyleCatalogItem> LineStyles =
