@@ -6668,14 +6668,17 @@ public static class DocxWriter
     {
         // Flatten the node tree in pre-order so every node (incl. nested Hierarchy children) gets a shape.
         var nodes = new List<(SmartArtNode Node, int Depth)>();
-        void Flatten(SmartArtNode node, int depth)
+        var parentIndexes = new List<int>();
+        void Flatten(SmartArtNode node, int depth, int parentIndex)
         {
+            var nodeIndex = nodes.Count;
             nodes.Add((node, depth));
+            parentIndexes.Add(parentIndex);
             foreach (var child in node.Children)
-                Flatten(child, depth + 1);
+                Flatten(child, depth + 1, nodeIndex);
         }
         foreach (var node in smartArt.Nodes)
-            Flatten(node, 0);
+            Flatten(node, 0, parentIndex: -1);
 
         // Keep the cached drawing inside the authored SmartArt frame. Word consumes this drawing through
         // dsp:dataModelExt, so fixed two-inch boxes make a four-node process wrap outside its frame.
@@ -6725,6 +6728,7 @@ public static class DocxWriter
                     new XElement(A + "ext", new XAttribute("cx", frameW), new XAttribute("cy", frameH)),
                     new XElement(A + "chOff", new XAttribute("x", 0), new XAttribute("y", 0)),
                     new XElement(A + "chExt", new XAttribute("cx", frameW), new XAttribute("cy", frameH)))));
+        var nextCachedShapeId = 1;
 
         void AddCachedShape(
             string modelId,
@@ -6827,7 +6831,7 @@ public static class DocxWriter
             spTree.Add(new XElement(Dsp + "sp",
                 new XAttribute("modelId", modelId),
                 new XElement(Dsp + "nvSpPr",
-                    new XElement(Dsp + "cNvPr", new XAttribute("id", spTree.Elements(Dsp + "sp").Count() + 1), new XAttribute("name", "SmartArt")),
+                    new XElement(Dsp + "cNvPr", new XAttribute("id", nextCachedShapeId++), new XAttribute("name", "SmartArt")),
                     new XElement(Dsp + "cNvSpPr")),
                 spPr,
                 new XElement(Dsp + "style",
@@ -6866,15 +6870,18 @@ public static class DocxWriter
                 var hierarchyBoxW = Math.Max(1L, Math.Min(PointsToEmu(112), frameW - 2 * margin));
                 var hierarchyBoxH = Math.Max(1L, Math.Min(PointsToEmu(28), frameH - 2 * margin));
                 var positions = new Dictionary<int, (long X, long Y)>();
+                var nodeCountsByDepth = new Dictionary<int, int>();
+                foreach (var (_, depth) in nodes)
+                    nodeCountsByDepth[depth] = nodeCountsByDepth.GetValueOrDefault(depth) + 1;
+                var nextSlotByDepth = new Dictionary<int, int>();
 
                 for (var i = 0; i < nodes.Count; i++)
                 {
                     var depth = nodes[i].Depth;
-                    var siblings = nodes.Select((item, index) => (item, index))
-                        .Where(pair => pair.item.Depth == depth)
-                        .ToList();
-                    var slot = siblings.FindIndex(pair => pair.index == i);
-                    var rowWidth = siblings.Count * hierarchyBoxW + Math.Max(0, siblings.Count - 1) * gap;
+                    var slot = nextSlotByDepth.GetValueOrDefault(depth);
+                    nextSlotByDepth[depth] = slot + 1;
+                    var nodeCountAtDepth = nodeCountsByDepth[depth];
+                    var rowWidth = nodeCountAtDepth * hierarchyBoxW + Math.Max(0, nodeCountAtDepth - 1) * gap;
                     var x = Math.Max(margin, (frameW - rowWidth) / 2 + slot * (hierarchyBoxW + gap));
                     var y = Math.Min(frameH - margin - hierarchyBoxH, margin + depth * (hierarchyBoxH + levelGap));
                     positions[i] = (x, y);
@@ -6882,7 +6889,7 @@ public static class DocxWriter
 
                 for (var i = 0; i < nodes.Count; i++)
                 {
-                    var parentIndex = nodes.FindIndex(candidate => candidate.Node.Children.Contains(nodes[i].Node));
+                    var parentIndex = parentIndexes[i];
                     if (parentIndex < 0)
                         continue;
 
@@ -7001,7 +7008,7 @@ public static class DocxWriter
                 new XAttribute("modelId", SmartArtModelId(3001 + i)),
                 new XElement(Dsp + "nvSpPr",
                     new XElement(Dsp + "cNvPr",
-                        new XAttribute("id", spTree.Elements(Dsp + "sp").Count() + 1),
+                        new XAttribute("id", nextCachedShapeId++),
                         new XAttribute("name", $"Node {i}")),
                     new XElement(Dsp + "cNvSpPr")),
                 new XElement(Dsp + "spPr",
