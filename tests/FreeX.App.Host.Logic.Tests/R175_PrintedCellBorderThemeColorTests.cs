@@ -36,7 +36,8 @@ public sealed class R175_PrintedCellBorderThemeColorTests
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            method!.Invoke(null, [dc, border, P1, P2, false, theme]);
+            // Positional: DrawPrintedBorderEdge(dc, border, p1, p2, theme, blackAndWhite = false).
+            method!.Invoke(null, [dc, border, P1, P2, theme, false]);
         }
 
         const int width = 40;
