@@ -539,6 +539,23 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void SourcePackage_RenumberedQueryTableReplayIndexesExistingTargets()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SourcePackage.cs");
+        var methodStart = source.IndexOf(
+            "    private static void PreserveRenumberedWorksheetQueryTableRelationships(",
+            StringComparison.Ordinal);
+        var methodEnd = source.IndexOf("    private static void CloneQueryTablesForDuplicatedSheets(", methodStart, StringComparison.Ordinal);
+        var method = source[methodStart..methodEnd];
+
+        method.Should().Contain("var existingQueryTableTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);")
+            .And.Contain("if (!existingQueryTableTargets.Add(target))")
+            .And.NotContain(".Any(existing =>",
+                "replaying many query-table relationships onto a renumbered worksheet must not rescan " +
+                "the generated relationship XML for every source relationship");
+    }
+
+    [Fact]
     public void SavePostProcessing_BatchesSourcePackageReplayWorksheetMetadataXmlWrites()
     {
         var adapterSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SavePostProcessing.cs");
