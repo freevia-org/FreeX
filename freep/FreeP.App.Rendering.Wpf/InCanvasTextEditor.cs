@@ -667,21 +667,24 @@ public sealed class InCanvasTextEditor : IDisposable
                 category: _inheritedStyleCategory,
                 onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted,
                 destinationSlideIds: CurrentSlideIds());
-            if (e.Key == Key.V && result.Handled)
+            // Paste now always consumes the key, so an applied paste is the one that produced a
+            // body -- testing Handled here would null the body out on a no-op paste.
+            if (e.Key == Key.V && result.UpdatedBody is { } pastedBody)
             {
-                _shapeParagraphBody = result.UpdatedBody;
+                _shapeParagraphBody = pastedBody;
                 // A paste rebuilds the document from a new body, so inline payloads hosted from
                 // here on belong to that body, not the one the edit started with.
-                _inlineOleSourceBody = result.UpdatedBody;
+                _inlineOleSourceBody = pastedBody;
             }
-            else if (e.Key is Key.C or Key.X &&
-                     !result.Handled &&
-                     result.FailureMessage is { } failureMessage)
+            else if (result.FailureMessage is { } failureMessage &&
+                     (e.Key == Key.V || !result.Handled))
                 _onClipboardWriteFailed?.Invoke(
-                    PresentationShellTextCatalog.Resolve(
-                        e.Key == Key.X
-                            ? PresentationShellTextCatalog.EditCutCommand
-                            : PresentationShellTextCatalog.EditCopyCommand),
+                    PresentationShellTextCatalog.Resolve(e.Key switch
+                    {
+                        Key.X => PresentationShellTextCatalog.EditCutCommand,
+                        Key.V => PresentationShellTextCatalog.EditPasteCommand,
+                        _ => PresentationShellTextCatalog.EditCopyCommand,
+                    }),
                     failureMessage);
             return;
         }

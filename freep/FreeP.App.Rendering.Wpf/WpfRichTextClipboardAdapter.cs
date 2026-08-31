@@ -139,7 +139,7 @@ internal static class WpfRichTextClipboardAdapter
             clipboard ?? new WpfPlatformClipboard(),
             cancellationToken);
         if (!result.IsSuccess || result.Value is null)
-            return default;
+            return new WpfRichTextClipboardPasteResult(false, null, result.ErrorMessage);
 
         return TryPasteContent(
             box,
@@ -176,9 +176,17 @@ internal static class WpfRichTextClipboardAdapter
             category,
             onInlineOlePayloadUpdated,
             destinationSlideIds);
+
+        // Ctrl+V is always consumed, even when nothing was pasted. Leaving it unhandled hands
+        // the key to the RichTextBox's own paste, which writes the clipboard into the document
+        // without the payload path -- no inline OLE routing, no table cell styles, and, until it
+        // was patched at the commit boundary, a slide-jump target belonging to another deck.
+        // A failed read is reported the way a failed copy is, rather than quietly becoming a
+        // different, lossier paste.
         return new WpfRichTextClipboardPreviewResult(
-            result.Applied,
-            result.UpdatedBody);
+            Handled: true,
+            result.UpdatedBody,
+            result.FailureMessage);
     }
 
     internal static bool TryPasteDataObject(
@@ -341,7 +349,8 @@ internal static class WpfRichTextClipboardAdapter
 
 internal readonly record struct WpfRichTextClipboardPasteResult(
     bool Applied,
-    TextBody? UpdatedBody);
+    TextBody? UpdatedBody,
+    string? FailureMessage = null);
 
 internal readonly record struct WpfRichTextClipboardPreviewResult(
     bool Handled,

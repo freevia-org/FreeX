@@ -16,8 +16,11 @@ public static class PresentationClipboardPlatformMapper
         Bytes(PresentationClipboardFormats.LinuxRtf),
     ];
 
+    // IncludeImage: a bare bitmap is the one thing an in-canvas paste could not resolve, which
+    // left WPF to paste it through its own RichTextBox handling and Avalonia to drop it.
     public static PlatformClipboardReadRequest RichTextReadRequest { get; } = new(
         IncludeText: true,
+        IncludeImage: true,
         CustomFormats: RichTextFormats);
 
     public static PlatformClipboardReadRequest ReadRequest { get; } = new(

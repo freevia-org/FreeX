@@ -574,14 +574,15 @@ public sealed class InCanvasTableCellEditor
                     currentBody,
                     onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted,
                     destinationSlideIds: CurrentSlideIds());
-                if (e.Key is Key.C or Key.X &&
-                    !result.Handled &&
-                    result.FailureMessage is { } failureMessage)
+                if (result.FailureMessage is { } failureMessage &&
+                    (e.Key == Key.V || !result.Handled))
                     _onClipboardWriteFailed?.Invoke(
-                        PresentationShellTextCatalog.Resolve(
-                            e.Key == Key.X
-                                ? PresentationShellTextCatalog.EditCutCommand
-                                : PresentationShellTextCatalog.EditCopyCommand),
+                        PresentationShellTextCatalog.Resolve(e.Key switch
+                        {
+                            Key.X => PresentationShellTextCatalog.EditCutCommand,
+                            Key.V => PresentationShellTextCatalog.EditPasteCommand,
+                            _ => PresentationShellTextCatalog.EditCopyCommand,
+                        }),
                         failureMessage);
                 return;
             }
