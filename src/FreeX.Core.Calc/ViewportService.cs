@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
@@ -1485,14 +1486,22 @@ public sealed partial class ViewportService : IViewportService
         // the real value shrinks (font-wise, in GridView's render pass) to fit the column
         // instead. Suppressing the indicator here lets the real formatted text reach that
         // shrink-font path unmolested; ShrinkToFit off keeps the normal '#' overflow behavior.
-        var result = NumberFormatter.FormatWithColor(
+        var result = TryFormatBuiltInShortDate(
             cell.Value,
             style.NumberFormat,
             targetWidthCharacters,
-            workbook.IndexedColors,
-            workbook.Theme,
             workbook.Uses1904DateSystem,
-            suppressWidthOverflowIndicator: style.ShrinkToFit);
+            style.ShrinkToFit,
+            out var localizedShortDate)
+            ? localizedShortDate
+            : NumberFormatter.FormatWithColor(
+                cell.Value,
+                style.NumberFormat,
+                targetWidthCharacters,
+                workbook.IndexedColors,
+                workbook.Theme,
+                workbook.Uses1904DateSystem,
+                suppressWidthOverflowIndicator: style.ShrinkToFit);
         if (TryParseHexColor(result.ColorHex, out var color))
         {
             if (style.FontColor != color)
@@ -1503,6 +1512,36 @@ public sealed partial class ViewportService : IViewportService
         }
 
         return result.Text;
+    }
+
+    private static bool TryFormatBuiltInShortDate(
+        ScalarValue value,
+        string numberFormat,
+        int targetWidthCharacters,
+        bool uses1904DateSystem,
+        bool suppressWidthOverflowIndicator,
+        out NumberFormatter.FormatResult result)
+    {
+        result = default;
+        var serial = value switch
+        {
+            NumberValue number => number.Value,
+            DateTimeValue dateTime => dateTime.Value,
+            _ => double.NaN
+        };
+        if (!string.Equals(numberFormat.Trim(), "m/d/yy", StringComparison.OrdinalIgnoreCase) ||
+            double.IsNaN(serial) ||
+            !ExcelDateSystem.TrySerialToDate(serial, uses1904DateSystem, out var date))
+        {
+            return false;
+        }
+
+        var text = date.ToString("d", CultureInfo.CurrentCulture);
+        if (!suppressWidthOverflowIndicator && text.Length > targetWidthCharacters)
+            text = new string('#', Math.Max(1, targetWidthCharacters));
+
+        result = new NumberFormatter.FormatResult(text);
+        return true;
     }
 
     /// <summary>

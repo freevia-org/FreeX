@@ -1,7 +1,10 @@
 using ClosedXML.Excel;
 using FluentAssertions;
+using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using System.IO.Compression;
+using System.Xml.Linq;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -98,5 +101,28 @@ public sealed class R52_NumberFormatBuiltInWritePathTests
         var reloaded = new XlsxFileAdapter().Load(reloadStream);
         var reloadedSheet = reloaded.GetSheetAt(0);
         reloaded.GetStyle(reloadedSheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be(customFormat);
+    }
+
+    [Fact]
+    public void Save_CurrentDateShortcut_WritesBuiltInShortDateIdWithoutCustomNumFmt()
+    {
+        var workbook = new Workbook("NumFmt");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, DateTimeEntryService.CreateCurrentDateShortcutCell(workbook, address, new DateTime(2026, 8, 31)));
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var styles = XDocument.Load(archive.GetEntry("xl/styles.xml")!.Open());
+        var worksheet = XDocument.Load(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+        var styleIndex = int.Parse(worksheet.Descendants(ns + "c").Single(cell => (string?)cell.Attribute("r") == "A1").Attribute("s")!.Value);
+        var xf = styles.Root!.Element(ns + "cellXfs")!.Elements(ns + "xf").ElementAt(styleIndex);
+
+        xf.Attribute("numFmtId")!.Value.Should().Be("14");
+        styles.Descendants(ns + "numFmt")
+            .Should().NotContain(element => string.Equals((string?)element.Attribute("formatCode"), DateTimeEntryService.CurrentDateNumberFormat, StringComparison.OrdinalIgnoreCase));
     }
 }

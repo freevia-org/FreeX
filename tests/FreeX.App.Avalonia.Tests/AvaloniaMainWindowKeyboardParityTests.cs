@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 
@@ -75,8 +76,11 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
             var dateAddress = new CellAddress(sheet.Id, 1, 1);
             window.Session.SelectCell(dateAddress);
             await Press(window, Key.OemSemicolon, KeyModifiers.Control);
-            var date = sheet.GetValue(dateAddress).Should().BeOfType<DateTimeValue>().Subject;
-            date.ToDateTime().Date.Should().Be(DateTime.Today);
+            var date = sheet.GetValue(dateAddress).Should().BeOfType<NumberValue>().Subject;
+            new DateTimeValue(date.Value).ToDateTime().Date.Should().Be(DateTime.Today);
+            var dateCell = sheet.GetCell(dateAddress)!;
+            window.Session.Workbook.GetStyle(dateCell.StyleId).NumberFormat.Should().Be(DateTimeEntryService.CurrentDateNumberFormat);
+            window.FormulaBoxTextForTest.Should().Be(DateTime.Today.ToString("d", CultureInfo.CurrentCulture));
 
             var timeAddress = new CellAddress(sheet.Id, 2, 1);
             window.Session.SelectCell(timeAddress);

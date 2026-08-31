@@ -1,6 +1,8 @@
 using FluentAssertions;
 using FreeX.App.Presentation;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.App.Host.Tests;
 
@@ -54,5 +56,22 @@ public sealed class SpreadsheetDisplayFormatterTests
         SpreadsheetDisplayFormatter.FormatCellValue(new BoolValue(true)).Should().Be("TRUE");
         SpreadsheetDisplayFormatter.FormatCellValue(new TextValue("hello")).Should().Be("hello");
         SpreadsheetDisplayFormatter.FormatCellValue(ErrorValue.DivByZero).Should().Be("#DIV/0!");
+    }
+
+    [Fact]
+    public void FormatFormulaBarText_BuiltInCurrentDateUsesCurrentCultureShortDate()
+    {
+        var culture = (CultureInfo)CultureInfo.GetCultureInfo("en-US").Clone();
+        culture.DateTimeFormat.ShortDatePattern = "M/d/yyyy";
+        using var _ = TestCultureScope.CurrentCulture(culture);
+        var workbook = new Workbook("Dates");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var cell = Cell.FromValue(new NumberValue(DateTimeEntryService.CurrentDate(new DateTime(2026, 8, 31)).Value));
+        cell.StyleId = workbook.RegisterStyle(new CellStyle { NumberFormat = DateTimeEntryService.CurrentDateNumberFormat });
+        sheet.SetCell(address, cell);
+
+        SpreadsheetDisplayFormatter.FormatFormulaBarText(cell, address, useR1C1ReferenceStyle: false, sheet, workbook)
+            .Should().Be("8/31/2026");
     }
 }

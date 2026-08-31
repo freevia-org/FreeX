@@ -1,6 +1,8 @@
 using FreeX.Core.Calc;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
+using System.Globalization;
 using Xunit;
 
 namespace FreeX.Core.Calc.Tests;
@@ -13,6 +15,28 @@ namespace FreeX.Core.Calc.Tests;
 /// </summary>
 public class ViewportDisplayText1904DateSystemTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetViewport_BuiltInShortDateUsesCurrentCulturePatternForNumericAndDateValues(bool useDateTimeValue)
+    {
+        var culture = (CultureInfo)CultureInfo.GetCultureInfo("en-US").Clone();
+        culture.DateTimeFormat.ShortDatePattern = "M/d/yyyy";
+        using var _ = TestCultureScope.CurrentCulture(culture);
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var styleId = workbook.RegisterStyle(new CellStyle { NumberFormat = DateTimeEntryService.CurrentDateNumberFormat });
+        sheet.ColumnWidths[1] = 20;
+        var serial = DateTimeEntryService.CurrentDate(new DateTime(2026, 8, 31)).Value;
+        var cell = Cell.FromValue(useDateTimeValue ? new DateTimeValue(serial) : new NumberValue(serial));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var viewport = new ViewportService().GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        viewport.Cells.Single(c => c.Row == 1 && c.Col == 1).DisplayText.Should().Be("8/31/2026");
+    }
+
     [Fact]
     public void GetViewport_DateFormattedCell_RendersAgainst1904Epoch_WhenWorkbookUses1904DateSystem()
     {

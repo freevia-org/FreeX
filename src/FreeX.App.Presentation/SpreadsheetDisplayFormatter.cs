@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.App.Presentation;
 
@@ -60,6 +61,9 @@ public static class SpreadsheetDisplayFormatter
             return "=" + formula;
         }
 
+        if (TryFormatCurrentDateShortcut(cell, address, sheet, workbook, out var dateText))
+            return dateText;
+
         return FormatCellValue(cell?.Value);
     }
 
@@ -89,6 +93,39 @@ public static class SpreadsheetDisplayFormatter
             ? cell.StyleId
             : sheet.GetStyleOnly(address.Row, address.Col) ?? StyleId.Default;
         return workbook.GetStyle(styleId).Hidden;
+    }
+
+    private static bool TryFormatCurrentDateShortcut(
+        Cell? cell,
+        CellAddress address,
+        Sheet? sheet,
+        Workbook? workbook,
+        out string text)
+    {
+        text = "";
+        var serial = cell?.Value switch
+        {
+            NumberValue number => number.Value,
+            DateTimeValue dateTime => dateTime.Value,
+            _ => double.NaN
+        };
+        if (cell is null || double.IsNaN(serial) || sheet is null || workbook is null)
+            return false;
+
+        var styleId = cell.StyleId != StyleId.Default
+            ? cell.StyleId
+            : sheet.GetStyleOnly(address.Row, address.Col) ?? StyleId.Default;
+        if (!string.Equals(
+                workbook.GetStyle(styleId).NumberFormat,
+                DateTimeEntryService.CurrentDateNumberFormat,
+                StringComparison.OrdinalIgnoreCase) ||
+            !new DateTimeValue(serial).TryToDateTime(out var date))
+        {
+            return false;
+        }
+
+        text = date.ToString("d", CultureInfo.CurrentCulture);
+        return true;
     }
 
     public static string FormatCellValue(ScalarValue? value) =>
