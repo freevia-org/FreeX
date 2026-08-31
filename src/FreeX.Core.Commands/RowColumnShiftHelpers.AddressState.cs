@@ -86,7 +86,7 @@ internal static partial class RowColumnShiftHelpers
 
         var snapshots = new List<TextBoxAddressSnapshot>(sheet.TextBoxes.Count);
         foreach (var textBox in sheet.TextBoxes)
-            snapshots.Add(new TextBoxAddressSnapshot(textBox, textBox.Anchor, textBox.Width, textBox.Height));
+            snapshots.Add(new TextBoxAddressSnapshot(textBox, textBox.Anchor, textBox.Width, textBox.Height, textBox.Hyperlink));
 
         return snapshots;
     }
@@ -98,7 +98,7 @@ internal static partial class RowColumnShiftHelpers
 
         var snapshots = new List<DrawingShapeAddressSnapshot>(sheet.DrawingShapes.Count);
         foreach (var shape in sheet.DrawingShapes)
-            snapshots.Add(new DrawingShapeAddressSnapshot(shape, shape.Anchor, shape.Width, shape.Height));
+            snapshots.Add(new DrawingShapeAddressSnapshot(shape, shape.Anchor, shape.Width, shape.Height, shape.Hyperlink));
 
         return snapshots;
     }
@@ -126,7 +126,8 @@ internal static partial class RowColumnShiftHelpers
                 picture.SourceColumnCount,
                 [.. picture.Cells],
                 picture.Width,
-                picture.Height));
+                picture.Height,
+                picture.Hyperlink));
         }
 
         return snapshots;
@@ -339,6 +340,9 @@ internal static partial class RowColumnShiftHelpers
             // (see ResizeSpanForShift) back to the exact pre-edit size, not just the pre-edit anchor.
             entry.TextBox.Width = entry.Width;
             entry.TextBox.Height = entry.Height;
+            // freex-hyperlinks F1: undo ShiftDrawingObjectHyperlinkForShift's target rewrite back to
+            // the exact pre-edit hyperlink.
+            entry.TextBox.Hyperlink = entry.Hyperlink;
             sheet.TextBoxes.Add(entry.TextBox);
         }
 
@@ -348,6 +352,7 @@ internal static partial class RowColumnShiftHelpers
             entry.Shape.Anchor = entry.Anchor;
             entry.Shape.Width = entry.Width;
             entry.Shape.Height = entry.Height;
+            entry.Shape.Hyperlink = entry.Hyperlink;
             sheet.DrawingShapes.Add(entry.Shape);
         }
 
@@ -359,6 +364,7 @@ internal static partial class RowColumnShiftHelpers
             entry.Picture.IsLinkedToSourceRange = entry.IsLinkedToSourceRange;
             entry.Picture.Width = entry.Width;
             entry.Picture.Height = entry.Height;
+            entry.Picture.Hyperlink = entry.Hyperlink;
 
             // P23: undo a structural edit that had refreshed a linked picture's rendered
             // snapshot (RefreshLinkedPictureSnapshot) must also put the geometry/cell cache back,
@@ -1160,6 +1166,7 @@ internal static partial class RowColumnShiftHelpers
                 else
                     entry.TextBox.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
             }
+            entry.TextBox.Hyperlink = ShiftDrawingObjectHyperlinkForShift(entry.Hyperlink, shift);
             sheet.TextBoxes.Add(entry.TextBox);
         }
     }
@@ -1181,6 +1188,7 @@ internal static partial class RowColumnShiftHelpers
                 else
                     entry.Shape.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
             }
+            entry.Shape.Hyperlink = ShiftDrawingObjectHyperlinkForShift(entry.Hyperlink, shift);
             sheet.DrawingShapes.Add(entry.Shape);
         }
     }
@@ -1222,6 +1230,8 @@ internal static partial class RowColumnShiftHelpers
                 RefreshLinkedPictureSnapshot(workbook, sheet, entry.Picture, newRange);
             }
 
+            entry.Picture.Hyperlink = ShiftDrawingObjectHyperlinkForShift(entry.Hyperlink, shift);
+
             sheet.Pictures.Add(entry.Picture);
         }
     }
@@ -1259,6 +1269,45 @@ internal static partial class RowColumnShiftHelpers
         shiftedAnchor = default;
         return false;
     }
+
+    /// <summary>
+    /// freex-hyperlinks F1: rewrites a drawing object's internal ('Place in This Document')
+    /// <see cref="DrawingObjectHyperlink.Target"/> for a row/column insert or delete, mirroring
+    /// DrawingObjectHyperlinkRewriter (SheetCommands.cs, R107) which already does the identical
+    /// rewrite -- via the same <see cref="FormulaRewriter.Rewrite"/> call -- for Rename Sheet and
+    /// Delete Sheet. ShiftDrawingShapes/ShiftTextBoxes/ShiftPictures relocate a shape/textbox/
+    /// picture's Anchor (and, for pictures, LinkedSourceRange) on every structural row/column edit
+    /// but never touched this field, so the hyperlink kept pointing at the pre-shift cell forever
+    /// (it is written back into the drawing XML verbatim on every save --
+    /// XlsxWorksheetDrawingObjectWriter.BuildObjectHyperlinkElement). An external ("Existing File
+    /// or Web Page") hyperlink -- TargetMode == "External" -- is left completely untouched: only an
+    /// internal target (TargetMode null) can possibly be a cell/sheet reference at all.
+    /// </summary>
+    private static DrawingObjectHyperlink? ShiftDrawingObjectHyperlinkForShift(
+        DrawingObjectHyperlink? hyperlink, AddressShift shift)
+    {
+        if (hyperlink is null || hyperlink.TargetMode is not null)
+            return hyperlink;
+
+        var rewritten = FormulaRewriter.Rewrite(hyperlink.Target, ToRewriteOperation(shift), shift.SheetName);
+        return rewritten is null || rewritten == hyperlink.Target ? hyperlink : hyperlink with { Target = rewritten };
+    }
+
+    /// <summary>
+    /// Converts this row/column-shift helper's own <see cref="AddressShift"/> value into the
+    /// equivalent <see cref="FreeX.Core.Formula.RewriteOperation"/> so <see cref="FormulaRewriter"/>
+    /// can be reused for <see cref="ShiftDrawingObjectHyperlinkForShift"/> exactly as it already is
+    /// for every other reference-bearing field (formulas, named ranges, hyperlink bookmarks) this
+    /// same structural edit rewrites.
+    /// </summary>
+    private static RewriteOperation ToRewriteOperation(AddressShift shift) => (shift.Axis, shift.Kind) switch
+    {
+        (AddressShiftAxis.Rows, AddressShiftKind.Insert) => new InsertRowsOp(shift.SheetName, shift.Start, shift.Count),
+        (AddressShiftAxis.Rows, AddressShiftKind.Delete) => new DeleteRowsOp(shift.SheetName, shift.Start, shift.Count),
+        (AddressShiftAxis.Columns, AddressShiftKind.Insert) => new InsertColsOp(shift.SheetName, shift.Start, shift.Count),
+        (AddressShiftAxis.Columns, AddressShiftKind.Delete) => new DeleteColsOp(shift.SheetName, shift.Start, shift.Count),
+        _ => throw new InvalidOperationException($"Unhandled AddressShift axis/kind combination: {shift.Axis}/{shift.Kind}")
+    };
 
     /// <summary>
     /// R86-commands-insert-move-refadjust-5-2: Excel's default "Move and size with cells"
@@ -2447,9 +2496,13 @@ internal readonly record struct StyleOnlyEntry(uint Row, uint Col, StyleId Style
 // R86-commands-insert-move-refadjust-5-2: Width/Height are captured alongside Anchor so a row/column
 // insert or delete that grows/shrinks the object's span (see ResizeSpanForShift) can be undone back
 // to its exact pre-edit size, not just its pre-edit anchor cell.
-internal readonly record struct TextBoxAddressSnapshot(TextBoxModel TextBox, CellAddress Anchor, double Width, double Height);
+// freex-hyperlinks F1: Hyperlink is captured alongside Anchor/Width/Height so a row/column insert
+// or delete that rewrites the object's internal ('Place in This Document') hyperlink target (see
+// ShiftDrawingObjectHyperlinkForShift) can be undone back to its exact pre-edit target, not just
+// its pre-edit position/size.
+internal readonly record struct TextBoxAddressSnapshot(TextBoxModel TextBox, CellAddress Anchor, double Width, double Height, DrawingObjectHyperlink? Hyperlink);
 
-internal readonly record struct DrawingShapeAddressSnapshot(DrawingShapeModel Shape, CellAddress Anchor, double Width, double Height);
+internal readonly record struct DrawingShapeAddressSnapshot(DrawingShapeModel Shape, CellAddress Anchor, double Width, double Height, DrawingObjectHyperlink? Hyperlink);
 
 internal readonly record struct PictureAddressSnapshot(
     PictureModel Picture,
@@ -2460,7 +2513,8 @@ internal readonly record struct PictureAddressSnapshot(
     uint SourceColumnCount,
     IReadOnlyList<PictureCellSnapshot> Cells,
     double Width,
-    double Height);
+    double Height,
+    DrawingObjectHyperlink? Hyperlink);
 
 internal readonly record struct SparklineAddressSnapshot(
     SparklineModel Sparkline,
