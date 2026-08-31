@@ -902,8 +902,8 @@ public sealed partial class MainWindow
             ApplyHeaderFooterEditorState(edited);
         }
 
-        customHeaderButton.Click += async (_, _) => await EditHeaderFooterAsync(openFooterTab: false);
-        customFooterButton.Click += async (_, _) => await EditHeaderFooterAsync(openFooterTab: true);
+        customHeaderButton.Click += (_, _) => RunGuarded(() => EditHeaderFooterAsync(openFooterTab: false));
+        customFooterButton.Click += (_, _) => RunGuarded(() => EditHeaderFooterAsync(openFooterTab: true));
         UpdateHeaderFooterPreview();
 
         // --- Sheet tab ---
@@ -1818,7 +1818,7 @@ public sealed partial class MainWindow
         };
         ApplyTokenButtonChrome(pictureButton, 80);
         AutomationProperties.SetAutomationId(pictureButton, "HeaderFooterPictureButton");
-        pictureButton.Click += async (_, _) =>
+        pictureButton.Click += (_, _) => RunGuarded(async () =>
         {
             var target = ActiveTarget();
             var editor = editors[target];
@@ -1872,7 +1872,7 @@ public sealed partial class MainWindow
                     picture));
             RefreshPictureTargetState();
             editor.Focus();
-        };
+        });
         tokenButtons.Children.Add(pictureButton);
 
         formatPictureButton = new Button
@@ -1882,7 +1882,7 @@ public sealed partial class MainWindow
         };
         ApplyTokenButtonChrome(formatPictureButton, 104);
         AutomationProperties.SetAutomationId(formatPictureButton, "HeaderFooterFormatPictureButton");
-        formatPictureButton!.Click += async (_, _) =>
+        formatPictureButton!.Click += (_, _) => RunGuarded(async () =>
         {
             var target = ActiveTarget();
             if (editedState.GetPictures(target.Scope) is { } pictures &&
@@ -1894,7 +1894,7 @@ public sealed partial class MainWindow
                     RefreshPictureTargetState();
                 }
             }
-        };
+        });
         tokenButtons.Children.Add(formatPictureButton);
 
         pictureTargetStatus = new TextBlock

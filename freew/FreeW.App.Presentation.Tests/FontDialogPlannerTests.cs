@@ -95,7 +95,7 @@ public sealed class FontDialogPlannerTests
 
         source.Should().Contain("IUserMessageService? messageService = null");
         source.Should().Contain("messageService ?? new AvaloniaUserMessageService(this)");
-        source.Should().Contain("private async void OnOk()");
+        source.Should().Contain("private void OnOk() => AvaloniaUiTaskGuard.Run(OnOkAsync);");
         source.Should().Contain("await _messageService.ShowWarningAsync(");
         source.Should().NotContain("_status.IsVisible = true");
     }

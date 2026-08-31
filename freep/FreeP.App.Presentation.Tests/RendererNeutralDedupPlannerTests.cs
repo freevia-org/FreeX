@@ -865,6 +865,89 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void PictureRenderPlanner_NegativeCropPadsImageInsideFrameInsteadOfCropping()
+    {
+        // a:srcRect l="-25000": the frame spans source fractions [-0.25, 1], so the bitmap covers
+        // only the right 80% of the frame and the left 20% is padding.
+        var picture = new DrawOp.Picture
+        {
+            DestDip = new LayoutRect(10, 20, 200, 100),
+            CropLeft = -0.25,
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 100, pixelHeight: 50);
+
+        plan.SourceRectPixels.Should().Be(new PictureSourceRectPixels(0, 0, 100, 50));
+        plan.HasSourceCrop.Should().BeFalse("an outset names no sub-rectangle of the bitmap");
+        plan.HasDestinationInset.Should().BeTrue();
+        plan.HasCrop.Should().BeTrue("the picture no longer fills its frame");
+        plan.DestinationDip.Should().Be(new LayoutRect(10, 20, 200, 100));
+        plan.ImageDestinationDip.X.Should().BeApproximately(50, 1e-9);
+        plan.ImageDestinationDip.Y.Should().BeApproximately(20, 1e-9);
+        plan.ImageDestinationDip.Width.Should().BeApproximately(160, 1e-9);
+        plan.ImageDestinationDip.Height.Should().BeApproximately(100, 1e-9);
+    }
+
+    [Fact]
+    public void PictureRenderPlanner_NegativeCropPadsAllFourEdgesSymmetrically()
+    {
+        // All four insets at -0.25: the frame spans [-0.25, 1.25] on both axes, so the bitmap sits
+        // centred at 1/1.5 of the frame with a 1/6 margin on every side.
+        var picture = new DrawOp.Picture
+        {
+            DestDip = new LayoutRect(0, 0, 300, 150),
+            CropLeft = -0.25,
+            CropTop = -0.25,
+            CropRight = -0.25,
+            CropBottom = -0.25,
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 60, pixelHeight: 30);
+
+        plan.SourceRectPixels.Should().Be(new PictureSourceRectPixels(0, 0, 60, 30));
+        plan.ImageDestinationDip.X.Should().BeApproximately(50, 1e-9);
+        plan.ImageDestinationDip.Y.Should().BeApproximately(25, 1e-9);
+        plan.ImageDestinationDip.Width.Should().BeApproximately(200, 1e-9);
+        plan.ImageDestinationDip.Height.Should().BeApproximately(100, 1e-9);
+    }
+
+    [Fact]
+    public void PictureRenderPlanner_CombinesCropOnOneEdgeWithOutsetOnTheOther()
+    {
+        var picture = new DrawOp.Picture
+        {
+            DestDip = new LayoutRect(0, 0, 100, 40),
+            CropLeft = -0.5,
+            CropRight = 0.25,
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 20, pixelHeight: 10);
+
+        plan.SourceRectPixels.Should().Be(new PictureSourceRectPixels(0, 0, 15, 10));
+        plan.HasSourceCrop.Should().BeTrue();
+        plan.HasDestinationInset.Should().BeTrue();
+        plan.ImageDestinationDip.X.Should().BeApproximately(40, 1e-9);
+        plan.ImageDestinationDip.Width.Should().BeApproximately(60, 1e-9);
+    }
+
+    [Fact]
+    public void PictureRenderPlanner_PositiveCropKeepsImageFillingTheWholeFrame()
+    {
+        var picture = new DrawOp.Picture
+        {
+            DestDip = new LayoutRect(10, 20, 200, 100),
+            CropLeft = 0.25,
+            CropBottom = 0.5,
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 100, pixelHeight: 50);
+
+        plan.HasSourceCrop.Should().BeTrue();
+        plan.HasDestinationInset.Should().BeFalse();
+        plan.ImageDestinationDip.Should().Be(plan.DestinationDip);
+    }
+
+    [Fact]
     public void PictureRenderPlanner_PlansColorEffectsAlphaAndOuterEffectOrder()
     {
         var picture = new DrawOp.Picture

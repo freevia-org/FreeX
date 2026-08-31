@@ -176,7 +176,7 @@ internal static class XlsxStructuredTableStyleMetadataWriter
                     ? new XElement(workbookNs + "sz", new XAttribute("val", fontSize.ToString(CultureInfo.InvariantCulture)))
                     : null,
                 diff.FontColor is { } fontColor
-                    ? new XElement(workbookNs + "color", new XAttribute("rgb", ToArgb(fontColor)))
+                    ? ToDxfColorElement(workbookNs, "color", fontColor, diff.FontThemeColor)
                     : null,
                 diff.FontName is { } fontName
                     ? new XElement(workbookNs + "name", new XAttribute("val", fontName))
@@ -201,15 +201,15 @@ internal static class XlsxStructuredTableStyleMetadataWriter
             if (patternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
             {
                 if (diff.FillColor is { } fg)
-                    patternFill.Add(new XElement(workbookNs + "fgColor", new XAttribute("rgb", ToArgb(fg))));
+                    patternFill.Add(ToDxfColorElement(workbookNs, "fgColor", fg, diff.FillThemeColor));
                 patternFill.Add(new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64")));
             }
             else
             {
                 if (diff.FillPatternColor is { } fg)
-                    patternFill.Add(new XElement(workbookNs + "fgColor", new XAttribute("rgb", ToArgb(fg))));
+                    patternFill.Add(ToDxfColorElement(workbookNs, "fgColor", fg, diff.FillPatternThemeColor));
                 if (diff.FillColor is { } bg)
-                    patternFill.Add(new XElement(workbookNs + "bgColor", new XAttribute("rgb", ToArgb(bg))));
+                    patternFill.Add(ToDxfColorElement(workbookNs, "bgColor", bg, diff.FillThemeColor));
             }
 
             fill = new XElement(workbookNs + "fill", patternFill);
@@ -238,7 +238,33 @@ internal static class XlsxStructuredTableStyleMetadataWriter
         return new XElement(
             workbookNs + edgeName,
             new XAttribute("style", ToBorderStyle(border.Style)),
-            new XElement(workbookNs + "color", new XAttribute("rgb", ToArgb(border.Color))));
+            ToDxfColorElement(workbookNs, "color", border.Color, border.ThemeColor));
+    }
+
+    /// <summary>
+    /// freex-table-style-theme-color-1: XLSX <em>does</em> carry theme colours, so a themed table-style
+    /// dxf must re-emit its <c>&lt;color theme="n" tint="t"/&gt;</c> link rather than the RGB it happens
+    /// to resolve to — otherwise every open→save permanently baked the style and its banding stopped
+    /// following Theme Colors while the surrounding cells still did. Mirrors the conditional-formatting
+    /// dxf writer's ToDifferentialColorXml, which this path had diverged from.
+    /// </summary>
+    private static XElement ToDxfColorElement(
+        XNamespace workbookNs,
+        string elementName,
+        CellColor color,
+        WorkbookThemeColorReference? themeColor)
+    {
+        if (themeColor is not { } link)
+            return new XElement(workbookNs + elementName, new XAttribute("rgb", ToArgb(color)));
+
+        var element = new XElement(
+            workbookNs + elementName,
+            new XAttribute(
+                "theme",
+                XlsxColorReader.ThemeColorIndex(link.Slot).ToString(CultureInfo.InvariantCulture)));
+        if (Math.Abs(link.Tint) >= 0.000001)
+            element.SetAttributeValue("tint", link.Tint.ToString("G17", CultureInfo.InvariantCulture));
+        return element;
     }
 
     private static string ToBorderStyle(BorderStyle style) =>

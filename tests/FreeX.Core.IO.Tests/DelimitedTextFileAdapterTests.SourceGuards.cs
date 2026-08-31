@@ -42,6 +42,18 @@ public sealed partial class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Save_SortsSnapshotInPlaceWithoutDuplicatingCellsIntoRowBuckets()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoSource("DelimitedTextWorkbookWriter.cs");
+
+        source.Should().Contain("Array.Sort(cells, static (left, right) =>");
+        source.Should().Contain("WriteRow(writer, delimiter, cells, rowStart, rowEnd, endCol, workbook);");
+        source.Should().NotContain("EstimateRowCapacity");
+        source.Should().NotContain("rowLookup");
+        source.Should().NotContain("DelimitedTextRowBucket");
+    }
+
+    [Fact]
     public void Save_StreamsNumericValuesWithoutPerCellStringAllocation()
     {
         var source = TestWorkspaceFiles.ReadCoreIoSource("DelimitedTextWorkbookWriter.cs");

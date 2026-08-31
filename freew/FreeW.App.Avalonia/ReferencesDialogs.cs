@@ -92,7 +92,7 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
             if (!_updatingControls)
                 _session.UpdateTarget(_targetList.SelectedIndex);
         };
-        _targetList.DoubleTapped += async (_, _) => await AcceptAsync();
+        _targetList.DoubleTapped += (_, _) => RunUiTask(AcceptAsync);
         _hyperlinkBox.IsCheckedChanged += (_, _) =>
             _session.UpdateHyperlink(_hyperlinkBox.IsChecked == true);
 
@@ -139,7 +139,7 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
         var actionPlans = CrossReferenceDialogPlanner.ActionButtons;
         var ok = Button(actionPlans[0].Label, click: null, isDefault: actionPlans[0].IsDefault);
         AvaloniaCompactDialogChrome.ApplyNeutralDefaultButtonChrome(ok);
-        ok.Click += async (_, _) => await AcceptAsync();
+        ok.Click += (_, _) => RunUiTask(AcceptAsync);
         var cancel = Button(actionPlans[1].Label, () => Close(), isCancel: actionPlans[1].IsCancel);
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
             [ok, cancel],
@@ -195,6 +195,22 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
 
         Result = acceptance.Result;
         Close();
+    }
+
+    private void RunUiTask(Func<Task> operation) => _ = ObserveUiTaskAsync(operation);
+
+    private static async Task ObserveUiTaskAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+        }
     }
 
     private static StackPanel LabeledColumn(string label, Control control, int column)
@@ -803,6 +819,22 @@ internal sealed class SourceEntryDialog : FreeWDialogWindow
         authorField.Focus();
     }
 
+    private void RunUiTask(Func<Task> operation) => _ = ObserveUiTaskAsync(operation);
+
+    private static async Task ObserveUiTaskAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+        }
+    }
+
     private void RefreshFields()
     {
         _grid.RowDefinitions.Clear();
@@ -837,7 +869,7 @@ internal sealed class SourceEntryDialog : FreeWDialogWindow
         };
         AvaloniaCompactDialogChrome.ApplyButton(edit, DialogChromeStyle, minWidth: 32);
         ToolTip.SetTip(edit, SourceManagementDialogPlanner.PrimaryAuthorEditorButtonToolTip);
-        edit.Click += (_, _) => _ = EditPrimaryAuthorAsync();
+        edit.Click += (_, _) => RunUiTask(EditPrimaryAuthorAsync);
 
         var row = new StackPanel
         {
@@ -1178,8 +1210,8 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
 
         AvaloniaCompactDialogChrome.ApplyListBox(_masterList, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyListBox(_currentList, DialogChromeStyle);
-        _masterList.DoubleTapped += (_, _) => _ = EditMasterAsync();
-        _currentList.DoubleTapped += (_, _) => _ = EditCurrentAsync();
+        _masterList.DoubleTapped += (_, _) => RunUiTask(EditMasterAsync);
+        _currentList.DoubleTapped += (_, _) => RunUiTask(EditCurrentAsync);
         RefreshMasterList();
         RefreshCurrentList();
 
@@ -1187,13 +1219,13 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
             SourceManagementDialogPlanner.MasterListLabel,
             _masterList,
             [
-                Button(text.AddButtonLabel, () => _ = AddMasterAsync()),
-                Button(text.EditButtonLabel, () => _ = EditMasterAsync()),
+                Button(text.AddButtonLabel, () => RunUiTask(AddMasterAsync)),
+                Button(text.EditButtonLabel, () => RunUiTask(EditMasterAsync)),
                 Button(text.DeleteButtonLabel, DeleteMaster)
             ]);
 
-        var copy = Button(text.CopyToCurrentButtonLabel, () => _ = CopyMasterToCurrentAsync());
-        var copyBack = Button(text.CopyToMasterButtonLabel, () => _ = CopyCurrentToMasterAsync());
+        var copy = Button(text.CopyToCurrentButtonLabel, () => RunUiTask(CopyMasterToCurrentAsync));
+        var copyBack = Button(text.CopyToMasterButtonLabel, () => RunUiTask(CopyCurrentToMasterAsync));
         var centerPane = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
@@ -1211,8 +1243,8 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
             SourceManagementDialogPlanner.CurrentDocumentListLabel,
             _currentList,
             [
-                Button(text.AddButtonLabel, () => _ = AddCurrentAsync()),
-                Button(text.EditButtonLabel, () => _ = EditCurrentAsync()),
+                Button(text.AddButtonLabel, () => RunUiTask(AddCurrentAsync)),
+                Button(text.EditButtonLabel, () => RunUiTask(EditCurrentAsync)),
                 Button(text.DeleteButtonLabel, DeleteCurrent)
             ]);
 
@@ -1384,6 +1416,22 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
         _state = plan.State;
         refresh(plan.SelectedIndex);
         return true;
+    }
+
+    private void RunUiTask(Func<Task> operation) => _ = ObserveUiTaskAsync(operation);
+
+    private static async Task ObserveUiTaskAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+        }
     }
 
     private void RefreshMasterList(int? selectedIndex = null)

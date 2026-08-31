@@ -323,21 +323,21 @@ public sealed partial class MainWindow
             }
         }
 
-        chartAreaButton.Click += async (_, _) => await PickAreaColor(
+        chartAreaButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
             ChartAreaFormatDialogFieldId.ChartAreaFillColor,
             () => state.ChartAreaFillColor,
             color => state = state with { ChartAreaFillColor = color },
-            chartAreaButton);
-        plotAreaButton.Click += async (_, _) => await PickAreaColor(
+            chartAreaButton));
+        plotAreaButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
             ChartAreaFormatDialogFieldId.PlotAreaFillColor,
             () => state.PlotAreaFillColor,
             color => state = state with { PlotAreaFillColor = color },
-            plotAreaButton);
-        plotBorderButton.Click += async (_, _) => await PickAreaColor(
+            plotAreaButton));
+        plotBorderButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
             ChartAreaFormatDialogFieldId.PlotAreaBorderColor,
             () => state.PlotAreaBorderColor,
             color => state = state with { PlotAreaBorderColor = color },
-            plotBorderButton);
+            plotBorderButton));
 
         // "Fill & Line" group box — matches WPF CreateGroupBox(ChartDialog_FillLineGroup, ...) with
         // the inline help paragraph at the top (ChartAreaLegend_FillLineHelpText).
@@ -389,21 +389,21 @@ public sealed partial class MainWindow
         var legendFillButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.LegendFillColor, current.LegendFillColor);
         var legendBorderButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.LegendBorderColor, current.LegendBorderColor);
 
-        legendTextButton.Click += async (_, _) => await PickAreaColor(
+        legendTextButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
             ChartAreaFormatDialogFieldId.LegendTextColor,
             () => state.LegendTextColor,
             color => state = state with { LegendTextColor = color },
-            legendTextButton);
-        legendFillButton.Click += async (_, _) => await PickAreaColor(
+            legendTextButton));
+        legendFillButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
             ChartAreaFormatDialogFieldId.LegendFillColor,
             () => state.LegendFillColor,
             color => state = state with { LegendFillColor = color },
-            legendFillButton);
-        legendBorderButton.Click += async (_, _) => await PickAreaColor(
+            legendFillButton));
+        legendBorderButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
             ChartAreaFormatDialogFieldId.LegendBorderColor,
             () => state.LegendBorderColor,
             color => state = state with { LegendBorderColor = color },
-            legendBorderButton);
+            legendBorderButton));
 
         var legendBorderWidthBox = MakeAreaNumberBox(
             ChartAreaFormatDialogFieldId.LegendBorderThickness,

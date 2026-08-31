@@ -638,10 +638,33 @@ public static class SkiaPdfWriter
         SKRect destRect,
         SKPaint imagePaint)
     {
-        if (TryGetSourceRect(skImage, image.SourceCrop, out var sourceRect))
-            canvas.DrawImage(skImage, sourceRect, destRect, imagePaint);
+        var plan = PdfRenderGeometry.GetImageCropPlan(skImage.Width, skImage.Height, image.SourceCrop);
+
+        // Negative a:srcRect insets outset rather than crop: the bitmap covers only part of the
+        // frame and the remainder stays transparent. The clip was already applied to the full frame
+        // by the caller, so only the painted rectangle shrinks.
+        var target = destRect;
+        if (plan.HasDestinationInset)
+        {
+            target = new SKRect(
+                destRect.Left + (float)(plan.DestinationInsetLeft * destRect.Width),
+                destRect.Top + (float)(plan.DestinationInsetTop * destRect.Height),
+                destRect.Right - (float)(plan.DestinationInsetRight * destRect.Width),
+                destRect.Bottom - (float)(plan.DestinationInsetBottom * destRect.Height));
+            if (target.Width <= 0 || target.Height <= 0)
+                return;
+        }
+
+        if (plan.HasSourceCrop)
+        {
+            canvas.DrawImage(
+                skImage,
+                SKRect.Create(plan.SourceX, plan.SourceY, plan.SourceWidth, plan.SourceHeight),
+                target,
+                imagePaint);
+        }
         else
-            canvas.DrawImage(skImage, destRect, imagePaint);
+            canvas.DrawImage(skImage, target, imagePaint);
     }
 
     private static void RenderEffectGroup(

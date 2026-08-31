@@ -79,7 +79,7 @@ public sealed class PivotValueFieldSettingsParitySourceTests
         source.Should().Contain("numberFormatPanel.Children.Add(numberFormatPresetBox);");
         source.Should().Contain("numberFormatId = preset.NumberFormatId;");
         source.Should().Contain("numberFormatCode = null;");
-        source.Should().Contain("numberFormatButton.Click += async");
+        source.Should().Contain("numberFormatButton.Click += (_, _) => RunGuarded");
         source.Should().Contain("ShowPivotNumberFormatInputDialogAsync(CurrentNumberFormatCode())");
         source.Should().Contain("SetNumberFormatState(acceptedFormat)");
         source.Should().Contain("numberFormatPresetBox.Items.Add(formatCode)");

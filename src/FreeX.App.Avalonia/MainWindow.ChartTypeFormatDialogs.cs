@@ -355,46 +355,46 @@ public sealed partial class MainWindow
         var thicknessBox = CreateChartTextBox(current.HighLowLineThickness.ToString("G", CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(thicknessBox, thicknessField.LabelResourceKey, thicknessField.AutomationId);
 
-        upFillButton.Click += async (_, _) =>
+        upFillButton.Click += (_, _) => RunGuarded(async () =>
         {
             var label = TypeFormatDescriptorText(upFillField.LabelResourceKey);
             var chosen = await ShowMoreColorsDialogAsync(
                 label,
                 state.UpBarFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color) { state = state with { UpBarFillColor = color }; upFillButton.Content = DescribeColor(label, color); }
-        };
-        upBorderButton.Click += async (_, _) =>
+        });
+        upBorderButton.Click += (_, _) => RunGuarded(async () =>
         {
             var label = TypeFormatDescriptorText(upBorderField.LabelResourceKey);
             var chosen = await ShowMoreColorsDialogAsync(
                 label,
                 state.UpBarBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color) { state = state with { UpBarBorderColor = color }; upBorderButton.Content = DescribeColor(label, color); }
-        };
-        downFillButton.Click += async (_, _) =>
+        });
+        downFillButton.Click += (_, _) => RunGuarded(async () =>
         {
             var label = TypeFormatDescriptorText(downFillField.LabelResourceKey);
             var chosen = await ShowMoreColorsDialogAsync(
                 label,
                 state.DownBarFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color) { state = state with { DownBarFillColor = color }; downFillButton.Content = DescribeColor(label, color); }
-        };
-        downBorderButton.Click += async (_, _) =>
+        });
+        downBorderButton.Click += (_, _) => RunGuarded(async () =>
         {
             var label = TypeFormatDescriptorText(downBorderField.LabelResourceKey);
             var chosen = await ShowMoreColorsDialogAsync(
                 label,
                 state.DownBarBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color) { state = state with { DownBarBorderColor = color }; downBorderButton.Content = DescribeColor(label, color); }
-        };
-        highLowButton.Click += async (_, _) =>
+        });
+        highLowButton.Click += (_, _) => RunGuarded(async () =>
         {
             var label = TypeFormatDescriptorText(highLowColorField.LabelResourceKey);
             var chosen = await ShowMoreColorsDialogAsync(
                 label,
                 state.HighLowLineColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color) { state = state with { HighLowLineColor = color }; highLowButton.Content = DescribeColor(label, color); }
-        };
+        });
 
         var dialog = NewChartDialog(UiText.Get(ChartStockFormatPlanner.TitleResourceKey), ChartStockFormatPlanner.DialogAutomationId);
 

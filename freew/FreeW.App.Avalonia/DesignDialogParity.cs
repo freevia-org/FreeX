@@ -110,7 +110,13 @@ public sealed partial class CustomizeThemeColorsDialog : FreeWDialogWindow
         return true;
     }
 
-    private async void AcceptAndClose()
+    private void AcceptAndClose() => AvaloniaUiTaskGuard.Run(AcceptAndCloseAsync, ex =>
+    {
+        _status.Text = ex.Message;
+        _status.IsVisible = true;
+    });
+
+    private async Task AcceptAndCloseAsync()
     {
         if (Accept(closeOnSuccess: false))
         {

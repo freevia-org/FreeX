@@ -225,14 +225,14 @@ public sealed partial class MainWindow
         };
         ApplyRibbonMenuButtonChrome(addButton, 110);
         AutomationProperties.SetAutomationId(addButton, "WatchWindowAddButton");
-        addButton.Click += async (_, _) =>
+        addButton.Click += (_, _) => RunGuarded(async () =>
         {
             if (await ShowAddWatchDialogAsync(FormatRangeReference(_session.SelectedRange), dialog))
             {
                 WatchWindowService.AddWatches(_session.Workbook, _session.SelectedRange);
                 RefreshList();
             }
-        };
+        });
 
         var deleteButton = new Button
         {

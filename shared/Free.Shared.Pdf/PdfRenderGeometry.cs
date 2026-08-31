@@ -1,3 +1,5 @@
+using Free.Shared.Drawing;
+
 namespace Free.Shared.Pdf;
 
 /// <summary>
@@ -15,6 +17,36 @@ public static class PdfRenderGeometry
     public static double RoundedClipRadius(double width, double height) =>
         Math.Min(width, height) * 0.18;
 
+    /// <summary>
+    /// Resolves an <c>a:srcRect</c>-style crop against a decoded image. Negative insets outset
+    /// rather than crop, so the plan also carries the fraction of the destination rectangle that
+    /// the image must leave empty on each edge.
+    /// </summary>
+    public static SourceRectCropPlan GetImageCropPlan(
+        int imageWidth,
+        int imageHeight,
+        PdfImageSourceCrop crop)
+    {
+        if (!crop.HasCrop || imageWidth <= 0 || imageHeight <= 0)
+            return new SourceRectCropPlan(
+                0,
+                0,
+                Math.Max(1, imageWidth),
+                Math.Max(1, imageHeight),
+                0,
+                0,
+                0,
+                0);
+
+        return SourceRectCropGeometry.Plan(
+            imageWidth,
+            imageHeight,
+            crop.Left,
+            crop.Top,
+            crop.Right,
+            crop.Bottom);
+    }
+
     public static bool TryGetImageSourceRect(
         int imageWidth,
         int imageHeight,
@@ -22,33 +54,15 @@ public static class PdfRenderGeometry
         out PdfImagePixelRect sourceRect)
     {
         sourceRect = default;
-        if (!crop.HasCrop || imageWidth <= 0 || imageHeight <= 0)
+        var plan = GetImageCropPlan(imageWidth, imageHeight, crop);
+        if (!plan.HasSourceCrop)
             return false;
 
-        var sourceX = Clamp(
-            (int)Math.Round(NormalizeCropFraction(crop.Left) * imageWidth),
-            0,
-            imageWidth - 1);
-        var sourceY = Clamp(
-            (int)Math.Round(NormalizeCropFraction(crop.Top) * imageHeight),
-            0,
-            imageHeight - 1);
-        var sourceWidth = Clamp(
-            (int)Math.Round((1.0 - NormalizeCropFraction(crop.Left) - NormalizeCropFraction(crop.Right)) * imageWidth),
-            1,
-            imageWidth - sourceX);
-        var sourceHeight = Clamp(
-            (int)Math.Round((1.0 - NormalizeCropFraction(crop.Top) - NormalizeCropFraction(crop.Bottom)) * imageHeight),
-            1,
-            imageHeight - sourceY);
-
-        if (sourceX == 0 &&
-            sourceY == 0 &&
-            sourceWidth == imageWidth &&
-            sourceHeight == imageHeight)
-            return false;
-
-        sourceRect = new PdfImagePixelRect(sourceX, sourceY, sourceWidth, sourceHeight);
+        sourceRect = new PdfImagePixelRect(
+            plan.SourceX,
+            plan.SourceY,
+            plan.SourceWidth,
+            plan.SourceHeight);
         return true;
     }
 
@@ -238,9 +252,6 @@ public static class PdfRenderGeometry
                 normalized.Equals("image/jpg", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static double NormalizeCropFraction(double value) =>
-        double.IsFinite(value) ? value : 0.0;
-
     private static bool IsFinite(double value) =>
         !double.IsNaN(value) && !double.IsInfinity(value);
 
@@ -289,9 +300,6 @@ public static class PdfRenderGeometry
         var dy = y2 - y1;
         return dx * dx + dy * dy;
     }
-
-    private static int Clamp(int value, int min, int max) =>
-        Math.Max(min, Math.Min(value, max));
 }
 
 public readonly record struct PdfImagePixelRect(int X, int Y, int Width, int Height);

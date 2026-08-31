@@ -76,7 +76,7 @@ public sealed partial class MainWindow
         closeButton.IsCancel = true;
 
         helpButton.Click += (_, _) => ShowSelectedIssueHelp();
-        showStepsButton.Click += async (_, _) => await ShowCalculationStepsForSelectedAsync();
+        showStepsButton.Click += (_, _) => RunGuarded(ShowCalculationStepsForSelectedAsync);
         sideIgnoreButton.Click += (_, _) => IgnoreSelected();
         editFormulaButton.Click += (_, _) => NavigateSelected();
         goToButton.Click += (_, _) => NavigateSelected();
@@ -84,7 +84,7 @@ public sealed partial class MainWindow
         nextButton.Click += (_, _) => MoveSelection(1);
         ignoreButton.Click += (_, _) => IgnoreSelected();
         traceButton.Click += (_, _) => TraceSelected();
-        optionsButton.Click += async (_, _) => await ShowOptionsDialogAsync();
+        optionsButton.Click += (_, _) => RunGuarded(ShowOptionsDialogAsync);
         closeButton.Click += (_, _) => dialog.Close();
 
         var actionStack = new StackPanel

@@ -98,6 +98,14 @@ internal static class XlsxStructuredTableStyleMetadataReader
         WorkbookTheme theme,
         WorkbookIndexedColorPalette indexedColors)
     {
+        // freex-table-style-theme-color-1: these carry the <color theme="n"/> LINK alongside the RGB it
+        // resolves to today, so a themed table style keeps following the workbook theme and round-trips
+        // its link on save instead of being permanently baked at load. Mirrors the conditional-
+        // formatting dxf reader (R120-cf-theme-color-1), which this path had diverged from.
+        WorkbookThemeColorReference? fontThemeColor = null;
+        WorkbookThemeColorReference? fillThemeColor = null;
+        WorkbookThemeColorReference? fillPatternThemeColor = null;
+
         var font = dxf.Element(workbookNs + "font");
         CellColor? fontColor = null;
         bool? bold = null;
@@ -107,8 +115,12 @@ internal static class XlsxStructuredTableStyleMetadataReader
         double? fontSize = null;
         if (font is not null)
         {
-            if (XlsxColorReader.TryReadCellColor(font.Element(workbookNs + "color"), theme, indexedColors, out var readFontColor))
+            if (XlsxColorReader.TryReadCellColorWithThemeReference(
+                    font.Element(workbookNs + "color"), theme, indexedColors, out var readFontColor, out var readFontThemeColor))
+            {
                 fontColor = readFontColor;
+                fontThemeColor = readFontThemeColor;
+            }
 
             if (font.Element(workbookNs + "b") is { } boldElement)
                 bold = XlsxXmlAttributeReader.ReadBoolAttribute(boldElement, "val", defaultValue: true);
@@ -145,18 +157,35 @@ internal static class XlsxStructuredTableStyleMetadataReader
             if (patternStyle != CellFillPatternStyle.None)
                 fillPatternStyle = patternStyle;
 
-            if (XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "fgColor"), theme, indexedColors, out var foregroundColor))
+            if (XlsxColorReader.TryReadCellColorWithThemeReference(
+                    patternFill.Element(workbookNs + "fgColor"),
+                    theme,
+                    indexedColors,
+                    out var foregroundColor,
+                    out var foregroundThemeColor))
             {
                 if (patternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
+                {
                     fillColor = foregroundColor;
+                    fillThemeColor = foregroundThemeColor;
+                }
                 else
+                {
                     fillPatternColor = foregroundColor;
+                    fillPatternThemeColor = foregroundThemeColor;
+                }
             }
 
             if (fillColor is null &&
-                XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "bgColor"), theme, indexedColors, out var backgroundColor))
+                XlsxColorReader.TryReadCellColorWithThemeReference(
+                    patternFill.Element(workbookNs + "bgColor"),
+                    theme,
+                    indexedColors,
+                    out var backgroundColor,
+                    out var backgroundThemeColor))
             {
                 fillColor = backgroundColor;
+                fillThemeColor = backgroundThemeColor;
             }
         }
 
@@ -199,9 +228,12 @@ internal static class XlsxStructuredTableStyleMetadataReader
                 FontName: fontName,
                 FontSize: fontSize,
                 FontColor: fontColor,
+                FontThemeColor: fontThemeColor,
                 FillColor: fillColor,
+                FillThemeColor: fillThemeColor,
                 FillPatternStyle: fillPatternStyle,
                 FillPatternColor: fillPatternColor,
+                FillPatternThemeColor: fillPatternThemeColor,
                 NumberFormat: numberFormat,
                 BorderTop: borderTop,
                 BorderRight: borderRight,
@@ -222,8 +254,13 @@ internal static class XlsxStructuredTableStyleMetadataReader
         if (style == BorderStyle.None)
             return null;
 
-        var hasColor = XlsxColorReader.TryReadCellColor(edge.Element(workbookNs + "color"), theme, indexedColors, out var color);
-        return new CellBorder(style, hasColor ? color : CellColor.Black);
+        // freex-table-style-theme-color-1: capture the <color theme="n" tint="t"/> LINK, not just the
+        // RGB it happens to resolve to today, so a themed table-style edge re-resolves against a later
+        // theme swap and round-trips its link on save. This mirrors what the conditional-formatting
+        // dxf reader already does (R120-cf-theme-color-1); the table-style path was the odd one out.
+        var hasColor = XlsxColorReader.TryReadCellColorWithThemeReference(
+            edge.Element(workbookNs + "color"), theme, indexedColors, out var color, out var themeColor);
+        return new CellBorder(style, hasColor ? color : CellColor.Black, hasColor ? themeColor : null);
     }
 
 }

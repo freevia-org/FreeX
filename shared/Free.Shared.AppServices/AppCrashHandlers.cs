@@ -20,6 +20,32 @@ namespace Free.Shared.AppServices;
 public static class AppCrashHandlers
 {
     /// <summary>
+    /// Runs the dispatcher diagnostics/emergency-snapshot callback and returns whether the UI
+    /// framework should mark the exception handled. Ordinary event/continuation faults are
+    /// recoverable at this final boundary; process-wide memory exhaustion is not.
+    /// </summary>
+    public static bool HandleDispatcherException(
+        Exception exception,
+        Action<Exception> recordAndSnapshot)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        ArgumentNullException.ThrowIfNull(recordAndSnapshot);
+
+        try
+        {
+            recordAndSnapshot(exception);
+        }
+        catch
+        {
+            // Crash diagnostics and emergency snapshots are best-effort. A secondary failure in
+            // either must not replace an otherwise recoverable UI exception or defeat this safety
+            // net. OutOfMemoryException remains fatal regardless.
+        }
+
+        return exception is not OutOfMemoryException;
+    }
+
+    /// <summary>
     /// Wires the dispatcher / appdomain / unobserved-task crash hooks. Safe to call once at startup.
     /// </summary>
     /// <param name="recordCrash">Records a crash for the given (exception, source). Must not throw.</param>

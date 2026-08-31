@@ -121,7 +121,10 @@ public partial class MainWindow
         };
     }
 
-    private async void MainWindow_Closing(object? sender, CancelEventArgs e)
+    private void MainWindow_Closing(object? sender, CancelEventArgs e) =>
+        RunGuardedUiCommand("Close Workbook", () => CloseWindowAsync(sender, e));
+
+    private async Task CloseWindowAsync(object? sender, CancelEventArgs e)
     {
         // A Save/Save-As or File>Open may still be running on a background thread while the
         // workbook happens to read as clean at this instant (a brand-new Book1, or a workbook

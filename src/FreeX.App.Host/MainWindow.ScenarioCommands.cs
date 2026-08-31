@@ -8,7 +8,10 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private async void ScenariosBtn_Click(object sender, RoutedEventArgs e)
+    private void ScenariosBtn_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Scenario Manager", () => ShowScenarioManagerAsync(sender, e));
+
+    private async Task ShowScenarioManagerAsync(object sender, RoutedEventArgs e)
     {
         ScenarioManagerDialog? dialog = null;
         dialog = new ScenarioManagerDialog(

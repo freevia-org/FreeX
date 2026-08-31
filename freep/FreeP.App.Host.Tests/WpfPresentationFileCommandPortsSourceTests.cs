@@ -103,7 +103,7 @@ public sealed class WpfPresentationFileCommandPortsSourceTests
             "FreeP.App.Host",
             "MainWindow.cs"));
 
-        source.Should().Contain("ExportVideo: () => _ = _fileSession.ExportVideoAsync(),");
+        source.Should().Contain("ExportVideo: () => RunGuarded(async () => await _fileSession.ExportVideoAsync(), \"Export video\"),");
     }
 
     [Fact]

@@ -20,7 +20,10 @@ public static class BgraRasterStatistics
         var backgroundGreen = pixels[1];
         var backgroundRed = pixels[2];
         long count = 0;
-        for (var index = 0; index < pixels.Length; index += 4)
+        // A capture/read can be truncated between obtaining its length and consuming the bytes.
+        // Ignore an incomplete trailing pixel rather than indexing its missing channels and taking
+        // down screenshot/evidence workflows with IndexOutOfRangeException.
+        for (var index = 0; index + 3 < pixels.Length; index += 4)
         {
             if (Math.Abs(pixels[index] - backgroundBlue) +
                 Math.Abs(pixels[index + 1] - backgroundGreen) +

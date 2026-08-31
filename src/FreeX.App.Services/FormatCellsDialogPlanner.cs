@@ -281,14 +281,25 @@ public static class FormatCellsDialogPlanner
         return string.IsNullOrWhiteSpace(typed) ? selectedFontName : typed;
     }
 
+    /// <param name="theme">
+    /// freex-theme-border-color-F1 (dialog write-back half): the colour boxes carry RGB text only, so a
+    /// cell whose font/fill/border follows a theme slot would come back as a literal RGB and
+    /// StyleDiff.ApplyTo would drop the CellStyle.*ThemeColor / CellBorder.ThemeColor link — silently
+    /// unlinking the cell from the theme on every OK, even when the user touched nothing. Each colour
+    /// below therefore re-emits the ORIGINAL theme link whenever the submitted RGB still equals what
+    /// that link resolves to under this theme; a genuinely edited colour still clears it, which is what
+    /// picking an explicit RGB means.
+    /// </param>
     public static bool TryCreateResult(
         CellStyle current,
         FormatCellsDialogInput input,
+        WorkbookTheme theme,
         out FormatCellsDialogResult? result,
         out FormatCellsDialogValidation? validation)
     {
         ArgumentNullException.ThrowIfNull(current);
         ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(theme);
 
         result = null;
         validation = null;
@@ -335,10 +346,10 @@ public static class FormatCellsDialogPlanner
         if (!TryValidateBorder(input.Border, out validation))
             return false;
 
-        var borderTop = ParseBorder(input.Border.Top, current.BorderTop);
-        var borderRight = ParseBorder(input.Border.Right, current.BorderRight);
-        var borderBottom = ParseBorder(input.Border.Bottom, current.BorderBottom);
-        var borderLeft = ParseBorder(input.Border.Left, current.BorderLeft);
+        var borderTop = ParseBorder(input.Border.Top, current.BorderTop, theme);
+        var borderRight = ParseBorder(input.Border.Right, current.BorderRight, theme);
+        var borderBottom = ParseBorder(input.Border.Bottom, current.BorderBottom, theme);
+        var borderLeft = ParseBorder(input.Border.Left, current.BorderLeft, theme);
 
         result = new FormatCellsDialogResult(
             new StyleDiff(
@@ -351,9 +362,21 @@ public static class FormatCellsDialogPlanner
                 FontName: ResolveSelectedFontName(input.Font.FontNameText, input.Font.SelectedFontName),
                 FontSize: fontSize,
                 FontColor: fontColor,
+                FontThemeColor: PreservedThemeLink(
+                    current.FontThemeColor, current.ResolveFontColor(theme), fontColor),
                 FillColor: input.Fill.ClearFill ? null : fillColor,
+                FillThemeColor: input.Fill.ClearFill
+                    ? null
+                    : PreservedThemeLink(
+                        current.FillThemeColor, current.ResolveFillColor(theme), fillColor),
                 FillPatternStyle: input.Fill.ClearFill ? CellFillPatternStyle.None : input.Fill.FillPatternStyle,
                 FillPatternColor: input.Fill.ClearFill ? null : fillPatternColor,
+                FillPatternThemeColor: input.Fill.ClearFill
+                    ? null
+                    : PreservedThemeLink(
+                        current.FillPatternThemeColor,
+                        current.ResolveFillPatternColor(theme),
+                        fillPatternColor),
                 HAlign: TryParseEnum<CellHAlign>(input.Alignment.HorizontalAlignmentText),
                 VAlign: TryParseEnum<CellVAlign>(input.Alignment.VerticalAlignmentText),
                 WrapText: input.Alignment.WrapText,
@@ -487,12 +510,47 @@ public static class FormatCellsDialogPlanner
         return true;
     }
 
+    /// <summary>
+    /// Legacy overload with no theme: cannot preserve a theme-backed edge, so it flattens
+    /// <see cref="CellBorder.ThemeColor"/> exactly as before. Prefer the theme-taking overload.
+    /// </summary>
     public static CellBorder ParseBorder(FormatCellsDialogBorderSideInput input, CellBorder current)
     {
         var style = TryParseEnum<BorderStyle>(input.StyleText) ?? current.Style;
         var color = TryParseColor(input.ColorText) ?? current.Color;
         return new CellBorder(style, color);
     }
+
+    /// <summary>
+    /// freex-theme-border-color-F1 (dialog write-back half): keeps a theme-backed edge linked when the
+    /// submitted RGB still equals what <paramref name="current"/>'s theme link resolves to under
+    /// <paramref name="theme"/> — which is what the Border tab seeds the box with, so simply pressing OK
+    /// no longer unlinks the edge. A genuinely re-picked colour still drops the link.
+    /// </summary>
+    public static CellBorder ParseBorder(
+        FormatCellsDialogBorderSideInput input,
+        CellBorder current,
+        WorkbookTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+
+        var style = TryParseEnum<BorderStyle>(input.StyleText) ?? current.Style;
+        var color = TryParseColor(input.ColorText) ?? current.ResolveColor(theme);
+        return current.ThemeColor is { } link && color == current.ResolveColor(theme)
+            ? new CellBorder(style, current.Color, link)
+            : new CellBorder(style, color);
+    }
+
+    /// <summary>
+    /// Returns <paramref name="link"/> when the colour the user is submitting still equals what that
+    /// link resolves to, so an untouched theme-backed colour survives OK; null once the two diverge,
+    /// letting StyleDiff.ApplyTo clear the link as an explicit RGB pick should.
+    /// </summary>
+    private static WorkbookThemeColorReference? PreservedThemeLink(
+        WorkbookThemeColorReference? link,
+        CellColor? resolvedCurrent,
+        CellColor? submitted) =>
+        link is { } value && submitted is { } chosen && resolvedCurrent == chosen ? value : null;
 
     public static BorderStyle ResolveBorderLineStyle(string? primaryStyleText, string? fallbackStyleText = null) =>
         TryParseEnum<BorderStyle>(primaryStyleText)

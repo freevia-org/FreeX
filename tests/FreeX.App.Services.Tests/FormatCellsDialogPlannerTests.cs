@@ -37,7 +37,7 @@ public sealed class FormatCellsDialogPlannerTests
             }
         };
 
-        FormatCellsDialogPlanner.TryCreateResult(new CellStyle(), input, out var result, out var validation)
+        FormatCellsDialogPlanner.TryCreateResult(new CellStyle(), input, WorkbookTheme.Office, out var result, out var validation)
             .Should()
             .BeTrue();
 
@@ -131,7 +131,7 @@ public sealed class FormatCellsDialogPlannerTests
             Font = ValidInput().Font with { FontSizeText = "409" }
         };
 
-        FormatCellsDialogPlanner.TryCreateResult(new CellStyle(), input, out var result, out var validation)
+        FormatCellsDialogPlanner.TryCreateResult(new CellStyle(), input, WorkbookTheme.Office, out var result, out var validation)
             .Should()
             .BeTrue();
 
@@ -189,7 +189,7 @@ public sealed class FormatCellsDialogPlannerTests
             }
         };
 
-        FormatCellsDialogPlanner.TryCreateResult(current, input, out var result, out var validation)
+        FormatCellsDialogPlanner.TryCreateResult(current, input, WorkbookTheme.Office, out var result, out var validation)
             .Should()
             .BeTrue();
 
@@ -302,7 +302,7 @@ public sealed class FormatCellsDialogPlannerTests
         FormatCellsDialogValidationTarget expectedTarget,
         string expectedMessageResourceKey)
     {
-        FormatCellsDialogPlanner.TryCreateResult(new CellStyle(), input, out var result, out var validation)
+        FormatCellsDialogPlanner.TryCreateResult(new CellStyle(), input, WorkbookTheme.Office, out var result, out var validation)
             .Should()
             .BeFalse();
 
@@ -419,4 +419,145 @@ public sealed class FormatCellsDialogPlannerTests
             UnderlineDouble: "Double",
             UnderlineSingleAccounting: "Single Accounting",
             UnderlineDoubleAccounting: "Double Accounting");
+
+    // ── freex-theme-border-color-F1: dialog write-back ───────────────────────
+    //
+    // The colour boxes carry RGB text only. Before the fix, pressing OK submitted that RGB and
+    // StyleDiff.ApplyTo cleared CellStyle.FontThemeColor / FillThemeColor / FillPatternThemeColor and
+    // CellBorder.ThemeColor -- so merely OPENING Format Cells on a theme-styled cell and clicking OK
+    // silently unlinked it from the theme, and it stopped following later Theme Colors swaps.
+
+    private static WorkbookTheme ThemeWithAccent1(CellColor accent1) =>
+        WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, accent1);
+
+    private static CellStyle ThemeLinkedStyle() =>
+        new()
+        {
+            // Baked RGBs deliberately disagree with what Accent1 resolves to, as a stale load-time
+            // bake would.
+            FontColor = new CellColor(1, 2, 3),
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+            FillColor = new CellColor(4, 5, 6),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+            FillPatternColor = new CellColor(7, 8, 9),
+            FillPatternThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+            BorderTop = new CellBorder(
+                BorderStyle.Thin,
+                new CellColor(10, 11, 12),
+                new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)),
+        };
+
+    private static string Hex(CellColor c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+
+    /// <summary>Rebuilds the input exactly as the dialog seeds its boxes: from the RESOLVED colours.</summary>
+    private static FormatCellsDialogInput UntouchedInputFor(CellStyle style, WorkbookTheme theme)
+    {
+        var baseInput = ValidInput();
+        return baseInput with
+        {
+            Font = baseInput.Font with { FontColorText = Hex(style.ResolveFontColor(theme)) },
+            Fill = baseInput.Fill with
+            {
+                FillColorText = Hex(style.ResolveFillColor(theme)!.Value),
+                FillPatternColorText = Hex(style.ResolveFillPatternColor(theme)!.Value),
+            },
+            Border = baseInput.Border with
+            {
+                Top = new FormatCellsDialogBorderSideInput(
+                    nameof(BorderStyle.Thin),
+                    Hex(style.BorderTop.ResolveColor(theme))),
+            },
+        };
+    }
+
+    [Fact]
+    public void TryCreateResult_UntouchedThemeColors_KeepTheirThemeLinks()
+    {
+        var theme = ThemeWithAccent1(new CellColor(200, 10, 20));
+        var style = ThemeLinkedStyle();
+
+        FormatCellsDialogPlanner.TryCreateResult(
+                style, UntouchedInputFor(style, theme), theme, out var result, out var validation)
+            .Should().BeTrue();
+        validation.Should().BeNull();
+
+        var applied = result!.Diff.ApplyTo(style);
+
+        applied.FontThemeColor.Should().Be(style.FontThemeColor);
+        applied.FillThemeColor.Should().Be(style.FillThemeColor);
+        applied.FillPatternThemeColor.Should().Be(style.FillPatternThemeColor);
+        applied.BorderTop.ThemeColor.Should().Be(style.BorderTop.ThemeColor);
+    }
+
+    [Fact]
+    public void TryCreateResult_UntouchedThemeColors_StillFollowALaterThemeSwap()
+    {
+        // The point of keeping the link: the cell must re-resolve under a NEW theme after the OK.
+        var theme = ThemeWithAccent1(new CellColor(200, 10, 20));
+        var style = ThemeLinkedStyle();
+
+        FormatCellsDialogPlanner.TryCreateResult(
+                style, UntouchedInputFor(style, theme), theme, out var result, out _)
+            .Should().BeTrue();
+        var applied = result!.Diff.ApplyTo(style);
+
+        var swapped = ThemeWithAccent1(new CellColor(20, 200, 10));
+        applied.ResolveFontColor(swapped).Should().Be(new CellColor(20, 200, 10));
+        applied.ResolveFillColor(swapped).Should().Be(new CellColor(20, 200, 10));
+        applied.ResolveFillPatternColor(swapped).Should().Be(new CellColor(20, 200, 10));
+        applied.BorderTop.ResolveColor(swapped).Should().Be(new CellColor(20, 200, 10));
+    }
+
+    [Fact]
+    public void TryCreateResult_ExplicitlyRepickedColors_DropTheThemeLink()
+    {
+        // Picking a literal RGB is exactly what "unlink from the theme" means, so the link must go.
+        var theme = ThemeWithAccent1(new CellColor(200, 10, 20));
+        var style = ThemeLinkedStyle();
+        var untouched = UntouchedInputFor(style, theme);
+        var repicked = untouched with
+        {
+            Font = untouched.Font with { FontColorText = "#123456" },
+            Fill = untouched.Fill with
+            {
+                FillColorText = "#654321",
+                FillPatternColorText = "#ABCDEF",
+            },
+            Border = untouched.Border with
+            {
+                Top = new FormatCellsDialogBorderSideInput(nameof(BorderStyle.Thin), "#0F0F0F"),
+            },
+        };
+
+        FormatCellsDialogPlanner.TryCreateResult(style, repicked, theme, out var result, out _)
+            .Should().BeTrue();
+        var applied = result!.Diff.ApplyTo(style);
+
+        applied.FontThemeColor.Should().BeNull();
+        applied.FillThemeColor.Should().BeNull();
+        applied.FillPatternThemeColor.Should().BeNull();
+        applied.BorderTop.ThemeColor.Should().BeNull();
+
+        applied.FontColor.Should().Be(new CellColor(0x12, 0x34, 0x56));
+        applied.BorderTop.Color.Should().Be(new CellColor(0x0F, 0x0F, 0x0F));
+        // And a later theme swap must NOT move them any more.
+        applied.ResolveFontColor(ThemeWithAccent1(new CellColor(20, 200, 10)))
+            .Should().Be(new CellColor(0x12, 0x34, 0x56));
+    }
+
+    [Fact]
+    public void TryCreateResult_PlainRgbStyle_IsUnaffectedByTheThemeArgument()
+    {
+        // No-regression: a style with no theme links must behave exactly as before.
+        var style = new CellStyle { FontColor = new CellColor(0, 112, 192) };
+
+        FormatCellsDialogPlanner.TryCreateResult(
+                style, ValidInput(), ThemeWithAccent1(new CellColor(200, 10, 20)), out var result, out _)
+            .Should().BeTrue();
+
+        result!.Diff.FontThemeColor.Should().BeNull();
+        result.Diff.FillThemeColor.Should().BeNull();
+        result.Diff.FillPatternThemeColor.Should().BeNull();
+        result.Diff.FontColor.Should().Be(new CellColor(192, 0, 0));
+    }
 }

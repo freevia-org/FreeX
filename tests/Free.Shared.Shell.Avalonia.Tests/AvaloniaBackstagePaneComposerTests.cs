@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using Free.Shared.Ribbon;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 
@@ -75,6 +76,45 @@ public sealed class AvaloniaBackstagePaneComposerTests
             opened.Should().Be(@"C:\Decks\Roadmap.fxp");
             options.GetVisualDescendants().OfType<TextBlock>().Should().Contain(text => text.Text == "en-US");
             account.GetVisualDescendants().OfType<TextBlock>().Should().Contain(text => text.Text == "1.0");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Composer_ContainsAndReportsActionCallbackFailure()
+    {
+        await Session.Dispatch(() =>
+        {
+            var failure = new InvalidOperationException("export failed");
+            (Exception Exception, string CommandId)? reported = null;
+            var previousHandler = RibbonCommandFaultReporter.Handler;
+            RibbonCommandFaultReporter.Handler = (exception, commandId) =>
+                reported = (exception, commandId);
+            try
+            {
+                var composer = new AvaloniaBackstagePaneComposer(AvaloniaBackstageChromeStyle.FromContract());
+                var spec = new BackstageActionPaneSpec(
+                    "Export",
+                    "Create a copy.",
+                    [new BackstageActionGroup(
+                        "PDF",
+                        [new BackstageActionRow("Export PDF", "Publish.", () => throw failure)
+                        {
+                            AutomationId = "ExportPdfAction",
+                        }])]);
+                var pane = composer.BuildActionPane(spec, "Export");
+                var button = pane.GetVisualDescendants().OfType<Button>().Single();
+
+                var click = () => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                click.Should().NotThrow("an action fault must not escape the Avalonia click boundary");
+                reported.Should().NotBeNull();
+                reported!.Value.Exception.Should().BeSameAs(failure);
+                reported.Value.CommandId.Should().Be("ExportPdfAction");
+            }
+            finally
+            {
+                RibbonCommandFaultReporter.Handler = previousHandler;
+            }
         }, CancellationToken.None);
     }
 }

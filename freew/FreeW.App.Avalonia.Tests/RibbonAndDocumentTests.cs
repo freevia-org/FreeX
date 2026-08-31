@@ -133,8 +133,8 @@ public class RibbonAndDocumentTests
 
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
         mainWindow.Should().Contain("NewDocument: NewDocument");
-        mainWindow.Should().Contain("ImportPdfText: () => _ = ImportPdfTextAsync()");
-        mainWindow.Should().Contain("Backstage: () => _ = ShowBackstageAsync()");
+        mainWindow.Should().Contain("ImportPdfText: () => RunUiTask(ImportPdfTextAsync)");
+        mainWindow.Should().Contain("Backstage: () => RunUiTask(ShowBackstageAsync)");
         mainWindow.Should().Contain("Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument)");
     }
 
@@ -350,8 +350,8 @@ public class RibbonAndDocumentTests
     {
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
 
-        mainWindow.Should().Contain("CompareDocuments: () => _ = CompareDocumentsAsync()");
-        mainWindow.Should().Contain("CombineDocuments: () => _ = CombineDocumentsAsync()");
+        mainWindow.Should().Contain("CompareDocuments: () => RunUiTask(CompareDocumentsAsync)");
+        mainWindow.Should().Contain("CombineDocuments: () => RunUiTask(CombineDocumentsAsync)");
         mainWindow.Should().Contain("ReviewCompareCombineWorkflow.ExecuteCompare(");
         mainWindow.Should().Contain("ReviewCompareCombineWorkflow.ExecuteCombine(");
         mainWindow.Should().Contain("_fileWorkflow.MarkDirtyWithPath(null);");

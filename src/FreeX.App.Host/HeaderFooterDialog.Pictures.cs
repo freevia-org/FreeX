@@ -12,6 +12,20 @@ public partial class HeaderFooterDialog
 {
     private async void PictureButton_Click(object sender, RoutedEventArgs e)
     {
+        try
+        {
+            await InsertPictureAsync();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // The native picker and dialog updates can fail too, not only image decoding. This is
+            // an async-void XAML boundary, so contain the complete workflow.
+            ShowPictureOpenFailure(ex.Message);
+        }
+    }
+
+    private async Task InsertPictureAsync()
+    {
         var result = WpfFileDialogService.ShowOpenDialog(
             this,
             UiText.Get("HeaderFooterPicture_OpenFileFilter"),

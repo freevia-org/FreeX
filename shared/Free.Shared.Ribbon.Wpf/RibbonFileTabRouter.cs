@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using Free.Shared.Ribbon;
 
 namespace Free.Shared.Ribbon.Wpf;
 
@@ -7,6 +8,8 @@ namespace Free.Shared.Ribbon.Wpf;
 /// </summary>
 public sealed class RibbonFileTabRouter : IDisposable
 {
+    private const string FileTabCommandId = "FileTab";
+
     private readonly TabControl _tabs;
     private readonly TabItem _fileTab;
     private readonly Action _showBackstage;
@@ -59,9 +62,26 @@ public sealed class RibbonFileTabRouter : IDisposable
         if (ReferenceEquals(_tabs.SelectedItem, _fileTab))
         {
             _suppressSelectionReentry = true;
-            _tabs.SelectedIndex = CoerceContentTabIndex(_lastContentTabIndex);
-            _suppressSelectionReentry = false;
-            _showBackstage();
+            try
+            {
+                _tabs.SelectedIndex = CoerceContentTabIndex(_lastContentTabIndex);
+            }
+            finally
+            {
+                _suppressSelectionReentry = false;
+            }
+
+            try
+            {
+                _showBackstage();
+            }
+            catch (Exception ex)
+            {
+                // This callback runs inside TabControl.SelectionChanged. The WPF application
+                // boundary records dispatcher faults but does not mark them handled, so an
+                // exception here would otherwise terminate the process.
+                RibbonCommandFaultReporter.Report(ex, FileTabCommandId);
+            }
             return;
         }
 

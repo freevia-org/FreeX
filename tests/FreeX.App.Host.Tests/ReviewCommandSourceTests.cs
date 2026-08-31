@@ -4,6 +4,18 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class ReviewCommandSourceTests
 {
+    [Fact]
+    public void WindowsShareDataRequestedAsyncBoundary_ContainsBrokerAndDeferralFailures()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("WindowsWorkbookShareService.cs");
+
+        source.Should().Contain("handler = async (_, args) =>");
+        source.Should().Contain("var deferral = request.GetDeferral();");
+        source.Should().Contain("request.FailWithDisplayText");
+        source.Should().Contain("deferral.Complete();");
+        source.Should().Contain("DataRequested is a WinRT async-void boundary");
+        source.Should().Contain("A dismissed or disconnected share broker can reject a late completion.");
+    }
 
     [Fact]
     public void NewThreadedComment_UsesSelectedCellInlineEditorAndSharedSubmitRoute()
