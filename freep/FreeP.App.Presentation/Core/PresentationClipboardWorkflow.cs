@@ -381,6 +381,25 @@ public static class PresentationClipboardWorkflow
         return body;
     }
 
+    /// <summary>
+    /// Returns <paramref name="payload"/> with any slide-jump target the destination deck cannot
+    /// resolve cleared, or the payload unchanged when there is nothing to resolve. The payload
+    /// itself is never mutated -- it can still be pasted again, including back into the deck it
+    /// was copied from.
+    /// </summary>
+    private static InCanvasRichClipboardPayload ResolveSlideJumps(
+        EditingSession editor,
+        InCanvasRichClipboardPayload payload)
+    {
+        if (editor.Presentation is not { } presentation)
+            return payload;
+
+        var body = InCanvasRichClipboardPlanner.ResolveSlideJumps(
+            payload.Body,
+            presentation.Slides.Select(slide => slide.Id).ToArray());
+        return ReferenceEquals(body, payload.Body) ? payload : payload with { Body = body };
+    }
+
     private static void ApplyRichPayload(
         EditingSession editor,
         InCanvasRichClipboardPayload payload)
@@ -392,14 +411,18 @@ public static class PresentationClipboardWorkflow
         foreach (var obj in objects)
             editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
 
+        // The payload can come from another open presentation, whose internal slide jumps name
+        // slides this deck does not have. Resolve them against this deck the same way the
+        // in-canvas editors do, so a paste onto the canvas and a paste into a text box agree.
+        var resolvedPayload = ResolveSlideJumps(editor, payload);
         var slideBody = images.Count > 0 || objects.Count > 0
-            ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
-            : payload.Body;
-        var table = payload.ContainsTable
+            ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(resolvedPayload.Body)
+            : resolvedPayload.Body;
+        var table = resolvedPayload.ContainsTable
             ? editor.InsertTableFromClipboard(
                 slideBody,
-                payload.TableColumnWidthsEmu,
-                payload.TableCellStyles)
+                resolvedPayload.TableColumnWidthsEmu,
+                resolvedPayload.TableCellStyles)
             : null;
         if (table is null
             && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))

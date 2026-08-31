@@ -3005,10 +3005,12 @@ public sealed class EditingSession : ICanvasGestureEditingSession
     public void PasteExternalShapes(IEnumerable<SlideShape> shapes)
     {
         ArgumentNullException.ThrowIfNull(shapes);
-        PasteShapeCopies(shapes);
+        PasteShapeCopies(shapes, orphanForeignSlideJumps: true);
     }
 
-    private void PasteShapeCopies(IEnumerable<SlideShape> shapes)
+    private void PasteShapeCopies(
+        IEnumerable<SlideShape> shapes,
+        bool orphanForeignSlideJumps = false)
     {
         if (CurrentSlide is null) return;
 
@@ -3031,6 +3033,19 @@ public sealed class EditingSession : ICanvasGestureEditingSession
 
         foreach (var clone in clones)
             RewriteConnectorTargets(clone, remap);
+
+        // Shapes arriving from another FreeP instance were decoded from a one-slide clipboard
+        // package, so an internal slide jump names a slide in that package's id space -- never
+        // one of ours, not even when the copy came from this same deck. Orphan what this deck
+        // cannot resolve, exactly as deleting a slide orphans the links that named it. Connector
+        // targets above are remapped for the same reason: a paste must not carry a reference
+        // that only meant something where it was copied from.
+        if (orphanForeignSlideJumps && Presentation is not null)
+        {
+            SlideHyperlinkTraversal.OrphanUnresolvableSlideJumps(
+                clones,
+                Presentation.Slides.Select(slide => slide.Id).ToArray());
+        }
 
         Bus.Execute(new PasteShapesCommand(_currentSlideIndex, clones));
 
