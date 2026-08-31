@@ -218,4 +218,109 @@ public sealed class CompositeWorkbookCommandTests
         sheet2.DrawingShapes.Should().BeEmpty();
     }
 
+
+    /// <summary>
+    /// A command shaped like the real multi-step writers (EditCellsCommand captures each cell's
+    /// CellEditCompanionSnapshot and THEN writes that cell, one at a time in a loop): it snapshots
+    /// before mutating, mutates, and only then fails -- so its own Revert can undo the partial
+    /// apply, provided somebody asks it to.
+    /// </summary>
+    private sealed class MutateThenThrowCommand(SheetId sheetId, CellAddress address, bool throwOnRevert = false)
+        : IWorkbookCommand
+    {
+        private Cell? _snapshot;
+        private bool _mutated;
+
+        public string Label => "Mutate then throw";
+
+        public CommandOutcome Apply(ICommandContext ctx)
+        {
+            var sheet = ctx.GetSheet(sheetId);
+            _snapshot = sheet.GetCell(address);
+            sheet.SetCell(address, Cell.FromValue(new TextValue("partial")));
+            _mutated = true;
+            throw new InvalidOperationException("apply boom");
+        }
+
+        public void Revert(ICommandContext ctx)
+        {
+            if (!_mutated)
+                return;
+            if (throwOnRevert)
+                throw new InvalidOperationException("revert boom");
+            var sheet = ctx.GetSheet(sheetId);
+            if (_snapshot is null)
+                sheet.ClearCell(address);
+            else
+                sheet.SetCell(address, _snapshot);
+            _mutated = false;
+        }
+    }
+
+    // R175-commands-composite-throwing-child-revert-1 (ported from the same fix in FreeW's
+    // CompositeDocumentCommand): a command is added to _applied only AFTER its Apply RETURNS, so
+    // the command that actually threw was never reverted -- the rollback unwound its prior
+    // siblings but left the thrower's own partial mutation in the workbook. Invisible with a
+    // child that validates before mutating (see Apply_RevertsAlreadyAppliedCommandsWhenLater-
+    // CommandFails above, where the protected-sheet reject happens before any write), but a real
+    // multi-step IWorkbookCommand writes as it goes: EditCellsCommand snapshots and writes cell
+    // by cell inside one loop, so a throw on cell K leaves cells 0..K-1 written, and its Revert()
+    // replays exactly the snapshots it managed to capture.
+    [Fact]
+    public void Apply_WhenThrowingCommandAlreadyMutated_RevertsThatCommandToo()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        var partialAddress = new CellAddress(sheet2.Id, 4, 4);
+        sheet2.SetCell(partialAddress, Cell.FromValue(new TextValue("original")));
+
+        var command = new CompositeWorkbookCommand(
+            "Grouped Edit",
+            [
+                EditCellsCommand.ForValue(sheet1.Id, new CellAddress(sheet1.Id, 1, 1), new TextValue("A")),
+                new MutateThenThrowCommand(sheet2.Id, partialAddress)
+            ]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("apply boom");
+        // The sibling rollback that already worked before this fix.
+        sheet1.GetCell(new CellAddress(sheet1.Id, 1, 1)).Should().BeNull();
+        // The differentiator: before this fix the thrower's own write survived as "partial",
+        // leaving a user-unauthored edit in a workbook whose operation reported failure and
+        // which no undo entry can reach.
+        sheet2.GetValue(partialAddress).Should().Be(new TextValue("original"));
+    }
+
+    // Sibling guard for the inner try/catch: a throwing command whose Revert ALSO throws must not
+    // abort the rollback of its successful siblings, and the outcome must still carry the original
+    // apply failure rather than the revert's.
+    [Fact]
+    public void Apply_WhenThrowingCommandRevertAlsoThrows_StillRollsBackSiblings_AndReportsOriginal()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        var partialAddress = new CellAddress(sheet2.Id, 4, 4);
+
+        var command = new CompositeWorkbookCommand(
+            "Grouped Edit",
+            [
+                EditCellsCommand.ForValue(sheet1.Id, new CellAddress(sheet1.Id, 1, 1), new TextValue("A")),
+                new MutateThenThrowCommand(sheet2.Id, partialAddress, throwOnRevert: true)
+            ]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("apply boom");
+        outcome.ErrorMessage.Should().NotContain("revert boom");
+        sheet1.GetCell(new CellAddress(sheet1.Id, 1, 1)).Should().BeNull();
+        // Only the child's own unrecoverable write survives.
+        sheet2.GetValue(partialAddress).Should().Be(new TextValue("partial"));
+    }
 }
