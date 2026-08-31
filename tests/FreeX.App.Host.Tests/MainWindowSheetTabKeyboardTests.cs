@@ -459,6 +459,30 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
+    public void RightClickInactiveSheetTab_OpensRebuiltSheetTabContextMenuAtMousePointer()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(sheetCount: 2);
+
+            harness.RightClickSheetTab("Sheet1");
+
+            harness.ActiveSheetTabName.Should().Be("Sheet1");
+            harness.SheetTabContextMenuIsOpen.Should().BeTrue(harness.DebugSheetTabs);
+            harness.SheetTabContextMenuPlacementTargetIsActiveTab.Should().BeTrue(harness.DebugSheetTabs);
+            harness.SheetTabContextMenuPlacement.Should().Be(PlacementMode.MousePoint);
+            harness.SheetTabMenuItems.Should().Contain(new[]
+            {
+                UiText.Get("MainWindow_Header_InsertSheet"),
+                UiText.Get("MainWindow_Header_DeleteSheet"),
+                UiText.Get("MainWindow_Header_Rename"),
+                UiText.Get("MainWindow_Header_TabColor"),
+                UiText.Get("MainWindow_Header_SelectAllSheets")
+            });
+        });
+    }
+
+    [Fact]
     public void SheetTabMouseMove_CancelsStaleDragWhenLeftButtonIsReleased()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
@@ -727,6 +751,22 @@ public sealed class MainWindowSheetTabKeyboardTests
             RoutedOrActiveSheetTabTarget is { ContextMenu.PlacementTarget: { } target } &&
             ReferenceEquals(target, RoutedOrActiveSheetTabTarget);
 
+        public bool SheetTabContextMenuPlacementTargetIsActiveTab =>
+            ActiveSheetTabTarget is { ContextMenu.PlacementTarget: { } target } &&
+            ReferenceEquals(target, ActiveSheetTabTarget);
+
+        public PlacementMode? SheetTabContextMenuPlacement =>
+            ActiveSheetTabTarget?.ContextMenu?.Placement;
+
+        public IReadOnlyList<string> SheetTabMenuItems =>
+            ActiveSheetTabTarget?.ContextMenu?.Items
+                .OfType<MenuItem>()
+                .Select(item => item.Header?.ToString())
+                .Where(header => !string.IsNullOrEmpty(header))
+                .Cast<string>()
+                .ToList()
+            ?? [];
+
         public string? SheetTabMenuItemGestureText(string header) =>
             RoutedOrActiveSheetTabTarget?.ContextMenu?.Items
                 .OfType<MenuItem>()
@@ -858,7 +898,7 @@ public sealed class MainWindowSheetTabKeyboardTests
                 Source = target
             };
 
-            _window.RaiseSheetTabRightClickForTest(target, args);
+            target.RaiseEvent(args);
             _window.UpdateLayout();
             PumpDispatcher();
         }
