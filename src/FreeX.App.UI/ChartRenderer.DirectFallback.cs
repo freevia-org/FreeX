@@ -20,8 +20,13 @@ public static partial class ChartRenderer
     ];
 
     private static readonly Typeface DirectChartTypeface = new("Segoe UI");
+    private static readonly Typeface DirectChartTitleTypeface = new(
+        new FontFamily("Segoe UI"),
+        FontStyles.Normal,
+        FontWeights.Bold,
+        FontStretches.Normal);
     private static readonly Pen DirectChartAxisPen = CreateFrozenPen(Color.FromRgb(89, 89, 89), 1);
-    private static readonly Pen DirectChartGridlinePen = CreateFrozenPen(Color.FromRgb(226, 226, 226), 1);
+    private static readonly Pen DirectChartGridlinePen = CreateFrozenPen(Color.FromRgb(127, 127, 127), 1);
     private static readonly Brush DirectChartTextBrush = CreateFrozenBrush(Color.FromRgb(64, 64, 64));
     private static readonly Brush DirectChartPlotFillBrush = CreateFrozenBrush(Colors.White);
 
@@ -213,7 +218,7 @@ public static partial class ChartRenderer
 
         var titleHeight = string.IsNullOrWhiteSpace(chart.Title) ? 8.0 : 34.0;
         if (!string.IsNullOrWhiteSpace(chart.Title))
-            DrawCenteredText(dc, chart.Title!, rect.Left, rect.Top + 6, rect.Width, chart.ChartTitleFontSize, DirectChartTextBrush);
+            DrawCenteredText(dc, chart.Title!, rect.Left, rect.Top + 6, rect.Width, chart.ChartTitleFontSize, DirectChartTextBrush, bold: true);
 
         var layout = PlanDirectChartLayout(chart, data.Series.Count, rect, titleHeight);
         dc.DrawRectangle(DirectChartPlotFillBrush, null, layout.Plot);
@@ -439,7 +444,7 @@ public static partial class ChartRenderer
     private static void DrawDirectPieChart(DrawingContext dc, ChartModel chart, DirectChartData data, Rect rect)
     {
         if (!string.IsNullOrWhiteSpace(chart.Title))
-            DrawCenteredText(dc, chart.Title!, rect.Left, rect.Top + 6, rect.Width, chart.ChartTitleFontSize, DirectChartTextBrush);
+            DrawCenteredText(dc, chart.Title!, rect.Left, rect.Top + 6, rect.Width, chart.ChartTitleFontSize, DirectChartTextBrush, bold: true);
 
         var values = data.Series[0].Values.Select(value => Math.Max(0, value ?? 0)).ToArray();
         var total = values.Sum();
@@ -640,9 +645,17 @@ public static partial class ChartRenderer
             ? value.ToString("0", CultureInfo.InvariantCulture)
             : value.ToString("0.##", CultureInfo.InvariantCulture);
 
-    private static void DrawCenteredText(DrawingContext dc, string text, double left, double top, double width, double fontSize, Brush brush)
+    private static void DrawCenteredText(
+        DrawingContext dc,
+        string text,
+        double left,
+        double top,
+        double width,
+        double fontSize,
+        Brush brush,
+        bool bold = false)
     {
-        var formatted = CreateFormattedText(text, fontSize, brush, Math.Max(1, width));
+        var formatted = CreateFormattedText(text, fontSize, brush, Math.Max(1, width), bold ? DirectChartTitleTypeface : DirectChartTypeface);
         dc.DrawText(formatted, new Point(left + (width - formatted.WidthIncludingTrailingWhitespace) / 2.0, top));
     }
 
@@ -658,13 +671,18 @@ public static partial class ChartRenderer
         dc.DrawText(formatted, new Point(left, top));
     }
 
-    private static FormattedText CreateFormattedText(string text, double fontSize, Brush brush, double maxWidth)
+    private static FormattedText CreateFormattedText(
+        string text,
+        double fontSize,
+        Brush brush,
+        double maxWidth,
+        Typeface? typeface = null)
     {
         var formatted = new FormattedText(
             text,
             CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
-            DirectChartTypeface,
+            typeface ?? DirectChartTypeface,
             fontSize,
             brush,
             1.0)

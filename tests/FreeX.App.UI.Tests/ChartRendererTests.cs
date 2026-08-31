@@ -148,6 +148,18 @@ public sealed partial class ChartRendererTests
         fallbackSource.Should().Contain("BuildDirectChartData(chart, viewport, theme)");
     }
 
+    [Fact]
+    public void DirectFallback_UsesExcelDefaultTitleAndMajorGridlineStyles()
+    {
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.DirectFallback.cs");
+
+        source.Should().Contain("DirectChartTitleTypeface = new(");
+        source.Should().Contain("FontWeights.Bold");
+        source.Should().Contain("DirectChartGridlinePen = CreateFrozenPen(Color.FromRgb(127, 127, 127), 1)");
+        source.Should().Contain("DirectChartTextBrush, bold: true");
+        source.Should().Contain("bold ? DirectChartTitleTypeface : DirectChartTypeface");
+    }
+
     [Theory]
     [InlineData(1.0)]
     [InlineData(1.5)]
