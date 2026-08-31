@@ -484,6 +484,99 @@ public sealed class DocumentViewFloatingShapeTests
         redoneText.Should().Be("Hello shape!");
     }
 
+    // ── freew-textbox-flow F3: shape-text insertion-point caret ──────────────────────────────────
+    //
+    // Before the fix, entering text-edit mode inside a floating text box routed keystrokes into the
+    // shape (OnTextInput / InsertText) but painted no on-screen caret anywhere near them: Render()'s
+    // only caret paint checked _hfCaret and the body caret, never _shapeCaret, and the selection-highlight
+    // painter (DrawShapeTextSelection) draws nothing for a collapsed (non-range) position. Worse, because
+    // the body caret's paint was gated only on "no header/footer caret", it kept re-painting the stale
+    // body-text caret position underneath/instead of the missing shape caret.
+    //
+    // ShapeCaretRectForTest below exercises the new resolver (TryGetActiveShapeCaretStop) end to end
+    // against the same _shapeTextCaretStops layout data the pointer/selection code already used, proving
+    // it resolves a real, moving caret position. Avalonia.Headless runs this whole test assembly with
+    // UseHeadlessDrawing=true (see FreeWHeadlessApp), so CaptureRenderedFrame cannot be used to sample
+    // actual pixels (see DocumentViewContentControlChromeTests for the same constraint); the two
+    // source-contract tests below pin the actual Render()-time paint call and the stale-body-caret
+    // suppression the same way this repo's other renderer-neutral ownership tests do.
+
+    [Fact]
+    public async Task ShapeCaretRectForTest_tracks_the_live_caret_while_editing_shape_text()
+    {
+        Rect? beforeEditing = null;
+        Rect? atEndOfText = null;
+        Rect? atStartOfText = null;
+        bool entered = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0,
+                fillColorHex: "#FFFFFF",
+                text: "Hello shape");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            // Not yet editing the shape's text: no live shape caret for the render loop to paint.
+            beforeEditing = view.ShapeCaretRectForTest;
+
+            view.SelectFloating(0, 1);
+            entered = view.EnterSelectedShapeTextEditing();
+            atEndOfText = view.ShapeCaretRectForTest;
+
+            view.SelectShapeTextRangeForTest(0, 0, 0);
+            atStartOfText = view.ShapeCaretRectForTest;
+        });
+
+        if (!ran) return;
+        entered.Should().BeTrue("a selected floating text box should enter text-edit mode");
+        beforeEditing.Should().BeNull(
+            "no shape text is being edited yet, so there must be no shape caret to resolve");
+        atEndOfText.Should().NotBeNull(
+            "entering text-edit mode (caret at the end of \"Hello shape\") must resolve to a paintable caret rect");
+        atStartOfText.Should().NotBeNull(
+            "moving the caret back to offset 0 must still resolve to a paintable caret rect");
+        atStartOfText!.Value.X.Should().BeLessThan(atEndOfText!.Value.X,
+            "the resolved caret rect must move left when the caret moves from the end of the text back to its start");
+        atEndOfText!.Value.Height.Should().BeGreaterThan(0);
+        atEndOfText!.Value.Width.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void DrawFloatingShape_paints_the_shape_text_caret_while_editing()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        var normalized = new string(source.Where(character => !char.IsWhiteSpace(character)).ToArray());
+
+        normalized.Should().Contain(
+            "if(IsFocused&&CurrentShapeTextSelectionisnull&&TryGetActiveShapeCaretStop(outvarcaretStop)&&"
+                + "caretStop.BlockIndex==sd.BlockIndex&&caretStop.RunIndex==sd.RunIndex&&"
+                + "ShapeChildPathsEqual(caretStop.ChildPath,sd.ChildPath)){context.FillRectangle(Brushes.Black,"
+                + "newRect(caretStop.X,caretStop.Y,1.5,caretStop.Height));}",
+            "DrawFloatingShape must actually paint an insertion-point caret while a floating text box's "
+                + "text is being edited -- the render call this finding says is missing");
+    }
+
+    [Fact]
+    public void Body_caret_fallback_is_suppressed_while_shape_text_is_being_edited()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        var normalized = new string(source.Where(character => !char.IsWhiteSpace(character)).ToArray());
+
+        normalized.Should().Contain(
+            "if(IsFocused&&_hfCaretisnotnull&&TryGetHfCaretRect(outvarhfRect))"
+                + "context.FillRectangle(Brushes.Black,hfRect);"
+                + "elseif(IsFocused&&NormalizedSelection()isnull&&_hfCaretisnull&&_shapeCaretisnull&&"
+                + "TryGetCaretRect(outvarcaretRect))context.FillRectangle(Brushes.Black,caretRect);",
+            "the body-caret fallback must also check _shapeCaret is null, otherwise it keeps painting "
+                + "the stale body caret on top of (or instead of) the shape-text caret while a floating "
+                + "text box is being edited");
+    }
+
     [Fact]
     public async Task CurrentFieldCommandsTargetOnlyFieldsInTheActiveShapeTextSelectionOrCaret()
     {

@@ -59,6 +59,14 @@ public sealed class SisterWpfFileCommandWorkflow
 
     public void MarkDirty() => _workflow.MarkDirty();
 
+    /// <summary>See <see cref="FileCommandWorkflow.MarkSavedAtUndoDepth"/>.</summary>
+    public void MarkSavedAtUndoDepth(int undoDepthAtSave, long undoStackVersionAtSave) =>
+        _workflow.MarkSavedAtUndoDepth(undoDepthAtSave, undoStackVersionAtSave);
+
+    /// <summary>See <see cref="FileCommandWorkflow.TryMarkCleanIfAtSavePoint"/>.</summary>
+    public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion) =>
+        _workflow.TryMarkCleanIfAtSavePoint(currentUndoDepth, currentUndoStackVersion);
+
     public void MarkDirtyWithPath(string? path, Action? beforeChanged = null) =>
         _workflow.MarkDirtyWithPath(path, beforeChanged);
 

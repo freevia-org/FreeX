@@ -3486,6 +3486,37 @@ public static class PptxPackageWriter
         return el;
     }
 
+    /// <summary>
+    /// Emits one <c>a:lnSpc</c>/<c>a:spcBef</c>/<c>a:spcAft</c> element. The points and percent
+    /// forms are mutually exclusive per ECMA-376, so at most one child is written; should a model
+    /// carry both, <paramref name="preferPercent"/> picks the winner (a:lnSpc is authored as a
+    /// percentage, spcBef/spcAft as points). <c>a:spcPts</c> is hundredths of a point;
+    /// <c>a:spcPct</c> is 1000ths of a percent.
+    /// </summary>
+    private static void AddSpacingEl(
+        XElement parent,
+        string localName,
+        double? points,
+        double? percent,
+        bool preferPercent = false)
+    {
+        if (preferPercent && percent is { } preferred)
+        {
+            parent.Add(new XElement(A + localName,
+                new XElement(A + "spcPct", new XAttribute("val", (int)Math.Round(preferred * 1000)))));
+        }
+        else if (points is { } pt)
+        {
+            parent.Add(new XElement(A + localName,
+                new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(pt * 100)))));
+        }
+        else if (percent is { } pct)
+        {
+            parent.Add(new XElement(A + localName,
+                new XElement(A + "spcPct", new XAttribute("val", (int)Math.Round(pct * 1000)))));
+        }
+    }
+
     private static XElement BuildLvlpPrEl(
         string localName,
         TextStyleLevel level,
@@ -3507,6 +3538,13 @@ public static class PptxPackageWriter
             el.Add(new XAttribute("rtl", rightToLeft.Value ? "1" : "0"));
         if (level.MarginLeftEmu.HasValue) el.Add(new XAttribute("marL", level.MarginLeftEmu.Value));
         if (level.IndentEmu.HasValue)     el.Add(new XAttribute("indent", level.IndentEmu.Value));
+
+        // CT_TextParagraphProperties child order: lnSpc -> spcBef -> spcAft -> bullet group
+        // -> tabLst -> defRPr. These must be added before the bullet elements below or
+        // OpenXmlValidator flags the level and PowerPoint repairs the file.
+        AddSpacingEl(el, "lnSpc", level.LineSpacingPointsExact, level.LineSpacingPercent, preferPercent: true);
+        AddSpacingEl(el, "spcBef", level.SpaceBeforePt, level.SpaceBeforePercent);
+        AddSpacingEl(el, "spcAft", level.SpaceAfterPt, level.SpaceAfterPercent);
 
         AddBulletTypographyProperties(
             el,
@@ -5321,42 +5359,12 @@ public static class PptxPackageWriter
         //   lnSpc → spcBef → spcAft → bullet group (buClr/buSz/buFont/buNone/buAutoNum/buChar)
         //   → tabLst → defRPr
         // lnSpc/spcBef/spcAft must come BEFORE the bullet group elements, in that order.
-        if (para.LineSpacingPercent.HasValue)
-        {
-            pPr.Add(new XElement(A + "lnSpc",
-                new XElement(A + "spcPct", new XAttribute("val", (int)Math.Round(para.LineSpacingPercent.Value * 1000)))));
-            hasPPr = true;
-        }
-        else if (para.LineSpacingPointsExact.HasValue)
-        {
-            pPr.Add(new XElement(A + "lnSpc",
-                new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(para.LineSpacingPointsExact.Value * 100)))));
-            hasPPr = true;
-        }
-        if (para.SpaceBeforePt.HasValue)
-        {
-            pPr.Add(new XElement(A + "spcBef",
-                new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(para.SpaceBeforePt.Value * 100)))));
-            hasPPr = true;
-        }
-        else if (para.SpaceBeforePercent.HasValue)
-        {
-            pPr.Add(new XElement(A + "spcBef",
-                new XElement(A + "spcPct", new XAttribute("val", (int)Math.Round(para.SpaceBeforePercent.Value * 1000)))));
-            hasPPr = true;
-        }
-        if (para.SpaceAfterPt.HasValue)
-        {
-            pPr.Add(new XElement(A + "spcAft",
-                new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(para.SpaceAfterPt.Value * 100)))));
-            hasPPr = true;
-        }
-        else if (para.SpaceAfterPercent.HasValue)
-        {
-            pPr.Add(new XElement(A + "spcAft",
-                new XElement(A + "spcPct", new XAttribute("val", (int)Math.Round(para.SpaceAfterPercent.Value * 1000)))));
-            hasPPr = true;
-        }
+        AddSpacingEl(pPr, "lnSpc", para.LineSpacingPointsExact, para.LineSpacingPercent, preferPercent: true);
+        AddSpacingEl(pPr, "spcBef", para.SpaceBeforePt, para.SpaceBeforePercent);
+        AddSpacingEl(pPr, "spcAft", para.SpaceAfterPt, para.SpaceAfterPercent);
+        hasPPr |= para.LineSpacingPercent.HasValue || para.LineSpacingPointsExact.HasValue
+            || para.SpaceBeforePt.HasValue || para.SpaceBeforePercent.HasValue
+            || para.SpaceAfterPt.HasValue || para.SpaceAfterPercent.HasValue;
 
         if (AddBulletTypographyProperties(
                 pPr,

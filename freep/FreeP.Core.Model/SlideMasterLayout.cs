@@ -19,6 +19,34 @@ public sealed class TextStyleLevel
     /// <summary>Indent (negative for hanging) in EMU, or null if not set.</summary>
     public long? IndentEmu { get; set; }
 
+    // ── Paragraph spacing (a:spcBef / a:spcAft / a:lnSpc) ──────────────────────
+    // PowerPoint's stock body placeholder carries spcBef at this level, so a deck that
+    // authors spacing only in its master/layout depends entirely on these being inherited.
+    // Within each of the three groups the points and percent forms are mutually exclusive
+    // per ECMA-376, so SlideCompositor.MergeTextStyleLevels resolves each group from one
+    // layer rather than mixing a points value from one with a percent from another.
+
+    /// <summary>Space before the paragraph in points (<c>a:spcBef/a:spcPts</c>), or null if not set.</summary>
+    public double? SpaceBeforePt { get; set; }
+
+    /// <summary>
+    /// Space before as a percentage of a single line's height (<c>a:spcBef/a:spcPct</c>;
+    /// 100 = one line), or null if not set. See <see cref="ParagraphSpacingMetrics"/>.
+    /// </summary>
+    public double? SpaceBeforePercent { get; set; }
+
+    /// <summary>Space after the paragraph in points (<c>a:spcAft/a:spcPts</c>), or null if not set.</summary>
+    public double? SpaceAfterPt { get; set; }
+
+    /// <summary>Space after as a percentage of a single line's height (<c>a:spcAft/a:spcPct</c>).</summary>
+    public double? SpaceAfterPercent { get; set; }
+
+    /// <summary>Line spacing as a percentage (<c>a:lnSpc/a:spcPct</c>; 100 = single), or null if not set.</summary>
+    public double? LineSpacingPercent { get; set; }
+
+    /// <summary>Exact line spacing in points (<c>a:lnSpc/a:spcPts</c>), or null if not set.</summary>
+    public double? LineSpacingPointsExact { get; set; }
+
     // ── Default run properties (a:defRPr) ──────────────────────────────────────
 
     /// <summary>Default font size in points (e.g. 28.0), or null if not set.</summary>

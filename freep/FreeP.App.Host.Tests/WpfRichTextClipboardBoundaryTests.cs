@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using Free.Shared.AppServices;
 using FreeP.App.Compositor;
@@ -87,10 +88,19 @@ public sealed class WpfRichTextClipboardBoundaryTests
                 cancellation.Token).AsTask());
     }
 
-    [StaFact]
-    public async Task PreviewKeyDown_FailedClipboardWriteLeavesEventUnhandled()
+    /// <summary>
+    /// Replaces PreviewKeyDown_FailedClipboardWriteLeavesEventUnhandled, which pinned the
+    /// opposite. A failed write used to leave the key for the RichTextBox's own copy or cut:
+    /// that published WPF's formats without the FreeP payload, and for cut deleted the selection
+    /// while the shell was told the cut had failed. Consuming the key and reporting the failure
+    /// is what the message already claims happened.
+    /// </summary>
+    [StaTheory]
+    [InlineData(Key.C)]
+    [InlineData(Key.X)]
+    public async Task PreviewKeyDown_FailedClipboardWriteHandlesTheKeyAndReportsTheFailure(Key key)
     {
-        var body = InCanvasRichClipboardPayload.FromPlainText("native fallback").Body;
+        var body = InCanvasRichClipboardPayload.FromPlainText("keep me").Body;
         var box = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(body, 12));
         box.SelectAll();
         var clipboard = new RecordingClipboard
@@ -101,7 +111,7 @@ public sealed class WpfRichTextClipboardBoundaryTests
         window.Show();
         try
         {
-            var eventArgs = PreviewKey(box, Key.C);
+            var eventArgs = PreviewKey(box, key);
 
             var result = await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(
                 eventArgs,
@@ -109,9 +119,13 @@ public sealed class WpfRichTextClipboardBoundaryTests
                 body,
                 clipboard);
 
-            result.Handled.Should().BeFalse();
+            result.Handled.Should().BeTrue();
             result.FailureMessage.Should().Be("busy");
-            eventArgs.Handled.Should().BeFalse();
+            eventArgs.Handled.Should().BeTrue();
+
+            // The whole point for cut: a failed write must not take the text with it.
+            new TextRange(box.Document.ContentStart, box.Document.ContentEnd)
+                .Text.Should().Contain("keep me");
         }
         finally
         {

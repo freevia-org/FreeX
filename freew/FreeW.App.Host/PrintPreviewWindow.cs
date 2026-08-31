@@ -166,6 +166,130 @@ internal static class PrintLayout
         return (IReadOnlyDictionary<int, List<(double Top, double Bottom)>>?)bands ?? EmptyChangeBarBands;
     }
 
+    private static readonly IReadOnlyDictionary<int, IReadOnlyList<DocumentFloatingObjectSnapshot>> EmptyFloatingObjectsByPage =
+        new Dictionary<int, IReadOnlyList<DocumentFloatingObjectSnapshot>>();
+
+    /// <summary>
+    /// One model block's real printed page and its estimated top offset within that page (in DIP,
+    /// relative to the page's content-box top), from the same page-reset walk <see cref="ResolveChangeBarBands"/>
+    /// uses.
+    /// </summary>
+    private readonly record struct BlockPagePosition(int PageIndex, double TopDip);
+
+    /// <summary>
+    /// Walks <paramref name="model"/>'s blocks in document order, resetting an estimated running Y
+    /// offset to zero every time <see cref="DynamicDocumentPaginator.GetPageNumber"/> reports the block
+    /// landed on a new real printed page -- the exact technique <see cref="ResolveChangeBarBands"/>
+    /// already relies on, factored out here so a floating drawing's anchor block can be placed on the
+    /// SAME real page a change bar for that block would land on, rather than guessing independently.
+    /// Returns one entry per block in <paramref name="model"/>.Blocks, or empty when the paginator isn't
+    /// the kind this walk needs (mirrors <see cref="ResolveChangeBarBands"/>'s own guard).
+    /// </summary>
+    private static IReadOnlyList<BlockPagePosition> ResolveBlockPagePositions(
+        DocumentView editor, DocumentPaginator paginator, double contentWidthDip, double lineHeightDip)
+    {
+        if (paginator.Source is not FlowDocument flow || paginator is not DynamicDocumentPaginator dynamicPaginator)
+            return [];
+
+        // A DynamicDocumentPaginator's own PageCount stays at its lazy default (1) until pagination has
+        // actually run to completion; reading it before that -- as this walk otherwise would, being the
+        // first consumer to touch the freshly built paginator -- makes every GetPageNumber() result below
+        // get clamped straight back down to page 0 (Math.Clamp(pageForBlock, 0, pageCount - 1) with
+        // pageCount==1), silently losing every anchor past the first page. ComputePageCount() forces the
+        // real, full page count synchronously (and is a cheap no-op on a paginator that already has one).
+        dynamicPaginator.ComputePageCount();
+
+        var model = editor.Model;
+        var flowBlocks = flow.Blocks.ToArray();
+        var pageCount = Math.Max(1, paginator.PageCount);
+        var typeface = new Typeface(editor.Document.FontFamily, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+        var fontSize = editor.Document.FontSize;
+
+        var positions = new List<BlockPagePosition>(model.Blocks.Count);
+        var currentPage = 0;
+        var currentY = 0.0;
+        for (var blockIndex = 0; blockIndex < model.Blocks.Count && blockIndex < flowBlocks.Length; blockIndex++)
+        {
+            var block = model.Blocks[blockIndex];
+            try
+            {
+                var pageForBlock = dynamicPaginator.GetPageNumber(flowBlocks[blockIndex].ContentStart);
+                if (pageForBlock >= 0 && pageForBlock != currentPage)
+                {
+                    currentPage = Math.Clamp(pageForBlock, 0, pageCount - 1);
+                    currentY = 0;
+                }
+            }
+            catch (NotSupportedException) { }
+            catch (InvalidOperationException) { }
+
+            positions.Add(new BlockPagePosition(currentPage, currentY));
+            currentY += EstimateChangeBarBlockHeightDip(block, contentWidthDip, typeface, fontSize, lineHeightDip);
+        }
+
+        return positions;
+    }
+
+    /// <summary>
+    /// Every floating drawing object (shape/text box, image, chart, WordArt, SmartArt, or drawing group)
+    /// anchored to a paragraph in <paramref name="editor"/>'s model, grouped by the REAL printed page its
+    /// anchor paragraph lands on and ordered back-to-front (behind-text objects first) the same way the
+    /// live editor's overlay canvas orders them (<see cref="DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder"/>).
+    /// <para>
+    /// The on-screen overlay (<c>DocumentView.SyncFloatingObjectsCanvas</c>) positions these objects in a
+    /// continuous, estimated document-flow coordinate space that has no counterpart in the real,
+    /// per-page <see cref="DocumentPage"/> visuals this pipeline produces -- which is why floating objects
+    /// used to be entirely absent from Print, Print Preview, PDF export, and XPS export (freew-textbox-flow
+    /// F1). This recomputes each object's placement from the model instead, feeding
+    /// <see cref="DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots"/> the block's real per-page top
+    /// offset (<see cref="ResolveBlockPagePositions"/>) against a single real page's own geometry
+    /// (<see cref="DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan"/> with <c>printLayout: true</c>),
+    /// so a Page/Margin/Paragraph-anchored object lands in that same page's own coordinate frame rather
+    /// than the live view's stacked multi-page one.
+    /// </para>
+    /// </summary>
+    internal static IReadOnlyDictionary<int, IReadOnlyList<DocumentFloatingObjectSnapshot>> ResolveFloatingObjectsByPage(
+        DocumentView editor, DocumentPaginator paginator, double contentWidthDip, double lineHeightDip)
+    {
+        var positions = ResolveBlockPagePositions(editor, paginator, contentWidthDip, lineHeightDip);
+        if (positions.Count == 0)
+            return EmptyFloatingObjectsByPage;
+
+        var model = editor.Model;
+        var surface = DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(model.Page, printLayout: true, plainInsetDip: 0);
+
+        Dictionary<int, List<DocumentFloatingObjectSnapshot>>? byPage = null;
+        for (var blockIndex = 0; blockIndex < model.Blocks.Count && blockIndex < positions.Count; blockIndex++)
+        {
+            if (model.Blocks[blockIndex] is not FreeW.Core.Model.Paragraph paragraph)
+                continue;
+
+            var position = positions[blockIndex];
+            var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+                paragraph, blockIndex, position.TopDip, surface, columnCount: 1);
+            if (snapshots.Count == 0)
+                continue;
+
+            byPage ??= [];
+            if (!byPage.TryGetValue(position.PageIndex, out var list))
+                byPage[position.PageIndex] = list = [];
+            list.AddRange(snapshots);
+        }
+
+        if (byPage is null)
+            return EmptyFloatingObjectsByPage;
+
+        var ordered = new Dictionary<int, IReadOnlyList<DocumentFloatingObjectSnapshot>>();
+        foreach (var (pageIndex, snapshots) in byPage)
+        {
+            ordered[pageIndex] = DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: true)
+                .Concat(DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: false))
+                .ToList();
+        }
+
+        return ordered;
+    }
+
     private static double EstimateChangeBarBlockHeightDip(
         FreeW.Core.Model.Block block, double contentWidthDip, Typeface typeface, double fontSize, double lineHeightDip)
     {
@@ -468,6 +592,7 @@ internal static class PrintLayout
         var lineHeightDip = editor.Document.FontSize * (4.0 / 3.0);
         var (contentWidthForChangeBarsDip, _) = PageLayout.ContentAreaDip(page);
         var changeBarBands = ResolveChangeBarBands(editor, paginator, contentWidthForChangeBarsDip, lineHeightDip);
+        var floatingObjectsByPage = ResolveFloatingObjectsByPage(editor, paginator, contentWidthForChangeBarsDip, lineHeightDip);
         return new HeaderFooterPaginator(
             paginator,
             editor.Model,
@@ -475,7 +600,8 @@ internal static class PrintLayout
             lineHeightDip,
             fragmentedFootnotePages: fragmentedFootnotePages,
             balloonSources: balloonSources,
-            changeBarBands: changeBarBands);
+            changeBarBands: changeBarBands,
+            floatingObjectsByPage: floatingObjectsByPage);
     }
 
     private static bool NeedsSectionAwareRendering(TextDocument document) =>
@@ -672,7 +798,8 @@ internal sealed class HeaderFooterPaginator(
     IReadOnlyList<IReadOnlyList<int>>? footnoteIdsByPage = null,
     IReadOnlyDictionary<int, DocumentFootnoteContinuationPagePlan>? fragmentedFootnotePages = null,
     IReadOnlyList<ReviewBalloonSource>? balloonSources = null,
-    IReadOnlyDictionary<int, List<(double Top, double Bottom)>>? changeBarBands = null) : DocumentPaginator
+    IReadOnlyDictionary<int, List<(double Top, double Bottom)>>? changeBarBands = null,
+    IReadOnlyDictionary<int, IReadOnlyList<DocumentFloatingObjectSnapshot>>? floatingObjectsByPage = null) : DocumentPaginator
 {
     private bool? _requiresDedicatedEndnotePage;
 
@@ -731,9 +858,14 @@ internal sealed class HeaderFooterPaginator(
         var hasBalloons = pageBalloons.Count > 0;
         var pageChangeBarBands = changeBarBands?.GetValueOrDefault(pageNumber);
         var hasChangeBars = pageChangeBarBands is { Count: > 0 };
+        // freew-textbox-flow F1: floating drawing objects (text boxes, images, charts, WordArt, SmartArt,
+        // drawing groups) were never composited onto the printed page at all -- see
+        // PrintLayout.ResolveFloatingObjectsByPage for how each one's real target page is resolved.
+        var pageFloatingObjects = floatingObjectsByPage?.GetValueOrDefault(pageNumber);
+        var hasFloatingObjects = pageFloatingObjects is { Count: > 0 };
         if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
             && !hasWatermark && !hasBorder && !hasLineNumbers && !hasColumnRule && !hasNotesAtFoot
-            && !hasBalloons && !hasChangeBars)
+            && !hasBalloons && !hasChangeBars && !hasFloatingObjects)
             return basePage;
 
         var size = basePage.Size;
@@ -755,7 +887,19 @@ internal sealed class HeaderFooterPaginator(
         if (basePage.Visual is not null
             && VisualTreeHelper.GetParent(basePage.Visual) is ContainerVisual previousWrapper)
             previousWrapper.Children.Remove(basePage.Visual);
+        if (hasFloatingObjects)
+        {
+            var behindTextObjects = pageFloatingObjects!.Where(snapshot => snapshot.BehindText).ToList();
+            if (behindTextObjects.Count > 0)
+                visual.Children.Add(BuildFloatingObjectsVisual(behindTextObjects));
+        }
         visual.Children.Add(basePage.Visual);
+        if (hasFloatingObjects)
+        {
+            var inFrontOfTextObjects = pageFloatingObjects!.Where(snapshot => !snapshot.BehindText).ToList();
+            if (inFrontOfTextObjects.Count > 0)
+                visual.Children.Add(BuildFloatingObjectsVisual(inFrontOfTextObjects));
+        }
         if (hasBorder
             && PageBorderVisibilityPlanner.LayerFor(pageBorder!.ZOrder) == PageBorderRenderLayer.InFrontOfText)
             visual.Children.Add(BuildPageBorder(pageBorder, size));
@@ -1457,6 +1601,180 @@ internal sealed class HeaderFooterPaginator(
             dc.DrawLine(pen, new Point(barX, y1), new Point(barX, y2));
         }
         return visual;
+    }
+
+    /// <summary>
+    /// Draws every floating object in <paramref name="snapshots"/> (already filtered to one z-order
+    /// layer -- behind-text or in-front-of-text -- by the caller) into a single page-space
+    /// <see cref="DrawingVisual"/>. freew-textbox-flow F1: this is the printed-page counterpart of
+    /// <c>DocumentView.SyncFloatingObjectsCanvas</c>, which only ever draws these onto the live editor's
+    /// overlay canvas. Fidelity here is intentionally simpler than the live overlay's (a plain fill/outline
+    /// and its text for a shape, the real decoded picture for an image, plain text for WordArt, and a
+    /// labelled placeholder frame for a chart/SmartArt/drawing group) -- the defect being fixed is that
+    /// these objects were completely and silently missing from the printed page, not a pixel-perfect
+    /// match with the live editor's rendering.
+    /// </summary>
+    private DrawingVisual BuildFloatingObjectsVisual(IReadOnlyList<DocumentFloatingObjectSnapshot> snapshots)
+    {
+        var visual = new DrawingVisual();
+        using var dc = visual.RenderOpen();
+        foreach (var snapshot in snapshots)
+            DrawFloatingObject(dc, snapshot);
+        return visual;
+    }
+
+    private void DrawFloatingObject(DrawingContext dc, DocumentFloatingObjectSnapshot snapshot)
+    {
+        if (snapshot.BlockIndex < 0 || snapshot.BlockIndex >= model.Blocks.Count
+            || model.Blocks[snapshot.BlockIndex] is not FreeW.Core.Model.Paragraph paragraph
+            || snapshot.RunIndex < 0 || snapshot.RunIndex >= paragraph.Runs.Count)
+            return;
+
+        var rect = new Rect(
+            snapshot.Rect.XDip,
+            snapshot.Rect.YDip,
+            Math.Max(0, snapshot.Rect.WidthDip),
+            Math.Max(0, snapshot.Rect.HeightDip));
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return;
+
+        var run = paragraph.Runs[snapshot.RunIndex];
+        var pushedTransform = snapshot.RotationAngle != 0 || snapshot.FlipH || snapshot.FlipV;
+        if (pushedTransform)
+        {
+            var center = new Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
+            var group = new TransformGroup();
+            if (snapshot.FlipH || snapshot.FlipV)
+                group.Children.Add(new ScaleTransform(snapshot.FlipH ? -1 : 1, snapshot.FlipV ? -1 : 1, center.X, center.Y));
+            if (snapshot.RotationAngle != 0)
+                group.Children.Add(new RotateTransform(snapshot.RotationAngle, center.X, center.Y));
+            dc.PushTransform(group);
+        }
+
+        try
+        {
+            switch (snapshot.Kind)
+            {
+                case DocumentFloatingObjectKind.Shape when run.Shape is { } shape:
+                    DrawFloatingShape(dc, shape, rect);
+                    break;
+                case DocumentFloatingObjectKind.Image when run.Image is { } image:
+                    DrawFloatingImage(dc, image, rect);
+                    break;
+                case DocumentFloatingObjectKind.WordArt when run.WordArt is { } wordArt:
+                    DrawFloatingWordArt(dc, wordArt, rect);
+                    break;
+                default:
+                    // Chart/SmartArt/drawing-group print rendering (and any Shape/Image/WordArt snapshot
+                    // whose backing run data went missing) draws a labelled placeholder frame rather than
+                    // nothing: full-fidelity print rendering of those kinds is a larger follow-up, but the
+                    // object must never again be silently absent from the printed page.
+                    DrawFloatingPlaceholder(dc, snapshot.TypeTag, rect);
+                    break;
+            }
+        }
+        finally
+        {
+            if (pushedTransform)
+                dc.Pop();
+        }
+    }
+
+    private static void DrawFloatingShape(DrawingContext dc, FreeW.Core.Model.Shape shape, Rect rect)
+    {
+        var fillBrush = BuildOptionalBrush(shape.FillColorHex);
+        Pen? pen = null;
+        var outlineBrush = BuildOptionalBrush(shape.OutlineColorHex);
+        if (outlineBrush is not null)
+        {
+            var widthDip = PageLayout.PointsToDip(shape.OutlineWidthPt > 0 ? shape.OutlineWidthPt : 1.0);
+            pen = new Pen(outlineBrush, Math.Max(0.75, widthDip));
+        }
+
+        if (shape.Kind == ShapeKind.Ellipse)
+            dc.DrawEllipse(fillBrush, pen, new Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2), rect.Width / 2, rect.Height / 2);
+        else
+            dc.DrawRectangle(fillBrush, pen, rect);
+
+        var text = shape.PlainText;
+        if (!string.IsNullOrEmpty(text))
+            DrawFittedText(dc, text, rect, 11.0, Brushes.Black, System.Windows.TextAlignment.Left);
+    }
+
+    private static void DrawFloatingImage(DrawingContext dc, InlineImage image, Rect rect)
+    {
+        var bytes = image.DisplayBytes;
+        if (bytes.Length == 0)
+        {
+            DrawFloatingPlaceholder(dc, "Picture", rect);
+            return;
+        }
+
+        try
+        {
+            using var stream = new MemoryStream(bytes);
+            var frame = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+            dc.DrawImage(frame, rect);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException or ArgumentException or InvalidOperationException)
+        {
+            // WIC cannot decode every format FreeW's picture model accepts (e.g. WMF/EMF metafiles) --
+            // fall back to a labelled placeholder rather than leaving the picture silently missing.
+            DrawFloatingPlaceholder(dc, "Picture", rect);
+        }
+    }
+
+    private static void DrawFloatingWordArt(DrawingContext dc, WordArt wordArt, Rect rect)
+    {
+        if (string.IsNullOrEmpty(wordArt.Text))
+            return;
+        DrawFittedText(dc, wordArt.Text, rect, wordArt.FontSizePt > 0 ? wordArt.FontSizePt : 36.0, Brushes.Black, System.Windows.TextAlignment.Center);
+    }
+
+    private static void DrawFloatingPlaceholder(DrawingContext dc, string label, Rect rect)
+    {
+        var fill = new SolidColorBrush(Color.FromArgb(24, 0, 0, 0));
+        fill.Freeze();
+        var pen = new Pen(Brushes.Gray, 1.0) { DashStyle = DashStyles.Dash };
+        dc.DrawRectangle(fill, pen, rect);
+        DrawFittedText(dc, label, rect, 9.0, Brushes.DimGray, System.Windows.TextAlignment.Center);
+    }
+
+    private static SolidColorBrush? BuildOptionalBrush(string? hex)
+    {
+        if (string.IsNullOrEmpty(hex))
+            return null;
+        var brush = new SolidColorBrush(ParseColor(hex));
+        brush.Freeze();
+        return brush;
+    }
+
+    /// <summary>Draws <paramref name="text"/> clipped and wrapped to fit inside <paramref name="rect"/>.</summary>
+    private static void DrawFittedText(
+        DrawingContext dc, string text, Rect rect, double fontSizePt, Brush brush, System.Windows.TextAlignment alignment)
+    {
+        const double padding = 3.0;
+        if (rect.Width <= padding * 2 || rect.Height <= padding * 2)
+            return;
+
+        var formatted = new FormattedText(
+            text,
+            System.Globalization.CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(new FontFamily("Calibri"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
+            PageLayout.PointsToDip(fontSizePt),
+            brush,
+            1.0)
+        {
+            MaxTextWidth = rect.Width - padding * 2,
+            MaxTextHeight = rect.Height - padding * 2,
+            TextAlignment = alignment,
+            Trimming = TextTrimming.CharacterEllipsis
+        };
+
+        dc.PushClip(new RectangleGeometry(rect));
+        dc.DrawText(formatted, new Point(rect.X + padding, rect.Y + padding));
+        dc.Pop();
     }
 
     /// <summary>Draws the faint, 45-degree page watermark text centred on the page, behind the content.</summary>

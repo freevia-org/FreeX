@@ -61,7 +61,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private readonly MenuItem _copyContextMenuItem;
     private readonly MenuItem _cutContextMenuItem;
     private readonly MenuItem _pasteContextMenuItem;
-    private string? _lastWriteFailureMessage;
+    private string? _lastClipboardFailureMessage;
     // Resolved lazily on every paste rather than captured once: the editor outlives individual
     // Presentation snapshots, and slides can be added or removed while the caret sits here.
     private readonly Func<IReadOnlyCollection<string>?>? _destinationSlideIdsProvider;
@@ -279,8 +279,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
     /// swallow this failure silently; callers now read it after a false result so it reaches the
     /// user instead of the user believing the copy/cut succeeded.
     /// </summary>
-    internal string? LastWriteFailureMessage =>
-        !ReferenceEquals(EditingTarget, this) ? EditingTarget.LastWriteFailureMessage : _lastWriteFailureMessage;
+    internal string? LastClipboardFailureMessage =>
+        !ReferenceEquals(EditingTarget, this) ? EditingTarget.LastClipboardFailureMessage : _lastClipboardFailureMessage;
 
     internal bool FocusEditor() => EditingTarget.InputBox.Focus();
 
@@ -307,7 +307,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         {
             // Nothing selected to cut; not a write failure, so clear any stale error from an
             // earlier call rather than letting it resurface on an unrelated empty-selection cut.
-            _lastWriteFailureMessage = null;
+            _lastClipboardFailureMessage = null;
             return false;
         }
 
@@ -328,8 +328,15 @@ internal sealed class AvaloniaRichTextEditor : Grid
             _clipboard,
             cancellationToken);
         if (!read.IsSuccess || read.Value is null)
+        {
+            // A failed read was silently indistinguishable from an empty clipboard here, so a
+            // paste that could not happen looked like a paste with nothing to do. WPF reports
+            // this; report it the same way rather than leaving the caret sitting there.
+            _lastClipboardFailureMessage = read.ErrorMessage;
             return false;
+        }
 
+        _lastClipboardFailureMessage = null;
         return ApplyClipboardContent(read.Value);
     }
 
@@ -957,7 +964,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         }
         catch (Exception exception)
         {
-            _lastWriteFailureMessage = $"{commandName}: {exception.Message}";
+            _lastClipboardFailureMessage = $"{commandName}: {exception.Message}";
         }
     }
 
@@ -969,7 +976,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         }
         catch (Exception exception)
         {
-            _lastWriteFailureMessage = exception.Message;
+            _lastClipboardFailureMessage = exception.Message;
         }
     }
 
@@ -1162,7 +1169,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         {
             // Nothing selected to copy/cut; not a write failure, so clear any stale error from an
             // earlier call rather than letting it resurface on an unrelated empty-selection copy.
-            _lastWriteFailureMessage = null;
+            _lastClipboardFailureMessage = null;
             return false;
         }
 
@@ -1173,7 +1180,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
             NativeXamlPackageFormat,
             NativeRtfFormat,
             cancellationToken);
-        _lastWriteFailureMessage = result.IsSuccess ? null : result.ErrorMessage;
+        _lastClipboardFailureMessage = result.IsSuccess ? null : result.ErrorMessage;
         return result.IsSuccess;
     }
 

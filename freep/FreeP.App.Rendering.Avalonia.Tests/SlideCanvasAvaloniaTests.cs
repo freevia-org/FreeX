@@ -3929,7 +3929,7 @@ public sealed class SlideCanvasAvaloniaTests
     // MainWindow.TryQueueActiveRichClipboard calls for the "select text inside a shape, then
     // Copy/Cut" path. Before this fix, a failed OS-clipboard write there was swallowed silently
     // (the underlying AvaloniaRichTextEditor.WriteRichClipboardAsync had no
-    // LastWriteFailureMessage at all), so the user believed the in-place copy succeeded and later
+    // LastClipboardFailureMessage at all), so the user believed the in-place copy succeeded and later
     // pasted stale content. The overlay/canvas built here are never attached to a Window/TopLevel
     // (matching every other InCanvasTextEditor test in this file), so
     // TopLevel.GetTopLevel(InputBox) is null and the write fails deterministically -- the same
@@ -3970,7 +3970,7 @@ public sealed class SlideCanvasAvaloniaTests
             textEditor.TrySelectTextRange(0, "Copy me".Length).Should().BeTrue();
 
             copyResult = textEditor.CopySelectionAsync().GetAwaiter().GetResult();
-            failureMessage = textEditor.LastWriteFailureMessage;
+            failureMessage = textEditor.LastClipboardFailureMessage;
         });
 
         copyResult.Should().BeFalse();
@@ -4013,7 +4013,7 @@ public sealed class SlideCanvasAvaloniaTests
             textEditor.TrySelectTextRange(0, "Cut me".Length).Should().BeTrue();
 
             cutResult = textEditor.CutSelectionAsync().GetAwaiter().GetResult();
-            failureMessage = textEditor.LastWriteFailureMessage;
+            failureMessage = textEditor.LastClipboardFailureMessage;
             textAfterFailedCut = RichInput(overlay).Text;
         });
 

@@ -30,15 +30,25 @@ internal static class WpfRichTextClipboardAdapter
     {
         ArgumentNullException.ThrowIfNull(eventArgs);
         WpfRichTextClipboardPreviewResult result;
+
+        // Copy and cut consume the key whether or not the write succeeded. Leaving a failure
+        // unhandled ran the RichTextBox's own copy or cut instead, which publishes WPF's formats
+        // without the FreeP payload -- and for cut deleted the selection, so the user was told
+        // "cut failed" while the text went away regardless. Reporting the failure and changing
+        // nothing is what the message already claims happened.
         if (eventArgs.Key == Key.C)
         {
             var write = await TryCopyResultAsync(box, originalBody, clipboard, cancellationToken);
-            result = new WpfRichTextClipboardPreviewResult(write.IsSuccess, FailureMessage: write.ErrorMessage);
+            result = new WpfRichTextClipboardPreviewResult(
+                Handled: true,
+                FailureMessage: write.ErrorMessage);
         }
         else if (eventArgs.Key == Key.X)
         {
             var write = await TryCutResultAsync(box, originalBody, clipboard, cancellationToken);
-            result = new WpfRichTextClipboardPreviewResult(write.IsSuccess, FailureMessage: write.ErrorMessage);
+            result = new WpfRichTextClipboardPreviewResult(
+                Handled: true,
+                FailureMessage: write.ErrorMessage);
         }
         else if (eventArgs.Key == Key.V)
         {
@@ -139,7 +149,7 @@ internal static class WpfRichTextClipboardAdapter
             clipboard ?? new WpfPlatformClipboard(),
             cancellationToken);
         if (!result.IsSuccess || result.Value is null)
-            return default;
+            return new WpfRichTextClipboardPasteResult(false, null, result.ErrorMessage);
 
         return TryPasteContent(
             box,
@@ -176,16 +186,30 @@ internal static class WpfRichTextClipboardAdapter
             category,
             onInlineOlePayloadUpdated,
             destinationSlideIds);
+
+        // Ctrl+V is always consumed, even when nothing was pasted. Leaving it unhandled hands
+        // the key to the RichTextBox's own paste, which writes the clipboard into the document
+        // without the payload path -- no inline OLE routing, no table cell styles, and, until it
+        // was patched at the commit boundary, a slide-jump target belonging to another deck.
+        // A failed read is reported the way a failed copy is, rather than quietly becoming a
+        // different, lossier paste.
         return new WpfRichTextClipboardPreviewResult(
-            result.Applied,
-            result.UpdatedBody);
+            Handled: true,
+            result.UpdatedBody,
+            result.FailureMessage);
     }
 
+    /// <param name="destinationSlideIds">
+    /// Carried through for the same reason the key-down path takes it: a drop or data-object
+    /// paste is a paste, and the day this gets wired to one it must resolve a foreign slide jump
+    /// rather than quietly reopening the gap the other paste paths closed.
+    /// </param>
     internal static bool TryPasteDataObject(
         RichTextBox box,
         TextBody? originalBody,
         IDataObject? data,
-        out TextBody? updatedBody)
+        out TextBody? updatedBody,
+        IReadOnlyCollection<string>? destinationSlideIds = null)
     {
         var read = WpfPlatformClipboard.ReadDataObject(
             data,
@@ -193,7 +217,12 @@ internal static class WpfRichTextClipboardAdapter
         var content = read.IsSuccess && read.Value is not null
             ? PresentationClipboardPlatformMapper.FromPlatformContent(read.Value)
             : new PresentationClipboardContent();
-        return TryPasteContent(box, originalBody, content, out updatedBody);
+        return TryPasteContent(
+            box,
+            originalBody,
+            content,
+            out updatedBody,
+            destinationSlideIds: destinationSlideIds);
     }
 
     private static bool TryPasteContent(
@@ -341,7 +370,8 @@ internal static class WpfRichTextClipboardAdapter
 
 internal readonly record struct WpfRichTextClipboardPasteResult(
     bool Applied,
-    TextBody? UpdatedBody);
+    TextBody? UpdatedBody,
+    string? FailureMessage = null);
 
 internal readonly record struct WpfRichTextClipboardPreviewResult(
     bool Handled,

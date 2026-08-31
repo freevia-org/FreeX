@@ -127,7 +127,7 @@ public static class PortableXpsWriter
             case PdfImage image:
                 imageCount++;
                 if (!IsSupportedImage(image))
-                    requirements.Add("PdfImage requires PNG or JPEG bytes without crop, clip, color effects, or rotation");
+                    requirements.Add("PdfImage requires readable PNG or JPEG bytes without clip, color effects, or rotation");
                 break;
             case PdfRotationGroup group:
                 foreach (var child in group.Ops)
@@ -248,19 +248,72 @@ public static class PortableXpsWriter
         var extension = image.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
         var path = $"Resources/Images/{++imageIndex}.{extension}";
         images.Add((path, image.ImageBytes));
+
+        var placement = PlaceImage(image);
         return new XElement(
             Xps + "Path",
-            new XAttribute("Data", RectPath(image.X, image.Y, image.Width, image.Height, pageHeight)),
+            new XAttribute(
+                "Data",
+                RectPath(placement.X, placement.Y, placement.Width, placement.Height, pageHeight)),
             new XElement(
                 Xps + "Path.Fill",
                 new XElement(
                     Xps + "ImageBrush",
                     new XAttribute("ImageSource", "/" + path),
-                    new XAttribute("Viewport", $"{F(image.X)},{F(pageHeight - image.Y - image.Height)},{F(image.Width)},{F(image.Height)}"),
+                    new XAttribute(
+                        "Viewport",
+                        $"{F(placement.X)},{F(pageHeight - placement.Y - placement.Height)},{F(placement.Width)},{F(placement.Height)}"),
                     new XAttribute("ViewportUnits", "Absolute"),
-                    new XAttribute("Viewbox", "0,0,1,1"),
+                    new XAttribute("Viewbox", placement.Viewbox),
                     new XAttribute("ViewboxUnits", "RelativeToBoundingBox"))));
     }
+
+    /// <summary>
+    /// Resolves an <c>a:srcRect</c> crop into the two things XPS can express: the visible source
+    /// region becomes the brush <c>Viewbox</c> (a fraction of the image bounding box), and the
+    /// destination rectangle shrinks for negative insets, which pad the image inside its frame
+    /// rather than cropping it. Both halves come from the shared plan the PDF adapters use, so the
+    /// same crop lands on the same source pixels in every backend.
+    /// </summary>
+    private static XpsImagePlacement PlaceImage(PdfImage image)
+    {
+        var full = new XpsImagePlacement(image.X, image.Y, image.Width, image.Height, "0,0,1,1");
+        if (!image.SourceCrop.HasCrop ||
+            image.Width <= 0 ||
+            image.Height <= 0 ||
+            !PdfImageDimensions.TryReadSize(image.ImageBytes, image.ContentType, out var pixelWidth, out var pixelHeight))
+            return full;
+
+        var plan = PdfRenderGeometry.GetImageCropPlan(pixelWidth, pixelHeight, image.SourceCrop);
+        if (!plan.HasCrop)
+            return full;
+
+        var width = image.Width * (1.0 - plan.DestinationInsetLeft - plan.DestinationInsetRight);
+        var height = image.Height * (1.0 - plan.DestinationInsetTop - plan.DestinationInsetBottom);
+        if (width <= 0 || height <= 0)
+            return full;
+
+        // The XPS page is y-up like PDF user space, so the bottom inset lifts the destination
+        // origin while the Viewbox -- measured on the image itself -- keeps its y-down top inset.
+        return new XpsImagePlacement(
+            image.X + plan.DestinationInsetLeft * image.Width,
+            image.Y + plan.DestinationInsetBottom * image.Height,
+            width,
+            height,
+            string.Join(
+                ",",
+                FFraction(plan.SourceX / (double)pixelWidth),
+                FFraction(plan.SourceY / (double)pixelHeight),
+                FFraction(plan.SourceWidth / (double)pixelWidth),
+                FFraction(plan.SourceHeight / (double)pixelHeight)));
+    }
+
+    private readonly record struct XpsImagePlacement(
+        double X,
+        double Y,
+        double Width,
+        double Height,
+        string Viewbox);
 
     private static XElement BuildCanvas(
         IReadOnlyList<PdfDrawOp> operations,
@@ -364,8 +417,12 @@ public static class PortableXpsWriter
         image.RotationDegrees == 0 &&
         image.ClipKind == PdfImageClipKind.None &&
         image.Opacity == 1 &&
-        !image.SourceCrop.HasCrop &&
-        !image.ColorEffects.HasPixelEffects;
+        !image.ColorEffects.HasPixelEffects &&
+        // A crop is expressible (Viewbox + a shrunken destination) only once the source pixel grid
+        // is known. Unreadable bytes keep the old truthful refusal rather than silently emitting
+        // the whole uncropped image.
+        (!image.SourceCrop.HasCrop ||
+         PdfImageDimensions.TryReadSize(image.ImageBytes, image.ContentType, out _, out _));
 
     private static XElement BuildContentTypes(PdfContentDocument document, XpsWriterOptions options)
     {
@@ -419,4 +476,8 @@ public static class PortableXpsWriter
     private static double FlipY(double y, double pageHeight) => pageHeight - y;
 
     private static string F(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    // Viewbox values are fractions of the image bounding box, so three decimals would quantise the
+    // crop to whole percent of the source -- visibly wrong on a large bitmap.
+    private static string FFraction(double value) => value.ToString("0.######", CultureInfo.InvariantCulture);
 }

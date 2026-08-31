@@ -72,9 +72,8 @@ public partial class GridView
     // Theme Colors picker (which populates CellBorder.ThemeColor alongside a Color baked at load
     // time -- mirrors CellStyle.FontThemeColor/FillThemeColor) re-resolves against the CURRENT
     // WorkbookTheme on every paint instead of showing the stale color captured when the file was
-    // loaded/authored or when the theme was last swapped. PrintRenderer.GridCells.cs'
-    // DrawPrintedBorderEdge is the print-path sibling of this method and has the same gap; it is
-    // being fixed separately, the identical way, via CellBorder.ResolveColor(theme).
+    // loaded/authored or when the theme was last swapped. Mirrors PrintRenderer.GridCells.cs'
+    // DrawPrintedBorderEdge, which resolves the identical way via CellBorder.ResolveColor(theme).
     private static void DrawBorderEdge(
         DrawingContext dc,
         CellBorder border,

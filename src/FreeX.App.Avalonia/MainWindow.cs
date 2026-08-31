@@ -11922,7 +11922,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Border-strip approach that could not dash and had incorrect Hair/SlantDashDot thickness).
         // borderNeighbors carries the touching neighbor cells' opposing edge styles so a shared
         // grid edge resolves to the heavier/more-prominent style through CellBorderVisualPlanner
-        // instead of this cell always winning by paint order.
+        // instead of this cell always winning by paint order. theme lets a border set via the Theme
+        // Colors picker (CellBorder.ThemeColor) re-resolve against the CURRENT workbook theme
+        // instead of a stale baked color -- see CellBorderPanel's own ResolveColor call.
         content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors, zoomFactor, theme));
     }
 

@@ -396,7 +396,42 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand, IEstima
         table = FindRequiredStructuredTable(sheet, _tableId);
         foreach (var styleCommand in BuildStyleCommands(table))
         {
-            var styleOutcome = styleCommand.Apply(ctx);
+            CommandOutcome styleOutcome;
+            try
+            {
+                styleOutcome = styleCommand.Apply(ctx);
+            }
+            catch (Exception ex)
+            {
+                // R175-auditA-F1: styleCommand (ApplyStyleCommand) mutates cell.StyleId in a
+                // per-cell loop -- if it throws PARTWAY through that loop (not merely returning
+                // a failed CommandOutcome), the cells it already touched keep their new style
+                // permanently: _appliedStyleCommands only grows on a successful return (below),
+                // so the old RevertAppliedCommands-only rollback undid every PRIOR sibling but
+                // never touched the throwing child's own partial mutation, exactly the
+                // CompositeWorkbookCommand defect this round fixed one file over. Mirror that
+                // fix's shape here: best-effort revert the throwing child FIRST -- undoing
+                // whatever it already snapshotted before unwinding the prior successful
+                // siblings below, the same order the mutations actually happened in (LIFO). The
+                // throwing child's own Revert may itself throw too (or, as here, be a safe no-op
+                // when its Apply threw before taking any snapshot); either way that is swallowed
+                // so a broken child Revert cannot mask the original exception (still captured in
+                // `ex` below) or abort the sibling/option rollback that follows.
+                try
+                {
+                    styleCommand.Revert(ctx);
+                }
+                catch
+                {
+                    // Best-effort: the child's Revert assumed more of its own Apply had
+                    // completed than actually had, or has some other unrelated bug. Either way
+                    // we must not lose the original exception or skip rolling back the
+                    // successful siblings and the option change.
+                }
+                RevertAppliedCommands(ctx);
+                return new CommandOutcome(false, $"{Label}: {ex.Message}");
+            }
+
             if (!styleOutcome.Success)
             {
                 RevertAppliedCommands(ctx);

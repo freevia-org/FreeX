@@ -918,7 +918,12 @@ public static partial class PrintRenderer
         };
 
         // Excel's "Black and white" print option forces every border to solid black regardless of
-        // its authored color.
+        // its authored color. Otherwise resolve through CellBorder.ResolveColor (mirrors
+        // ResolvePrintedTextBrush/DrawPrintedCellFill's ResolveFontColor/ResolveFillColor calls
+        // above) instead of reading the plain Color field directly, so a border set via the
+        // ribbon's Theme Colors picker (which populates ThemeColor alongside a Color baked at load
+        // time) prints in its CURRENT theme color instead of the stale color captured when the
+        // file was loaded/authored.
         var borderBrush = blackAndWhite
             ? Brushes.Black
             : BrushForResolvedBorderColor(border.ResolveColor(theme));

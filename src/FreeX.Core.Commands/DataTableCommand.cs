@@ -858,7 +858,31 @@ public static class DataTableAutoRefreshEffects
                     continue;
 
                 var refreshCommand = new DataTableBodyRefreshCommand(registration);
-                var outcome = refreshCommand.Apply(ctx);
+                CommandOutcome outcome;
+                try
+                {
+                    outcome = refreshCommand.Apply(ctx);
+                }
+                catch
+                {
+                    // R175-auditB-F1: same rollback-family defect fixed this round in
+                    // StructuredTableEditEffects.Apply (Commands.cs) -- refreshCommand can throw
+                    // PARTWAY through re-deriving the table body instead of merely returning a
+                    // failed CommandOutcome. A failed CommandOutcome is already handled by this
+                    // method's documented "best-effort, silently skip" contract (refreshCommand is
+                    // simply never added to `applied`) -- but an exception is different: it
+                    // propagates out of this static helper, through EditCellsCommand.Apply (which
+                    // does not catch it), up to CommandBus.Execute's own top-level handler, which
+                    // reverts the whole edit command (its Revert calls
+                    // DataTableAutoRefreshEffects/StructuredTableEditEffects.Revert, which unwinds
+                    // every entry already in `applied` -- every earlier sibling refresh in this
+                    // loop is already correctly rolled back that way). The one thing that mechanism
+                    // cannot fix is THIS command's own partial mutation, because refreshCommand was
+                    // never added to `applied`. Best-effort revert it here before rethrowing so the
+                    // original exception is not lost.
+                    try { refreshCommand.Revert(ctx); } catch { }
+                    throw;
+                }
                 if (!outcome.Success)
                     continue;
 
