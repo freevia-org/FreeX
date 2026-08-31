@@ -368,21 +368,55 @@ public sealed class StatusBarLayoutTests
             harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Worksheet);
 
             harness.CycleShellFocus(reverse: false);
-            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Ribbon);
-
-            harness.CycleShellFocus(reverse: false);
-            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.FormulaBar);
-            harness.FocusedElementName.Should().Be("FormulaBar");
-
-            harness.CycleShellFocus(reverse: false);
             harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.SheetTabs);
             harness.FocusedSheetTabName.Should().Be("Sheet1");
 
             harness.CycleShellFocus(reverse: false);
-            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.StatusBar);
-            harness.FocusedElementName.Should().Be("StatusZoomOutButton");
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.FormulaBar);
+            harness.NameBoxHasKeyboardFocus.Should().BeTrue();
+            harness.NameBoxAutomationId.Should().Be("CellAddressBox");
 
             harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.StatusBar);
+            harness.FocusedElementName.Should().Be("StatusModeFocusTarget");
+            harness.FocusedElementAutomationId.Should().Be("StatusCellMode");
+            harness.FocusedElementAutomationName.Should().Be("Cell Mode Ready");
+
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Ribbon);
+            harness.FocusedRibbonTabHeader.Should().Be("Home");
+
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Worksheet);
+        });
+    }
+
+    [Fact]
+    public void ShiftF6ShellFocusCycle_ReversesTheExcelRegionOrderInHost()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Ribbon);
+
+            harness.CycleShellFocus(reverse: true);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.StatusBar);
+            harness.FocusedElementName.Should().Be("StatusModeFocusTarget");
+
+            harness.CycleShellFocus(reverse: true);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.FormulaBar);
+            harness.NameBoxHasKeyboardFocus.Should().BeTrue();
+
+            harness.CycleShellFocus(reverse: true);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.SheetTabs);
+            harness.FocusedSheetTabName.Should().Be("Sheet1");
+
+            harness.CycleShellFocus(reverse: true);
             harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Worksheet);
         });
     }
@@ -398,12 +432,14 @@ public sealed class StatusBarLayoutTests
             harness.CycleShellFocus(reverse: false);
             harness.CycleShellFocus(reverse: false);
             harness.CycleShellFocus(reverse: false);
-            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.SheetTabs);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.StatusBar);
 
             harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Ribbon);
 
-            harness.CurrentShellFocusTarget.Should().BeOneOf(ShellFocusTarget.TaskPane, ShellFocusTarget.StatusBar, ShellFocusTarget.Worksheet);
-            harness.FocusedElementName.Should().BeOneOf("PivotFieldListSearchBox", "StatusNormalViewButton", "StatusZoomOutButton", "SheetGrid");
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().BeOneOf(ShellFocusTarget.TaskPane, ShellFocusTarget.Worksheet);
+            harness.FocusedElementName.Should().BeOneOf("PivotFieldListSearchBox", "SheetGrid");
         });
     }
 
@@ -418,12 +454,14 @@ public sealed class StatusBarLayoutTests
             harness.CycleShellFocus(reverse: false);
             harness.CycleShellFocus(reverse: false);
             harness.CycleShellFocus(reverse: false);
-            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.SheetTabs);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.StatusBar);
 
             harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Ribbon);
 
-            harness.CurrentShellFocusTarget.Should().BeOneOf(ShellFocusTarget.TaskPane, ShellFocusTarget.StatusBar, ShellFocusTarget.Worksheet);
-            harness.FocusedElementName.Should().BeOneOf("SlicerTimelinePaneCloseBtn", "SlicerTimelinePane", "StatusNormalViewButton", "StatusZoomOutButton", "SheetGrid");
+            harness.CycleShellFocus(reverse: false);
+            harness.CurrentShellFocusTarget.Should().BeOneOf(ShellFocusTarget.TaskPane, ShellFocusTarget.Worksheet);
+            harness.FocusedElementName.Should().BeOneOf("SlicerTimelinePaneCloseBtn", "SlicerTimelinePane", "SheetGrid");
         });
     }
 
@@ -473,6 +511,27 @@ public sealed class StatusBarLayoutTests
             Keyboard.FocusedElement is FrameworkElement element && !string.IsNullOrWhiteSpace(element.Name)
                 ? element.Name
                 : VisibleTaskPaneFocusCandidateName();
+
+        public string FocusedElementAutomationId =>
+            Keyboard.FocusedElement is DependencyObject element
+                ? AutomationProperties.GetAutomationId(element)
+                : string.Empty;
+
+        public string FocusedElementAutomationName =>
+            Keyboard.FocusedElement is DependencyObject element
+                ? AutomationProperties.GetName(element)
+                : string.Empty;
+
+        public string? FocusedRibbonTabHeader =>
+            _window.FindName("RibbonTabs") is TabControl { SelectedItem: TabItem tab }
+                ? tab.Header?.ToString()
+                : null;
+
+        public bool NameBoxHasKeyboardFocus =>
+            ((ComboBox)_window.FindName("CellAddressBox")).IsKeyboardFocusWithin;
+
+        public string NameBoxAutomationId =>
+            AutomationProperties.GetAutomationId((ComboBox)_window.FindName("CellAddressBox"));
 
         public bool FocusedElementIsWorksheet =>
             ReferenceEquals(Keyboard.FocusedElement, _window.SheetGrid);

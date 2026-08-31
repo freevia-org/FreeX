@@ -6,16 +6,18 @@ namespace FreeX.App.Presentation.Tests.Shell;
 public sealed class ShellFocusCyclePlannerTests
 {
     [Theory]
-    [InlineData(ShellFocusTarget.Worksheet, false, ShellFocusTarget.Ribbon)]
-    [InlineData(ShellFocusTarget.Ribbon, false, ShellFocusTarget.FormulaBar)]
-    [InlineData(ShellFocusTarget.FormulaBar, false, ShellFocusTarget.SheetTabs)]
-    [InlineData(ShellFocusTarget.SheetTabs, false, ShellFocusTarget.TaskPane)]
-    [InlineData(ShellFocusTarget.TaskPane, false, ShellFocusTarget.StatusBar)]
-    [InlineData(ShellFocusTarget.StatusBar, false, ShellFocusTarget.Worksheet)]
-    [InlineData(ShellFocusTarget.Worksheet, true, ShellFocusTarget.StatusBar)]
-    [InlineData(ShellFocusTarget.StatusBar, true, ShellFocusTarget.TaskPane)]
-    [InlineData(ShellFocusTarget.TaskPane, true, ShellFocusTarget.SheetTabs)]
-    [InlineData(ShellFocusTarget.Ribbon, true, ShellFocusTarget.Worksheet)]
+    [InlineData(ShellFocusTarget.Worksheet, false, ShellFocusTarget.SheetTabs)]
+    [InlineData(ShellFocusTarget.SheetTabs, false, ShellFocusTarget.FormulaBar)]
+    [InlineData(ShellFocusTarget.FormulaBar, false, ShellFocusTarget.StatusBar)]
+    [InlineData(ShellFocusTarget.StatusBar, false, ShellFocusTarget.Ribbon)]
+    [InlineData(ShellFocusTarget.Ribbon, false, ShellFocusTarget.TaskPane)]
+    [InlineData(ShellFocusTarget.TaskPane, false, ShellFocusTarget.Worksheet)]
+    [InlineData(ShellFocusTarget.Worksheet, true, ShellFocusTarget.TaskPane)]
+    [InlineData(ShellFocusTarget.TaskPane, true, ShellFocusTarget.Ribbon)]
+    [InlineData(ShellFocusTarget.Ribbon, true, ShellFocusTarget.StatusBar)]
+    [InlineData(ShellFocusTarget.StatusBar, true, ShellFocusTarget.FormulaBar)]
+    [InlineData(ShellFocusTarget.FormulaBar, true, ShellFocusTarget.SheetTabs)]
+    [InlineData(ShellFocusTarget.SheetTabs, true, ShellFocusTarget.Worksheet)]
     public void GetNext_CyclesThroughExcelShellRegions(
         ShellFocusTarget current,
         bool reverse,
@@ -27,8 +29,8 @@ public sealed class ShellFocusCyclePlannerTests
     }
 
     [Theory]
-    [InlineData(ShellFocusTarget.SheetTabs, false, ShellFocusTarget.StatusBar)]
-    [InlineData(ShellFocusTarget.StatusBar, true, ShellFocusTarget.SheetTabs)]
+    [InlineData(ShellFocusTarget.Ribbon, false, ShellFocusTarget.Worksheet)]
+    [InlineData(ShellFocusTarget.Worksheet, true, ShellFocusTarget.Ribbon)]
     public void GetNextAvailable_SkipsUnavailableTaskPane(
         ShellFocusTarget current,
         bool reverse,
@@ -43,8 +45,8 @@ public sealed class ShellFocusCyclePlannerTests
     }
 
     [Theory]
-    [InlineData(ShellFocusTarget.SheetTabs, false, ShellFocusTarget.TaskPane)]
-    [InlineData(ShellFocusTarget.StatusBar, true, ShellFocusTarget.TaskPane)]
+    [InlineData(ShellFocusTarget.Ribbon, false, ShellFocusTarget.TaskPane)]
+    [InlineData(ShellFocusTarget.Worksheet, true, ShellFocusTarget.TaskPane)]
     public void GetNextAvailable_IncludesVisibleContextualTaskPane(
         ShellFocusTarget current,
         bool reverse,
@@ -68,7 +70,7 @@ public sealed class ShellFocusCyclePlannerTests
         bool slicerTimelineVisible)
     {
         var next = ShellFocusCyclePlanner.GetNextAvailable(
-            ShellFocusTarget.SheetTabs,
+            ShellFocusTarget.Ribbon,
             reverse: false,
             target => target is not ShellFocusTarget.TaskPane ||
                       IsContextualTaskPaneVisible(pivotFieldListVisible, slicerTimelineVisible));
@@ -119,9 +121,8 @@ public sealed class ShellFocusCyclePlannerTests
 
         focused.Should().BeTrue();
         attempts.Should().Equal(
-            ShellFocusTarget.Ribbon,
-            ShellFocusTarget.FormulaBar,
             ShellFocusTarget.SheetTabs,
+            ShellFocusTarget.FormulaBar,
             ShellFocusTarget.StatusBar);
     }
 
@@ -142,11 +143,11 @@ public sealed class ShellFocusCyclePlannerTests
 
         focused.Should().BeFalse();
         attempts.Should().Equal(
-            ShellFocusTarget.Ribbon,
-            ShellFocusTarget.FormulaBar,
             ShellFocusTarget.SheetTabs,
-            ShellFocusTarget.TaskPane,
+            ShellFocusTarget.FormulaBar,
             ShellFocusTarget.StatusBar,
+            ShellFocusTarget.Ribbon,
+            ShellFocusTarget.TaskPane,
             ShellFocusTarget.Worksheet);
     }
 

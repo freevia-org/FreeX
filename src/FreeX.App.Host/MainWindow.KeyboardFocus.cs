@@ -119,7 +119,7 @@ public partial class MainWindow
                 return true;
 
             case StatusBarKeyboardNavigationAction.MoveFocus when plan.Target is { } target:
-                if (!TryFocusStatusBarElement(GetStatusBarFocusElement(target)))
+                if (!TryFocusElement(GetStatusBarFocusElement(target)))
                     return false;
 
                 e.Handled = true;
@@ -242,7 +242,7 @@ public partial class MainWindow
             case ShellFocusTarget.FormulaBar:
                 if (FormulaBarBorder?.Visibility != Visibility.Visible)
                     return false;
-                return FormulaBar.Focus();
+                return TryFocusElement(CellAddressBox);
 
             case ShellFocusTarget.SheetTabs:
                 return TryFocusCurrentSheetTab() || AddSheetButton.Focus();
@@ -251,7 +251,7 @@ public partial class MainWindow
                 return FocusVisibleTaskPane();
 
             case ShellFocusTarget.StatusBar:
-                return FocusStatusBar();
+                return FocusStatusMode();
 
             default:
                 FocusSheetGridIfNeeded();
@@ -273,17 +273,8 @@ public partial class MainWindow
         return false;
     }
 
-    private bool FocusStatusBar()
-    {
-        var candidates = GetStatusBarFocusCandidates();
-        foreach (var target in StatusBarFocusNavigationPlanner.BuildInitialFocusOrder(candidates))
-        {
-            if (TryFocusStatusBarElement(GetStatusBarFocusElement(target)))
-                return true;
-        }
-
-        return false;
-    }
+    private bool FocusStatusMode() =>
+        TryFocusElement(StatusModeFocusTarget);
 
     private IReadOnlyCollection<StatusBarFocusCandidate> GetStatusBarFocusCandidates()
     {
@@ -334,7 +325,7 @@ public partial class MainWindow
         return control.IsVisible && control.IsEnabled;
     }
 
-    private static bool TryFocusStatusBarElement(FrameworkElement control)
+    private static bool TryFocusElement(FrameworkElement control)
     {
         if (!control.IsVisible || !control.IsEnabled)
             return false;

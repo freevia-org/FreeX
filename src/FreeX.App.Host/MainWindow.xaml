@@ -1017,15 +1017,33 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <StackPanel x:Name="StatusModePanel" Grid.Column="0"
-                            Orientation="Horizontal"
-                            VerticalAlignment="Center">
-                    <TextBlock x:Name="StatusReadyText" Text="{local:Loc Key=MainWindow_Text_Ready}" Foreground="{DynamicResource FreeXStatusForegroundBrush}"
-                               FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="StatusPageNumberText" Text="" Foreground="{DynamicResource FreeXStatusForegroundBrush}"
-                               FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center" Margin="16,0,0,0"
-                               Visibility="Collapsed"/>
-                </StackPanel>
+                <Border x:Name="StatusModeFocusTarget" Grid.Column="0"
+                        Focusable="True"
+                        BorderBrush="Transparent"
+                        BorderThickness="1"
+                        Padding="2,0"
+                        AutomationProperties.Name="{Binding Text, ElementName=StatusReadyText, StringFormat=Cell Mode {0}}"
+                        AutomationProperties.AutomationId="StatusCellMode"
+                        AutomationProperties.HelpText="Current worksheet cell mode.">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Style.Triggers>
+                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource FreeXAccentDarkBrush}"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel x:Name="StatusModePanel"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <TextBlock x:Name="StatusReadyText" Text="{local:Loc Key=MainWindow_Text_Ready}" Foreground="{DynamicResource FreeXStatusForegroundBrush}"
+                                   FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="StatusPageNumberText" Text="" Foreground="{DynamicResource FreeXStatusForegroundBrush}"
+                                   FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center" Margin="16,0,0,0"
+                                   Visibility="Collapsed"/>
+                    </StackPanel>
+                </Border>
 
                 <Border x:Name="StatusStatsViewport" Grid.Column="1"
                         Margin="8,0,12,0"

@@ -5,11 +5,11 @@ public static class ShellFocusCyclePlanner
     private static readonly ShellFocusTarget[] Cycle =
     [
         ShellFocusTarget.Worksheet,
-        ShellFocusTarget.Ribbon,
-        ShellFocusTarget.FormulaBar,
         ShellFocusTarget.SheetTabs,
-        ShellFocusTarget.TaskPane,
-        ShellFocusTarget.StatusBar
+        ShellFocusTarget.FormulaBar,
+        ShellFocusTarget.StatusBar,
+        ShellFocusTarget.Ribbon,
+        ShellFocusTarget.TaskPane
     ];
 
     public static ShellFocusTarget GetNext(ShellFocusTarget current, bool reverse)
