@@ -50,13 +50,13 @@ internal static class RibbonIconFactory
     private static ImageSource? TryLoadCommandIcon(string commandName, Brush glyphBrush, double size) =>
         CommandIconLoader.TryLoad(commandName, glyphBrush, size);
 
-    private static IEnumerable<string> GetCommandIconSlugCandidates(string slug)
+    internal static IEnumerable<string> GetCommandIconSlugCandidates(string slug)
     {
         // Prefer aliases so overloaded names such as "size" resolve to the intended FreeW artwork.
         foreach (var candidate in RibbonCommandIconSlugAliases.GetCandidates(slug))
             yield return candidate;
     }
 
-    private static string ToCommandIconSlug(string text) =>
+    internal static string ToCommandIconSlug(string text) =>
         RibbonCommandIconPolicy.ToCommandIconSlug(text, "freew.");
 }

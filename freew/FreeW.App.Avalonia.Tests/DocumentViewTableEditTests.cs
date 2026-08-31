@@ -495,15 +495,11 @@ file static class DocumentViewTableTestExtensions
 
     public static void SimulateBackspace(this DocumentView view)
     {
-        var method = typeof(DocumentView).GetMethod("Backspace",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        method?.Invoke(view, null);
+        view.Backspace();
     }
 
     private static void InvokeMoveCaret(DocumentView view, int delta)
     {
-        var method = typeof(DocumentView).GetMethod("MoveCaret",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        method?.Invoke(view, [delta, false]);
+        view.MoveCaret(delta, false);
     }
 }
