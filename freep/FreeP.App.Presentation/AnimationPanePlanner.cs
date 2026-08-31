@@ -965,11 +965,15 @@ public static class AnimationPanePlanner
             text = text[..^1].Trim();
         }
 
-        if (double.TryParse(
-                text,
-                NumberStyles.Float,
-                CultureInfo.InvariantCulture,
-                out double seconds)
+        // r177: accept the CURRENT culture first, then invariant. FormatDuration writes these
+        // fields with CultureInfo.CurrentCulture, so on any comma-decimal locale the pane showed
+        // "0,5" and then refused to parse it -- opening Animation Pane and clicking away without
+        // typing anything reported the field invalid and discarded the value. Trying invariant as
+        // a fallback keeps values that were typed or pasted in "0.5" form working too.
+        // NumberStyles.Float excludes AllowThousands, so "1.5" cannot be misread as 15 by a
+        // culture whose group separator is "." -- it simply fails there and falls through.
+        if ((double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out double seconds)
+                || double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds))
             && (allowZero ? seconds >= 0 : seconds > 0))
         {
             ms = (int)(seconds * 1000.0);

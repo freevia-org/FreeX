@@ -743,7 +743,37 @@ public sealed partial class DocumentView : Control
     /// <summary>Select the next occurrence of <paramref name="query"/> after the caret (wraps around).</summary>
     public bool FindNext(string query) => FindNext(query, new FindReplaceSearchOptions());
 
-    public bool FindNext(string query, FindReplaceSearchOptions options)
+    public bool FindNext(string query, FindReplaceSearchOptions options) =>
+        FindNext(query, options, headerFooterResume: null);
+
+    /// <summary>
+    /// <paramref name="headerFooterResume"/> lets Replace All continue a header/footer slot past
+    /// the text it just wrote there. Interactive Find Next always passes null and keeps its
+    /// existing behaviour of re-landing on the first remaining match in the slot.
+    /// </summary>
+    /// <summary>
+    /// Searches ONLY the default header/footer, for Replace All once the body story is finished.
+    /// </summary>
+    private bool FindNextHeaderFooterOnly(
+        string query,
+        FindReplaceSearchOptions options,
+        (bool IsFooter, int ParagraphIndex, int Offset)? headerFooterResume)
+    {
+        if (string.IsNullOrEmpty(query))
+            return false;
+        if (FindReplaceDialogPlanner.FindNextHeaderFooterMatch(
+                _doc, query, options, headerFooterResume) is not { } hit)
+            return false;
+
+        SelectFindReplaceMatch(hit);
+        InvalidateVisual();
+        return true;
+    }
+
+    private bool FindNext(
+        string query,
+        FindReplaceSearchOptions options,
+        (bool IsFooter, int ParagraphIndex, int Offset)? headerFooterResume)
     {
         if (string.IsNullOrEmpty(query))
             return false;
@@ -753,7 +783,8 @@ public sealed partial class DocumentView : Control
                 options,
                 _caret.Block,
                 _caret.Offset,
-                CurrentFindReplaceTableCellPosition()) is not { } hit)
+                CurrentFindReplaceTableCellPosition(),
+                headerFooterResume) is not { } hit)
             return false;
 
         SelectFindReplaceMatch(hit);
@@ -1001,26 +1032,51 @@ public sealed partial class DocumentView : Control
         // an N-match Replace All became N separate undo entries here. ownsUndoGroup guards against the
         // (currently unreached, but the rest of this file always guards it this way) case of being called
         // while an outer caller already has a group open.
-        // r176 remediation: a header/footer match has no resume position -- FindInDefaultHeaderFooter
-        // always rescans each paragraph from offset 0, and the planner justifies that by assuming
-        // "each replacement removes that occurrence". That assumption fails whenever the
-        // replacement CONTAINS the search term (Confidential -> Strictly Confidential): the term is
-        // recreated at the same offset, the next find returns the same hit, and Replace All runs to
-        // its 10000 cap rewriting the header into garbage. Before headers were reachable at all this
-        // was merely a no-op; making them reachable turned it into data corruption, so the loop now
-        // requires each header/footer hit to be somewhere new.
-        (HfTarget Target, int Offset)? previousHeaderFooterMatch = null;
+        // r176/r177: a header/footer match had no resume position -- FindInDefaultHeaderFooter
+        // rescanned each paragraph from offset 0, and the planner justified that by assuming
+        // "each replacement removes that occurrence". That fails whenever the replacement
+        // CONTAINS the search term (Confidential -> Strictly Confidential): the term is recreated
+        // and the next find returns it again. r176 stopped the resulting runaway with a
+        // forward-progress guard that BROKE the loop, which fixed the corruption but silently
+        // abandoned every slot after the offending one -- a header that tripped it left the
+        // FOOTER unreplaced with no indication. r177 gives the walk the resume position it was
+        // missing instead, so the loop simply moves past what it just wrote and carries on into
+        // the next slot. No guard, and nothing is skipped.
+        (bool IsFooter, int ParagraphIndex, int Offset)? headerFooterResume = null;
         var ownsUndoGroup = !_bus.IsUndoGroupOpen;
         if (ownsUndoGroup)
             _bus.BeginUndoGroup();
         try
         {
+            // Once the body story wraps, it is finished -- but the header and footer have not been
+            // visited yet. FindNextMatch only falls through to them when the body yields NO match at
+            // all, so before r177 a document whose body contained the term had its header/footer
+            // occurrences silently skipped and the reported count was short by that many. Switch to
+            // the header/footer-only walk at that point instead of ending the operation.
+            var bodyExhausted = false;
             while (count < 10000)
             {
                 var searchFrom = _caret;
-                var found = options is { } opts ? FindNext(query, opts) : FindNext(query);
-                if (!found || HasWrappedAround(searchFrom))
-                    break;
+                bool found;
+                if (bodyExhausted)
+                {
+                    found = FindNextHeaderFooterOnly(query, options ?? new FindReplaceSearchOptions(), headerFooterResume);
+                    if (!found)
+                        break;
+                }
+                else
+                {
+                    found = FindNext(query, options ?? new FindReplaceSearchOptions(), headerFooterResume);
+                    if (!found || HasWrappedAround(searchFrom))
+                    {
+                        // Body finished (or never matched). Hand off to the header/footer walk; only
+                        // stop for real once that also comes up empty.
+                        bodyExhausted = true;
+                        found = FindNextHeaderFooterOnly(query, options ?? new FindReplaceSearchOptions(), headerFooterResume);
+                        if (!found)
+                            break;
+                    }
+                }
 
                 // A header/footer Find Next hit (see SelectFindReplaceMatch) routes through the separate
                 // _hfCaret/_hfSelectionAnchor model and leaves _selectionAnchor null -- so matchStart is
@@ -1031,19 +1087,12 @@ public sealed partial class DocumentView : Control
                 // other match.
                 if (_hfSelectionAnchor is { } headerFooterMatch)
                 {
-                    // Require forward progress: the next hit in the same slot and paragraph must
-                    // start at or after the end of what was just written there. Equality alone is
-                    // not enough -- when the replacement contains the search term the match does
-                    // not repeat, it WALKS forward through its own output (0, then 9, then 18 for
-                    // Confidential -> Strictly Confidential) and never terminates on its own.
-                    if (previousHeaderFooterMatch is { } resume
-                        && resume.Target.Equals(headerFooterMatch.Target)
-                        && headerFooterMatch.Offset < resume.Offset)
-                    {
-                        break;
-                    }
-
-                    previousHeaderFooterMatch = (headerFooterMatch.Target,
+                    // Resume the next search just past what this replacement is about to write,
+                    // in this slot and paragraph. Later paragraphs in the slot, and the other
+                    // slot, are still searched in full (see FindInDefaultHeaderFooter).
+                    headerFooterResume = (
+                        headerFooterMatch.Target.Slot == HeaderFooterSlotKind.Footer,
+                        headerFooterMatch.Target.ParaIdx,
                         headerFooterMatch.Offset + replacement.Length);
                 }
 
@@ -1076,12 +1125,24 @@ public sealed partial class DocumentView : Control
                 count++;
             }
         }
+        catch
+        {
+            // r177: Replace All is one operation to the user, so a failure partway must leave the
+            // document as it found it rather than half-replaced. This used to fall into the finally
+            // below and COMMIT whatever had been applied -- undoable, but still a partial replacement
+            // the user never asked for. The WPF sibling had the worse version of the same bug (it
+            // abandoned the group, leaving the partial edit in the document and absent from the undo
+            // stack); both shells now roll back.
+            if (ownsUndoGroup)
+                _bus.RollbackUndoGroup();
+            throw;
+        }
         finally
         {
             // CommitUndoGroup no-ops (pushes nothing) when nothing was collected, e.g. a zero-match
-            // Replace All -- safe to call unconditionally, including when the loop above threw, so the
-            // bus is never left with a permanently-open group that would swallow every later edit.
-            if (ownsUndoGroup)
+            // Replace All -- safe to call unconditionally. The catch above has already closed the
+            // group on the throwing path, and IsUndoGroupOpen guards the double-close.
+            if (ownsUndoGroup && _bus.IsUndoGroupOpen)
                 _bus.CommitUndoGroup("Replace All");
         }
 
