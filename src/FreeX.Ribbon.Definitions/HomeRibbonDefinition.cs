@@ -16,7 +16,12 @@ public static class HomeRibbonDefinition
     public static RibbonTab HomeTab() => new RibbonDefinitionBuilder()
         .Tab("HomeTab", "Home", "H", tab => tab
             .Group("HomeClipboardGroup", "Clipboard", "C", priority: 100, g => g
-                .Large("Paste", "Paste", Ico.Paste, "V", menu: HomeRibbonMenus.Paste)
+                .SplitButton("Paste", "Paste", HomeRibbonMenus.Paste, control => control with
+                {
+                    PreferredLayout = RibbonCommandLayoutKind.Large,
+                    Icon = new RibbonCommandIcon(Ico.Paste),
+                    KeyTip = "V"
+                })
                 .Medium("Cut", "Cut", Ico.Cut, "X")
                 .Medium("Copy", "Copy", Ico.Copy, "C")
                 .Medium("Format Painter", "Format Painter", Ico.FormatPainter, "FP"))
