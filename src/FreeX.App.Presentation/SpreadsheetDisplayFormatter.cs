@@ -173,11 +173,8 @@ public static class SpreadsheetDisplayFormatter
         if (cell?.Value is not NumberValue number || sheet is null || workbook is null)
             return false;
 
-        var styleId = cell.StyleId != StyleId.Default
-            ? cell.StyleId
-            : sheet.GetStyleOnly(address.Row, address.Col) ?? StyleId.Default;
         if (!string.Equals(
-                workbook.GetStyle(styleId).NumberFormat,
+                GetEffectiveStyle(cell, address, sheet, workbook).NumberFormat,
                 DateTimeEntryService.CurrentDateNumberFormat,
                 StringComparison.OrdinalIgnoreCase))
         {
