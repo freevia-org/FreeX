@@ -199,12 +199,8 @@ internal static class GridViewFormControlTestExtensions
     /// </summary>
     public static void SimulateFormControlClick(this GridView grid, Point pos)
     {
-        // Access via reflection since TryHandleFormControlClick is private.
-        var method = typeof(GridView).GetMethod(
-            "TryHandleFormControlClick",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-        method.Should().NotBeNull("TryHandleFormControlClick must exist on GridView");
-        method!.Invoke(grid, [pos]);
+        // Compiled call: TryHandleFormControlClick is internal, and this assembly has
+        // InternalsVisibleTo, so a signature change breaks the build here.
+        grid.TryHandleFormControlClick(pos);
     }
 }

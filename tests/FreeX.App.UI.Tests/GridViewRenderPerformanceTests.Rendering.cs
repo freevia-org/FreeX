@@ -51,7 +51,7 @@ public sealed partial class GridViewRenderPerformanceTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var buildCellLookups = source[
             source.IndexOf("IReadOnlyList<RenderBorderCell> BorderCells) BuildRenderCellLookups", StringComparison.Ordinal)..
-            source.IndexOf("private RenderCellLookupCache GetRenderCellLookups", StringComparison.Ordinal)];
+            source.IndexOf("internal RenderCellLookupCache GetRenderCellLookups", StringComparison.Ordinal)];
 
         source.Should().Contain("private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);");
         buildCellLookups.Should().Contain("Dictionary<(uint Row, uint Col), CellStyle>? styles = null;");
@@ -141,7 +141,7 @@ public sealed partial class GridViewRenderPerformanceTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
+            source.IndexOf("internal void DrawCommentIndicator", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
         renderCells.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip).Width");
@@ -255,13 +255,8 @@ public sealed partial class GridViewRenderPerformanceTests
         formatRowHeader.Should().Contain("RowHeaderCache.GetOrAdd(row");
         formatRowHeader.Should().Contain("rowNumber.ToString(CultureInfo.InvariantCulture)");
 
-        var formatter = typeof(GridView).GetMethod(
-            "FormatRowHeader",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        formatter.Should().NotBeNull();
-        formatter!.Invoke(null, [1u]).Should().Be("1");
-        formatter.Invoke(null, [1_048_576u]).Should().Be("1048576");
+        GridView.FormatRowHeader(1u).Should().Be("1");
+        GridView.FormatRowHeader(1_048_576u).Should().Be("1048576");
     }
 
     [Fact]
@@ -402,13 +397,8 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void FormatColumnHeader_UsesA1NamesOrR1C1Numbers()
     {
-        var formatColumnHeader = typeof(GridView).GetMethod(
-            "FormatColumnHeader",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        formatColumnHeader.Should().NotBeNull();
-        formatColumnHeader!.Invoke(null, [27u, false]).Should().Be("AA");
-        formatColumnHeader.Invoke(null, [27u, true]).Should().Be("27");
+        GridView.FormatColumnHeader(27u, false).Should().Be("AA");
+        GridView.FormatColumnHeader(27u, true).Should().Be("27");
     }
 
     [Fact]
@@ -759,7 +749,7 @@ public sealed partial class GridViewRenderPerformanceTests
         var gridViewSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.cs");
         var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var drawCommentIndicator = rendering[
-            rendering.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)..
+            rendering.IndexOf("internal void DrawCommentIndicator", StringComparison.Ordinal)..
             rendering.IndexOf("private static bool ShouldClipText", StringComparison.Ordinal)];
 
         gridViewSource.Should().Contain("private readonly Dictionary<Rect, Geometry> _commentIndicatorGeometryCache = new();");
@@ -865,7 +855,7 @@ public sealed partial class GridViewRenderPerformanceTests
         rendering.Should().Contain("ReferenceEquals(cached.RowMetrics, viewport.RowMetrics)");
         rendering.Should().Contain("ReferenceEquals(cached.ColMetrics, viewport.ColMetrics)");
         rendering.Should().Contain("occupied ??= GetOccupiedCellLookup(viewport, EditingCell);");
-        cacheSource.Should().Contain("private sealed record RenderCellLookupCache");
+        cacheSource.Should().Contain("internal sealed record RenderCellLookupCache");
         cacheSource.Should().Contain("IReadOnlyList<DisplayCell> Cells");
         cacheSource.Should().Contain("IReadOnlyList<RowMetric> RowMetrics");
         cacheSource.Should().Contain("IReadOnlyList<ColMetric> ColMetrics");
@@ -879,10 +869,6 @@ public sealed partial class GridViewRenderPerformanceTests
     {
         RunOnStaThread(() =>
         {
-            var method = typeof(GridView).GetMethod(
-                "GetRenderCellLookups",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            method.Should().NotBeNull();
 
             var rows = new[] { new RowMetric(1, 20, 0) };
             var columns = new[] { new ColMetric(1, 64, 0) };
@@ -893,9 +879,9 @@ public sealed partial class GridViewRenderPerformanceTests
             var wrappedViewport = new ViewportModel(cells, rows, columns);
             var changedCellsViewport = new ViewportModel(new[] { Cell(1, 1, "value", borderStyle) }, rows, columns);
 
-            var firstLookup = method!.Invoke(grid, [firstViewport]);
-            var wrappedLookup = method.Invoke(grid, [wrappedViewport]);
-            var changedCellsLookup = method.Invoke(grid, [changedCellsViewport]);
+            var firstLookup = grid.GetRenderCellLookups(firstViewport);
+            var wrappedLookup = grid.GetRenderCellLookups(wrappedViewport);
+            var changedCellsLookup = grid.GetRenderCellLookups(changedCellsViewport);
 
             wrappedLookup.Should().BeSameAs(firstLookup);
             changedCellsLookup.Should().NotBeSameAs(firstLookup);
@@ -956,7 +942,7 @@ public sealed partial class GridViewRenderPerformanceTests
 
         var surfacePass = source[
             source.IndexOf("private void RenderStyledAndMergedCellSurfaces", StringComparison.Ordinal)..
-            source.IndexOf("private void DrawCellSurface", StringComparison.Ordinal)];
+            source.IndexOf("internal void DrawCellSurface", StringComparison.Ordinal)];
         surfacePass.Should().Contain("foreach (var entry in styleLookup)");
         surfacePass.Should().Contain("FindMerge(row, column).HasValue");
         surfacePass.Should().Contain("foreach (var entry in _mergeLookup)");
@@ -987,15 +973,11 @@ public sealed partial class GridViewRenderPerformanceTests
         borderPass.Should().NotContain("BuildBorderStyleLookup(viewport.Cells)");
         borderPass.Should().NotContain("HasVisibleCellBorder(style)");
 
-        var hasVisibleBorder = typeof(GridView).GetMethod(
-            "HasVisibleCellBorder",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        hasVisibleBorder.Should().NotBeNull();
-        hasVisibleBorder!.Invoke(null, [CellStyle.Default]).Should().Be(false);
+        GridView.HasVisibleCellBorder(CellStyle.Default).Should().Be(false);
 
         var borderedStyle = CellStyle.Default.Clone();
         borderedStyle.BorderBottom = new CellBorder(BorderStyle.Thin, CellColor.Black);
-        hasVisibleBorder.Invoke(null, [borderedStyle]).Should().Be(true);
+        GridView.HasVisibleCellBorder(borderedStyle).Should().Be(true);
     }
 
     private static readonly CellBorder ThinBorder = new(BorderStyle.Thin, CellColor.Black);
@@ -1026,7 +1008,7 @@ public sealed partial class GridViewRenderPerformanceTests
             "GridView.Rendering.CellStyles.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
+            source.IndexOf("internal void DrawCommentIndicator", StringComparison.Ordinal)];
 
         // The shared fill materialization plan resolves theme colors; WPF only materializes that
         // portable plan through its bounded brush cache.
@@ -1043,7 +1025,7 @@ public sealed partial class GridViewRenderPerformanceTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
+            source.IndexOf("internal void DrawCommentIndicator", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("_brushCache, _borderPenCache");
     }
@@ -1075,7 +1057,7 @@ public sealed partial class GridViewRenderPerformanceTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
+            source.IndexOf("internal void DrawCommentIndicator", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("var typefaceKey = CreateCellTypefaceKeyWithTheme(style);");
         renderCells.Should().Contain("CreateCellTypeface(typefaceKey, _typefaceCache)");
@@ -1106,7 +1088,7 @@ public sealed partial class GridViewRenderPerformanceTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
+            source.IndexOf("internal void DrawCommentIndicator", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache,");
         source.Should().Contain("UnderlinePenForTextBrush(textBrush, underlinePenCache)");

@@ -107,7 +107,7 @@ public partial class GridView
     /// so that form-control clicks are consumed and do not accidentally select/drag the shape layer.
     /// Returns <see langword="true"/> when a form control was hit and the event has been handled.
     /// </summary>
-    private bool TryHandleFormControlClick(Point pos)
+    internal bool TryHandleFormControlClick(Point pos)
     {
         var hit = HitTestFormControl(pos);
         if (hit is null)

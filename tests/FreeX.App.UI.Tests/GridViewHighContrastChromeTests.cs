@@ -141,7 +141,7 @@ public sealed class GridViewHighContrastChromeTests
         // "HeaderTextBrush", nothing -- so this is a structural guarantee, not just a runtime one.
         var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var drawCellSurface = rendering[
-            rendering.IndexOf("private void DrawCellSurface(", StringComparison.Ordinal)..
+            rendering.IndexOf("internal void DrawCellSurface(", StringComparison.Ordinal)..
             rendering.IndexOf("private void RenderCellBackgroundBase(", StringComparison.Ordinal)];
 
         drawCellSurface.Should().Contain("CellFillMaterializationPlanner.Plan(");

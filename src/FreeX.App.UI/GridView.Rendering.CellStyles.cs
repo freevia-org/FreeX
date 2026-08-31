@@ -166,7 +166,7 @@ public partial class GridView
         CellBorderLinePrimitive line) =>
         dc.DrawLine(pen, new Point(line.X1, line.Y1), new Point(line.X2, line.Y2));
 
-    private static bool HasVisibleCellBorder(CellStyle style) =>
+    internal static bool HasVisibleCellBorder(CellStyle style) =>
         style.BorderTop.Style != BorderStyle.None ||
         style.BorderBottom.Style != BorderStyle.None ||
         style.BorderLeft.Style != BorderStyle.None ||

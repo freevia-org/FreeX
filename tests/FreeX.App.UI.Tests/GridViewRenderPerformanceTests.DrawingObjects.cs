@@ -126,7 +126,7 @@ public sealed partial class GridViewRenderPerformanceTests
             drawingSource.IndexOf("private void RenderCharts", StringComparison.Ordinal)..
             drawingSource.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)];
         var getCachedChartImage = cacheSource[
-            cacheSource.IndexOf("private ImageSource? GetCachedChartImage", StringComparison.Ordinal)..
+            cacheSource.IndexOf("internal ImageSource? GetCachedChartImage", StringComparison.Ordinal)..
             cacheSource.IndexOf("private void ClearChartRenderCache", StringComparison.Ordinal)];
 
         gridViewSource.Should().Contain("private readonly Dictionary<ChartRenderCacheKey, ImageSource> _chartRenderCache = new();");
