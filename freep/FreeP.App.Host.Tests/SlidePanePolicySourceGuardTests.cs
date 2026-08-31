@@ -29,6 +29,10 @@ public sealed class SlidePanePolicySourceGuardTests
         pane.Should().Contain("Slide = slide");
         pane.Should().Contain("GetActiveItem()?.Focus()");
         pane.Should().Contain("_list.ScrollIntoView(active)");
+        pane.Should().Contain("new Dictionary<int, PresentationSlidePaneItemProjection>(");
+        pane.Should().Contain("projectedSlides.TryAdd(projected.Entry.SlideIndex, projected)");
+        pane.Should().Contain("projectedSlides.TryGetValue(slideIndex, out var projected)");
+        pane.Should().NotContain("projection.Items.FirstOrDefault(candidate =>");
 
         pane.Should().NotContain("private readonly EditingSession");
         pane.Should().NotContain("_editor.Changed +=");
