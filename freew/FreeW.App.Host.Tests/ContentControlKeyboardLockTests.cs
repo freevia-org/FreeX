@@ -37,11 +37,6 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class ContentControlKeyboardLockTests
 {
-    private static readonly MethodInfo TryPrepareNativeFallbackMethod =
-        typeof(DocumentView).GetMethod("TryPrepareNativeFallback", BindingFlags.NonPublic | BindingFlags.Instance)
-        ?? throw new InvalidOperationException(
-            "DocumentView.TryPrepareNativeFallback not found -- the choke point this test targets was renamed or removed.");
-
     private static DocumentView LoadWithPlainTextControl(string text, ContentControlLockMode lockMode)
     {
         var run = Run.PlainTextControl(text, tag: "Name");
@@ -96,9 +91,8 @@ public sealed class ContentControlKeyboardLockTests
     /// </summary>
     private static (bool Allowed, bool RestoreReadOnly) TryPrepareNativeFallback(DocumentView view)
     {
-        var args = new object?[] { null };
-        var allowed = (bool)TryPrepareNativeFallbackMethod.Invoke(view, args)!;
-        return (allowed, (bool)args[0]!);
+        var allowed = view.TryPrepareNativeFallback(out var restoreReadOnly);
+        return (allowed, restoreReadOnly);
     }
 
     /// <summary>

@@ -969,7 +969,7 @@ public sealed partial class DocumentView : RichTextBox
     /// paragraph's BLOCK-level control (see <see cref="BlockContentControlAt"/>) -- the whole-paragraph
     /// <c>w:sdt</c> Word produces for "lock whole paragraph", which carries no run.Control at all.
     /// </summary>
-    private bool TryPrepareNativeFallback(out bool restoreReadOnly)
+    internal bool TryPrepareNativeFallback(out bool restoreReadOnly)
     {
         restoreReadOnly = false;
         // freew-cc-6: the checks below judge the position the caret sits ON, which says nothing about a
@@ -15646,7 +15646,7 @@ public sealed partial class DocumentView : RichTextBox
 
     private bool TryApplyBodyDeleteForward() => TryApplyBodyDeletion(backward: false);
 
-    private bool TryApplyBodyDeletion(bool backward)
+    internal bool TryApplyBodyDeletion(bool backward)
     {
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
             || !TryGetCurrentBodyTextRange(out var range))
