@@ -42,6 +42,15 @@ public sealed partial class OdsFileAdapter : IFileAdapter
     internal static readonly XNamespace NumberNs = "urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0";
     internal static readonly XNamespace SvgNs = "urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0";
 
+    /// <summary>
+    /// The OpenFormula namespace. Every formula this adapter writes is prefixed "of:=" per ODF 1.2's
+    /// table:formula grammar, where "of" is a NAMESPACE PREFIX that the document must declare -- and
+    /// content.xml did not declare it, so the prefix was unresolvable. LibreOffice consequently failed
+    /// to parse every formula FreeX wrote to .ods and evaluated the lot to #VALUE!, while FreeX's own
+    /// reader never noticed because it strips the "of:=" prefix textually without resolving it.
+    /// </summary>
+    internal static readonly XNamespace OfNs = "urn:oasis:names:tc:opendocument:xmlns:of:1.2";
+
     private static readonly OpenDocumentXmlEntryOptions XmlEntryOptions = new(
         OmitXmlDeclaration: false,
         Indent: false,

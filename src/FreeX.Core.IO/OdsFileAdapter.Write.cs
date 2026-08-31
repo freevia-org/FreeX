@@ -38,6 +38,10 @@ public sealed partial class OdsFileAdapter
             new XAttribute(XNamespace.Xmlns + "fo", FoNs.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "number", NumberNs.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "svg", SvgNs.NamespaceName),
+            // Required: table:formula values are written as "of:=..." and "of" is a namespace prefix,
+            // not literal text. See OdsFileAdapter.OfNs -- without this declaration LibreOffice cannot
+            // resolve the prefix and every formula in the document evaluates to #VALUE!.
+            new XAttribute(XNamespace.Xmlns + "of", OfNs.NamespaceName),
             new XAttribute(OfficeNs + "version", "1.2"),
             automaticStyles,
             body);
