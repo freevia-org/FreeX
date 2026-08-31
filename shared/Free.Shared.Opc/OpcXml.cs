@@ -110,11 +110,17 @@ public static class OpcXml
         document.Save(stream, saveOptions);
     }
 
-    public static void WriteXmlEntry(ZipArchive archive, string entryPath, XDocument document)
+    public static void WriteXmlEntry(
+        ZipArchive archive,
+        string entryPath,
+        XDocument document,
+        DateTimeOffset? lastWriteTime = null)
     {
         XmlTextSanitizer.SanitizeInPlace(document);
 
         var entry = archive.CreateEntry(entryPath, CompressionLevel.Optimal);
+        if (lastWriteTime is { } timestamp)
+            entry.LastWriteTime = timestamp;
         using var stream = entry.Open();
         document.Save(stream);
     }
