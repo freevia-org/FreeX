@@ -140,6 +140,7 @@ internal static partial class XlsxChartXmlWriter
         bool forceLineShapeProperties = false)
     {
         var layout = GetSeriesStripLayout(chart);
+        var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var categoryRange = chart.FirstColIsCategories
             ? FormatStripRange(layout, sheet.Name, layout.CategoryStrip)
             : null;
@@ -154,7 +155,7 @@ internal static partial class XlsxChartXmlWriter
             if (includeSeries is not null && !includeSeries(seriesIndex))
                 continue;
 
-            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var verbatim = GetVerbatimFormulas(verbatimLookup, seriesIndex);
             var valueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, strip);
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
@@ -375,8 +376,33 @@ internal static partial class XlsxChartXmlWriter
         return hasAnyValue;
     }
 
-    private static ChartSeriesVerbatimFormulas? GetVerbatimFormulas(ChartModel chart, int seriesIndex) =>
-        chart.VerbatimSeriesFormulas?.FirstOrDefault(f => f.SeriesIndex == seriesIndex);
+    private sealed class ChartSeriesVerbatimFormulaLookup
+    {
+        private readonly Dictionary<int, ChartSeriesVerbatimFormulas> _formulasBySeriesIndex;
+
+        private ChartSeriesVerbatimFormulaLookup(Dictionary<int, ChartSeriesVerbatimFormulas> formulasBySeriesIndex) =>
+            _formulasBySeriesIndex = formulasBySeriesIndex;
+
+        public static ChartSeriesVerbatimFormulaLookup? Create(ChartModel chart)
+        {
+            if (chart.VerbatimSeriesFormulas is not { Count: > 0 } formulas)
+                return null;
+
+            var formulasBySeriesIndex = new Dictionary<int, ChartSeriesVerbatimFormulas>(formulas.Count);
+            foreach (var formula in formulas)
+                formulasBySeriesIndex.TryAdd(formula.SeriesIndex, formula);
+
+            return new ChartSeriesVerbatimFormulaLookup(formulasBySeriesIndex);
+        }
+
+        public ChartSeriesVerbatimFormulas? Get(int seriesIndex) =>
+            _formulasBySeriesIndex.TryGetValue(seriesIndex, out var formulas) ? formulas : null;
+    }
+
+    private static ChartSeriesVerbatimFormulas? GetVerbatimFormulas(
+        ChartSeriesVerbatimFormulaLookup? verbatimLookup,
+        int seriesIndex) =>
+        verbatimLookup?.Get(seriesIndex);
 
     /// <summary>
     /// R107-io-chart-series-verbatim-refresh: attempts to resolve a verbatim series container's
@@ -517,7 +543,7 @@ internal static partial class XlsxChartXmlWriter
     /// <summary>
     /// R103-io-chart-series-tx-1: returns the captured &lt;c:tx&gt; formula for this series (see
     /// <see cref="ChartModel.SeriesNameOverrides"/>), independent of whether it happens to also be
-    /// unparsable (that case is already covered by <see cref="GetVerbatimFormulas"/>'s TxFormula).
+    /// unparsable (that case is already covered by the captured verbatim formula's TxFormula).
     /// </summary>
     private static string? GetSeriesNameOverrideFormula(ChartModel chart, int seriesIndex) =>
         chart.SeriesNameOverrides.LastOrDefault(o => o.SeriesIndex == seriesIndex)?.Formula;
@@ -525,7 +551,7 @@ internal static partial class XlsxChartXmlWriter
     /// <summary>
     /// R103-io-chart-series-tx-1: single choke point for resolving a series' &lt;c:tx&gt; element —
     /// preferring, in order, (1) an unparsable verbatim tx formula (named range/multi-area/external
-    /// link — <see cref="GetVerbatimFormulas"/>), (2) a captured tx formula that parsed fine but
+    /// link), (2) a captured tx formula that parsed fine but
     /// points somewhere other than the strip's own header cell (Excel's "Select Data &gt; Edit
     /// Series &gt; Series name" lets the user reference ANY cell — <see cref="GetSeriesNameOverrideFormula"/>),
     /// and finally (3) the recomputed strip header-cell guess (<see cref="ToSeriesTitleXml"/>). Used
@@ -709,6 +735,7 @@ internal static partial class XlsxChartXmlWriter
         Func<int, bool>? includeSeries = null)
     {
         var layout = GetSeriesStripLayout(chart);
+        var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var xValueStrip = chart.SeriesInRows ? chart.DataRange.Start.Row : chart.DataRange.Start.Col;
         var xValueRange = FormatStripRange(layout, sheet.Name, xValueStrip);
 
@@ -721,7 +748,7 @@ internal static partial class XlsxChartXmlWriter
                 continue;
             }
 
-            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var verbatim = GetVerbatimFormulas(verbatimLookup, seriesIndex);
             var effectiveXValueRange = verbatim?.CatFormula ?? xValueRange;
             var yValueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, strip);
@@ -827,13 +854,14 @@ internal static partial class XlsxChartXmlWriter
         if (layout.LastStrip - xValueStrip < 2)
             yield break;
 
+        var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var xValueRange = FormatStripRange(layout, sheet.Name, xValueStrip);
 
         var seriesIndex = 0;
         for (var yValueStrip = xValueStrip + 1; yValueStrip < layout.LastStrip; yValueStrip += 2)
         {
             var sizeStrip = yValueStrip + 1;
-            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var verbatim = GetVerbatimFormulas(verbatimLookup, seriesIndex);
             var effectiveXValueRange = verbatim?.CatFormula ?? xValueRange;
             var yValueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, yValueStrip);
@@ -893,6 +921,7 @@ internal static partial class XlsxChartXmlWriter
         if (chart.FirstColIsCategories && layout.LastStrip <= layout.CategoryStrip)
             yield break;
 
+        var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var categoryRange = chart.FirstColIsCategories
             ? FormatStripRange(layout, sheet.Name, layout.CategoryStrip)
             : null;
@@ -905,7 +934,7 @@ internal static partial class XlsxChartXmlWriter
         var seriesIndex = 0;
         for (var valueStrip = layout.FirstValueStrip; valueStrip <= layout.LastStrip; valueStrip++)
         {
-            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var verbatim = GetVerbatimFormulas(verbatimLookup, seriesIndex);
             var valueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, valueStrip);
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;

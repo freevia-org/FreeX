@@ -89,6 +89,41 @@ public sealed class R53_ChartSeriesNumCacheTests
             "a verbatim multi-area formula has no single strip to source cache values from");
     }
 
+    [Fact]
+    public void LineChart_DenseVerbatimFormulas_KeepFirstDuplicateSeriesFormula()
+    {
+        var workbook = new Workbook("DenseClassicVerbatimSeries");
+        var sheet = workbook.AddSheet("Data");
+        var verbatimFormulas = new List<ChartSeriesVerbatimFormulas>();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 48)),
+            FirstRowIsHeader = false,
+            FirstColIsCategories = false,
+            VerbatimSeriesFormulas = verbatimFormulas
+        };
+
+        for (var seriesIndex = 0; seriesIndex < 48; seriesIndex++)
+        {
+            verbatimFormulas.Add(new ChartSeriesVerbatimFormulas(
+                seriesIndex, $"NamedValue{seriesIndex}", null, null));
+        }
+
+        // FirstOrDefault previously kept this earlier record. The indexed writer must never let a
+        // later duplicate silently replace its verbatim formula.
+        verbatimFormulas.Add(new ChartSeriesVerbatimFormulas(0, "NamedDuplicate", null, null));
+
+        var chartXml = FreeX.Core.IO.XlsxChartXmlWriter.ToChartXml(chart, workbook, sheet);
+        var series = chartXml.Descendants(ChartNs + "ser").ToList();
+
+        series.Should().HaveCount(48);
+        series[0].Element(ChartNs + "val")!.Element(ChartNs + "numRef")!.Element(ChartNs + "f")!.Value
+            .Should().Be("NamedValue0");
+        series[47].Element(ChartNs + "val")!.Element(ChartNs + "numRef")!.Element(ChartNs + "f")!.Value
+            .Should().Be("NamedValue47");
+    }
+
     private static XDocument LoadChartXml(byte[] package)
     {
         using var stream = new MemoryStream(package, writable: false);
