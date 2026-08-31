@@ -195,7 +195,13 @@ public sealed class DifFileAdapter : IFileAdapter
                 writer.WriteLine("V");
                 break;
             case BoolValue b:
-                writer.WriteLine("0,0");
+                // The TRUE/FALSE indicator is the spec-correct way to carry a boolean and is what
+                // ParseNumericChunk reads back, but the number slot must still hold the boolean's
+                // numeric equivalent rather than a flat 0. A consumer that does not implement the
+                // TRUE/FALSE indicators falls back to the number -- LibreOffice does exactly this --
+                // and with 0 hardcoded there every TRUE silently arrived as FALSE. Verified against
+                // LibreOffice: it now reads 1.
+                writer.WriteLine(b.Value ? "0,1" : "0,0");
                 writer.WriteLine(b.Value ? "TRUE" : "FALSE");
                 break;
             case ErrorValue error:
