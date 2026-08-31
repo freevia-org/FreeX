@@ -159,15 +159,11 @@ public sealed class RibbonCommandIconAssetTests
             .ToArray();
         duplicateGroups.Should().BeEmpty("FreeW's app-local command SVG directory must contain one file per exact payload");
 
-        var candidateMethod = typeof(RibbonIconFactory).GetMethod(
-            "GetCommandIconSlugCandidates",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        candidateMethod.Should().NotBeNull();
 
         foreach (var alias in RemovedExactDuplicateSlugs)
         {
             var canonical = RibbonCommandIconSlugAliases.GetCandidates(alias).First();
-            var candidates = ((IEnumerable<string>)candidateMethod!.Invoke(null, [alias])!).ToArray();
+            var candidates = ((IEnumerable<string>)RibbonIconFactory.GetCommandIconSlugCandidates(alias)!).ToArray();
 
             candidates.First().Should().Be(canonical, alias);
             (File.Exists(Path.Combine(iconDirectory, canonical + ".svg")) ||
@@ -286,12 +282,7 @@ public sealed class RibbonCommandIconAssetTests
 
     private static string ToCommandIconSlug(string commandId)
     {
-        var method = typeof(RibbonIconFactory).GetMethod(
-            "ToCommandIconSlug",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        method.Should().NotBeNull();
-        return (string)method!.Invoke(null, [commandId])!;
+        return (string)RibbonIconFactory.ToCommandIconSlug(commandId)!;
     }
 
 }

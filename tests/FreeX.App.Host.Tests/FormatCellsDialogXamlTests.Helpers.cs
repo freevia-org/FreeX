@@ -49,9 +49,7 @@ public sealed partial class FormatCellsDialogXamlTests
 
     private static string PreviewForFormat(string format)
     {
-        var method = typeof(FormatCellsDialog).GetMethod("PreviewForFormat", BindingFlags.Static | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        return method!.Invoke(null, [format]).Should().BeOfType<string>().Subject;
+        return FormatCellsDialog.PreviewForFormat(format).Should().BeOfType<string>().Subject;
     }
 
     private static void ClickOkForTest(FormatCellsDialog dialog)

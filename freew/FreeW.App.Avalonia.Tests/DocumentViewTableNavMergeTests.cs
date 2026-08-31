@@ -570,9 +570,7 @@ file static class DocumentViewTableNavTestExtensions
         if (view.CellCaretInfo is not null)
         {
             // Route through the private TabNavigateCell method.
-            var method = typeof(DocumentView).GetMethod("TabNavigateCell",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            method?.Invoke(view, [forward]);
+            view.TabNavigateCell(forward);
         }
         else if (forward)
         {

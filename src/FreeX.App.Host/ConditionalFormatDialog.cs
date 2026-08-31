@@ -651,7 +651,7 @@ public partial class ConditionalFormatDialog : Window
         _value2Label = new Label();
     }
 
-    private void RefreshRuleDescription(string ruleType)
+    internal void RefreshRuleDescription(string ruleType)
     {
         _ruleType = ruleType;
         _customFormatStyle = null;

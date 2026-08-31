@@ -142,6 +142,7 @@ internal static partial class XlsxChartXmlWriter
         var layout = GetSeriesStripLayout(chart);
         var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var formatLookup = ChartSeriesFormatLookup.Create(chart);
+        var dataPointFormatLookup = ChartDataPointFormatLookup.Create(chart);
         var categoryRange = chart.FirstColIsCategories
             ? FormatStripRange(layout, sheet.Name, layout.CategoryStrip)
             : null;
@@ -197,7 +198,7 @@ internal static partial class XlsxChartXmlWriter
                     ? ToSeriesMarkerXml(chart, formatLookup, seriesIndex, chartNs, drawingNs)
                     : null,
                 ToSeriesInvertIfNegativeXml(chart, formatLookup, seriesIndex, chartNs),
-                ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToDataPointsXml(chart, dataPointFormatLookup, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToAdditionalTrendlinesXml(chart, seriesIndex),
@@ -767,6 +768,7 @@ internal static partial class XlsxChartXmlWriter
         var layout = GetSeriesStripLayout(chart);
         var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var formatLookup = ChartSeriesFormatLookup.Create(chart);
+        var dataPointFormatLookup = ChartDataPointFormatLookup.Create(chart);
         var xValueStrip = chart.SeriesInRows ? chart.DataRange.Start.Row : chart.DataRange.Start.Col;
         var xValueRange = FormatStripRange(layout, sheet.Name, xValueStrip);
 
@@ -798,7 +800,7 @@ internal static partial class XlsxChartXmlWriter
                 txElement,
                 ToScatterSeriesLineShapeProperties(chart, formatLookup, seriesIndex, chartNs, drawingNs),
                 ToSeriesMarkerXml(chart, formatLookup, seriesIndex, chartNs, drawingNs),
-                ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToDataPointsXml(chart, dataPointFormatLookup, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToAdditionalTrendlinesXml(chart, seriesIndex),
@@ -888,6 +890,7 @@ internal static partial class XlsxChartXmlWriter
 
         var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var formatLookup = ChartSeriesFormatLookup.Create(chart);
+        var dataPointFormatLookup = ChartDataPointFormatLookup.Create(chart);
         var xValueRange = FormatStripRange(layout, sheet.Name, xValueStrip);
 
         var seriesIndex = 0;
@@ -920,7 +923,7 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
                 txElement,
                 ToSeriesShapeProperties(formatLookup, seriesIndex, chartNs, drawingNs),
-                ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToDataPointsXml(chart, dataPointFormatLookup, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToAdditionalTrendlinesXml(chart, seriesIndex),
@@ -956,6 +959,7 @@ internal static partial class XlsxChartXmlWriter
 
         var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var formatLookup = ChartSeriesFormatLookup.Create(chart);
+        var dataPointFormatLookup = ChartDataPointFormatLookup.Create(chart);
         var categoryRange = chart.FirstColIsCategories
             ? FormatStripRange(layout, sheet.Name, layout.CategoryStrip)
             : null;
@@ -1000,7 +1004,7 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
                 txElement,
                 ToSeriesShapeProperties(formatLookup, seriesIndex, chartNs, drawingNs),
-                ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToDataPointsXml(chart, dataPointFormatLookup, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToVerbatimMultiLevelCategoryXml(chart, seriesIndex)
                     ?? ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs, categoryCache),
@@ -1042,6 +1046,74 @@ internal static partial class XlsxChartXmlWriter
     }
 
     /// <summary>
+    /// Indexes per-data-point formatting once for a chart writer. The previous dPt writer found
+    /// matching entries with <c>LastOrDefault</c> for every emitted point after scanning both
+    /// lists again to discover point indexes. Assigning while traversing keeps that last-entry
+    /// precedence, including duplicate series/point entries from a manually constructed model.
+    /// </summary>
+    private sealed class ChartDataPointFormatLookup
+    {
+        private readonly Dictionary<int, Dictionary<int, ChartPointFillFormat>> _fillsBySeries;
+        private readonly Dictionary<int, Dictionary<int, ChartPointMarkerFormat>> _markersBySeries;
+
+        private ChartDataPointFormatLookup(
+            Dictionary<int, Dictionary<int, ChartPointFillFormat>> fillsBySeries,
+            Dictionary<int, Dictionary<int, ChartPointMarkerFormat>> markersBySeries)
+        {
+            _fillsBySeries = fillsBySeries;
+            _markersBySeries = markersBySeries;
+        }
+
+        public static ChartDataPointFormatLookup? Create(ChartModel chart)
+        {
+            if (chart.PointFillColors.Count == 0 && chart.PointMarkerFormats.Count == 0)
+                return null;
+
+            var fillsBySeries = new Dictionary<int, Dictionary<int, ChartPointFillFormat>>();
+            foreach (var fill in chart.PointFillColors)
+                Add(fillsBySeries, fill.SeriesIndex, fill.PointIndex, fill);
+
+            var markersBySeries = new Dictionary<int, Dictionary<int, ChartPointMarkerFormat>>();
+            foreach (var marker in chart.PointMarkerFormats)
+                Add(markersBySeries, marker.SeriesIndex, marker.PointIndex, marker);
+
+            return new ChartDataPointFormatLookup(fillsBySeries, markersBySeries);
+        }
+
+        public IEnumerable<int> GetPointIndexes(int seriesIndex, IEnumerable<int> explodedPointIndexes)
+        {
+            var pointIndexes = new SortedSet<int>();
+            if (_fillsBySeries.TryGetValue(seriesIndex, out var fills))
+                pointIndexes.UnionWith(fills.Keys);
+            if (_markersBySeries.TryGetValue(seriesIndex, out var markers))
+                pointIndexes.UnionWith(markers.Keys);
+            pointIndexes.UnionWith(explodedPointIndexes);
+            return pointIndexes;
+        }
+
+        public ChartPointFillFormat? GetFillFormat(int seriesIndex, int pointIndex) =>
+            _fillsBySeries.TryGetValue(seriesIndex, out var fills) && fills.TryGetValue(pointIndex, out var format)
+                ? format
+                : null;
+
+        public ChartPointMarkerFormat? GetMarkerFormat(int seriesIndex, int pointIndex) =>
+            _markersBySeries.TryGetValue(seriesIndex, out var markers) && markers.TryGetValue(pointIndex, out var format)
+                ? format
+                : null;
+
+        private static void Add<T>(Dictionary<int, Dictionary<int, T>> formatsBySeries, int seriesIndex, int pointIndex, T format)
+        {
+            if (!formatsBySeries.TryGetValue(seriesIndex, out var formats))
+            {
+                formats = [];
+                formatsBySeries.Add(seriesIndex, formats);
+            }
+
+            formats[pointIndex] = format;
+        }
+    }
+
+    /// <summary>
     /// Emits one <c>&lt;c:dPt&gt;</c> element per data point that needs a per-point override —
     /// an exploded-slice distance, an explicit per-point fill color
     /// (<see cref="ChartModel.PointFillColors"/>), or a per-point marker override
@@ -1050,6 +1122,7 @@ internal static partial class XlsxChartXmlWriter
     /// </summary>
     private static IEnumerable<XElement> ToDataPointsXml(
         ChartModel chart,
+        ChartDataPointFormatLookup? dataPointFormatLookup,
         int seriesIndex,
         XNamespace chartNs,
         XNamespace drawingNs)
@@ -1072,24 +1145,18 @@ internal static partial class XlsxChartXmlWriter
             explodedPoints[chart.ExplodedSliceIndex] = chart.ExplodedSliceDistance;
         }
 
-        var pointIndexes = chart.PointFillColors
-            .Where(point => point.SeriesIndex == seriesIndex)
-            .Select(point => point.PointIndex)
-            .Concat(explodedPoints.Keys)
-            .Concat(chart.PointMarkerFormats
-                .Where(point => point.SeriesIndex == seriesIndex)
-                .Select(point => point.PointIndex))
-            .Distinct()
-            .OrderBy(index => index);
+        var pointIndexes = dataPointFormatLookup is null
+            ? explodedPoints.Keys.OrderBy(index => index)
+            : dataPointFormatLookup.GetPointIndexes(seriesIndex, explodedPoints.Keys);
 
         foreach (var pointIndex in pointIndexes)
         {
-            var marker = ToPointMarkerXml(chart, seriesIndex, pointIndex, chartNs, drawingNs);
+            var marker = ToPointMarkerXml(chart, dataPointFormatLookup, seriesIndex, pointIndex, chartNs, drawingNs);
             var explosion = explodedPoints.TryGetValue(pointIndex, out var distance)
                 ? new XElement(chartNs + "explosion",
                     new XAttribute("val", Math.Clamp((int)Math.Round(distance * 100), 0, 50)))
                 : null;
-            var spPr = ToPointShapeProperties(chart, seriesIndex, pointIndex, chartNs, drawingNs);
+            var spPr = ToPointShapeProperties(dataPointFormatLookup, seriesIndex, pointIndex, chartNs, drawingNs);
 
             yield return new XElement(chartNs + "dPt",
                 new XElement(chartNs + "idx", new XAttribute("val", pointIndex)),
@@ -1107,6 +1174,7 @@ internal static partial class XlsxChartXmlWriter
     /// </summary>
     private static XElement? ToPointMarkerXml(
         ChartModel chart,
+        ChartDataPointFormatLookup? dataPointFormatLookup,
         int seriesIndex,
         int pointIndex,
         XNamespace chartNs,
@@ -1115,8 +1183,7 @@ internal static partial class XlsxChartXmlWriter
         if (!ChartTypeSupport.SupportsSeriesMarkers(chart.Type))
             return null;
 
-        var format = chart.PointMarkerFormats.LastOrDefault(item =>
-            item.SeriesIndex == seriesIndex && item.PointIndex == pointIndex);
+        var format = dataPointFormatLookup?.GetMarkerFormat(seriesIndex, pointIndex);
         if (format is null)
             return null;
 
@@ -1142,14 +1209,13 @@ internal static partial class XlsxChartXmlWriter
     }
 
     private static XElement? ToPointShapeProperties(
-        ChartModel chart,
+        ChartDataPointFormatLookup? dataPointFormatLookup,
         int seriesIndex,
         int pointIndex,
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        var point = chart.PointFillColors.LastOrDefault(item =>
-            item.SeriesIndex == seriesIndex && item.PointIndex == pointIndex);
+        var point = dataPointFormatLookup?.GetFillFormat(seriesIndex, pointIndex);
         if (point is null)
             return null;
 

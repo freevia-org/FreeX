@@ -316,15 +316,7 @@ public sealed partial class OptionsDialogSourceTests
 
     {
 
-        var method = typeof(OptionsDialog).GetMethod(
-
-            "TryHandleQuickAccessSelectedCommandsListKey",
-
-            BindingFlags.Instance | BindingFlags.NonPublic);
-
-        method.Should().NotBeNull();
-
-        return method!.Invoke(dialog, [key, modifiers]).Should().BeOfType<bool>().Subject;
+        return dialog.TryHandleQuickAccessSelectedCommandsListKey(key, modifiers);
 
     }
 

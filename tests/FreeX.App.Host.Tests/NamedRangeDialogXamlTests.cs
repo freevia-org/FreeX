@@ -506,7 +506,7 @@ public sealed class NamedRangeDialogXamlTests
     {
         var source = ReadNamedRangeDialogSource();
 
-        var methodStart = source.IndexOf("private void DefineOrUpdateName(", StringComparison.Ordinal);
+        var methodStart = source.IndexOf("internal void DefineOrUpdateName(", StringComparison.Ordinal);
         var planSave = source.IndexOf("var plan = _definedNames.PlanSave(draft, original);", StringComparison.Ordinal);
         var validation = source.IndexOf("if (!plan.Validation.Name.IsValid)", StringComparison.Ordinal);
         var localizedMessage = source.IndexOf("DescribeDraftNameError(plan.Validation.Name.Error, plan.Draft.Name)", StringComparison.Ordinal);

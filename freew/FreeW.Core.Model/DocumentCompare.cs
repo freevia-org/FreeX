@@ -535,9 +535,18 @@ public static class DocumentCompare
             plainBuffer.Clear();
             var tokens = useExactTokens ? Tokenize(text) : TokenizeComparisonSegments(text);
             var offset = 0;
+            var commentSpanIndex = 0;
             foreach (var token in tokens)
             {
-                var commentId = FindCoveringCommentId(commentSpans, offset);
+                // Both token offsets and contributing run spans are in document order. Advance past
+                // completed spans once instead of re-scanning every commented run for every token.
+                while (commentSpanIndex < commentSpans.Count
+                    && offset >= commentSpans[commentSpanIndex].Start + commentSpans[commentSpanIndex].Length)
+                    commentSpanIndex++;
+                int? commentId = commentSpanIndex < commentSpans.Count
+                    && offset >= commentSpans[commentSpanIndex].Start
+                    ? commentSpans[commentSpanIndex].CommentId
+                    : null;
                 units.Add(new DiffUnit(token, null, commentId));
                 offset += token.Length;
             }
@@ -559,21 +568,6 @@ public static class DocumentCompare
         }
         FlushPlain();
         return units;
-    }
-
-    // Finds the comment id (if any) of the plain-run span covering buffer offset `tokenStart` -- i.e. the
-    // comment anchored to whichever source run contributed the token's first character. A token that
-    // straddles a span boundary (e.g. a word split mid-anchor across a commented and an uncommented run)
-    // is attributed to the run its first character came from, mirroring how a comment range conventionally
-    // starts at the beginning of the anchored text.
-    private static int? FindCoveringCommentId(List<(int Start, int Length, int CommentId)> spans, int tokenStart)
-    {
-        foreach (var span in spans)
-        {
-            if (tokenStart >= span.Start && tokenStart < span.Start + span.Length)
-                return span.CommentId;
-        }
-        return null;
     }
 
     // True for a run whose content cannot be represented as plain text: cloning just its literal Text into

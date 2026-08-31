@@ -65,9 +65,7 @@ public sealed partial class ConditionalFormatDialogTests
 
     private static void RefreshRuleDescriptionForTest(ConditionalFormatDialog dialog, string ruleType)
     {
-        var method = typeof(ConditionalFormatDialog).GetMethod("RefreshRuleDescription", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(dialog, [ruleType]);
+        dialog.RefreshRuleDescription(ruleType);
     }
 
     private static GridRange RangeFor(SheetId sheetId) =>

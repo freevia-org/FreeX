@@ -15,6 +15,35 @@ public sealed class AutosaveRecoveryPolicyTests
     }
 
     [Fact]
+    public void SelectLatest_DenseCandidates_PreservesFirstCandidateWhenNewestTimestampsTie()
+    {
+        var firstNewest = Candidate("First newest", "2026-08-31T20:00:00Z");
+        var tiedNewest = Candidate("Tied newest", "2026-08-31T20:00:00Z");
+        var candidates = Enumerable.Range(0, 1024)
+            .Select(index => Candidate($"Older {index}", $"2026-08-30T{index % 20:00}:00:00Z"))
+            .Prepend(firstNewest)
+            .Append(tiedNewest);
+
+        AutosaveRecoveryPolicy.SelectLatest(candidates).Should().BeSameAs(firstNewest);
+    }
+
+    [Fact]
+    public void SelectLatest_SourceGuardKeepsLinearSelectionWithoutSortingOrMaterializing()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "shared", "Free.Shared.AppServices", "AutosaveRecoveryPolicy.cs");
+        var start = source.IndexOf("    public static AutosaveRecoveryCandidate? SelectLatest(", StringComparison.Ordinal);
+        var end = source.IndexOf("    public static IReadOnlyList<AutosaveRecoveryCandidate> OrderNewestFirst(", StringComparison.Ordinal);
+        var method = source[start..end];
+
+        method.Should().Contain("foreach (var candidate in candidates)")
+            .And.Contain("timestamp > latestTimestamp")
+            .And.NotContain("OrderNewestFirst(")
+            .And.NotContain(".ToList(")
+            .And.NotContain("OrderBy");
+    }
+
+    [Fact]
     public void ResolveDisplayName_UsesCallerProvidedFallback()
     {
         AutosaveRecoveryPolicy.ResolveDisplayName(Candidate(" ", null), "an item")

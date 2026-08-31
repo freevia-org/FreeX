@@ -516,7 +516,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     public void ChartExSeriesTitles_IndexVerbatimAndEmbeddedEntriesWithoutLinqRescans()
     {
         var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxChartXmlWriter.ChartEx.cs");
-        var buildStart = source.IndexOf("    internal static IEnumerable<XElement> BuildChartExSeries(", StringComparison.Ordinal);
+        var buildStart = source.IndexOf("    private static IEnumerable<XElement> BuildChartExSeries(", StringComparison.Ordinal);
         var titleStart = source.IndexOf("    private static XElement? ToChartExSeriesTitleXml(", StringComparison.Ordinal);
         var lookupStart = source.IndexOf("    private sealed class ChartExSeriesTitleLookup", StringComparison.Ordinal);
         var valueStripStart = source.IndexOf("    private static uint GetChartExSeriesValueStrip", StringComparison.Ordinal);
@@ -663,5 +663,30 @@ public sealed partial class XlsxFileAdapterPerformanceTests
                 "first duplicate IDs must preserve the former document-order lookup result")
             .And.NotContain("FindChartExData(",
                 "the old per-dataId full-document scan should be removed after indexing");
+    }
+
+    [Fact]
+    public void ChartSeriesWriter_IndexesDataPointFormatsWithLastDuplicatePrecedence()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxChartXmlWriter.Series.cs");
+        var buildStart = source.IndexOf("    private static IEnumerable<XElement> BuildChartSeries(", StringComparison.Ordinal);
+        var lookupStart = source.IndexOf("    private sealed class ChartDataPointFormatLookup", StringComparison.Ordinal);
+        var dataPointsStart = source.IndexOf("    private static IEnumerable<XElement> ToDataPointsXml(", StringComparison.Ordinal);
+        var markerStart = source.IndexOf("    private static XElement? ToPointMarkerXml(", StringComparison.Ordinal);
+        var builds = source[buildStart..lookupStart];
+        var lookup = source[lookupStart..dataPointsStart];
+        var dataPoints = source[dataPointsStart..markerStart];
+
+        builds.Should().Contain("var dataPointFormatLookup = ChartDataPointFormatLookup.Create(chart);")
+            .And.Contain("ToDataPointsXml(chart, dataPointFormatLookup, seriesIndex, chartNs, drawingNs)");
+        lookup.Should().Contain("if (chart.PointFillColors.Count == 0 && chart.PointMarkerFormats.Count == 0)")
+            .And.Contain("return null;",
+                "charts without per-point overrides must not allocate lookup dictionaries")
+            .And.Contain("formats[pointIndex] = format;",
+                "later duplicate formats must retain the old LastOrDefault precedence");
+        dataPoints.Should().Contain("dataPointFormatLookup.GetPointIndexes(seriesIndex, explodedPoints.Keys)")
+            .And.NotContain("chart.PointFillColors.LastOrDefault(")
+            .And.NotContain("chart.PointMarkerFormats.LastOrDefault(",
+                "each emitted data point must resolve indexed formats instead of rescanning both lists");
     }
 }

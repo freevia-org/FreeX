@@ -85,17 +85,11 @@ public sealed class R49_ManageConditionalFormatsAppliesToFocusTests
 
     private static void InvokeGotFocus(TextBox textBox)
     {
-        var method = typeof(ManageConditionalFormatsDialog).GetMethod(
-            "AppliesToTextBox_GotFocus", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new MissingMethodException(nameof(ManageConditionalFormatsDialog), "AppliesToTextBox_GotFocus");
-        method.Invoke(null, [textBox, new RoutedEventArgs()]);
+        ManageConditionalFormatsDialog.AppliesToTextBox_GotFocus(textBox, new RoutedEventArgs());
     }
 
     private static void InvokeLostFocus(ManageConditionalFormatsDialog dialog, TextBox textBox)
     {
-        var method = typeof(ManageConditionalFormatsDialog).GetMethod(
-            "AppliesToTextBox_LostFocus", BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new MissingMethodException(nameof(ManageConditionalFormatsDialog), "AppliesToTextBox_LostFocus");
-        method.Invoke(dialog, [textBox, new RoutedEventArgs()]);
+        dialog.AppliesToTextBox_LostFocus(textBox, new RoutedEventArgs());
     }
 }

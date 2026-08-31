@@ -196,7 +196,7 @@ public sealed partial class NamedRangeDialog : Window
     /// already has the real one in hand (from the dialog result or from a row's own
     /// <see cref="DefinedNameRow.Scope"/>) and must use that directly.
     /// </summary>
-    private void DefineOrUpdateName(
+    internal void DefineOrUpdateName(
         NameDefinitionDialogResult definition,
         string? originalName,
         string? originalScope,
@@ -323,7 +323,7 @@ public sealed partial class NamedRangeDialog : Window
     /// selected/preselected at all (see the R114-app-name-manager-workbook-sentinel-3-2 doc comment
     /// on <see cref="DefineOrUpdateName"/>).
     /// </summary>
-    private IReadOnlyList<DefinedNameScopeOption> GetScopeOptions() =>
+    internal IReadOnlyList<DefinedNameScopeOption> GetScopeOptions() =>
         DefinedNameUiPolicy.BuildScopeOptions(_definedNames.ScopeChoices);
 
     /// <summary>

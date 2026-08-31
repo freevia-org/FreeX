@@ -134,9 +134,7 @@ public sealed class R114_NameManagerWorkbookSentinelTests
             var dialog = new NamedRangeDialog(workbook, CreateCommandBus(workbook));
             try
             {
-                var method = typeof(NamedRangeDialog).GetMethod("GetScopeOptions", BindingFlags.NonPublic | BindingFlags.Instance)
-                    ?? throw new MissingMethodException(nameof(NamedRangeDialog), "GetScopeOptions");
-                var options = (IReadOnlyList<DefinedNameScopeOption>)method.Invoke(dialog, null)!;
+                var options = (IReadOnlyList<DefinedNameScopeOption>)dialog.GetScopeOptions()!;
 
                 var workbookLabelled = options.Where(o => o.Label == "Workbook").ToList();
                 workbookLabelled.Should().HaveCount(2,
@@ -165,9 +163,7 @@ public sealed class R114_NameManagerWorkbookSentinelTests
             var dialog = new NamedRangeDialog(workbook, CreateCommandBus(workbook));
             try
             {
-                var method = typeof(NamedRangeDialog).GetMethod("GetScopeOptions", BindingFlags.NonPublic | BindingFlags.Instance)
-                    ?? throw new MissingMethodException(nameof(NamedRangeDialog), "GetScopeOptions");
-                var options = (IReadOnlyList<DefinedNameScopeOption>)method.Invoke(dialog, null)!;
+                var options = (IReadOnlyList<DefinedNameScopeOption>)dialog.GetScopeOptions()!;
 
                 options.Should().HaveCount(3);
                 options.Should().ContainSingle(o => o.Label == "Workbook" && o.SheetId == null);
@@ -241,9 +237,7 @@ public sealed class R114_NameManagerWorkbookSentinelTests
         string? originalScope,
         SheetId? originalScopeSheetId)
     {
-        var method = typeof(NamedRangeDialog).GetMethod("DefineOrUpdateName", BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new MissingMethodException(nameof(NamedRangeDialog), "DefineOrUpdateName");
-        method.Invoke(dialog, [definition, originalName, originalScope, originalScopeSheetId]);
+        dialog.DefineOrUpdateName(definition, originalName, originalScope, originalScopeSheetId);
     }
 
     private static Func<IWorkbookCommand, CommandOutcome> CreateCommandBus(Workbook workbook)

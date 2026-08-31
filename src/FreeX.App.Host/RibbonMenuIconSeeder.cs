@@ -27,7 +27,7 @@ public static class RibbonMenuIconSeeder
             SeedMenuItems(menu.Items.OfType<MenuItem>());
     }
 
-    private static void SeedMenuItems(IEnumerable<MenuItem> menuItems)
+    internal static void SeedMenuItems(IEnumerable<MenuItem> menuItems)
     {
         foreach (var item in menuItems)
         {

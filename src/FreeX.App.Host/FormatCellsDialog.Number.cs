@@ -29,7 +29,7 @@ public partial class FormatCellsDialog
     private static int DecimalPlacesForFormat(string? format) =>
         FormatCellsNumberFormatPlanner.DecimalPlacesForFormat(format);
 
-    private static string PreviewForFormat(string? text) =>
+    internal static string PreviewForFormat(string? text) =>
         FormatCellsNumberFormatPlanner.PreviewForFormat(text);
 
     private void SelectNumberFormatOption(FormatCellsNumberFormatOption option)

@@ -121,9 +121,7 @@ public sealed class R123_NamedFormulaCommentDialogTests
         string? originalScope,
         SheetId? originalScopeSheetId = null)
     {
-        var method = typeof(NamedRangeDialog).GetMethod("DefineOrUpdateName", BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new MissingMethodException(nameof(NamedRangeDialog), "DefineOrUpdateName");
-        method.Invoke(dialog, [definition, originalName, originalScope, originalScopeSheetId]);
+        dialog.DefineOrUpdateName(definition, originalName, originalScope, originalScopeSheetId);
     }
 
     private static Func<IWorkbookCommand, CommandOutcome> CreateCommandBus(Workbook workbook)
