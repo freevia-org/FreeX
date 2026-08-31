@@ -53,6 +53,16 @@ public sealed class DialogRangeSelectionFormatterTests
             .Should().Be("R2C2:R4C4");
     }
 
+    [Fact]
+    public void Format_AbsoluteRangeUsesExcelStyleLockedA1References()
+    {
+        DialogRangeSelectionFormatter.Format(
+                CreateRange(),
+                DialogRangeSelectionFormat.AbsoluteRange,
+                new DialogRangeSelectionFormatContext(null, null, UseR1C1ReferenceStyle: false))
+            .Should().Be("$B$2:$D$4");
+    }
+
     private static GridRange CreateRange()
     {
         var sheetId = SheetId.New();

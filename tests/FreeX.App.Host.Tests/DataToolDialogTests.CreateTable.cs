@@ -64,6 +64,47 @@ public sealed partial class DataToolDialogTests
     }
 
     [Fact]
+    public void CreateTableDialog_UsesCompactRightAlignedRangePickerAndActionRow()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("CreateTableDialog.cs");
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new CreateTableDialog(SheetId.New(), "$A$20:$B$21", "TableStyleMedium2");
+            dialog.Show();
+            try
+            {
+                dialog.Width.Should().Be(CreateTableDialogPlanner.Width);
+                dialog.Height.Should().Be(CreateTableDialogPlanner.Height);
+
+                var rangeBox = WpfTestTree.FindVisualDescendants<TextBox>(dialog).Single();
+                rangeBox.Text.Should().Be("$A$20:$B$21");
+                rangeBox.MinWidth.Should().Be(CreateTableDialogPlanner.RangeBoxMinimumWidth);
+
+                var picker = WpfTestTree.FindVisualDescendants<Button>(dialog)
+                    .Single(button => Equals(button.Content, "..."));
+                picker.Width.Should().Be(CreateTableDialogPlanner.RangePickerWidth);
+                DockPanel.GetDock(picker).Should().Be(Dock.Right);
+
+                var actionButtons = WpfTestTree.FindVisualDescendants<Button>(dialog)
+                    .Where(button => !Equals(button.Content, "..."))
+                    .ToList();
+                actionButtons.Should().HaveCount(2);
+                actionButtons.Should().OnlyContain(button => button.MinWidth == CreateTableDialogPlanner.ButtonWidth);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+
+        source.Should().Contain("pickerDock: Dock.Right");
+        source.Should().Contain("pickerWidth: CreateTableDialogPlanner.RangePickerWidth");
+        source.Should().Contain("DialogButtonRowFactory.Create(");
+        source.Should().Contain("CreateTableDialogPlanner.ActionRowTopMargin");
+    }
+
+    [Fact]
     public void CreateTableDialogOpenedFromKeyboard_FocusesRangeBox()
     {
         var source = DialogSourceTestSupport.ReadHostSources("CreateTableDialog.cs");
@@ -143,7 +184,9 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("CreateTableRangeSelectionRequest request");
         source.Should().Contain("BeginDialogRangeSelection(");
         source.Should().Contain("request.CollapseDialog");
-        source.Should().Contain("selectedRange => dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End))");
+        source.Should().Contain("FormatCreateTableRangeReference(sourceRange)");
+        source.Should().Contain("selectedRange => dialog.ApplyRangeSelection(FormatCreateTableRangeReference(selectedRange))");
+        source.Should().Contain("DialogRangeSelectionFormat.AbsoluteRange");
     }
 
     [Fact]
