@@ -5185,7 +5185,6 @@ public static class PptxPackageWriter
 
         const double AvgCharWidthEmFactor = 0.52; // coarse proportional-font average advance width
         const double WideCharWidthEmFactor = 1.0; // CJK/fullwidth glyphs render close to a full em wide
-        const double LineHeightFactor = 1.2;
         const double DefaultFontSizePt = 18.0;
         const double DefaultInsetLeftRightPt = 7.2; // OOXML default lIns/rIns (91440 EMU)
         const double DefaultInsetTopBottomPt = 3.6; // OOXML default tIns/bIns (45720 EMU)
@@ -5217,9 +5216,21 @@ public static class PptxPackageWriter
             int lines = body.Wrap
                 ? Math.Max(1, (int)Math.Ceiling(textWidthPt / widthPt))
                 : 1;
-            unscaledHeightPt += lines * fontSizePt * LineHeightFactor;
-            unscaledHeightPt += paragraph.SpaceBeforePt ?? 0;
-            unscaledHeightPt += paragraph.SpaceAfterPt ?? 0;
+            // Percent-authored spacing (a:spcBef/a:spcAft with a:spcPct) resolves against a
+            // single line's height, and a:lnSpc scales the text height itself — this estimate
+            // drives the cached normAutofit fontScale, so ignoring either understates the
+            // required shrink for exactly the paragraphs that need it most.
+            double singleLineHeightPt = ParagraphSpacingMetrics.SingleLineHeightPoints(fontSizePt);
+            double lineHeightPt = paragraph.LineSpacingPointsExact is { } exactLinePt && exactLinePt > 0
+                ? exactLinePt
+                : singleLineHeightPt * (paragraph.LineSpacingPercent is { } linePct && linePct > 0
+                    ? linePct / 100.0
+                    : 1.0);
+            unscaledHeightPt += lines * lineHeightPt;
+            unscaledHeightPt += ParagraphSpacingMetrics.ResolvePoints(
+                paragraph.SpaceBeforePt, paragraph.SpaceBeforePercent, singleLineHeightPt);
+            unscaledHeightPt += ParagraphSpacingMetrics.ResolvePoints(
+                paragraph.SpaceAfterPt, paragraph.SpaceAfterPercent, singleLineHeightPt);
         }
 
         // Fits at authored size (or no clear evidence of overflow) — no basis to override the
