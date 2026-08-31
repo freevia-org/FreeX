@@ -184,6 +184,7 @@ public sealed class WpfAuthoritySurfaceParityTests
 
             dialog.Result.Should().BeNull();
             dialog.ValidationTextForTest.Should().Contain("credential provider unavailable");
+            return true;
         }, CancellationToken.None);
     }
 
