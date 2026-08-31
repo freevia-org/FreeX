@@ -101,9 +101,12 @@ public static class BackstageRecentFileListPlanner
 
 public sealed class RecentFileViewModel
 {
+    private const int MaximumDisplayDirectoryLength = 72;
+
     public string Path { get; }
     public string FileName { get; }
     public string Directory { get; }
+    public string DisplayDirectory { get; }
     public string LastOpenedText { get; }
     public bool IsPinned { get; }
     public string OpenAutomationName { get; }
@@ -120,6 +123,7 @@ public sealed class RecentFileViewModel
         FileAccessIdentity = entry.FileAccessIdentity;
         FileName = FilePathPolicy.FileNameOrPath(entry.Path);
         Directory = System.IO.Path.GetDirectoryName(entry.Path) ?? "";
+        DisplayDirectory = CompactDirectoryForDisplay(Directory);
         LastOpenedText = FormatDate(entry.LastOpened);
         IsPinned = entry.IsPinned;
         OpenAutomationName = IsPinned
@@ -134,6 +138,34 @@ public sealed class RecentFileViewModel
             : BackstageStrings.Current.Get("Backstage_Recent_PinHelpText");
         RemoveAutomationName = BackstageStrings.Current.Format("Backstage_Recent_RemoveAutomationName", FileName);
         RemoveAutomationHelpText = BackstageStrings.Current.Get("Backstage_Recent_RemoveAutomationHelpText");
+    }
+
+    private static string CompactDirectoryForDisplay(string directory)
+    {
+        if (directory.Length <= MaximumDisplayDirectoryLength)
+            return directory;
+
+        var separator = directory.Contains('\\') ? '\\' : '/';
+        var segments = directory.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length <= 4)
+            return directory;
+
+        var isUnc = directory.StartsWith("\\\\", StringComparison.Ordinal) ||
+                    directory.StartsWith("//", StringComparison.Ordinal);
+        var isRootedSlash = !isUnc && (directory.StartsWith('\\') || directory.StartsWith('/'));
+        var prefixSegmentCount = isUnc ? 2 : isRootedSlash ? 0 : 1;
+        var tailSegmentCount = Math.Min(3, segments.Length - prefixSegmentCount);
+        if (tailSegmentCount <= 0)
+            return directory;
+
+        var prefix = isUnc
+            ? $"{separator}{separator}{segments[0]}{separator}{segments[1]}"
+            : isRootedSlash
+                ? separator.ToString()
+                : segments[0];
+        var tail = string.Join(separator, segments[^tailSegmentCount..]);
+        var prefixSeparator = prefix.EndsWith(separator) ? string.Empty : separator.ToString();
+        return $"{prefix}{prefixSeparator}\u2026{separator}{tail}";
     }
 
     private static string FormatDate(DateTimeOffset timestamp)
