@@ -3732,8 +3732,28 @@ public sealed partial class MainWindow : Window
         // so this is necessarily fire-and-forget; ShowFileCommandErrorAsync still serializes behind
         // its own owner-window dialog machinery like every other Avalonia alert in this shell.
         if (feedback.ShouldShowError)
-            RunUiTask(() => _fileWorkflow.ShowFileCommandErrorAsync(feedback.ErrorSummary!, feedback.Exception!));
+            RunUiTask(() => ShowFileCommandErrorPreservingFeedbackAsync(feedback));
         return feedback.Succeeded;
+    }
+
+    private async Task ShowFileCommandErrorPreservingFeedbackAsync(FreeWDocumentFileFeedback feedback)
+    {
+        try
+        {
+            await _fileWorkflow.ShowFileCommandErrorAsync(feedback.ErrorSummary!, feedback.Exception!);
+        }
+        catch (OperationCanceledException)
+        {
+            // Dismissing an error dialog must not replace the underlying file-command feedback.
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // The status bar already contains the actionable file failure. If native presentation
+            // itself is unavailable (for example while a headless or not-yet-visible owner exists),
+            // retain that original diagnosis instead of masking it with a secondary dialog error.
+            System.Diagnostics.Debug.WriteLine(
+                $"Could not present file-command error dialog '{feedback.ErrorSummary}': {ex}");
+        }
     }
 
     /// <summary>
