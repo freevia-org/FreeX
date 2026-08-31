@@ -1017,18 +1017,12 @@ public static class TextLayoutPlanner
     }
 
     /// <summary>
-    /// Multiple of the font size that makes up a single line's height. Used as the basis for
-    /// percentage paragraph spacing, where no measured single-line height is available (the
-    /// measured height covers the whole wrapped paragraph). Matches the factor
-    /// <see cref="SlideShowTextHyperlinkHitTestPlanner"/> uses for the same purpose.
-    /// </summary>
-    private const double SingleLineHeightFactor = 1.2;
-
-    /// <summary>
     /// A single line's height for this paragraph, in points: the largest authored run font size
-    /// times <see cref="SingleLineHeightFactor"/>. This is the basis ECMA-376 defines for
-    /// <c>a:spcBef</c>/<c>a:spcAft</c> expressed as <c>a:spcPct</c> — the same "one line"
-    /// notion <c>a:lnSpc/a:spcPct</c> uses. Zero when the paragraph has no sized runs.
+    /// times <see cref="ParagraphSpacingMetrics.LineHeightFactor"/>. This is the basis ECMA-376
+    /// defines for <c>a:spcBef</c>/<c>a:spcAft</c> expressed as <c>a:spcPct</c> — the same "one
+    /// line" notion <c>a:lnSpc/a:spcPct</c> uses, and no measured single-line height is available
+    /// here (the measured height covers the whole wrapped paragraph). Zero when the paragraph has
+    /// no sized runs.
     /// </summary>
     public static double ResolveParagraphSingleLineHeightPoints(ResolvedParagraph paragraph)
     {
@@ -1036,7 +1030,7 @@ public static class TextLayoutPlanner
         double maxFontPt = 0;
         foreach (var run in paragraph.Runs)
             maxFontPt = Math.Max(maxFontPt, run.FontSizePt);
-        return maxFontPt > 0 ? maxFontPt * SingleLineHeightFactor : 0;
+        return ParagraphSpacingMetrics.SingleLineHeightPoints(maxFontPt);
     }
 
     /// <summary>
@@ -1065,10 +1059,13 @@ public static class TextLayoutPlanner
     {
         // spcPts wins over spcPct: they are mutually exclusive per ECMA-376, and both the reader
         // and the model give the explicit points value precedence.
-        if (points != 0 || percent is not { } pct || pct <= 0)
+        if (points != 0)
             return points;
 
-        return ResolveParagraphSingleLineHeightPoints(paragraph) * pct / 100.0;
+        return ParagraphSpacingMetrics.ResolvePoints(
+            points: null,
+            percent,
+            ResolveParagraphSingleLineHeightPoints(paragraph));
     }
 
     public static TextBlockLayoutPlan PlanTableCellText(

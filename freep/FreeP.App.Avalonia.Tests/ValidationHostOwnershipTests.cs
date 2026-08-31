@@ -74,6 +74,16 @@ public sealed class ValidationHostOwnershipTests
 
     private static IReadOnlyList<string> ReadTypeNames(string assemblyPath)
     {
+        // Round 172: this test reads an assembly ANOTHER project produces (the FreePValidationHost
+        // variant of FreeP.App.Avalonia, built via FreeP.Validation.Avalonia's ProjectReference), so
+        // a tree whose bin/ has been cleaned surfaced the prerequisite as a bare
+        // DirectoryNotFoundException naming a path -- which reads exactly like the ownership
+        // violation this test exists to catch, and cost real time to tell apart. Say which it is.
+        File.Exists(assemblyPath).Should().BeTrue(
+            "the validation-host variant at '{0}' must be built before this ownership test runs; "
+            + "build the whole solution (dotnet build FreeP.slnx) rather than this test project alone",
+            assemblyPath);
+
         using var stream = File.OpenRead(assemblyPath);
         using var peReader = new PEReader(stream);
         var metadata = peReader.GetMetadataReader();

@@ -47,7 +47,15 @@ public sealed class LibVlcMediaPlaybackBackendFactory : IMediaPlaybackBackendFac
             backend = new LibVlcMediaPlaybackBackend(_libVlcFactory());
             return true;
         }
-        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or TypeInitializationException or InvalidOperationException)
+        // Round 172: VLCException belongs in this list, and its absence made the whole graceful
+        // path dead for the most ordinary failure there is. Core.Initialize() reports missing
+        // natives by throwing LibVLCSharp's own VLCException ("Failed to load required native
+        // libraries"), which derives straight from Exception and so matched none of the framework
+        // types below -- so on any machine or CI image without the LibVLC native package (Linux
+        // without libvlc, a build that does not pull the native runtime) the exception escaped
+        // TryCreate, and Probe() -- whose entire contract is to report unavailability rather than
+        // throw -- took the process with it instead of returning IsAvailable=false.
+        catch (Exception ex) when (ex is VLCException or DllNotFoundException or EntryPointNotFoundException or TypeInitializationException or InvalidOperationException)
         {
             failure = new MediaPlaybackFailure(
                 MediaPlaybackFailureKind.NativeLibraryUnavailable,
