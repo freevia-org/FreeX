@@ -85,6 +85,47 @@ public sealed class RibbonKeyTipResolutionPlannerTests
         result.ExactIndex.Should().Be(-1);
     }
 
+    [Fact]
+    public void Resolve_DenseCandidatesEvaluatesEachCandidateOnce()
+    {
+        var candidates = Enumerable.Range(0, 1_000)
+            .Select(index => new Candidate(index == 999 ? "ABZ" : $"K{index}"))
+            .ToArray();
+        var keyTipSelections = 0;
+        var enabledSelections = 0;
+
+        var result = RibbonKeyTipResolutionPlanner.Resolve(
+            candidates,
+            "AB",
+            candidate =>
+            {
+                keyTipSelections++;
+                return candidate.KeyTip;
+            },
+            candidate =>
+            {
+                enabledSelections++;
+                return candidate.IsEnabled;
+            });
+
+        result.Kind.Should().Be(RibbonKeyTipResolutionKind.Prefix);
+        keyTipSelections.Should().Be(candidates.Length);
+        enabledSelections.Should().Be(candidates.Length);
+    }
+
+    [Fact]
+    public void Resolve_SourceGuardUsesOneIndexedPassWithoutMaterializingCandidates()
+    {
+        var source = File.ReadAllText(TestWorkspaceFileLocator.Find(
+            "shared/Free.Shared.Ribbon/KeyTips/RibbonKeyTipResolutionPlanner.cs"));
+
+        source.Should().Contain("for (var index = 0; index < candidates.Count; index++)")
+            .And.Contain("var startsWithSequence = keyTip.StartsWith(normalizedSequence")
+            .And.NotContain(".ToArray()")
+            .And.NotContain("normalized.FirstOrDefault")
+            .And.NotContain("normalized.Any");
+    }
+
     private static RibbonKeyTipResolution Resolve(string sequence, params Candidate[] candidates) =>
         RibbonKeyTipResolutionPlanner.Resolve(
             candidates,
