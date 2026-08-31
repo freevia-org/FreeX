@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
-using Free.Shared.AppServices;
-
-namespace Free.Shared.Shell;
+namespace Free.Shared.AppServices;
 
 /// <summary>
 /// Caches filesystem existence probes for recent-file paths so that callers who need to re-check

@@ -2046,6 +2046,7 @@ public sealed partial class DocumentView : RichTextBox
         // left the replaced text permanently gone, with no further undo to recover it. Render()
         // below reassigns Document and discards WPF-native undo, so the bus is the only way back.
         var ownsPasteUndoGroup = false;
+        (List<FreeW.Core.Model.Block> Before, List<FreeW.Core.Model.Block> After)? pendingBlocks = null;
         if (!Selection.IsEmpty)
         {
             if (IsCaretOnLockedContentControl())
@@ -2055,43 +2056,61 @@ public sealed partial class DocumentView : RichTextBox
             var beforeDelete = _model.Blocks.ToList();
             Selection.Text = string.Empty;
             CommitToModel();
-            var afterDelete = _model.Blocks.ToList();
+            pendingBlocks = (beforeDelete, _model.Blocks.ToList());
 
             ownsPasteUndoGroup = !_commands.IsUndoGroupOpen;
             if (ownsPasteUndoGroup)
                 _commands.BeginUndoGroup();
-            _commands.Execute(new ReplaceAllBlocksCommand(beforeDelete, afterDelete, "Paste"));
         }
         else
         {
             CommitToModel();
         }
 
-        if (!TryGetCurrentBodyTextRange(out var range) || !range.IsCollapsed)
+        // r181: everything from here to the commit runs under try/catch. An exception escaping
+        // between BeginUndoGroup and its commit leaves DocumentCommandBus._batch set forever:
+        // BeginUndoGroup is not reentrant, so the NEXT feature to open a group throws, and until
+        // then every ordinary edit silently collects into the orphaned batch instead of the undo
+        // stack and stops raising Changed. Both clipboard entry points here convert externally
+        // sourced RTF/HTML through a long splice pipeline, which is exactly where a throw would
+        // come from. The sibling in FindReplaceDialog added the same round already guards this way.
+        try
         {
-            if (ownsPasteUndoGroup)
-                _commands.RollbackUndoGroup();
-            return false;
-        }
+            if (pendingBlocks is { } blocks)
+                _commands.Execute(new ReplaceAllBlocksCommand(blocks.Before, blocks.After, "Paste"));
 
-        if (!_editingSession.TryInsertDocumentAtBodyCaret(
-                range.Normalize().Start,
-                source,
-                out var insertion,
-                TrackChangesEnabled))
+            if (!TryGetCurrentBodyTextRange(out var range) || !range.IsCollapsed)
+            {
+                if (ownsPasteUndoGroup)
+                    _commands.RollbackUndoGroup();
+                return false;
+            }
+
+            if (!_editingSession.TryInsertDocumentAtBodyCaret(
+                    range.Normalize().Start,
+                    source,
+                    out var insertion,
+                    TrackChangesEnabled))
+            {
+                // Roll back, do not abandon: the deletion above is already applied.
+                if (ownsPasteUndoGroup)
+                    _commands.RollbackUndoGroup();
+                return false;
+            }
+
+            if (ownsPasteUndoGroup)
+                _commands.CommitUndoGroup("Paste");
+
+            Render();
+            PlaceCaretAtModelTextOffset(insertion.Caret.BlockIndex, insertion.Caret.Offset);
+            return true;
+        }
+        catch
         {
-            // Roll back, do not abandon: the deletion above is already applied.
-            if (ownsPasteUndoGroup)
+            if (ownsPasteUndoGroup && _commands.IsUndoGroupOpen)
                 _commands.RollbackUndoGroup();
-            return false;
+            throw;
         }
-
-        if (ownsPasteUndoGroup)
-            _commands.CommitUndoGroup("Paste");
-
-        Render();
-        PlaceCaretAtModelTextOffset(insertion.Caret.BlockIndex, insertion.Caret.Offset);
-        return true;
     }
 
     /// <summary>
