@@ -481,7 +481,7 @@ internal static partial class XlsxPivotTableWriter
                 field.GroupEnd is null ? null : new XAttribute("groupEnd", FormatInvariant(field.GroupEnd.Value)),
                 field.GroupInterval is null ? null : new XAttribute("groupInterval", FormatInvariant(field.GroupInterval.Value))));
 
-    private static XElement ToPivotFieldsXml(
+    internal static XElement ToPivotFieldsXml(
         PivotTableModel pivot,
         PivotCacheModel? pivotCache,
         IReadOnlyDictionary<string, int> calculatedFieldIndexes,
