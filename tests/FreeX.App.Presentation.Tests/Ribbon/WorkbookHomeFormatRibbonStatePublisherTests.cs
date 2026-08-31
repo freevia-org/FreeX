@@ -20,7 +20,8 @@ public sealed class WorkbookHomeFormatRibbonStatePublisherTests
             HorizontalAlignment: HorizontalAlignment.Right,
             WrapText: true,
             FontName: "Aptos",
-            FontSizeText: "14");
+            FontSizeText: "14",
+            NumberFormatText: "0%");
 
         WorkbookHomeFormatRibbonStatePublisher.Publish(store, state);
 
@@ -37,6 +38,7 @@ public sealed class WorkbookHomeFormatRibbonStatePublisherTests
         Checked(store, "Wrap Text").Should().BeTrue();
         store.GetState("Font").Value.Should().Be("Aptos");
         store.GetState("Font Size").Value.Should().Be("14");
+        store.GetState("Number Format").Value.Should().Be("0%");
     }
 
     [Fact]
@@ -55,7 +57,7 @@ public sealed class WorkbookHomeFormatRibbonStatePublisherTests
         var firstPublishChanges = changes;
         WorkbookHomeFormatRibbonStatePublisher.Publish(store, state);
 
-        firstPublishChanges.Should().Be(13);
+        firstPublishChanges.Should().Be(14);
         changes.Should().Be(firstPublishChanges);
     }
 
