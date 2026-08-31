@@ -118,9 +118,9 @@ public sealed partial class MainWindowXamlKeyTipTests
         keyboardFocusSource.Should().Contain("ShellFocusCyclePlanner.TryFocusNextAvailable(");
         keyboardFocusSource.Should().Contain("FocusShellRegion);");
         keyboardFocusSource.Should().NotContain("Enum.GetValues<ShellFocusTarget>()");
-        keyboardFocusSource.Should().Contain("return FormulaBar.Focus();");
+        keyboardFocusSource.Should().Contain("return TryFocusElement(CellAddressBox);");
         keyboardFocusSource.Should().Contain("return TryFocusCurrentSheetTab() || AddSheetButton.Focus();");
-        keyboardFocusSource.Should().Contain("return FocusStatusBar();");
+        keyboardFocusSource.Should().Contain("return FocusStatusMode();");
     }
 
     [Fact]

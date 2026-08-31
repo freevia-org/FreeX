@@ -562,22 +562,18 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void F6StatusBar_DelegatesInitialFocusOrderToServicesPlanner()
+    public void F6StatusBar_EntersTheAccessibleCellModeTarget()
     {
         var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
-        var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("StatusBarFocusNavigationPlanner.cs");
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
-        keyboardFocusSource.Should().Contain("return FocusStatusBar();");
-        keyboardFocusSource.Should().Contain("private bool FocusStatusBar()");
-        keyboardFocusSource.Should().Contain("StatusBarFocusNavigationPlanner.BuildInitialFocusOrder(candidates)");
-        keyboardFocusSource.Should().Contain("TryFocusStatusBarElement(GetStatusBarFocusElement(target))");
+        keyboardFocusSource.Should().Contain("return FocusStatusMode();");
+        keyboardFocusSource.Should().Contain("private bool FocusStatusMode()");
+        keyboardFocusSource.Should().Contain("TryFocusElement(StatusModeFocusTarget)");
         keyboardFocusSource.Should().NotContain("return StatusZoomOutButton.Focus() || ZoomSlider.Focus();");
-        plannerSource.IndexOf("StatusBarFocusTarget.ZoomOutButton", StringComparison.Ordinal)
-            .Should()
-            .BeLessThan(plannerSource.IndexOf("StatusBarFocusTarget.ZoomSlider", StringComparison.Ordinal));
-        xaml.Should().Contain("x:Name=\"StatusZoomOutButton\"");
-        xaml.Should().Contain("x:Name=\"StatusZoomInButton\"");
+        xaml.Should().Contain("x:Name=\"StatusModeFocusTarget\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"StatusCellMode\"");
+        xaml.Should().Contain("Property=\"IsKeyboardFocusWithin\"");
     }
 
     [Fact]
