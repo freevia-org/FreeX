@@ -9,11 +9,16 @@ namespace FreeX.App.Host;
 
 public partial class FormatCellsDialog
 {
-    private static void PopulateBorder(ComboBox styleBox, TextBox colorBox, CellBorder border)
+    /// <summary>
+    /// freex-theme-border-color-F1: shows the EFFECTIVE color of an existing edge. A theme-backed
+    /// border carries the RGB baked in at load time, so reading <c>border.Color</c> raw put a color in
+    /// this box that disagreed with what the grid was painting for that same edge.
+    /// </summary>
+    private static void PopulateBorder(ComboBox styleBox, TextBox colorBox, CellBorder border, WorkbookTheme theme)
     {
         styleBox.ItemsSource = FormatCellsBorderPalettePlanner.StyleChoices;
         styleBox.SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(border.Style);
-        colorBox.Text = ColorInputParser.FormatRgbColor(border.Color);
+        colorBox.Text = ColorInputParser.FormatRgbColor(border.ResolveColor(theme));
     }
 
     private void PopulateBorderColorPalette()
@@ -162,7 +167,7 @@ public partial class FormatCellsDialog
             ? PreviewThickness(inside.Style)
             : 0;
         var insideBrush = _borderPresetInside is { } insideBorder
-            ? BrushForColor(insideBorder.Color, Brushes.Black)
+            ? BrushForColor(insideBorder.ResolveColor(_theme), Brushes.Black)
             : Brushes.Black;
         DlgBorderPreviewInsideVertical.BorderThickness = new Thickness(insideThickness, 0, 0, 0);
         DlgBorderPreviewInsideHorizontal.BorderThickness = new Thickness(0, insideThickness, 0, 0);

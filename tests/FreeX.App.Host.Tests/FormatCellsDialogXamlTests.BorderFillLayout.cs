@@ -206,7 +206,7 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new FormatCellsDialog(CellStyle.Default, FormatCellsDialogTab.Border);
+            var dialog = new FormatCellsDialog(CellStyle.Default, WorkbookTheme.Office, FormatCellsDialogTab.Border);
             dialog.Show();
             try
             {

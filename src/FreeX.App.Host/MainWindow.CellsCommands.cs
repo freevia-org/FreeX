@@ -659,7 +659,7 @@ public partial class MainWindow
         var numberPreviewText = selectedCell is null
             ? null
             : GetAutoFitDisplayText(sheet, selectedCell);
-        var dlg = new FormatCellsDialog(currentStyle, initialTab, mergeCells, numberPreviewText) { Owner = this };
+        var dlg = new FormatCellsDialog(currentStyle, _workbook.Theme, initialTab, mergeCells, numberPreviewText) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultDiff is null) return;
         var mergeContentResolution = MergeCellContentResolution.KeepFirstCell;
         if (dlg.ResultMergeCells == true && !TryResolveMergeContentResolution(range, out mergeContentResolution))
