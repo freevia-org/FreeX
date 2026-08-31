@@ -125,18 +125,12 @@ public sealed class R74_PrintedBorderEdgePrecedenceTests
         var hyperlinkLookup = new Dictionary<(uint Row, uint Col), WorksheetPrintHyperlinkPlan>();
         var cellDestinationLookup = new Dictionary<(uint Row, uint Col), CellAddress>();
 
-        var method = typeof(PrintRenderer).GetMethod(
-            "DrawPrintedGridCells",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-
         var width = (int)(ColumnWidth * 2 * Scale);
         var height = (int)(RowHeight * Scale);
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            method!.Invoke(null,
-            [
+            PrintRenderer.DrawPrintedGridCells(
                 dc,
                 textOverlays,
                 linkOverlays,
@@ -153,8 +147,8 @@ public sealed class R74_PrintedBorderEdgePrecedenceTests
                 0.0,
                 new Workbook(),
                 false,
-                sheet,
-            ]);
+                sheet
+            );
         }
 
         var bitmap = new RenderTargetBitmap(width, height, Dpi, Dpi, PixelFormats.Pbgra32);

@@ -52,9 +52,7 @@ public sealed class GridViewPinnedNoteHoverPreviewTests
 
     private static void InvokeUpdateCommentPreviewForPointer(GridView grid, Point pos)
     {
-        var method = typeof(GridView).GetMethod("UpdateCommentPreviewForPointer", BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Should().NotBeNull();
-        method!.Invoke(grid, [pos]);
+        grid.UpdateCommentPreviewForPointer(pos);
     }
 
     private static Border? GetCommentPreviewBorder(GridView grid)

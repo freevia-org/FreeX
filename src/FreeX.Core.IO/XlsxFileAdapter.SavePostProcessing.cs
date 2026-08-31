@@ -9,7 +9,7 @@ namespace FreeX.Core.IO;
 
 public sealed partial class XlsxFileAdapter
 {
-    private static void ApplyPackagePostProcessing(
+    internal static void ApplyPackagePostProcessing(
         Workbook workbook,
         Stream packageStream,
         string? currentModelFingerprint = null,
@@ -497,6 +497,15 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxSourceDrawingGeometryRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
+
+            // round-176-drawing-hyperlink-persist: the same verbatim-preservation gap, for the same
+            // objects, one field over. A source-loaded object's a:hlinkClick (and the drawing-rels
+            // entry behind it) is replayed from the source package exactly like its anchor geometry
+            // was, so a DrawingObjectHyperlink rewritten on the model by a command that leaves
+            // IsSourceLoaded alone -- the row/column shift (freex-hyperlinks F1), Rename/Delete Sheet
+            // (R107) -- reached the model and never the saved file.
+            packageStream.Position = 0;
+            XlsxSourceDrawingHyperlinkRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         // R118-io-drawing-zorder-1: Bring Forward/Send Backward/Selection Pane commands only ever
@@ -1990,7 +1999,10 @@ public sealed partial class XlsxFileAdapter
         /// <summary>
         /// True when any sheet has at least one source-loaded picture/text box/shape. Gates the F15
         /// anchor-geometry rewrite (<see cref="XlsxSourceDrawingGeometryRewriter"/>) that keeps a
-        /// resize/move of a source-loaded drawing object from being discarded on save.
+        /// resize/move of a source-loaded drawing object from being discarded on save, and its
+        /// object-hyperlink sibling <see cref="XlsxSourceDrawingHyperlinkRewriter"/>
+        /// (round-176-drawing-hyperlink-persist), which does the same for
+        /// <see cref="DrawingObjectHyperlink"/>.
         /// </summary>
         public bool HasSourceLoadedDrawingObjects;
         /// <summary>

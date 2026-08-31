@@ -4,7 +4,7 @@ namespace FreeX.App.UI;
 
 public partial class GridView
 {
-    private sealed record RenderCellLookupCache(
+    internal sealed record RenderCellLookupCache(
         IReadOnlyList<DisplayCell> Cells,
         IReadOnlyList<RowMetric> RowMetrics,
         IReadOnlyList<ColMetric> ColMetrics,
@@ -14,7 +14,7 @@ public partial class GridView
         Dictionary<uint, RowMetric> Rows,
         Dictionary<uint, ColMetric> Columns);
 
-    private readonly record struct RenderBorderCell(
+    internal readonly record struct RenderBorderCell(
         uint Row,
         uint Col,
         CellStyle Style);

@@ -945,13 +945,9 @@ public sealed class LegacyXlsFileAdapterTests
     [InlineData(nameof(ExcelDataReader.CellError.GETTING_DATA), "#GETTING_DATA")]
     public void Load_MapsExcelDataReaderCellErrors(string errorName, string expectedCode)
     {
-        var method = typeof(LegacyXlsFileAdapter).GetMethod(
-            "MapExcelDataReaderErrorValue",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
 
         var error = Enum.Parse<ExcelDataReader.CellError>(errorName);
-        var value = method!.Invoke(null, [error]);
+        var value = LegacyXlsFileAdapter.MapExcelDataReaderErrorValue(error);
 
         value.Should().Be(new ErrorValue(expectedCode));
     }
@@ -963,11 +959,7 @@ public sealed class LegacyXlsFileAdapterTests
         var sheet = (HSSFSheet)hssf.CreateSheet("Visible");
         var drawing = (HSSFPatriarch)sheet.CreateDrawingPatriarch();
         var comboBox = drawing.CreateComboBox(new HSSFClientAnchor(0, 0, 0, 0, 0, 0, 2, 2));
-        var objMethod = typeof(LegacyXlsFileAdapter).GetMethod(
-            "TryGetObjRecord",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        objMethod.Should().NotBeNull();
-        objMethod!.Invoke(null, [comboBox]).Should().BeOfType<ObjRecord>();
+        LegacyXlsFileAdapter.TryGetObjRecord(comboBox).Should().BeOfType<ObjRecord>();
 
         var lbsData = LbsDataSubRecord.CreateAutoFilterInstance();
         SetPrivateField(lbsData, "_linkPtg", HSSFFormulaParser.Parse("Visible!$A$20:$A$22", hssf).Single());
@@ -1044,9 +1036,7 @@ public sealed class LegacyXlsFileAdapterTests
 
     private static ScalarValue MapLegacyXlsValue(object? value)
     {
-        var method = typeof(LegacyXlsFileAdapter).GetMethod("MapValue", BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-        return (ScalarValue)method!.Invoke(null, [value])!;
+        return (ScalarValue)LegacyXlsFileAdapter.MapValue(value)!;
     }
 
     private static T CreateUninitializedPivotRecord<T>(params (string FieldName, object? Value)[] fields)

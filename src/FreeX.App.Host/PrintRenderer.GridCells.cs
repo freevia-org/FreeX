@@ -38,7 +38,7 @@ public static partial class PrintRenderer
                 ValidationCircleLayoutPlanner.StrokeColor.B)),
             ValidationCircleLayoutPlanner.StrokeThickness);
 
-    private static void DrawPrintedGridCells(
+    internal static void DrawPrintedGridCells(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
         ICollection<PdfLinkOverlay> linkOverlays,

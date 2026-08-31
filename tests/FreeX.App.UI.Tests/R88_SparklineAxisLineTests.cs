@@ -18,16 +18,12 @@ public sealed class R88_SparklineAxisLineTests
 {
     private static double InvokeResolveColumnAxisY(IReadOnlyList<double> values, Rect rect, bool winLoss)
     {
-        var method = typeof(GridView).GetMethod("ResolveColumnAxisY", BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull("GridView.Overlays.Sparklines.cs must expose a data-aware column axis-Y resolver");
-        return (double)method!.Invoke(null, [values, rect, winLoss])!;
+        return (double)GridView.ResolveColumnAxisY(values, rect, winLoss)!;
     }
 
     private static double? InvokeResolveLineAxisY(IReadOnlyList<double> values, Rect rect, double? overrideMin, double? overrideMax)
     {
-        var method = typeof(GridView).GetMethod("ResolveLineAxisY", BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull("GridView.Overlays.Sparklines.cs must expose a data-aware line axis-Y resolver");
-        return (double?)method!.Invoke(null, [values, rect, overrideMin, overrideMax]);
+        return (double?)GridView.ResolveLineAxisY(values, rect, overrideMin, overrideMax);
     }
 
     [Fact]

@@ -512,7 +512,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         partName.StartsWith("customUI/", StringComparison.OrdinalIgnoreCase) &&
         partName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
-    private static bool HasRangeHyperlinkRefs(MemoryStream sourcePackage)
+    internal static bool HasRangeHyperlinkRefs(MemoryStream sourcePackage)
     {
         sourcePackage.Position = 0;
         try

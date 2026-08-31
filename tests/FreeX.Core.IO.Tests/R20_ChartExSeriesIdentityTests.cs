@@ -158,8 +158,6 @@ public sealed class R20_chartex_series_identity_Tests
 
     private static void InvokeMergeChartExSeries(XDocument sourceXml, XElement sourceChart, XDocument generatedXml)
     {
-        var method = typeof(XlsxFileAdapter).GetMethod("MergeChartExSeries", BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull("XlsxFileAdapter.SourcePackage.cs must still declare a private static MergeChartExSeries");
-        method!.Invoke(null, [sourceXml, sourceChart, generatedXml, ChartExNs]);
+        XlsxFileAdapter.MergeChartExSeries(sourceXml, sourceChart, generatedXml, ChartExNs);
     }
 }

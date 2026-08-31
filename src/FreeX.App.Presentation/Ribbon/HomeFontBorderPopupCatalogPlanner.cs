@@ -32,8 +32,14 @@ public static class HomeFontBorderPopupCatalogPlanner
         Swatch("Red", new CellColor(255, 0, 0), "home.fontColorRed"),
         Swatch("Green", new CellColor(0, 128, 0), "home.fontColorGreen"),
         Swatch("Blue", new CellColor(0, 0, 255), "home.fontColorBlue"),
-        Swatch("Accent 1", new CellColor(68, 114, 196)),
-        Swatch("Accent 2", new CellColor(237, 125, 49)),
+        // The Accent swatches carry the DEFAULT (Office theme) accents. The live Font Color gallery is
+        // built by CellColorPalettePlanner.BuildThemePalette from the workbook's own theme, and the
+        // declarative ribbon renders Font Color as a single icon with no swatch bar, so these values
+        // are catalog metadata rather than anything painted -- only Label reaches FontColorPopupGroups.
+        // They were the legacy Office 2013-2021 palette, which matched neither the default theme nor
+        // the gallery.
+        Swatch("Accent 1", new CellColor(21, 96, 130)),
+        Swatch("Accent 2", new CellColor(233, 113, 50)),
     ];
 
     public static readonly IReadOnlyList<HomeBorderLineColorCatalogItem> BorderLineColorSwatches =

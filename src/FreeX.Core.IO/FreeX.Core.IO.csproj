@@ -1,6 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <!-- The adapter/writer tests drive internal helpers directly rather than by reflection, so a
+         change to one of those signatures is a build error in the test lane. -->
+    <InternalsVisibleTo Include="FreeX.Core.IO.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../FreeX.Core.Model/FreeX.Core.Model.csproj" />
     <ProjectReference Include="../FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
     <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />

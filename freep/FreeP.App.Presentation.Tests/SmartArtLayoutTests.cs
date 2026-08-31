@@ -49,6 +49,32 @@ public sealed class SmartArtLayoutTests
         return data;
     }
 
+    private static SmartArtData MakeAsymmetricTopDownHierarchy(bool includeBlankTemplates)
+    {
+        var root = new SmartArtNode { Text = "Root", Level = 0 };
+        var heavyBranch = new SmartArtNode { Text = "Heavy", Level = 1 };
+        foreach (var index in Enumerable.Range(0, 16))
+            heavyBranch.Children.Add(new SmartArtNode { Text = $"Leaf {index}", Level = 2 });
+        if (includeBlankTemplates)
+            heavyBranch.Children.Insert(8, new SmartArtNode { Text = "   ", Level = 2 });
+
+        root.Children.Add(heavyBranch);
+        if (includeBlankTemplates)
+            root.Children.Add(new SmartArtNode { Text = string.Empty, Level = 1 });
+        root.Children.Add(new SmartArtNode { Text = "Light", Level = 1 });
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy",
+            IsLiveLayoutSupported = true,
+        };
+        data.Nodes.Add(root);
+        if (includeBlankTemplates)
+            data.Nodes.Add(new SmartArtNode { Text = "\t", Level = 0 });
+        return data;
+    }
+
     private static byte[] Minimal1x1Png() =>
     [
         0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
@@ -1177,6 +1203,88 @@ public sealed class SmartArtLayoutTests
             .Should().HaveCount(3, "root plus two child boxes should be emitted from the hierarchy tree");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
             .Should().HaveCount(2, "basicHierarchy should reuse shared parent-child connector geometry");
+    }
+
+    [Fact]
+    public void BasicHierarchy_DenseSkewedTreePreservesPreorderRolesAndConnectorIds()
+    {
+        const int nodeCount = 256;
+        var root = new SmartArtNode { Text = "Node 0", Level = 0 };
+        var parent = root;
+        foreach (var index in Enumerable.Range(1, nodeCount - 1))
+        {
+            var child = new SmartArtNode { Text = $"Node {index}", Level = index };
+            parent.Children.Add(child);
+            parent = child;
+        }
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy",
+            IsLiveLayoutSupported = true,
+        };
+        data.Nodes.Add(root);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!;
+
+        var boxes = shapes.Where(shape => shape.TextBody is not null).ToArray();
+        boxes.Should().HaveCount(nodeCount);
+        boxes.Select(shape => shape.PlainText)
+            .Should().Equal(Enumerable.Range(0, nodeCount).Select(index => $"Node {index}"));
+        boxes.Should().ContainSingle(shape => shape.Name.StartsWith("SmartArt_BasicHierarchy_Root_", StringComparison.Ordinal));
+        boxes.Should().ContainSingle(shape => shape.Name.StartsWith("SmartArt_BasicHierarchy_Leaf_", StringComparison.Ordinal));
+        boxes.Count(shape => shape.Name.StartsWith("SmartArt_BasicHierarchy_Branch_", StringComparison.Ordinal))
+            .Should().Be(nodeCount - 2);
+
+        var connectors = shapes.Where(shape => shape.TextBody is null).ToArray();
+        connectors.Should().HaveCount(nodeCount - 1);
+        connectors.Should().OnlyContain(shape =>
+            shape.Name.StartsWith("SmartArt_BasicHierarchy_Connector_", StringComparison.Ordinal));
+        shapes.Select(shape => shape.Id).Should().Equal(Enumerable.Range(380, nodeCount * 2 - 1).Select(id => (uint)id));
+    }
+
+    [Fact]
+    public void BasicHierarchy_AsymmetricTreeFiltersBlankTemplatesWithoutChangingGeometry()
+    {
+        var expected = SmartArtLayoutEngine.Layout(
+            MakeAsymmetricTopDownHierarchy(includeBlankTemplates: false),
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme())!;
+        var withBlankTemplates = SmartArtLayoutEngine.Layout(
+            MakeAsymmetricTopDownHierarchy(includeBlankTemplates: true),
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme())!;
+
+        withBlankTemplates.Select(shape => (
+                shape.Id,
+                shape.Name,
+                shape.PlainText,
+                shape.OffsetXEmu,
+                shape.OffsetYEmu,
+                shape.ExtentCxEmu,
+                shape.ExtentCyEmu))
+            .Should().Equal(expected.Select(shape => (
+                shape.Id,
+                shape.Name,
+                shape.PlainText,
+                shape.OffsetXEmu,
+                shape.OffsetYEmu,
+                shape.ExtentCxEmu,
+                shape.ExtentCyEmu)));
+
+        var boxes = withBlankTemplates.Where(shape => shape.TextBody is not null).ToArray();
+        boxes.Should().HaveCount(19, "the root, two branches, and sixteen dense leaves remain visible");
+        var heavy = boxes.Single(shape => shape.PlainText == "Heavy");
+        var light = boxes.Single(shape => shape.PlainText == "Light");
+        heavy.OffsetXEmu.Should().BeLessThan(light.OffsetXEmu);
+        (heavy.OffsetXEmu + heavy.ExtentCxEmu).Should().BeLessThanOrEqualTo(light.OffsetXEmu);
     }
 
     [Fact]

@@ -420,8 +420,8 @@ public sealed class GridViewSelectionLayoutTests
             rendering.IndexOf("private void RenderSelectionRange", StringComparison.Ordinal)..
             rendering.IndexOf("private void RenderSelectionHandle", StringComparison.Ordinal)];
         var calculateSelectionRangeLayout = rendering[
-            rendering.IndexOf("private SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateSelectionRangeLayout", StringComparison.Ordinal)..
-            rendering.IndexOf("private SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateVisibleSingleCellSelectionLayout", StringComparison.Ordinal)];
+            rendering.IndexOf("internal SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateSelectionRangeLayout", StringComparison.Ordinal)..
+            rendering.IndexOf("internal SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateVisibleSingleCellSelectionLayout", StringComparison.Ordinal)];
 
         renderSelectionRange.Should().Contain("CalculateSelectionRangeLayout(Viewport, range, rowHeaderWidth, columnHeaderHeight)");
         renderSelectionRange.Should().Contain("selectionLayout.HasTopEdge");

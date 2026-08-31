@@ -6367,6 +6367,10 @@ public static class DocxWriter
             }
             else
             {
+                var semanticNodeIndexesById = new Dictionary<string, int>(semanticNodes.Count, StringComparer.Ordinal);
+                for (var index = 0; index < semanticNodes.Count; index++)
+                    semanticNodeIndexesById.Add(semanticNodes[index].Id, index);
+
                 foreach (var group in semanticNodes.GroupBy(node => node.ParentId, StringComparer.Ordinal))
                 {
                     var sourceId = group.Key == docId ? presentationIds[docId] : containerIds[group.Key];
@@ -6374,6 +6378,7 @@ public static class DocxWriter
                     for (var i = 0; i < children.Count; i++)
                     {
                         var child = children[i];
+                        var childIndex = semanticNodeIndexesById[child.Id];
                         var childRoot = rootIds[child.Id];
                         if (group.Key == docId)
                         {
@@ -6381,7 +6386,7 @@ public static class DocxWriter
                         }
                         else
                         {
-                            var parentTransitionId = SmartArtModelId(4000 + semanticNodes.IndexOf(child));
+                            var parentTransitionId = SmartArtModelId(4000 + childIndex);
                             var parentTransitionPresentationId = parentTransitionPresentationIds[parentTransitionId];
                             var transitionName = "Name" + (10 + Math.Max(0, child.Depth - 1) * 7).ToString(System.Globalization.CultureInfo.InvariantCulture);
                             var parentTransitionStyleCount = Math.Max(2, child.Depth + 1);
@@ -6398,7 +6403,7 @@ public static class DocxWriter
                         }
                         if (i + 1 < children.Count)
                         {
-                            var transitionId = SmartArtModelId(5000 + semanticNodes.IndexOf(child));
+                            var transitionId = SmartArtModelId(5000 + childIndex);
                             var transitionPresentationId = transitionPresentationIds[transitionId];
                             var transitionName = "Name" + (10 + transitionDepths[transitionId] * 7).ToString(System.Globalization.CultureInfo.InvariantCulture);
                             var siblingTransitionStyleCount = transitionDepths[transitionId] + 2;

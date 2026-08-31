@@ -140,6 +140,8 @@ internal static partial class XlsxChartXmlWriter
         bool forceLineShapeProperties = false)
     {
         var layout = GetSeriesStripLayout(chart);
+        var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
+        var formatLookup = ChartSeriesFormatLookup.Create(chart);
         var categoryRange = chart.FirstColIsCategories
             ? FormatStripRange(layout, sheet.Name, layout.CategoryStrip)
             : null;
@@ -154,7 +156,7 @@ internal static partial class XlsxChartXmlWriter
             if (includeSeries is not null && !includeSeries(seriesIndex))
                 continue;
 
-            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var verbatim = GetVerbatimFormulas(verbatimLookup, seriesIndex);
             var valueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, strip);
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
@@ -189,12 +191,12 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
                 txElement,
                 chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
-                    ? ToSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs)
-                    : ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
+                    ? ToSeriesLineShapeProperties(formatLookup, seriesIndex, chartNs, drawingNs)
+                    : ToSeriesShapeProperties(formatLookup, seriesIndex, chartNs, drawingNs),
                 chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
-                    ? ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs)
+                    ? ToSeriesMarkerXml(chart, formatLookup, seriesIndex, chartNs, drawingNs)
                     : null,
-                ToSeriesInvertIfNegativeXml(chart, seriesIndex, chartNs),
+                ToSeriesInvertIfNegativeXml(chart, formatLookup, seriesIndex, chartNs),
                 ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
@@ -231,7 +233,7 @@ internal static partial class XlsxChartXmlWriter
                 // through SetChartLayoutCommand's model-side ClampSeriesFormat, or a model
                 // constructed directly) producing a schema-invalid file Excel has to repair.
                 forceLineShapeProperties && chart.Type is not ChartType.Radar
-                    ? ToSeriesSmoothXml(chart, seriesIndex, chartNs)
+                    ? ToSeriesSmoothXml(formatLookup, seriesIndex, chartNs)
                     : null,
                 ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
         }
@@ -375,8 +377,58 @@ internal static partial class XlsxChartXmlWriter
         return hasAnyValue;
     }
 
-    private static ChartSeriesVerbatimFormulas? GetVerbatimFormulas(ChartModel chart, int seriesIndex) =>
-        chart.VerbatimSeriesFormulas?.FirstOrDefault(f => f.SeriesIndex == seriesIndex);
+    private sealed class ChartSeriesVerbatimFormulaLookup
+    {
+        private readonly Dictionary<int, ChartSeriesVerbatimFormulas> _formulasBySeriesIndex;
+
+        private ChartSeriesVerbatimFormulaLookup(Dictionary<int, ChartSeriesVerbatimFormulas> formulasBySeriesIndex) =>
+            _formulasBySeriesIndex = formulasBySeriesIndex;
+
+        public static ChartSeriesVerbatimFormulaLookup? Create(ChartModel chart)
+        {
+            if (chart.VerbatimSeriesFormulas is not { Count: > 0 } formulas)
+                return null;
+
+            var formulasBySeriesIndex = new Dictionary<int, ChartSeriesVerbatimFormulas>(formulas.Count);
+            foreach (var formula in formulas)
+                formulasBySeriesIndex.TryAdd(formula.SeriesIndex, formula);
+
+            return new ChartSeriesVerbatimFormulaLookup(formulasBySeriesIndex);
+        }
+
+        public ChartSeriesVerbatimFormulas? Get(int seriesIndex) =>
+            _formulasBySeriesIndex.TryGetValue(seriesIndex, out var formulas) ? formulas : null;
+    }
+
+    private static ChartSeriesVerbatimFormulas? GetVerbatimFormulas(
+        ChartSeriesVerbatimFormulaLookup? verbatimLookup,
+        int seriesIndex) =>
+        verbatimLookup?.Get(seriesIndex);
+
+    private sealed class ChartSeriesFormatLookup
+    {
+        private readonly Dictionary<int, ChartSeriesFormat> _formatsBySeriesIndex;
+
+        private ChartSeriesFormatLookup(Dictionary<int, ChartSeriesFormat> formatsBySeriesIndex) =>
+            _formatsBySeriesIndex = formatsBySeriesIndex;
+
+        public static ChartSeriesFormatLookup? Create(ChartModel chart)
+        {
+            if (chart.SeriesFormats.Count == 0)
+                return null;
+
+            var formatsBySeriesIndex = new Dictionary<int, ChartSeriesFormat>(chart.SeriesFormats.Count);
+            foreach (var format in chart.SeriesFormats)
+                formatsBySeriesIndex[format.SeriesIndex] = format;
+
+            return new ChartSeriesFormatLookup(formatsBySeriesIndex);
+        }
+
+        public ChartSeriesFormat? Get(int seriesIndex) =>
+            _formatsBySeriesIndex.TryGetValue(seriesIndex, out var format)
+                ? Normalize(format)
+                : null;
+    }
 
     /// <summary>
     /// R107-io-chart-series-verbatim-refresh: attempts to resolve a verbatim series container's
@@ -517,7 +569,7 @@ internal static partial class XlsxChartXmlWriter
     /// <summary>
     /// R103-io-chart-series-tx-1: returns the captured &lt;c:tx&gt; formula for this series (see
     /// <see cref="ChartModel.SeriesNameOverrides"/>), independent of whether it happens to also be
-    /// unparsable (that case is already covered by <see cref="GetVerbatimFormulas"/>'s TxFormula).
+    /// unparsable (that case is already covered by the captured verbatim formula's TxFormula).
     /// </summary>
     private static string? GetSeriesNameOverrideFormula(ChartModel chart, int seriesIndex) =>
         chart.SeriesNameOverrides.LastOrDefault(o => o.SeriesIndex == seriesIndex)?.Formula;
@@ -525,7 +577,7 @@ internal static partial class XlsxChartXmlWriter
     /// <summary>
     /// R103-io-chart-series-tx-1: single choke point for resolving a series' &lt;c:tx&gt; element —
     /// preferring, in order, (1) an unparsable verbatim tx formula (named range/multi-area/external
-    /// link — <see cref="GetVerbatimFormulas"/>), (2) a captured tx formula that parsed fine but
+    /// link), (2) a captured tx formula that parsed fine but
     /// points somewhere other than the strip's own header cell (Excel's "Select Data &gt; Edit
     /// Series &gt; Series name" lets the user reference ANY cell — <see cref="GetSeriesNameOverrideFormula"/>),
     /// and finally (3) the recomputed strip header-cell guess (<see cref="ToSeriesTitleXml"/>). Used
@@ -684,15 +736,19 @@ internal static partial class XlsxChartXmlWriter
         return new XElement(chartNs + "cat", refElement);
     }
 
-    private static XElement? ToSeriesSmoothXml(ChartModel chart, int seriesIndex, XNamespace chartNs) =>
-        GetSeriesFormat(chart, seriesIndex)?.Smooth is { } smooth
+    private static XElement? ToSeriesSmoothXml(ChartSeriesFormatLookup? formatLookup, int seriesIndex, XNamespace chartNs) =>
+        GetSeriesFormat(formatLookup, seriesIndex)?.Smooth is { } smooth
             ? new XElement(chartNs + "smooth", new XAttribute("val", smooth ? "1" : "0"))
             : null;
 
-    private static XElement? ToSeriesInvertIfNegativeXml(ChartModel chart, int seriesIndex, XNamespace chartNs)
+    private static XElement? ToSeriesInvertIfNegativeXml(
+        ChartModel chart,
+        ChartSeriesFormatLookup? formatLookup,
+        int seriesIndex,
+        XNamespace chartNs)
     {
         if (!ChartTypeSupport.SupportsInvertIfNegative(chart.Type) ||
-            GetSeriesFormat(chart, seriesIndex)?.InvertIfNegative is not { } invertIfNegative)
+            GetSeriesFormat(formatLookup, seriesIndex)?.InvertIfNegative is not { } invertIfNegative)
         {
             return null;
         }
@@ -709,6 +765,8 @@ internal static partial class XlsxChartXmlWriter
         Func<int, bool>? includeSeries = null)
     {
         var layout = GetSeriesStripLayout(chart);
+        var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
+        var formatLookup = ChartSeriesFormatLookup.Create(chart);
         var xValueStrip = chart.SeriesInRows ? chart.DataRange.Start.Row : chart.DataRange.Start.Col;
         var xValueRange = FormatStripRange(layout, sheet.Name, xValueStrip);
 
@@ -721,7 +779,7 @@ internal static partial class XlsxChartXmlWriter
                 continue;
             }
 
-            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var verbatim = GetVerbatimFormulas(verbatimLookup, seriesIndex);
             var effectiveXValueRange = verbatim?.CatFormula ?? xValueRange;
             var yValueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, strip);
@@ -738,8 +796,8 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
                 new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
                 txElement,
-                ToScatterSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs),
-                ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs),
+                ToScatterSeriesLineShapeProperties(chart, formatLookup, seriesIndex, chartNs, drawingNs),
+                ToSeriesMarkerXml(chart, formatLookup, seriesIndex, chartNs, drawingNs),
                 ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
@@ -754,7 +812,7 @@ internal static partial class XlsxChartXmlWriter
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", yValueRange),
                         yValueCache)),
-                ToSeriesSmoothXml(chart, seriesIndex, chartNs),
+                ToSeriesSmoothXml(formatLookup, seriesIndex, chartNs),
                 ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
             seriesIndex++;
         }
@@ -762,21 +820,22 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement? ToScatterSeriesLineShapeProperties(
         ChartModel chart,
+        ChartSeriesFormatLookup? formatLookup,
         int seriesIndex,
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        if (ScatterSeriesRequestsLine(chart, seriesIndex))
-            return ToSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs);
+        if (ScatterSeriesRequestsLine(formatLookup, seriesIndex))
+            return ToSeriesLineShapeProperties(formatLookup, seriesIndex, chartNs, drawingNs);
 
         return new XElement(chartNs + "spPr",
             new XElement(drawingNs + "ln",
                 new XElement(drawingNs + "noFill")));
     }
 
-    private static bool ScatterSeriesRequestsLine(ChartModel chart, int seriesIndex)
+    private static bool ScatterSeriesRequestsLine(ChartSeriesFormatLookup? formatLookup, int seriesIndex)
     {
-        var format = GetSeriesFormat(chart, seriesIndex);
+        var format = GetSeriesFormat(formatLookup, seriesIndex);
         return format is not null &&
             (format.StrokeColor is not null ||
              format.StrokeThemeColor is not null ||
@@ -827,13 +886,15 @@ internal static partial class XlsxChartXmlWriter
         if (layout.LastStrip - xValueStrip < 2)
             yield break;
 
+        var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
+        var formatLookup = ChartSeriesFormatLookup.Create(chart);
         var xValueRange = FormatStripRange(layout, sheet.Name, xValueStrip);
 
         var seriesIndex = 0;
         for (var yValueStrip = xValueStrip + 1; yValueStrip < layout.LastStrip; yValueStrip += 2)
         {
             var sizeStrip = yValueStrip + 1;
-            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var verbatim = GetVerbatimFormulas(verbatimLookup, seriesIndex);
             var effectiveXValueRange = verbatim?.CatFormula ?? xValueRange;
             var yValueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, yValueStrip);
@@ -858,7 +919,7 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
                 new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
                 txElement,
-                ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
+                ToSeriesShapeProperties(formatLookup, seriesIndex, chartNs, drawingNs),
                 ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
@@ -893,6 +954,8 @@ internal static partial class XlsxChartXmlWriter
         if (chart.FirstColIsCategories && layout.LastStrip <= layout.CategoryStrip)
             yield break;
 
+        var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
+        var formatLookup = ChartSeriesFormatLookup.Create(chart);
         var categoryRange = chart.FirstColIsCategories
             ? FormatStripRange(layout, sheet.Name, layout.CategoryStrip)
             : null;
@@ -905,7 +968,7 @@ internal static partial class XlsxChartXmlWriter
         var seriesIndex = 0;
         for (var valueStrip = layout.FirstValueStrip; valueStrip <= layout.LastStrip; valueStrip++)
         {
-            var verbatim = GetVerbatimFormulas(chart, seriesIndex);
+            var verbatim = GetVerbatimFormulas(verbatimLookup, seriesIndex);
             var valueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, valueStrip);
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
@@ -936,7 +999,7 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
                 new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
                 txElement,
-                ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
+                ToSeriesShapeProperties(formatLookup, seriesIndex, chartNs, drawingNs),
                 ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToVerbatimMultiLevelCategoryXml(chart, seriesIndex)
@@ -1095,12 +1158,12 @@ internal static partial class XlsxChartXmlWriter
     }
 
     private static XElement? ToSeriesLineShapeProperties(
-        ChartModel chart,
+        ChartSeriesFormatLookup? formatLookup,
         int seriesIndex,
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        var format = GetSeriesFormat(chart, seriesIndex);
+        var format = GetSeriesFormat(formatLookup, seriesIndex);
         if (format is null)
             return null;
 
@@ -1124,6 +1187,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement? ToSeriesMarkerXml(
         ChartModel chart,
+        ChartSeriesFormatLookup? formatLookup,
         int seriesIndex,
         XNamespace chartNs,
         XNamespace drawingNs)
@@ -1131,7 +1195,7 @@ internal static partial class XlsxChartXmlWriter
         if (!ChartTypeSupport.SupportsSeriesMarkers(chart.Type))
             return null;
 
-        var format = GetSeriesFormat(chart, seriesIndex);
+        var format = GetSeriesFormat(formatLookup, seriesIndex);
         if (format is null)
             return null;
 
@@ -1157,12 +1221,12 @@ internal static partial class XlsxChartXmlWriter
     }
 
     private static XElement? ToSeriesShapeProperties(
-        ChartModel chart,
+        ChartSeriesFormatLookup? formatLookup,
         int seriesIndex,
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        var format = GetSeriesFormat(chart, seriesIndex);
+        var format = GetSeriesFormat(formatLookup, seriesIndex);
         if (format is null)
             return null;
 
@@ -1206,17 +1270,15 @@ internal static partial class XlsxChartXmlWriter
                     : null);
     }
 
-    private static ChartSeriesFormat? GetSeriesFormat(ChartModel chart, int seriesIndex)
-    {
-        var format = chart.SeriesFormats.LastOrDefault(item => item.SeriesIndex == seriesIndex);
-        return format is null
-            ? null
-            : format with
-            {
-                DashStyle = ValidNullableEnumOrNull(format.DashStyle),
-                MarkerStyle = ValidNullableEnumOrNull(format.MarkerStyle)
-            };
-    }
+    private static ChartSeriesFormat? GetSeriesFormat(ChartSeriesFormatLookup? formatLookup, int seriesIndex) =>
+        formatLookup?.Get(seriesIndex);
+
+    private static ChartSeriesFormat Normalize(ChartSeriesFormat format) =>
+        format with
+        {
+            DashStyle = ValidNullableEnumOrNull(format.DashStyle),
+            MarkerStyle = ValidNullableEnumOrNull(format.MarkerStyle)
+        };
 
     private static TEnum? ValidNullableEnumOrNull<TEnum>(TEnum? value)
         where TEnum : struct, Enum =>

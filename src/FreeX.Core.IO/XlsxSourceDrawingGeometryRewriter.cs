@@ -116,7 +116,7 @@ internal static class XlsxSourceDrawingGeometryRewriter
                 var anchor = FindNearestAnchorElement(pictureElement);
                 if (anchor is not null &&
                     RewriteAnchorGeometry(
-                        anchor, sheet, picture.Width, picture.Height, picture.AnchorOffsetX, picture.AnchorOffsetY,
+                        anchor, sheet, picture.Anchor, picture.Width, picture.Height, picture.AnchorOffsetX, picture.AnchorOffsetY,
                         picture.SourceLoadedWidthPixels, picture.SourceLoadedHeightPixels))
                 {
                     changed = true;
@@ -198,7 +198,7 @@ internal static class XlsxSourceDrawingGeometryRewriter
                 var anchor = FindNearestAnchorElement(textBoxElement);
                 if (anchor is not null &&
                     RewriteAnchorGeometry(
-                        anchor, sheet, textBox.Width, textBox.Height, textBox.AnchorOffsetX, textBox.AnchorOffsetY,
+                        anchor, sheet, textBox.Anchor, textBox.Width, textBox.Height, textBox.AnchorOffsetX, textBox.AnchorOffsetY,
                         textBox.SourceLoadedWidthPixels, textBox.SourceLoadedHeightPixels))
                 {
                     changed = true;
@@ -222,7 +222,7 @@ internal static class XlsxSourceDrawingGeometryRewriter
                 var anchor = FindNearestAnchorElement(shapeElement);
                 if (anchor is not null &&
                     RewriteAnchorGeometry(
-                        anchor, sheet, shape.Width, shape.Height, shape.AnchorOffsetX, shape.AnchorOffsetY,
+                        anchor, sheet, shape.Anchor, shape.Width, shape.Height, shape.AnchorOffsetX, shape.AnchorOffsetY,
                         shape.SourceLoadedWidthPixels, shape.SourceLoadedHeightPixels))
                 {
                     changed = true;
@@ -715,6 +715,7 @@ internal static class XlsxSourceDrawingGeometryRewriter
     private static bool RewriteAnchorGeometry(
         XElement anchor,
         Sheet sheet,
+        CellAddress anchorCell,
         double widthPixels,
         double heightPixels,
         double offsetXPixels,
@@ -725,6 +726,9 @@ internal static class XlsxSourceDrawingGeometryRewriter
         // R72-io-drawing-anchors-4-2: an absoluteAnchor has xdr:pos/xdr:ext, never xdr:from/xdr:to, so it
         // must be handled independently of (and before) the from-null guard below -- that guard is only
         // meaningful for the twoCellAnchor path, which genuinely needs from/to markers.
+        // An absoluteAnchor is also the one kind whose anchorCell carries no information: the loader
+        // resolves it to the sheet origin for every such object (see XlsxDrawingAnchorApplier's doc
+        // comment), and RowColumnShiftHelpers.TryShiftAnchoredDrawingObject deliberately never moves it.
         if (anchor.Name == SpreadsheetDrawingNs + "absoluteAnchor")
             return RewriteAbsoluteAnchorGeometry(anchor, widthPixels, heightPixels, offsetXPixels, offsetYPixels);
 
@@ -733,6 +737,26 @@ internal static class XlsxSourceDrawingGeometryRewriter
             return false;
 
         var changed = false;
+
+        // round-177-drawing-anchor-cell-persist: move the from-marker to the model's CURRENT anchor
+        // cell. Everything else in this method rewrote only the sub-cell offset and the size, so a
+        // source-loaded object that changed WHICH CELL it hangs off -- the row/column insert/delete
+        // shift is the way that happens (RowColumnShiftHelpers.ShiftPictures/ShiftDrawingShapes/
+        // ShiftTextBoxes assign a shifted Anchor) -- had that move silently discarded, replaying the
+        // pre-shift marker from the preserved source anchor. The load side sets Anchor to
+        // FromRow/ColumnZeroBased + 1, so for an untouched object the desired value below equals what
+        // is already in the file and SetIndexElement is a no-op -- an ordinary save stays byte-stable.
+        var desiredFromCol = ToZeroBasedIndex(anchorCell.Col, MaxColumnIndex);
+        var desiredFromRow = ToZeroBasedIndex(anchorCell.Row, MaxRowIndex);
+        var colDelta = TryGetIndexElement(from, "col", out var previousFromCol)
+            ? (long)desiredFromCol - previousFromCol
+            : 0;
+        var rowDelta = TryGetIndexElement(from, "row", out var previousFromRow)
+            ? (long)desiredFromRow - previousFromRow
+            : 0;
+        changed |= SetIndexElement(from, "col", desiredFromCol);
+        changed |= SetIndexElement(from, "row", desiredFromRow);
+
         changed |= SetOffsetElement(from, "colOff", offsetXPixels);
         changed |= SetOffsetElement(from, "rowOff", offsetYPixels);
 
@@ -771,6 +795,13 @@ internal static class XlsxSourceDrawingGeometryRewriter
             if (sourceLoadedWidthPixels is { } baselineWidth && ApproximatelyEqualsPixels(baselineWidth, widthPixels) &&
                 sourceLoadedHeightPixels is { } baselineHeight && ApproximatelyEqualsPixels(baselineHeight, heightPixels))
             {
+                // round-177-drawing-anchor-cell-persist: the object was MOVED but not resized, so the
+                // recompute below is (correctly) skipped -- but the to-marker still has to follow the
+                // from-marker, or the preserved anchor would stretch the object from its new top-left
+                // to its old bottom-right. Translating by the same delta keeps the spanned cell count
+                // exactly as authored, which is what the skip-gate is protecting in the first place.
+                changed |= TranslateMarkerIndex(to, "col", colDelta, MaxColumnIndex);
+                changed |= TranslateMarkerIndex(to, "row", rowDelta, MaxRowIndex);
                 return changed;
             }
 
@@ -988,6 +1019,37 @@ internal static class XlsxSourceDrawingGeometryRewriter
 
         element.Value = emu;
         return true;
+    }
+
+    /// <summary>
+    /// round-177-drawing-anchor-cell-persist: the model's 1-based <see cref="CellAddress"/> component as
+    /// the 0-based index DrawingML markers use, clamped to the same ceiling the rest of this file and
+    /// <c>XlsxWorksheetChartWriter</c> already clamp to. A 0 (never a valid 1-based address) maps to 0
+    /// rather than underflowing.
+    /// </summary>
+    private static uint ToZeroBasedIndex(uint oneBased, uint maxIndex) =>
+        oneBased <= 1 ? 0 : Math.Min(oneBased - 1, maxIndex - 1);
+
+    private static bool TryGetIndexElement(XElement marker, string elementName, out long index)
+    {
+        index = 0;
+        return marker.Element(SpreadsheetDrawingNs + elementName)?.Value is { } value &&
+            long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out index);
+    }
+
+    /// <summary>
+    /// round-177-drawing-anchor-cell-persist: shifts one marker component by <paramref name="delta"/>,
+    /// clamped into range. Used to carry a twoCellAnchor's to-marker along with a from-marker that moved
+    /// without the object being resized. A zero delta (the overwhelmingly common case -- nothing moved)
+    /// short-circuits so an untouched anchor is not even parsed.
+    /// </summary>
+    private static bool TranslateMarkerIndex(XElement marker, string elementName, long delta, uint maxIndex)
+    {
+        if (delta == 0 || !TryGetIndexElement(marker, elementName, out var current))
+            return false;
+
+        var translated = Math.Clamp(current + delta, 0, maxIndex - 1);
+        return SetIndexElement(marker, elementName, (uint)translated);
     }
 
     private static bool SetIndexElement(XElement marker, string elementName, uint index)

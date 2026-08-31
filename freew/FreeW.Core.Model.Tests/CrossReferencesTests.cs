@@ -212,6 +212,56 @@ public class CrossReferencesTests
     }
 
     [Fact]
+    public void Targets_DenseFootnoteMarkersKeepFirstMarkerAndAscendingIds()
+    {
+        const int count = 256;
+        var doc = new TextDocument();
+        for (var index = 0; index < count; index++)
+        {
+            var id = count - index;
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FootnoteReference(id));
+            if (id == count)
+            {
+                paragraph.BookmarkNames.Add("_RefFirst");
+                paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+                    "first", BookmarkBoundaryKind.Start, 0, "_RefFirst"));
+                paragraph.BookmarkBoundaries.Add(new BookmarkBoundary("first", BookmarkBoundaryKind.End, 1));
+            }
+
+            doc.Blocks.Add(paragraph);
+            doc.Footnotes[id] = new Footnote(id, "note");
+        }
+
+        var duplicate = new Paragraph();
+        duplicate.Runs.Add(Run.FootnoteReference(count));
+        duplicate.BookmarkNames.Add("_RefDuplicate");
+        duplicate.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "duplicate", BookmarkBoundaryKind.Start, 0, "_RefDuplicate"));
+        duplicate.BookmarkBoundaries.Add(new BookmarkBoundary("duplicate", BookmarkBoundaryKind.End, 1));
+        doc.Blocks.Add(duplicate);
+
+        var targets = CrossReferences.Targets(doc, CrossRefType.Footnote);
+
+        targets.Should().HaveCount(count);
+        targets.Select(target => target.NoteId)
+            .Should().Equal(Enumerable.Range(1, count).Select(id => (int?)id));
+        targets[^1].Should().Be(new CrossRefTarget("Footnote 256", "_RefFirst", 0, 256, 0));
+    }
+
+    [Fact]
+    public void Targets_SourceGuardBuildsOnePassNoteMarkerIndex()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.Model", "CrossReferences.cs");
+
+        source.Should().Contain("var markerById = BuildNoteMarkerIndex(doc, footnote, sortedIds);")
+            .And.Contain("markerById.TryGetValue(id, out var marker)")
+            .And.Contain("markerById.TryAdd(")
+            .And.Contain("blockRunOrdinal + runIndex")
+            .And.NotContain("FindNoteMarker(doc, id, footnote)");
+    }
+
+    [Fact]
     public void Targets_ImportedBookmarkSpanningTwoMarkersIsNotReused()
     {
         var doc = new TextDocument();

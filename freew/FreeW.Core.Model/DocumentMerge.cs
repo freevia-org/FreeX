@@ -644,10 +644,23 @@ public static class DocumentMerge
         if (sourceByTag.Count == 0)
             return;
 
-        var usedTags = target.Sources
-            .Select(entry => SourceTagIdentity.Canonicalize(entry.Tag))
-            .Where(tag => tag.Length > 0)
-            .ToHashSet(SourceTagIdentity.Comparer);
+        var usedTags = new HashSet<string>(SourceTagIdentity.Comparer);
+        var targetSourcesByTag = new Dictionary<string, List<Source>>(SourceTagIdentity.Comparer);
+        foreach (var entry in target.Sources)
+        {
+            var tag = SourceTagIdentity.Canonicalize(entry.Tag);
+            if (tag.Length == 0)
+                continue;
+
+            usedTags.Add(tag);
+            if (!targetSourcesByTag.TryGetValue(tag, out var matchingSources))
+            {
+                matchingSources = [];
+                targetSourcesByTag.Add(tag, matchingSources);
+            }
+
+            matchingSources.Add(entry);
+        }
         var mappings = new Dictionary<string, string>(SourceTagIdentity.Comparer);
 
         foreach (var run in paragraphs.SelectMany(paragraph => paragraph.Runs))
@@ -661,11 +674,8 @@ public static class DocumentMerge
 
             if (!mappings.TryGetValue(sourceTag, out var targetTag))
             {
-                var matchingTargetSources = target.Sources
-                    .Where(entry => SourceTagIdentity.Comparer.Equals(
-                        SourceTagIdentity.Canonicalize(entry.Tag),
-                        sourceTag))
-                    .ToList();
+                targetSourcesByTag.TryGetValue(sourceTag, out var matchingTargetSources);
+                matchingTargetSources ??= [];
                 var equivalent = matchingTargetSources.FirstOrDefault(entry => Citations.SameSource(entry, sourceEntry));
                 if (equivalent is not null)
                 {
@@ -674,13 +684,13 @@ public static class DocumentMerge
                 else if (matchingTargetSources.Count == 0)
                 {
                     targetTag = sourceTag;
-                    target.Sources.Add(sourceEntry.CloneWithTag(targetTag));
+                    AddTargetSource(sourceEntry.CloneWithTag(targetTag), targetTag);
                     usedTags.Add(targetTag);
                 }
                 else
                 {
                     targetTag = AllocateSourceTag(sourceTag, usedTags);
-                    target.Sources.Add(sourceEntry.CloneWithTag(targetTag));
+                    AddTargetSource(sourceEntry.CloneWithTag(targetTag), targetTag);
                 }
 
                 mappings[sourceTag] = targetTag;
@@ -688,6 +698,18 @@ public static class DocumentMerge
 
             if (!string.Equals(sourceTag, targetTag, StringComparison.Ordinal))
                 run.ComplexField = field with { Instruction = ComplexFieldEngine.ReplaceArgument(field.Instruction, targetTag) };
+        }
+
+        void AddTargetSource(Source entry, string tag)
+        {
+            target.Sources.Add(entry);
+            if (!targetSourcesByTag.TryGetValue(tag, out var matchingSources))
+            {
+                matchingSources = [];
+                targetSourcesByTag.Add(tag, matchingSources);
+            }
+
+            matchingSources.Add(entry);
         }
     }
 

@@ -22,10 +22,6 @@ public class FreeXR14T15Tests
     {
         WpfTestThread.Run(() =>
         {
-            var method = typeof(GridView).GetMethod(
-                "CalculateVisibleSingleCellSelectionLayout",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            method.Should().NotBeNull();
             var grid = new GridView();
 
             // Window > Split at column 4: columns 1-3 are pinned in the left pane
@@ -49,9 +45,7 @@ public class FreeXR14T15Tests
                 new CellAddress(columnSplitSheet, 2, 2),
                 new CellAddress(columnSplitSheet, 2, 2));
 
-            var b2Layout = (SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout?)method!.Invoke(
-                grid,
-                [columnSplitViewport, b2, GridView.RowHeaderWidth, GridView.ColHeaderHeight]);
+            var b2Layout = (SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout?)grid.CalculateVisibleSingleCellSelectionLayout(columnSplitViewport, b2, GridView.RowHeaderWidth, GridView.ColHeaderHeight);
 
             b2Layout.Should().NotBeNull(
                 "Excel keeps a selected cell's outline visible in a Window > Split fixed pane even after the scrollable pane scrolls past it");
@@ -79,9 +73,7 @@ public class FreeXR14T15Tests
                 new CellAddress(rowSplitSheet, 2, 1),
                 new CellAddress(rowSplitSheet, 2, 1));
 
-            var a2Layout = (SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout?)method.Invoke(
-                grid,
-                [rowSplitViewport, a2, GridView.RowHeaderWidth, GridView.ColHeaderHeight]);
+            var a2Layout = (SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout?)grid.CalculateVisibleSingleCellSelectionLayout(rowSplitViewport, a2, GridView.RowHeaderWidth, GridView.ColHeaderHeight);
 
             a2Layout.Should().NotBeNull(
                 "Excel keeps a selected cell's outline visible in a Window > Split top pane even after the scrollable pane scrolls past it");

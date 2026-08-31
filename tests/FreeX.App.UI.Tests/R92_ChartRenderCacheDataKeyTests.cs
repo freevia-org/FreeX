@@ -23,9 +23,7 @@ public sealed class R92_ChartRenderCacheDataKeyTests
     private static ImageSource? InvokeGetCachedChartImage(
         GridView grid, ChartModel chart, ViewportModel viewport, WorkbookTheme theme, double renderScale)
     {
-        var method = typeof(GridView).GetMethod("GetCachedChartImage", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        return (ImageSource?)method!.Invoke(grid, [chart, viewport, theme, renderScale]);
+        return (ImageSource?)grid.GetCachedChartImage(chart, viewport, theme, renderScale);
     }
 
     private static int GetChartRenderCacheCount(GridView grid)
@@ -38,10 +36,7 @@ public sealed class R92_ChartRenderCacheDataKeyTests
 
     private static long InvokeComputeChartDataFingerprint(ChartModel chart, ViewportModel viewport)
     {
-        var method = typeof(GridView).GetMethod(
-            "ComputeChartDataFingerprint", BindingFlags.Static | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        return (long)method!.Invoke(null, [chart, viewport])!;
+        return (long)GridView.ComputeChartDataFingerprint(chart, viewport)!;
     }
 
     private static DisplayCell Cell(uint row, uint col, string text) =>

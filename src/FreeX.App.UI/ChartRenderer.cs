@@ -77,7 +77,7 @@ public static partial class ChartRenderer
         return Math.Clamp(Math.Max(2.0, Math.Ceiling(renderScale)), 2.0, 4.0);
     }
 
-    private static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport) =>
+    internal static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport) =>
         BuildPlotModel(chart, viewport, WorkbookTheme.Office);
 
     /// <summary>
@@ -91,7 +91,7 @@ public static partial class ChartRenderer
     private static bool IsPieSliceExploded(ChartModel chart, int sliceIndex) =>
         ChartRenderPolicyPlanner.IsPieSliceExploded(chart, 0, sliceIndex);
 
-    private static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
+    internal static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
     {
         if (!ChartTypeSupport.IsRenderable(chart.Type))
             return null;

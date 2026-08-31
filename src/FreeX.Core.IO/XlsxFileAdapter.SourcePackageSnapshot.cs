@@ -316,6 +316,12 @@ public sealed partial class XlsxFileAdapter
         // Include ShownComments (pinned note state) so that a pin/unpin toggles the fingerprint,
         // forcing a full save rather than a source-copy that would silently preserve stale VML.
         WriteShownCommentsFingerprint(workbook, stream);
+        // round-176-drawing-hyperlink-persist: same reason as the two above -- a drawing object's
+        // DrawingObjectHyperlink is not part of the .fxl DTOs the NativeJsonAdapter fingerprint is
+        // built from, so an edit that changes ONLY a hyperlink (Insert/Remove Hyperlink on a shape,
+        // picture, text box or chart) left the fingerprint identical and took the source-copy path,
+        // which replays the original package bytes and silently discards the edit.
+        WriteDrawingObjectHyperlinkModelFingerprint(workbook, stream);
         stream.Flush();
         cryptoStream.FlushFinalBlock();
         return Convert.ToHexString(hash.Hash ?? []);
@@ -339,6 +345,35 @@ public sealed partial class XlsxFileAdapter
                 WriteFingerprintToken(stream, ":");
                 WriteFingerprintString(stream, author);
             }
+        }
+    }
+
+    /// <summary>
+    /// round-176-drawing-hyperlink-persist: every drawing object's object-level hyperlink, in model
+    /// order, so the whole-model fingerprint (which decides the "nothing changed -- copy the source
+    /// package byte for byte" fast path in <c>XlsxFileAdapter.Save</c>) can see a hyperlink-only edit.
+    /// Deliberately separate from <see cref="CreateDrawingModelFingerprint"/>, which answers the much
+    /// narrower question of whether a save may reuse the source package's DRAWING parts verbatim.
+    /// </summary>
+    private static void WriteDrawingObjectHyperlinkModelFingerprint(Workbook workbook, Stream stream)
+    {
+        WriteFingerprintToken(stream, "\nfreex-drawing-object-hyperlink-fingerprint-v1\n");
+        WriteFingerprintNumber(stream, workbook.Sheets.Count);
+        foreach (var sheet in workbook.Sheets)
+        {
+            WriteFingerprintToken(stream, "\nsheet:");
+            WriteFingerprintString(stream, sheet.Name);
+            foreach (var chart in sheet.Charts)
+                WriteDrawingObjectHyperlinkFingerprint(stream, chart.Hyperlink);
+            WriteFingerprintToken(stream, ";");
+            foreach (var picture in sheet.Pictures)
+                WriteDrawingObjectHyperlinkFingerprint(stream, picture.Hyperlink);
+            WriteFingerprintToken(stream, ";");
+            foreach (var textBox in sheet.TextBoxes)
+                WriteDrawingObjectHyperlinkFingerprint(stream, textBox.Hyperlink);
+            WriteFingerprintToken(stream, ";");
+            foreach (var shape in sheet.DrawingShapes)
+                WriteDrawingObjectHyperlinkFingerprint(stream, shape.Hyperlink);
         }
     }
 

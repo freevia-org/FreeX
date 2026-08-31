@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -321,6 +322,58 @@ public sealed class R112_ChartVerbatimSeriesFormulasNamedRangeTests
         reloadedChart.EmbeddedSeriesData.Should().NotBeNull();
         reloadedChart.EmbeddedSeriesData!.Single(d => d.SeriesIndex == 0).SeriesName.Should().Be("SeriesX",
             "the series' own cached name (from <cx:tx>/<cx:txData>/<cx:v>) must still be captured");
+    }
+
+    [Fact]
+    public void BoxAndWhiskerChart_DenseVerbatimTitles_KeepFirstDuplicateFormulaAndCachedName()
+    {
+        var workbook = new Workbook("DenseVerbatimChartExTitles");
+        var sheet = workbook.AddSheet("Data");
+        var verbatimFormulas = new List<ChartSeriesVerbatimFormulas>();
+        var embeddedSeries = new List<ChartEmbeddedSeriesData>();
+        var chart = new ChartModel
+        {
+            Type = ChartType.BoxAndWhisker,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            FirstRowIsHeader = true,
+            FirstColIsCategories = false,
+            VerbatimSeriesFormulas = verbatimFormulas,
+            EmbeddedSeriesData = embeddedSeries
+        };
+
+        for (var seriesIndex = 0; seriesIndex < 48; seriesIndex++)
+        {
+            verbatimFormulas.Add(new ChartSeriesVerbatimFormulas(
+                seriesIndex, $"'Data'!rngValue{seriesIndex}", null, $"'Data'!rngTitle{seriesIndex}"));
+            embeddedSeries.Add(new ChartEmbeddedSeriesData(
+                seriesIndex, $"Series {seriesIndex}", [], []));
+        }
+
+        // FirstOrDefault previously selected these first entries. The indexed writer must keep that
+        // duplicate behavior instead of allowing later source entries to replace the title payload.
+        verbatimFormulas.Add(new ChartSeriesVerbatimFormulas(
+            0, "'Data'!rngDuplicateValue", null, "'Data'!rngDuplicateTitle"));
+        embeddedSeries.Add(new ChartEmbeddedSeriesData(0, "Duplicate Series", [], []));
+
+        var series = BuildChartExPrimarySeries(chart, sheet, dataCount: 48);
+
+        series.Should().HaveCount(48);
+        var firstTitle = series[0].Element(ChartExNs + "tx")!.Element(ChartExNs + "txData")!;
+        firstTitle.Element(ChartExNs + "f")!.Value.Should().Be("'Data'!rngTitle0");
+        firstTitle.Element(ChartExNs + "v")!.Value.Should().Be("Series 0");
+
+        var finalTitle = series[47].Element(ChartExNs + "tx")!.Element(ChartExNs + "txData")!;
+        finalTitle.Element(ChartExNs + "f")!.Value.Should().Be("'Data'!rngTitle47");
+        finalTitle.Element(ChartExNs + "v")!.Value.Should().Be("Series 47");
+    }
+
+    private static List<XElement> BuildChartExPrimarySeries(ChartModel chart, Sheet sheet, int dataCount)
+    {
+        var buildSeries = typeof(FreeX.Core.IO.XlsxChartXmlWriter).GetMethod(
+            "BuildChartExSeries",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        var series = (IEnumerable<XElement>)buildSeries.Invoke(null, [chart, sheet, ChartExNs, dataCount])!;
+        return series.ToList();
     }
 
     private static byte[] SaveThreeDColumnHeaderedTwoSeriesChart()

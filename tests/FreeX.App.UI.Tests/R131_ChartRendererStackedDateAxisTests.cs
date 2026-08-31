@@ -28,12 +28,7 @@ public sealed class R131_ChartRendererStackedDateAxisTests
 
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport)
     {
-        var method = typeof(ChartRenderer).GetMethod(
-            "BuildPlotModel",
-            BindingFlags.NonPublic | BindingFlags.Static,
-            [typeof(ChartModel), typeof(ViewportModel)]);
-        method.Should().NotBeNull();
-        return method!.Invoke(null, [chart, viewport]).Should().BeOfType<PlotModel>().Subject;
+        return ChartRenderer.BuildPlotModel(chart, viewport).Should().BeOfType<PlotModel>().Subject;
     }
 
     private static ViewportModel BuildDateViewport(SheetId sheetId) => new(

@@ -1082,7 +1082,7 @@ public partial class GridView
         }
     }
 
-    private void DrawCellSurface(
+    internal void DrawCellSurface(
         DrawingContext dc,
         Rect rect,
         CellStyle? bg,
@@ -1185,7 +1185,7 @@ public partial class GridView
     private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);
     private static readonly IReadOnlyList<RenderBorderCell> EmptyRenderBorderCells = Array.Empty<RenderBorderCell>();
 
-    private static (Dictionary<(uint Row, uint Col), CellStyle> Styles,
+    internal static (Dictionary<(uint Row, uint Col), CellStyle> Styles,
         Dictionary<(uint Row, uint Col), CellStyle> BorderStyles,
         IReadOnlyList<RenderBorderCell> BorderCells) BuildRenderCellLookups(
         IReadOnlyList<DisplayCell> cells,
@@ -1235,7 +1235,7 @@ public partial class GridView
         return lookup;
     }
 
-    private Dictionary<(uint Row, uint Col), CellStyle>? GetSplitPaneBorderStyleLookup(
+    internal Dictionary<(uint Row, uint Col), CellStyle>? GetSplitPaneBorderStyleLookup(
         IReadOnlyList<DisplayCell> cells)
     {
         if (_splitPaneBorderLookupCache is { } cached && ReferenceEquals(cached.Cells, cells))
@@ -1246,7 +1246,7 @@ public partial class GridView
         return borderStyles;
     }
 
-    private RenderCellLookupCache GetRenderCellLookups(ViewportModel viewport)
+    internal RenderCellLookupCache GetRenderCellLookups(ViewportModel viewport)
     {
         if (_renderCellLookupCache is { } cached &&
             ReferenceEquals(cached.Cells, viewport.Cells) &&
@@ -1289,7 +1289,7 @@ public partial class GridView
         return lookups;
     }
 
-    private HashSet<(uint Row, uint Col)> GetOccupiedCellLookup(ViewportModel viewport, CellAddress? editingCell)
+    internal HashSet<(uint Row, uint Col)> GetOccupiedCellLookup(ViewportModel viewport, CellAddress? editingCell)
     {
         if (_occupiedCellLookupCache is { } cached &&
             ReferenceEquals(cached.Cells, viewport.Cells) &&
@@ -1399,7 +1399,7 @@ public partial class GridView
         return lookup;
     }
 
-    private void DrawCommentIndicator(DrawingContext dc, Rect rect, CellCommentDisplayKind kind) =>
+    internal void DrawCommentIndicator(DrawingContext dc, Rect rect, CellCommentDisplayKind kind) =>
         dc.DrawGeometry(CommentIndicatorBrush(kind), null, GetCommentIndicatorGeometry(rect));
 
     /// <summary>

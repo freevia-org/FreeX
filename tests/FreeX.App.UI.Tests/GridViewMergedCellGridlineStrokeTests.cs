@@ -51,13 +51,11 @@ public sealed class GridViewMergedCellGridlineStrokeTests
             var grid = new GridView { ShowGridLines = showGridLines };
             var rect = new Rect(0, 0, Width, Height);
 
-            var method = typeof(GridView).GetMethod("DrawCellSurface", BindingFlags.NonPublic | BindingFlags.Instance);
-            method.Should().NotBeNull();
 
             var visual = new DrawingVisual();
             using (var dc = visual.RenderOpen())
             {
-                method!.Invoke(grid, [dc, rect, bg, isMerged, 0.0, 0.0, (double)Width, (double)Height]);
+                grid.DrawCellSurface(dc, rect, bg, isMerged, 0.0, 0.0, (double)Width, (double)Height);
             }
 
             var bitmap = new RenderTargetBitmap(Width, Height, 96, 96, PixelFormats.Pbgra32);

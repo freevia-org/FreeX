@@ -133,6 +133,43 @@ public class DocumentMergeTests
     }
 
     [Fact]
+    public void Merge_DenseCitationTagCollisionsReuseOneCanonicalTargetIndex()
+    {
+        const int count = 256;
+        var source = new TextDocument();
+        var target = new TextDocument();
+        for (var index = 0; index < count; index++)
+        {
+            var tag = "Source" + index;
+            source.Sources.Add(new Source { Tag = tag, Author = "Source author " + index, Title = "Source title " + index });
+            target.Sources.Add(new Source { Tag = tag, Author = "Target author " + index, Title = "Target title " + index });
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.ComplexFieldRun(" CITATION " + tag + " ", "[stale]"));
+            source.Blocks.Add(paragraph);
+        }
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        target.Sources.Should().HaveCount(count * 2);
+        target.Sources.Skip(count).Select(entry => entry.Tag)
+            .Should().Equal(Enumerable.Range(0, count).Select(index => "Source" + index + "_FreeW1"));
+        inserted.Cast<Paragraph>().Select(paragraph => ComplexFieldEngine.Argument(paragraph.Runs.Single().ComplexField!.Instruction))
+            .Should().Equal(Enumerable.Range(0, count).Select(index => "Source" + index + "_FreeW1"));
+        source.Sources.Should().HaveCount(count);
+    }
+
+    [Fact]
+    public void Merge_SourceGuardIndexesTargetCitationSourcesByCanonicalTag()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.Model", "DocumentMerge.cs");
+
+        source.Should().Contain("var targetSourcesByTag = new Dictionary<string, List<Source>>(SourceTagIdentity.Comparer);")
+            .And.Contain("targetSourcesByTag.TryGetValue(sourceTag, out var matchingTargetSources)")
+            .And.Contain("AddTargetSource(sourceEntry.CloneWithTag(targetTag), targetTag)")
+            .And.NotContain("var matchingTargetSources = target.Sources");
+    }
+
+    [Fact]
     public void Merge_TransfersSectionBreakHeadersAndStyles_WithoutAliasingTheSource()
     {
         var source = new TextDocument();

@@ -959,7 +959,7 @@ public partial class GridView : FrameworkElement
         return pen;
     }
 
-    private static int GetMarchingAntsPhase(double offset)
+    internal static int GetMarchingAntsPhase(double offset)
     {
         var phase = (int)Math.Round(offset * 2, MidpointRounding.AwayFromZero) % MarchingAntsPhaseCount;
         return phase < 0 ? phase + MarchingAntsPhaseCount : phase;

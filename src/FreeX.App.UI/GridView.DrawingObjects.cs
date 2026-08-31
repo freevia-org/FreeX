@@ -971,7 +971,7 @@ public partial class GridView
     private static string FormatTimelineRange(TimelineModel timeline)
         => GridDrawingObjectPlanner.FormatTimelineRange(timeline);
 
-    private Brush CreateDrawingShapeFill(DrawingShapeRenderMetadata metadata)
+    internal Brush CreateDrawingShapeFill(DrawingShapeRenderMetadata metadata)
     {
         if (metadata.FillGradient is { } gradient)
             return GetDrawingObjectGradientBrush(metadata.Paint.Fill, gradient.EndColor, gradient.Direction);
@@ -1090,7 +1090,7 @@ public partial class GridView
         }
     }
 
-    private void DrawShapeThreeDRotationEffect(
+    internal void DrawShapeThreeDRotationEffect(
         DrawingContext dc,
         DrawingShapeKind kind,
         Rect rect,
@@ -1136,7 +1136,7 @@ public partial class GridView
         dc.DrawGeometry(brush, pen, geometry);
     }
 
-    private void DrawShapeAuthoredBevelEffect(
+    internal void DrawShapeAuthoredBevelEffect(
         DrawingContext dc,
         DrawingShapeKind kind,
         Rect rect,
@@ -1226,7 +1226,7 @@ public partial class GridView
         DrawShapeGeometry(dc, kind, effectRect, null, pen);
     }
 
-    private void DrawShapeReflectionEffect(
+    internal void DrawShapeReflectionEffect(
         DrawingContext dc,
         DrawingShapeKind kind,
         Rect rect,
@@ -1413,9 +1413,9 @@ public partial class GridView
     /// body upright and readable, so the flip's <see cref="ScaleTransform"/> must not be active
     /// while text glyphs are drawn, while the rotation should still apply to the text like Excel.
     /// </summary>
-    private readonly record struct DrawingObjectTransformState(bool HasRotation, bool HasFlip);
+    internal readonly record struct DrawingObjectTransformState(bool HasRotation, bool HasFlip);
 
-    private static DrawingObjectTransformState PushDrawingObjectTransform(
+    internal static DrawingObjectTransformState PushDrawingObjectTransform(
         DrawingContext dc,
         double rotationDegrees,
         bool flipHorizontal,
@@ -1451,7 +1451,7 @@ public partial class GridView
     /// transform active. Call before drawing shape/text-box text so the text stays upright/mirror-free
     /// under a flip while still following the shape's rotation, matching Excel.
     /// </summary>
-    private static void PopDrawingObjectFlipTransform(DrawingContext dc, ref DrawingObjectTransformState state)
+    internal static void PopDrawingObjectFlipTransform(DrawingContext dc, ref DrawingObjectTransformState state)
     {
         if (!state.HasFlip)
             return;
@@ -1460,7 +1460,7 @@ public partial class GridView
         state = state with { HasFlip = false };
     }
 
-    private static void PopDrawingObjectTransform(DrawingContext dc, DrawingObjectTransformState state)
+    internal static void PopDrawingObjectTransform(DrawingContext dc, DrawingObjectTransformState state)
     {
         if (state.HasFlip)
             dc.Pop();
@@ -1884,7 +1884,7 @@ public partial class GridView
     /// For WordArt shapes, draws styled text with a gradient fill and/or text outline;
     /// warp presets are preserved but rendered flat (deferred).
     /// </summary>
-    private void DrawShapeText(DrawingContext dc, DrawingShapeModel shape, Rect rect, double pixelsPerDip)
+    internal void DrawShapeText(DrawingContext dc, DrawingShapeModel shape, Rect rect, double pixelsPerDip)
     {
         const double ShapeTextHPad = 4;
         const double ShapeTextVPad = 2;
