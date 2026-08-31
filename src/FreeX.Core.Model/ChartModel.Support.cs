@@ -334,6 +334,15 @@ public sealed class ChartDataTableModel
     public WorkbookThemeColorReference? TextThemeColor { get; set; }
     public double? FontSize { get; set; }
 
+    public CellColor? ResolveFillColor(WorkbookTheme theme) =>
+        FillThemeColor?.Resolve(theme) ?? FillColor;
+
+    public CellColor? ResolveBorderColor(WorkbookTheme theme) =>
+        BorderThemeColor?.Resolve(theme) ?? BorderColor;
+
+    public CellColor? ResolveTextColor(WorkbookTheme theme) =>
+        TextThemeColor?.Resolve(theme) ?? TextColor;
+
     /// <summary>Creates an independent data-table formatting model with identical settings.</summary>
     public ChartDataTableModel Clone() => new()
     {
