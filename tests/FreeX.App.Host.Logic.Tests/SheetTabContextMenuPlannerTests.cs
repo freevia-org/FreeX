@@ -5,7 +5,7 @@ namespace FreeX.App.Host.Tests;
 public sealed class SheetTabContextMenuPlannerTests
 {
     [Fact]
-    public void BuildSheetTabCommands_HasSeparatorsBetweenLogicalGroups()
+    public void BuildSheetTabCommands_DefaultCompositionUsesExcelLabelsAndOmitsUngroupWhenNotGrouped()
     {
         var commands = SheetTabContextMenuPlanner.BuildSheetTabCommands();
 
@@ -28,8 +28,7 @@ public sealed class SheetTabContextMenuPlannerTests
             "Hide",
             "Unhide",
             "—",
-            "SelectAllSheets",
-            "UngroupSheets");
+            "SelectAllSheets");
     }
 
     [Fact]
@@ -40,8 +39,8 @@ public sealed class SheetTabContextMenuPlannerTests
             .ToList();
 
         commands.Select(command => command.ResourceKey).Should().Equal(
-            "MainWindow_Header_InsertSheet",
-            "MainWindow_Header_DeleteSheet",
+            "Common_Insert",
+            "MainWindow_Content_Delete",
             "MainWindow_Header_Rename",
             "MainWindow_Header_MoveOrCopy",
             "MainWindow_Header_ViewCode",
@@ -49,15 +48,14 @@ public sealed class SheetTabContextMenuPlannerTests
             "MainWindow_Header_TabColor",
             "MainWindow_Header_Hide",
             "MainWindow_Header_Unhide",
-            "MainWindow_Header_SelectAllSheets",
-            "MainWindow_Header_UngroupSheets");
+            "MainWindow_Header_SelectAllSheets");
 
         commands.Select(command => command.KeyTip).Should().Equal(
-            "I", "E", "R", "M", "V", "P", "T", "H", "U", "A", "G");
+            "I", "E", "R", "M", "V", "P", "T", "H", "U", "A");
 
         commands.Select(command => command.CommandName).Should().Equal(
-            "Insert Sheet",
-            "Delete Sheet",
+            "Insert",
+            "Delete",
             "Rename",
             "Move or Copy",
             "View Code",
@@ -65,8 +63,7 @@ public sealed class SheetTabContextMenuPlannerTests
             "Tab Color",
             "Hide",
             "Unhide",
-            "Select All Sheets",
-            "Ungroup Sheets");
+            "Select All Sheets");
     }
 
     [Fact]
@@ -83,7 +80,7 @@ public sealed class SheetTabContextMenuPlannerTests
     }
 
     [Fact]
-    public void BuildSheetTabCommands_DisablesWorkbookStateDependentRowsWithoutHidingThem()
+    public void BuildSheetTabCommands_OmitsUngroupRatherThanShowingANonActionableRow()
     {
         var commands = SheetTabContextMenuPlanner.BuildSheetTabCommands(
                 new SheetTabContextMenuState(
@@ -105,16 +102,14 @@ public sealed class SheetTabContextMenuPlannerTests
             SheetTabContextMenuAction.TabColor,
             SheetTabContextMenuAction.Hide,
             SheetTabContextMenuAction.Unhide,
-            SheetTabContextMenuAction.SelectAllSheets,
-            SheetTabContextMenuAction.UngroupSheets);
+            SheetTabContextMenuAction.SelectAllSheets);
 
         commands.Where(command => command.Action is
                 SheetTabContextMenuAction.DeleteSheet or
                 SheetTabContextMenuAction.ViewCode or
                 SheetTabContextMenuAction.Hide or
                 SheetTabContextMenuAction.Unhide or
-                SheetTabContextMenuAction.SelectAllSheets or
-                SheetTabContextMenuAction.UngroupSheets)
+                SheetTabContextMenuAction.SelectAllSheets)
             .Should()
             .OnlyContain(command => !command.IsEnabled);
         commands.Where(command => command.Action is
@@ -125,6 +120,19 @@ public sealed class SheetTabContextMenuPlannerTests
                 SheetTabContextMenuAction.TabColor)
             .Should()
             .OnlyContain(command => command.IsEnabled);
+    }
+
+    [Fact]
+    public void BuildSheetTabCommands_OnlyAddsUngroupWhenTheWorkbookIsGrouped()
+    {
+        SheetTabContextMenuPlanner.BuildSheetTabCommands(
+                new SheetTabContextMenuState(CanUngroupSheets: true))
+            .Select(command => command.Action)
+            .Should().Contain(SheetTabContextMenuAction.UngroupSheets);
+
+        SheetTabContextMenuPlanner.BuildSheetTabCommands()
+            .Select(command => command.Action)
+            .Should().NotContain(SheetTabContextMenuAction.UngroupSheets);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -17,17 +18,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace FreeX.App.Host.Tests;
 
 /// <summary>
-/// freex-subtotals-outline-F2: the WPF host had no UI path to Data &gt; Outline &gt; Settings at all --
-/// no sheet-tab context-menu entry, no ribbon command, nothing anywhere under FreeX.App.Host ever
-/// constructed SetWorksheetOutlineSettingsCommand (a full source-tree grep returned zero hits) --
-/// even though the Avalonia shell already exposes it from the identical sheet-tab right-click menu
-/// (FreeX.App.Avalonia/MainWindow.cs:4523, MainWindow.Outline.cs's ShowOutlineSettingsDialogAsync).
-/// These tests drive the real right-click -&gt; context-menu -&gt; dialog -&gt; command path end to end.
+/// Covers the WPF Outline Settings dialog's command path independently of sheet-tab composition.
+/// Sheet tabs intentionally omit this non-Excel command; the dialog still must apply and cancel
+/// per-sheet settings correctly when opened by its owning feature surface.
 /// </summary>
 public sealed class R153_SheetTabOutlineSettingsMenuTests
 {
     [Fact]
-    public void SheetTabContextMenu_OutlineSettingsItem_AppliesChosenSettingsToRightClickedSheetOnly()
+    public void OutlineSettingsDialog_AppliesChosenSettingsToRequestedSheetOnly()
     {
         StaTestRunner.Run(() =>
         {
@@ -70,7 +68,7 @@ public sealed class R153_SheetTabOutlineSettingsMenuTests
     }
 
     [Fact]
-    public void SheetTabContextMenu_OutlineSettingsCancel_LeavesSheetOutlineSettingsUnchanged()
+    public void OutlineSettingsDialog_Cancel_LeavesSheetOutlineSettingsUnchanged()
     {
         // Sibling no-regression case: dismissing the dialog via Cancel must not issue the
         // (undoable) SetWorksheetOutlineSettingsCommand at all, mirroring Avalonia's
@@ -139,45 +137,17 @@ public sealed class R153_SheetTabOutlineSettingsMenuTests
         }
 
         /// <summary>
-        /// Right-clicks the named sheet tab (the real MouseRightButtonDown -&gt; context-menu-open
-        /// path via RaiseSheetTabRightClickForTest), locates the "Outline Settings..." item by its
-        /// localized header, and clicks it. That click synchronously opens a genuinely modal dialog
-        /// via ShowDialog(); while it blocks and pumps the dispatcher, a queued callback finds it
-        /// through the owner window's OwnedWindows (matched by its AutomationId, no test-only seam
-        /// in production code), lets <paramref name="interact"/> drive it, and closes it.
+        /// Opens the retained Outline Settings dialog for the named sheet. Sheet-tab menus deliberately
+        /// do not expose this non-Excel command; while the modal dialog blocks and pumps the dispatcher,
+        /// a queued callback finds it through the owner window's OwnedWindows (matched by its
+        /// AutomationId, no test-only seam in production code), lets <paramref name="interact"/> drive
+        /// it, and closes it.
         /// </summary>
         public void OpenOutlineSettingsDialogFromSheetTabContextMenu(string sheetName, Action<Window> interact)
         {
-            var initialTarget = SheetTabTarget(sheetName);
-            var mouseArgs = new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Right)
-            {
-                RoutedEvent = UIElement.MouseRightButtonDownEvent,
-                Source = initialTarget
-            };
-            _window.RaiseSheetTabRightClickForTest(initialTarget, mouseArgs);
-            _window.UpdateLayout();
-            PumpDispatcher();
-
-            // SheetTab_MouseRightButtonDown calls RefreshSheetTabs(), which Clear()s/re-Add()s the
-            // ObservableCollection the tab strip is bound to -- WPF regenerates every container from
-            // that Reset, so the pre-click element is stale; re-resolve it now that it is current.
             var target = SheetTabTarget(sheetName);
-            var contextMenu = target.ContextMenu
-                ?? throw new InvalidOperationException($"Sheet tab '{sheetName}' has no context menu.");
-            // Mirrors what the real WPF context-menu-open pipeline sets (and what the keyboard route,
-            // TryOpenFocusedSheetTabContextMenu, sets explicitly): GetContextMenuTab(sender) resolves
-            // the right-clicked tab via ContextMenu.PlacementTarget, which only a genuine popup-open
-            // assigns -- so it must be set here too, or every click handler sees a null tab.
-            contextMenu.PlacementTarget = target;
-            var menuItem = contextMenu.Items
-                .OfType<MenuItem>()
-                .FirstOrDefault(item => string.Equals(
-                    item.Header?.ToString(),
-                    UiText.Get("OutlineSettings_MenuItem"),
-                    StringComparison.Ordinal))
-                ?? throw new InvalidOperationException(
-                    "No 'Outline Settings...' item on the WPF sheet-tab context menu -- freex-subtotals-outline-F2 regressed.");
-            menuItem.IsEnabled.Should().BeTrue("Outline Settings has no workbook-state gating, unlike Delete/Hide/etc.");
+            var tab = target.DataContext as SheetTabViewModel
+                ?? throw new InvalidOperationException($"Sheet tab '{sheetName}' has no view model.");
 
             _window.Dispatcher.BeginInvoke(new Action(() =>
             {
@@ -198,7 +168,11 @@ public sealed class R153_SheetTabOutlineSettingsMenuTests
                     dialog.Close();
             }), DispatcherPriority.ApplicationIdle);
 
-            menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            var showDialog = typeof(MainWindow).GetMethod(
+                "ShowOutlineSettingsDialog",
+                BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("Outline Settings dialog entry point not found.");
+            showDialog.Invoke(_window, [tab.Id]);
             PumpDispatcher();
         }
 

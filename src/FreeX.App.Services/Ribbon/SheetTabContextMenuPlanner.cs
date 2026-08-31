@@ -29,8 +29,8 @@ public static class SheetTabContextMenuPlanner
         state ??= SheetTabContextMenuState.Default;
 
         return Freeze([
-            new("MainWindow_Header_InsertSheet", SheetTabContextMenuAction.InsertSheet, KeyTip: "I", CommandName: "Insert Sheet", IsEnabled: state.CanInsertSheet),
-            new("MainWindow_Header_DeleteSheet", SheetTabContextMenuAction.DeleteSheet, KeyTip: "E", CommandName: "Delete Sheet", IsEnabled: state.CanDeleteSheet),
+            new("Common_Insert", SheetTabContextMenuAction.InsertSheet, KeyTip: "I", CommandName: "Insert", IsEnabled: state.CanInsertSheet),
+            new("MainWindow_Content_Delete", SheetTabContextMenuAction.DeleteSheet, KeyTip: "E", CommandName: "Delete", IsEnabled: state.CanDeleteSheet),
             new("MainWindow_Header_Rename", SheetTabContextMenuAction.Rename, KeyTip: "R", CommandName: "Rename", IsEnabled: state.CanRename),
             new("MainWindow_Header_MoveOrCopy", SheetTabContextMenuAction.MoveOrCopy, KeyTip: "M", CommandName: "Move or Copy", IsEnabled: state.CanMoveOrCopy),
             SheetTabContextMenuCommand.Separator,
@@ -42,7 +42,9 @@ public static class SheetTabContextMenuPlanner
             new("MainWindow_Header_Unhide", SheetTabContextMenuAction.Unhide, KeyTip: "U", CommandName: "Unhide", IsEnabled: state.CanUnhideSheet),
             SheetTabContextMenuCommand.Separator,
             new("MainWindow_Header_SelectAllSheets", SheetTabContextMenuAction.SelectAllSheets, KeyTip: "A", CommandName: "Select All Sheets", IsEnabled: state.CanSelectAllSheets),
-            new("MainWindow_Header_UngroupSheets", SheetTabContextMenuAction.UngroupSheets, KeyTip: "G", CommandName: "Ungroup Sheets", IsEnabled: state.CanUngroupSheets)
+            .. (state.CanUngroupSheets
+                ? new[] { new SheetTabContextMenuCommand("MainWindow_Header_UngroupSheets", SheetTabContextMenuAction.UngroupSheets, KeyTip: "G", CommandName: "Ungroup Sheets") }
+                : Array.Empty<SheetTabContextMenuCommand>())
         ]);
     }
 
@@ -71,7 +73,7 @@ public sealed record SheetTabContextMenuState(
     bool CanHideSheet = true,
     bool CanUnhideSheet = true,
     bool CanSelectAllSheets = true,
-    bool CanUngroupSheets = true,
+    bool CanUngroupSheets = false,
     // R139-workbook-protection: these three commands previously had no enablement wiring at all
     // (always rendered enabled) so neither workbook-structure protection nor an individually-
     // protected target sheet ever grayed them out, unlike CanDeleteSheet/CanHideSheet above.

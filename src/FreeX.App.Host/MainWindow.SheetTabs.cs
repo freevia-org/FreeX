@@ -1483,20 +1483,8 @@ public partial class MainWindow
     {
         menu.Items.Clear();
         var state = BuildSheetTabContextMenuState(tab);
-        var outlineSettingsInserted = false;
         foreach (var command in SheetTabContextMenuPlanner.BuildSheetTabCommands(state))
         {
-            // freex-subtotals-outline-F2: the shared SheetTabContextMenuPlanner has no entry for
-            // Data > Outline > Settings, so splice it in ourselves right where the Avalonia shell's
-            // own hand-built sheet-tab menu places it (FreeX.App.Avalonia/MainWindow.cs) -- between
-            // the Tab Color/Hide/Unhide block and Select All Sheets/Ungroup Sheets. The separator the
-            // planner already emits before SelectAllSheets becomes the separator before this item; we
-            // only need to add the item itself plus a trailing separator.
-            if (!outlineSettingsInserted && command.Action == SheetTabContextMenuAction.SelectAllSheets)
-            {
-                AddOutlineSettingsContextMenuItem(menu.Items);
-                outlineSettingsInserted = true;
-            }
             AddSheetTabContextMenuItem(menu.Items, command);
         }
 
@@ -1510,22 +1498,6 @@ public partial class MainWindow
     {
         foreach (var item in menu.Items.OfType<MenuItem>())
             item.InputGestureText = string.Empty;
-    }
-
-    // freex-subtotals-outline-F2: WPF host mirror of the Avalonia shell's "Outline Settings..." sheet-tab
-    // context menu item (FreeX.App.Avalonia/MainWindow.cs:4523,
-    // FreeX.App.Avalonia/MainWindow.Outline.cs:ShowOutlineSettingsDialogAsync). Reuses the same neutral
-    // "OutlineSettings_MenuItem" resx key Avalonia already localizes, so this adds no new resource.
-    private void AddOutlineSettingsContextMenuItem(ItemCollection target)
-    {
-        var menuItem = new MenuItem
-        {
-            Header = UiText.Get("OutlineSettings_MenuItem"),
-            IsEnabled = true
-        };
-        menuItem.Click += (clickSender, clickArgs) => SheetCtxOutlineSettings_Click(clickSender, clickArgs);
-        target.Add(menuItem);
-        target.Add(new Separator());
     }
 
     private SheetTabContextMenuState BuildSheetTabContextMenuState(SheetTabViewModel? tab)
