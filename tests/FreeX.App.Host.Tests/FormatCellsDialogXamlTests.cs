@@ -74,7 +74,7 @@ public sealed partial class FormatCellsDialogXamlTests
         xaml.Should().Contain("SystemColors.HighlightTextBrushKey");
         xaml.Should().Contain("x:Name=\"NumberPreview\" FontWeight=\"Bold\"");
         xaml.Should().Contain("<StackPanel Grid.Column=\"1\" Width=\"330\" HorizontalAlignment=\"Left\">");
-        xaml.Should().Contain("Width=\"94\"");
+        xaml.Should().Contain("<Border x:Name=\"NumberPreviewBorder\"");
         xaml.Should().Contain("Height=\"36\"");
         xaml.Should().Contain("x:Name=\"NumberGeneralDescription\"");
     }
@@ -86,6 +86,36 @@ public sealed partial class FormatCellsDialogXamlTests
 
         xaml.Should().Contain("Width=\"74\" Height=\"24\" Margin=\"5,0,0,0\" IsDefault=\"True\"");
         xaml.Should().Contain("Width=\"74\" Height=\"24\" Margin=\"8,0,0,0\" IsCancel=\"True\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_UsesCompactFrameExceptForFixedBorderEditor()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var tabs = GetControl<TabControl>(dialog, "Tabs");
+
+                dialog.Width.Should().BeApproximately(550, 0.5);
+                dialog.Height.Should().BeApproximately(510, 0.5);
+
+                tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
+                PumpDispatcher();
+                dialog.Width.Should().BeApproximately(620, 0.5);
+                dialog.Height.Should().BeApproximately(540, 0.5);
+
+                tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;
+                PumpDispatcher();
+                dialog.Width.Should().BeApproximately(550, 0.5);
+                dialog.Height.Should().BeApproximately(510, 0.5);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
