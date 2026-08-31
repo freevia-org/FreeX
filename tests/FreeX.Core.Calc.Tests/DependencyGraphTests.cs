@@ -313,12 +313,7 @@ public class DependencyGraphTests
         var a1 = new CellAddress(sheet, 1, 1);
         var b1 = new CellAddress(sheet, 1, 2);
         var owned = new HashSet<CellAddress> { a1 };
-        var helper = typeof(DependencyGraph).GetMethod(
-            "SetDependenciesFromOwnedSet",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-
-        helper.Should().NotBeNull("RecalcEngine should have an owned HashSet path for formula dependencies");
-        helper!.Invoke(graph, [b1, owned]);
+        graph.SetDependenciesFromOwnedSet(b1, owned);
 
         graph.GetDirectPrecedents(b1).Should().BeSameAs(owned);
         graph.GetDirectDependents(a1).Should().Contain(b1);
