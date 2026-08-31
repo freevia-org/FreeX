@@ -17,9 +17,11 @@ public sealed class StatusBarFocusNavigationSourceGuardTests
         plannerSource.Should().NotContain("System.Windows.Input");
 
         hostSource.Should().Contain("StatusBarFocusNavigationPlanner.BuildKeyboardNavigationPlan(");
-        hostSource.Should().Contain("StatusBarFocusNavigationPlanner.BuildInitialFocusOrder(");
+        hostSource.Should().Contain("FocusStatusMode()");
+        hostSource.Should().Contain("TryFocusElement(StatusModeFocusTarget)");
         hostSource.Should().Contain("Keyboard.Focus(control)");
         hostSource.Should().Contain("FocusManager.SetFocusedElement");
+        hostSource.Should().NotContain("StatusBarFocusNavigationPlanner.BuildInitialFocusOrder(");
         hostSource.Should().NotContain("GetStatusBarFocusOrder");
         hostSource.Should().NotContain("TryMoveStatusBarFocus");
         hostSource.Should().NotContain("FindStatusBarFocusIndex");

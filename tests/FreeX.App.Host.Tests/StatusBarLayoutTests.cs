@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -385,6 +386,9 @@ public sealed class StatusBarLayoutTests
             harness.CycleShellFocus(reverse: false);
             harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.SheetTabs);
             harness.FocusedSheetTabName.Should().Be("Sheet1");
+            harness.FocusedElementName.Should().Be("SheetTabFocusTarget");
+            harness.FocusedElementAutomationId.Should().Be("Sheet1");
+            harness.FocusedElementHasAutomationPeer.Should().BeTrue();
 
             harness.CycleShellFocus(reverse: false);
             harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.FormulaBar);
@@ -396,6 +400,8 @@ public sealed class StatusBarLayoutTests
             harness.FocusedElementName.Should().Be("StatusModeFocusTarget");
             harness.FocusedElementAutomationId.Should().Be("StatusCellMode");
             harness.FocusedElementAutomationName.Should().Be("Cell Mode Ready");
+            harness.Window.FindName("StatusModeFocusTarget").Should().BeOfType<Button>();
+            harness.FocusedElementHasAutomationPeer.Should().BeTrue();
 
             harness.CycleShellFocus(reverse: false);
             harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.Ribbon);
@@ -536,6 +542,11 @@ public sealed class StatusBarLayoutTests
             Keyboard.FocusedElement is DependencyObject element
                 ? AutomationProperties.GetName(element)
                 : string.Empty;
+
+        public bool FocusedElementHasAutomationPeer =>
+            Keyboard.FocusedElement is UIElement element &&
+            (UIElementAutomationPeer.FromElement(element) ??
+             UIElementAutomationPeer.CreatePeerForElement(element)) is not null;
 
         public string? FocusedRibbonTabHeader =>
             _window.FindName("RibbonTabs") is TabControl { SelectedItem: TabItem tab }
