@@ -174,10 +174,10 @@ public sealed partial class FormatCellsDialogXamlTests
         xaml.ShouldContainLocalizedAttribute("Content", "_Category:");
         xaml.Should().Contain("Target=\"{Binding ElementName=NumberCategoryList}\"");
         xaml.Should().Contain("Text=\"Sample\"");
-        xaml.Should().Contain("Width=\"620\" Height=\"540\"");
+        xaml.Should().Contain("Width=\"550\" Height=\"510\"");
         xaml.Should().Contain("Height=\"278\"");
         xaml.Should().Contain("<StackPanel Grid.Column=\"1\" Width=\"330\" HorizontalAlignment=\"Left\">");
-        xaml.Should().Contain("Width=\"94\"");
+        xaml.Should().Contain("<Border x:Name=\"NumberPreviewBorder\"");
         xaml.Should().Contain("Height=\"36\"");
         xaml.Should().Contain("x:Name=\"NumberGeneralDescription\"");
         xaml.Should().Contain("Text=\"General format cells have no specific number format.\"");
