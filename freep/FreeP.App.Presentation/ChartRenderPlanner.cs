@@ -2613,7 +2613,8 @@ public static partial class ChartRenderPlanner
         ChartBubblePrimitivePlan? bubble,
         IReadOnlyList<SrgbColor>? seriesColors)
     {
-        if (chart.Series.Count == 0 || !plot.HasPositiveArea)
+        if (chart.Series.Count == 0 || !plot.HasPositiveArea
+            || !chart.Series.Any(series => series.ErrorBars is not null))
             return Array.Empty<ChartErrorBarPrimitive>();
 
         var result = new List<ChartErrorBarPrimitive>();
@@ -2629,6 +2630,14 @@ public static partial class ChartRenderPlanner
         double scatterXRange = Math.Max(1e-9, scatterXMax - scatterXMin);
         double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
         double categoryHeight = plot.Height / Math.Max(1, chart.Categories.Count);
+        var geometryIndex = ChartErrorBarGeometryIndex.Create(
+            geometryKind,
+            rectangles,
+            lineSeries,
+            areaSeries,
+            radar,
+            scatter,
+            bubble);
 
         foreach (var (series, seriesIndex) in chart.Series.Select((value, index) => (value, index)))
         {
@@ -2643,17 +2652,10 @@ public static partial class ChartRenderPlanner
                 if (!value.HasValue)
                     continue;
 
-                var center = FindErrorBarCenter(
-                    geometryKind,
+                var center = geometryIndex.FindCenter(
                     seriesIndex,
                     pointIndex,
-                    value.Value,
-                    rectangles,
-                    lineSeries,
-                    areaSeries,
-                    radar,
-                    scatter,
-                    bubble);
+                    value.Value);
                 if (!center.HasValue)
                     continue;
 
@@ -2742,69 +2744,147 @@ public static partial class ChartRenderPlanner
         return result;
     }
 
-    private static ChartPlanPoint? FindErrorBarCenter(
-        ChartSceneGeometryKind geometryKind,
-        int seriesIndex,
-        int pointIndex,
-        double value,
-        IReadOnlyList<ChartRectPrimitive> rectangles,
-        IReadOnlyList<ChartLineSeriesPrimitive> lineSeries,
-        IReadOnlyList<ChartAreaSeriesPrimitive> areaSeries,
-        ChartRadarPrimitivePlan? radar,
-        ChartScatterPrimitivePlan? scatter,
-        ChartBubblePrimitivePlan? bubble)
+    private sealed class ChartErrorBarGeometryIndex
     {
-        switch (geometryKind)
+        private readonly ChartSceneGeometryKind _geometryKind;
+        private Dictionary<int, ChartLineSeriesPrimitive>? _lineSeries;
+        private Dictionary<(int SeriesIndex, int PointIndex), ChartPlanPoint>? _areaPoints;
+        private Dictionary<int, ChartRadarSeriesPrimitive>? _radarSeries;
+        private Dictionary<(int SeriesIndex, int PointIndex), ChartRectPrimitive>? _rectangles;
+        private Dictionary<int, ChartScatterSeriesPrimitive>? _scatterSeries;
+        private Dictionary<(int SeriesIndex, int PointIndex), ChartBubblePrimitive>? _bubbles;
+
+        private ChartErrorBarGeometryIndex(ChartSceneGeometryKind geometryKind)
         {
-            case ChartSceneGeometryKind.Line:
-            case ChartSceneGeometryKind.Stock:
-                var line = lineSeries.FirstOrDefault(item => item.SeriesIndex == seriesIndex);
-                return line.Points is not null && pointIndex < line.Points.Count
-                    ? line.Points[pointIndex]
-                    : null;
-            case ChartSceneGeometryKind.Area:
-                foreach (var area in areaSeries.Where(item => item.SeriesIndex == seriesIndex))
-                {
-                    int slot = -1;
-                    for (int candidate = 0; candidate < area.PointIndices.Count; candidate++)
+            _geometryKind = geometryKind;
+        }
+
+        public static ChartErrorBarGeometryIndex Create(
+            ChartSceneGeometryKind geometryKind,
+            IReadOnlyList<ChartRectPrimitive> rectangles,
+            IReadOnlyList<ChartLineSeriesPrimitive> lineSeries,
+            IReadOnlyList<ChartAreaSeriesPrimitive> areaSeries,
+            ChartRadarPrimitivePlan? radar,
+            ChartScatterPrimitivePlan? scatter,
+            ChartBubblePrimitivePlan? bubble)
+        {
+            var index = new ChartErrorBarGeometryIndex(geometryKind);
+            switch (geometryKind)
+            {
+                case ChartSceneGeometryKind.Line:
+                case ChartSceneGeometryKind.Stock:
+                    index._lineSeries = new Dictionary<int, ChartLineSeriesPrimitive>();
+                    foreach (var series in lineSeries)
+                        index._lineSeries.TryAdd(series.SeriesIndex, series);
+                    break;
+                case ChartSceneGeometryKind.Area:
+                    index._areaPoints = new Dictionary<(int, int), ChartPlanPoint>();
+                    foreach (var area in areaSeries)
                     {
-                        if (area.PointIndices[candidate] == pointIndex)
+                        var pointIndicesSeenInArea = new HashSet<int>();
+                        for (int slot = 0; slot < area.PointIndices.Count; slot++)
                         {
-                            slot = candidate;
-                            break;
+                            int pointIndex = area.PointIndices[slot];
+                            if (!pointIndicesSeenInArea.Add(pointIndex) || slot >= area.Points.Count)
+                                continue;
+
+                            index._areaPoints.TryAdd(
+                                (area.SeriesIndex, pointIndex),
+                                area.Points[slot]);
                         }
                     }
-                    if (slot >= 0 && slot < area.Points.Count)
-                        return area.Points[slot];
-                }
-                return null;
-            case ChartSceneGeometryKind.Radar:
-                var radarSeries = radar?.Series.FirstOrDefault(item => item.SeriesIndex == seriesIndex);
-                return radarSeries is { } rs && pointIndex < rs.Points.Count
-                    ? rs.Points[pointIndex]
-                    : null;
-            case ChartSceneGeometryKind.Column:
-                var column = rectangles.FirstOrDefault(item => item.SeriesIndex == seriesIndex && item.CategoryIndex == pointIndex);
-                if (column.Bounds.HasPositiveArea)
-                    return new ChartPlanPoint(column.Bounds.X + column.Bounds.Width / 2.0,
-                        value >= 0 ? column.Bounds.Y : column.Bounds.Bottom);
-                return null;
-            case ChartSceneGeometryKind.Bar:
-                var bar = rectangles.FirstOrDefault(item => item.SeriesIndex == seriesIndex && item.CategoryIndex == pointIndex);
-                if (bar.Bounds.HasPositiveArea)
-                    return new ChartPlanPoint(value >= 0 ? bar.Bounds.Right : bar.Bounds.X,
-                        bar.Bounds.Y + bar.Bounds.Height / 2.0);
-                return null;
-            case ChartSceneGeometryKind.Scatter:
-                var scatterSeries = scatter?.Series.FirstOrDefault(item => item.SeriesIndex == seriesIndex);
-                return scatterSeries is { } ss && ss.Points is not null && pointIndex < ss.Points.Count
-                    ? ss.Points[pointIndex]
-                    : null;
-            case ChartSceneGeometryKind.Bubble:
-                var bubblePoint = bubble?.Bubbles.FirstOrDefault(item => item.SeriesIndex == seriesIndex && item.PointIndex == pointIndex);
-                return bubblePoint is { } bp ? bp.Center : null;
-            default:
-                return null;
+                    break;
+                case ChartSceneGeometryKind.Radar:
+                    index._radarSeries = new Dictionary<int, ChartRadarSeriesPrimitive>();
+                    if (radar is { } radarPlan)
+                    {
+                        foreach (var series in radarPlan.Series)
+                            index._radarSeries.TryAdd(series.SeriesIndex, series);
+                    }
+                    break;
+                case ChartSceneGeometryKind.Column:
+                case ChartSceneGeometryKind.Bar:
+                    index._rectangles = new Dictionary<(int, int), ChartRectPrimitive>();
+                    foreach (var rectangle in rectangles)
+                    {
+                        index._rectangles.TryAdd(
+                            (rectangle.SeriesIndex, rectangle.CategoryIndex),
+                            rectangle);
+                    }
+                    break;
+                case ChartSceneGeometryKind.Scatter:
+                    index._scatterSeries = new Dictionary<int, ChartScatterSeriesPrimitive>();
+                    if (scatter is { } scatterPlan)
+                    {
+                        foreach (var series in scatterPlan.Series)
+                            index._scatterSeries.TryAdd(series.SeriesIndex, series);
+                    }
+                    break;
+                case ChartSceneGeometryKind.Bubble:
+                    index._bubbles = new Dictionary<(int, int), ChartBubblePrimitive>();
+                    if (bubble is { } bubblePlan)
+                    {
+                        foreach (var point in bubblePlan.Bubbles)
+                            index._bubbles.TryAdd((point.SeriesIndex, point.PointIndex), point);
+                    }
+                    break;
+            }
+
+            return index;
+        }
+
+        public ChartPlanPoint? FindCenter(int seriesIndex, int pointIndex, double value)
+        {
+            switch (_geometryKind)
+            {
+                case ChartSceneGeometryKind.Line:
+                case ChartSceneGeometryKind.Stock:
+                    return _lineSeries!.TryGetValue(seriesIndex, out var line)
+                        && line.Points is not null
+                        && pointIndex < line.Points.Count
+                        ? line.Points[pointIndex]
+                        : null;
+                case ChartSceneGeometryKind.Area:
+                    return _areaPoints!.TryGetValue((seriesIndex, pointIndex), out var areaPoint)
+                        ? areaPoint
+                        : null;
+                case ChartSceneGeometryKind.Radar:
+                    return _radarSeries!.TryGetValue(seriesIndex, out var radarSeries)
+                        && radarSeries.Points is not null
+                        && pointIndex < radarSeries.Points.Count
+                        ? radarSeries.Points[pointIndex]
+                        : null;
+                case ChartSceneGeometryKind.Column:
+                    if (_rectangles!.TryGetValue((seriesIndex, pointIndex), out var column)
+                        && column.Bounds.HasPositiveArea)
+                    {
+                        return new ChartPlanPoint(
+                            column.Bounds.X + column.Bounds.Width / 2.0,
+                            value >= 0 ? column.Bounds.Y : column.Bounds.Bottom);
+                    }
+                    return null;
+                case ChartSceneGeometryKind.Bar:
+                    if (_rectangles!.TryGetValue((seriesIndex, pointIndex), out var bar)
+                        && bar.Bounds.HasPositiveArea)
+                    {
+                        return new ChartPlanPoint(
+                            value >= 0 ? bar.Bounds.Right : bar.Bounds.X,
+                            bar.Bounds.Y + bar.Bounds.Height / 2.0);
+                    }
+                    return null;
+                case ChartSceneGeometryKind.Scatter:
+                    return _scatterSeries!.TryGetValue(seriesIndex, out var scatterSeries)
+                        && scatterSeries.Points is not null
+                        && pointIndex < scatterSeries.Points.Count
+                        ? scatterSeries.Points[pointIndex]
+                        : null;
+                case ChartSceneGeometryKind.Bubble:
+                    return _bubbles!.TryGetValue((seriesIndex, pointIndex), out var bubblePoint)
+                        ? bubblePoint.Center
+                        : null;
+                default:
+                    return null;
+            }
         }
     }
 
