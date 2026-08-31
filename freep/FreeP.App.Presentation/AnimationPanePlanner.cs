@@ -1611,7 +1611,14 @@ public static class AnimationPanePlanner
         }
 
         normalized = normalized.TrimEnd('%').Trim();
-        if (!double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var percent)
+        // r180: same asymmetry r177 fixed for the Duration/Delay fields in this file --
+        // FormatEasing renders this percentage with CurrentCulture (an interpolated "0.###"),
+        // so on a comma-decimal locale the box shows "12,345%" and an InvariantCulture-only
+        // parse cannot read it back. Tabbing off the Smooth Start/End field without typing
+        // anything reported it invalid and reverted the value. Current culture first, invariant
+        // as the fallback for values typed or pasted in "12.345" form.
+        if ((!double.TryParse(normalized, NumberStyles.Float, CultureInfo.CurrentCulture, out var percent)
+                && !double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out percent))
             || percent is < 0 or > 100)
         {
             value = null;
