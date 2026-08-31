@@ -39,6 +39,8 @@ public static class DocxWriter
     private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
     private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
+    private static readonly DateTimeOffset DeterministicZipTimestamp =
+        new(1980, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
     // abstractNumId 0 / numId 1; decimal numbering uses abstractNumId 1 / numId 2; multilevel (legal
@@ -409,6 +411,7 @@ public static class DocxWriter
         // round-trips. Authored-from-scratch documents have none, so nothing extra is written.
         foreach (var part in preservedParts)
             WriteBinaryPart(archive, part.PartName.TrimStart('/'), part.Bytes);
+
     }
 
     private static XDocument BuildCoreProperties(TextDocument document)
@@ -1037,7 +1040,7 @@ public static class DocxWriter
             | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs);
 
     private static void WritePart(ZipArchive archive, string entryPath, XDocument content)
-        => OpcXml.WriteXmlEntry(archive, entryPath, content);
+        => OpcXml.WriteXmlEntry(archive, entryPath, content, DeterministicZipTimestamp);
 
     private static void SanitizePersonalInformation(XDocument content)
     {
@@ -1061,6 +1064,9 @@ public static class DocxWriter
     private static void WriteBinaryPart(ZipArchive archive, string entryPath, byte[] content)
     {
         var entry = archive.CreateEntry(entryPath, CompressionLevel.Optimal);
+        // ZipArchive.CreateEntry otherwise stamps the current local time at ZIP's two-second precision,
+        // making two identical saves differ when they straddle a timestamp boundary.
+        entry.LastWriteTime = DeterministicZipTimestamp;
         using var entryStream = entry.Open();
         entryStream.Write(content, 0, content.Length);
     }
