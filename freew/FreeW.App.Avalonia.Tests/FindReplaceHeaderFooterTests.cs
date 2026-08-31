@@ -95,6 +95,91 @@ public sealed class FindReplaceHeaderFooterTests
     /// The existing Replace All coverage could not catch this: it replaces "cat" with "dog", a
     /// replacement deliberately not containing the search term.
     /// </summary>
+    /// <summary>
+    /// r177. Replace All reached the header/footer only when the body story contained NO match at
+    /// all: FindNextMatch falls through to the header/footer walk as a last resort, but a body that
+    /// has its own match makes the body walk wrap and re-report that match, which ReplaceAllCore
+    /// read as "finished" and stopped on. So the common case -- the search term appears in the body
+    /// AND in the header/footer -- silently replaced only the body occurrences and reported a count
+    /// short by the rest, with nothing to tell the user their header was left alone.
+    ///
+    /// This is the case the pre-existing coverage could not see: every other test here uses a body
+    /// that deliberately does not contain the term.
+    /// </summary>
+    [Fact]
+    public async Task ReplaceAll_ReplacesInBodyAndHeaderAndFooter_WhenAllThreeContainTheTerm()
+    {
+        var count = -1;
+        string? headerText = null;
+        string? footerText = null;
+        string? bodyText = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(new Paragraph("body mentions Draft as well"));
+            document.Header = new HeaderFooter("Draft header");
+            document.Footer = new HeaderFooter("Draft footer");
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(800, 2000));
+
+            count = view.ReplaceAll("Draft", "Final");
+
+            headerText = view.Document.Header!.Paragraphs[0].PlainText;
+            footerText = view.Document.Footer!.Paragraphs[0].PlainText;
+            bodyText = ((Paragraph)view.Document.Blocks[0]).PlainText;
+        });
+        if (!ran) return;
+
+        bodyText.Should().Be("body mentions Final as well");
+        headerText.Should().Be("Final header", "the header must not be skipped just because the body also matched");
+        footerText.Should().Be("Final footer", "nor the footer");
+        count.Should().Be(3, "all three occurrences were replaced, so all three must be counted");
+    }
+
+    /// <summary>
+    /// r177 sibling of the two cases above, and the one that broke r176 fix. When the replacement
+    /// re-creates the search term AND there is a footer, the header must be replaced exactly once
+    /// and the walk must still continue into the footer. r176 stopped the runaway with a guard that
+    /// broke the whole loop, which left the footer untouched with no indication.
+    /// </summary>
+    [Fact]
+    public async Task ReplaceAll_WhenTheReplacementContainsTheSearchTerm_StillContinuesIntoTheFooter()
+    {
+        var count = -1;
+        string? headerText = null;
+        string? footerText = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(new Paragraph("nothing relevant here"));
+            document.Header = new HeaderFooter("Confidential header");
+            document.Footer = new HeaderFooter("Confidential footer");
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(800, 2000));
+
+            count = view.ReplaceAll("Confidential", "Strictly Confidential");
+
+            headerText = view.Document.Header!.Paragraphs[0].PlainText;
+            footerText = view.Document.Footer!.Paragraphs[0].PlainText;
+        });
+        if (!ran) return;
+
+        headerText.Should().Be("Strictly Confidential header", "exactly one replacement, no runaway");
+        footerText.Should().Be(
+            "Strictly Confidential footer",
+            "the footer must still be reached -- a self-referencing replacement in the header is not a "
+            + "reason to abandon the rest of the document");
+        count.Should().Be(2);
+    }
+
     [Fact]
     public async Task ReplaceAll_WhenTheReplacementContainsTheSearchTerm_ReplacesOnceAndStops()
     {

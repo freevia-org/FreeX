@@ -293,11 +293,20 @@ public sealed partial class MainWindow
 
     private async Task ShowBackstageAccountDialogAsync()
     {
-        var plan = LocalAccountInfoPlanner.Build(
+        // r177: pass the CONFIGURED author name, and the OS account separately, exactly as the
+        // WPF shell does (see MainWindow.Backstage.cs BuildLocalAccountPanePlan there). This
+        // used the 4-argument overload, which maps its userName straight into the request UserName
+        // -- so File > Account showed the OS account name and Options > User name was silently
+        // ignored, and the separate "local OS account" line the pane supports never rendered at
+        // all because nothing ever supplied it. Same divergence as the comment-author one fixed in
+        // r176; NormalizeUserName still falls back to the OS account when nothing is configured.
+        var plan = LocalAccountInfoPlanner.Build(new LocalAccountInfoRequest(
             typeof(MainWindow).Assembly,
-            deviceName: SafeEnvironment(() => Environment.MachineName),
-            userName: SafeEnvironment(() => Environment.UserName),
-            optionsAvailable: true);
+            DeviceName: SafeEnvironment(() => Environment.MachineName),
+            UserName: AppOptions.NormalizeUserName(_optionsRuntimeSession.LiveOptions.UserName),
+            OptionsAvailable: true,
+            LocalOsUserName: SafeEnvironment(() => Environment.UserName),
+            LocalOsUserDomain: SafeEnvironment(() => Environment.UserDomainName)));
 
         var dialog = new Window
         {
