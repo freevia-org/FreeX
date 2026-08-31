@@ -1071,6 +1071,16 @@ public sealed partial class DocumentView : Control
                     {
                         // Body finished (or never matched). Hand off to the header/footer walk; only
                         // stop for real once that also comes up empty.
+                        //
+                        // r178: NOT when the operation is restricted to a selection. A selection is a
+                        // body concept -- SelectFindReplaceMatch clears _selectionAnchor for a
+                        // header/footer hit, so the restrict check below can never fire for one, and
+                        // the r177 handoff therefore replaced header and footer text that lay far
+                        // outside the range the user had selected. Replace All in a selection must
+                        // stay inside it.
+                        if (restrictToSelection)
+                            break;
+
                         bodyExhausted = true;
                         found = FindNextHeaderFooterOnly(query, options ?? new FindReplaceSearchOptions(), headerFooterResume);
                         if (!found)
@@ -1087,6 +1097,17 @@ public sealed partial class DocumentView : Control
                 // other match.
                 if (_hfSelectionAnchor is { } headerFooterMatch)
                 {
+                    // r178: a header/footer hit can never lie inside a BODY selection, and
+                    // SelectFindReplaceMatch clears _selectionAnchor for one -- so the
+                    // restrict-to-selection check further down (which reads _selectionAnchor)
+                    // silently skips these hits entirely. Reject them here instead, or Replace All
+                    // "within the selection" rewrites header and footer text far outside the range
+                    // the user highlighted. Reachable by the ordinary FindNext fallback as well as
+                    // by the body-exhausted handoff, so the check has to live here rather than at
+                    // the handoff alone.
+                    if (restrictToSelection)
+                        break;
+
                     // Resume the next search just past what this replacement is about to write,
                     // in this slot and paragraph. Later paragraphs in the slot, and the other
                     // slot, are still searched in full (see FindInDefaultHeaderFooter).
@@ -18759,8 +18780,16 @@ public sealed partial class DocumentView : Control
                 DeleteSelection();
             if (CurrentParagraph() is not { } fallbackParagraph || !IsTextReplaceable(fallbackParagraph))
             {
+                // r178: ROLL BACK, not abort. DeleteSelection() above may already have applied a
+                // deletion into this group, and abandoning it leaves that deletion in the document
+                // with no undo entry -- the selected text is gone, the typed character never
+                // arrives, and Ctrl+Z cannot bring it back. Reachable when the selection spans into
+                // a paragraph holding a locked content-control run that sits entirely AFTER the
+                // selection end: the merge is allowed, but the merged paragraph then carries the
+                // locked run, so IsTextReplaceable turns false here. Same remedy the sibling guards
+                // in InsertParagraphBreak and InsertFieldRunAtActiveCaret already use.
                 if (ownsFallbackUndoGroup)
-                    _bus.AbortUndoGroup();
+                    _bus.RollbackUndoGroup();
                 return;
             }
             block = _caret.Block;
@@ -20174,8 +20203,11 @@ public sealed partial class DocumentView : Control
                 var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
                 if (para == null || !IsEditable(para))
                 {
+                    // r178: same delete-then-bail hazard as the body fallback above --
+                    // DeleteCellSelection has already applied into this group, so abandoning it
+                    // strands the deletion with no way to undo it.
                     if (ownsCellUndoGroup)
-                        _bus.AbortUndoGroup();
+                        _bus.RollbackUndoGroup();
                     return;
                 }
                 var offset = cc.Offset;

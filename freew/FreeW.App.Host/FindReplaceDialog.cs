@@ -348,7 +348,22 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                 // undo stack, so Ctrl+Z skipped straight past them and the user had no way back.
                 // Replace All is one operation to the user: if it cannot finish, it must leave the
                 // document as it found it.
-                editor.Commands.RollbackUndoGroup();
+                // r178: only roll back if the group is still open. The throw can come from
+                // CommitUndoGroup itself -- it clears the batch BEFORE raising Changed, and Changed
+                // runs the renderer synchronously -- in which case the work is already committed and
+                // undoable, and an unguarded RollbackUndoGroup threw "No undo group is open" over the
+                // top of the real failure. AbortUndoGroup was idempotent so this never showed before
+                // r177 swapped it. Same guard DocumentUndoGroupExecutor.Execute already uses.
+                if (editor.Commands.IsUndoGroupOpen)
+                {
+                    editor.Commands.RollbackUndoGroup();
+                    // The rollback is silent by design, and this loop has been rendering into the
+                    // live FlowDocument all along (notifyOnEachExecute above), so the surface is now
+                    // ahead of the reverted model. Pull it back, or the next edit commits the
+                    // rolled-back text straight into the document.
+                    editor.RefreshFromModel();
+                }
+
                 throw;
             }
 
