@@ -689,6 +689,43 @@ public sealed class RibbonWpfSplitButtonTests
         });
     }
 
+    [Fact]
+    public void NumberFormatValue_MapsToPercentageLabelWithoutExecuting()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var command = new RecordingValueCommand();
+            var registry = new RibbonCommandRegistry();
+            registry.Register("Number Format", command);
+            var stateStore = new RibbonStateStore();
+            stateStore.SetValue("Number Format", "0%");
+            var root = RibbonWpfRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab
+                        .Group("number", "Number", "N", 1, group => group
+                            .ComboBox("Number Format", "Number Format", combo => combo with
+                            {
+                                Choices =
+                                [
+                                    new RibbonComboBoxChoice("General", "General"),
+                                    new RibbonComboBoxChoice("0%", "Percentage"),
+                                ],
+                            })))
+                    .Build()
+                    .FindTab("home")!,
+                new Border(),
+                registry,
+                stateStore);
+            Layout(root, 420, 130);
+
+            var selector = Descendants(root).OfType<ComboBox>().Single();
+            selector.Text.Should().Be("Percentage");
+            selector.SelectedItem.Should().BeOfType<RibbonComboBoxChoice>()
+                .Which.Value.Should().Be("0%");
+            command.Values.Should().BeEmpty();
+        });
+    }
+
     private static FrameworkElement BuildRibbon(
         IRibbonCommandRegistry registry,
         RibbonMenu? menu = null,
