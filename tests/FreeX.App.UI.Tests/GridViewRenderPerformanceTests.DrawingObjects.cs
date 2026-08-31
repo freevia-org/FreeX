@@ -97,7 +97,7 @@ public sealed partial class GridViewRenderPerformanceTests
             source.IndexOf("private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup", StringComparison.Ordinal)..
             source.IndexOf("private static LineSeries CreateLineSeries", StringComparison.Ordinal)];
         var buildPlotModel = source[
-            source.IndexOf("private static PlotModel? BuildPlotModel", StringComparison.Ordinal)..
+            source.IndexOf("internal static PlotModel? BuildPlotModel", StringComparison.Ordinal)..
             source.IndexOf("private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup", StringComparison.Ordinal)];
 
         buildPlotModel.Should().Contain("var dataPointCapacity = GetDataPointCapacity(dataStartRow, endRow);");

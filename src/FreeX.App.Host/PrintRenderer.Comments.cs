@@ -8,7 +8,7 @@ namespace FreeX.App.Host;
 
 public static partial class PrintRenderer
 {
-    private static void DrawDisplayedComments(
+    internal static void DrawDisplayedComments(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
         IReadOnlyList<PageDisplayedCommentBlock> comments,

@@ -65,12 +65,7 @@ public sealed class R176_ChartDataTableThemeColorReResolutionTests
 
     private static PlotModel Render(ChartDataTableModel dataTable, WorkbookTheme theme)
     {
-        var method = typeof(ChartRenderer).GetMethod(
-            "BuildPlotModel",
-            BindingFlags.NonPublic | BindingFlags.Static,
-            [typeof(ChartModel), typeof(ViewportModel), typeof(WorkbookTheme)]);
-        method.Should().NotBeNull();
-        return method!.Invoke(null, [BuildChart(dataTable), BuildViewport(), theme])
+        return ChartRenderer.BuildPlotModel(BuildChart(dataTable), BuildViewport(), theme)
             .Should().BeOfType<PlotModel>().Subject;
     }
 
