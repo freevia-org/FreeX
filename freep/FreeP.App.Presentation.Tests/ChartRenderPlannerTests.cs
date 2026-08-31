@@ -61,6 +61,58 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_LargePieLeaderLinesPreserveCategoryOrderAndTwoSegmentsPerLabel()
+    {
+        const int pointCount = 128;
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            DataLabels = new ChartDataLabels
+            {
+                ShowValue = true,
+                ShowLeaderLines = true,
+                Position = DataLabelPosition.OutsideEnd
+            }
+        };
+        chart.Categories.AddRange(Enumerable.Range(0, pointCount).Select(index => $"Category {index}"));
+        var series = new ChartSeries { Name = "Values" };
+        series.Values.AddRange(Enumerable.Repeat<double?>(1, pointCount));
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+
+        scene.DataLabels.Should().HaveCount(pointCount);
+        scene.DataLabelLeaderLines.Should().HaveCount(pointCount * 2);
+        scene.DataLabelLeaderLines.Select(line => line.StartPointIndex)
+            .Should().Equal(Enumerable.Range(0, pointCount)
+                .SelectMany(index => new[] { index, index }));
+    }
+
+    [Fact]
+    public void PieLeaderLines_SourceGuardUsesFirstWinsSliceIndex()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Presentation", "ChartRenderPlanner.cs");
+        int start = source.IndexOf(
+            "private static IReadOnlyList<ChartLineSegmentPrimitive> BuildDataLabelLeaderLines(",
+            StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        int end = source.IndexOf(
+            "private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSeriesLines(",
+            start,
+            StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+
+        var method = source[start..end];
+        method.Should().Contain("new Dictionary<int, ChartPieSlicePrimitive>()")
+            .And.Contain("slicesByPointIndex.TryAdd(slice.PointIndex, slice)")
+            .And.Contain("slicesByPointIndex.TryGetValue(label.CategoryIndex, out var slice)")
+            .And.NotContain("slices.FirstOrDefault(");
+    }
+
+    [Fact]
     public void BuildScenePlan_PieNativeLeaderLinesActivateWithoutDataLabelFlag()
     {
         var chart = new ChartShape

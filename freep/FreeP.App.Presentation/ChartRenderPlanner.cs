@@ -2040,12 +2040,18 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartLineSegmentPrimitive>();
         }
 
+        var slicesByPointIndex = new Dictionary<int, ChartPieSlicePrimitive>();
+        foreach (var slice in slices)
+            slicesByPointIndex.TryAdd(slice.PointIndex, slice);
+
         var lines = new List<ChartLineSegmentPrimitive>();
         foreach (var label in labels)
         {
-            var slice = slices.FirstOrDefault(candidate => candidate.PointIndex == label.CategoryIndex);
-            if (slice.OuterRadius <= 0)
+            if (!slicesByPointIndex.TryGetValue(label.CategoryIndex, out var slice)
+                || slice.OuterRadius <= 0)
+            {
                 continue;
+            }
 
             double midAngle = (slice.StartAngle + slice.EndAngle) / 2.0;
             double scaleY = slice.EffectiveVerticalScale;
