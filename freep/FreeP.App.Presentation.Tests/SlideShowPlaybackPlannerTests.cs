@@ -2394,6 +2394,62 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanAnimationStep_ResolvesDenseReverseOrderedFillColorsByShapeId()
+    {
+        const int shapeCount = 256;
+        const string fillBehavior = """
+            <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+              <p:animClr clrSpc="rgb">
+                <p:to><a:srgbClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="ABCDEF"/></p:to>
+              </p:animClr>
+            </p:childTnLst>
+            """;
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        var entries = new List<AnimationEntry>(shapeCount);
+        for (var index = 0; index < shapeCount; index++)
+        {
+            var shapeId = (uint)(1000 + index);
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = shapeId,
+                Kind = SlideShapeKind.AutoShape,
+                Fill = new ShapeFill.Solid(new SrgbColor(
+                    (byte)index,
+                    (byte)(255 - index),
+                    (byte)(index ^ 0x5A))),
+            });
+        }
+        for (var index = shapeCount - 1; index >= 0; index--)
+        {
+            entries.Add(new AnimationEntry(
+                new ShapeAnimation
+                {
+                    ShapeId = (uint)(1000 + index),
+                    Kind = AnimationKind.Emphasis,
+                    Preset = AnimationPreset.ChangeFillColor,
+                    PreservedFillBehaviorXml = fillBehavior,
+                },
+                StartDelayMs: shapeCount - 1 - index));
+        }
+
+        var plans = SlideShowPlaybackPlanner.PlanAnimationStep(
+            new AnimationStep(entries),
+            presentation);
+
+        plans.Should().HaveCount(shapeCount);
+        for (var planIndex = 0; planIndex < shapeCount; planIndex++)
+        {
+            var shapeIndex = shapeCount - 1 - planIndex;
+            plans[planIndex].Animation.ShapeId.Should().Be((uint)(1000 + shapeIndex));
+            plans[planIndex].DelayMs.Should().Be(planIndex);
+            plans[planIndex].ColorFromHex.Should().Be(
+                $"{shapeIndex:X2}{255 - shapeIndex:X2}{shapeIndex ^ 0x5A:X2}");
+            plans[planIndex].ColorToHex.Should().Be("ABCDEF");
+        }
+    }
+
+    [Fact]
     public void ResolveFontStyleBehavior_ResolvesNativeStyleSetters()
     {
         var values = SlideShowPlaybackPlanner.ResolveFontStyleBehavior(new ShapeAnimation
