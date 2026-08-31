@@ -210,16 +210,15 @@ public sealed partial class FindReplaceDialog : Window
         var matchCase = MatchCaseBox.IsChecked == true;
         var matchEntireCell = MatchEntireBox.IsChecked == true;
         var result = _workflow.FindNext(search, options, matchCase, matchEntireCell);
-        _results = result.Matches;
+        HideFindAllResults();
         _currentIndex = result.SelectedIndex;
-        UpdateResultsGrid();
         if (!result.Success)
         {
             SetStatusText(DialogText(FindReplaceDialogText.NoMatchesFound));
             _currentIndex = -1;
             return;
         }
-        SetStatusText(DialogText(FindReplaceDialogText.MatchStatus, _currentIndex + 1, _results.Count));
+        SetStatusText(DialogText(FindReplaceDialogText.MatchStatus, _currentIndex + 1, result.Matches.Count));
     }
 
     private void FindAll()
@@ -236,6 +235,7 @@ public sealed partial class FindReplaceDialog : Window
         _results = result.Matches;
         _currentIndex = -1;
 
+        ShowFindAllResults();
         UpdateResultsGrid();
         SetStatusText(_results.Count == 0
             ? DialogText(FindReplaceDialogText.NoMatchesFound)
@@ -399,6 +399,17 @@ public sealed partial class FindReplaceDialog : Window
     private void UpdateResultsGrid()
     {
         FindResultsGrid.ItemsSource = FindReplaceDialogPlanner.BuildFindResultRows(_getWorkbook(), _results);
+    }
+
+    private void ShowFindAllResults() =>
+        FindResultsGrid.Visibility = Visibility.Visible;
+
+    private void HideFindAllResults()
+    {
+        _results = [];
+        FindResultsGrid.SelectedItem = null;
+        FindResultsGrid.ItemsSource = null;
+        FindResultsGrid.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>

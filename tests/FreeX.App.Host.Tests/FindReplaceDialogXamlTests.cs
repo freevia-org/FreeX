@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Xml.Linq;
@@ -78,6 +79,7 @@ public sealed class FindReplaceDialogXamlTests
         xaml.Should().Contain("FindReplaceDialogPlanner.ClearFormatButtonWidth");
         xaml.Should().Contain("FindReplaceDialogPlanner.ChooseFormatButtonWidth");
         xaml.Should().Contain("FindReplaceDialogPlanner.ResultsMinimumHeight");
+        xaml.Should().Contain("SizeToContent=\"Height\"");
         xaml.Should().Contain("FindReplaceDialog.FindReplaceResultBookColumnWidth");
         xaml.Should().Contain("FindReplaceDialog.FindReplaceResultSheetColumnWidth");
         xaml.Should().Contain("FindReplaceDialog.FindReplaceResultNameColumnWidth");
@@ -184,10 +186,56 @@ public sealed class FindReplaceDialogXamlTests
             .Single(element => element.Attribute(xaml + "Name")?.Value == "FindResultsGrid");
 
         grid.Attribute("SelectionChanged")?.Value.Should().Be("FindResultsGrid_SelectionChanged");
+        grid.Attribute("Visibility")?.Value.Should().Be("Collapsed");
         WithDialog(dialog => GetPrivateControl<DataGrid>(dialog, "FindResultsGrid").Columns
             .Select(column => column.Header)
             .Should()
             .Equal("Book", "Sheet", "Name", "Cell", "Value", "Formula"));
+    }
+
+    [Fact]
+    public void DialogFindNext_NavigatesAndKeepsFindAllResultsHiddenUntilExplicitlyRequested()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            var b5 = new CellAddress(sheet.Id, 5, 2);
+            sheet.SetCell(a1, new TextValue("smoke one"));
+            sheet.SetCell(b5, new TextValue("smoke two"));
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
+            var navigated = new List<CellAddress>();
+            var dialog = new FindReplaceDialog(
+                () => workbook,
+                command => commandBus.Execute(workbook.Id, command),
+                navigated.Add,
+                getCurrentSheetId: () => sheet.Id,
+                getActiveSelectionCell: () => a1);
+            dialog.Show();
+            try
+            {
+                GetPrivateControl<ComboBox>(dialog, "LookInCombo").SelectedIndex = 1;
+                GetPrivateControl<TextBox>(dialog, "FindBox").Text = "smoke";
+
+                InvokePrivate(dialog, "FindAll_Click");
+                var resultsGrid = GetPrivateControl<DataGrid>(dialog, "FindResultsGrid");
+                resultsGrid.Visibility.Should().Be(Visibility.Visible);
+                resultsGrid.Items.Count.Should().Be(2);
+
+                InvokePrivate(dialog, "FindNext_Click");
+
+                dialog.IsVisible.Should().BeTrue();
+                navigated.Should().Contain(b5);
+                resultsGrid.Visibility.Should().Be(Visibility.Collapsed);
+                resultsGrid.Items.Count.Should().Be(0);
+                GetPrivateControl<TextBlock>(dialog, "StatusLabel").Text.Should().Be("Match 2 of 2");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]

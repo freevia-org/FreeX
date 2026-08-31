@@ -4,9 +4,9 @@
         xmlns:local="clr-namespace:FreeX.App.Host"
         xmlns:services="clr-namespace:FreeX.App.Services;assembly=FreeX.App.Services"
         Width="{x:Static services:FindReplaceDialogPlanner.Width}"
-        Height="{x:Static services:FindReplaceDialogPlanner.Height}"
+        MaxHeight="{x:Static services:FindReplaceDialogPlanner.Height}"
         MinWidth="{x:Static services:FindReplaceDialogPlanner.MinWidth}"
-        MinHeight="{x:Static services:FindReplaceDialogPlanner.MinHeight}"
+        SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
         ShowInTaskbar="False">
@@ -119,6 +119,7 @@
                   HeadersVisibility="Column"
                   MinHeight="{x:Static services:FindReplaceDialogPlanner.ResultsMinimumHeight}"
                   Margin="0,0,0,8"
+                  Visibility="Collapsed"
                   SelectionChanged="FindResultsGrid_SelectionChanged">
             <DataGrid.Columns>
                 <DataGridTextColumn Binding="{Binding Book}" Width="{x:Static local:FindReplaceDialog.FindReplaceResultBookColumnWidth}"/>
