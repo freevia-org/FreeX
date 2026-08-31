@@ -5566,6 +5566,17 @@ public sealed partial class DocumentView : RichTextBox
         return ReadAloudController.MapCaretBlockToSegmentIndex(_model, CaretBlockIndex());
     }
 
+    /// <summary>
+    /// Re-renders the visible FlowDocument from the model. r178: needed by callers that render
+    /// DURING an undo group (BeginUndoGroup(notifyOnEachExecute: true)) and then roll that group
+    /// back. RollbackUndoGroup is deliberately silent on a complete restoration -- for an ordinary
+    /// subscriber the restored model is exactly what it last saw -- but a surface that was mutated
+    /// mid-group is AHEAD of the model, so nothing tells it to go back. That matters beyond
+    /// appearance here: this FlowDocument is the surface CommitToModel reads, so a stale one gets
+    /// written back into the document on the next edit, reintroducing the reverted text.
+    /// </summary>
+    public void RefreshFromModel() => Render();
+
     private void Render()
     {
         // Expose the current file name and Review display policy to the static
